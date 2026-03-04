@@ -3667,6 +3667,28 @@ export class LyricDancePlayer {
    * Render film grain overlay. Uses pre-generated noise buffers rotated per frame
    * to eliminate per-frame Math.random() cost (~57K calls/frame → 0).
    */
+  /** Relative luminance of a hex color (0 = black, 1 = white) */
+  private _hexLuminance(hex: string): number {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substring(0, 2), 16) / 255;
+    const g = parseInt(c.substring(2, 4), 16) / 255;
+    const b = parseInt(c.substring(4, 6), 16) / 255;
+    const lr = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+    const lg = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+    const lb = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+    return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+  }
+
+  /** Blend two hex colors by t (0 = a, 1 = b) */
+  private _blendHex(a: string, b: string, t: number): string {
+    const pa = a.replace('#', '');
+    const pb = b.replace('#', '');
+    const r = Math.round(parseInt(pa.substring(0, 2), 16) * (1 - t) + parseInt(pb.substring(0, 2), 16) * t);
+    const g = Math.round(parseInt(pa.substring(2, 4), 16) * (1 - t) + parseInt(pb.substring(2, 4), 16) * t);
+    const bl = Math.round(parseInt(pa.substring(4, 6), 16) * (1 - t) + parseInt(pb.substring(4, 6), 16) * t);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
+  }
+
   private renderFilmGrain(intensity: number, size: number): void {
     const grainW = Math.ceil(this.width / Math.max(1, size * 2));
     const grainH = Math.ceil(this.height / Math.max(1, size * 2));
@@ -4376,9 +4398,30 @@ export class LyricDancePlayer {
         // ═══ SINGLE COLOR MODEL: one color for all words, contrast against background ═══
         // No tiers, no semantic overrides, no palette juggling.
         // Light text on dark backgrounds, dark text on light backgrounds.
+        // EXCEPTION: Hero words get the palette accent color (mood color from the chapter image).
         {
           const bgIsLight = this._textBandBrightness > 0.55;
-          chunk.color = bgIsLight ? '#1a1a2e' : '#f0f0f0';
+          const baseColor = bgIsLight ? '#1a1a2e' : '#f0f0f0';
+
+          if (isHeroWord) {
+            // Hero word = palette accent. Use _framePalette[1] (the mood color).
+            const pal = this._framePalette ?? [];
+            const rawAccent = pal[1] ?? '#FFD700';
+
+            // WCAG readability guard: ensure accent has enough contrast against the bg.
+            const accentLum = this._hexLuminance(rawAccent);
+            if (bgIsLight && accentLum > 0.55) {
+              // Accent too bright for white bg — darken it
+              chunk.color = this._blendHex(rawAccent, '#1a1a2e', 0.5);
+            } else if (!bgIsLight && accentLum < 0.15) {
+              // Accent too dark for dark bg — lighten it
+              chunk.color = this._blendHex(rawAccent, '#f0f0f0', 0.5);
+            } else {
+              chunk.color = rawAccent;
+            }
+          } else {
+            chunk.color = baseColor;
+          }
         }
         chunk.glow = wordGlow;
         chunk.entryStyle = usedEntry;
