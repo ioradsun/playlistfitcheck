@@ -1615,6 +1615,23 @@ export class LyricDancePlayer {
     return Math.max(0, this.songEndSec - this.songStartSec);
   }
 
+  async prepareExportFramePipeline(): Promise<void> {
+    if (this._bakePromise) await this._bakePromise;
+    if (!this.fullModeEnabled) this.enableFullVisualMode();
+
+    // Ensure chapter images + Ken Burns params are ready before frame stepping.
+    await this.loadSectionImages().catch(() => undefined);
+
+    // Rebuild visuals if they were not initialized yet.
+    if (!this.chapterSims.length || !this._globalBeatVis) this.buildChapterSims();
+    if (!this.bgCaches.length) this.buildBgCache();
+
+    this._bgSnapshotSection = -999;
+    this._bgSnapshotQTier = -1 as any;
+    this._lightingOverlayCanvas = null;
+    this._lightingOverlayKey = '';
+  }
+
   private _exportMode = false;
   private _savedDpr = 0;
   private _savedQualityTier: 0 | 1 | 2 | 3 = 0;
@@ -2656,7 +2673,7 @@ export class LyricDancePlayer {
         if (currentSection && nextImgIdx !== imgIdx) {
           const secEnd = currentSection.endSec ?? (currentSection.endRatio != null ? currentSection.endRatio * duration : null);
           if (secEnd != null) {
-            const timeToEnd = secEnd - (this.audio?.currentTime ?? 0);
+            const timeToEnd = secEnd - this.currentTSec;
             if (timeToEnd < 1.5 && timeToEnd > 0) crossfade = 1 - (timeToEnd / 1.5);
           }
         }
@@ -4010,7 +4027,7 @@ export class LyricDancePlayer {
       const audioDur = this.audio?.duration || 1;
       const chapterDur = audioDur / chapterCount;
       const chapterStart = chapterIdx * chapterDur;
-      const localT = Math.max(0, Math.min(1, ((this.audio?.currentTime ?? 0) - chapterStart) / chapterDur));
+      const localT = Math.max(0, Math.min(1, (this.currentTSec - chapterStart) / chapterDur));
       const eased = localT * localT * (3 - 2 * localT);
       if (kb) {
         const zoom = kb.zoomStart + (kb.zoomEnd - kb.zoomStart) * eased;
