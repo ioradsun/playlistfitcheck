@@ -12,9 +12,9 @@
  * Each layer is independently tunable and can be disabled.
  *
  * SAFETY ENVELOPE:
- *   Max zoom:     1.12  (never clip text)
- *   Max shake:    6px   (never blur readability)
- *   Max rotation: ±1.5° (cinematic, not nauseating)
+ *   Max zoom:     1.15  (never clip text)
+ *   Max shake:    10px  (never blur readability)
+ *   Max rotation: ±2.5° (cinematic, not nauseating)
  */
 
 import type { BeatState } from './BeatConductor';
@@ -80,7 +80,7 @@ export type SectionRigName = 'verse' | 'chorus' | 'bridge' | 'drop' | 'intro' | 
 // ─── Defaults ────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: CameraConfig = {
-  // Punch (same as V1)
+  // Punch
   beatThreshold: 0.55,
   silenceThreshold: 0.08,
   beatZoom: 0.03,
@@ -88,22 +88,22 @@ const DEFAULT_CONFIG: CameraConfig = {
   heroShakePx: 3,
   heroDurationFrames: 3,
   heroTaperMs: 150,
-  // Breath
-  breathZoomRange: 0.025,
-  breathDriftPx: 12,
-  breathTransitionSec: 8,
-  // Pulse
-  pulseAmplitudeY: 2.0,
-  pulseAmplitudeX: 1.0,
-  pulseZoom: 0.012,
-  // Parallax
-  parallaxFar: 0.3,
-  parallaxMid: 0.6,
-  parallaxNear: 0.85,
-  // Safety
-  maxZoom: 1.12,
-  maxShakePx: 6,
-  maxRotationRad: 1.5 * Math.PI / 180,
+  // Breath — bold enough to feel
+  breathZoomRange: 0.06,         // ±6% zoom per section
+  breathDriftPx: 30,             // 30px drift — visible on all screens
+  breathTransitionSec: 4,        // arrive in 4s not 8
+  // Pulse — rhythmic bob you can feel
+  pulseAmplitudeY: 5.0,          // 5px Y bob on beat
+  pulseAmplitudeX: 2.5,          // 2.5px X sway
+  pulseZoom: 0.025,              // 2.5% downbeat zoom bump
+  // Parallax — wide depth spread
+  parallaxFar: 0.15,             // BG barely moves
+  parallaxMid: 0.5,              // mid layers at half
+  parallaxNear: 0.85,            // near particles nearly 1:1
+  // Safety — generous headroom
+  maxZoom: 1.15,
+  maxShakePx: 10,
+  maxRotationRad: 2.5 * Math.PI / 180,
 };
 
 // ─── Section camera presets ──────────────────────────────────
@@ -117,18 +117,18 @@ interface BreathTarget {
 }
 
 const SECTION_BREATH: Record<SectionRigName, BreathTarget> = {
-  // Verses push in slightly — intimacy
-  verse:  { zoom: +0.018, driftX: -0.4, driftY: -0.15, rotation: 0, speed: 0.7 },
-  // Choruses pull out — expansive, wide
-  chorus: { zoom: -0.01,  driftX:  0.0, driftY:  0.0,  rotation: 0, speed: 1.0 },
-  // Bridges hold still — suspended tension
-  bridge: { zoom:  0.0,   driftX:  0.0, driftY:  0.0,  rotation: 0.004, speed: 0.5 },
-  // Drops snap wide then push in fast
-  drop:   { zoom: +0.025, driftX:  0.0, driftY: -0.3,  rotation: 0, speed: 2.0 },
-  // Intro: gentle drift in
-  intro:  { zoom: +0.01,  driftX:  0.3, driftY:  0.0,  rotation: 0, speed: 0.5 },
-  // Outro: slow continuous pull-back
-  outro:  { zoom: -0.02,  driftX:  0.0, driftY:  0.1,  rotation: 0, speed: 0.4 },
+  // Verses push in — intimacy, background slides left
+  verse:  { zoom: +0.04,  driftX: -0.6, driftY: -0.2,  rotation: 0,      speed: 1.0 },
+  // Choruses pull out — expansive, wide, centered
+  chorus: { zoom: -0.03,  driftX:  0.0, driftY:  0.0,  rotation: 0,      speed: 1.5 },
+  // Bridges hold still — suspended, slow tilt (~0.7°)
+  bridge: { zoom:  0.0,   driftX:  0.0, driftY:  0.0,  rotation: 0.012,  speed: 0.6 },
+  // Drops snap forward fast — aggressive push-in
+  drop:   { zoom: +0.06,  driftX:  0.0, driftY: -0.5,  rotation: 0,      speed: 3.0 },
+  // Intro: gentle drift in from right
+  intro:  { zoom: +0.03,  driftX:  0.5, driftY:  0.0,  rotation: 0,      speed: 0.7 },
+  // Outro: slow pull-back with slight tilt
+  outro:  { zoom: -0.05,  driftX:  0.0, driftY:  0.2,  rotation: 0.005,  speed: 0.5 },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -524,9 +524,9 @@ export class CameraRig {
     let depth: number;
     switch (layer) {
       case 'backdrop':
-      case 'far':        depth = cfg.parallaxFar;  break;  // 0.3
+      case 'far':        depth = cfg.parallaxFar;  break;  // 0.15
       case 'atmosphere':
-      case 'mid':        depth = cfg.parallaxMid;  break;  // 0.6
+      case 'mid':        depth = cfg.parallaxMid;  break;  // 0.5
       case 'near':       depth = cfg.parallaxNear; break;  // 0.85
       default:           depth = 0.5;
     }
