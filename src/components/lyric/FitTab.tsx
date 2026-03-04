@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink } from "lucide-react";
+import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -14,7 +14,8 @@ import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { LyricWaveform } from "./LyricWaveform";
-import { InlineLyricDance } from "@/components/songfit/InlineLyricDance";
+import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
+import { FitExportModal } from "./FitExportModal";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
@@ -94,6 +95,8 @@ export function FitTab({
   const [publishedDanceId, setPublishedDanceId] = useState<string | null>(null);
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const dancePlayerRef = useRef<InlineLyricDanceHandle>(null);
 
   // Prefetch dance data as soon as we know the ID — so the player is instant
   const DANCE_COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,artist_dna";
@@ -624,6 +627,7 @@ export function FitTab({
         <div className="space-y-3">
           <div className="rounded-xl overflow-hidden">
             <InlineLyricDance
+              ref={dancePlayerRef}
               lyricDanceId={publishedDanceId}
               lyricDanceUrl={publishedUrl}
               songTitle={lyricData.title || "Untitled"}
@@ -642,18 +646,20 @@ export function FitTab({
               Watch Dance
             </a>
             <button
-              onClick={handleDance}
-              disabled={republishDisabled}
-              className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              onClick={() => setShowExportModal(true)}
+              className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
             >
-              {publishing ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>{publishStatus || "Republishing…"}</span>
-                </span>
-              ) : "Republish"}
+              <Download size={14} />
+              Download
             </button>
           </div>
+          <FitExportModal
+            isOpen={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            getPlayer={dancePlayerRef.current ? () => dancePlayerRef.current?.getPlayer() ?? null : null}
+            songTitle={lyricData.title || "Untitled"}
+            artistName=""
+          />
         </div>
       ) : hasRealAudio ? (
         <div className="glass-card rounded-xl p-3">

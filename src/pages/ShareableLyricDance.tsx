@@ -6,13 +6,11 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { exportVideoAsMP4, canExportVideo } from "@/engine/exportVideo";
 import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, Sun, Moon } from "lucide-react";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Sun, Moon } from "lucide-react";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import { getSessionId } from "@/lib/sessionId";
@@ -263,10 +261,7 @@ export default function ShareableLyricDance() {
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [exporting, setExporting] = useState<"16:9" | "9:16" | null>(null);
-  const [exportProgress, setExportProgress] = useState(0);
   const [themeMode, setThemeMode] = useState<'auto' | 'light' | 'dark'>('auto');
-  const abortRef = useRef<AbortController | null>(null);
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -281,71 +276,6 @@ export default function ShareableLyricDance() {
       playerInstance.themeOverride = themeMode;
     }
   }, [themeMode, playerInstance]);
-
-  const handleExport = useCallback(async (ratio: "16:9" | "9:16") => {
-    if (!playerRef.current) return;
-
-    if (!canExportVideo()) {
-      toast.error("Export requires Chrome or Edge browser (version 94+)");
-      return;
-    }
-
-    const resolutions = {
-      "16:9": { width: 1920, height: 1080 },
-      "9:16": { width: 1080, height: 1920 },
-    };
-
-    const { width, height } = resolutions[ratio];
-    const songDuration = playerRef.current.getSongDuration();
-
-    if (!songDuration || songDuration <= 0) {
-      toast.error("Could not determine song duration");
-      return;
-    }
-
-    playerRef.current.pause();
-    setExporting(ratio);
-    setExportProgress(0);
-
-    const abort = new AbortController();
-    abortRef.current = abort;
-
-    try {
-      const blob = await exportVideoAsMP4({
-        player: playerRef.current,
-        width,
-        height,
-        fps: 30,
-        songDuration,
-        onProgress: setExportProgress,
-        signal: abort.signal,
-      });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const artistName = data?.artist_name ?? "artist";
-      const songName = data?.song_name ?? "song";
-      a.download = `${artistName}-${songName}-${ratio.replace(":", "x")}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast.success("Video exported!");
-    } catch (err: any) {
-      if (err.name === "AbortError") {
-        toast.info("Export cancelled");
-      } else {
-        console.error("Export failed:", err);
-        toast.error("Export failed. Try Chrome or Edge browser.");
-      }
-    } finally {
-      abortRef.current = null;
-      setExporting(null);
-      setExportProgress(0);
-    }
-  }, [data]);
 
   // ── Data fetch ──────────────────────────────────────────────────────
 
@@ -807,53 +737,6 @@ export default function ShareableLyricDance() {
       <div className="w-full" style={{ background: "#0a0a0a" }}>
         <div className="max-w-[480px] mx-auto px-5 py-4 space-y-3">
           <div className="flex items-center gap-3">
-            {/* Download button */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  disabled={!!exporting}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/5 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-                  aria-label="Download video"
-                >
-                  {exporting ? (
-                    <span className="text-[9px] font-mono animate-pulse text-white/50">{exportProgress}%</span>
-                  ) : (
-                    <Download size={16} />
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent side="top" align="start" className="w-auto min-w-[180px] p-1 bg-[#1a1a1a] border-white/10">
-                <button
-                  onClick={() => handleExport("9:16")}
-                  disabled={!!exporting}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-left text-sm font-mono text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40"
-                >
-                  {exporting === "9:16"
-                    ? <span className="text-white/50">Exporting {exportProgress}%…</span>
-                    : <><span className="text-white/30">9:16</span><span className="text-white/50">·</span><span>TikTok / Reels</span></>
-                  }
-                </button>
-                <button
-                  onClick={() => handleExport("16:9")}
-                  disabled={!!exporting}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-left text-sm font-mono text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40"
-                >
-                  {exporting === "16:9"
-                    ? <span className="text-white/50">Exporting {exportProgress}%…</span>
-                    : <><span className="text-white/30">16:9</span><span className="text-white/50">·</span><span>YouTube</span></>
-                  }
-                </button>
-                {exporting && (
-                  <button
-                    onClick={() => abortRef.current?.abort()}
-                    className="w-full px-3 py-1.5 rounded text-xs text-red-400 hover:bg-red-500/10 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </PopoverContent>
-            </Popover>
-
             {/* Theme toggle */}
             <button
               onClick={() => {

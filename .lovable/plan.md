@@ -1,79 +1,31 @@
 
 
-# Skeleton-First Lyric Tab — Final Adjustments
+# Download Export Modal — Implementation Complete
 
-## 1. Delete `LyricProgressModal` entirely
+## Summary
 
-`LyricsTab.tsx` is the only consumer. The file `src/components/lyric/LyricProgressModal.tsx` will be deleted, along with its import and all related state (`progressStage`, `progressOpen`, `progressFileName`, and the `ProgressStage` type import) from `LyricsTab.tsx`.
+Replaced the "Republish" button in the FIT tab with a "Download" button that opens a full export modal (`FitExportModal`). Removed the download popover from the `ShareableLyricDance` page.
 
-## 2. Create `LyricSkeleton.tsx`
-
-New file: `src/components/lyric/LyricSkeleton.tsx`
-
-A skeleton screen mimicking the `LyricDisplay` layout:
-- Song title (passed as prop)
-- Waveform placeholder bar
-- 12-16 skeleton lines with randomized widths (40-90%)
-- Uses the existing `Skeleton` component from `src/components/ui/skeleton.tsx`
-
-Accepts two mode props:
-- **loading mode**: Shows "Transcribing lyrics..." with a subtle spinner
-- **error mode**: Shows "Transcription failed" message with a "Try Again" button and an optional "Back" button
-
-Props:
-```typescript
-interface Props {
-  title: string;
-  fileName?: string;
-  loading: boolean;       // true = transcribing, false = failed
-  onRetry?: () => void;   // retry button handler (error mode)
-  onBack?: () => void;    // back to uploader
-}
-```
-
-## 3. Update `LyricsTab.tsx` — four render states
-
-```text
-State A: lyricData + audioFile + lines.length > 0
-  --> LyricDisplay (normal editor)
-
-State B: lyricData + audioFile + lines.length === 0 + loading
-  --> LyricSkeleton (transcribing mode)
-
-State C: lyricData + audioFile + lines.length === 0 + !loading
-  --> LyricSkeleton (error mode, retry button calls handleTranscribe again)
-
-State D: everything else
-  --> LyricUploader
-```
-
-State C is the key addition -- when transcription fails, `loading` becomes `false` but `lyricData` still has 0 lines. Instead of silently dropping the user back to the uploader, we show the skeleton in error mode with a retry button. The retry button re-calls `handleTranscribe` with the existing `audioFile`.
-
-## 4. Clean up `handleTranscribe` in `LyricsTab.tsx`
-
-Remove:
-- All `setProgressStage(...)` calls
-- All `setTimeout` timer arrays and `clearTimeout` loops
-- `progressStage`, `progressOpen`, `progressFileName` state variables
-- `LyricProgressModal` import
-
-Keep:
-- `setLoading(true)` / `setLoading(false)`
-- Immediate shell creation (`setLyricData({ title, lines: [] })`)
-- `onUploadStarted` / `onAudioSubmitted` callbacks
-- Transcription fetch, response handling, DB persistence
-- Console timing logs
-
-## Files affected
+## Files Changed
 
 | File | Action |
 |------|--------|
-| `src/components/lyric/LyricProgressModal.tsx` | **Delete** |
-| `src/components/lyric/LyricSkeleton.tsx` | **Create** |
-| `src/components/lyric/LyricsTab.tsx` | **Edit** — remove modal, add skeleton, four-state render |
+| `src/components/lyric/FitExportModal.tsx` | **Created** — Export modal with format/quality selection, progress states, download |
+| `src/components/songfit/InlineLyricDance.tsx` | **Edited** — Added `forwardRef` + `useImperativeHandle` to expose player |
+| `src/components/lyric/FitTab.tsx` | **Edited** — Replaced Republish with Download button + FitExportModal |
+| `src/pages/ShareableLyricDance.tsx` | **Edited** — Removed download popover, export state, and handleExport |
 
-## Not modified
-- `LyricFitTab.tsx` — upload fast-path intact
-- `LyricDisplay.tsx` — unchanged
-- Backend / edge functions — untouched
-- `presetDerivation.ts` — untouched
+## Architecture
+
+- `InlineLyricDance` exposes `InlineLyricDanceHandle.getPlayer()` via `forwardRef`
+- `FitTab` holds a ref to `InlineLyricDance` and passes `getPlayer` to `FitExportModal`
+- `FitExportModal` uses `exportVideoAsMP4` from `src/engine/exportVideo.ts` (WebCodecs + mp4-muxer)
+- Export is video-only; audio notice is displayed in the modal
+
+## Export Options
+
+| Quality | 9:16 | 16:9 | 1:1 |
+|---------|------|------|-----|
+| 1080p | 1080×1920 | 1920×1080 | 1080×1080 |
+| 720p | 720×1280 | 1280×720 | 720×720 |
+| 480p | 480×854 | 854×480 | 480×480 |

@@ -4,13 +4,17 @@
  * consistent with the shareable lyric dance page experience.
  */
 
-import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { useState, useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle } from "react";
 import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withInitLimit } from "@/engine/initQueue";
 
 const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words,section_images,cinematic_direction,artist_dna";
+
+export interface InlineLyricDanceHandle {
+  getPlayer: () => LyricDancePlayer | null;
+}
 
 interface Props {
   lyricDanceId: string;
@@ -43,7 +47,7 @@ function getSharedVisibilityObserver() {
   return sharedVisibilityObserver;
 }
 
-function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData }: Props) {
+function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData }: Props, ref: React.Ref<InlineLyricDanceHandle>) {
   const [data, setData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -57,6 +61,11 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const initRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
+
+  // Expose player to parent via ref
+  useImperativeHandle(ref, () => ({
+    getPlayer: () => playerRef.current,
+  }), []);
 
   // Use prefetched data if available, otherwise fetch
   useEffect(() => {
@@ -310,4 +319,4 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   );
 }
 
-export const InlineLyricDance = memo(InlineLyricDanceInner);
+export const InlineLyricDance = memo(forwardRef(InlineLyricDanceInner));
