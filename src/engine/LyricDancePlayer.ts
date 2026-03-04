@@ -4374,22 +4374,35 @@ export class LyricDancePlayer {
       let _mlDy: number[];
 
       const _resolvedFontForML = this.getResolvedFont();
-      const _mlCached = this._mlLayoutCache.get(groupIdx);
-      if (
-        _mlCached &&
-        _mlCached.groupIdx === groupIdx &&
-        _mlCached.resolvedFont === _resolvedFontForML
-      ) {
-        // Cache hit — reuse precomputed layout, zero measureText calls
-        _isMultiLine = _mlCached.isMultiLine;
-        _mlDx = _mlCached.dx;
-        _mlDy = _mlCached.dy;
+
+      // ── Cache is only valid for 'current' groups ──
+      // Offscreen groups never need multi-line layout. If we cache an offscreen
+      // pass (isMultiLine=false, empty dx/dy) and then hit it when the group
+      // becomes 'current', the hero layout silently never runs — causing the
+      // word-position jump. Only read/write the cache when lineRole==='current'.
+      if (lineRole === 'current') {
+        const _mlCached = this._mlLayoutCache.get(groupIdx);
+        if (
+          _mlCached &&
+          _mlCached.groupIdx === groupIdx &&
+          _mlCached.resolvedFont === _resolvedFontForML
+        ) {
+          // Cache hit — reuse precomputed layout, zero measureText calls
+          _isMultiLine = _mlCached.isMultiLine;
+          _mlDx = _mlCached.dx;
+          _mlDy = _mlCached.dy;
+        } else {
+          // Cache miss — fall through to compute block below
+          _mlDx = [];
+          _mlDy = [];
+        }
       } else {
-        // Cache miss — compute layout and store
+        // Offscreen — skip cache entirely, use defaults
         _mlDx = [];
         _mlDy = [];
+      }
 
-        if (lineRole === 'current' && !groupHasActiveSoloHero && group.words.length > 1) {
+      if (lineRole === 'current' && !this._mlLayoutCache.has(groupIdx) && !groupHasActiveSoloHero && group.words.length > 1) {
           const mCtx = this._measureCtx;
           const resolvedFontML = _resolvedFontForML;
 
@@ -4498,13 +4511,20 @@ export class LyricDancePlayer {
           }
         }
 
-        // Store computed layout — evict if cache grows beyond reasonable size
-        if (this._mlLayoutCache.size >= 32) {
-          this._mlLayoutCache.delete(this._mlLayoutCache.keys().next().value!);
-        }
-        this._mlLayoutCache.set(groupIdx, {
-          isMultiLine: _isMultiLine,
-          dx: _mlDx.slice(),
+             // Store in cache only for current groups - offscreen passes must never
+          // prime the cache with isMultiLine=false + empty dx/dy.
+          if (this._mlLayoutCache.size >= 32) {
+            this._mlLayoutCache.delete(this._mlLayoutCache.keys().next().value!);
+          }
+          this._mlLayoutCache.set(groupIdx, {
+            isMultiLine: _isMultiLine,
+            dx: _mlDx.slice(),
+            dy: _mlDy.slice(),
+            groupIdx,
+            resolvedFont: _resolvedFontForML,
+          });
+        } // end cache-miss
+      } // end lineRole === current     dx: _mlDx.slice(),
           dy: _mlDy.slice(),
           groupIdx,
           resolvedFont: _resolvedFontForML,
