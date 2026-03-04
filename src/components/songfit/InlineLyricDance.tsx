@@ -14,6 +14,7 @@ const COLUMNS = "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_ur
 
 export interface InlineLyricDanceHandle {
   getPlayer: () => LyricDancePlayer | null;
+  reloadTranscript: (lines: any[], words: any[] | null) => Promise<void>;
 }
 
 interface Props {
