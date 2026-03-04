@@ -1,4 +1,3 @@
-/* cache-bust: 2026-03-04-V4 */
 /**
  * useLyricDancePlayer — canonical player lifecycle hook.
  *
@@ -52,7 +51,9 @@ export function useLyricDancePlayer(
   }, [initialData]);
 
   // ── Init / destroy ────────────────────────────────────────────────────
-  const dataReady = !!(data && data.words?.length && data.cinematic_direction);
+  // words are optional — player falls back to line-level timing if absent.
+  // Only cinematic_direction is required (drives the entire visual system).
+  const dataReady = !!(data && data.cinematic_direction);
 
   useEffect(() => {
     if (initRef.current || !dataReady) return;
