@@ -1091,6 +1091,11 @@ export class LyricDancePlayer {
   private _lightingOverlayKey = '';
   private _textBandBrightness = 0.3; // sampled brightness of center band where text renders
   private _lastBandSampleMs = 0;     // throttle: sample every 300ms
+  // ═══ Frozen background snapshot — redrawn only on section change, not every frame ═══
+  // Text animation draws on top of this, cutting bg+filter cost to near-zero per frame.
+  private _bgSnapshot: HTMLCanvasElement | null = null;
+  private _bgSnapshotSection = -999; // section index when snapshot was last baked
+  private _bgSnapshotQTier = -1;     // quality tier when snapshot was last baked
   // ═══ Per-frame caches — computed once in tick(), reused everywhere ═══
   private _frameSectionIdx = -1;
   private _framePalette: string[] | null = null;
@@ -1738,6 +1743,7 @@ export class LyricDancePlayer {
     // Invalidate bg cache — was baked at previous DPR
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
+    this._bgSnapshotSection = -999; // force rebake at new resolution
     if (this.payload) this.buildBgCache();
   }
 
@@ -1843,8 +1849,8 @@ export class LyricDancePlayer {
   }
 
   updateSectionImages(urls: string[]): void {
-    
     this.data = { ...this.data, section_images: urls };
+    this._bgSnapshotSection = -999; // force snapshot rebake with new images
     this.loadSectionImages();
   }
 
@@ -2313,7 +2319,7 @@ export class LyricDancePlayer {
     sx: number,
     sy: number,
   ): [number, number, number, number, number, number] {
-    const dpr = this.dpr;
+    const dpr = this._effectiveDpr;
     if (rotation === 0 && skewXDeg === 0 && sx === 1 && sy === 1) {
       return [dpr, 0, 0, dpr, tx * dpr, ty * dpr];
     }
@@ -2534,12 +2540,9 @@ export class LyricDancePlayer {
     const qTier = this._qualityTier;
 
     // ── During minimal-boot upgrade gap: keep the first frame visible ──
-    // compiledScene is null until prepareFullMode() completes. Rather than
-    // showing a blank canvas, re-draw the gradient + first lyric placeholder
-    // every tick so the user always sees something meaningful.
     if (!precomputedFrame) {
       if (!this.fullModeEnabled) {
-        this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+        this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
         this.drawMinimalFirstFrame();
       }
       return;
@@ -2548,71 +2551,93 @@ export class LyricDancePlayer {
     const frame = precomputedFrame;
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
 
-    try {
-      this.updateSims(tSec, frame);
-    } catch (e) {
-      console.error('[LyricEngine] sim crash:', e);
+    // ── Sim update: skip at tier ≥ 2 (they're not drawn) ──────────────
+    // Cuts fire/water/aurora particle math entirely when fps is low.
+    if (qTier < 2) {
+      try { this.updateSims(tSec, frame); } catch (e) { console.error('[LyricEngine] sim crash:', e); }
+    } else {
+      // Still update beat visualizer — it's drawn at tier < 2 only, but
+      // _globalBeatVis needs state for when we recover to tier 1.
+      if (this._globalBeatVis) {
+        const bs = this._lastBeatState;
+        this._globalBeatVis.update(bs?.energy ?? 0, bs?.pulse ?? 0, bs?.hitStrength ?? 0, bs?.phase ?? 0, bs?.beatIndex ?? 0);
+      }
     }
 
-    // Background: static bg cache first, then section images on top
-    // ═══ V2: CameraRig parallax — BG_FAR layer ═══
-    this.cameraRig.applyTransform(this.ctx, 'far');
-    this.drawBackground(frame);
+    // ── BACKGROUND: frozen snapshot, rebaked only on section change ───
+    // At tier ≥ 1 the bg is a static drawImage — zero filter overhead per frame.
+    // At tier 0 we still do full Ken Burns + filter (looks best when fps allows it).
+    const curSection = this._frameSectionIdx;
+    const snapshotStale = curSection !== this._bgSnapshotSection || qTier !== this._bgSnapshotQTier;
 
-    // Section image overlay — use baked sectionIndex directly
-    const imgIdx = Math.min(frame.sectionIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
-    const nextImgIdx = Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
-    // Crossfade based on actual section boundaries (matches grade lerp timing)
-    const duration = this.audio?.duration || 1;
-    const totalChapters = this.chapterImages.length || 1;
-    const chapterSpan = duration / totalChapters;
-    const currentTimeSec = this.audio?.currentTime ?? 0;
-    const cdForCrossfade = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const sectionsForCrossfade = (cdForCrossfade?.sections as any[]) ?? (cdForCrossfade?.chapters as any[]) ?? [];
-    const currentSection = sectionsForCrossfade[imgIdx];
-    let crossfade = 0;
-    if (currentSection && nextImgIdx !== imgIdx) {
-      // Resolve the end time of the current section
-      const secEnd = currentSection.endSec
-        ?? (currentSection.endRatio != null ? currentSection.endRatio * duration : null);
-      if (secEnd != null) {
-        const crossfadeDur = 1.5; // seconds — matches grade lerp transitionDur
-        const timeToEnd = secEnd - currentTimeSec;
-        if (timeToEnd < crossfadeDur && timeToEnd > 0) {
-          crossfade = 1 - (timeToEnd / crossfadeDur); // 0 at start → 1 at boundary
+    if (qTier === 0 || snapshotStale) {
+      // Bake a fresh snapshot into _bgSnapshot offscreen canvas
+      if (snapshotStale && qTier >= 1) {
+        if (!this._bgSnapshot || this._bgSnapshot.width !== Math.floor(this.width * this._effectiveDpr) || this._bgSnapshot.height !== Math.floor(this.height * this._effectiveDpr)) {
+          this._bgSnapshot = document.createElement('canvas');
+          this._bgSnapshot.width = Math.floor(this.width * this._effectiveDpr);
+          this._bgSnapshot.height = Math.floor(this.height * this._effectiveDpr);
         }
+        const snapCtx = this._bgSnapshot.getContext('2d')!;
+        snapCtx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
+        snapCtx.clearRect(0, 0, this.width, this.height);
+
+        // Draw bg gradient
+        this.cameraRig.applyTransform(snapCtx, 'far');
+        this._drawBackgroundToCtx(snapCtx, frame);
+        const imgIdx = Math.min(frame.sectionIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
+        this._drawChapterImageToCtx(snapCtx, imgIdx, imgIdx, 0); // no crossfade in snapshot
+        this.cameraRig.resetTransform(snapCtx);
+        if (qTier < 2) {
+          this.cameraRig.applyTransform(snapCtx, 'mid');
+          this._drawSimLayerToCtx(snapCtx, frame);
+          this.cameraRig.resetTransform(snapCtx);
+        }
+        snapCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+        this._bgSnapshotSection = curSection;
+        this._bgSnapshotQTier = qTier;
+      }
+
+      if (qTier === 0) {
+        // Full quality path — Ken Burns, crossfade, filter all live
+        this.cameraRig.applyTransform(this.ctx, 'far');
+        this.drawBackground(frame);
+        const imgIdx = Math.min(frame.sectionIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
+        const nextImgIdx = Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
+        const duration = this.audio?.duration || 1;
+        const cdForCrossfade = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+        const sectionsForCrossfade = (cdForCrossfade?.sections as any[]) ?? (cdForCrossfade?.chapters as any[]) ?? [];
+        const currentSection = sectionsForCrossfade[imgIdx];
+        let crossfade = 0;
+        if (currentSection && nextImgIdx !== imgIdx) {
+          const secEnd = currentSection.endSec ?? (currentSection.endRatio != null ? currentSection.endRatio * duration : null);
+          if (secEnd != null) {
+            const timeToEnd = secEnd - (this.audio?.currentTime ?? 0);
+            if (timeToEnd < 1.5 && timeToEnd > 0) crossfade = 1 - (timeToEnd / 1.5);
+          }
+        }
+        this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
+        this.cameraRig.resetTransform(this.ctx);
+        this.cameraRig.applyTransform(this.ctx, 'mid');
+        this.drawSimLayer(frame);
+        if (qTier < 2) this.drawLightingOverlay(frame, tSec);
+        this.cameraRig.resetTransform(this.ctx);
       }
     }
-    this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
-    // ═══ V2: End BG_FAR parallax ═══
-    this.cameraRig.resetTransform(this.ctx);
 
-    // ═══ V2: CameraRig parallax — BG_MID layer (sims, lighting) ═══
-    // Skip sims at tier 3 (fire/water/aurora/rain draw full-canvas canvases)
-    // Skip lighting overlay at tier 2+ (radial gradient composite)
-    if (qTier < 3) {
-      this.cameraRig.applyTransform(this.ctx, 'mid');
-      this.drawSimLayer(frame);
-      if (qTier < 2) this.drawLightingOverlay(frame, tSec);
-      this.cameraRig.resetTransform(this.ctx);
+    // Tier ≥ 1: stamp the frozen snapshot — one drawImage, zero filters
+    if (qTier >= 1 && this._bgSnapshot) {
+      this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      this.ctx.drawImage(this._bgSnapshot, 0, 0);
+      this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     }
 
     if (qTier < 3) {
-      try {
-        this.checkEmotionalEvents(tSec, songProgress);
-      } catch (e) {
-        console.error('[LyricEngine] emotional events crash:', e);
-      }
-    }
-
-    if (qTier < 3) this.drawEmotionalEvents(tSec);
-
-    // Ambient particles — runtime system updates per section
-    // ═══ V2: CameraRig parallax — BG_NEAR layer ═══
-    // Skip particles entirely at tier 3 (hundreds of drawImage/arc calls)
-    if (qTier < 3) {
+      try { this.checkEmotionalEvents(tSec, songProgress); } catch (e) { console.error('[LyricEngine] emotional events crash:', e); }
+      this.drawEmotionalEvents(tSec);
       this.cameraRig.applyTransform(this.ctx, 'near');
       this.ambientParticleEngine?.draw(this.ctx, "far");
       this.cameraRig.resetTransform(this.ctx);
@@ -2676,6 +2701,14 @@ export class LyricDancePlayer {
     }
     const frameNowMs = performance.now(); // hoisted — used everywhere below
     const frameNowSec = frameNowMs / 1000;
+
+    // ── Pre-zero shadow state at tier ≥ 2 ────────────────────────────
+    // Setting shadowBlur=0 here once is cheaper than the browser having to
+    // re-evaluate 'if blurCap===0 then shadow is still dirty' per chunk.
+    if (qTier >= 2) {
+      this.ctx.shadowBlur = 0;
+      this.ctx.shadowColor = 'transparent';
+    }
 
     const isPortraitLocal = this.height > this.width;
     const viewportMinFont = isPortraitLocal ? 12 : 10;
@@ -5005,6 +5038,30 @@ export class LyricDancePlayer {
   }
 
 
+
+  /** Draw background gradient to an arbitrary ctx (used for snapshot baking) */
+  private _drawBackgroundToCtx(ctx: CanvasRenderingContext2D, frame: ScaledKeyframe): void {
+    const saved = this.ctx;
+    (this as any).ctx = ctx;
+    this.drawBackground(frame);
+    (this as any).ctx = saved;
+  }
+
+  /** Draw chapter image to an arbitrary ctx (used for snapshot baking) */
+  private _drawChapterImageToCtx(ctx: CanvasRenderingContext2D, imgIdx: number, nextImgIdx: number, blend: number): void {
+    const saved = this.ctx;
+    (this as any).ctx = ctx;
+    this.drawChapterImage(imgIdx, nextImgIdx, blend);
+    (this as any).ctx = saved;
+  }
+
+  /** Draw sim layer to an arbitrary ctx (used for snapshot baking) */
+  private _drawSimLayerToCtx(ctx: CanvasRenderingContext2D, frame: ScaledKeyframe): void {
+    const saved = this.ctx;
+    (this as any).ctx = ctx;
+    this.drawSimLayer(frame);
+    (this as any).ctx = saved;
+  }
 
   private drawBackground(frame: ScaledKeyframe): void {
     const chapters = this.resolvedState.chapters ?? [];
