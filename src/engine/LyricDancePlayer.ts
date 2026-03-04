@@ -1054,6 +1054,7 @@ export class LyricDancePlayer {
   private _compiledViewportH = 540;
   private _compiledWasPortrait = false;
   private _evalFrame: ScaledKeyframe | null = null;
+  private _evalChunks: ScaledKeyframe['chunks'] | null = null;
 
   // Background cache
   private bgCaches: HTMLCanvasElement[] = [];
@@ -2684,7 +2685,17 @@ export class LyricDancePlayer {
     let drawCalls = 0;
     const sortBuf = this._sortBuffer;
     // PERF: skip sort when visible set hasn't changed — hash already computed for collision solver above
-    const sortHash = visibleHash; // reuse the FNV hash computed for collision detection
+    // Inline FNV-1a hash of visible chunk ids (same logic as visibleHash below, but computed earlier for sort-skip)
+    let sortHash = 2166136261;
+    for (let shi = 0; shi < frame.chunks.length; shi += 1) {
+      const sid = frame.chunks[shi].id;
+      for (let sci = 0; sci < sid.length; sci += 1) {
+        sortHash ^= sid.charCodeAt(sci);
+        sortHash = Math.imul(sortHash, 16777619);
+      }
+      sortHash ^= 44;
+      sortHash = Math.imul(sortHash, 16777619);
+    }
     if (sortHash !== this._lastSortHash || sortBuf.length !== frame.chunks.length) {
       this._lastSortHash = sortHash;
       sortBuf.length = 0;
@@ -4482,6 +4493,8 @@ export class LyricDancePlayer {
     }
     const _hasBeatResponses = _beatResponses.length > 0;
     let ci = 0;
+    if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
+    const chunks = this._evalChunks;
     const bpm = scene.bpm;
 
     for (let ai = 0; ai < activeGroups.length; ai++) {
@@ -4813,10 +4826,10 @@ export class LyricDancePlayer {
         // ═══ BEAT-GRID GLOW, SCALE, NUDGE via SubsystemResponse ═══
         // Use the pre-computed per-emphasis-level response so every word dances
         // to the beat proportional to its semantic weight.
-        const emp = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
+        const empBeat = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
         // Hero words get isHero=true response (1.6× on wordScale/wordGlow/wordNudgeY)
         const beatResp = _hasBeatResponses
-          ? (isHeroWord ? _beatResponsesHero[emp] : _beatResponses[emp])
+          ? (isHeroWord ? _beatResponsesHero[empBeat] : _beatResponses[empBeat])
           : null;
 
         let wordGlow = 0;
