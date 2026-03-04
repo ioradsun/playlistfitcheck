@@ -383,7 +383,7 @@ export default function ShareableLyricDance() {
           }
         });
         // Profile already fetched in parallel above. Fetch comments here (no earlier counterpart).
-        supabase.from("lyric_dance_comments" as any).select("id, text, submitted_at").eq("dance_id", d.id).order("submitted_at", { ascending: true }).limit(100).then(() => {}).catch(() => {});
+        Promise.resolve(supabase.from("lyric_dance_comments" as any).select("id, text, submitted_at").eq("dance_id", d.id).order("submitted_at", { ascending: true }).limit(100)).then(() => {}).catch(() => {});
       });
   }, [artistSlug, songSlug]);
 
