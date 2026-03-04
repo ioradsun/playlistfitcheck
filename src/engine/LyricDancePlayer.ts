@@ -1693,7 +1693,7 @@ export class LyricDancePlayer {
     this.lastSimFrame = -1;
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    this._lastVisibleChunkIds = '';
+    this._lastVisibleMidChunkId = '';
     this.cameraRig.setViewport(w, h);
 
     // Keep compile-time layout in sync with meaningful viewport changes.
