@@ -68,7 +68,15 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   // Expose player to parent via ref
   useImperativeHandle(ref, () => ({
     getPlayer: () => playerRef.current,
-  }), []);
+    reloadTranscript: async (lines: any[], words: any[] | null) => {
+      const player = playerRef.current;
+      if (!player || !data) return;
+      const t = player.getCurrentTime();
+      const newPayload = { ...data, lyrics: lines, words: words ?? data.words };
+      await player.load(newPayload, () => {});
+      player.seek(t);
+    },
+  }), [data]);
 
   // Use prefetched data if available, otherwise fetch
   useEffect(() => {
