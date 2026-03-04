@@ -497,6 +497,25 @@ export default function ShareableLyricDance() {
     };
   }, [data?.id, data?.section_images, data?.auto_palettes]);
 
+  // ── Hot-patch transcript (lyrics/words) without restart ──────────
+  const transcriptMountRef = useRef(false);
+  const transcriptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!playerRef.current || !data?.lyrics) return;
+    // Skip the initial mount — player already loaded with this data
+    if (!transcriptMountRef.current) {
+      transcriptMountRef.current = true;
+      return;
+    }
+    if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
+    transcriptTimerRef.current = setTimeout(() => {
+      playerRef.current?.updateTranscript(data.lyrics, data.words ?? null);
+    }, 300);
+    return () => {
+      if (transcriptTimerRef.current) clearTimeout(transcriptTimerRef.current);
+    };
+  }, [data?.lyrics, data?.words]);
+
   // ── Hot-patch scene context without restart ────────────────────────
   useEffect(() => {
     if (!playerRef.current || !data?.scene_context) return;
