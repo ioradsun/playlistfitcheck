@@ -309,6 +309,8 @@ export function FitTab({
 
     return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
   }, [lyricData?.lines, words]);
+
+  const handleDance = useCallback(async () => {
     console.log("[FitTab] handleDance called", { user: !!user, lyricData: !!lyricData, audioFile: !!audioFile, publishing });
     if (!user) { toast.error("Sign in to publish your Dance"); return; }
     if (!cinematicDirection || !lyricData || !audioFile || publishing) return;
