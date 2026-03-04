@@ -977,6 +977,7 @@ export class LyricDancePlayer {
   private chunks: Map<string, ChunkState> = new Map();
   private _lastFont = '';
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
+  private _outChunks: ScaledKeyframe['chunks'] = [];
   private _boundsBuffer: ChunkBounds[] = [];
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
   private _lastVisibleChunkSetHash = 0;
