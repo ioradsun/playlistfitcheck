@@ -1615,6 +1615,23 @@ export class LyricDancePlayer {
     return Math.max(0, this.songEndSec - this.songStartSec);
   }
 
+  async prepareExportFramePipeline(): Promise<void> {
+    if (this._bakePromise) await this._bakePromise;
+    if (!this.fullModeEnabled) this.enableFullVisualMode();
+
+    // Ensure chapter images + Ken Burns params are ready before frame stepping.
+    await this.loadSectionImages().catch(() => undefined);
+
+    // Rebuild visuals if they were not initialized yet.
+    if (!this.chapterSims.length || !this._globalBeatVis) this.buildChapterSims();
+    if (!this.bgCaches.length) this.buildBgCache();
+
+    this._bgSnapshotSection = -999;
+    this._bgSnapshotQTier = -1 as any;
+    this._lightingOverlayCanvas = null;
+    this._lightingOverlayKey = '';
+  }
+
   private _exportMode = false;
   private _savedDpr = 0;
   private _savedQualityTier: 0 | 1 | 2 | 3 = 0;
