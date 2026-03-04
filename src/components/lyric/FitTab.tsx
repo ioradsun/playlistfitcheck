@@ -296,14 +296,21 @@ export function FitTab({
       const danceId = publishedDanceIdRef.current;
       if (!danceId) return;
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
+
+      // Use the reconciled words from the player engine — updateTranscript() maps
+      // edited line text back onto word timestamp slots. Those reconciled words
+      // are what compileScene actually renders on the shareable page.
+      // Fall back to raw Whisper words if player isn't ready yet.
+      const reconciledWords = dancePlayerRef.current?.getPlayer()?.currentData?.words ?? wordsRef.current ?? null;
+
       const { error } = await supabase
         .from('shareable_lyric_dances' as any)
-        .update({ lyrics: mainLines, words: wordsRef.current ?? null })
+        .update({ lyrics: mainLines, words: reconciledWords })
         .eq('id', danceId);
       if (error) {
         console.error('[auto-save] lyrics save failed:', error.message);
       } else {
-        console.log('[auto-save] lyrics saved to DB. lines:', mainLines.length);
+        console.log('[auto-save] lyrics + reconciled words saved. lines:', mainLines.length, 'words:', reconciledWords?.length ?? 0);
       }
     }, 1500); // 1.5s debounce — wait for user to stop typing
 
