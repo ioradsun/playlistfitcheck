@@ -261,18 +261,27 @@ export function FitTab({
 
   useEffect(() => {
     // Only reload when current transcript differs from the published version
-    if (!prefetchedDanceData) return;
-    if (transcriptKey === prefetchedTranscriptKey) return;
+    if (!prefetchedDanceData) {
+      console.log('[transcript-reload] skipped: prefetchedDanceData not yet loaded');
+      return;
+    }
+    if (transcriptKey === prefetchedTranscriptKey) {
+      console.log('[transcript-reload] skipped: keys match (no edits vs published)');
+      return;
+    }
+    console.log('[transcript-reload] queuing reload — key mismatch detected');
 
     if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
 
     const runReload = () => {
       const playerHandle = dancePlayerRef.current;
       if (!playerHandle) {
+        console.log('[transcript-reload] playerHandle not ready, retrying...');
         reloadTimerRef.current = setTimeout(runReload, 180);
         return;
       }
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
+      console.log('[transcript-reload] calling reloadTranscript with', mainLines.length, 'lines');
       void playerHandle.reloadTranscript(mainLines, wordsRef.current ?? undefined);
     };
 
