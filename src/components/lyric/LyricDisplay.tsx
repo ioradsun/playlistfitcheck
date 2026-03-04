@@ -36,7 +36,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
-import { LyricWaveform } from "./LyricWaveform";
+import { type BeatGridData } from "@/hooks/useBeatGrid";
 import { VersionToggle, type ActiveVersion } from "./VersionToggle";
 import {
   LyricFormatControls,
