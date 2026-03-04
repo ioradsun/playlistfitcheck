@@ -323,6 +323,7 @@ export function LyricDisplay({
   onBack,
   onSaved,
   onReuploadAudio,
+  onLinesChange,
   onHeaderProject,
 }: Props) {
   const { user, roles } = useAuth();
