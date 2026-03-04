@@ -249,12 +249,20 @@ export function FitTab({
     return linesStr + '||' + wordsStr;
   }, [lyricData?.lines, words]);
 
-  const initialTranscriptKeyRef = useRef(transcriptKey);
+  // Build a stable key from the prefetched (published) data so we can detect edits
+  const prefetchedTranscriptKey = useMemo(() => {
+    if (!prefetchedDanceData) return '';
+    const pLines = Array.isArray(prefetchedDanceData.lyrics) ? prefetchedDanceData.lyrics : [];
+    const linesStr = pLines.map((l: any) => `${l.text}|${l.start}|${l.end}`).join('\n');
+    const pWords = Array.isArray(prefetchedDanceData.words) ? prefetchedDanceData.words : [];
+    const wordsStr = pWords.map((w: any) => `${w.word}|${w.start}|${w.end}`).join(',');
+    return linesStr + '||' + wordsStr;
+  }, [prefetchedDanceData]);
 
   useEffect(() => {
-    // Skip the initial render — only react to actual changes
-    if (transcriptKey === initialTranscriptKeyRef.current) return;
+    // Only reload when current transcript differs from the published version
     if (!prefetchedDanceData || !dancePlayerRef.current) return;
+    if (transcriptKey === prefetchedTranscriptKey) return;
 
     if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
     reloadTimerRef.current = setTimeout(() => {
@@ -263,7 +271,7 @@ export function FitTab({
     }, 400);
 
     return () => { if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current); };
-  }, [transcriptKey, prefetchedDanceData]);
+  }, [transcriptKey, prefetchedDanceData, prefetchedTranscriptKey]);
 
 
   const handleDance = useCallback(async () => {
