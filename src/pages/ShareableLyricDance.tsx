@@ -497,7 +497,6 @@ export default function ShareableLyricDance() {
   // ── Render ──────────────────────────────────────────────────────────
 
   return (
-  return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
       {/* Close button */}
       <button
