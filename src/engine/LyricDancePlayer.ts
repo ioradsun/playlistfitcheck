@@ -2398,7 +2398,7 @@ export class LyricDancePlayer {
       ds.scale = frame?.cameraZoom ?? 1;
       ds.lineColor = this.getResolvedPalette()?.[2] ?? '#ffffff';
       ds.effectKey = activeLine?.tag ?? '—';
-      const firstVisible = this._solvedBounds[0];
+      const firstVisible = this._solvedBounds[0] as any;
       ds.entryProgress = firstVisible?.entryProgress ?? 0;
       ds.exitProgress = firstVisible?.exitProgress ?? 0;
     } // end debug panel guard
