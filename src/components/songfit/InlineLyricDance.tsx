@@ -1,11 +1,11 @@
-/* cache-bust: 2026-03-04-V4 */
+/* cache-bust: 2026-03-04-V6 */
 /**
  * InlineLyricDance — Embeds the lyric dance player inside a card.
  * Player lifecycle is fully owned by useLyricDancePlayer.
  */
 
 import { useState, useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle } from "react";
-import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
+import { Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
@@ -178,10 +178,30 @@ function InlineLyricDanceInner(
         style={{ display: "none" }} />
 
       {(loading || (!playerReady && !fetchError)) && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black">
-          <div className="text-center space-y-2">
-            <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto" />
-            <p className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">Loading dance…</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
+          {/* Artist initial */}
+          <div className="w-12 h-12 rounded-full bg-white/[0.06] flex items-center justify-center mb-4">
+            <span className="text-base font-mono text-white/30">
+              {(artistName || songTitle || "?")[0].toUpperCase()}
+            </span>
+          </div>
+          {/* Song title */}
+          <p className="text-sm font-semibold text-white/80 mb-1 px-6 text-center truncate max-w-[80%]">{songTitle}</p>
+          {artistName && (
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 mb-5">{artistName}</p>
+          )}
+          {/* Waveform shimmer — 5 bars pulsing in sequence */}
+          <div className="flex items-end gap-[3px] h-6">
+            {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
+              <div
+                key={i}
+                className="w-[3px] rounded-full bg-white/20"
+                style={{
+                  height: `${h * 100}%`,
+                  animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite`,
+                }}
+              />
+            ))}
           </div>
         </div>
       )}

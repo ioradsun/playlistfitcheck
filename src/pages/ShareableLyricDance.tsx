@@ -485,10 +485,18 @@ export default function ShareableLyricDance() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center z-50">
-        <div className="text-center space-y-3">
-          <div className="h-4 w-48 rounded bg-white/[0.06] animate-pulse mx-auto" />
-          <div className="h-3 w-32 rounded bg-white/[0.04] animate-pulse mx-auto" />
+      <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-50">
+        <div className="w-14 h-14 rounded-full bg-white/[0.06] flex items-center justify-center mb-5">
+          <span className="text-lg font-mono text-white/30">♪</span>
+        </div>
+        <div className="flex items-end gap-[3px] h-6">
+          {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
+            <div
+              key={i}
+              className="w-[3px] rounded-full bg-white/20"
+              style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }}
+            />
+          ))}
         </div>
       </div>
     );
@@ -506,11 +514,24 @@ export default function ShareableLyricDance() {
   // Gate: don't render player until cinematic_direction is a real object (not null, not [])
   if (!data.cinematic_direction || Array.isArray(data.cinematic_direction)) {
     return (
-      <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center z-50">
-        <div className="text-center space-y-3">
-          <div className="h-4 w-48 rounded bg-white/[0.06] animate-pulse mx-auto" />
-          <div className="h-3 w-32 rounded bg-white/[0.04] animate-pulse mx-auto" />
-          <p className="text-white/20 text-xs font-mono mt-4">loading cinematic direction…</p>
+      <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-50">
+        <div className="w-14 h-14 rounded-full bg-white/[0.06] flex items-center justify-center mb-4">
+          <span className="text-lg font-mono text-white/30">
+            {(data.artist_name || data.song_name || "?")[0].toUpperCase()}
+          </span>
+        </div>
+        <p className="text-sm font-semibold text-white/80 mb-1">{data.song_name}</p>
+        {data.artist_name && (
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 mb-5">{data.artist_name}</p>
+        )}
+        <div className="flex items-end gap-[3px] h-6">
+          {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
+            <div
+              key={i}
+              className="w-[3px] rounded-full bg-white/20"
+              style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }}
+            />
+          ))}
         </div>
       </div>
     );
