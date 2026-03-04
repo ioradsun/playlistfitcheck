@@ -942,6 +942,9 @@ export class LyricDancePlayer {
   // Audio (React reads this)
   public audio: HTMLAudioElement;
 
+  /** Theme override: 'auto' uses mood grade, 'light'/'dark' forces the look */
+  public themeOverride: 'auto' | 'light' | 'dark' = 'auto';
+
   // Public debug surface (React reads this)
   public debugState: LiveDebugState = { ...DEFAULT_DEBUG_STATE };
   public resolvedState: ResolvedPlayerState = {
@@ -2354,11 +2357,20 @@ export class LyricDancePlayer {
     const nowMs = performance.now();
     if (nowMs - this._lastBandSampleMs > 2000) {
       this._lastBandSampleMs = nowMs;
-      const moodGrade = (this as any)._activeMoodGrade as MoodGrade | undefined;
-      if (moodGrade) {
-        // CSS filter brightness applies to the whole image. Text sits in the lower
-        // half where it's almost always darker. Bias down by 0.15.
-        this._textBandBrightness = Math.max(0, moodGrade.brightness - 0.15);
+      if (this.themeOverride === 'light') {
+        // Force light background → dark text
+        this._textBandBrightness = 0.75;
+      } else if (this.themeOverride === 'dark') {
+        // Force dark background → light text
+        this._textBandBrightness = 0.25;
+      } else {
+        // Auto: use mood grade as before
+        const moodGrade = (this as any)._activeMoodGrade as MoodGrade | undefined;
+        if (moodGrade) {
+          // CSS filter brightness applies to the whole image. Text sits in the lower
+          // half where it's almost always darker. Bias down by 0.15.
+          this._textBandBrightness = Math.max(0, moodGrade.brightness - 0.15);
+        }
       }
     }
 
@@ -3477,7 +3489,24 @@ export class LyricDancePlayer {
       const dominantMood = sections[0]?.visualMood as string | undefined;
       this._songGrade = getMoodGrade(dominantMood);
     }
-    const activeGrade = this._songGrade;
+    let activeGrade = this._songGrade;
+
+    // ═══ THEME OVERRIDE: modify grade for forced light/dark ═══
+    if (this.themeOverride !== 'auto' && activeGrade) {
+      // Clone the grade to avoid mutating the cached _songGrade
+      activeGrade = { ...activeGrade, blur: { ...activeGrade.blur }, grain: { ...activeGrade.grain } };
+      if (this.themeOverride === 'light') {
+        // Push brightness way up, reduce contrast, desaturate slightly
+        activeGrade.brightness = Math.max(activeGrade.brightness, 0.75);
+        activeGrade.contrast = Math.min(activeGrade.contrast, 0.90);
+        activeGrade.saturation = Math.min(activeGrade.saturation, 0.70);
+      } else {
+        // Push brightness down for a moody dark look
+        activeGrade.brightness = Math.min(activeGrade.brightness, 0.28);
+        activeGrade.contrast = Math.max(activeGrade.contrast, 1.2);
+        activeGrade.saturation = Math.min(activeGrade.saturation, 0.65);
+      }
+    }
 
     // Emotional intensity: use a fixed mid-level — no per-section variation
     const intensity = 0.5;
@@ -4451,7 +4480,7 @@ export class LyricDancePlayer {
     if (bgCanvas) {
       this.ctx.drawImage(bgCanvas, 0, 0, this.width, this.height);
     } else {
-      this.ctx.fillStyle = '#0a0a0f';
+      this.ctx.fillStyle = this.themeOverride === 'light' ? '#f0f0f5' : '#0a0a0f';
       this.ctx.fillRect(0, 0, this.width, this.height);
     }
   }
