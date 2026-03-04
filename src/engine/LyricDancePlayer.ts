@@ -4375,12 +4375,14 @@ export class LyricDancePlayer {
 
       const _resolvedFontForML = this.getResolvedFont();
 
-      // ── Cache is only valid for 'current' groups ──
-      // Offscreen groups never need multi-line layout. If we cache an offscreen
-      // pass (isMultiLine=false, empty dx/dy) and then hit it when the group
-      // becomes 'current', the hero layout silently never runs — causing the
-      // word-position jump. Only read/write the cache when lineRole==='current'.
-      if (lineRole === 'current') {
+      // ── Cache read gated on current + no active solo hero ──
+      // Offscreen groups skip entirely (no layout needed).
+      // Solo-hero-active frames must ALSO skip: the cache was written when
+      // groupHasActiveSoloHero=false (multi-line offsets computed). When the
+      // hero word activates, heroOffsetX/Y is applied on top of the cached
+      // _mlDx/y — both centering systems compound and the word jumps.
+      // Fix: if a solo hero is active, treat as no multi-line layout.
+      if (lineRole === 'current' && !groupHasActiveSoloHero) {
         const _mlCached = this._mlLayoutCache.get(groupIdx);
         if (
           _mlCached &&
