@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
-import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
+import { Loader2, Volume2, VolumeX, Maximize2, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withInitLimit } from "@/engine/initQueue";
