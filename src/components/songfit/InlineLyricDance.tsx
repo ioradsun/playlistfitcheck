@@ -319,4 +319,4 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
   );
 }
 
-export const InlineLyricDance = memo(InlineLyricDanceInner);
+export const InlineLyricDance = memo(forwardRef(InlineLyricDanceInner));
