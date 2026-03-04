@@ -119,13 +119,14 @@ export function FitTab({
     // Look up by user_id + song_slug (artist_slug may differ between artist name and display_name)
     supabase
       .from("shareable_lyric_dances" as any)
-      .select("artist_slug, song_slug, lyrics")
+      .select("id, artist_slug, song_slug, lyrics")
       .eq("user_id", user.id)
       .eq("song_slug", songSlug)
       .maybeSingle()
       .then(({ data }: any) => {
         if (data) {
           setPublishedUrl(`/${data.artist_slug}/${data.song_slug}/lyric-dance`);
+          setPublishedDanceId(data.id);
           const pubLines = Array.isArray(data.lyrics) ? data.lyrics : [];
           setPublishedLyricsHash(computeLyricsHash(pubLines));
         }
