@@ -156,6 +156,7 @@ interface Props {
   onBack: () => void;
   onSaved?: (id: string) => void;
   onReuploadAudio?: (file: File) => void;
+  onLinesChange?: (lines: LyricLine[]) => void;
   onHeaderProject?: (
     project: {
       title: string;
