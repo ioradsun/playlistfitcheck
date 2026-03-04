@@ -304,8 +304,7 @@ export default function ShareableLyricDance() {
         // Was inside .finally() of direction chain → avatar arrived AFTER cover
         // was already showing, causing a letter→avatar pop.
         supabase.from("profiles").select("display_name, avatar_url").eq("id", d.user_id).maybeSingle()
-          .then(({ data: pData }) => { if (pData) setProfile(pData as ProfileInfo); })
-          .catch(() => {});
+          .then(({ data: pData }) => { if (pData) setProfile(pData as ProfileInfo); }, () => {});
 
         // Phase 2: cinematic direction
         Promise.resolve(
@@ -383,7 +382,7 @@ export default function ShareableLyricDance() {
           }
         });
         // Profile already fetched in parallel above. Fetch comments here (no earlier counterpart).
-        supabase.from("lyric_dance_comments" as any).select("id, text, submitted_at").eq("dance_id", d.id).order("submitted_at", { ascending: true }).limit(100).then(() => {}).catch(() => {});
+        supabase.from("lyric_dance_comments" as any).select("id, text, submitted_at").eq("dance_id", d.id).order("submitted_at", { ascending: true }).limit(100).then(() => {}, () => {});
       });
   }, [artistSlug, songSlug]);
 
