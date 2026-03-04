@@ -4509,7 +4509,6 @@ export class LyricDancePlayer {
               yPos += line.h;
             }
           }
-        }
 
              // Store in cache only for current groups - offscreen passes must never
           // prime the cache with isMultiLine=false + empty dx/dy.
@@ -4524,12 +4523,7 @@ export class LyricDancePlayer {
             resolvedFont: _resolvedFontForML,
           });
         } // end cache-miss
-      } // end lineRole === current     dx: _mlDx.slice(),
-          dy: _mlDy.slice(),
-          groupIdx,
-          resolvedFont: _resolvedFontForML,
-        });
-      }
+      
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
