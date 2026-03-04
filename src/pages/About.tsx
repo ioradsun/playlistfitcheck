@@ -41,7 +41,7 @@ export default function About() {
             <p className="text-sm text-muted-foreground leading-relaxed">
               {about.origin_intro || (
                 <>
-                  I'm{" "}
+                   I'm{" "}
                   <a
                     href="https://open.spotify.com/artist/1PlkAOmfFYqBYFpN8jDj4v"
                     target="_blank"
@@ -50,7 +50,7 @@ export default function About() {
                   >
                     ajan
                   </a>
-                  . I make music, so I know the 3am doubt—is the mix ready, is it actually good? My dad builds tech. So we built tools to try and answer those questions.
+                  . I make music, so I know the 3am doubt—is the mix ready, is it actually good? My dad builds tech. So we built tools to try and answer those questions. Every tool here exists because we needed it ourselves first.
                 </>
               )}
             </p>
