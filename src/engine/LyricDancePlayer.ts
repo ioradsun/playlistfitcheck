@@ -1336,8 +1336,9 @@ export class LyricDancePlayer {
   private drawMinimalFirstFrame(): void {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
-    const bg = this.data.palette?.[0] ?? '#0b0b10';
-    const accent = this.data.palette?.[1] ?? '#2b2b45';
+    const isLight = this.themeOverride === 'light';
+    const bg = isLight ? '#f5f5f5' : (this.data.palette?.[0] ?? '#0b0b10');
+    const accent = isLight ? '#e8e8ec' : (this.data.palette?.[1] ?? '#2b2b45');
     const gradient = this.ctx.createLinearGradient(0, 0, 0, this.height);
     gradient.addColorStop(0, bg);
     gradient.addColorStop(1, accent);
@@ -1345,7 +1346,7 @@ export class LyricDancePlayer {
     this.ctx.fillRect(0, 0, this.width, this.height);
 
     const firstLine = this.data.lyrics?.[0]?.text?.trim() || 'Loading lyrics…';
-    this.ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    this.ctx.fillStyle = isLight ? 'rgba(26,26,46,0.92)' : 'rgba(255,255,255,0.92)';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.ctx.font = '700 32px "Montserrat", sans-serif';
@@ -2355,7 +2356,8 @@ export class LyricDancePlayer {
     // from the CSS filter + a bias toward dark (text is usually in bottom half).
     // This costs nothing — it's already computed.
     const nowMs = performance.now();
-    if (nowMs - this._lastBandSampleMs > 2000) {
+    const isForced = this.themeOverride !== 'auto';
+    if (isForced || nowMs - this._lastBandSampleMs > 2000) {
       this._lastBandSampleMs = nowMs;
       if (this.themeOverride === 'light') {
         // Force light background → dark text
@@ -3601,6 +3603,22 @@ export class LyricDancePlayer {
       this.ctx.restore();
     }
 
+    // ═══ LIGHT THEME WASH: overlay white on top of background to actually make it light ═══
+    if (this.themeOverride === 'light') {
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.82;
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillRect(0, 0, this.width, this.height);
+      this.ctx.restore();
+    } else if (this.themeOverride === 'dark') {
+      // Deepen dark mode with a subtle black overlay
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.35;
+      this.ctx.fillStyle = '#000000';
+      this.ctx.fillRect(0, 0, this.width, this.height);
+      this.ctx.restore();
+    }
+
     // ─── Film grain: consistent level from song grade ───
     // Skip grain at tier 1+ (overlay composite + putImageData is expensive)
     if (this._qualityTier === 0) {
@@ -4482,6 +4500,21 @@ export class LyricDancePlayer {
     } else {
       this.ctx.fillStyle = this.themeOverride === 'light' ? '#f0f0f5' : '#0a0a0f';
       this.ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    // Theme wash for system backgrounds
+    if (this.themeOverride === 'light') {
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.82;
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillRect(0, 0, this.width, this.height);
+      this.ctx.restore();
+    } else if (this.themeOverride === 'dark') {
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.35;
+      this.ctx.fillStyle = '#000000';
+      this.ctx.fillRect(0, 0, this.width, this.height);
+      this.ctx.restore();
     }
   }
 
