@@ -1,3 +1,4 @@
+/* cache-bust: 2026-03-04-V4 */
 /**
  * useLyricDancePlayer — canonical player lifecycle hook.
  *

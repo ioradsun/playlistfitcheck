@@ -1,3 +1,4 @@
+/* cache-bust: 2026-03-04-V4 */
 /**
  * Canonical column list for `shareable_lyric_dances` queries.
  *
