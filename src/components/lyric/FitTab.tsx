@@ -87,6 +87,8 @@ export function FitTab({
   onHeaderProject,
   onBack,
   onImageGenerationStatusChange,
+  autoDanceId,
+  autoDanceSlug,
 }: Props) {
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
