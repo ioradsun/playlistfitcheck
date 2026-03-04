@@ -33,7 +33,8 @@ export interface CameraConfig {
   beatZoom: number;              // zoom punch per beat (e.g. 0.02 = 2%)
   bassMultiplier: number;        // extra multiplier for bass hits
   transientMultiplier: number;   // extra multiplier for transient hits
-  swaySmoothing: number;         // how smooth the between-beat sway is
+  /** @deprecated Was used by old spring sway — no longer read. Reserved for compat. */
+  swaySmoothing: number;
   // Drop detection
   dropEnergyThreshold: number;   // energy must exceed rolling avg by this much
   dropMinEnergy: number;         // absolute minimum energy to trigger drop
@@ -43,9 +44,13 @@ export interface CameraConfig {
   // Hero punch
   heroZoom: number;              // zoom punch for hero word
   heroShakePx: number;           // shake impulse for hero
-  heroDurationFrames: number;    // frames the punch lasts
+  /** Duration of hero punch in milliseconds (replaces heroDurationFrames — frame-rate independent) */
+  heroPunchMs: number;
   heroTaperMs: number;           // cooldown between hero punches
   heroStillMs: number;           // ms of stillness before hero punch fires
+  // Output spring — smooths beat impulse output to prevent hard snaps
+  springStiffness: number;       // spring constant (higher = snappier)
+  springDamping: number;         // damping ratio (>1 = overdamped/no oscillation)
   // Parallax
   parallaxFar: number;
   parallaxMid: number;
@@ -94,19 +99,22 @@ const DEFAULT_CONFIG: CameraConfig = {
   beatZoom: 0.025,
   bassMultiplier: 1.8,
   transientMultiplier: 1.5,
-  swaySmoothing: 2.0,
+  swaySmoothing: 2.0,   // deprecated — kept for external callers passing old configs
   // Drop detection
   dropEnergyThreshold: 0.25,
   dropMinEnergy: 0.55,
   dropShakePx: 5,
   dropIntensity: 2.0,
   dropDecayRate: 1.5,
-  // Hero punch
+  // Hero punch — time-based (was heroDurationFrames: 3 → frame-rate dependent)
   heroZoom: 0.10,
   heroShakePx: 5,
-  heroDurationFrames: 3,
+  heroPunchMs: 80,        // ~5 frames at 60fps — snappy but visible
   heroTaperMs: 150,
   heroStillMs: 120,
+  // Output spring — critically damped feels organic without oscillation
+  springStiffness: 180,   // tuned for ~60ms settle time
+  springDamping: 22,      // sqrt(4 * stiffness) = critical damping
   // Parallax
   parallaxFar: 0.15,
   parallaxMid: 0.5,
@@ -147,12 +155,21 @@ export class CameraRig {
   private heroPunchZoom = 0;
   private heroPunchShakeX = 0;
   private heroPunchShakeY = 0;
-  private heroFramesLeft = 0;
-  private heroTotalFrames = 0;
+  /** Time-based punch — ms remaining (was frame-count, which was frame-rate dependent) */
+  private heroPunchMsLeft = 0;
+  private heroPunchMsTotal = 0;
   private lastHeroPunchMs = 0;
   private prevHeroActive = false;
   private heroStillTimer = 0;
   private heroFreezeAmount = 0;
+
+  // ═══ OUTPUT SPRING state ═══
+  // Spring follows raw impulse values → smooth organic output
+  // velocity terms (units/sec) for each output axis
+  private _springZoom = 1;        private _velZoom = 0;
+  private _springOffX = 0;        private _velOffX = 0;
+  private _springOffY = 0;        private _velOffY = 0;
+  private _springRot = 0;         private _velRot = 0;
 
   // ═══ Composite output ═══
   private _zoom = 1;
@@ -244,8 +261,9 @@ export class CameraRig {
 
       this.heroActive = true;
       this.heroPunchZoom = cfg.heroZoom * scale;
-      this.heroTotalFrames = cfg.heroDurationFrames;
-      this.heroFramesLeft = cfg.heroDurationFrames;
+      // TIME-BASED: heroPunchMs replaces heroDurationFrames (was frame-rate dependent)
+      this.heroPunchMsTotal = cfg.heroPunchMs;
+      this.heroPunchMsLeft = cfg.heroPunchMs;
 
       const angle = (nowMs * 7.13) % (Math.PI * 2);
       this.heroPunchShakeX = Math.cos(angle) * cfg.heroShakePx * scale;
@@ -257,19 +275,19 @@ export class CameraRig {
       this.heroStillTimer = 0;
     }
 
-    // Hero decay
-    if (this.heroFramesLeft > 0) {
-      this.heroFramesLeft--;
+    // Hero decay — time-based (not frame-count)
+    if (this.heroPunchMsLeft > 0) {
+      this.heroPunchMsLeft = Math.max(0, this.heroPunchMsLeft - deltaMs);
     }
-    if (this.heroFramesLeft <= 0 && this.heroActive) {
+    if (this.heroPunchMsLeft <= 0 && this.heroActive) {
       this.heroActive = false;
       this.heroPunchZoom = 0;
       this.heroPunchShakeX = 0;
       this.heroPunchShakeY = 0;
     }
 
-    const heroFrac = (this.heroFramesLeft > 0 && this.heroTotalFrames > 0)
-      ? this.heroFramesLeft / this.heroTotalFrames
+    const heroFrac = (this.heroPunchMsLeft > 0 && this.heroPunchMsTotal > 0)
+      ? this.heroPunchMsLeft / this.heroPunchMsTotal
       : 0;
 
     // ═══════════════════════════════════════════════════════════
@@ -333,30 +351,50 @@ export class CameraRig {
 
     const beatAlive = 1 - this.heroFreezeAmount;
 
-    let zoom = 1.0
+    // Raw target values (impulse + sway + drop)
+    const targetZoom = 1.0
       + (this.beatImpulseZoom + swayAmp * 0.005) * beatAlive
       + this.heroPunchZoom * heroFrac;
 
-    let offsetX = (this.beatImpulseX + swayX + dropShakeX) * beatAlive
+    const targetOffX = (this.beatImpulseX + swayX + dropShakeX) * beatAlive
       + this.heroPunchShakeX * heroFrac;
 
-    let offsetY = (this.beatImpulseY + swayY + dropShakeY) * beatAlive
+    const targetOffY = (this.beatImpulseY + swayY + dropShakeY) * beatAlive
       + this.heroPunchShakeY * heroFrac;
 
-    let rotation = this.beatImpulseRot * beatAlive;
+    const targetRot = this.beatImpulseRot * beatAlive;
 
-    let shakeX = (this.beatImpulseX * 0.5 + dropShakeX) * beatAlive
-      + this.heroPunchShakeX * heroFrac;
-    let shakeY = (this.beatImpulseY * 0.5 + dropShakeY) * beatAlive
-      + this.heroPunchShakeY * heroFrac;
+    // ── Spring-damped output ─────────────────────────────────────
+    // Critically-damped spring: F = -k*(x-target) - c*v
+    // At critical damping: c = 2*sqrt(k*m), with m=1 → c = 2*sqrt(k)
+    // This gives organic, non-oscillating snap to target.
+    const k = cfg.springStiffness;
+    const c = cfg.springDamping;
+
+    const accelZoom = -k * (this._springZoom - targetZoom) - c * this._velZoom;
+    this._velZoom += accelZoom * dt;
+    this._springZoom += this._velZoom * dt;
+
+    const accelX = -k * (this._springOffX - targetOffX) - c * this._velOffX;
+    this._velOffX += accelX * dt;
+    this._springOffX += this._velOffX * dt;
+
+    const accelY = -k * (this._springOffY - targetOffY) - c * this._velOffY;
+    this._velOffY += accelY * dt;
+    this._springOffY += this._velOffY * dt;
+
+    const accelRot = -k * (this._springRot - targetRot) - c * this._velRot;
+    this._velRot += accelRot * dt;
+    this._springRot += this._velRot * dt;
 
     // ── Safety ──
-    zoom = clamp(zoom, 2 - cfg.maxZoom, cfg.maxZoom);
-    offsetX = clamp(offsetX, -cfg.maxOffsetPx, cfg.maxOffsetPx);
-    offsetY = clamp(offsetY, -cfg.maxOffsetPx, cfg.maxOffsetPx);
-    rotation = clamp(rotation, -cfg.maxRotationRad, cfg.maxRotationRad);
-    shakeX = clamp(shakeX, -cfg.maxOffsetPx, cfg.maxOffsetPx);
-    shakeY = clamp(shakeY, -cfg.maxOffsetPx, cfg.maxOffsetPx);
+    let zoom     = clamp(this._springZoom,  2 - cfg.maxZoom,        cfg.maxZoom);
+    let offsetX  = clamp(this._springOffX, -cfg.maxOffsetPx,        cfg.maxOffsetPx);
+    let offsetY  = clamp(this._springOffY, -cfg.maxOffsetPx,        cfg.maxOffsetPx);
+    let rotation = clamp(this._springRot,  -cfg.maxRotationRad,     cfg.maxRotationRad);
+    // shakeX/Y exposed for parallax sub-layers (subset of offset)
+    let shakeX   = clamp(this._springOffX * 0.5, -cfg.maxOffsetPx,  cfg.maxOffsetPx);
+    let shakeY   = clamp(this._springOffY * 0.5, -cfg.maxOffsetPx,  cfg.maxOffsetPx);
 
     this._zoom = zoom;
     this._offsetX = offsetX;
@@ -453,8 +491,8 @@ export class CameraRig {
     this.heroPunchZoom = 0;
     this.heroPunchShakeX = 0;
     this.heroPunchShakeY = 0;
-    this.heroFramesLeft = 0;
-    this.heroTotalFrames = 0;
+    this.heroPunchMsLeft = 0;
+    this.heroPunchMsTotal = 0;
     this.lastHeroPunchMs = 0;
     this.prevHeroActive = false;
     this.heroStillTimer = 0;
@@ -466,6 +504,11 @@ export class CameraRig {
     this._shakeX = 0;
     this._shakeY = 0;
     this._cachedTransform = null;
+    // Spring state
+    this._springZoom = 1;   this._velZoom = 0;
+    this._springOffX = 0;   this._velOffX = 0;
+    this._springOffY = 0;   this._velOffY = 0;
+    this._springRot = 0;    this._velRot = 0;
   }
 
   /** Expose drop detection for external systems (e.g. particles) */

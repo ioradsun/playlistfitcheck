@@ -2886,6 +2886,8 @@ export class LyricDancePlayer {
     // shakeX/shakeY is a subset used by parallax layers; offsetX/offsetY is the real camera.
     const camShakeX = subjectT.offsetX;
     const camShakeY = subjectT.offsetY;
+    // Camera rotation — wired to transient hit impulses. Applied additively to per-chunk rotation.
+    const camRotation = subjectT.rotation;
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
@@ -3046,7 +3048,7 @@ export class LyricDancePlayer {
               const [da, db, dc, dd, de, df] = this.computeTransformMatrix(
                 camShakeX + camCX + (heroDrawX - camCX) * camZoom,
                 camShakeY + camCY + ((heroDrawY + offsetY) - camCY) * camZoom,
-                chunk.rotation ?? 0,
+                (chunk.rotation ?? 0) + camRotation,
                 chunk.skewX ?? 0,
                 sx * camZoom,
                 sy * camZoom,
@@ -3095,7 +3097,7 @@ export class LyricDancePlayer {
             const [ga, gb, gc, gd, ge, gf] = this.computeTransformMatrix(
               camShakeX + camCX + ((heroDrawX + gx) - camCX) * camZoom,
               camShakeY + camCY + ((heroDrawY + gy) - camCY) * camZoom,
-              chunk.rotation ?? 0,
+              (chunk.rotation ?? 0) + camRotation,
               chunk.skewX ?? 0,
               sx * camZoom,
               sy * camZoom,
@@ -3109,7 +3111,7 @@ export class LyricDancePlayer {
         const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
           camShakeX + camCX + (heroDrawX - camCX) * camZoom,
           camShakeY + camCY + (heroDrawY - camCY) * camZoom,
-          chunk.rotation ?? 0,
+          (chunk.rotation ?? 0) + camRotation,
           chunk.skewX ?? 0,
           sx * camZoom,
           sy * camZoom,
