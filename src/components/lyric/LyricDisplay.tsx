@@ -156,6 +156,7 @@ interface Props {
   onBack: () => void;
   onSaved?: (id: string) => void;
   onReuploadAudio?: (file: File) => void;
+  onLinesChange?: (lines: LyricLine[]) => void;
   onHeaderProject?: (
     project: {
       title: string;
@@ -322,6 +323,7 @@ export function LyricDisplay({
   onBack,
   onSaved,
   onReuploadAudio,
+  onLinesChange,
   onHeaderProject,
 }: Props) {
   const { user, roles } = useAuth();
@@ -961,6 +963,15 @@ export function LyricDisplay({
     }
     scheduleAutosave();
   }, [explicitLines, fmlyLines, explicitMeta, fmlyMeta, beatGrid, renderData]);
+
+  // Sync explicit lines back to parent so tab switches preserve edits
+  const onLinesChangeRef = useRef(onLinesChange);
+  onLinesChangeRef.current = onLinesChange;
+  const linesInitRef = useRef(true);
+  useEffect(() => {
+    if (linesInitRef.current) { linesInitRef.current = false; return; }
+    onLinesChangeRef.current?.(explicitLines);
+  }, [explicitLines]);
 
   // ── Editing ───────────────────────────────────────────────────────────────
   const startEditing = (index: number) => {

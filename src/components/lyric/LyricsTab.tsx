@@ -349,6 +349,10 @@ export function LyricsTab({
             const cacheId = savedId || "__unsaved__";
             sessionAudio.set("lyric", cacheId, file);
           }}
+          onLinesChange={(newLines) => {
+            setLines(newLines);
+            if (lyricData) setLyricData({ ...lyricData, lines: newLines });
+          }}
           onHeaderProject={onHeaderProject}
         />
       </div>
