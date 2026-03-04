@@ -597,6 +597,8 @@ export function LyricFitTab({
                   .maybeSingle();
                 if (existing?.id) {
                   resolvedDanceId = existing.id;
+                  setAutoDanceId(existing.id);
+                  setAutoDanceSlug({ artist: artistSlugVal, song: songSlugVal });
                   // Update cinematic_direction on existing row
                   await supabase
                     .from("shareable_lyric_dances" as any)
