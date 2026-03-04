@@ -273,7 +273,7 @@ export function FitTab({
         return;
       }
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
-      void playerHandle.reloadTranscript(mainLines, null);
+      void playerHandle.reloadTranscript(mainLines, wordsRef.current ?? undefined);
     };
 
     reloadTimerRef.current = setTimeout(runReload, 400);
