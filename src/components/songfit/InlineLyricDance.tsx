@@ -185,18 +185,16 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
     };
   }, [data]);
 
-  // Init player once when data is ready — isVisible is only used as a first-paint gate,
-  // not as a lifecycle trigger. Once created the player stays alive until unmount or
-  // dance ID changes. Tying cleanup to isVisible caused the player to be destroyed
-  // every time the user switched tabs (display:none → IntersectionObserver fires → isVisible=false)
-  // which meant transcript updates were always applied to a freshly-created stale player.
+  // Init player as soon as data is ready — do NOT gate on isVisible.
+  // When FitTab is rendered with display:none (always-mounted architecture),
+  // IntersectionObserver never fires so isVisible stays false permanently.
+  // The canvas falls back to 960x540 if offsetWidth/Height are 0, and the
+  // ResizeObserver corrects dimensions the moment the tab becomes visible.
   const dataReady = !!(data && data.words?.length && data.cinematic_direction);
   useEffect(() => {
-    console.log('[SYNC:J] init-gate check — initRef:', initRef.current, 'isVisible:', isVisible, 'dataReady:', dataReady, 'data.id:', data?.id);
+    console.log('[SYNC:J] init-gate check — initRef:', initRef.current, 'dataReady:', dataReady, 'data.id:', data?.id);
     if (initRef.current) return;
-    // Wait until visible for the first time — avoids initializing off-screen players.
-    // But once initialized we never destroy on visibility loss (only on unmount/id change).
-    if (!isVisible || !dataReady) return;
+    if (!dataReady) return;
     if (!canvasRef.current || !textCanvasRef.current || !containerRef.current) return;
 
     initRef.current = true;
@@ -245,7 +243,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
       setPlayerReady(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVisible, data?.id]); // isVisible = first-paint gate only; data.id = different dance
+  }, [dataReady, data?.id]); // dataReady = init trigger; data.id = different dance → reinit
 
   // Pause/resume based on visibility
   useEffect(() => {
