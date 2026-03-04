@@ -5,7 +5,7 @@
  * v2: removed lyrics column, single-column report.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
