@@ -261,10 +261,7 @@ export default function ShareableLyricDance() {
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [exporting, setExporting] = useState<"16:9" | "9:16" | null>(null);
-  const [exportProgress, setExportProgress] = useState(0);
   const [themeMode, setThemeMode] = useState<'auto' | 'light' | 'dark'>('auto');
-  const abortRef = useRef<AbortController | null>(null);
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
