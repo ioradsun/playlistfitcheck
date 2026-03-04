@@ -4493,6 +4493,8 @@ export class LyricDancePlayer {
     }
     const _hasBeatResponses = _beatResponses.length > 0;
     let ci = 0;
+    if (!this._outChunks) this._outChunks = [] as ScaledKeyframe['chunks'];
+    const _outChunks = this._outChunks;
     const bpm = scene.bpm;
 
     for (let ai = 0; ai < activeGroups.length; ai++) {
