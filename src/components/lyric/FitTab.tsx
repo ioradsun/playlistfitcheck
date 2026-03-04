@@ -14,6 +14,7 @@ import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { LyricWaveform } from "./LyricWaveform";
+import { InlineLyricDance } from "@/components/songfit/InlineLyricDance";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
@@ -89,6 +90,7 @@ export function FitTab({
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishedDanceId, setPublishedDanceId] = useState<string | null>(null);
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
 
   // ── Battle publish state ──────────────────────────────────────────────
@@ -117,13 +119,14 @@ export function FitTab({
     // Look up by user_id + song_slug (artist_slug may differ between artist name and display_name)
     supabase
       .from("shareable_lyric_dances" as any)
-      .select("artist_slug, song_slug, lyrics")
+      .select("id, artist_slug, song_slug, lyrics")
       .eq("user_id", user.id)
       .eq("song_slug", songSlug)
       .maybeSingle()
       .then(({ data }: any) => {
         if (data) {
           setPublishedUrl(`/${data.artist_slug}/${data.song_slug}/lyric-dance`);
+          setPublishedDanceId(data.id);
           const pubLines = Array.isArray(data.lyrics) ? data.lyrics : [];
           setPublishedLyricsHash(computeLyricsHash(pubLines));
         }
@@ -336,6 +339,7 @@ export function FitTab({
 
       const url = `/${artistSlug}/${songSlug}/lyric-dance`;
       setPublishedUrl(url);
+      setPublishedDanceId(danceRow?.id ?? null);
       setPublishedLyricsHash(currentLyricsHash);
       toast.success("Lyric Dance page published!");
 
@@ -599,8 +603,42 @@ export function FitTab({
 
   return (
     <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
-      {/* Waveform — full width */}
-      {hasRealAudio && (
+      {/* Dance preview or waveform fallback */}
+      {publishedUrl && publishedDanceId ? (
+        <div className="space-y-3">
+          <div className="rounded-xl overflow-hidden">
+            <InlineLyricDance
+              lyricDanceId={publishedDanceId}
+              lyricDanceUrl={publishedUrl}
+              songTitle={lyricData.title || "Untitled"}
+              artistName=""
+            />
+          </div>
+          {/* Dance action buttons */}
+          <div className="flex gap-2">
+            <a
+              href={publishedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+            >
+              Watch Dance
+            </a>
+            <button
+              onClick={handleDance}
+              disabled={republishDisabled}
+              className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+            >
+              {publishing ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>{publishStatus || "Republishing…"}</span>
+                </span>
+              ) : "Republish"}
+            </button>
+          </div>
+        </div>
+      ) : hasRealAudio ? (
         <div className="glass-card rounded-xl p-3">
           <LyricWaveform
             waveform={waveform}
@@ -612,7 +650,7 @@ export function FitTab({
             beatGridLoading={false}
           />
         </div>
-      )}
+      ) : null}
 
       {/* Single-column report */}
       <div className="space-y-3">
@@ -804,26 +842,8 @@ export function FitTab({
             </div>
           )}
 
-          {/* Dance buttons */}
-          {publishedUrl && !danceNeedsRegeneration ? (
-            <div className="flex gap-2">
-              <a
-                href={publishedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-              >
-                Watch Dance
-              </a>
-              <button
-                onClick={handleDance}
-                disabled={republishDisabled}
-                className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-              >
-                {publishing ? <Loader2 size={14} className="animate-spin" /> : "Republish"}
-              </button>
-            </div>
-          ) : (
+          {/* Dance button — only shown when no dance exists yet (buttons moved to top when dance exists) */}
+          {!publishedDanceId && (
             <button
               onClick={handleDance}
               disabled={danceDisabled}
