@@ -2673,7 +2673,7 @@ export class LyricDancePlayer {
         if (currentSection && nextImgIdx !== imgIdx) {
           const secEnd = currentSection.endSec ?? (currentSection.endRatio != null ? currentSection.endRatio * duration : null);
           if (secEnd != null) {
-            const timeToEnd = secEnd - (this.audio?.currentTime ?? 0);
+            const timeToEnd = secEnd - this.currentTSec;
             if (timeToEnd < 1.5 && timeToEnd > 0) crossfade = 1 - (timeToEnd / 1.5);
           }
         }
