@@ -1,20 +1,25 @@
 /**
- * CameraRig — Three-layer cinematic camera.
+ * CameraRig V3 — Beat-driven camera.
  *
- * ┌─────────────────────────────────────────────────────────────┐
- * │  BREATH   slow section-level drift + zoom (0.01–0.03 Hz)   │
- * │  PULSE    beat-synced rhythmic sway     (synced to BPM)    │
- * │  PUNCH    instant word-level impulse    (1–3 frames)       │
- * │  PARALLAX depth separation per layer    (always-on)        │
- * └─────────────────────────────────────────────────────────────┘
+ * THREE SYSTEMS, NOTHING ELSE:
  *
- * Layers composite additively: totalZoom = breath + pulse + punch.
- * Each layer is independently tunable and can be disabled.
+ *   1. BEAT DANCE  — Every beat moves the camera. Energy scales intensity.
+ *                    Bass → downward punch. Transient → lateral snap.
+ *                    Continuous sine sway between beats.
+ *
+ *   2. DROP DETECT — Auto-detected from energy. When energy spikes above
+ *                    the rolling average, everything scales up + continuous
+ *                    shake kicks in. No mood strings needed.
+ *
+ *   3. HERO PUNCH  — Brief stillness (anticipation) → lock on word → punch in.
+ *                    The only moment the camera pauses the beat dance.
+ *
+ * PARALLAX always on: far=0.15, mid=0.5, near=0.85, text=0 (anchored).
  *
  * SAFETY ENVELOPE:
- *   Max zoom:     1.15  (never clip text)
- *   Max shake:    10px  (never blur readability)
- *   Max rotation: ±2.5° (cinematic, not nauseating)
+ *   Max zoom:     1.15
+ *   Max offset:   30px
+ *   Max rotation: ±2.5°
  */
 
 import type { BeatState } from './BeatConductor';
@@ -22,29 +27,32 @@ import type { BeatState } from './BeatConductor';
 // ─── Public interfaces ───────────────────────────────────────
 
 export interface CameraConfig {
-  // Punch
-  beatThreshold: number;
-  silenceThreshold: number;
-  beatZoom: number;
-  heroZoom: number;
-  heroShakePx: number;
-  heroDurationFrames: number;
-  heroTaperMs: number;
-  // Breath
-  breathZoomRange: number;       // max ±zoom from 1.0 (e.g. 0.025 = ±2.5%)
-  breathDriftPx: number;         // max drift in px at canvas scale
-  breathTransitionSec: number;   // seconds to lerp between section targets
-  // Pulse
-  pulseAmplitudeY: number;       // max Y bob in px
-  pulseAmplitudeX: number;       // max X sway in px
-  pulseZoom: number;             // zoom per downbeat (e.g. 0.012)
-  // Parallax depth multipliers
+  // Beat dance
+  beatBounceY: number;           // px Y bounce per beat (scaled by energy)
+  beatBounceX: number;           // px X sway per beat
+  beatZoom: number;              // zoom punch per beat (e.g. 0.02 = 2%)
+  bassMultiplier: number;        // extra multiplier for bass hits
+  transientMultiplier: number;   // extra multiplier for transient hits
+  swaySmoothing: number;         // how smooth the between-beat sway is
+  // Drop detection
+  dropEnergyThreshold: number;   // energy must exceed rolling avg by this much
+  dropMinEnergy: number;         // absolute minimum energy to trigger drop
+  dropShakePx: number;           // continuous shake amplitude during drops
+  dropIntensity: number;         // multiplier on everything during drops
+  dropDecayRate: number;         // how fast drop state fades (per second)
+  // Hero punch
+  heroZoom: number;              // zoom punch for hero word
+  heroShakePx: number;           // shake impulse for hero
+  heroDurationFrames: number;    // frames the punch lasts
+  heroTaperMs: number;           // cooldown between hero punches
+  heroStillMs: number;           // ms of stillness before hero punch fires
+  // Parallax
   parallaxFar: number;
   parallaxMid: number;
   parallaxNear: number;
   // Safety
   maxZoom: number;
-  maxShakePx: number;
+  maxOffsetPx: number;
   maxRotationRad: number;
 }
 
@@ -80,79 +88,39 @@ export type SectionRigName = 'verse' | 'chorus' | 'bridge' | 'drop' | 'intro' | 
 // ─── Defaults ────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: CameraConfig = {
-  // Punch
-  beatThreshold: 0.55,
-  silenceThreshold: 0.08,
-  beatZoom: 0.03,
-  heroZoom: 0.09,
-  heroShakePx: 3,
+  // Beat dance — visible on every beat
+  beatBounceY: 6,
+  beatBounceX: 3,
+  beatZoom: 0.02,
+  bassMultiplier: 2.0,
+  transientMultiplier: 1.5,
+  swaySmoothing: 2.0,
+  // Drop detection
+  dropEnergyThreshold: 0.25,
+  dropMinEnergy: 0.55,
+  dropShakePx: 4,
+  dropIntensity: 2.2,
+  dropDecayRate: 1.5,
+  // Hero punch
+  heroZoom: 0.10,
+  heroShakePx: 4,
   heroDurationFrames: 3,
   heroTaperMs: 150,
-  // Breath — bold enough to feel
-  breathZoomRange: 0.06,         // ±6% zoom per section
-  breathDriftPx: 30,             // 30px drift — visible on all screens
-  breathTransitionSec: 4,        // arrive in 4s not 8
-  // Pulse — rhythmic bob you can feel
-  pulseAmplitudeY: 5.0,          // 5px Y bob on beat
-  pulseAmplitudeX: 2.5,          // 2.5px X sway
-  pulseZoom: 0.025,              // 2.5% downbeat zoom bump
-  // Parallax — wide depth spread
-  parallaxFar: 0.15,             // BG barely moves
-  parallaxMid: 0.5,              // mid layers at half
-  parallaxNear: 0.85,            // near particles nearly 1:1
-  // Safety — generous headroom
+  heroStillMs: 120,
+  // Parallax
+  parallaxFar: 0.15,
+  parallaxMid: 0.5,
+  parallaxNear: 0.85,
+  // Safety
   maxZoom: 1.15,
-  maxShakePx: 10,
+  maxOffsetPx: 30,
   maxRotationRad: 2.5 * Math.PI / 180,
-};
-
-// ─── Section camera presets ──────────────────────────────────
-
-interface BreathTarget {
-  zoom: number;       // target zoom offset from 1.0 (e.g. +0.02 = push in)
-  driftX: number;     // target drift direction −1 to +1
-  driftY: number;     // target drift direction −1 to +1
-  rotation: number;   // target rotation in radians
-  speed: number;      // multiplier on breath transition speed (1.0 = normal)
-  intensity: number;  // multiplier on pulse + punch amplitude (1.0 = normal)
-  shake: number;      // continuous shake amplitude in px (0 = none)
-}
-
-const SECTION_BREATH: Record<SectionRigName, BreathTarget> = {
-  // Verses push in — intimacy, background slides left
-  verse:  { zoom: +0.04,  driftX: -0.6, driftY: -0.2,  rotation: 0,      speed: 1.0, intensity: 0.8,  shake: 0   },
-  // Choruses pull out — expansive, wide, centered, slightly boosted
-  chorus: { zoom: -0.03,  driftX:  0.0, driftY:  0.0,  rotation: 0,      speed: 1.5, intensity: 1.2,  shake: 0   },
-  // Bridges hold still — suspended, slow tilt (~0.7°)
-  bridge: { zoom:  0.0,   driftX:  0.0, driftY:  0.0,  rotation: 0.012,  speed: 0.6, intensity: 0.5,  shake: 0   },
-  // Drops — aggressive push-in, high intensity, continuous shake
-  drop:   { zoom: +0.06,  driftX:  0.0, driftY: -0.5,  rotation: 0,      speed: 3.0, intensity: 1.8,  shake: 3.0 },
-  // Intro: gentle drift in from right
-  intro:  { zoom: +0.03,  driftX:  0.5, driftY:  0.0,  rotation: 0,      speed: 0.7, intensity: 0.6,  shake: 0   },
-  // Outro: slow pull-back with slight tilt
-  outro:  { zoom: -0.05,  driftX:  0.0, driftY:  0.2,  rotation: 0.005,  speed: 0.5, intensity: 0.4,  shake: 0   },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-/** Exponential decay toward target. Framerate-independent. */
-function expLerp(current: number, target: number, rate: number, dtSec: number): number {
-  // rate = how many times per second we close 63% of the gap
-  // Higher rate = faster. rate=1 means ~63% per second.
-  const alpha = 1 - Math.exp(-rate * dtSec);
-  return current + (target - current) * alpha;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return value < min ? min : value > max ? max : value;
-}
-
-// ─── State machine (expanded) ────────────────────────────────
-
-const enum CamState {
-  IDLE = 0,
-  BEAT_HIT = 1,
-  HERO_PUNCH = 2,
+function clamp(v: number, min: number, max: number): number {
+  return v < min ? min : v > max ? max : v;
 }
 
 // ─── CameraRig ───────────────────────────────────────────────
@@ -162,100 +130,56 @@ export class CameraRig {
   private canvasW = 960;
   private canvasH = 540;
 
-  // ═══ BREATH state ═══
-  private section: SectionRigName = 'verse';
-  private breathTarget: BreathTarget = SECTION_BREATH.verse;
-  private breathZoom = 0;          // current zoom offset
-  private breathDriftX = 0;        // current drift px
-  private breathDriftY = 0;        // current drift px
-  private breathRotation = 0;      // current rotation rad
-  private breathBrightness = 0.5;  // modulates breath amplitude
-  private breathIntensity = 1.0;   // smoothed section intensity multiplier
-  private breathShake = 0;         // smoothed continuous shake amplitude
-
-  // ═══ PULSE state ═══
-  private bpm = 120;
-  private pulsePhase = 0;          // 0–1 from beatState
-  private pulseEnergy = 0.5;       // smoothed energy
-  private pulseIsDownbeat = false;
-  private lastPulseDownbeatZoom = 0;
-
-  // ═══ PUNCH state (from V1, expanded) ═══
-  private punchState: CamState = CamState.IDLE;
-  private punchZoom = 0;
-  private punchShakeX = 0;
-  private punchShakeY = 0;
-  private punchRotation = 0;
-  private framesRemaining = 0;
-  private totalFrames = 0;
-  private lastHeroPunchMs = 0;
+  // ═══ BEAT DANCE state ═══
   private prevBeatIndex = -1;
+  private beatImpulseY = 0;
+  private beatImpulseX = 0;
+  private beatImpulseZoom = 0;
+  private beatImpulseRot = 0;
+
+  // ═══ DROP DETECTION state ═══
+  private energyAvg = 0.3;
+  private dropAmount = 0;
+  private prevEnergy = 0;
+
+  // ═══ HERO PUNCH state ═══
+  private heroActive = false;
+  private heroPunchZoom = 0;
+  private heroPunchShakeX = 0;
+  private heroPunchShakeY = 0;
+  private heroFramesLeft = 0;
+  private heroTotalFrames = 0;
+  private lastHeroPunchMs = 0;
   private prevHeroActive = false;
-  private shakeAngle = 0;
+  private heroStillTimer = 0;
+  private heroFreezeAmount = 0;
 
-  // ═══ Silence state ═══
-  private silenceTimer = 0;        // seconds since last vocal activity
-  private silencePullback = 0;     // gradual wide-shot pull-back
-
-  // ═══ Climax state ═══
-  private climaxIntensity = 0;     // 0–1 smoothed climax blend
-
-  // ═══ Cache ═══
+  // ═══ Composite output ═══
+  private _zoom = 1;
+  private _offsetX = 0;
+  private _offsetY = 0;
+  private _rotation = 0;
+  private _shakeX = 0;
+  private _shakeY = 0;
   private _cachedTransform: SubjectTransform | null = null;
-  private _compositeZoom = 1;
-  private _compositeOffsetX = 0;
-  private _compositeOffsetY = 0;
-  private _compositeRotation = 0;
-  private _compositeShakeX = 0;
-  private _compositeShakeY = 0;
 
   constructor(config?: Partial<CameraConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  // ─── Section / energy setters ──────────────────────────────
+  // ─── Compatibility stubs (kept for API — no-ops now) ───────
 
-  setBPM(bpm: number): void {
-    this.bpm = Math.max(40, Math.min(300, bpm));
-  }
-
-  setSection(section: SectionRigName): void {
-    if (section === this.section) return;
-    this.section = section;
-    this.breathTarget = SECTION_BREATH[section] ?? SECTION_BREATH.verse;
-  }
-
-  /**
-   * Accept any string and map it to the closest SectionRigName.
-   * Handles cinematic direction values like "intimate", "expansive", etc.
-   */
-  setSectionFromMood(mood: string): void {
-    const m = (mood || '').toLowerCase();
-    if (m.includes('intro') || m.includes('opening'))           this.setSection('intro');
-    else if (m.includes('vers') || m.includes('intimate') || m.includes('quiet'))
-                                                                 this.setSection('verse');
-    else if (m.includes('chor') || m.includes('expan') || m.includes('anthemic') || m.includes('soar'))
-                                                                 this.setSection('chorus');
-    else if (m.includes('bridge') || m.includes('suspend') || m.includes('reflect'))
-                                                                 this.setSection('bridge');
-    else if (m.includes('drop') || m.includes('explo') || m.includes('intense') || m.includes('chaos'))
-                                                                 this.setSection('drop');
-    else if (m.includes('outro') || m.includes('fad') || m.includes('end') || m.includes('resolve'))
-                                                                 this.setSection('outro');
-    // else keep current
-  }
-
-  setEnergy(rawEnergy: number): void {
-    // Smooth externally-provided energy (e.g. from audio analysis sections)
-    this.breathBrightness = clamp(rawEnergy, 0, 1);
-  }
+  setBPM(_bpm: number): void {}
+  setSection(_section: SectionRigName): void {}
+  setSectionFromMood(_mood: string): void {}
+  setEnergy(_e: number): void {}
 
   setViewport(width: number, height: number): void {
     this.canvasW = width;
     this.canvasH = height;
   }
 
-  // ─── Main update — called once per frame ───────────────────
+  // ─── Main update ───────────────────────────────────────────
 
   update(
     deltaMs: number,
@@ -263,261 +187,201 @@ export class CameraRig {
     focus?: SubjectFocus | PhraseAnchor | null,
   ): void {
     const cfg = this.config;
-    const dtSec = Math.min(deltaMs, 100) / 1000; // cap at 100ms for stability
+    const dt = Math.min(deltaMs, 100) / 1000;
     const sf = (focus && 'heroActive' in focus) ? (focus as SubjectFocus) : null;
     const nowMs = performance.now();
 
-    // ═══════════════════════════════════════════════════════════
-    // 1. BREATH — slow section-level drift
-    // ═══════════════════════════════════════════════════════════
-    {
-      const target = this.breathTarget;
-      // Brightness modulates amplitude: dark sections breathe slower/smaller
-      const brightnessScale = 0.5 + (beatState?.brightness ?? this.breathBrightness) * 0.5;
-      const transitionRate = (target.speed / Math.max(1, cfg.breathTransitionSec)) * brightnessScale;
+    const energy = beatState?.energy ?? 0;
+    const phase = beatState?.phase ?? 0;
+    const hitStrength = beatState?.hitStrength ?? 0;
+    const hitType = beatState?.hitType ?? 'none';
+    const isNewBeat = beatState !== null && beatState.beatIndex !== this.prevBeatIndex;
 
-      this.breathZoom = expLerp(
-        this.breathZoom,
-        target.zoom * cfg.breathZoomRange / 0.025 * brightnessScale,
-        transitionRate,
-        dtSec,
-      );
-      this.breathDriftX = expLerp(
-        this.breathDriftX,
-        target.driftX * cfg.breathDriftPx * brightnessScale,
-        transitionRate,
-        dtSec,
-      );
-      this.breathDriftY = expLerp(
-        this.breathDriftY,
-        target.driftY * cfg.breathDriftPx * brightnessScale,
-        transitionRate,
-        dtSec,
-      );
-      this.breathRotation = expLerp(
-        this.breathRotation,
-        target.rotation * brightnessScale,
-        transitionRate,
-        dtSec,
-      );
-      // Smooth section intensity + continuous shake
-      this.breathIntensity = expLerp(this.breathIntensity, target.intensity, transitionRate * 2, dtSec);
-      this.breathShake = expLerp(this.breathShake, target.shake, transitionRate * 2, dtSec);
+    // ═══════════════════════════════════════════════════════════
+    // 1. DROP DETECTION — auto from energy
+    // ═══════════════════════════════════════════════════════════
+
+    // Slow-moving average (~3s tau)
+    this.energyAvg += (energy - this.energyAvg) * Math.min(1, dt * 0.35);
+
+    const energySpike = energy - this.energyAvg;
+    const isDropping = energySpike > cfg.dropEnergyThreshold && energy > cfg.dropMinEnergy;
+
+    if (isDropping) {
+      this.dropAmount = Math.min(1, this.dropAmount + dt * 4);
+    } else {
+      this.dropAmount = Math.max(0, this.dropAmount - dt * cfg.dropDecayRate);
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 2. PULSE — beat-synced rhythmic sway
-    // ═══════════════════════════════════════════════════════════
-    {
-      if (beatState) {
-        this.pulsePhase = beatState.phase;
-        this.pulseEnergy = expLerp(this.pulseEnergy, beatState.energy, 3.0, dtSec);
-        this.pulseIsDownbeat = beatState.isDownbeat;
-      }
+    const dropMult = 1.0 + this.dropAmount * (cfg.dropIntensity - 1.0);
 
-      // Downbeat zoom punch with exponential decay
-      if (beatState && beatState.isDownbeat && beatState.beatIndex !== this.prevBeatIndex) {
-        this.lastPulseDownbeatZoom = cfg.pulseZoom * Math.min(1, this.pulseEnergy * 1.5);
-      }
-      this.lastPulseDownbeatZoom *= Math.pow(0.85, dtSec * 60); // ~85% decay per frame at 60fps
+    // ═══════════════════════════════════════════════════════════
+    // 2. HERO PUNCH — stillness → lock → punch
+    // ═══════════════════════════════════════════════════════════
+
+    const heroApproaching = sf?.heroApproaching ?? false;
+    const heroJustStarted = sf !== null
+      && sf.heroActive
+      && sf.emphasisLevel >= 4
+      && !this.prevHeroActive;
+
+    // Anticipation: freeze beat dance as hero approaches
+    if (heroApproaching) {
+      this.heroStillTimer += deltaMs;
+      this.heroFreezeAmount = Math.min(1, this.heroStillTimer / Math.max(1, cfg.heroStillMs));
+    } else if (!sf?.heroActive) {
+      this.heroStillTimer = 0;
+      this.heroFreezeAmount = Math.max(0, this.heroFreezeAmount - dt * 8);
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 3. PUNCH — instant word-level impulse
-    // ═══════════════════════════════════════════════════════════
-    {
-      const heroJustStarted = sf !== null
-        && sf.heroActive
-        && sf.emphasisLevel >= 4
-        && !this.prevHeroActive;
-
-      if (heroJustStarted) {
-        const timeSinceLastHero = nowMs - this.lastHeroPunchMs;
-        let scale = 1.0;
-        if (timeSinceLastHero < cfg.heroTaperMs) {
-          scale = Math.max(0.3, timeSinceLastHero / cfg.heroTaperMs);
-        }
-        const energy = beatState?.energy ?? 0.5;
-        const silenceScale = energy < cfg.silenceThreshold ? 0.4 : 1.0;
-        scale *= silenceScale;
-
-        // Climax multiplier
-        const climaxMult = sf.isClimax ? 1.4 : 1.0;
-        scale *= climaxMult;
-
-        this.punchState = CamState.HERO_PUNCH;
-        this.punchZoom = cfg.heroZoom * scale;
-        this.totalFrames = cfg.heroDurationFrames;
-        this.framesRemaining = cfg.heroDurationFrames;
-
-        this.shakeAngle = (nowMs * 7.13) % (Math.PI * 2);
-        this.punchShakeX = Math.cos(this.shakeAngle) * cfg.heroShakePx * scale;
-        this.punchShakeY = Math.sin(this.shakeAngle) * cfg.heroShakePx * scale;
-
-        // Climax adds rotation wobble
-        this.punchRotation = sf.isClimax
-          ? (Math.sin(this.shakeAngle * 3) * 0.008 * scale) // ~0.5° max
-          : 0;
-
-        this.lastHeroPunchMs = nowMs;
+    if (heroJustStarted) {
+      const timeSinceLast = nowMs - this.lastHeroPunchMs;
+      let scale = 1.0;
+      if (timeSinceLast < cfg.heroTaperMs) {
+        scale = Math.max(0.3, timeSinceLast / cfg.heroTaperMs);
       }
+      if (sf!.isClimax) scale *= 1.4;
 
-      // BeatHit (only if not in HeroPunch)
-      if (this.punchState !== CamState.HERO_PUNCH && beatState) {
-        const energy = beatState.energy;
-        const newBeat = beatState.beatIndex !== this.prevBeatIndex;
+      this.heroActive = true;
+      this.heroPunchZoom = cfg.heroZoom * scale;
+      this.heroTotalFrames = cfg.heroDurationFrames;
+      this.heroFramesLeft = cfg.heroDurationFrames;
 
-        if (newBeat && energy >= cfg.silenceThreshold) {
-          const hitScore = beatState.strength * beatState.hitStrength * energy;
+      const angle = (nowMs * 7.13) % (Math.PI * 2);
+      this.heroPunchShakeX = Math.cos(angle) * cfg.heroShakePx * scale;
+      this.heroPunchShakeY = Math.sin(angle) * cfg.heroShakePx * scale;
+      this.lastHeroPunchMs = nowMs;
 
-          if (hitScore > cfg.beatThreshold) {
-            this.punchState = CamState.BEAT_HIT;
-            this.punchZoom = cfg.beatZoom;
-            this.totalFrames = 1;
-            this.framesRemaining = 1;
-
-            // Bass hits punch down, transients shake laterally
-            if (beatState.hitType === 'bass') {
-              this.punchShakeX = 0;
-              this.punchShakeY = 1.5 * (energy > 0.7 ? 2 : 1);
-              this.punchRotation = 0;
-            } else if (beatState.hitType === 'transient') {
-              // Alternate left/right on transients
-              const dir = (beatState.beatIndex % 2 === 0) ? 1 : -1;
-              this.punchShakeX = 1.5 * dir;
-              this.punchShakeY = 0;
-              this.punchRotation = 0;
-            } else {
-              this.punchShakeX = 0;
-              this.punchShakeY = 0;
-              this.punchRotation = 0;
-            }
-          }
-        }
-      }
-
-      // Decay
-      if (this.framesRemaining > 0) {
-        this.framesRemaining--;
-      }
-      if (this.framesRemaining <= 0 && this.punchState !== CamState.IDLE) {
-        this.punchState = CamState.IDLE;
-        this.punchZoom = 0;
-        this.punchShakeX = 0;
-        this.punchShakeY = 0;
-        this.punchRotation = 0;
-      }
+      // Release freeze on punch
+      this.heroFreezeAmount = 0;
+      this.heroStillTimer = 0;
     }
 
+    // Hero decay
+    if (this.heroFramesLeft > 0) {
+      this.heroFramesLeft--;
+    }
+    if (this.heroFramesLeft <= 0 && this.heroActive) {
+      this.heroActive = false;
+      this.heroPunchZoom = 0;
+      this.heroPunchShakeX = 0;
+      this.heroPunchShakeY = 0;
+    }
+
+    const heroFrac = (this.heroFramesLeft > 0 && this.heroTotalFrames > 0)
+      ? this.heroFramesLeft / this.heroTotalFrames
+      : 0;
+
     // ═══════════════════════════════════════════════════════════
-    // 4. SILENCE — pull back during vocal gaps
+    // 3. BEAT DANCE — every beat, camera moves
     // ═══════════════════════════════════════════════════════════
-    {
-      const isActive = sf?.vocalActive ?? false;
-      if (isActive) {
-        this.silenceTimer = 0;
+
+    if (isNewBeat && energy > 0.05) {
+      const strength = beatState!.strength * Math.max(hitStrength, 0.3);
+      const amp = strength * energy * dropMult;
+
+      if (hitType === 'bass') {
+        // Bass → downward punch
+        this.beatImpulseY = cfg.beatBounceY * amp * cfg.bassMultiplier;
+        this.beatImpulseX = 0;
+        this.beatImpulseRot = 0;
+      } else if (hitType === 'transient') {
+        // Transient → lateral snap
+        const dir = (beatState!.beatIndex % 2 === 0) ? 1 : -1;
+        this.beatImpulseX = cfg.beatBounceX * amp * cfg.transientMultiplier * dir;
+        this.beatImpulseY = cfg.beatBounceY * amp * 0.3;
+        this.beatImpulseRot = dir * 0.003 * amp;
       } else {
-        this.silenceTimer += dtSec;
-      }
-      // After 1.5s of silence, start gradual wide-shot pull-back
-      const silenceTarget = this.silenceTimer > 1.5
-        ? Math.min(1, (this.silenceTimer - 1.5) / 3.0) // 0→1 over 3 seconds
-        : 0;
-      this.silencePullback = expLerp(this.silencePullback, silenceTarget, 2.0, dtSec);
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // 5. CLIMAX — smooth blend to heightened state
-    // ═══════════════════════════════════════════════════════════
-    {
-      const targetClimax = sf?.isClimax ? 1 : 0;
-      this.climaxIntensity = expLerp(this.climaxIntensity, targetClimax, 1.5, dtSec);
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // 6. COMPOSITE — sum all layers with safety clamps
-    // ═══════════════════════════════════════════════════════════
-    {
-      // Punch active fraction (linear decay within event window)
-      let punchFrac = 0;
-      if (this.framesRemaining > 0 && this.totalFrames > 0) {
-        punchFrac = this.framesRemaining / this.totalFrames;
+        // Generic → balanced bounce
+        const dir = (beatState!.beatIndex % 2 === 0) ? 1 : -1;
+        this.beatImpulseY = cfg.beatBounceY * amp * 0.7;
+        this.beatImpulseX = cfg.beatBounceX * amp * 0.4 * dir;
+        this.beatImpulseRot = 0;
       }
 
-      // Pulse: continuous sine bob from beat phase
-      // phase 0 = on beat, we want peak displacement at phase 0
-      const pulseSine = Math.cos(this.pulsePhase * Math.PI * 2);
-      const pulseAmp = this.pulseEnergy * (1 + this.climaxIntensity * 0.5) * this.breathIntensity;
-      const pulseOffsetY = pulseSine * cfg.pulseAmplitudeY * pulseAmp;
-      const pulseOffsetX = Math.sin(this.pulsePhase * Math.PI * 2 * 0.5) * cfg.pulseAmplitudeX * pulseAmp * 0.5;
-      const pulseZoom = this.lastPulseDownbeatZoom * this.breathIntensity;
-
-      // Silence pull-back (negative zoom = wide shot)
-      const silenceZoom = -this.silencePullback * 0.02;
-
-      // Continuous section shake (e.g. drops) — high-freq noise
-      const shakeT = nowMs * 0.013; // ~13Hz wobble base
-      const contShakeX = this.breathShake * Math.sin(shakeT * 7.1 + 1.3) * this.pulseEnergy;
-      const contShakeY = this.breathShake * Math.cos(shakeT * 5.7 + 2.9) * this.pulseEnergy;
-
-      // Raw composite
-      let zoom = 1.0
-        + this.breathZoom
-        + pulseZoom
-        + this.punchZoom * punchFrac * this.breathIntensity
-        + silenceZoom;
-
-      let offsetX = this.breathDriftX
-        + pulseOffsetX
-        + this.punchShakeX * punchFrac
-        + contShakeX;
-
-      let offsetY = this.breathDriftY
-        + pulseOffsetY
-        + this.punchShakeY * punchFrac
-        + contShakeY;
-
-      let rotation = this.breathRotation
-        + this.punchRotation * punchFrac;
-
-      let shakeX = this.punchShakeX * punchFrac + contShakeX;
-      let shakeY = this.punchShakeY * punchFrac + contShakeY;
-
-      // ── Safety envelope ──
-      zoom = clamp(zoom, 2 - cfg.maxZoom, cfg.maxZoom); // symmetric around 1.0
-      offsetX = clamp(offsetX, -cfg.maxShakePx * 3, cfg.maxShakePx * 3);
-      offsetY = clamp(offsetY, -cfg.maxShakePx * 3, cfg.maxShakePx * 3);
-      rotation = clamp(rotation, -cfg.maxRotationRad, cfg.maxRotationRad);
-      shakeX = clamp(shakeX, -cfg.maxShakePx, cfg.maxShakePx);
-      shakeY = clamp(shakeY, -cfg.maxShakePx, cfg.maxShakePx);
-
-      this._compositeZoom = zoom;
-      this._compositeOffsetX = offsetX;
-      this._compositeOffsetY = offsetY;
-      this._compositeRotation = rotation;
-      this._compositeShakeX = shakeX;
-      this._compositeShakeY = shakeY;
+      // Zoom on every beat
+      const downbeatMult = beatState!.isDownbeat ? 1.5 : 1.0;
+      this.beatImpulseZoom = cfg.beatZoom * amp * downbeatMult;
     }
+
+    // Fast exponential decay (~88% gone per frame at 60fps)
+    const decayRate = Math.pow(0.12, dt);
+    this.beatImpulseY *= decayRate;
+    this.beatImpulseX *= decayRate;
+    this.beatImpulseZoom *= decayRate;
+    this.beatImpulseRot *= decayRate;
+
+    // Continuous sway between beats
+    const swayAmp = energy * dropMult;
+    const swayY = Math.cos(phase * Math.PI * 2) * cfg.beatBounceY * 0.3 * swayAmp;
+    const swayX = Math.sin(phase * Math.PI) * cfg.beatBounceX * 0.2 * swayAmp;
+
+    // ═══════════════════════════════════════════════════════════
+    // 4. DROP SHAKE — continuous noise during drops
+    // ═══════════════════════════════════════════════════════════
+
+    const shakeT = nowMs * 0.013;
+    const dropShakeX = this.dropAmount * cfg.dropShakePx * Math.sin(shakeT * 7.1 + 1.3) * energy;
+    const dropShakeY = this.dropAmount * cfg.dropShakePx * Math.cos(shakeT * 5.7 + 2.9) * energy;
+
+    // ═══════════════════════════════════════════════════════════
+    // 5. COMPOSITE — beat + drop + hero, freeze during anticipation
+    // ═══════════════════════════════════════════════════════════
+
+    const beatAlive = 1 - this.heroFreezeAmount;
+
+    let zoom = 1.0
+      + (this.beatImpulseZoom + swayAmp * 0.005) * beatAlive
+      + this.heroPunchZoom * heroFrac;
+
+    let offsetX = (this.beatImpulseX + swayX + dropShakeX) * beatAlive
+      + this.heroPunchShakeX * heroFrac;
+
+    let offsetY = (this.beatImpulseY + swayY + dropShakeY) * beatAlive
+      + this.heroPunchShakeY * heroFrac;
+
+    let rotation = this.beatImpulseRot * beatAlive;
+
+    let shakeX = (this.beatImpulseX * 0.5 + dropShakeX) * beatAlive
+      + this.heroPunchShakeX * heroFrac;
+    let shakeY = (this.beatImpulseY * 0.5 + dropShakeY) * beatAlive
+      + this.heroPunchShakeY * heroFrac;
+
+    // ── Safety ──
+    zoom = clamp(zoom, 2 - cfg.maxZoom, cfg.maxZoom);
+    offsetX = clamp(offsetX, -cfg.maxOffsetPx, cfg.maxOffsetPx);
+    offsetY = clamp(offsetY, -cfg.maxOffsetPx, cfg.maxOffsetPx);
+    rotation = clamp(rotation, -cfg.maxRotationRad, cfg.maxRotationRad);
+    shakeX = clamp(shakeX, -cfg.maxOffsetPx, cfg.maxOffsetPx);
+    shakeY = clamp(shakeY, -cfg.maxOffsetPx, cfg.maxOffsetPx);
+
+    this._zoom = zoom;
+    this._offsetX = offsetX;
+    this._offsetY = offsetY;
+    this._rotation = rotation;
+    this._shakeX = shakeX;
+    this._shakeY = shakeY;
 
     // ═══ Bookkeeping ═══
     this.prevHeroActive = sf?.heroActive ?? false;
     if (beatState) this.prevBeatIndex = beatState.beatIndex;
+    this.prevEnergy = energy;
     this._cachedTransform = null;
   }
 
-  // ─── Transform output (for text layer — no parallax) ───────
+  // ─── Transform output (text layer — no parallax) ───────────
 
   getSubjectTransform(): SubjectTransform {
     if (this._cachedTransform) return this._cachedTransform;
 
     const result: SubjectTransform = {
-      zoom: this._compositeZoom,
-      proximity: Math.max(0, this._compositeZoom - 1),
-      offsetX: this._compositeOffsetX,
-      offsetY: this._compositeOffsetY,
-      rotation: this._compositeRotation,
-      shakeX: this._compositeShakeX,
-      shakeY: this._compositeShakeY,
+      zoom: this._zoom,
+      proximity: Math.max(0, this._zoom - 1),
+      offsetX: this._offsetX,
+      offsetY: this._offsetY,
+      rotation: this._rotation,
+      shakeX: this._shakeX,
+      shakeY: this._shakeY,
     };
     this._cachedTransform = result;
     return result;
@@ -531,47 +395,36 @@ export class CameraRig {
   ): void {
     ctx.save();
 
-    // Parallax depth: each layer moves a fraction of the total displacement.
-    // Far layers barely move, near layers move more. Text (not passed here)
-    // gets zero displacement — anchored for readability.
     const cfg = this.config;
     let depth: number;
     switch (layer) {
       case 'backdrop':
-      case 'far':        depth = cfg.parallaxFar;  break;  // 0.15
+      case 'far':        depth = cfg.parallaxFar;  break;
       case 'atmosphere':
-      case 'mid':        depth = cfg.parallaxMid;  break;  // 0.5
-      case 'near':       depth = cfg.parallaxNear; break;  // 0.85
+      case 'mid':        depth = cfg.parallaxMid;  break;
+      case 'near':       depth = cfg.parallaxNear; break;
       default:           depth = 0.5;
     }
 
-    const zoom = 1.0 + (this._compositeZoom - 1.0) * depth;
-    const offsetX = this._compositeOffsetX * depth;
-    const offsetY = this._compositeOffsetY * depth;
-    const shakeX = this._compositeShakeX * depth;
-    const shakeY = this._compositeShakeY * depth;
-    const rotation = this._compositeRotation * depth;
+    const zoom = 1.0 + (this._zoom - 1.0) * depth;
+    const ox = this._offsetX * depth;
+    const oy = this._offsetY * depth;
+    const sx = this._shakeX * depth;
+    const sy = this._shakeY * depth;
+    const rot = this._rotation * depth;
 
     const cx = this.canvasW / 2;
     const cy = this.canvasH / 2;
 
     const hasMotion = Math.abs(zoom - 1.0) > 0.0005
-      || Math.abs(offsetX) > 0.1
-      || Math.abs(offsetY) > 0.1
-      || Math.abs(shakeX) > 0.1
-      || Math.abs(shakeY) > 0.1
-      || Math.abs(rotation) > 0.0001;
+      || Math.abs(ox) > 0.1 || Math.abs(oy) > 0.1
+      || Math.abs(sx) > 0.1 || Math.abs(sy) > 0.1
+      || Math.abs(rot) > 0.0001;
 
     if (hasMotion) {
-      // Translate to center, apply all transforms, translate back.
-      // Order: translate → rotate → scale → offset+shake
-      ctx.translate(cx + offsetX + shakeX, cy + offsetY + shakeY);
-      if (Math.abs(rotation) > 0.0001) {
-        ctx.rotate(rotation);
-      }
-      if (Math.abs(zoom - 1.0) > 0.0005) {
-        ctx.scale(zoom, zoom);
-      }
+      ctx.translate(cx + ox + sx, cy + oy + sy);
+      if (Math.abs(rot) > 0.0001) ctx.rotate(rot);
+      if (Math.abs(zoom - 1.0) > 0.0005) ctx.scale(zoom, zoom);
       ctx.translate(-cx, -cy);
     }
   }
@@ -581,45 +434,37 @@ export class CameraRig {
   }
 
   getProximity(): number {
-    return Math.max(0, this._compositeZoom - 1);
+    return Math.max(0, this._zoom - 1);
   }
 
-  // ─── Utility ───────────────────────────────────────────────
-
   reset(): void {
-    this.punchState = CamState.IDLE;
-    this.punchZoom = 0;
-    this.punchShakeX = 0;
-    this.punchShakeY = 0;
-    this.punchRotation = 0;
-    this.framesRemaining = 0;
-    this.totalFrames = 0;
-    this.lastHeroPunchMs = 0;
     this.prevBeatIndex = -1;
+    this.beatImpulseY = 0;
+    this.beatImpulseX = 0;
+    this.beatImpulseZoom = 0;
+    this.beatImpulseRot = 0;
+    this.energyAvg = 0.3;
+    this.dropAmount = 0;
+    this.prevEnergy = 0;
+    this.heroActive = false;
+    this.heroPunchZoom = 0;
+    this.heroPunchShakeX = 0;
+    this.heroPunchShakeY = 0;
+    this.heroFramesLeft = 0;
+    this.heroTotalFrames = 0;
+    this.lastHeroPunchMs = 0;
     this.prevHeroActive = false;
-    this.breathZoom = 0;
-    this.breathDriftX = 0;
-    this.breathDriftY = 0;
-    this.breathRotation = 0;
-    this.breathIntensity = 1.0;
-    this.breathShake = 0;
-    this.pulsePhase = 0;
-    this.pulseEnergy = 0.5;
-    this.lastPulseDownbeatZoom = 0;
-    this.silenceTimer = 0;
-    this.silencePullback = 0;
-    this.climaxIntensity = 0;
-    this._compositeZoom = 1;
-    this._compositeOffsetX = 0;
-    this._compositeOffsetY = 0;
-    this._compositeRotation = 0;
-    this._compositeShakeX = 0;
-    this._compositeShakeY = 0;
+    this.heroStillTimer = 0;
+    this.heroFreezeAmount = 0;
+    this._zoom = 1;
+    this._offsetX = 0;
+    this._offsetY = 0;
+    this._rotation = 0;
+    this._shakeX = 0;
+    this._shakeY = 0;
     this._cachedTransform = null;
   }
 
-  /** Expose current section for debugging */
-  get currentSection(): SectionRigName { return this.section; }
-  /** Expose climax intensity for external systems */
-  get climax(): number { return this.climaxIntensity; }
+  /** Expose drop detection for external systems (e.g. particles) */
+  get drop(): number { return this.dropAmount; }
 }
