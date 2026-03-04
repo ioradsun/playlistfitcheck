@@ -1746,6 +1746,7 @@ export class LyricDancePlayer {
 
   /** Adaptive quality — call once per frame to update tier based on rolling FPS. */
   private _updateQualityTier(nowMs: number): void {
+    if (this._exportMode) return; // Export always runs at tier 0
     this._qFrameCount++;
     if (this._qWindowStart === 0) { this._qWindowStart = nowMs; return; }
     const elapsed = nowMs - this._qWindowStart;
