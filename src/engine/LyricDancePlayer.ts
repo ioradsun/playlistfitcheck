@@ -4825,7 +4825,7 @@ export class LyricDancePlayer {
         // ═══ BEAT-GRID GLOW, SCALE, NUDGE via SubsystemResponse ═══
         // Use the pre-computed per-emphasis-level response so every word dances
         // to the beat proportional to its semantic weight.
-        const emp = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
+        const empBeat = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
         // Hero words get isHero=true response (1.6× on wordScale/wordGlow/wordNudgeY)
         const beatResp = _hasBeatResponses
           ? (isHeroWord ? _beatResponsesHero[emp] : _beatResponses[emp])
