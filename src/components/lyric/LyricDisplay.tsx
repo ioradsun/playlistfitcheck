@@ -923,6 +923,19 @@ export function LyricDisplay({
           onSaved?.(inserted.id);
         }
       }
+
+      // Keep published dance transcript in sync with autosaved lyrics so
+      // embedded preview + Watch Dance page reflect latest edits immediately.
+      const songSlug = slugify(data.title || "untitled");
+      const publishedLines = explicitLines.filter((l) => l.tag !== "adlib");
+      if (songSlug) {
+        await supabase
+          .from("shareable_lyric_dances" as any)
+          .update({ lyrics: publishedLines } as any)
+          .eq("user_id", user.id)
+          .eq("song_slug", songSlug);
+      }
+
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch (e) {
