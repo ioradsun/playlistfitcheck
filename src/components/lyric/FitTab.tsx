@@ -246,20 +246,29 @@ export function FitTab({
 
   const transcriptInitRef = useRef(false);
   useEffect(() => {
-    if (!lyricData?.lines) return;
+    if (!lyricData?.lines) {
+      console.log('[SYNC:A] no lyricData.lines, skip');
+      return;
+    }
 
     // Skip first fire — player initializes from prefetchedData already containing these lines
     if (!transcriptInitRef.current) {
       transcriptInitRef.current = true;
+      console.log('[SYNC:A] first fire — skipping (init guard). lines:', lyricData.lines.length, 'publishedDanceId:', publishedDanceId, 'dancePlayerRef:', !!dancePlayerRef.current);
       return;
     }
+
+    console.log('[SYNC:B] lyricData changed — queuing sync. lines:', lyricData.lines.length, 'publishedDanceId:', !!publishedDanceId, 'dancePlayerRef:', !!dancePlayerRef.current);
 
     if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current);
     transcriptSyncTimerRef.current = setTimeout(() => {
       const handle = dancePlayerRef.current;
-      if (!handle) return;
+      if (!handle) {
+        console.log('[SYNC:C] FAIL — dancePlayerRef.current is null. publishedUrl:', publishedUrl, 'publishedDanceId:', publishedDanceId);
+        return;
+      }
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
-      console.log('[transcript-sync] pushing', mainLines.length, 'lines to player');
+      console.log('[SYNC:D] calling reloadTranscript with', mainLines.length, 'lines');
       void handle.reloadTranscript(mainLines, wordsRef.current ?? undefined);
     }, 300);
 
