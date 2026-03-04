@@ -1748,6 +1748,17 @@ export class LyricDancePlayer {
     this.data = { ...this.data, lyrics: lines };
     if (words !== undefined) this.data = { ...this.data, words: words ?? undefined };
     if (!this.payload) return;
+
+    // ── Invalidate bake cache ──────────────────────────────────────────────
+    // ensureTimelineReady() ends with `this.compiledScene = this._bakedScene`,
+    // which would silently overwrite the scene we're about to compile here if
+    // an in-flight scheduleFullModeUpgrade() idle callback fires afterwards.
+    // Clear both the promise and the cached scene so the next upgrade bakes
+    // from the new lyrics instead of restoring the stale ones.
+    this._bakePromise = null;
+    this._bakedScene = null;
+    this._bakedChunkCache = null;
+
     const t = this.audio.currentTime;
     const payload = this.buildScenePayload();
     this.payload = payload;
