@@ -961,8 +961,8 @@ export function LyricFitTab({
         />
       )}
 
-      {activeTab === "lyrics" ? (
-      <LyricsTab
+      <div style={{ display: activeTab === "lyrics" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <LyricsTab
           lyricData={lyricData}
           setLyricData={setLyricData}
           audioFile={audioFile}
@@ -1013,7 +1013,9 @@ export function LyricFitTab({
             onUploadStartedProp?.(payload);
           }}
         />
-      ) : lyricData && audioFile ? (
+      </div>
+      <div style={{ display: activeTab === "fit" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        {lyricData && audioFile ? (
         <FitTab
           lyricData={lyricData}
           audioFile={audioFile}
@@ -1037,7 +1039,8 @@ export function LyricFitTab({
             setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
           }}
         />
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }
