@@ -128,7 +128,7 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
         canvasRef.current!,
         textCanvasRef.current!,
         containerRef.current as HTMLDivElement,
-        { bootMode: "minimal" },
+        { bootMode },
       );
       playerRef.current = player;
 
