@@ -90,6 +90,7 @@ export function FitTab({
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishedDanceId, setPublishedDanceId] = useState<string | null>(null);
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
 
   // ── Battle publish state ──────────────────────────────────────────────
