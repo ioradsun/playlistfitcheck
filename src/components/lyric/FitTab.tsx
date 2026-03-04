@@ -602,8 +602,42 @@ export function FitTab({
 
   return (
     <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
-      {/* Waveform — full width */}
-      {hasRealAudio && (
+      {/* Dance preview or waveform fallback */}
+      {publishedUrl && publishedDanceId ? (
+        <div className="space-y-3">
+          <div className="rounded-xl overflow-hidden">
+            <InlineLyricDance
+              lyricDanceId={publishedDanceId}
+              lyricDanceUrl={publishedUrl}
+              songTitle={lyricData.title || "Untitled"}
+              artistName=""
+            />
+          </div>
+          {/* Dance action buttons */}
+          <div className="flex gap-2">
+            <a
+              href={publishedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+            >
+              Watch Dance
+            </a>
+            <button
+              onClick={handleDance}
+              disabled={republishDisabled}
+              className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 disabled:opacity-40 disabled:cursor-not-allowed text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+            >
+              {publishing ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>{publishStatus || "Republishing…"}</span>
+                </span>
+              ) : "Republish"}
+            </button>
+          </div>
+        </div>
+      ) : hasRealAudio ? (
         <div className="glass-card rounded-xl p-3">
           <LyricWaveform
             waveform={waveform}
@@ -615,7 +649,7 @@ export function FitTab({
             beatGridLoading={false}
           />
         </div>
-      )}
+      ) : null}
 
       {/* Single-column report */}
       <div className="space-y-3">
