@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
-import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
+import { Loader2, Volume2, VolumeX, Maximize2, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withInitLimit } from "@/engine/initQueue";
@@ -196,6 +196,19 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
 
   const canPlay = data && data.words?.length && data.cinematic_direction;
 
+  // Derive poster gradient from palette
+  const posterGradient = (() => {
+    if (!data) return "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)";
+    const palette = (data as any).palette;
+    if (Array.isArray(palette) && palette.length >= 2) {
+      const c1 = palette[0] || "#1a1a2e";
+      const c2 = palette[1] || "#0f3460";
+      const c3 = palette[2] || palette[1] || "#16213e";
+      return `linear-gradient(135deg, ${c1}22 0%, ${c2}44 50%, ${c3}66 100%)`;
+    }
+    return "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)";
+  })();
+
   return (
     <div
       ref={containerRef}
@@ -221,6 +234,24 @@ function InlineLyricDanceInner({ lyricDanceId, lyricDanceUrl, songTitle, artistN
           <div className="text-center space-y-2">
             <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto" />
             <p className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">Loading dance…</p>
+          </div>
+        </div>
+      )}
+
+      {/* Poster frame — shown when data loaded but not yet started */}
+      {canPlay && !started && !loading && (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center z-[5]"
+          style={{ background: posterGradient }}
+        >
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 hover:bg-white/25 transition-colors">
+              <Play size={28} className="text-white ml-1" fill="white" />
+            </div>
+            <div className="text-center px-6">
+              <p className="text-sm font-semibold text-white/90">{songTitle}</p>
+              <p className="text-[11px] text-white/50 font-mono uppercase tracking-wider mt-1">Tap to play</p>
+            </div>
           </div>
         </div>
       )}

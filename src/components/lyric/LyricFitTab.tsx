@@ -106,8 +106,6 @@ export function LyricFitTab({
   const [songSignature, setSongSignature] = useState<SongSignature | null>(null);
   const [audioSections, setAudioSections] = useState<any[]>([]);
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
-  const [autoDanceId, setAutoDanceId] = useState<string | null>(null);
-  const [autoDanceSlug, setAutoDanceSlug] = useState<{ artist: string; song: string } | null>(null);
   // bgImageUrl and frameState removed — V3 derives from cinematicDirection
 
   const [fitReadiness, setFitReadiness] = useState<FitReadiness>("not_started");
@@ -597,8 +595,6 @@ export function LyricFitTab({
                   .maybeSingle();
                 if (existing?.id) {
                   resolvedDanceId = existing.id;
-                  setAutoDanceId(existing.id);
-                  setAutoDanceSlug({ artist: artistSlugVal, song: songSlugVal });
                   // Update cinematic_direction on existing row
                   await supabase
                     .from("shareable_lyric_dances" as any)
@@ -645,11 +641,7 @@ export function LyricFitTab({
                     .eq("song_slug", songSlugVal)
                     .maybeSingle();
                   resolvedDanceId = newRow?.id ?? null;
-                  if (resolvedDanceId) {
-                    console.log(`[Pipeline] Draft dance row created: ${resolvedDanceId}`);
-                    setAutoDanceId(resolvedDanceId);
-                    setAutoDanceSlug({ artist: artistSlugVal, song: songSlugVal });
-                  }
+                  if (resolvedDanceId) console.log(`[Pipeline] Draft dance row created: ${resolvedDanceId}`);
                 }
 
                 if (!resolvedDanceId) {
@@ -1003,8 +995,6 @@ export function LyricFitTab({
             setGenerationStatus({ beatGrid: "idle", renderData: "idle", cinematicDirection: "idle", sectionImages: "idle" });
             setFitReadiness("not_started");
             setFitUnlocked(false);
-            setAutoDanceId(null);
-            setAutoDanceSlug(null);
             cinematicTriggeredRef.current = false;
             pipelineTriggeredRef.current = false;
             sectionPipelineRunningRef.current = false;
@@ -1043,8 +1033,6 @@ export function LyricFitTab({
           onRetry={retryGeneration}
           onHeaderProject={onHeaderProject}
           onBack={() => handleViewChange("lyrics")}
-          autoDanceId={autoDanceId}
-          autoDanceSlug={autoDanceSlug}
           onImageGenerationStatusChange={(status) => {
             setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
           }}
