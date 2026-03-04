@@ -234,60 +234,37 @@ export function FitTab({
   }, [lyricData.title, audioFile.name, onHeaderProject, onBack]);
 // CinematicDirectionCard extracted to top-level — see below FitTab
 
-  // ── Auto-update canvas when transcript changes ────────────────────────
-  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Live transcript sync ──────────────────────────────────────────────
+  // FitTab stays mounted (hidden) while the user edits in LyricsTab.
+  // lyricData.lines is live shared state — just watch it and push to the
+  // player whenever it changes. No DB comparison needed.
+  const transcriptSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const linesRef = useRef(lyricData?.lines);
   const wordsRef = useRef(words);
   linesRef.current = lyricData?.lines;
   wordsRef.current = words;
 
-  // Hash lines+words identity for change detection
-  const transcriptKey = useMemo(() => {
-    if (!lyricData?.lines) return '';
-    const linesStr = lyricData.lines.map(l => `${l.text}|${l.start}|${l.end}`).join('\n');
-    const wordsStr = words ? words.map(w => `${w.word}|${w.start}|${w.end}`).join(',') : '';
-    return linesStr + '||' + wordsStr;
-  }, [lyricData?.lines, words]);
-
-  // Build a stable key from the prefetched (published) data so we can detect edits
-  const prefetchedTranscriptKey = useMemo(() => {
-    if (!prefetchedDanceData) return '';
-    const pLines = Array.isArray(prefetchedDanceData.lyrics) ? prefetchedDanceData.lyrics : [];
-    const linesStr = pLines.map((l: any) => `${l.text}|${l.start}|${l.end}`).join('\n');
-    const pWords = Array.isArray(prefetchedDanceData.words) ? prefetchedDanceData.words : [];
-    const wordsStr = pWords.map((w: any) => `${w.word}|${w.start}|${w.end}`).join(',');
-    return linesStr + '||' + wordsStr;
-  }, [prefetchedDanceData]);
-
+  const transcriptInitRef = useRef(false);
   useEffect(() => {
-    // Only reload when current transcript differs from the published version
-    if (!prefetchedDanceData) {
-      console.log('[transcript-reload] skipped: prefetchedDanceData not yet loaded');
+    if (!lyricData?.lines) return;
+
+    // Skip first fire — player initializes from prefetchedData already containing these lines
+    if (!transcriptInitRef.current) {
+      transcriptInitRef.current = true;
       return;
     }
-    if (transcriptKey === prefetchedTranscriptKey) {
-      console.log('[transcript-reload] skipped: keys match (no edits vs published)');
-      return;
-    }
-    console.log('[transcript-reload] queuing reload — key mismatch detected');
 
-    if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-
-    const runReload = () => {
-      const playerHandle = dancePlayerRef.current;
-      if (!playerHandle) {
-        console.log('[transcript-reload] playerHandle not ready, retrying...');
-        reloadTimerRef.current = setTimeout(runReload, 180);
-        return;
-      }
+    if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current);
+    transcriptSyncTimerRef.current = setTimeout(() => {
+      const handle = dancePlayerRef.current;
+      if (!handle) return;
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
-      console.log('[transcript-reload] calling reloadTranscript with', mainLines.length, 'lines');
-      void playerHandle.reloadTranscript(mainLines, wordsRef.current ?? undefined);
-    };
+      console.log('[transcript-sync] pushing', mainLines.length, 'lines to player');
+      void handle.reloadTranscript(mainLines, wordsRef.current ?? undefined);
+    }, 300);
 
-    reloadTimerRef.current = setTimeout(runReload, 400);
-    return () => { if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current); };
-  }, [transcriptKey, prefetchedDanceData, prefetchedTranscriptKey]);
+    return () => { if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current); };
+  }, [lyricData?.lines, words]);
 
 
   const handleDance = useCallback(async () => {
