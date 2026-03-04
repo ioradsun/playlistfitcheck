@@ -802,22 +802,55 @@ export function FitTab({
               bootMode="full"
             />
           </div>
-          {/* Dance action buttons */}
-          <div className="flex gap-2">
+          {/* Action toolbar — single row of icon buttons */}
+          <div className="flex items-center justify-center gap-1">
             <a
               href={publishedUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              title="Watch Dance"
             >
-              Watch Dance
+              <ExternalLink size={14} />
+              Watch
             </a>
             <button
               onClick={() => setShowExportModal(true)}
-              className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold tracking-wide uppercase transition-colors border rounded-xl py-3 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              title="Download"
             >
               <Download size={14} />
               Download
+            </button>
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}${publishedUrl}`;
+                navigator.clipboard.writeText(url).then(() => toast.success("Link copied!"));
+              }}
+              className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              title="Copy Link"
+            >
+              <Link size={14} />
+              Link
+            </button>
+            <button
+              onClick={handleCrowdfitToggle}
+              disabled={crowdfitToggling}
+              className={`flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 ${
+                crowdfitPostId
+                  ? "text-primary border-primary/40 bg-primary/5"
+                  : "text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+              } disabled:opacity-50`}
+              title={crowdfitPostId ? "Remove from CrowdFit" : "Publish to CrowdFit"}
+            >
+              {crowdfitToggling ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : crowdfitPostId ? (
+                <Check size={14} />
+              ) : (
+                <Users size={14} />
+              )}
+              {crowdfitPostId ? "Live" : "CrowdFit"}
             </button>
           </div>
           <FitExportModal
