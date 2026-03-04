@@ -1,79 +1,58 @@
 
 
-# Skeleton-First Lyric Tab — Final Adjustments
+# Replace Waveform with Inline Lyric Dance on Fit Tab
 
-## 1. Delete `LyricProgressModal` entirely
+## What changes
 
-`LyricsTab.tsx` is the only consumer. The file `src/components/lyric/LyricProgressModal.tsx` will be deleted, along with its import and all related state (`progressStage`, `progressOpen`, `progressFileName`, and the `ProgressStage` type import) from `LyricsTab.tsx`.
+Replace the `LyricWaveform` at the top of the Fit tab with the actual published lyric dance video (using the existing `InlineLyricDance` component), and move the Republish/Regenerate button directly below it.
 
-## 2. Create `LyricSkeleton.tsx`
+## Implementation
 
-New file: `src/components/lyric/LyricSkeleton.tsx`
+### File: `src/components/lyric/FitTab.tsx`
 
-A skeleton screen mimicking the `LyricDisplay` layout:
-- Song title (passed as prop)
-- Waveform placeholder bar
-- 12-16 skeleton lines with randomized widths (40-90%)
-- Uses the existing `Skeleton` component from `src/components/ui/skeleton.tsx`
+1. **Import `InlineLyricDance`** from `@/components/songfit/InlineLyricDance`.
 
-Accepts two mode props:
-- **loading mode**: Shows "Transcribing lyrics..." with a subtle spinner
-- **error mode**: Shows "Transcription failed" message with a "Try Again" button and an optional "Back" button
+2. **Replace the waveform block** (lines 602-615) with conditional rendering:
+   - **If a published dance exists** (`publishedUrl` is set and we can derive the dance ID): Render `<InlineLyricDance>` with the dance data, followed by the Republish button underneath.
+   - **If no dance exists yet**: Keep the waveform as a fallback (the dance hasn't been created yet, so there's nothing to show).
 
-Props:
-```typescript
-interface Props {
-  title: string;
-  fileName?: string;
-  loading: boolean;       // true = transcribing, false = failed
-  onRetry?: () => void;   // retry button handler (error mode)
-  onBack?: () => void;    // back to uploader
-}
-```
+3. **Fetch the dance ID** alongside the existing published-dance check (the `useEffect` at line 112 already queries `shareable_lyric_dances`). Add `id` to the select columns and store it in a new `publishedDanceId` state variable.
 
-## 3. Update `LyricsTab.tsx` — four render states
+4. **Move the Dance/Republish buttons** (lines 807-841) from the bottom up to directly below the inline dance player at the top. Remove the duplicate button section at the bottom.
+
+### Layout (when dance exists)
 
 ```text
-State A: lyricData + audioFile + lines.length > 0
-  --> LyricDisplay (normal editor)
-
-State B: lyricData + audioFile + lines.length === 0 + loading
-  --> LyricSkeleton (transcribing mode)
-
-State C: lyricData + audioFile + lines.length === 0 + !loading
-  --> LyricSkeleton (error mode, retry button calls handleTranscribe again)
-
-State D: everything else
-  --> LyricUploader
+┌─────────────────────────────┐
+│  InlineLyricDance (352px)   │  ← replaces waveform
+├─────────────────────────────┤
+│  [Watch Dance] [Republish]  │  ← moved from bottom
+├─────────────────────────────┤
+│  Song DNA / Meaning / etc.  │  ← unchanged
+└─────────────────────────────┘
 ```
 
-State C is the key addition -- when transcription fails, `loading` becomes `false` but `lyricData` still has 0 lines. Instead of silently dropping the user back to the uploader, we show the skeleton in error mode with a retry button. The retry button re-calls `handleTranscribe` with the existing `audioFile`.
+### Layout (no dance yet)
 
-## 4. Clean up `handleTranscribe` in `LyricsTab.tsx`
+```text
+┌─────────────────────────────┐
+│  LyricWaveform              │  ← kept as before
+├─────────────────────────────┤
+│  Song DNA / Meaning / etc.  │
+├─────────────────────────────┤
+│  [Dance] button             │  ← stays at bottom
+└─────────────────────────────┘
+```
 
-Remove:
-- All `setProgressStage(...)` calls
-- All `setTimeout` timer arrays and `clearTimeout` loops
-- `progressStage`, `progressOpen`, `progressFileName` state variables
-- `LyricProgressModal` import
+### Details
 
-Keep:
-- `setLoading(true)` / `setLoading(false)`
-- Immediate shell creation (`setLyricData({ title, lines: [] })`)
-- `onUploadStarted` / `onAudioSubmitted` callbacks
-- Transcription fetch, response handling, DB persistence
-- Console timing logs
+- New state: `publishedDanceId: string | null` — set from the existing `useEffect` that checks for published dances.
+- The `InlineLyricDance` component already handles fetching its own data, autoplay on visibility, mute controls, and full-page expansion — no new logic needed.
+- The `publishedUrl` is already computed; we just need the `id` to pass to `InlineLyricDance`.
 
-## Files affected
+### Files affected
 
 | File | Action |
 |------|--------|
-| `src/components/lyric/LyricProgressModal.tsx` | **Delete** |
-| `src/components/lyric/LyricSkeleton.tsx` | **Create** |
-| `src/components/lyric/LyricsTab.tsx` | **Edit** — remove modal, add skeleton, four-state render |
+| `src/components/lyric/FitTab.tsx` | Edit — add import, add `publishedDanceId` state, replace waveform conditionally, relocate buttons |
 
-## Not modified
-- `LyricFitTab.tsx` — upload fast-path intact
-- `LyricDisplay.tsx` — unchanged
-- Backend / edge functions — untouched
-- `presetDerivation.ts` — untouched
