@@ -737,53 +737,6 @@ export default function ShareableLyricDance() {
       <div className="w-full" style={{ background: "#0a0a0a" }}>
         <div className="max-w-[480px] mx-auto px-5 py-4 space-y-3">
           <div className="flex items-center gap-3">
-            {/* Download button */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  disabled={!!exporting}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/5 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-                  aria-label="Download video"
-                >
-                  {exporting ? (
-                    <span className="text-[9px] font-mono animate-pulse text-white/50">{exportProgress}%</span>
-                  ) : (
-                    <Download size={16} />
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent side="top" align="start" className="w-auto min-w-[180px] p-1 bg-[#1a1a1a] border-white/10">
-                <button
-                  onClick={() => handleExport("9:16")}
-                  disabled={!!exporting}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-left text-sm font-mono text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40"
-                >
-                  {exporting === "9:16"
-                    ? <span className="text-white/50">Exporting {exportProgress}%…</span>
-                    : <><span className="text-white/30">9:16</span><span className="text-white/50">·</span><span>TikTok / Reels</span></>
-                  }
-                </button>
-                <button
-                  onClick={() => handleExport("16:9")}
-                  disabled={!!exporting}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded text-left text-sm font-mono text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40"
-                >
-                  {exporting === "16:9"
-                    ? <span className="text-white/50">Exporting {exportProgress}%…</span>
-                    : <><span className="text-white/30">16:9</span><span className="text-white/50">·</span><span>YouTube</span></>
-                  }
-                </button>
-                {exporting && (
-                  <button
-                    onClick={() => abortRef.current?.abort()}
-                    className="w-full px-3 py-1.5 rounded text-xs text-red-400 hover:bg-red-500/10 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </PopoverContent>
-            </Popover>
-
             {/* Theme toggle */}
             <button
               onClick={() => {
