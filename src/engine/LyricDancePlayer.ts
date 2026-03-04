@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-01-V2-CONDUCTOR */
+/* cache-bust: 2026-03-04-V3 */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
@@ -1787,7 +1787,8 @@ export class LyricDancePlayer {
     }
     this._updateViewportScale();
     this.audio.currentTime = t;
-    console.info('[LyricDancePlayer] updateTranscript: recompiled', lines.length, 'lines');
+    const groupCount = this.compiledScene?.phraseGroups?.length ?? 0;
+    console.info('[SYNC:K] updateTranscript done. lines:', lines.length, 'phraseGroups:', groupCount, 'payload:', !!this.payload, 'compiledScene:', !!this.compiledScene);
   }
 
   updateSectionImages(urls: string[]): void {
