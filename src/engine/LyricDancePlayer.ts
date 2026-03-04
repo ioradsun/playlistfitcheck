@@ -4479,9 +4479,11 @@ export class LyricDancePlayer {
     // hitStrength drives punch/slam impulses; pulse drives the softer dance motion.
     type SR = import('@/engine/BeatConductor').SubsystemResponse;
     const _beatResponses: SR[] = [];
+    const _beatResponsesHero: SR[] = []; // isHero=true → 1.6× on all word values
     if (beatState && this.conductor) {
       for (let eLevel = 0; eLevel <= 5; eLevel++) {
-        _beatResponses[eLevel] = this.conductor.getSubsystemResponse(beatState, eLevel);
+        _beatResponses[eLevel] = this.conductor.getSubsystemResponse(beatState, eLevel, false);
+        _beatResponsesHero[eLevel] = this.conductor.getSubsystemResponse(beatState, eLevel, true);
       }
     }
     const _hasBeatResponses = _beatResponses.length > 0;
@@ -4818,7 +4820,10 @@ export class LyricDancePlayer {
         // Use the pre-computed per-emphasis-level response so every word dances
         // to the beat proportional to its semantic weight.
         const emp = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
-        const beatResp = _hasBeatResponses ? _beatResponses[emp] : null;
+        // Hero words get isHero=true response (1.6× on wordScale/wordGlow/wordNudgeY)
+        const beatResp = _hasBeatResponses
+          ? (isHeroWord ? _beatResponsesHero[emp] : _beatResponses[emp])
+          : null;
 
         let wordGlow = 0;
         let beatScaleMult = 1.0;

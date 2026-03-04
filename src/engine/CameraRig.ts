@@ -114,7 +114,7 @@ const DEFAULT_CONFIG: CameraConfig = {
   heroStillMs: 120,
   // Output spring — critically damped feels organic without oscillation
   springStiffness: 180,   // tuned for ~60ms settle time
-  springDamping: 22,      // sqrt(4 * stiffness) = critical damping
+  springDamping: 27,      // 2*sqrt(180) = 26.8 → true critical damping (no overshoot/ring)
   // Parallax
   parallaxFar: 0.15,
   parallaxMid: 0.5,
@@ -311,7 +311,8 @@ export class CameraRig {
         const dir = (beatState!.beatIndex % 2 === 0) ? 1 : -1;
         this.beatImpulseX = cfg.beatBounceX * amp * cfg.transientMultiplier * dir;
         this.beatImpulseY = cfg.beatBounceY * amp * 0.4;
-        this.beatImpulseRot = dir * 0.005 * amp;
+        // Rotation: was 0.005 → ~0.4° peak (below JND of ~1°). Now 0.018 → ~1.4° peak.
+        this.beatImpulseRot = dir * 0.018 * amp;
       } else {
         // Generic → alternating bounce
         const dir = (beatState!.beatIndex % 2 === 0) ? 1 : -1;
