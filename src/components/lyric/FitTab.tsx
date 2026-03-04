@@ -633,6 +633,7 @@ export function FitTab({
               songTitle={lyricData.title || "Untitled"}
               artistName=""
               prefetchedData={prefetchedDanceData}
+              bootMode="full"
             />
           </div>
           {/* Dance action buttons */}
