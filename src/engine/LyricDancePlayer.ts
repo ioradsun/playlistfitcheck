@@ -1254,6 +1254,8 @@ export class LyricDancePlayer {
     if (!fontsApi || this._fontStabilized) return;
     Promise.all([
       fontsApi.load('400 16px Montserrat'),
+      fontsApi.load('500 16px Montserrat'),
+      fontsApi.load('600 16px Montserrat'),
       fontsApi.load('700 16px Montserrat'),
       fontsApi.load('800 16px Montserrat'),
       fontsApi.load('900 16px Montserrat'),
@@ -2034,6 +2036,11 @@ export class LyricDancePlayer {
         this._lastVisibleFirstChunkId = "";
         this._lastVisibleMidChunkId = "";
         this._lastVisibleLastChunkId = "";
+        // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
+        if (this.payload && this.compiledScene) {
+          this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
+          this._buildChunkCacheFromScene(this.compiledScene);
+        }
       }
 
       // ALWAYS start frame with this exact sequence
