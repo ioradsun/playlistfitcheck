@@ -223,13 +223,13 @@ function LiveDebugHUD({ player }: { player: LyricDancePlayer | null }) {
 
   return (
     <div style={{
-      position: "fixed", top: 12, left: 12, zIndex: 200,
+      position: "fixed", bottom: 80, left: 12, zIndex: 200,
       background: "rgba(0,0,0,0.88)", backdropFilter: "blur(4px)",
       border: "1px solid rgba(74,222,128,0.15)", borderRadius: 6,
       padding: 12, maxWidth: 280, minWidth: 240,
       fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace",
       fontSize: 11, lineHeight: "1.55", color: "#4ade80",
-      pointerEvents: "auto", overflowY: "auto", maxHeight: "90vh",
+      pointerEvents: "auto", overflowY: "auto", maxHeight: "70vh",
     }}>
       <Section title="BEAT"><Row label="intensity" value={f(snap.beatIntensity)} /><Row label="pulse" value={f(snap.bgBeatPulse)} /><Row label="phase" value={f(snap.bgBeatPhase)} /><Row label="physGlow" value={f(snap.physGlow)} /></Section>
       <Section title="PHYSICS"><Row label="heat" value={f(snap.heat)} /><Row label="velocity" value={f(snap.velocity)} /><Row label="words" value={String(snap.wordCount)} /></Section>
