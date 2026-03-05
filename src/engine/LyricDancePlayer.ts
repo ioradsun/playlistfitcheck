@@ -1673,16 +1673,8 @@ export class LyricDancePlayer {
       const upcoming = this._getUpcomingHero(clamped);
       const songProg = (clamped - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
       const isClimax = (beatState?.energy ?? 0) > 0.65 && songProg > 0.50;
-      const focus: SubjectFocus = {
-        x: this.width / 2,
-        y: this.height / 2,
-        heroActive: upcoming !== null && !upcoming.isAnticipation,
-        emphasisLevel: upcoming?.emphasis ?? 0,
-        isClimax,
-        vocalActive,
-        heroApproaching: upcoming?.isAnticipation ?? false,
-      };
-      this.cameraRig.update(deltaMs, beatState, focus);
+      // Hero punch fired from draw loop via triggerHeroPunch()
+      this.cameraRig.update(deltaMs, beatState, null);
     }
 
     this.update(deltaMs, clamped, frame, beatState);
@@ -2093,16 +2085,9 @@ export class LyricDancePlayer {
           this.cameraRig.setEnergy(beatState?.energy ?? 0.5);
         }
 
-        const focus: SubjectFocus = {
-          x: this.width / 2,
-          y: this.height / 2,
-          heroActive: upcoming !== null && !upcoming.isAnticipation,
-          emphasisLevel: upcoming?.emphasis ?? 0,
-          isClimax,
-          vocalActive,
-          heroApproaching: upcoming?.isAnticipation ?? false,
-        };
-        this.cameraRig.update(deltaMs, beatState, focus);
+        // Hero punch now fired directly from draw loop via triggerHeroPunch()
+        // Pass null focus — camera no longer polls for hero state
+        this.cameraRig.update(deltaMs, beatState, null);
       }
 
       this.update(deltaMs, smoothedTime, frame, beatState);
@@ -2655,7 +2640,7 @@ export class LyricDancePlayer {
           }
         }
         this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
-        this.drawSimLayer(frame);
+        // drawSimLayer moved below camera release — screen-anchored
         this.drawLightingOverlay(frame, tSec);
       }
     }
@@ -2671,7 +2656,7 @@ export class LyricDancePlayer {
     if (qTier < 3) {
       try { this.checkEmotionalEvents(tSec, songProgress); } catch (e) { console.error('[LyricEngine] emotional events crash:', e); }
       this.drawEmotionalEvents(tSec);
-      this.ambientParticleEngine?.draw(this.ctx, "far");
+      // ambientParticleEngine.draw moved below camera release — screen-anchored
     }
 
     // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
@@ -2926,7 +2911,21 @@ export class LyricDancePlayer {
       const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
       const exit = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
       if (entry >= 1.0 && exit === 0) {
-        if (!this.chunkActiveSinceMs.has(chunk.id)) this.chunkActiveSinceMs.set(chunk.id, frameNowMs);
+        if (!this.chunkActiveSinceMs.has(chunk.id)) {
+          this.chunkActiveSinceMs.set(chunk.id, frameNowMs);
+          // ═══ HERO SYNC: fire camera punch at the exact frame hero word enters ═══
+          // Same event, same frame — camera and word are guaranteed in sync.
+          // Pass word duration so camera zoom holds for exactly as long as the word.
+          const emp = chunk.emphasisLevel ?? 0;
+          if (emp >= 4) {
+            const songProg = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
+            const isClimax = (this._lastBeatState?.energy ?? 0) > 0.65 && songProg > 0.50;
+            // Look up word duration from hero schedule
+            const heroEntry = this._heroSchedule.find(h => h.startSec <= tSec && h.endSec > tSec);
+            const durationMs = heroEntry ? (heroEntry.endSec - heroEntry.startSec) * 1000 : undefined;
+            this.cameraRig.triggerHeroPunch(emp, isClimax, durationMs);
+          }
+        }
       }
       const activeSince = this.chunkActiveSinceMs.get(chunk.id);
       const visibleMs = activeSince != null ? frameNowMs - activeSince : 0;
@@ -2942,6 +2941,8 @@ export class LyricDancePlayer {
         const spawnFontSize = spawnBound ? spawnBound.fontSize : 36;
         const spawnColor = chunk.color ?? '#f0f0f0';
         this.spawnDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, spawnColor, frameNowMs);
+        // Camera recoils when the word shatters — same frame as the burst
+        this.cameraRig.triggerDecompShake(chunk.emphasisLevel ?? 4);
       }
 
       const obj = this.chunks.get(chunk.id);
@@ -3189,6 +3190,11 @@ export class LyricDancePlayer {
 
     // ═══ Hero decomposition particles — shatter effect on hero word exit ═══
     this.updateAndDrawDecomp(frameNowSec);
+
+    // ── Screen-anchored HUD: reset to plain DPR transform, draw beat bars + particles ──
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
+    this.drawSimLayer(frame);
+    if (qTier < 3) this.ambientParticleEngine?.draw(this.ctx, "far");
 
     this.drawWatermark();
     if (this.perfDebugEnabled) this.drawPerfOverlay();

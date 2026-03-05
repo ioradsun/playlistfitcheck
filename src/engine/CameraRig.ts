@@ -155,7 +155,7 @@ const DEFAULT_CONFIG: CameraConfig = {
   dropIntensity: 2.0,
   dropDecayRate: 1.0,
   heroZoom: 0.12,
-  heroShakePx: 8,
+  heroShakePx: 0,  // no shake — depth only
   heroPunchMs: 90,
   heroTaperMs: 150,
   heroStillMs: 80,       // handheld operator reacts fast
@@ -234,14 +234,12 @@ export class CameraRig {
   // ── Hero punch ─────────────────────────────────────────────────────────
   private _heroActive = false;
   private _heroPunchZoom = 0;
-  private _heroPunchShakeX = 0;
-  private _heroPunchShakeY = 0;
+  private _decompShakeX = 0;
+  private _decompShakeY = 0;
+  private _decompShakeMs = 0;
   private _heroPunchMsLeft = 0;
   private _heroPunchMsTotal = 0;
   private _lastHeroPunchMs = 0;
-  private _prevHeroActive = false;
-  private _heroStillTimer = 0;
-  private _heroFreezeAmt = 0;
 
   // ── Output spring ──────────────────────────────────────────────────────
   private _springZoom=1; private _velZoom=0;
@@ -524,41 +522,20 @@ export class CameraRig {
     [this._beatX,  this._beatXV]  = spring(this._beatX,  this._beatXV,  65,  15, dt);
     [this._beatZ,  this._beatZV]  = spring(this._beatZ,  this._beatZV,  65,  15, dt);
 
-    // ══ HERO PUNCH ═════════════════════════════════════════════════════════
-
-    const heroJustStarted = sf !== null && sf.heroActive && sf.emphasisLevel >= 4 && !this._prevHeroActive;
-
-    // Handheld: hero approaching = operator leans in HARDER, not still
-    if (sf?.heroApproaching) {
-      this._heroStillTimer += deltaMs;
-      this._heroFreezeAmt = Math.min(0.4, this._heroStillTimer / Math.max(1, cfg.heroStillMs));
-      // Note: 0.4 max (not 1.0) — handheld operator doesn't fully freeze, just focuses
-    } else if (!sf?.heroActive) {
-      this._heroStillTimer = 0;
-      this._heroFreezeAmt = Math.max(0, this._heroFreezeAmt - dt * 6);
-    }
-
-    if (heroJustStarted) {
-      const elapsed = nowMs - this._lastHeroPunchMs;
-      const scale = (elapsed < cfg.heroTaperMs ? Math.max(0.3, elapsed / cfg.heroTaperMs) : 1)
-                  * (sf!.isClimax ? 1.5 : 1);
-      this._heroActive = true;
-      this._heroPunchZoom = cfg.heroZoom * scale;
-      this._heroPunchMsTotal = cfg.heroPunchMs;
-      this._heroPunchMsLeft  = cfg.heroPunchMs;
-      const ang = (nowMs * 7.13) % (Math.PI * 2);
-      this._heroPunchShakeX = Math.cos(ang) * cfg.heroShakePx * scale;
-      this._heroPunchShakeY = Math.sin(ang) * cfg.heroShakePx * scale;
-      this._lastHeroPunchMs = nowMs;
-      this._heroFreezeAmt = 0;
-      this._heroStillTimer = 0;
-    }
+    // ══ HERO PUNCH — driven by triggerHeroPunch() call from text layer ═══════
+    // No polling. The text draw loop calls triggerHeroPunch(emphasisLevel, isClimax)
+    // at the exact frame the hero word entry animation starts.
+    // Camera and word fire from the same event — guaranteed sync.
     this._heroPunchMsLeft = Math.max(0, this._heroPunchMsLeft - deltaMs);
     if (this._heroPunchMsLeft <= 0 && this._heroActive) {
       this._heroActive = false;
       this._heroPunchZoom = this._heroPunchShakeX = this._heroPunchShakeY = 0;
     }
     const heroFrac = this._heroPunchMsLeft > 0 ? this._heroPunchMsLeft / this._heroPunchMsTotal : 0;
+
+    // Decomp shake: decays linearly over _decompShakeMs
+    const decompFrac = this._decompShakeMs > 0 ? this._decompShakeMs / 250 : 0;
+    this._decompShakeMs = Math.max(0, this._decompShakeMs - deltaMs);
 
     // ══ COMPOSITE ══════════════════════════════════════════════════════════
 
@@ -577,13 +554,14 @@ export class CameraRig {
     const rawOffY = (this._bassY + this._beatY) * beatAlive
       + bodyY
       + dropShakeY
-      + this._heroPunchShakeY * heroFrac;
+      + this._decompShakeY * decompFrac
+      + 0; // heroShake removed — depth only
 
-    // X: transient shoulder + tremor only (no lateral sway) + drop shake + hero
+    // X: transient + drop shake + decomp recoil
     const rawOffX = (this._transX + this._beatX) * beatAlive
       + bodyX
       + dropShakeX
-      + this._heroPunchShakeX * heroFrac;
+      + this._decompShakeX * decompFrac;
 
     // Rotation: none — depth-only model
     const rawRot = 0;
@@ -603,7 +581,6 @@ export class CameraRig {
     this._shakeX   = clamp(this._springOffX * 0.5, -cfg.maxOffsetPx, cfg.maxOffsetPx);
     this._shakeY   = clamp(this._springOffY * 0.5, -cfg.maxOffsetPx, cfg.maxOffsetPx);
 
-    this._prevHeroActive = sf?.heroActive ?? false;
     if (beatState) this._prevBeatIndex = beatState.beatIndex;
     this._cachedTransform = null;
   }
@@ -660,6 +637,49 @@ export class CameraRig {
     }
   }
 
+  /**
+   * Called by the text draw loop at the exact frame a hero word entry animation
+   * starts. Fires the camera punch synchronously — no polling, guaranteed sync.
+   *
+   * @param emphasisLevel  0-5 from word directive
+   * @param isClimax       true if song is past 50% + high energy
+   * @param durationMs     how long the word is visible — camera holds zoom for this long
+   */
+  triggerHeroPunch(emphasisLevel: number, isClimax: boolean, durationMs?: number): void {
+    const cfg = this.cfg;
+    const nowMs = performance.now();
+    const elapsed = nowMs - this._lastHeroPunchMs;
+    const taper = elapsed < cfg.heroTaperMs ? Math.max(0.3, elapsed / cfg.heroTaperMs) : 1;
+    const climaxBoost = isClimax ? 1.5 : 1;
+    const emphBoost = emphasisLevel >= 5 ? 1.3 : 1.0;
+    const scale = taper * climaxBoost * emphBoost;
+
+    this._heroActive = true;
+    this._heroPunchZoom = cfg.heroZoom * scale;
+    // Hold for the word's visible duration, clamped to a sane range (200ms–3s)
+    const holdMs = durationMs != null
+      ? Math.min(3000, Math.max(200, durationMs))
+      : cfg.heroPunchMs;
+    this._heroPunchMsTotal = holdMs;
+    this._heroPunchMsLeft  = holdMs;
+    this._heroPunchShakeX = 0;
+    this._heroPunchShakeY = 0;
+    this._lastHeroPunchMs = nowMs;
+  }
+
+  /**
+   * Called when a hero word shatters into particles.
+   * Fires a short sharp shake — camera recoils from the explosion.
+   */
+  triggerDecompShake(emphasisLevel: number): void {
+    const scale = emphasisLevel >= 5 ? 1.4 : 1.0;
+    // Inject directly into the drop shake system for a 1-frame impulse
+    // that decays naturally through the output spring.
+    this._decompShakeX = (Math.random() * 2 - 1) * this.cfg.dropShakePx * 3 * scale;
+    this._decompShakeY = (Math.random() * 2 - 1) * this.cfg.dropShakePx * 2 * scale;
+    this._decompShakeMs = 250; // shake duration ms
+  }
+
   resetTransform(ctx: CanvasRenderingContext2D): void { ctx.restore(); }
   getProximity(): number { return Math.max(0, this._zoom - 1); }
   get drop(): number { return this._dropAmount; }
@@ -678,9 +698,9 @@ export class CameraRig {
     this._tonalZ=this._tonalZV=0;
     this._beatY=this._beatYV=this._beatX=this._beatXV=this._beatZ=this._beatZV=0;
     this._dropOnsetMs=this._dropGrooveMs=0; this._energyAvg=0.3; this._dropAmount=0; this._wasDropping=false;
-    this._heroActive=false; this._heroPunchZoom=this._heroPunchShakeX=this._heroPunchShakeY=0;
+    this._heroActive=false; this._heroPunchZoom=0;
     this._heroPunchMsLeft=this._heroPunchMsTotal=this._lastHeroPunchMs=0;
-    this._prevHeroActive=false; this._heroStillTimer=this._heroFreezeAmt=0;
+    this._decompShakeX=this._decompShakeY=this._decompShakeMs=0;
     this._springZoom=1; this._velZoom=0; this._springOffX=this._velOffX=0;
     this._springOffY=this._velOffY=0; this._springRot=this._velRot=0;
     this._zoom=1; this._offsetX=this._offsetY=this._rotation=this._shakeX=this._shakeY=0;
