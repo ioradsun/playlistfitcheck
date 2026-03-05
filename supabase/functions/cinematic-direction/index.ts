@@ -128,6 +128,17 @@ WORD DIRECTIVES
 ═══════════════════════════════════════
 
 For 15-25 emotionally significant words, design semantic animations.
+
+PRIORITY: If HELD_WORDS are provided, those are your primary candidates.
+The artist held these words for ≥500ms — that's deliberate emphasis.
+Start with held words, then add up to 5 additional short words if narratively critical.
+
+Match the animation to what the word MEANS:
+- Motion words (fly, spin, fall, drift) → movement-matching entry/exit
+- Impact words (hit, crash, slam) → slam-down, shatter
+- Element words (fire, ice, wave) → element-matching color + entry
+- Time words (wait, patience, forever) → breathe-in, linger
+- If no obvious visual semantic, match to narrative role (climax → explode-in, resolution → drift-in)
 Each directive:
 - "word": lowercase
 - "emphasisLevel": 1-5
@@ -198,6 +209,8 @@ interface RequestBody {
   listenerScene?: string;
   scene_context?: SceneContext | null;
   audioSections?: AudioSectionInput[];
+  /** Word-level timestamps from Whisper — used for held-word hero detection */
+  words?: Array<{ word: string; start: number; end: number }>;
 }
 
 const ENUMS = {
@@ -243,6 +256,67 @@ const ENUMS = {
   ],
 } as const;
 
+
+const LYRIC_FILLER = new Set([
+  'the','a','an','in','on','at','to','of','and','or','but','is','it','as','for','with','from','by','than',
+  'i','me','my','im','mine','myself','you','your','yours','he','him','his','she','her','we','us','our','they','them','their',
+  'be','been','was','were','am','are','got','get','do','did','dont','have','has','had','can','cant','will','wont','ill','ive',
+  'oh','yeah','yo','uh','um','ah','ooh','hey','wow','nah','yah','aye','mmm','huh','woo','la','na','da',
+  'that','this','its','those','these','what','where','who','how','when','which',
+  'so','if','up','out','not','no','just','like','all','too','very','real','bout','some',
+]);
+interface HeldWord { word: string; clean: string; durationMs: number; songPosition: number; }
+function extractHeldWords(words: Array<{ word: string; start: number; end: number }>, songStart: number, songEnd: number): { heldWords: HeldWord[]; medianMs: number; totalCount: number } {
+  const songDur = Math.max(0.01, songEnd - songStart);
+  const durations: number[] = [];
+  const held: HeldWord[] = [];
+  for (const w of words) {
+    const dur = w.end - w.start;
+    durations.push(dur);
+    if (dur < 0.5) continue;
+    const clean = w.word.replace(/[^a-zA-Z]/g, '').toLowerCase();
+    if (!clean || clean.length < 2) continue;
+    if (LYRIC_FILLER.has(clean)) continue;
+    held.push({ word: w.word, clean, durationMs: Math.round(dur * 1000), songPosition: (w.start - songStart) / songDur });
+  }
+  const byClean = new Map<string, HeldWord>();
+  for (const hw of held) {
+    const existing = byClean.get(hw.clean);
+    if (!existing || hw.durationMs > existing.durationMs) byClean.set(hw.clean, hw);
+  }
+  const deduped = [...byClean.values()].sort((a, b) => a.songPosition - b.songPosition);
+  const sorted = [...durations].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] ?? 0.2;
+  return { heldWords: deduped, medianMs: Math.round(median * 1000), totalCount: words.length };
+}
+function formatHeldWordsBlock(words: Array<{ word: string; start: number; end: number }>, lines: LyricLine[]): string {
+  if (!words || words.length === 0) return '';
+  const songStart = lines[0]?.start ?? 0;
+  const songEnd = lines[lines.length - 1]?.end ?? 1;
+  const { heldWords, medianMs } = extractHeldWords(words, songStart, songEnd);
+  if (heldWords.length === 0) return '';
+  const entries = heldWords.map(hw => `  "${hw.clean}" — ${hw.durationMs}ms (${(hw.songPosition * 100).toFixed(0)}% into song)`);
+  return `
+═══════════════════════════════════════
+HELD WORDS — artist vocal emphasis
+═══════════════════════════════════════
+
+These words were held ≥500ms by the artist (median word is ${medianMs}ms).
+Long duration = deliberate artistic emphasis. These are your PRIMARY hero candidates.
+Every held word below should get a wordDirective unless truly low-impact in context.
+
+${entries.join('\n')}
+
+Map duration to emphasisLevel:
+  ≥1500ms → emphasisLevel 5 (the artist REALLY held this)
+  1000-1499ms → emphasisLevel 4
+  700-999ms → emphasisLevel 3
+  500-699ms → emphasisLevel 2
+
+You may add up to 5 additional short words if narratively critical (title words, emotional peaks).
+`;
+}
+
 const DEFAULTS: Record<string, string> = {
   sceneTone: "dark",
   atmosphere: "cinematic",
@@ -270,6 +344,7 @@ function buildUserMessage(
   lines: LyricLine[],
   listenerScene: string,
   audioSections?: AudioSectionInput[],
+  words?: Array<{ word: string; start: number; end: number }>,
 ): string {
   let msg = "";
 
@@ -296,6 +371,11 @@ function buildUserMessage(
     msg += `Lyrics (${lines.length} lines):\n`;
     msg += lines.map((l) => l.text).join("\n");
     msg += "\n\n";
+  }
+
+  if (words && words.length > 0) {
+    const heldBlock = formatHeldWordsBlock(words, lines);
+    if (heldBlock) msg += heldBlock + "\n";
   }
 
   msg += "Return cinematic_direction. JSON only.";
@@ -616,10 +696,11 @@ serve(async (req) => {
     const listenerScene = resolveListenerScene(body);
     const scenePrefix = buildScenePrefix(body.scene_context);
     const systemPrompt = scenePrefix + CINEMATIC_DIRECTION_PROMPT;
-    const userMessage = buildUserMessage(title, artist, lines, listenerScene, body.audioSections);
+    const userMessage = buildUserMessage(title, artist, lines, listenerScene, body.audioSections, body.words);
     const sectionCount = body.audioSections?.length ?? 0;
 
-    console.log(`[cinematic-direction] ${title} by ${artist} | ${lines.length} lines | ${sectionCount} sections`);
+    const heldCount = body.words?.length ? extractHeldWords(body.words, lines[0]?.start ?? 0, lines[lines.length - 1]?.end ?? 1).heldWords.length : 0;
+    console.log(`[cinematic-direction] ${title} by ${artist} | ${lines.length} lines | ${sectionCount} sections | ${heldCount} held words`);
 
     const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount);
 
