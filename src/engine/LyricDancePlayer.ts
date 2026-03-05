@@ -4371,7 +4371,12 @@ export class LyricDancePlayer {
     for (let gi = 0; gi < groups.length; gi++) {
       const group = groups[gi];
       const visStart = group.start - group.entryDuration - group.staggerDelay * group.words.length;
-      const visEnd = group.end + group.lingerDuration + group.exitDuration;
+      const nextGrpStart = (gi + 1 < groups.length) ? groups[gi + 1].start : Infinity;
+      // Hero words: hard-clamp visEnd so exiting group clears before next group enters
+      const hasHeroWord = group.words.some(w => w.isHeroWord && (w.wordDuration ?? 0) >= 0.5 && (w.emphasisLevel ?? 1) >= 4);
+      const visEnd = hasHeroWord
+        ? Math.min(group.end + group.lingerDuration + group.exitDuration, nextGrpStart + group.exitDuration * 0.5)
+        : group.end + group.lingerDuration + group.exitDuration;
       if (tSec < visStart) {
         if (tSec < visStart - 2.0) break;
         continue;
@@ -4521,8 +4526,9 @@ export class LyricDancePlayer {
         for (let hwi = 0; hwi < group.words.length; hwi++) {
           const hw = group.words[hwi];
           if (!hw.isHeroWord) continue;
-          // Solo treatment only for words with ≥500ms duration
+          // Solo treatment only for words with ≥500ms duration AND AI emphasis>=4
           if ((hw.wordDuration ?? 0) < 0.5) continue;
+          if ((hw.emphasisLevel ?? 1) < 4) continue;
           const hwStagger = Math.max(0, (hw.wordStart ?? group.start) - group.start);
           const hwStart = group.start + hwStagger;
           const hwEnd = group.end + group.lingerDuration;
@@ -4776,7 +4782,7 @@ export class LyricDancePlayer {
         // ─── NEW HERO MODEL: duration-gated solo OR emphasis-based inline ───
         const isHeroWord = word.isHeroWord === true;
         const heroDuration = word.wordDuration ?? 0;
-        const isSoloHero = isHeroWord && heroDuration >= 0.5; // ≥500ms = solo center
+        const isSoloHero = isHeroWord && heroDuration >= 0.5 && (word.emphasisLevel ?? 1) >= 4; // must be AI-flagged (emp>=4) AND long to go solo center
         let heroScaleMult = 1.0;
         let heroOffsetX = 0;
         let heroOffsetY = 0;
