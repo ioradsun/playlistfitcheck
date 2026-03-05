@@ -286,6 +286,6 @@ export function detectSections(
     ...section,
     index,
     energyDelta: index === 0 ? 0 : section.avgEnergy - (arr[index - 1]?.avgEnergy ?? section.avgEnergy),
-    lyrics: section.lyrics.slice(0, 3),
+    lyrics: section.lyrics,
   }));
 }
