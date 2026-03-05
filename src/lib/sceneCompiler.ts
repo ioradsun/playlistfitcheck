@@ -574,21 +574,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   });
   const wordMeta: WordMetaEntry[] = words.map((w) => {
     const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    // Find which line this word belongs to by time overlap.
-    // Fall back to closest line by start time rather than always line 0,
-    // which caused words from different lines to share lineIndex=0.
-    let lineIndex = payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? Infinity));
-    if (lineIndex < 0) {
-      // No exact match — assign to the closest line by proximity
-      let bestDist = Infinity;
-      for (let li = 0; li < payload.lines.length; li++) {
-        const lStart = payload.lines[li].start ?? 0;
-        const lEnd = payload.lines[li].end ?? lStart + 5;
-        const dist = Math.min(Math.abs(w.start - lStart), Math.abs(w.start - lEnd));
-        if (dist < bestDist) { bestDist = dist; lineIndex = li; }
-      }
-      lineIndex = Math.max(0, lineIndex);
-    }
+    const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? Infinity)));
     return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
   });
   const lineWordCounters: Record<number, number> = {};
@@ -701,24 +687,15 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         fontFamily: baseTypography.fontFamily,
         color: semantic?.colorOverride ?? resolveV3Palette(payload, ((wm.start + (payload.lines[group.lineIndex]?.end ?? wm.start)) * 0.5 - payload.songStart) / Math.max(0.01, payload.songEnd - payload.songStart))[2] ?? '#ffffff',
         hasSemanticColor: Boolean(semantic?.colorOverride),
-        // Auto-hero: any word held ≥500ms is prominent enough to be a hero word
-        // regardless of whether the AI flagged it. Catches long sustained words
-        // the AI may have missed.
         isHeroWord: (wm.directive?.emphasisLevel ?? 1) >= 4
-          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, ''))
-          || Math.max(0, wm.end - wm.start) >= 0.5,
+          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')),
         heroPresentation: ((wm.directive?.emphasisLevel ?? 1) >= 4
-          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, ''))
-          || Math.max(0, wm.end - wm.start) >= 0.5)
+          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')))
           ? (wm.directive as any)?.heroPresentation ?? 'inline-scale'
           : undefined,
         isAnchor: pos.isAnchor,
         isFiller: pos.isFiller,
-        // Auto-promote emphasis to 4 for duration-qualified hero words so camera fires
-        emphasisLevel: Math.max(
-          wm.directive?.emphasisLevel ?? 1,
-          Math.max(0, wm.end - wm.start) >= 0.5 ? 4 : 1
-        ),
+        emphasisLevel: wm.directive?.emphasisLevel ?? 1,
         wordDuration: Math.max(0, wm.end - wm.start),
         semanticScaleX: semantic?.scaleX ?? 1,
         semanticScaleY: semantic?.scaleY ?? 1,
