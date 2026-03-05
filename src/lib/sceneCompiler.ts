@@ -687,15 +687,24 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         fontFamily: baseTypography.fontFamily,
         color: semantic?.colorOverride ?? resolveV3Palette(payload, ((wm.start + (payload.lines[group.lineIndex]?.end ?? wm.start)) * 0.5 - payload.songStart) / Math.max(0.01, payload.songEnd - payload.songStart))[2] ?? '#ffffff',
         hasSemanticColor: Boolean(semantic?.colorOverride),
+        // Auto-hero: any word held ≥500ms is prominent enough to be a hero word
+        // regardless of whether the AI flagged it. Catches long sustained words
+        // the AI may have missed.
         isHeroWord: (wm.directive?.emphasisLevel ?? 1) >= 4
-          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')),
+          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, ''))
+          || Math.max(0, wm.end - wm.start) >= 0.5,
         heroPresentation: ((wm.directive?.emphasisLevel ?? 1) >= 4
-          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')))
+          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, ''))
+          || Math.max(0, wm.end - wm.start) >= 0.5)
           ? (wm.directive as any)?.heroPresentation ?? 'inline-scale'
           : undefined,
         isAnchor: pos.isAnchor,
         isFiller: pos.isFiller,
-        emphasisLevel: wm.directive?.emphasisLevel ?? 1,
+        // Auto-promote emphasis to 4 for duration-qualified hero words so camera fires
+        emphasisLevel: Math.max(
+          wm.directive?.emphasisLevel ?? 1,
+          Math.max(0, wm.end - wm.start) >= 0.5 ? 4 : 1
+        ),
         wordDuration: Math.max(0, wm.end - wm.start),
         semanticScaleX: semantic?.scaleX ?? 1,
         semanticScaleY: semantic?.scaleY ?? 1,
