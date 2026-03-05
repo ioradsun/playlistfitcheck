@@ -326,15 +326,13 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
       player.seek(line.startSec);
       player.play();
 
-      if (!repeatMode) {
-        const lineDuration = line.endSec - line.startSec;
-        const stopAfterMs = Math.max(lineDuration + 0.3, 1.5) * 1000;
-        loopTimeoutRef.current = setTimeout(() => {
-          player.pause();
-          setIsLineLocked(false);
-          loopTimeoutRef.current = null;
-        }, stopAfterMs);
-      }
+      const lineDuration = line.endSec - line.startSec;
+      const stopAfterMs = Math.max(lineDuration + 0.3, 1.5) * 1000;
+      loopTimeoutRef.current = setTimeout(() => {
+        player.pause();
+        setIsLineLocked(false);
+        loopTimeoutRef.current = null;
+      }, stopAfterMs);
     } else {
       onSeekTo(line.startSec);
     }
