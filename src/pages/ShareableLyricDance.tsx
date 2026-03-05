@@ -538,6 +538,21 @@ export default function ShareableLyricDance() {
     };
   }, [playerInstance]);
 
+  // ── Song-end detection → auto-open reaction panel ────────────────────
+  useEffect(() => {
+    const player = playerInstance;
+    if (!player) return;
+    const audio = player.audio;
+
+    const onEnded = () => {
+      // Small delay so the last frame holds before panel slides up
+      setTimeout(() => setReactionPanelOpen(true), 800);
+    };
+
+    audio.addEventListener('ended', onEnded);
+    return () => audio.removeEventListener('ended', onEnded);
+  }, [playerInstance]);
+
   // Badge timer + hide Lovable widget
   useEffect(() => { const t = setTimeout(() => setBadgeVisible(true), 1000); return () => clearTimeout(t); }, []);
   useEffect(() => {
@@ -915,6 +930,8 @@ export default function ShareableLyricDance() {
         currentTimeSec={currentTimeSec}
         palette={Array.isArray(data?.palette) ? data.palette : []}
         onSeekTo={(sec) => playerInstance?.seek(sec)}
+        player={playerInstance}
+        durationSec={durationSec}
         reactionData={reactionData}
         onReactionDataChange={setReactionData}
         onReactionFired={(emoji) => {
