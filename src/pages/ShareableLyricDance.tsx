@@ -172,7 +172,7 @@ const ProgressBar = React.forwardRef<HTMLDivElement, {
       onMouseDown={handleDown}
       onTouchStart={handleDown}
       onClick={e => e.stopPropagation()}
-      className="absolute bottom-0 left-0 right-0 z-10 h-3 cursor-pointer group"
+      className="relative w-full z-10 h-3 cursor-pointer group"
       style={{ touchAction: "none" }}
     >
       <div className="absolute inset-0 bg-white/5" />
@@ -708,7 +708,15 @@ export default function ShareableLyricDance() {
           </div>
         )}
 
-        {/* Progress bar */}
+        {/* Export buttons removed from canvas — moved to bottom bar */}
+        </div>
+
+      </div>
+
+      {/* Bottom action bar */}
+      <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }}>
+
+        {/* Progress bar — full width, always visible */}
         {!showCover && !isWaitingForPlayer && data && (
           <ProgressBar
             player={playerRef.current}
@@ -719,13 +727,6 @@ export default function ShareableLyricDance() {
           />
         )}
 
-        {/* Export buttons removed from canvas — moved to bottom bar */}
-        </div>
-
-      </div>
-
-      {/* Bottom action bar */}
-      <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }}>
         <div className="w-full max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center gap-3">
 
