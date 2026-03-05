@@ -1648,6 +1648,7 @@ export class LyricDancePlayer {
     const deltaMs = 1000 / 30; // fixed timestep for export
     const beatState = this.conductor?.getState(clamped) ?? null;
     if (beatState) (beatState as any)._tSec = clamped;
+    this._lastBeatState = beatState;
     this._frameDt = deltaMs / 16.67;
 
     // Section + palette
@@ -2039,6 +2040,7 @@ export class LyricDancePlayer {
       // ═══ V2: Get beat state ONCE from conductor ═══
       const beatState = this.conductor?.getState(smoothedTime) ?? null;
       if (beatState) (beatState as any)._tSec = smoothedTime;
+      this._lastBeatState = beatState; // keep in sync for draw loop + hero punch trigger
       this._frameDt = Math.min(deltaMs, 33.33) / 16.67; // normalized to 60fps
 
       // ═══ Per-frame caches: section index + palette ═══
@@ -4367,16 +4369,18 @@ export class LyricDancePlayer {
     const activeGroups = this._activeGroupIndices;
     activeGroups.length = 0;
 
-    // First pass: collect groups by their individual time windows (original logic)
+    // First pass: collect groups by their individual time windows.
+    // HARD RULE: a group is never visible past when the next group starts speaking.
+    // This is the only guarantee against hero word overlap.
     for (let gi = 0; gi < groups.length; gi++) {
       const group = groups[gi];
       const visStart = group.start - group.entryDuration - group.staggerDelay * group.words.length;
       const nextGrpStart = (gi + 1 < groups.length) ? groups[gi + 1].start : Infinity;
-      // Hero words: hard-clamp visEnd so exiting group clears before next group enters
-      const hasHeroWord = group.words.some(w => w.isHeroWord && (w.wordDuration ?? 0) >= 0.5 && (w.emphasisLevel ?? 1) >= 4);
-      const visEnd = hasHeroWord
-        ? Math.min(group.end + group.lingerDuration + group.exitDuration, nextGrpStart + group.exitDuration * 0.5)
-        : group.end + group.lingerDuration + group.exitDuration;
+      // Never show this group once the next group has started speaking
+      const visEnd = Math.min(
+        group.end + group.lingerDuration + group.exitDuration,
+        nextGrpStart
+      );
       if (tSec < visStart) {
         if (tSec < visStart - 2.0) break;
         continue;
@@ -4446,30 +4450,8 @@ export class LyricDancePlayer {
           }
         }
       }
-      // Pass 3: if still nothing, find closest exiting group (exit animation visible)
-      // ONLY if primaryLineIndex hasn't yet advanced to a new line with its own group.
-      // If the next line already has an actively-speaking group available, skip the exit
-      // of the old group entirely — prevents overlap.
-      if (activeGroupIdx === -1) {
-        // Check if any group on the NEXT line is already speaking or about to enter
-        const nextLineHasActiveGroup = activeGroups.some(ri => {
-          const g = groups[ri];
-          if (g.lineIndex === primaryLineIndex) return false;
-          const entryPad = g.words.length * (g.staggerDelay ?? 0.05) + 0.15;
-          return tSec >= g.start - entryPad;
-        });
-        if (!nextLineHasActiveGroup) {
-          for (let ri = 0; ri < activeGroups.length; ri++) {
-            const g = groups[activeGroups[ri]];
-            if (g.lineIndex !== primaryLineIndex) continue;
-            const exitEnd = g.end + g.lingerDuration + g.exitDuration;
-            if (tSec >= g.end && tSec < exitEnd) {
-              activeGroupIdx = activeGroups[ri];
-              break;
-            }
-          }
-        }
-      }
+      // Pass 3 removed — visEnd is already clamped to nextGrpStart so
+      // exiting groups are never in activeGroups when the next group has started.
     }
     // Replace activeGroups with just the one active group
     if (activeGroupIdx >= 0) {
