@@ -181,19 +181,27 @@ export function useLyricSections(
     }));
 
     const songSignature: SongSignature = {
-      energyCurve: new Float32Array(0),
-      spectralCentroidHz: 2000,
+      bpm: beatGrid?.bpm ?? 120,
       durationSec,
+      tempoStability: 0.5,
+      beatIntervalVariance: 0,
+      rmsMean: 0.5,
+      rmsVariance: 0,
+      zeroCrossingRate: 0,
+      spectralCentroidHz: 2000,
+      lyricDensity: null,
+      energyCurve: new Float32Array(0),
+      analysisVersion: 1,
     };
 
     const effectiveBeatGrid: BeatGrid = beatGrid ?? { bpm: 120, beats: [], confidence: 0 };
 
-    const detected = detectSections({
+    const detected = detectSections(
       songSignature,
-      beatGrid: effectiveBeatGrid,
-      lines: timestampedLines,
+      effectiveBeatGrid,
+      timestampedLines,
       durationSec,
-    });
+    );
 
     if (!detected.length) {
       return { sections: [], allLines, isReady: false };

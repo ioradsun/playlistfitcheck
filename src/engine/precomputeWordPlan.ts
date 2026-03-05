@@ -86,7 +86,11 @@ export function buildWordPlan(opts: {
     lineEnds[lineIndex] = line.end;
 
     const words = line.text.split(/\s+/).filter(Boolean);
-    const wordsUpper = cinematicTextTransform === "uppercase" ? words.map(w => w.toUpperCase()) : words;
+    const stripPunct = (w: string) => w.replace(/[^\w\s']/g, "");
+    const wordsUpper = words.map(w => {
+      const clean = stripPunct(w);
+      return cinematicTextTransform === "uppercase" ? clean.toUpperCase() : clean;
+    });
     const normalizedWords = words.map((word) => word.toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, ""));
 
     const lineDuration = Math.max(0.001, line.end - line.start);
