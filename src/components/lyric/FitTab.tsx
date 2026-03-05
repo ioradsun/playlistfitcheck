@@ -1,3 +1,4 @@
+/* cache-bust: 2026-03-05-V1 */
 /**
  * FitTab — Displays analysis results with waveform + beat markers.
  * Centered single-column layout for readability.
