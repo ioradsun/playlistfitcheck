@@ -765,14 +765,12 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                           </button>
                         ))}
 
-                        <button
-                          onClick={() => {
-                            handleCommentReact(comment.id, 'fire');
-                          }}
-                          className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors"
-                        >
-                          + react
-                        </button>
+                        <CommentReactPicker
+                          commentId={comment.id}
+                          onPick={(emoji) => handleCommentReact(comment.id, emoji as EmojiKey)}
+                          sessionReacted={sessionCommentReacted}
+                          palette={palette}
+                        />
 
                         {!isReply && (
                           <button
