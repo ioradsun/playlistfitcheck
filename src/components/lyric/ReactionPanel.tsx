@@ -443,7 +443,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
     }
 
     if (inserted) {
-      const newComment = inserted as CommentRow;
+      const newComment = inserted as unknown as CommentRow;
 
       if (replyingTo) {
         setComments(prev => prev.map(c =>
