@@ -265,6 +265,9 @@ export default function ShareableLyricDance() {
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [themeMode, setThemeMode] = useState<'auto' | 'light' | 'dark'>('auto');
+  const [panelExpanded, setPanelExpanded] = useState(false);
+  const [anchoredLineIndex, setAnchoredLineIndex] = useState<number | null>(null);
+  const commentInputRef = useRef<HTMLInputElement>(null);
   const currentTimeSecRef = useRef(0);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
 
@@ -281,6 +284,18 @@ export default function ShareableLyricDance() {
     data?.cinematic_direction ?? null,
     durationSec,
   );
+
+  const activeLine = useMemo(() => {
+    if (!lyricSections.isReady) return null;
+    const line = lyricSections.allLines.find(
+      l => currentTimeSec >= l.startSec && currentTimeSec < l.endSec + 0.1,
+    ) ?? null;
+    if (!line) return null;
+    const section = lyricSections.sections.find(
+      s => s.lines.some(sl => sl.lineIndex === line.lineIndex),
+    ) ?? null;
+    return { text: line.text, lineIndex: line.lineIndex, sectionLabel: section?.label ?? null };
+  }, [lyricSections, currentTimeSec]);
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -484,7 +499,12 @@ export default function ShareableLyricDance() {
 
     const { data: inserted } = await supabase
       .from("lyric_dance_comments" as any)
-      .insert({ dance_id: data.id, text, session_id: sessionId })
+      .insert({
+        dance_id: data.id,
+        text,
+        session_id: sessionId,
+        line_index: anchoredLineIndex ?? null,
+      })
       .select("id, text, submitted_at")
       .single();
 
@@ -492,6 +512,15 @@ export default function ShareableLyricDance() {
       const newComment = inserted as any as DanceComment;
       setHasSubmitted(true);
       setInputText("");
+      setPanelExpanded(false);
+      setAnchoredLineIndex(null);
+
+      const anchorLine = anchoredLineIndex !== null
+        ? lyricSections.allLines.find(l => l.lineIndex === anchoredLineIndex)
+        : null;
+      if (anchorLine) {
+        playerRef.current?.seek(anchorLine.startSec);
+      }
 
       // Fire comet on canvas
       playerRef.current?.fireComment(newComment.text);
@@ -518,7 +547,7 @@ export default function ShareableLyricDance() {
         });
       }
     }
-  }, [inputText, data, hasSubmitted]);
+  }, [inputText, data, hasSubmitted, anchoredLineIndex, lyricSections.allLines]);
 
   // Badge timer + hide Lovable widget
   useEffect(() => { const t = setTimeout(() => setBadgeVisible(true), 1000); return () => clearTimeout(t); }, []);
@@ -589,6 +618,18 @@ export default function ShareableLyricDance() {
         >
           <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
           <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+
+          {/* Expand dim — covers canvas when panel is expanded */}
+          {panelExpanded && (
+            <div
+              className="absolute inset-0 z-[15] cursor-pointer"
+              style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(1px)", transition: "opacity 200ms ease" }}
+              onClick={() => {
+                setPanelExpanded(false);
+                setAnchoredLineIndex(null);
+              }}
+            />
+          )}
 
         {/* Cover overlay — doubles as loading skeleton.
             isWaitingForPlayer = cover IS the skeleton, same DOM, content fills in.
@@ -686,7 +727,14 @@ export default function ShareableLyricDance() {
 
         {/* Lyric review panel — desktop only */}
         <div
-          className="hidden md:flex flex-col w-[264px] shrink-0 border-l border-white/[0.05]"
+          className={`
+            flex flex-col shrink-0 border-l border-white/[0.05]
+            transition-all duration-200 ease-in-out
+            ${panelExpanded
+              ? 'w-full md:w-[420px]'
+              : 'hidden md:flex w-[264px]'
+            }
+          `}
           style={{ background: "#0d0d0d" }}
         >
           <LyricReviewPanel
@@ -696,54 +744,141 @@ export default function ShareableLyricDance() {
             onSeekTo={(sec) => playerInstance?.seek(sec)}
             palette={Array.isArray(data?.palette) ? data.palette : []}
             isReady={lyricSections.isReady}
+            expanded={panelExpanded}
+            onLineSelect={(lineIndex) => {
+              setAnchoredLineIndex(lineIndex);
+              setTimeout(() => commentInputRef.current?.focus(), 50);
+            }}
           />
         </div>
       </div>
 
       {/* Bottom action bar */}
       <div className="w-full" style={{ background: "#0a0a0a" }}>
-        <div className="max-w-[480px] mx-auto px-5 py-4 space-y-3">
+        <div
+          className="mx-auto px-4 py-3"
+          style={{ maxWidth: panelExpanded ? '100%' : 480 }}
+        >
           <div className="flex items-center gap-3">
-            {/* Theme toggle */}
-            <button
-              onClick={() => {
-                setThemeMode(prev =>
-                  prev === 'auto' ? 'light' : prev === 'light' ? 'dark' : 'auto'
-                );
-              }}
-              className="w-10 h-10 flex items-center justify-center rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/5 transition-all shrink-0 relative"
-              aria-label="Toggle theme"
-              title={`Theme: ${themeMode}`}
-            >
-              {themeMode === 'light' ? (
-                <Sun size={16} />
-              ) : themeMode === 'dark' ? (
-                <Moon size={16} />
-              ) : (
-                <span className="text-[9px] font-mono uppercase tracking-wider opacity-60">A</span>
-              )}
-            </button>
 
-            {/* Comment input */}
+            {/* Theme toggle — hide when expanded */}
+            {!panelExpanded && (
+              <button
+                onClick={() => setThemeMode(prev =>
+                  prev === 'auto' ? 'light' : prev === 'light' ? 'dark' : 'auto'
+                )}
+                className="w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/5 transition-all shrink-0"
+                aria-label="Toggle theme"
+              >
+                {themeMode === 'light' ? <Sun size={14} /> : themeMode === 'dark' ? <Moon size={14} /> : (
+                  <span className="text-[9px] font-mono uppercase tracking-wider opacity-60">A</span>
+                )}
+              </button>
+            )}
+
+            {/* Now-playing chip — only when not expanded and active line exists */}
+            {!panelExpanded && activeLine && (
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/[0.07] shrink-0 max-w-[180px] overflow-hidden"
+                style={{ background: "rgba(255,255,255,0.03)" }}
+              >
+                <div
+                  className="w-1 h-1 rounded-full shrink-0"
+                  style={{ background: Array.isArray(data?.palette) ? data.palette[1] : '#ffffff', opacity: 0.7 }}
+                />
+                <span className="text-[10px] font-mono text-white/40 truncate">
+                  {activeLine.text}
+                </span>
+              </div>
+            )}
+
+            {/* Anchored line indicator — shown when expanded + line selected */}
+            {panelExpanded && anchoredLineIndex !== null && activeLine && (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[9px] font-mono text-white/25 uppercase tracking-wider">
+                  on
+                </span>
+                <span className="text-[10px] font-mono text-white/50 max-w-[160px] truncate">
+                  "{lyricSections.allLines.find(l => l.lineIndex === anchoredLineIndex)?.text}"
+                </span>
+                <button
+                  onClick={() => setAnchoredLineIndex(null)}
+                  className="text-white/20 hover:text-white/50 transition-colors"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <line x1="2" y1="2" x2="8" y2="8" /><line x1="8" y1="2" x2="2" y2="8" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            {/* Comment input — always present, expands panel on focus */}
             <div className="flex-1">
               <AnimatePresence mode="wait">
                 {hasSubmitted ? (
-                  <motion.p key="notified" initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}
-                    onAnimationComplete={() => { setTimeout(() => setHasSubmitted(false), 2500); }}
-                    className="text-center text-sm text-white/30">FMLY Notified</motion.p>
+                  <motion.p
+                    key="notified"
+                    initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    transition={{ duration: 0.6 }}
+                    onAnimationComplete={() => setTimeout(() => setHasSubmitted(false), 2500)}
+                    className="text-center text-sm text-white/30"
+                  >
+                    FMLY Notified
+                  </motion.p>
                 ) : (
-                  <motion.div key="input" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="relative">
+                  <motion.div
+                    key="input"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                    className="relative"
+                  >
                     <input
-                      type="text" value={inputText} onChange={e => setInputText(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
-                      placeholder="DROP YOUR TAKE LIVE" maxLength={200}
-                      className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-3 pr-20 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                      ref={commentInputRef}
+                      type="text"
+                      value={inputText}
+                      onChange={e => setInputText(e.target.value)}
+                      onFocus={() => {
+                        setPanelExpanded(true);
+                        if (anchoredLineIndex === null && activeLine) {
+                          setAnchoredLineIndex(activeLine.lineIndex);
+                        }
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleSubmit();
+                        if (e.key === 'Escape') {
+                          setPanelExpanded(false);
+                          setAnchoredLineIndex(null);
+                          commentInputRef.current?.blur();
+                        }
+                      }}
+                      placeholder={panelExpanded ? "your take on this line..." : "DROP YOUR TAKE"}
+                      maxLength={200}
+                      className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-2.5 pr-16 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/25 transition-colors"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/20 pointer-events-none">Press Enter</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/15 pointer-events-none">
+                      {panelExpanded ? '↵ send' : 'Enter'}
+                    </span>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Collapse button — only when expanded */}
+            {panelExpanded && (
+              <button
+                onClick={() => {
+                  setPanelExpanded(false);
+                  setAnchoredLineIndex(null);
+                }}
+                className="w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-white/30 hover:text-white/60 hover:border-white/25 transition-all shrink-0"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <line x1="2" y1="10" x2="10" y2="2" />
+                  <polyline points="4,2 10,2 10,8" />
+                </svg>
+              </button>
+            )}
+
           </div>
         </div>
       </div>
