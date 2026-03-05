@@ -1648,6 +1648,7 @@ export class LyricDancePlayer {
     const deltaMs = 1000 / 30; // fixed timestep for export
     const beatState = this.conductor?.getState(clamped) ?? null;
     if (beatState) (beatState as any)._tSec = clamped;
+    this._lastBeatState = beatState;
     this._frameDt = deltaMs / 16.67;
 
     // Section + palette
@@ -2045,6 +2046,7 @@ export class LyricDancePlayer {
       // ═══ V2: Get beat state ONCE from conductor ═══
       const beatState = this.conductor?.getState(smoothedTime) ?? null;
       if (beatState) (beatState as any)._tSec = smoothedTime;
+      this._lastBeatState = beatState;
       this._frameDt = Math.min(deltaMs, 33.33) / 16.67; // normalized to 60fps
 
       // ═══ Per-frame caches: section index + palette ═══
