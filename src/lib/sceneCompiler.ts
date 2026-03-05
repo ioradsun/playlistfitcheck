@@ -574,7 +574,21 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   });
   const wordMeta: WordMetaEntry[] = words.map((w) => {
     const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? Infinity)));
+    // Find which line this word belongs to by time overlap.
+    // Fall back to closest line by start time rather than always line 0,
+    // which caused words from different lines to share lineIndex=0.
+    let lineIndex = payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? Infinity));
+    if (lineIndex < 0) {
+      // No exact match — assign to the closest line by proximity
+      let bestDist = Infinity;
+      for (let li = 0; li < payload.lines.length; li++) {
+        const lStart = payload.lines[li].start ?? 0;
+        const lEnd = payload.lines[li].end ?? lStart + 5;
+        const dist = Math.min(Math.abs(w.start - lStart), Math.abs(w.start - lEnd));
+        if (dist < bestDist) { bestDist = dist; lineIndex = li; }
+      }
+      lineIndex = Math.max(0, lineIndex);
+    }
     return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
   });
   const lineWordCounters: Record<number, number> = {};
