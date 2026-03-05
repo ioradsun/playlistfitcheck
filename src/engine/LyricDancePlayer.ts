@@ -3181,7 +3181,7 @@ export class LyricDancePlayer {
     // ═══ Hero decomposition particles — shatter effect on hero word exit ═══
     this.updateAndDrawDecomp(frameNowSec);
 
-    if (this._exportMode) this.drawWatermark();
+    if (this.isExporting) this.drawWatermark();
     if (this.perfDebugEnabled) this.drawPerfOverlay();
     this.debugState.drawCalls = drawCalls;
   }
