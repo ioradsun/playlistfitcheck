@@ -1648,7 +1648,6 @@ export class LyricDancePlayer {
     const deltaMs = 1000 / 30; // fixed timestep for export
     const beatState = this.conductor?.getState(clamped) ?? null;
     if (beatState) (beatState as any)._tSec = clamped;
-    this._lastBeatState = beatState;
     this._frameDt = deltaMs / 16.67;
 
     // Section + palette
@@ -1674,8 +1673,16 @@ export class LyricDancePlayer {
       const upcoming = this._getUpcomingHero(clamped);
       const songProg = (clamped - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
       const isClimax = (beatState?.energy ?? 0) > 0.65 && songProg > 0.50;
-      // Hero punch fired from draw loop via triggerHeroPunch()
-      this.cameraRig.update(deltaMs, beatState, null);
+      const focus: SubjectFocus = {
+        x: this.width / 2,
+        y: this.height / 2,
+        heroActive: upcoming !== null && !upcoming.isAnticipation,
+        emphasisLevel: upcoming?.emphasis ?? 0,
+        isClimax,
+        vocalActive,
+        heroApproaching: upcoming?.isAnticipation ?? false,
+      };
+      this.cameraRig.update(deltaMs, beatState, focus);
     }
 
     this.update(deltaMs, clamped, frame, beatState);
@@ -1779,8 +1786,6 @@ export class LyricDancePlayer {
     this.deriveVisualSystems();
     this.buildChapterSims();
     this.buildEmotionalEvents();
-    // Font may have changed — preload the new typography
-    this.preloadFonts().catch(() => {});
   }
 
   /**
@@ -2040,7 +2045,6 @@ export class LyricDancePlayer {
       // ═══ V2: Get beat state ONCE from conductor ═══
       const beatState = this.conductor?.getState(smoothedTime) ?? null;
       if (beatState) (beatState as any)._tSec = smoothedTime;
-      this._lastBeatState = beatState; // keep in sync for draw loop + hero punch trigger
       this._frameDt = Math.min(deltaMs, 33.33) / 16.67; // normalized to 60fps
 
       // ═══ Per-frame caches: section index + palette ═══
@@ -2089,9 +2093,16 @@ export class LyricDancePlayer {
           this.cameraRig.setEnergy(beatState?.energy ?? 0.5);
         }
 
-        // Hero punch now fired directly from draw loop via triggerHeroPunch()
-        // Pass null focus — camera no longer polls for hero state
-        this.cameraRig.update(deltaMs, beatState, null);
+        const focus: SubjectFocus = {
+          x: this.width / 2,
+          y: this.height / 2,
+          heroActive: upcoming !== null && !upcoming.isAnticipation,
+          emphasisLevel: upcoming?.emphasis ?? 0,
+          isClimax,
+          vocalActive,
+          heroApproaching: upcoming?.isAnticipation ?? false,
+        };
+        this.cameraRig.update(deltaMs, beatState, focus);
       }
 
       this.update(deltaMs, smoothedTime, frame, beatState);
@@ -2625,7 +2636,7 @@ export class LyricDancePlayer {
           }
         }
         this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
-        // drawSimLayer moved below camera release — screen-anchored
+        this.drawSimLayer(frame);
         this.drawLightingOverlay(frame, tSec);
       }
     }
@@ -2640,7 +2651,7 @@ export class LyricDancePlayer {
     if (qTier < 3) {
       try { this.checkEmotionalEvents(tSec, songProgress); } catch (e) { console.error('[LyricEngine] emotional events crash:', e); }
       this.drawEmotionalEvents(tSec);
-      // ambientParticleEngine.draw moved below camera release — screen-anchored
+      this.ambientParticleEngine?.draw(this.ctx, "far");
     }
 
     // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
@@ -2877,16 +2888,18 @@ export class LyricDancePlayer {
     }
 
     this.ctx.save();
-    // Per-word setTransform() is absolute — wipes any parent transform including _applyCam.
-    // Camera is therefore NOT applied via _applyCam for text — it's baked into each word
-    // matrix via camZoom only (zoom scales positions around center).
-    // offsetX/Y/rotation are zeroed — camera position offset is handled via camZoom math
-    // (zooming toward center naturally shifts all word positions correctly).
+    // ═══ DIRECTOR'S CAMERA: Pure depth — zoom into the words ═══
+    // NOTE: Canvas zoom is baked into each chunk's setTransform() call below,
+    // NOT applied as a parent transform, because setTransform() replaces the
+    // entire matrix and would wipe any parent zoom.
     const subjectT = this.cameraRig.getSubjectTransform();
-    const camZoom     = subjectT.zoom;
-    const camShakeX   = 0;   // offset handled by zoom-toward-center math below
-    const camShakeY   = 0;
-    const camRotation = 0;   // rotation removed
+    const camZoom = subjectT.zoom;
+    // Text is the nearest layer — use full camera offset (beat dance + sway + drop shake).
+    // shakeX/shakeY is a subset used by parallax layers; offsetX/offsetY is the real camera.
+    const camShakeX = subjectT.offsetX;
+    const camShakeY = subjectT.offsetY;
+    // Camera rotation — wired to transient hit impulses. Applied additively to per-chunk rotation.
+    const camRotation = subjectT.rotation;
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
@@ -2897,21 +2910,7 @@ export class LyricDancePlayer {
       const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
       const exit = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
       if (entry >= 1.0 && exit === 0) {
-        if (!this.chunkActiveSinceMs.has(chunk.id)) {
-          this.chunkActiveSinceMs.set(chunk.id, frameNowMs);
-          // ═══ HERO SYNC: fire camera punch at the exact frame hero word enters ═══
-          // Same event, same frame — camera and word are guaranteed in sync.
-          // Pass word duration so camera zoom holds for exactly as long as the word.
-          const emp = chunk.emphasisLevel ?? 0;
-          if (emp >= 4) {
-            const songProg = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
-            const isClimax = (this._lastBeatState?.energy ?? 0) > 0.65 && songProg > 0.50;
-            // Look up word duration from hero schedule
-            const heroEntry = this._heroSchedule.find(h => h.startSec <= tSec && h.endSec > tSec);
-            const durationMs = heroEntry ? (heroEntry.endSec - heroEntry.startSec) * 1000 : undefined;
-            this.cameraRig.triggerHeroPunch(emp, isClimax, durationMs);
-          }
-        }
+        if (!this.chunkActiveSinceMs.has(chunk.id)) this.chunkActiveSinceMs.set(chunk.id, frameNowMs);
       }
       const activeSince = this.chunkActiveSinceMs.get(chunk.id);
       const visibleMs = activeSince != null ? frameNowMs - activeSince : 0;
@@ -2927,8 +2926,6 @@ export class LyricDancePlayer {
         const spawnFontSize = spawnBound ? spawnBound.fontSize : 36;
         const spawnColor = chunk.color ?? '#f0f0f0';
         this.spawnDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, spawnColor, frameNowMs);
-        // Camera recoils when the word shatters — same frame as the burst
-        this.cameraRig.triggerDecompShake(chunk.emphasisLevel ?? 4);
       }
 
       const obj = this.chunks.get(chunk.id);
@@ -4369,18 +4366,11 @@ export class LyricDancePlayer {
     const activeGroups = this._activeGroupIndices;
     activeGroups.length = 0;
 
-    // First pass: collect groups by their individual time windows.
-    // HARD RULE: a group is never visible past when the next group starts speaking.
-    // This is the only guarantee against hero word overlap.
+    // First pass: collect groups by their individual time windows (original logic)
     for (let gi = 0; gi < groups.length; gi++) {
       const group = groups[gi];
       const visStart = group.start - group.entryDuration - group.staggerDelay * group.words.length;
-      const nextGrpStart = (gi + 1 < groups.length) ? groups[gi + 1].start : Infinity;
-      // Never show this group once the next group has started speaking
-      const visEnd = Math.min(
-        group.end + group.lingerDuration + group.exitDuration,
-        nextGrpStart
-      );
+      const visEnd = group.end + group.lingerDuration + group.exitDuration;
       if (tSec < visStart) {
         if (tSec < visStart - 2.0) break;
         continue;
@@ -4450,8 +4440,18 @@ export class LyricDancePlayer {
           }
         }
       }
-      // Pass 3 removed — visEnd is already clamped to nextGrpStart so
-      // exiting groups are never in activeGroups when the next group has started.
+      // Pass 3: if still nothing, find closest exiting group (exit animation visible)
+      if (activeGroupIdx === -1) {
+        for (let ri = 0; ri < activeGroups.length; ri++) {
+          const g = groups[activeGroups[ri]];
+          if (g.lineIndex !== primaryLineIndex) continue;
+          const exitEnd = g.end + g.lingerDuration + g.exitDuration;
+          if (tSec >= g.end && tSec < exitEnd) {
+            activeGroupIdx = activeGroups[ri];
+            break;
+          }
+        }
+      }
     }
     // Replace activeGroups with just the one active group
     if (activeGroupIdx >= 0) {
@@ -4520,9 +4520,8 @@ export class LyricDancePlayer {
         for (let hwi = 0; hwi < group.words.length; hwi++) {
           const hw = group.words[hwi];
           if (!hw.isHeroWord) continue;
-          // Solo treatment only for words with ≥500ms duration AND AI emphasis>=4
+          // Solo treatment only for words with ≥500ms duration
           if ((hw.wordDuration ?? 0) < 0.5) continue;
-          if ((hw.emphasisLevel ?? 1) < 4) continue;
           const hwStagger = Math.max(0, (hw.wordStart ?? group.start) - group.start);
           const hwStart = group.start + hwStagger;
           const hwEnd = group.end + group.lingerDuration;
@@ -4776,7 +4775,7 @@ export class LyricDancePlayer {
         // ─── NEW HERO MODEL: duration-gated solo OR emphasis-based inline ───
         const isHeroWord = word.isHeroWord === true;
         const heroDuration = word.wordDuration ?? 0;
-        const isSoloHero = isHeroWord && heroDuration >= 0.5 && (word.emphasisLevel ?? 1) >= 4; // must be AI-flagged (emp>=4) AND long to go solo center
+        const isSoloHero = isHeroWord && heroDuration >= 0.5; // ≥500ms = solo center
         let heroScaleMult = 1.0;
         let heroOffsetX = 0;
         let heroOffsetY = 0;
