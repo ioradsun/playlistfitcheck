@@ -1052,12 +1052,11 @@ export function LyricDanceDebugPanel({ data, player = null, onRegenerateSong, on
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          style={{ position: "fixed", bottom: 16, right: 16, zIndex: 9999 }}
-          className="flex items-center gap-1.5 rounded-full bg-red-600 text-white px-4 py-2 text-xs font-mono font-bold shadow-xl hover:bg-red-500 transition-colors"
+          style={{ position: "fixed", bottom: 80, left: 12, zIndex: 9999 }}
+          className="text-[10px] font-mono text-white/25 hover:text-white/50 transition-colors"
           title="Open debug panel"
         >
-          <Bug size={14} />
-          DEBUG
+          debug
         </button>
       )}
 
