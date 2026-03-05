@@ -4895,14 +4895,26 @@ export class LyricDancePlayer {
         chunk.isAnchor = isAnchor;
         chunk.color = word.color;
         // ═══ SINGLE COLOR MODEL: one color for all words, contrast against background ═══
-        // No tiers, no semantic overrides, no palette juggling.
         // Light text on dark backgrounds, dark text on light backgrounds.
-        // EXCEPTION: Hero words get the palette accent color (mood color from the chapter image).
+        // EXCEPTION 1: Hero words get the palette accent color.
+        // EXCEPTION 2: Words with semantic color overrides keep their color (e.g. "red" = red).
         {
           const bgIsLight = this._textBandBrightness > 0.55;
           const baseColor = bgIsLight ? '#1a1a2e' : '#f0f0f0';
 
-          if (isHeroWord) {
+          if (word.hasSemanticColor) {
+            // ═══ SEMANTIC COLOR: "red" turns red, "gold" turns gold, etc. ═══
+            // Apply contrast guard so semantic colors remain readable on any background.
+            const semColor = word.color;
+            const semLum = this._hexLuminance(semColor);
+            if (bgIsLight && semLum > 0.7) {
+              chunk.color = this._blendHex(semColor, '#1a1a2e', 0.35);
+            } else if (!bgIsLight && semLum < 0.1) {
+              chunk.color = this._blendHex(semColor, '#f0f0f0', 0.35);
+            } else {
+              chunk.color = semColor;
+            }
+          } else if (isHeroWord) {
             // Hero word = palette accent. Use _framePalette[1] (the mood color).
             const pal = this._framePalette ?? [];
             const rawAccent = pal[1] ?? '#FFD700';
@@ -4910,10 +4922,8 @@ export class LyricDancePlayer {
             // WCAG readability guard: ensure accent has enough contrast against the bg.
             const accentLum = this._hexLuminance(rawAccent);
             if (bgIsLight && accentLum > 0.55) {
-              // Accent too bright for white bg — darken it
               chunk.color = this._blendHex(rawAccent, '#1a1a2e', 0.5);
             } else if (!bgIsLight && accentLum < 0.15) {
-              // Accent too dark for dark bg — lighten it
               chunk.color = this._blendHex(rawAccent, '#f0f0f0', 0.5);
             } else {
               chunk.color = rawAccent;

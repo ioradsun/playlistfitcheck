@@ -3,6 +3,7 @@ import { enrichSections } from "@/engine/directionResolvers";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { FrameRenderState } from "@/engine/presetDerivation";
+import { getSemanticOverride } from "@/engine/SemanticAnimMapper";
 
 export type LineBeatMap = {
   lineIndex: number;
@@ -474,7 +475,7 @@ export function computeBehaviorState(style: BehaviorStyle, tSec: number, wordSta
 }
 
 function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults, storyboard: Map<number, StoryboardEntryLike>, manifestDirective: ManifestWordDirective | null): { entry: EntryStyle; behavior: BehaviorStyle; exit: ExitStyle } {
-  // Priority: manifest directive > word directive > storyboard > motion defaults
+  // Priority: manifest directive > word directive > SEMANTIC AUTO-MAP > storyboard > motion defaults
   if (manifestDirective?.entryStyle) {
     return { entry: manifestDirective.entryStyle, behavior: manifestDirective.behavior ?? 'none', exit: manifestDirective.exitStyle ?? motionDefaults.exits[0] };
   }
@@ -486,6 +487,17 @@ function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults,
       entry: (wd.entry as EntryStyle) ?? motionDefaults.entries[0],
       behavior: (wd.behavior as BehaviorStyle) ?? 'none',
       exit: (wd.exit as ExitStyle) ?? motionDefaults.exits[0],
+    };
+  }
+
+  // ═══ SEMANTIC AUTO-MAP: the word IS the directive ═══
+  // "red" turns red, "wave" flows in, "spin" rotates — no AI annotation needed.
+  const semanticAnim = getSemanticOverride(wm.clean);
+  if (semanticAnim && (semanticAnim.entry || semanticAnim.exit || semanticAnim.behavior)) {
+    return {
+      entry: (semanticAnim.entry as EntryStyle) ?? motionDefaults.entries[0],
+      behavior: (semanticAnim.behavior as BehaviorStyle) ?? 'none',
+      exit: (semanticAnim.exit as ExitStyle) ?? motionDefaults.exits[0],
     };
   }
 
@@ -670,6 +682,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       const manifestDirective = manifestWordDirectives[key]?.[wi] ?? null;
       const motion = assignWordAnimations(wm, motionDefaults, storyboard, manifestDirective as ManifestWordDirective | null);
       const semantic = wm.directive?.visualMetaphor ? SEMANTIC_EFFECTS[wm.directive.visualMetaphor as VisualMetaphor] : null;
+      // ═══ Semantic auto-map: word meaning → color/glow (the word IS the directive) ═══
+      const autoSemantic = getSemanticOverride(wm.clean);
       const pos = positions[wi];
       const base: CompiledWord = {
         id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
@@ -685,8 +699,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         behaviorStyle: semantic?.behavior ?? motion.behavior,
         fontWeight: semantic?.fontWeight ?? baseTypography.fontWeight,
         fontFamily: baseTypography.fontFamily,
-        color: semantic?.colorOverride ?? resolveV3Palette(payload, ((wm.start + (payload.lines[group.lineIndex]?.end ?? wm.start)) * 0.5 - payload.songStart) / Math.max(0.01, payload.songEnd - payload.songStart))[2] ?? '#ffffff',
-        hasSemanticColor: Boolean(semantic?.colorOverride),
+        color: semantic?.colorOverride ?? autoSemantic?.colorOverride ?? resolveV3Palette(payload, ((wm.start + (payload.lines[group.lineIndex]?.end ?? wm.start)) * 0.5 - payload.songStart) / Math.max(0.01, payload.songEnd - payload.songStart))[2] ?? '#ffffff',
+        hasSemanticColor: Boolean(semantic?.colorOverride || autoSemantic?.colorOverride),
         isHeroWord: (wm.directive?.emphasisLevel ?? 1) >= 4
           || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')),
         heroPresentation: ((wm.directive?.emphasisLevel ?? 1) >= 4
@@ -700,7 +714,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         semanticScaleX: semantic?.scaleX ?? 1,
         semanticScaleY: semantic?.scaleY ?? 1,
         semanticAlphaMax: semantic?.alphaMax ?? 1,
-        semanticGlowMult: semantic?.glowMultiplier ?? 1,
+        semanticGlowMult: semantic?.glowMultiplier ?? autoSemantic?.glowMult ?? 1,
         entryDurationMult: semantic?.entryDurationMult ?? 1,
         emitterType: semantic?.emitterType ?? 'none',
         trail: wm.directive?.trail ?? (semantic?.emitterType ?? 'none'),
