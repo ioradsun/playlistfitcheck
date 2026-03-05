@@ -529,7 +529,7 @@ export class CameraRig {
     this._heroPunchMsLeft = Math.max(0, this._heroPunchMsLeft - deltaMs);
     if (this._heroPunchMsLeft <= 0 && this._heroActive) {
       this._heroActive = false;
-      this._heroPunchZoom = this._heroPunchShakeX = this._heroPunchShakeY = 0;
+      this._heroPunchZoom = 0;
     }
     const heroFrac = this._heroPunchMsLeft > 0 ? this._heroPunchMsLeft / this._heroPunchMsTotal : 0;
 
@@ -541,7 +541,7 @@ export class CameraRig {
 
     // Handheld difference: heroFreezeAmt is partial (0.4 max) — operator focuses but
     // still reacts. No full freeze. The body keeps breathing even when focusing.
-    const beatAlive = 1 - this._heroFreezeAmt;  // 0.6 minimum during hero approach
+    const beatAlive = 1;  // _heroFreezeAmt removed — no freeze in depth-only model
 
     // Zoom: proximity base + beat depth pulse (tin-tin-tin) + hit accents + hero
     const rawZoom = 1.0
@@ -662,8 +662,6 @@ export class CameraRig {
       : cfg.heroPunchMs;
     this._heroPunchMsTotal = holdMs;
     this._heroPunchMsLeft  = holdMs;
-    this._heroPunchShakeX = 0;
-    this._heroPunchShakeY = 0;
     this._lastHeroPunchMs = nowMs;
   }
 

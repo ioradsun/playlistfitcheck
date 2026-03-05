@@ -1778,6 +1778,8 @@ export class LyricDancePlayer {
     this.deriveVisualSystems();
     this.buildChapterSims();
     this.buildEmotionalEvents();
+    // Font may have changed — preload the new typography
+    this.preloadFonts().catch(() => {});
   }
 
   /**
