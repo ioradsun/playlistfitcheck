@@ -2557,26 +2557,7 @@ export class LyricDancePlayer {
     const frame = precomputedFrame;
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
-    // ═══ WORLD CAMERA — read once per frame ════════════════════════════════
-    // ctx.setTransform() is ABSOLUTE — it replaces the full matrix and ignores
-    // ctx.save/restore. So we can't wrap the frame in applyTransform().
-    // Instead: read camera state once here, then apply it as ctx.transform()
-    // after every ctx.setTransform(dpr) call in this frame.
-    const _cam = this.cameraRig.getWorldCamera();
-    const _camCX = this.width / 2;
-    const _camCY = this.height / 2;
-    // Helper: call after every ctx.setTransform(dpr) to bake camera into the matrix.
-    const _applyCam = () => {
-      if (Math.abs(_cam.sc - 1) > 0.0005 || Math.abs(_cam.tx) > 0.1 || Math.abs(_cam.ty) > 0.1 || Math.abs(_cam.rot) > 0.0001) {
-        this.ctx.translate(_camCX + _cam.tx, _camCY + _cam.ty);
-        if (Math.abs(_cam.rot) > 0.0001) this.ctx.rotate(_cam.rot);
-        if (Math.abs(_cam.sc - 1) > 0.0005) this.ctx.scale(_cam.sc, _cam.sc);
-        this.ctx.translate(-_camCX, -_camCY);
-      }
-    };
-
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
-    _applyCam();
 
     // ── Sim update: skip at tier ≥ 2 (they're not drawn) ──────────────
     // Cuts fire/water/aurora particle math entirely when fps is low.
@@ -2650,7 +2631,6 @@ export class LyricDancePlayer {
       this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       this.ctx.drawImage(this._bgSnapshot, 0, 0);
       this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
-      _applyCam(); // restore camera after snapshot stamp
     }
 
     if (qTier < 3) {
@@ -2893,14 +2873,16 @@ export class LyricDancePlayer {
     }
 
     this.ctx.save();
-    // Per-word setTransform() is absolute — it wipes any parent transform.
-    // So we bake the camera directly into each word's matrix via camShakeX/Y/Zoom/Rotation.
-    // The _applyCam() at frame-level handles background/particles; text gets it here.
+    // Per-word setTransform() is absolute — wipes any parent transform including _applyCam.
+    // Camera is therefore NOT applied via _applyCam for text — it's baked into each word
+    // matrix via camZoom only (zoom scales positions around center).
+    // offsetX/Y/rotation are zeroed — camera position offset is handled via camZoom math
+    // (zooming toward center naturally shifts all word positions correctly).
     const subjectT = this.cameraRig.getSubjectTransform();
     const camZoom     = subjectT.zoom;
-    const camShakeX   = subjectT.offsetX;
-    const camShakeY   = subjectT.offsetY;
-    const camRotation = subjectT.rotation;
+    const camShakeX   = 0;   // offset handled by zoom-toward-center math below
+    const camShakeY   = 0;
+    const camRotation = 0;   // rotation removed
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
@@ -3178,8 +3160,6 @@ export class LyricDancePlayer {
     }
     this.ctx.restore();
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
-    // Comment comets and decomp particles are world-space — apply camera
-    _applyCam();
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
@@ -3190,11 +3170,6 @@ export class LyricDancePlayer {
 
     // ═══ Hero decomposition particles — shatter effect on hero word exit ═══
     this.updateAndDrawDecomp(frameNowSec);
-
-    // ── Screen-anchored HUD: reset to plain DPR transform, draw beat bars + particles ──
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
-    this.drawSimLayer(frame);
-    if (qTier < 3) this.ambientParticleEngine?.draw(this.ctx, "far");
 
     this.drawWatermark();
     if (this.perfDebugEnabled) this.drawPerfOverlay();
