@@ -500,7 +500,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
         <motion.div
           initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: '100%', opacity: 0 }}
           transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
-          className="fixed left-0 right-0 bottom-[48px] z-40 h-[72vh] flex flex-col overflow-hidden"
+          className="fixed left-0 right-0 bottom-[48px] z-40 h-[88vh] flex flex-col overflow-hidden"
           style={{ background: '#0d0d0d', borderTop: '1px solid rgba(255,255,255,0.06)' }}
         >
           {/* ══ HEADER ══════════════════════════════════════ */}
@@ -600,10 +600,12 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                     onClick={() => {
                       if (focusedLine) handleReact(key as EmojiKey, focusedLine.lineIndex);
                     }}
-                    className="flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl transition-all active:scale-95 flex-1 focus:outline-none"
+                    className="flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl transition-all active:scale-95 flex-1 focus:outline-none relative"
                     style={{
-                      background: reacted ? `${palette[1] ?? '#ffffff'}1a` : 'transparent',
-                      transform: reacted ? 'scale(1.05)' : 'scale(1)',
+                      background: reacted ? `${palette[1] ?? '#ffffff'}12` : 'transparent',
+                      borderBottom: reacted
+                        ? `2px solid ${palette[1] ?? 'rgba(255,255,255,0.5)'}`
+                        : '2px solid transparent',
                     }}
                   >
                     <span className="text-lg leading-none">{symbol}</span>
@@ -697,65 +699,35 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
               )}
             </div>
 
-            {/* ── Segmented pill navigation ── */}
-            <div className="px-4 pb-3">
-              <div
-                className="flex rounded-lg overflow-hidden"
-                style={{ border: '1px solid rgba(255,255,255,0.08)' }}
-              >
-                <button
-                  onClick={() => setPanelView('lyrics')}
-                  className="flex-1 py-2 text-[10px] font-mono uppercase tracking-wider transition-all focus:outline-none"
-                  style={{
-                    background: panelView === 'lyrics'
-                      ? 'rgba(255,255,255,0.08)'
-                      : 'transparent',
-                    color: panelView === 'lyrics'
-                      ? 'rgba(255,255,255,0.70)'
-                      : 'rgba(255,255,255,0.28)',
-                  }}
+            {/* Takes toggle row */}
+            <button
+              onClick={() => setPanelView(prev => prev === 'comments' ? 'lyrics' : 'comments')}
+              className="w-full flex items-center justify-between px-5 py-2.5 border-t border-white/[0.05] transition-colors hover:bg-white/[0.02] focus:outline-none"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider"
+                  style={{ color: panelView === 'comments' ? (palette[1] ?? 'rgba(255,255,255,0.65)') : 'rgba(255,255,255,0.30)' }}
                 >
-                  Lyrics
-                </button>
-                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)' }} />
-                <button
-                  onClick={() => setPanelView('comments')}
-                  className="flex-1 py-2 text-[10px] font-mono uppercase tracking-wider transition-all focus:outline-none flex items-center justify-center gap-1.5"
-                  style={{
-                    background: panelView === 'comments'
-                      ? 'rgba(255,255,255,0.08)'
-                      : 'transparent',
-                    color: panelView === 'comments'
-                      ? 'rgba(255,255,255,0.70)'
-                      : 'rgba(255,255,255,0.28)',
-                  }}
-                >
-                  <span>Takes</span>
-                  {focusedLineComments.length > 0 && (
-                    <span
-                      className="text-[9px] font-mono rounded-full px-1.5 py-0.5"
-                      style={{
-                        background: panelView === 'comments'
-                          ? 'rgba(255,255,255,0.12)'
-                          : 'rgba(255,255,255,0.06)',
-                        color: panelView === 'comments'
-                          ? 'rgba(255,255,255,0.65)'
-                          : 'rgba(255,255,255,0.30)',
-                      }}
-                    >
-                      {focusedLineComments.length}
-                    </span>
-                  )}
-                </button>
+                  💬 {focusedLineComments.length > 0 ? `${focusedLineComments.length} ${focusedLineComments.length === 1 ? 'take' : 'takes'}` : 'takes'}
+                </span>
               </div>
-            </div>
+              <span
+                className="text-[10px] font-mono transition-transform duration-200"
+                style={{
+                  color: 'rgba(255,255,255,0.25)',
+                  transform: panelView === 'comments' ? 'rotate(180deg)' : 'rotate(0deg)',
+                  display: 'inline-block',
+                }}
+              >
+                ↓
+              </span>
+            </button>
           </div>
 
           {/* ══ SCROLLABLE CONTENT AREA ═════════════════════ */}
-
-          {/* LYRICS VIEW */}
-          {panelView === 'lyrics' && (
-            <div className="flex-1 overflow-y-auto pb-6" style={{ scrollbarWidth: 'none' }}>
+          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+            {/* Always-visible lyric list */}
+            <div className="pb-2">
               {sections.map((section, si) => (
                 <div key={section.sectionIndex} className={si === 0 ? 'mt-3 mb-1' : 'mt-5 mb-1'}>
 
@@ -837,97 +809,102 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                 </div>
               ))}
             </div>
-          )}
 
-          {/* TAKES / COMMENTS VIEW */}
-          {panelView === 'comments' && (
-            <div className="flex-1 overflow-y-auto pb-6" style={{ scrollbarWidth: 'none' }}>
-              {focusedLineComments.length === 0 ? (
-                <p className="text-[11px] font-mono text-white/20 text-center py-8">
-                  no takes yet — be first
-                </p>
-              ) : (
-                <div>
-                  {(() => {
-                    const emojiMap: Record<string, string> = {
-                      fire:'🔥', dead:'💀', mind_blown:'🤯',
-                      emotional:'😭', respect:'🙏', accurate:'🎯',
-                    };
+            {/* Comments section — expands below lyrics when open */}
+            {panelView === 'comments' && (
+              <div className="border-t border-white/[0.07] pb-6">
+                <div className="px-5 pt-4 pb-2">
+                  <span className="text-[8px] font-mono uppercase tracking-[0.22em] text-white/25">
+                    takes on this line
+                  </span>
+                </div>
+                {focusedLineComments.length === 0 ? (
+                  <p className="text-[11px] font-mono text-white/20 text-center py-6">
+                    no takes yet — be first
+                  </p>
+                ) : (
+                  <div>
+                    {(() => {
+                      const emojiMap: Record<string, string> = {
+                        fire:'🔥', dead:'💀', mind_blown:'🤯',
+                        emotional:'😭', respect:'🙏', accurate:'🎯',
+                      };
 
-                    const renderComment = (comment: CommentRow, isReply = false) => {
-                      const reactions = commentReactions[comment.id] ?? {};
-                      const reactionEntries = Object.entries(reactions)
-                        .filter(([, count]) => count > 0)
-                        .sort((a, b) => b[1] - a[1]);
+                      const renderComment = (comment: CommentRow, isReply = false) => {
+                        const reactions = commentReactions[comment.id] ?? {};
+                        const reactionEntries = Object.entries(reactions)
+                          .filter(([, count]) => count > 0)
+                          .sort((a, b) => b[1] - a[1]);
 
-                      return (
-                        <div
-                          key={comment.id}
-                          className={`${isReply ? 'ml-6 border-l border-white/[0.06] pl-4' : 'px-5'} py-3`}
-                        >
-                          {comment.is_pinned && (
-                            <span className="text-[8px] font-mono uppercase tracking-wider text-white/25 mb-1 block">
-                              📌 pinned
-                            </span>
-                          )}
+                        return (
+                          <div
+                            key={comment.id}
+                            className={`${isReply ? 'ml-6 border-l border-white/[0.06] pl-4' : 'px-5'} py-3`}
+                          >
+                            {comment.is_pinned && (
+                              <span className="text-[8px] font-mono uppercase tracking-wider text-white/25 mb-1 block">
+                                📌 pinned
+                              </span>
+                            )}
 
-                          <p className="text-[13px] font-light leading-relaxed text-white/70 mb-2">
-                            {comment.text}
-                          </p>
+                            <p className="text-[13px] font-light leading-relaxed text-white/70 mb-2">
+                              {comment.text}
+                            </p>
 
-                          <div className="flex items-center gap-3 flex-wrap">
-                            {reactionEntries.map(([emoji, count]) => (
-                              <button
-                                key={emoji}
-                                onClick={() => handleCommentReact(comment.id, emoji as EmojiKey)}
-                                className="flex items-center gap-0.5 text-[10px] font-mono transition-all active:scale-95 focus:outline-none"
-                                style={{
-                                  color: sessionCommentReacted.has(`${comment.id}-${emoji}`)
-                                    ? (palette[1] ?? 'rgba(255,255,255,0.7)')
-                                    : 'rgba(255,255,255,0.28)',
-                                }}
-                              >
-                                <span>{emojiMap[emoji] ?? emoji}</span>
-                                <span className="ml-0.5">{count}</span>
-                              </button>
-                            ))}
+                            <div className="flex items-center gap-3 flex-wrap">
+                              {reactionEntries.map(([emoji, count]) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => handleCommentReact(comment.id, emoji as EmojiKey)}
+                                  className="flex items-center gap-0.5 text-[10px] font-mono transition-all active:scale-95 focus:outline-none"
+                                  style={{
+                                    color: sessionCommentReacted.has(`${comment.id}-${emoji}`)
+                                      ? (palette[1] ?? 'rgba(255,255,255,0.7)')
+                                      : 'rgba(255,255,255,0.28)',
+                                  }}
+                                >
+                                  <span>{emojiMap[emoji] ?? emoji}</span>
+                                  <span className="ml-0.5">{count}</span>
+                                </button>
+                              ))}
 
-                            <CommentReactPicker
-                              commentId={comment.id}
-                              onPick={(emoji) => handleCommentReact(comment.id, emoji as EmojiKey)}
-                              sessionReacted={sessionCommentReacted}
-                              palette={palette}
-                            />
+                              <CommentReactPicker
+                                commentId={comment.id}
+                                onPick={(emoji) => handleCommentReact(comment.id, emoji as EmojiKey)}
+                                sessionReacted={sessionCommentReacted}
+                                palette={palette}
+                              />
 
-                            {!isReply && (
-                              <button
-                                onClick={() => setReplyingTo(comment)}
-                                className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors ml-auto focus:outline-none"
-                              >
-                                reply
-                              </button>
+                              {!isReply && (
+                                <button
+                                  onClick={() => setReplyingTo(comment)}
+                                  className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors ml-auto focus:outline-none"
+                                >
+                                  reply
+                                </button>
+                              )}
+                            </div>
+
+                            {!isReply && comment.replies && comment.replies.length > 0 && (
+                              <div className="mt-2">
+                                {comment.replies.map(reply => renderComment(reply, true))}
+                              </div>
                             )}
                           </div>
+                        );
+                      };
 
-                          {!isReply && comment.replies && comment.replies.length > 0 && (
-                            <div className="mt-2">
-                              {comment.replies.map(reply => renderComment(reply, true))}
-                            </div>
-                          )}
+                      return focusedLineComments.map(c => (
+                        <div key={c.id} className="border-b border-white/[0.04]">
+                          {renderComment(c)}
                         </div>
-                      );
-                    };
-
-                    return focusedLineComments.map(c => (
-                      <div key={c.id} className="border-b border-white/[0.04]">
-                        {renderComment(c)}
-                      </div>
-                    ));
-                  })()}
-                </div>
-              )}
-            </div>
-          )}
+                      ));
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Keyframes */}
           <style>{`
