@@ -17,7 +17,9 @@ import { RIVER_ROWS, type ConstellationNode } from "@/hooks/useHookCanvas";
 import { getSessionId } from "@/lib/sessionId";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
+import { useLyricSections } from "@/hooks/useLyricSections";
 import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
+import { LyricReviewPanel } from "@/components/lyric/LyricReviewPanel";
 import { LyricDancePlayer, DEFAULT_DEBUG_STATE, type LyricDanceData, type LiveDebugState } from "@/engine/LyricDancePlayer";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
@@ -263,6 +265,22 @@ export default function ShareableLyricDance() {
   const [inputText, setInputText] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [themeMode, setThemeMode] = useState<'auto' | 'light' | 'dark'>('auto');
+  const currentTimeSecRef = useRef(0);
+  const [currentTimeSec, setCurrentTimeSec] = useState(0);
+
+  // ── Lyric sections — derived from words + cinematic direction ────────
+  const durationSec = useMemo(() => {
+    const lines = data?.lyrics ?? [];
+    if (!lines.length) return 0;
+    return (lines[lines.length - 1] as any).end ?? 0;
+  }, [data?.lyrics]);
+
+  const lyricSections = useLyricSections(
+    data?.words ?? null,
+    data?.beat_grid ?? null,
+    data?.cinematic_direction ?? null,
+    durationSec,
+  );
 
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -419,6 +437,44 @@ export default function ShareableLyricDance() {
     setMuted(newMuted);
   }, [muted]);
 
+  // ── Current time tracking for LyricReviewPanel ──────────────────────
+  useEffect(() => {
+    const player = playerInstance;
+    if (!player) return;
+    const audio = player.audio;
+    let rafId = 0;
+
+    const tick = () => {
+      const t = audio.currentTime;
+      if (Math.abs(t - currentTimeSecRef.current) > 0.05) {
+        currentTimeSecRef.current = t;
+        setCurrentTimeSec(t);
+      }
+      if (!audio.paused && !document.hidden) {
+        rafId = requestAnimationFrame(tick);
+      }
+    };
+
+    const onPlay = () => { if (!rafId) rafId = requestAnimationFrame(tick); };
+    const onPause = () => { cancelAnimationFrame(rafId); rafId = 0; };
+    const onVis = () => {
+      if (document.hidden) { cancelAnimationFrame(rafId); rafId = 0; }
+      else if (!audio.paused) onPlay();
+    };
+
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    document.addEventListener('visibilitychange', onVis);
+    if (!audio.paused) onPlay();
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [playerInstance]);
+
   // ── Comment submit ──────────────────────────────────────────────────
 
   const handleSubmit = useCallback(async () => {
@@ -523,14 +579,16 @@ export default function ShareableLyricDance() {
         )}
       </AnimatePresence>
 
-      {/* Canvas area */}
-      <div
-        ref={containerRef}
-        className="relative w-full flex-1 min-h-[60vh] md:min-h-[70vh] cursor-pointer overflow-hidden"
-        onClick={() => { if (!showCover) handleMuteToggle(); }}
-      >
-        <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-        <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+      {/* Main content row — canvas + lyric panel */}
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        {/* Canvas column */}
+        <div
+          ref={containerRef}
+          className="relative flex-1 min-w-0 cursor-pointer overflow-hidden"
+          onClick={() => { if (!showCover) handleMuteToggle(); }}
+        >
+          <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+          <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
         {/* Cover overlay — doubles as loading skeleton.
             isWaitingForPlayer = cover IS the skeleton, same DOM, content fills in.
@@ -624,6 +682,22 @@ export default function ShareableLyricDance() {
         )}
 
         {/* Export buttons removed from canvas — moved to bottom bar */}
+        </div>
+
+        {/* Lyric review panel — desktop only */}
+        <div
+          className="hidden md:flex flex-col w-[264px] shrink-0 border-l border-white/[0.05]"
+          style={{ background: "#0d0d0d" }}
+        >
+          <LyricReviewPanel
+            sections={lyricSections.sections}
+            allLines={lyricSections.allLines}
+            currentTimeSec={currentTimeSec}
+            onSeekTo={(sec) => playerInstance?.seek(sec)}
+            palette={Array.isArray(data?.palette) ? data.palette : []}
+            isReady={lyricSections.isReady}
+          />
+        </div>
       </div>
 
       {/* Bottom action bar */}
