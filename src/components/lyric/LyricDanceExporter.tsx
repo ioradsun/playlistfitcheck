@@ -1,3 +1,4 @@
+/* cache-bust: 2026-03-05-V1 */
 import { useState, useRef, useEffect } from "react";
 import { X, Play, Pause, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
