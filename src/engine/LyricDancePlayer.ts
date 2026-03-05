@@ -723,8 +723,8 @@ class RainSim {
 //   light  — clean bright minimal pillars
 // AI cinematic direction picks style per section based on mood/atmosphere.
 type BarVisStyle = 'flame' | 'neon' | 'smoke' | 'light';
-const VIS_W = 192;
-const VIS_H = 48;
+const VIS_W = 320;
+const VIS_H = 64;
 
 class BeatVisSim {
   private visCanvas: HTMLCanvasElement;
@@ -810,7 +810,7 @@ class BeatVisSim {
           const r = Math.min(255, Math.floor(pr * (0.4 + t * 0.6) + tipShift * (255 - pr) * 0.6));
           const g = Math.min(255, Math.floor(pg * (0.3 + t * 0.4) + tipShift * Math.max(0, 180 - pg) * 0.3));
           const b = Math.floor(pb * (0.2 + t * 0.15) * (1 - tipShift * 0.7));
-          const a = Math.min(255, Math.floor((160 + flicker * 35) * (0.45 + t * 0.40) * (1 - flicker * 0.15)));
+          const a = Math.min(255, Math.floor((230 + flicker * 25) * (0.60 + t * 0.35) * (1 - flicker * 0.10)));
           buf[idx] = r; buf[idx + 1] = g; buf[idx + 2] = Math.max(0, b); buf[idx + 3] = a;
         } else if (style === 'neon') {
           // ── NEON: bright core, bloom falloff at edges ──
@@ -820,7 +820,7 @@ class BeatVisSim {
           buf[idx]     = Math.min(255, Math.floor(pr * bright * glow + 40 * t));
           buf[idx + 1] = Math.min(255, Math.floor(pg * bright * glow + 30 * t));
           buf[idx + 2] = Math.min(255, Math.floor(pb * bright * glow + 60 * t));
-          buf[idx + 3] = Math.min(255, Math.floor(170 * (0.45 + t * 0.45)));
+          buf[idx + 3] = Math.min(255, Math.floor(220 * (0.55 + t * 0.40)));
         } else if (style === 'smoke') {
           // ── SMOKE: soft, feathered, wispy at top ──
           const wisp = t > 0.4 ? Math.sin(this.flickerPhase * 1.5 + seed * 30 + x * 0.5) * 0.25 * t : 0;
@@ -829,14 +829,14 @@ class BeatVisSim {
           buf[idx]     = Math.min(255, Math.floor((pr * 0.3 + 180 * 0.7) * grey));
           buf[idx + 1] = Math.min(255, Math.floor((pg * 0.3 + 170 * 0.7) * grey));
           buf[idx + 2] = Math.min(255, Math.floor((pb * 0.3 + 175 * 0.7) * grey));
-          buf[idx + 3] = Math.min(255, Math.floor(130 * fade * (0.35 + t * 0.28 + wisp)));
+          buf[idx + 3] = Math.min(255, Math.floor(185 * fade * (0.45 + t * 0.30 + wisp)));
         } else {
           // ── LIGHT: clean, bright, minimal pillars ──
           const bright = 0.35 + t * 0.65;
           buf[idx]     = Math.min(255, Math.floor(pr * bright + 50 * t));
           buf[idx + 1] = Math.min(255, Math.floor(pg * bright + 50 * t));
           buf[idx + 2] = Math.min(255, Math.floor(pb * bright + 50 * t));
-          buf[idx + 3] = Math.min(255, Math.floor(155 * (0.45 + t * 0.45)));
+          buf[idx + 3] = Math.min(255, Math.floor(210 * (0.55 + t * 0.40)));
         }
       }
     }
@@ -1219,7 +1219,7 @@ export class LyricDancePlayer {
       particleSystem: this.resolvedState.particleConfig.system,
       particleDensity: this.resolvedState.particleConfig.density,
       particleSpeed: this.resolvedState.particleConfig.speed,
-      particleOpacity: 0.4,
+      particleOpacity: 0.7,
       particleBeatReactive: true,
       particleDirection: "drift",
       fontFamily: "Montserrat",
@@ -2402,7 +2402,7 @@ export class LyricDancePlayer {
         system: mapped,
         density: this.resolvedState.particleConfig.density ?? 0.35,
         speed: this.resolvedState.particleConfig.speed ?? 0.35,
-        opacity: 0.4,
+        opacity: 0.7,
         beatReactive: true,
       });
 
@@ -4297,7 +4297,7 @@ export class LyricDancePlayer {
 
     // Section-specific sims (fire, water, aurora, rain) — full canvas, subtle
     for (const simCanvas of this.currentSimCanvases) {
-      this.ctx.globalAlpha = 0.30 * simOpacity;
+      this.ctx.globalAlpha = 0.45 * simOpacity;
       this.ctx.drawImage(simCanvas, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
     }
@@ -4308,10 +4308,10 @@ export class LyricDancePlayer {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
-      // Alpha driven by actual energy — invisible during silence
-      const visAlpha = Math.min(0.45, 0.15 + bsEnergy * 0.22 + bsPulse * 0.08); // 0.15 floor → 0.45 peak
+      // Alpha driven by actual energy — visible floor, strong peak
+      const visAlpha = Math.min(0.85, 0.30 + bsEnergy * 0.40 + bsPulse * 0.15); // 0.30 floor → 0.85 peak
       if (visAlpha > 0.01) {
-        const visH = this.height * 0.25;
+        const visH = this.height * 0.28;
         const visTop = this.height - visH;
         this.ctx.globalAlpha = visAlpha;
         this.ctx.imageSmoothingEnabled = false;
