@@ -111,6 +111,16 @@ OPTIONAL — override song defaults for this section:
 - "texture": override
 - "typography": override
 - "atmosphere": override
+- "structuralLabel": human-readable section name.
+  Use the heuristic role provided as a strong prior.
+  Correct it only if the actual lyrics clearly contradict it.
+  Standard values: "Intro", "Verse 1", "Verse 2", "Verse 3",
+  "Pre-Chorus", "Chorus", "Post-Chorus", "Bridge", "Hook",
+  "Breakdown", "Drop", "Outro".
+  Number repeated types sequentially: "Verse 1", "Verse 2".
+  Number Chorus only if the lyrics differ significantly between
+  occurrences — otherwise all chorus sections share the label "Chorus".
+  Always return this field. Never leave it null or omit it.
 
 ═══════════════════════════════════════
 STORYBOARD (sparse)
@@ -477,6 +487,13 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
       if (!s.visualMood || !(ENUMS.visualMood as readonly string[]).includes(s.visualMood)) {
         if (s.visualMood) errors.push(`Section ${s.sectionIndex}: invalid visualMood "${s.visualMood}"`);
         s.visualMood = "intimate";
+      }
+      if (typeof s.structuralLabel === "string") {
+        s.structuralLabel = s.structuralLabel.trim();
+      }
+      if (!s.structuralLabel) {
+        errors.push(`Section ${s.sectionIndex}: missing structuralLabel`);
+        s.structuralLabel = `Section ${Number.isInteger(s.sectionIndex) ? s.sectionIndex + 1 : 1}`;
       }
       for (const field of ["motion", "texture", "typography", "atmosphere"] as const) {
         if (s[field] !== undefined && !(ENUMS[field] as readonly string[]).includes(s[field])) {
