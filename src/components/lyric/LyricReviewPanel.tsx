@@ -9,9 +9,11 @@ interface LyricReviewPanelProps {
   onSeekTo: (sec: number) => void;
   palette: string[];
   isReady: boolean;
+  expanded?: boolean;
+  onLineSelect?: (lineIndex: number) => void;
 }
 
-function LyricReviewPanel({ sections, allLines, currentTimeSec, onSeekTo, palette, isReady }: LyricReviewPanelProps) {
+function LyricReviewPanel({ sections, allLines, currentTimeSec, onSeekTo, palette, isReady, expanded, onLineSelect }: LyricReviewPanelProps) {
   const activeLineIndex = useMemo(() => {
     for (let i = 0; i < allLines.length; i++) {
       const l = allLines[i];
@@ -33,9 +35,6 @@ function LyricReviewPanel({ sections, allLines, currentTimeSec, onSeekTo, palett
     activeLineRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [activeLineIndex]);
 
-  const handleLineCick = (line: LyricSectionLine) => {
-    onSeekTo(Math.max(0, line.startSec - 0.25));
-  };
 
   const handleSectionClick = (section: LyricSection) => {
     onSeekTo(section.startSec);
@@ -121,12 +120,15 @@ function LyricReviewPanel({ sections, allLines, currentTimeSec, onSeekTo, palett
               <div
                 key={line.lineIndex}
                 ref={isActive ? activeLineRef : undefined}
-                onClick={() => handleLineCick(line)}
+                onClick={() => {
+                  onSeekTo(Math.max(0, line.startSec - 0.25));
+                  if (expanded && onLineSelect) onLineSelect(line.lineIndex);
+                }}
                 style={{
-                  fontSize: 13,
+                  fontSize: expanded ? 15 : 13,
                   fontFamily: "'Inter', sans-serif",
                   lineHeight: 1.65,
-                  padding: "5px 16px 5px 14px",
+                  padding: expanded ? "6px 20px 6px 16px" : "5px 16px 5px 14px",
                   borderLeft: isActive
                     ? `2px solid ${palette[1] ?? "#ffffff"}`
                     : "2px solid transparent",
