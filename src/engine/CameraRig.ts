@@ -143,24 +143,24 @@ interface SongArcPoint {
 // ─── Defaults ─────────────────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: CameraConfig = {
-  beatBounceY: 45,       // was 10 — below human perception threshold
-  beatBounceX: 22,       // was 5
-  beatZoom: 0.05,        // was 0.025
-  bassMultiplier: 2.2,
-  transientMultiplier: 1.8,
+  beatBounceY: 70,       // direct energy — hits hard on loud beats
+  beatBounceX: 35,
+  beatZoom: 0.12,        // direct energy — zoom tied to loudness
+  bassMultiplier: 3.0,   // bass hits punch harder
+  transientMultiplier: 2.4,
   swaySmoothing: 2.0,    // no-op
   dropEnergyThreshold: 0.20,
   dropMinEnergy: 0.45,
-  dropShakePx: 12,
-  dropIntensity: 2.0,
+  dropShakePx: 28,       // stronger drop shake
+  dropIntensity: 2.8,    // drop multiplier
   dropDecayRate: 1.0,
   heroZoom: 0.30,  // was 0.12 — bumped so punch is visible
   heroShakePx: 0,  // no shake — depth only
   heroPunchMs: 200,  // was 90 — longer hold before spring-back
   heroTaperMs: 150,
   heroStillMs: 80,       // handheld operator reacts fast
-  springStiffness: 200,
-  springDamping: 28,
+  springStiffness: 280,  // tighter spring = snappier response
+  springDamping: 22,     // less damping = more snap, slight overshoot
   parallaxFar: 0.15,
   parallaxMid: 0.5,
   parallaxNear: 0.85,
@@ -368,55 +368,17 @@ export class CameraRig {
     const isNewBeat  = beatState !== null && beatState.beatIndex !== this._prevBeatIndex && beatState.beatIndex >= 0;
     const isDownbeat = beatState?.isDownbeat   ?? false;
     const strength   = beatState?.strength     ?? 0.5;
-    const pulse      = beatState?.pulse        ?? 0;
 
-    // ══ 3-STATE MACHINE ════════════════════════════════════════════════════
-
-    // Resolve state from song arc
-    const arcPt = this._resolveArc(tSec >= 0 ? tSec : 0);
-    const targetState: HandheldState = arcPt?.state ?? (
-      energy > 0.65 ? 'IMPACT' : energy > 0.35 ? 'DRIVE' : 'HOLD'
-    );
-
-    // State transition: blend over ~500ms so state changes feel like operator response
-    if (targetState !== this._state) {
-      this._prevState = this._state;
-      this._state = targetState;
-      this._stateBlend = 0;
-      this._stateSince = 0;
-    }
-    this._stateBlend = Math.min(1, this._stateBlend + dt * 2);  // ~500ms blend
-    this._stateSince += deltaMs;
-
-    // Blend between previous and current state profiles
-    const prevProf = STATE_PROFILES[this._prevState];
-    const currProf = STATE_PROFILES[this._state];
-    const bodyScale = lerp(prevProf.bodyScale, currProf.bodyScale, this._stateBlend);
-    const beatScale = lerp(prevProf.beatScale, currProf.beatScale, this._stateBlend);
-    const proxTarget = lerp(prevProf.proximityTarget, currProf.proximityTarget, this._stateBlend);
-    const proxRate   = lerp(prevProf.proximityRate,   currProf.proximityRate,   this._stateBlend);
-
-    // ── Operator forward lean (DRIVE/IMPACT: step closer over time) ────────
-    // Handheld: not a smooth dolly, but an operator physically closing distance.
-    // The lean-in is faster in IMPACT, releases slowly back to baseline on HOLD.
-    if (this._state === 'HOLD') {
-      this._proximityBase = lerp(this._proximityBase, 0, dt * 0.5);
-    } else {
-      this._proximityBase = Math.min(proxTarget, this._proximityBase + proxRate * dt);
-    }
-
-    // ══ BEAT DEPTH PULSE ══════════════════════════════════════════════════════
-    // Zero baseline — camera is completely still unless a beat, drop, or hero
-    // triggers it. No oscillators. No ambient movement.
-    // Every beat = push in (zoom). Between beats = float back to 1.0.
-    // Uses BeatConductor pulse (Gaussian peak on beat hit) for smooth in/out.
-    // Amplitude scales with state: HOLD=subtle, DRIVE=medium, IMPACT=full.
-    const beatDepthZoom = (beatState?.pulse ?? 0) * lerp(0.012, 0.032, beatScale - 0.5);
+    // ══ DIRECT ENERGY MODEL ════════════════════════════════════════════════
+    // No state machine. No gradual cinematic. Energy IS the camera.
+    // High energy beat → big zoom + shake. Low energy → nothing.
+    // beatScale: 0 at silence, 1 at full energy. Non-linear so quiet parts stay still.
+    const beatScale = Math.pow(Math.max(0, energy), 0.6);
 
     const bodyX = 0;
     const bodyY = 0;
     const bodyRot = 0;
-    const bodyZoom = beatDepthZoom;
+    const bodyZoom = 0;
 
     // ══ DROP DETECTION & ONSET ══════════════════════════════════════════════
 
@@ -465,10 +427,11 @@ export class CameraRig {
     const nearApex = this.peakDropTime >= 0 && tSec >= 0 && Math.abs(tSec - this.peakDropTime) < 4;
     const apexBoost = nearApex ? 1.5 : 1.0;
 
-    // Amplitude: floor so every beat is visible; energy/strength push it higher.
-    const beatAmp = (0.4 + energy * 0.35 + strength * 0.25)
-      * beatScale
-      * (1 + (hitStr > 0.3 ? hitStr * 0.5 : 0))
+    // Amplitude: pure energy — no artificial floor.
+    // Silence = 0, full energy = 1. Camera only moves when music demands it.
+    const beatAmp = energy * beatScale
+      * (1 + (hitStr > 0.5 ? hitStr * 0.8 : 0))
+      * (isDownbeat ? 1.4 : 1.0)
       * dropMult
       * apexBoost;
 
