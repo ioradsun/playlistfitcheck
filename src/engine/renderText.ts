@@ -622,9 +622,10 @@ export function renderText(
     ctx.restore();
   }
 
-  const getDisplayWord = (text: string) => (
-    cinematicTextTransform === "uppercase" ? text.toUpperCase() : text
-  );
+  const getDisplayWord = (text: string) => {
+    const clean = text.replace(/[^\w\s']/g, "");
+    return cinematicTextTransform === "uppercase" ? clean.toUpperCase() : clean;
+  };
 
   const drawLine = (text: string, y: number): void => {
     if (resolvedLetterSpacingEm === -0.05 && ch > cw) {
