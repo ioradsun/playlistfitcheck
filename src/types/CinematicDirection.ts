@@ -62,6 +62,7 @@ export interface CinematicSection {
   startRatio?: number;
   /** Computed by enrichSections() — ratio 0–1 */
   endRatio?: number;
+  structuralLabel?: string;
 }
 
 export interface StoryboardEntry {
