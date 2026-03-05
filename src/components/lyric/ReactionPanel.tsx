@@ -37,6 +37,13 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, palette
   const [comments, setComments] = useState<any[]>([]);
 
   useEffect(() => {
+    if (isOpen) {
+      setHasSubmitted(false);
+      setTextInput('');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     if (!danceId) return;
     supabase
       .from('lyric_dance_comments' as any)
@@ -64,8 +71,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, palette
         const topEmoji = Object.entries(info.emojis).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'fire';
         return { lineIndex: Number(lineIndex), text: line?.text ?? '...', total: info.total, topEmoji };
       })
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
+      .sort((a, b) => b.total - a.total);
   }, [reactionData, allLines]);
 
   const handleReact = async (emoji: EmojiKey) => {
@@ -101,7 +107,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, palette
     if (!textInput.trim() || !danceId || hasSubmitted) return;
     const text = textInput.trim().slice(0, 200);
     const sessionId = getSessionId();
-    const { data } = await supabase
+    const { data: inserted, error } = await supabase
       .from('lyric_dance_comments' as any)
       .insert({
         dance_id: danceId,
@@ -111,11 +117,15 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, palette
       })
       .select('id, text, line_index, submitted_at, is_pinned')
       .single();
-    if (data) {
-      setComments(prev => [data, ...prev]);
+    if (error) {
+      console.error('Comment insert failed:', error);
+      return;
+    }
+    if (inserted) {
+      setComments(prev => [inserted, ...prev]);
       setHasSubmitted(true);
       setTextInput('');
-      onReactionFired('🗣️');
+      onReactionFired('fire');
     }
   };
 
@@ -155,17 +165,18 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, palette
             return <button key={key} onClick={() => handleReact(key as EmojiKey)} className={`flex flex-col items-center gap-1 py-2 px-1 rounded-xl transition-all ${reacted ? 'bg-white/[0.07] scale-105' : 'hover:bg-white/[0.04] active:scale-95'}`} style={{ minWidth: 44 }}><span className="text-xl leading-none">{symbol}</span><span className="text-[9px] font-mono text-white/30">{count > 0 ? count : label}</span></button>;
           })}</div></div>
 
-          {hotLines.length > 0 && <div className="px-5 py-4 border-b border-white/[0.05]"><p className="text-[9px] font-mono uppercase tracking-[0.18em] text-white/25 mb-3">Hottest on this song</p><div className="space-y-1">{hotLines.map((hl) => { const line = allLines.find(l => l.lineIndex === hl.lineIndex); const emoji = { fire: '🔥', dead: '💀', mind_blown: '🤯', emotional: '😭', respect: '🙏', accurate: '🎯' }[hl.topEmoji] ?? '🔥'; return <button key={hl.lineIndex} onClick={() => { if (line) onSeekTo(line.startSec); }} className="w-full flex items-center gap-3 py-2 rounded-lg hover:bg-white/[0.03] transition-colors text-left px-2"><span className="text-base leading-none shrink-0">{emoji}</span><span className="flex-1 text-[12px] text-white/50 truncate font-light">{hl.text}</span><span className="text-[9px] font-mono text-white/25 shrink-0">×{hl.total}</span></button>; })}</div></div>}
+          {hotLines.length > 0 && <div className="px-5 py-4 border-b border-white/[0.05]"><p className="text-[9px] font-mono uppercase tracking-[0.18em] text-white/25 mb-3">Hottest on this song</p><div className="reaction-hotlines space-y-1 max-h-[180px] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>{hotLines.map((hl) => { const line = allLines.find(l => l.lineIndex === hl.lineIndex); const emoji = { fire: '🔥', dead: '💀', mind_blown: '🤯', emotional: '😭', respect: '🙏', accurate: '🎯' }[hl.topEmoji] ?? '🔥'; return <button key={hl.lineIndex} onClick={() => { if (line) onSeekTo(line.startSec); }} className="w-full flex items-center gap-3 py-2 rounded-lg hover:bg-white/[0.03] transition-colors text-left px-2"><span className="text-base leading-none shrink-0">{emoji}</span><span className="flex-1 text-[12px] text-white/50 truncate font-light">{hl.text}</span><span className="text-[9px] font-mono text-white/25 shrink-0">×{hl.total}</span></button>; })}</div></div>}
 
           <div className="px-5 py-4">
             <p className="text-[9px] font-mono uppercase tracking-[0.18em] text-white/25 mb-3">Takes</p>
             {!hasSubmitted ? (
-              <div className="relative mb-4"><input type="text" value={textInput} onChange={e => setTextInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleTextSubmit(); if (e.key === 'Escape') onClose(); }} placeholder={activeLine ? `on "${activeLine.text.slice(0, 30)}..."` : 'your take...'} maxLength={200} className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-2.5 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/25 transition-colors pr-16" /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/15 pointer-events-none">↵ send</span></div>
+              <div className="relative mb-4"><input type="text" value={textInput} onChange={e => setTextInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleTextSubmit(); if (e.key === 'Escape') onClose(); }} placeholder="drop your take..." maxLength={200} className="w-full bg-transparent border border-white/10 rounded-lg px-4 py-2.5 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/25 transition-colors pr-16" /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/15 pointer-events-none">↵ send</span></div>
             ) : (
               <p className="text-[11px] font-mono text-white/30 text-center mb-4">FMLY Notified</p>
             )}
             <div className="space-y-3">{comments.map((c: any) => <div key={c.id} className="flex flex-col gap-1">{c.line_index != null && <button onClick={() => { const line = allLines.find(l => l.lineIndex === c.line_index); if (line) onSeekTo(line.startSec); }} className="text-[9px] font-mono text-white/25 hover:text-white/45 transition-colors text-left">on "{allLines.find(l => l.lineIndex === c.line_index)?.text?.slice(0, 40) ?? '...'}..."</button>}<p className={`text-[12px] leading-relaxed font-light ${c.is_pinned ? 'text-white/75' : 'text-white/45'}`}>{c.is_pinned && <span className="text-[9px] mr-1.5 opacity-50">♪</span>}{c.text}</p></div>)}</div>
           </div>
+          <style>{`.reaction-hotlines::-webkit-scrollbar { display: none; }`}</style>
         </motion.div>
       )}
     </AnimatePresence>
