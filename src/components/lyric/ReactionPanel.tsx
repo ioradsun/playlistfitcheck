@@ -134,7 +134,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
       .limit(200)
       .then(({ data }) => {
         if (!data) return;
-        const rows = data as CommentRow[];
+        const rows = data as unknown as CommentRow[];
         const topLevel = rows.filter(c => !c.parent_comment_id);
         const byParent: Record<string, CommentRow[]> = {};
         rows.filter(c => c.parent_comment_id).forEach(c => {
