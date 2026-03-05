@@ -745,18 +745,7 @@ export default function ShareableLyricDance() {
         <div className="w-full max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center gap-3">
 
-            {/* Theme toggle */}
-            <button
-              onClick={() => setThemeMode(prev =>
-                prev === 'auto' ? 'light' : prev === 'light' ? 'dark' : 'auto'
-              )}
-              className="w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-white/35 hover:text-white/60 hover:border-white/20 transition-all shrink-0"
-              aria-label="Toggle theme"
-            >
-              {themeMode === 'light' ? <Sun size={14} /> : themeMode === 'dark' ? <Moon size={14} /> : (
-                <span className="text-[9px] font-mono uppercase tracking-wider opacity-50">A</span>
-              )}
-            </button>
+
 
             {/* Now-playing chip — current lyric line, tappable to open reaction engine */}
             <button
