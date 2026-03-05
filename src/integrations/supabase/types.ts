@@ -517,6 +517,7 @@ export type Database = {
         Row: {
           dance_id: string
           id: string
+          line_index: number | null
           session_id: string | null
           submitted_at: string
           text: string
@@ -525,6 +526,7 @@ export type Database = {
         Insert: {
           dance_id: string
           id?: string
+          line_index?: number | null
           session_id?: string | null
           submitted_at?: string
           text: string
@@ -533,6 +535,7 @@ export type Database = {
         Update: {
           dance_id?: string
           id?: string
+          line_index?: number | null
           session_id?: string | null
           submitted_at?: string
           text?: string

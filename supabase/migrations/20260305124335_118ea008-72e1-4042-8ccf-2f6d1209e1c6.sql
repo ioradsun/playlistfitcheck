@@ -1,0 +1,1 @@
+ALTER TABLE public.lyric_dance_comments ADD COLUMN IF NOT EXISTS line_index integer NULL;
