@@ -596,6 +596,44 @@ export type Database = {
           },
         ]
       }
+      lyric_dance_reactions: {
+        Row: {
+          created_at: string | null
+          dance_id: string
+          emoji: string
+          id: string
+          line_index: number | null
+          section_index: number | null
+          session_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          dance_id: string
+          emoji: string
+          id?: string
+          line_index?: number | null
+          section_index?: number | null
+          session_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          dance_id?: string
+          emoji?: string
+          id?: string
+          line_index?: number | null
+          section_index?: number | null
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lyric_dance_reactions_dance_id_fkey"
+            columns: ["dance_id"]
+            isOneToOne: false
+            referencedRelation: "shareable_lyric_dances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lyric_dance_signals: {
         Row: {
           context_note: string | null
