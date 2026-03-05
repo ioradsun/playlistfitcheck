@@ -518,6 +518,7 @@ export function LyricFitTab({
           audioSections: audioSections.length ? audioSections : undefined,
           lyricId: savedIdRef.current || undefined,
           scene_context: sceneContext,
+          words: words ?? undefined,
         },
       });
 

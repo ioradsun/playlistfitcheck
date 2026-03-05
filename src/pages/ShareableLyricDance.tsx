@@ -352,7 +352,7 @@ export default function ShareableLyricDance() {
             .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
           const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
-            body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id },
+            body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id, words: d.words ?? undefined },
           });
 
           if (dirResult?.cinematicDirection) {
@@ -693,6 +693,7 @@ export default function ShareableLyricDance() {
               lines: lyricsForDirection,
               lyricId: data.id,
               audioSections: existingAudioSections,
+              words: data.words ?? undefined,
             },
           }).then(({ data: dirResult, error }) => {
             if (error) { toast.error("Cinematic direction failed"); return; }
@@ -739,6 +740,7 @@ export default function ShareableLyricDance() {
                 lines: lyricsForDirection,
                 lyricId: data.id,
                 audioSections: existingAudioSections2,
+                words: data.words ?? undefined,
               },
             });
             if (error) throw error;
@@ -771,6 +773,7 @@ export default function ShareableLyricDance() {
                 scene_context: data.scene_context ?? null,
                 systemPromptOverride: systemPrompt,
                 audioSections: existingAudioSections3,
+                words: data.words ?? undefined,
               },
             });
             if (error) throw error;
