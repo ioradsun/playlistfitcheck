@@ -1,3 +1,4 @@
+/* cache-bust: 2026-03-05-V1 */
 /**
  * LyricFitTab — Thin parent container with two-tab architecture.
  * Holds all shared state. Renders LyricFitToggle + LyricsTab or FitTab.
