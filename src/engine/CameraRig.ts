@@ -214,7 +214,6 @@ export class CameraRig {
   // ── Body simulation — 4 inharmonic oscillators ───────────────────────────
   // Phase accumulators (radians). All start at different offsets → immediate organic feel.
   private _breathPhase    = 0.0;
-  private _weightPhase    = 1.3;  // offset — never in phase with breath
   private _tremorPhase    = 2.7;  // high-freq
   private _shoulderPhase  = 0.9;  // rotation
 
@@ -411,29 +410,39 @@ export class CameraRig {
       this._proximityBase = Math.min(proxTarget, this._proximityBase + proxRate * dt);
     }
 
-    // ══ BODY SIMULATION — 4 inharmonic oscillators ═════════════════════════
+    // ══ BODY SIMULATION — 3 oscillators (no lateral sway) ════════════════════
+    // Weight shift (side-to-side rocking) removed — depth-only model.
+    // The body breathes IN/OUT (zoom) on the beat, not left/right.
+    //
+    // Remaining oscillators:
+    //   BREATH       0.25Hz — slow vertical bob, always present
+    //   TREMOR       2.3Hz  — forearm micro-shake, high-freq organic texture
+    //   SHOULDER     0.6Hz  — subtle rotation from arm weight
 
-    // Advance all phases
     this._breathPhase   += dt * 2 * Math.PI * 0.25;  // 0.25Hz
-    this._weightPhase   += dt * 2 * Math.PI * 0.12;  // 0.12Hz
     this._tremorPhase   += dt * 2 * Math.PI * 2.3;   // 2.3Hz
     this._shoulderPhase += dt * 2 * Math.PI * 0.6;   // 0.6Hz
 
-    // Scale amplitudes by bodyScale + energy (operator moves more when music is louder)
     const bodyEnergy = lerp(0.6, 1.4, energy);
     const bs = bodyScale * bodyEnergy;
 
-    const breathY    =  Math.sin(this._breathPhase)    * 4.0 * bs;
-    const weightX    =  Math.sin(this._weightPhase)    * 6.0 * bs;
-    const weightY    =  Math.cos(this._weightPhase)    * 1.5 * bs;
-    const tremorX    =  Math.sin(this._tremorPhase)    * 0.8 * bs;
-    const tremorY    =  Math.cos(this._tremorPhase + 1.1) * 0.8 * bs;
-    const shoulderRot = Math.sin(this._shoulderPhase)  * 0.007 * bs; // ≈±0.4° at scale=1
+    const breathY    =  Math.sin(this._breathPhase)       * 3.0 * bs;  // vertical only
+    const tremorX    =  Math.sin(this._tremorPhase)       * 0.6 * bs;  // micro X
+    const tremorY    =  Math.cos(this._tremorPhase + 1.1) * 0.6 * bs;  // micro Y
+    const shoulderRot = Math.sin(this._shoulderPhase)     * 0.005 * bs;
 
-    // Total body signal (before beat accents)
-    const bodyX = weightX + tremorX;
-    const bodyY = breathY + weightY + tremorY;
+    // BEAT DEPTH PULSE — the core of the depth-based model.
+    // On each beat, zoom IN (push toward subject). Between beats, float back.
+    // This creates the tin-tin-tin camera mimicry: every hit = lean in.
+    // Uses BeatConductor pulse (0-1 Gaussian peak on beat) for smooth in/out.
+    // Amplitude scales with state: HOLD=subtle, DRIVE=medium, IMPACT=full.
+    const pulseMag = lerp(0.010, 0.028, beatScale - 0.5) * bodyEnergy;
+    const beatDepthZoom = (beatState?.pulse ?? 0) * pulseMag;
+
+    const bodyX = tremorX;                   // no lateral sway
+    const bodyY = breathY + tremorY;         // vertical breath + micro
     const bodyRot = shoulderRot;
+    const bodyZoom = beatDepthZoom;          // depth pulse on the beat
 
     // ══ DROP DETECTION & ONSET ══════════════════════════════════════════════
 
@@ -581,19 +590,20 @@ export class CameraRig {
     // still reacts. No full freeze. The body keeps breathing even when focusing.
     const beatAlive = 1 - this._heroFreezeAmt;  // 0.6 minimum during hero approach
 
-    // Zoom: proximity base (lean-in) + bass punch + tonal lean + generic + hero
+    // Zoom: proximity base + beat depth pulse (tin-tin-tin) + hit accents + hero
     const rawZoom = 1.0
       + this._proximityBase
+      + bodyZoom                                          // beat depth pulse — always
       + (this._bassZ + this._tonalZ + this._beatZ) * beatAlive
       + this._heroPunchZoom * heroFrac;
 
-    // Y: bass lurch + generic + body breath/weight + drop shake + hero
+    // Y: bass lurch + generic + breath micro-tremor + drop shake + hero
     const rawOffY = (this._bassY + this._beatY) * beatAlive
       + bodyY
       + dropShakeY
       + this._heroPunchShakeY * heroFrac;
 
-    // X: transient shoulder + generic + body weight shift + drop shake + hero
+    // X: transient shoulder + tremor only (no lateral sway) + drop shake + hero
     const rawOffX = (this._transX + this._beatX) * beatAlive
       + bodyX
       + dropShakeX
@@ -687,7 +697,7 @@ export class CameraRig {
     this._prevBeatIndex = -1;
     this._state = 'HOLD'; this._prevState = 'HOLD'; this._stateBlend = 0; this._stateSince = 0;
     this._proximityBase = 0;
-    this._breathPhase = 0; this._weightPhase = 1.3; this._tremorPhase = 2.7; this._shoulderPhase = 0.9;
+    this._breathPhase = 0; this._tremorPhase = 2.7; this._shoulderPhase = 0.9;
     this._bassY=this._bassYV=this._bassZ=this._bassZV=0;
     this._transX=this._transXV=this._transR=this._transRV=0;
     this._tonalZ=this._tonalZV=0;
