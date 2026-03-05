@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-04-V4-EXPORT-FIX */
+/* cache-bust: 2026-03-04-V3 */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
@@ -1381,6 +1381,13 @@ export class LyricDancePlayer {
           this.conductor.setAnalysis((beatGridData as any)._analysis);
         }
         console.info(`[V2] BeatConductor created: ${this.conductor.beatsPerMinute} BPM, ${this.conductor.totalBeats} beats, ${songDuration.toFixed(1)}s, hits: ${(beatGridData as any).hits?.length ?? 0}`);
+        // ═══ V4: Load song structure into CameraRig ═══
+        // CameraRig pre-analyzes beatGrid + cinematic sections to build the song arc:
+        // energy profile per section, drop detection, anticipation timing.
+        this.cameraRig.loadSongData(
+          beatGridData as any,
+          this.data.cinematic_direction ?? null,
+        );
         this.cameraRig.setBPM(this.conductor.beatsPerMinute);
 
         // ═══ V2: Compute timing budgets ═══
@@ -1615,54 +1622,17 @@ export class LyricDancePlayer {
     return Math.max(0, this.songEndSec - this.songStartSec);
   }
 
-  async prepareExportFramePipeline(): Promise<void> {
-    if (this._bakePromise) await this._bakePromise;
-    if (!this.fullModeEnabled) this.enableFullVisualMode();
-
-    // Ensure chapter images + Ken Burns params are ready before frame stepping.
-    await this.loadSectionImages().catch(() => undefined);
-
-    // Rebuild visuals if they were not initialized yet.
-    if (!this.chapterSims.length || !this._globalBeatVis) this.buildChapterSims();
-    if (!this.bgCaches.length) this.buildBgCache();
-
-    this._bgSnapshotSection = -999;
-    this._bgSnapshotQTier = -1 as any;
-    this._lightingOverlayCanvas = null;
-    this._lightingOverlayKey = '';
-  }
-
-  private _exportMode = false;
-  private _savedDpr = 0;
-  private _savedQualityTier: 0 | 1 | 2 | 3 = 0;
-
   setupExportResolution(width: number, height: number): void {
     this.pause();
     this.displayWidth = this.width;
     this.displayHeight = this.height;
-
-    // Lock quality to maximum and DPR to 1 so canvas backing store
-    // matches the exact export resolution (e.g. 1920×1080 = 1920×1080 px).
-    this._exportMode = true;
-    this._savedDpr = this.dpr;
-    this._savedQualityTier = this._qualityTier;
-    this.dpr = 1;
-    this._qualityTier = 0;
-
     this.setResolution(width, height);
     // Re-acquire context with willReadFrequently for fast pixel readback
     this.ctx = this.canvas.getContext('2d', {
       willReadFrequently: true,
       desynchronized: true,
     })!;
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-    // Invalidate cached snapshots so they rebake at full quality
-    this._bgSnapshotSection = -999;
-    this._bgSnapshotQTier = -1 as any;
-    this._lightingOverlayCanvas = null;
-    this._lightingOverlayKey = '';
-
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.seek(this.songStartSec);
   }
 
@@ -1677,7 +1647,7 @@ export class LyricDancePlayer {
 
     const deltaMs = 1000 / 30; // fixed timestep for export
     const beatState = this.conductor?.getState(clamped) ?? null;
-    this._lastBeatState = beatState;
+    if (beatState) (beatState as any)._tSec = clamped;
     this._frameDt = deltaMs / 16.67;
 
     // Section + palette
@@ -1724,21 +1694,10 @@ export class LyricDancePlayer {
   }
 
   teardownExportResolution(): void {
-    // Restore DPR + quality tier
-    this.dpr = this._savedDpr;
-    this._qualityTier = this._savedQualityTier;
-    this._exportMode = false;
-
     this.setResolution(this.displayWidth, this.displayHeight);
     // Restore normal GPU-backed context
     this.ctx = this.canvas.getContext('2d')!;
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
-
-    // Invalidate caches baked at export resolution
-    this._bgSnapshotSection = -999;
-    this._bgSnapshotQTier = -1 as any;
-    this._lightingOverlayCanvas = null;
-    this._lightingOverlayKey = '';
   }
 
   resize(logicalW: number, logicalH: number): void {
@@ -2085,7 +2044,7 @@ export class LyricDancePlayer {
 
       // ═══ V2: Get beat state ONCE from conductor ═══
       const beatState = this.conductor?.getState(smoothedTime) ?? null;
-      this._lastBeatState = beatState;
+      if (beatState) (beatState as any)._tSec = smoothedTime;
       this._frameDt = Math.min(deltaMs, 33.33) / 16.67; // normalized to 60fps
 
       // ═══ Per-frame caches: section index + palette ═══
@@ -2598,8 +2557,7 @@ export class LyricDancePlayer {
   private _draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
     this.currentTSec = tSec;
     this.frameCount++;
-    // Skip adaptive quality during export — tier is locked to 0
-    if (!this._exportMode) this._updateQualityTier(performance.now());
+    this._updateQualityTier(performance.now());
     const qTier = this._qualityTier;
 
     // ── During minimal-boot upgrade gap: keep the first frame visible ──
@@ -2673,7 +2631,7 @@ export class LyricDancePlayer {
         if (currentSection && nextImgIdx !== imgIdx) {
           const secEnd = currentSection.endSec ?? (currentSection.endRatio != null ? currentSection.endRatio * duration : null);
           if (secEnd != null) {
-            const timeToEnd = secEnd - this.currentTSec;
+            const timeToEnd = secEnd - (this.audio?.currentTime ?? 0);
             if (timeToEnd < 1.5 && timeToEnd > 0) crossfade = 1 - (timeToEnd / 1.5);
           }
         }
@@ -4027,7 +3985,7 @@ export class LyricDancePlayer {
       const audioDur = this.audio?.duration || 1;
       const chapterDur = audioDur / chapterCount;
       const chapterStart = chapterIdx * chapterDur;
-      const localT = Math.max(0, Math.min(1, (this.currentTSec - chapterStart) / chapterDur));
+      const localT = Math.max(0, Math.min(1, ((this.audio?.currentTime ?? 0) - chapterStart) / chapterDur));
       const eased = localT * localT * (3 - 2 * localT);
       if (kb) {
         const zoom = kb.zoomStart + (kb.zoomEnd - kb.zoomStart) * eased;
