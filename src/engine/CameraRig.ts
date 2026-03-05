@@ -429,7 +429,7 @@ export class CameraRig {
     const breathY    =  Math.sin(this._breathPhase)       * 3.0 * bs;  // vertical only
     const tremorX    =  Math.sin(this._tremorPhase)       * 0.6 * bs;  // micro X
     const tremorY    =  Math.cos(this._tremorPhase + 1.1) * 0.6 * bs;  // micro Y
-    const shoulderRot = Math.sin(this._shoulderPhase)     * 0.005 * bs;
+    const shoulderRot = 0;  // removed — depth-only model
 
     // BEAT DEPTH PULSE — the core of the depth-based model.
     // On each beat, zoom IN (push toward subject). Between beats, float back.
@@ -513,7 +513,7 @@ export class CameraRig {
         const dir = (beatState!.beatIndex % 2 === 0) ? 1 : -1;
         const amp = beatAmp * cfg.transientMultiplier;
         this._transX  = cfg.beatBounceX * amp * dir;               this._transXV = 0;
-        this._transR  = dir * cfg.maxRotationRad * 0.55 * amp;     this._transRV = 0;
+        this._transR  = 0; this._transRV = 0;  // no tilt — depth only
 
       } else if (hitType === 'tonal') {
         // ── TONAL: conscious lean-in. Slow zoom, slight yaw. Holds long.
@@ -609,8 +609,8 @@ export class CameraRig {
       + dropShakeX
       + this._heroPunchShakeX * heroFrac;
 
-    // Rotation: transient dutch tilt + shoulder roll
-    const rawRot = this._transR * beatAlive + bodyRot;
+    // Rotation: none — depth-only model
+    const rawRot = 0;
 
     // ── Output spring (final smoothing) ────────────────────────────────────
     // Lighter spring than cinematic — handheld output is snappier.
