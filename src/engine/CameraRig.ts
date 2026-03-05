@@ -154,9 +154,9 @@ const DEFAULT_CONFIG: CameraConfig = {
   dropShakePx: 12,
   dropIntensity: 2.0,
   dropDecayRate: 1.0,
-  heroZoom: 0.12,
+  heroZoom: 0.30,  // was 0.12 — bumped so punch is visible
   heroShakePx: 0,  // no shake — depth only
-  heroPunchMs: 90,
+  heroPunchMs: 200,  // was 90 — longer hold before spring-back
   heroTaperMs: 150,
   heroStillMs: 80,       // handheld operator reacts fast
   springStiffness: 200,
