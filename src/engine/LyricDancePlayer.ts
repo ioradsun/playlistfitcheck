@@ -2572,13 +2572,26 @@ export class LyricDancePlayer {
     const frame = precomputedFrame;
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
 
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
+    // ═══ WORLD CAMERA — read once per frame ════════════════════════════════
+    // ctx.setTransform() is ABSOLUTE — it replaces the full matrix and ignores
+    // ctx.save/restore. So we can't wrap the frame in applyTransform().
+    // Instead: read camera state once here, then apply it as ctx.transform()
+    // after every ctx.setTransform(dpr) call in this frame.
+    const _cam = this.cameraRig.getWorldCamera();
+    const _camCX = this.width / 2;
+    const _camCY = this.height / 2;
+    // Helper: call after every ctx.setTransform(dpr) to bake camera into the matrix.
+    const _applyCam = () => {
+      if (Math.abs(_cam.sc - 1) > 0.0005 || Math.abs(_cam.tx) > 0.1 || Math.abs(_cam.ty) > 0.1 || Math.abs(_cam.rot) > 0.0001) {
+        this.ctx.translate(_camCX + _cam.tx, _camCY + _cam.ty);
+        if (Math.abs(_cam.rot) > 0.0001) this.ctx.rotate(_cam.rot);
+        if (Math.abs(_cam.sc - 1) > 0.0005) this.ctx.scale(_cam.sc, _cam.sc);
+        this.ctx.translate(-_camCX, -_camCY);
+      }
+    };
 
-    // ═══ WORLD CAMERA TRANSFORM ════════════════════════════════════════════
-    // Apply camera to the ENTIRE canvas — background, particles, text all move
-    // as one world. This is the "handheld camera outside the performance" model.
-    // applyTransform calls ctx.save() internally; we call resetTransform at frame end.
-    this.cameraRig.applyTransform(this.ctx, 'mid');
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
+    _applyCam();
 
     // ── Sim update: skip at tier ≥ 2 (they're not drawn) ──────────────
     // Cuts fire/water/aurora particle math entirely when fps is low.
@@ -2652,6 +2665,7 @@ export class LyricDancePlayer {
       this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       this.ctx.drawImage(this._bgSnapshot, 0, 0);
       this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
+      _applyCam(); // restore camera after snapshot stamp
     }
 
     if (qTier < 3) {
@@ -2894,15 +2908,14 @@ export class LyricDancePlayer {
     }
 
     this.ctx.save();
-    // World camera transform applied at frame start (applyTransform in _draw).
-    // We still read camZoom and camRotation for per-chunk setTransform() calls
-    // because setTransform() replaces the full matrix (can't inherit parent transform).
-    // offsets are already in world-space — don't re-apply them here.
+    // Per-word setTransform() is absolute — it wipes any parent transform.
+    // So we bake the camera directly into each word's matrix via camShakeX/Y/Zoom/Rotation.
+    // The _applyCam() at frame-level handles background/particles; text gets it here.
     const subjectT = this.cameraRig.getSubjectTransform();
-    const camZoom = subjectT.zoom;
-    const camShakeX = 0;  // world transform handles offsets — zeroed here to avoid double-apply
-    const camShakeY = 0;
-    const camRotation = 0;  // world transform handles rotation — zeroed to avoid double-apply
+    const camZoom     = subjectT.zoom;
+    const camShakeX   = subjectT.offsetX;
+    const camShakeY   = subjectT.offsetY;
+    const camRotation = subjectT.rotation;
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
@@ -3164,6 +3177,8 @@ export class LyricDancePlayer {
     }
     this.ctx.restore();
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    // Comment comets and decomp particles are world-space — apply camera
+    _applyCam();
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
@@ -3174,11 +3189,6 @@ export class LyricDancePlayer {
 
     // ═══ Hero decomposition particles — shatter effect on hero word exit ═══
     this.updateAndDrawDecomp(frameNowSec);
-
-    // ═══ RESTORE WORLD CAMERA TRANSFORM ═══════════════════════════════════
-    // Watermark and perf overlay are screen-space HUD — they must NOT shake.
-    // resetTransform calls ctx.restore() to undo the applyTransform() at frame start.
-    this.cameraRig.resetTransform(this.ctx);
 
     this.drawWatermark();
     if (this.perfDebugEnabled) this.drawPerfOverlay();

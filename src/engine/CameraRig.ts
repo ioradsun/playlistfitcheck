@@ -639,6 +639,22 @@ export class CameraRig {
     };
   }
 
+  /**
+   * Raw world camera for composing into absolute setTransform() calls.
+   * ctx.setTransform() ignores the save/restore stack, so the camera
+   * must be baked in at each call site via ctx.transform() after setTransform.
+   *
+   *   const cam = rig.getWorldCamera();
+   *   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);           // DPR base
+   *   ctx.translate(cx, cy);                             // pivot to center
+   *   ctx.rotate(cam.rot);                               // camera rotation
+   *   ctx.scale(cam.sc, cam.sc);                         // camera zoom
+   *   ctx.translate(-cx + cam.tx, -cy + cam.ty);         // camera offset + back
+   */
+  getWorldCamera(): { tx: number; ty: number; sc: number; rot: number } {
+    return { tx: this._offsetX, ty: this._offsetY, sc: this._zoom, rot: this._rotation };
+  }
+
   applyTransform(ctx: CanvasRenderingContext2D, layer: 'backdrop'|'atmosphere'|'far'|'mid'|'near'): void {
     ctx.save();
     const cfg = this.cfg;
