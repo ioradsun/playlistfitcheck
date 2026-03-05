@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-05-V1 */
+/* cache-bust: 2026-03-04-V3 */
 /**
  * LyricDancePlayer V2 — BeatConductor-driven canvas engine.
  *
@@ -2574,6 +2574,12 @@ export class LyricDancePlayer {
 
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
 
+    // ═══ WORLD CAMERA TRANSFORM ════════════════════════════════════════════
+    // Apply camera to the ENTIRE canvas — background, particles, text all move
+    // as one world. This is the "handheld camera outside the performance" model.
+    // applyTransform calls ctx.save() internally; we call resetTransform at frame end.
+    this.cameraRig.applyTransform(this.ctx, 'mid');
+
     // ── Sim update: skip at tier ≥ 2 (they're not drawn) ──────────────
     // Cuts fire/water/aurora particle math entirely when fps is low.
     if (qTier < 2) {
@@ -2888,18 +2894,15 @@ export class LyricDancePlayer {
     }
 
     this.ctx.save();
-    // ═══ DIRECTOR'S CAMERA: Pure depth — zoom into the words ═══
-    // NOTE: Canvas zoom is baked into each chunk's setTransform() call below,
-    // NOT applied as a parent transform, because setTransform() replaces the
-    // entire matrix and would wipe any parent zoom.
+    // World camera transform applied at frame start (applyTransform in _draw).
+    // We still read camZoom and camRotation for per-chunk setTransform() calls
+    // because setTransform() replaces the full matrix (can't inherit parent transform).
+    // offsets are already in world-space — don't re-apply them here.
     const subjectT = this.cameraRig.getSubjectTransform();
     const camZoom = subjectT.zoom;
-    // Text is the nearest layer — use full camera offset (beat dance + sway + drop shake).
-    // shakeX/shakeY is a subset used by parallax layers; offsetX/offsetY is the real camera.
-    const camShakeX = subjectT.offsetX;
-    const camShakeY = subjectT.offsetY;
-    // Camera rotation — wired to transient hit impulses. Applied additively to per-chunk rotation.
-    const camRotation = subjectT.rotation;
+    const camShakeX = 0;  // world transform handles offsets — zeroed here to avoid double-apply
+    const camShakeY = 0;
+    const camRotation = 0;  // world transform handles rotation — zeroed to avoid double-apply
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
@@ -3171,6 +3174,11 @@ export class LyricDancePlayer {
 
     // ═══ Hero decomposition particles — shatter effect on hero word exit ═══
     this.updateAndDrawDecomp(frameNowSec);
+
+    // ═══ RESTORE WORLD CAMERA TRANSFORM ═══════════════════════════════════
+    // Watermark and perf overlay are screen-space HUD — they must NOT shake.
+    // resetTransform calls ctx.restore() to undo the applyTransform() at frame start.
+    this.cameraRig.resetTransform(this.ctx);
 
     this.drawWatermark();
     if (this.perfDebugEnabled) this.drawPerfOverlay();
