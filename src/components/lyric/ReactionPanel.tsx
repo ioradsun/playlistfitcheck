@@ -461,14 +461,16 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                   const isRepeatActive = repeatMode && repeatActiveLine?.lineIndex === line.lineIndex;
                   const isActive = isFocused || isRepeatActive;
 
-                  const lineReactions = EMOJIS
+                  const lineReactionsByEmoji = EMOJIS
                     .map(({ key, symbol }) => ({
                       key, symbol,
                       count: reactionData[key]?.line[line.lineIndex] ?? 0,
                     }))
                     .filter(r => r.count > 0)
-                    .sort((a, b) => b.count - a.count)
-                    .slice(0, 3);
+                    .sort((a, b) => b.count - a.count);
+
+                  const topReaction = lineReactionsByEmoji[0] ?? null;
+                  const totalLineReactions = lineReactionsByEmoji.reduce((sum, r) => sum + r.count, 0);
 
                   return (
                     <div
@@ -496,19 +498,14 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                       </span>
 
                       {/* Reaction summary pills */}
-                      {lineReactions.length > 0 && (
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {lineReactions.map(({ key, symbol, count }) => (
-                            <span
-                              key={key}
-                              className="flex items-center gap-0.5 text-[9px] font-mono"
-                              style={{ color: 'rgba(255,255,255,0.28)' }}
-                            >
-                              <span className="text-[10px] leading-none">{symbol}</span>
-                              <span>{count}</span>
-                            </span>
-                          ))}
-                        </div>
+                      {topReaction && (
+                        <span
+                          className="flex items-center gap-0.5 text-[9px] font-mono shrink-0"
+                          style={{ color: 'rgba(255,255,255,0.28)' }}
+                        >
+                          <span className="text-[10px] leading-none">{topReaction.symbol}</span>
+                          <span>{totalLineReactions}</span>
+                        </span>
                       )}
                     </div>
                   );
