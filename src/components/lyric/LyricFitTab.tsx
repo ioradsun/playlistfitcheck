@@ -16,6 +16,8 @@ import { detectSections, type TimestampedLine } from "@/engine/sectionDetector";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
+import { useLyricSections } from "@/hooks/useLyricSections";
+import { mergeSectionOverrides, type SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { SceneContextResult } from "@/lib/sceneContexts";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
@@ -101,6 +103,7 @@ export function LyricFitTab({
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(initialLyric?.fmly_lines ?? null);
   const [versionMeta, setVersionMeta] = useState<any | null>(initialLyric?.version_meta ?? null);
   const [words, setWords] = useState<Array<{ word: string; start: number; end: number }> | null>(initialLyric?.words ?? null);
+  const [sectionOverrides, setSectionOverrides] = useState<SectionOverrides | null>(initialLyric?.section_overrides ?? null);
 
   const [renderData, setRenderData] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
@@ -147,6 +150,12 @@ export function LyricFitTab({
     const lastLineEnd = timestampedLines[timestampedLines.length - 1]?.endSec ?? 0;
     return Math.max(audioBuffer?.duration ?? 0, lastLineEnd);
   }, [audioBuffer, timestampedLines]);
+
+  const { sections: detectedSections } = useLyricSections(words, beatGrid, cinematicDirection, audioDurationSec);
+  const mergedSections = useMemo(
+    () => mergeSectionOverrides(detectedSections, sectionOverrides),
+    [detectedSections, sectionOverrides],
+  );
 
   const sectionsReady = audioSections.length > 0;
   const fitPipelineT0Ref = useRef<number | null>(null);
@@ -263,6 +272,42 @@ export function LyricFitTab({
   useEffect(() => {
     savedIdRef.current = savedId;
   }, [savedId]);
+
+  useEffect(() => {
+    if (!cinematicDirection || !sectionOverrides?.length || !mergedSections.length) return;
+    if (!Array.isArray(cinematicDirection.sections)) return;
+
+    const patchedSections = cinematicDirection.sections.map((cs: any, i: number) => {
+      const merged = mergedSections[i];
+      if (!merged) return cs;
+      return {
+        ...cs,
+        startSec: merged.startSec,
+        endSec: merged.endSec,
+        structuralLabel: merged.label,
+      };
+    });
+
+    setCinematicDirection((prev: any) => {
+      if (!prev || !Array.isArray(prev.sections)) return prev;
+      const same = prev.sections.every((sec: any, i: number) => {
+        const next = patchedSections[i];
+        return !!next && sec.startSec === next.startSec && sec.endSec === next.endSec && sec.structuralLabel === next.structuralLabel;
+      });
+      return same ? prev : { ...prev, sections: patchedSections };
+    });
+  }, [cinematicDirection, sectionOverrides, mergedSections]);
+
+  useEffect(() => {
+    if (!savedId || !sectionOverrides) return;
+    const timer = setTimeout(() => {
+      void supabase
+        .from("saved_lyrics")
+        .update({ section_overrides: sectionOverrides as any })
+        .eq("id", savedId);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [sectionOverrides, savedId]);
 
   // (persist effect moved below persistRenderData definition)
 
@@ -995,6 +1040,7 @@ export function LyricFitTab({
             setAudioBufferReady(false);
             setAudioSections([]);
             setGenerationStatus({ beatGrid: "idle", renderData: "idle", cinematicDirection: "idle", sectionImages: "idle" });
+            setSectionOverrides(null);
             setFitReadiness("not_started");
             setFitUnlocked(false);
             cinematicTriggeredRef.current = false;
@@ -1034,6 +1080,9 @@ export function LyricFitTab({
           generationStatus={generationStatus}
           audioSections={audioSections}
           words={words}
+          sectionOverrides={sectionOverrides}
+          onSectionOverridesChange={setSectionOverrides}
+          mergedSections={mergedSections}
           onRetry={retryGeneration}
           onHeaderProject={onHeaderProject}
           onBack={() => handleViewChange("lyrics")}

@@ -15,6 +15,7 @@ import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { LyricWaveform } from "./LyricWaveform";
+import { SectionTimeline } from "./SectionTimeline";
 import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
 import { FitExportModal } from "./FitExportModal";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -24,6 +25,8 @@ import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 // FrameRenderState import removed — V3 derives from cinematicDirection
 import type { AudioSection } from "@/engine/sectionDetector";
+import type { LyricSection } from "@/hooks/useLyricSections";
+import type { SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus } from "./LyricFitTab";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
@@ -63,6 +66,9 @@ interface Props {
   generationStatus: GenerationStatus;
   audioSections?: AudioSection[];
   words?: Array<{ word: string; start: number; end: number }> | null;
+  sectionOverrides: SectionOverrides | null;
+  onSectionOverridesChange: (overrides: SectionOverrides) => void;
+  mergedSections: LyricSection[];
   onRetry?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
@@ -85,6 +91,9 @@ export function FitTab({
   generationStatus,
   audioSections,
   words,
+  sectionOverrides,
+  onSectionOverridesChange,
+  mergedSections,
   onRetry,
   onHeaderProject,
   onBack,
@@ -1005,6 +1014,23 @@ export function FitTab({
                 </div>
               )}
 
+              {mergedSections.length > 0 && waveform && (
+                <SectionTimeline
+                  sections={mergedSections}
+                  lyrics={lyricData.lines}
+                  words={words ?? null}
+                  waveformPeaks={waveform.peaks}
+                  durationSec={waveform.duration || Math.max(lyricData.lines[lyricData.lines.length - 1]?.end ?? 0, 1)}
+                  currentTimeSec={currentTime}
+                  isPlaying={isPlaying}
+                  onSeek={handleSeek}
+                  onTogglePlay={handleTogglePlay}
+                  sectionOverrides={sectionOverrides}
+                  onSectionOverridesChange={onSectionOverridesChange}
+                  palette={Array.isArray(cinematicDirection?.palette) ? cinematicDirection.palette : []}
+                />
+              )}
+
               {/* Visual system info now shown via Cinematic Direction card below */}
 
               {cinematicDirection && (
@@ -1035,34 +1061,6 @@ export function FitTab({
                 </div>
               )}
 
-              {audioSections && audioSections.length > 0 && (
-                <div className="glass-card rounded-xl p-3 space-y-2">
-                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                    <Zap size={10} />
-                    Sections · {audioSections.length}
-                  </div>
-                  <div className="space-y-1.5">
-                    {audioSections.map((s) => (
-                      <div key={s.index} className="flex items-start gap-2">
-                        <span className="text-[9px] font-mono text-primary/70 mt-0.5 whitespace-nowrap w-16 shrink-0">
-                          {formatTime(s.startSec)}–{formatTime(s.endSec)}
-                        </span>
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0">
-                          {s.role}
-                        </span>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <div className="w-12 h-1.5 rounded-full bg-secondary overflow-hidden shrink-0" title={`Energy: ${Math.round(s.avgEnergy * 100)}%`}>
-                            <div className="h-full rounded-full bg-primary/60" style={{ width: `${Math.round(s.avgEnergy * 100)}%` }} />
-                          </div>
-                          <span className="text-[8px] text-muted-foreground/60 truncate">
-                            {s.spectralCharacter} · {s.beatDensity.toFixed(1)}b/s
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -1413,53 +1411,6 @@ function CinematicDirectionCard({
           {(Array.isArray(cinematicDirection.palette) ? cinematicDirection.palette : []).map((c: string, i: number) => (
             <div key={i} className="w-4 h-4 rounded-sm border border-white/10" style={{ backgroundColor: c }} title={c} />
           ))}
-        </div>
-      )}
-
-      {sections.length > 0 && (
-        <div className="space-y-1.5 mt-2">
-          <span className="text-[9px] font-mono text-muted-foreground/60 uppercase">Sections · {sections.length}</span>
-          {sections.map((s: any, i: number) => {
-            const imgUrl = sectionImages[i] ?? null;
-            const imageTimestamp = imageTimestamps[i] ? formatImageTimestamp(imageTimestamps[i]) : null;
-            return (
-              <div key={i} className="flex items-start gap-2 p-1.5 rounded bg-white/[0.02]">
-                <div className="flex-1 min-w-0 space-y-0.5">
-                  <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-mono text-muted-foreground/40">§{s.sectionIndex ?? i}</span>
-                    <span className="text-[10px] text-foreground/80 truncate">{s.label || s.mood || "section"}</span>
-                  </div>
-                  {s.description && <p className="text-[9px] text-muted-foreground/60 line-clamp-2">{s.description}</p>}
-                </div>
-                <div className="flex flex-col items-center gap-0.5 shrink-0">
-                  {imgUrl ? (
-                    <a
-                      href={imgUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block"
-                    >
-                      <img
-                        src={imgUrl}
-                        alt={`Section ${s.sectionIndex ?? i} background`}
-                        className="w-16 h-16 rounded-md object-cover border border-white/10 hover:border-purple-400 transition-colors cursor-pointer"
-                      />
-                    </a>
-                  ) : (
-                    <div className="w-16 h-16 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-xs text-white/30">
-                      {generating ? <Loader2 size={14} className="animate-spin" /> : "—"}
-                    </div>
-                  )}
-                  <span className="text-[10px] text-white/30 leading-none h-[10px]">
-                    {imgUrl ? (imageTimestamp ?? "just now") : ""}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-          <div className="text-xs text-white/40 mt-2">
-            {sectionImages.filter(Boolean).length}/{sections.length} images generated
-          </div>
         </div>
       )}
 

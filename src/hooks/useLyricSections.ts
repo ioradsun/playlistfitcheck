@@ -20,7 +20,7 @@ export interface LyricSection {
   sectionIndex: number;
   role: SectionRole;
   label: string;
-  labelSource: "ai" | "heuristic";
+  labelSource: "ai" | "heuristic" | "user";
   startSec: number;
   endSec: number;
   lines: LyricSectionLine[];
@@ -211,7 +211,7 @@ export function useLyricSections(
     const cdSections = cinematicDirection?.sections;
     if (Array.isArray(cdSections)) {
       for (const s of cdSections) {
-        const label = (s as any).structuralLabel;
+        const label = s.structuralLabel;
         if (typeof label === "string" && label.trim()) {
           aiLabelMap.set(s.sectionIndex, label.trim());
         }
