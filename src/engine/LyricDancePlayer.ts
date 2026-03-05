@@ -4447,14 +4447,26 @@ export class LyricDancePlayer {
         }
       }
       // Pass 3: if still nothing, find closest exiting group (exit animation visible)
+      // ONLY if primaryLineIndex hasn't yet advanced to a new line with its own group.
+      // If the next line already has an actively-speaking group available, skip the exit
+      // of the old group entirely — prevents overlap.
       if (activeGroupIdx === -1) {
-        for (let ri = 0; ri < activeGroups.length; ri++) {
-          const g = groups[activeGroups[ri]];
-          if (g.lineIndex !== primaryLineIndex) continue;
-          const exitEnd = g.end + g.lingerDuration + g.exitDuration;
-          if (tSec >= g.end && tSec < exitEnd) {
-            activeGroupIdx = activeGroups[ri];
-            break;
+        // Check if any group on the NEXT line is already speaking or about to enter
+        const nextLineHasActiveGroup = activeGroups.some(ri => {
+          const g = groups[ri];
+          if (g.lineIndex === primaryLineIndex) return false;
+          const entryPad = g.words.length * (g.staggerDelay ?? 0.05) + 0.15;
+          return tSec >= g.start - entryPad;
+        });
+        if (!nextLineHasActiveGroup) {
+          for (let ri = 0; ri < activeGroups.length; ri++) {
+            const g = groups[activeGroups[ri]];
+            if (g.lineIndex !== primaryLineIndex) continue;
+            const exitEnd = g.end + g.lingerDuration + g.exitDuration;
+            if (tSec >= g.end && tSec < exitEnd) {
+              activeGroupIdx = activeGroups[ri];
+              break;
+            }
           }
         }
       }
