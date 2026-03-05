@@ -44,6 +44,50 @@ const EMOJIS = [
 
 type EmojiKey = typeof EMOJIS[number]['key'];
 
+function CommentReactPicker({
+  commentId,
+  onPick,
+  sessionReacted,
+  palette,
+}: {
+  commentId: string;
+  onPick: (emoji: string) => void;
+  sessionReacted: Set<string>;
+  palette: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-block">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors"
+      >
+        + react
+      </button>
+      {open && (
+        <span
+          className="absolute bottom-full left-0 mb-1 flex items-center gap-1 rounded-lg px-1.5 py-1 z-50"
+          style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          {EMOJIS.map(({ key, symbol }) => {
+            const reacted = sessionReacted.has(`${commentId}-${key}`);
+            return (
+              <button
+                key={key}
+                onClick={() => { onPick(key); setOpen(false); }}
+                className="text-base px-0.5 hover:scale-125 transition-transform active:scale-95"
+                style={{ opacity: reacted ? 0.4 : 1 }}
+              >
+                {symbol}
+              </button>
+            );
+          })}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, sections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange }: ReactionPanelProps) {
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);

@@ -513,11 +513,45 @@ export type Database = {
           },
         ]
       }
+      lyric_dance_comment_reactions: {
+        Row: {
+          comment_id: string
+          created_at: string | null
+          emoji: string
+          id: string
+          session_id: string | null
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string | null
+          emoji: string
+          id?: string
+          session_id?: string | null
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string | null
+          emoji?: string
+          id?: string
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lyric_dance_comment_reactions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_dance_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lyric_dance_comments: {
         Row: {
           dance_id: string
           id: string
+          is_pinned: boolean | null
           line_index: number | null
+          parent_comment_id: string | null
           session_id: string | null
           submitted_at: string
           text: string
@@ -526,7 +560,9 @@ export type Database = {
         Insert: {
           dance_id: string
           id?: string
+          is_pinned?: boolean | null
           line_index?: number | null
+          parent_comment_id?: string | null
           session_id?: string | null
           submitted_at?: string
           text: string
@@ -535,7 +571,9 @@ export type Database = {
         Update: {
           dance_id?: string
           id?: string
+          is_pinned?: boolean | null
           line_index?: number | null
+          parent_comment_id?: string | null
           session_id?: string | null
           submitted_at?: string
           text?: string
@@ -547,6 +585,13 @@ export type Database = {
             columns: ["dance_id"]
             isOneToOne: false
             referencedRelation: "shareable_lyric_dances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lyric_dance_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_dance_comments"
             referencedColumns: ["id"]
           },
         ]
