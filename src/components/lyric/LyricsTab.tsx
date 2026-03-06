@@ -173,7 +173,7 @@ export function LyricsTab({
 
       try {
         // Only compress if over 25MB (only needed for fallback multipart path)
-        console.log(`[Transcribe Debug] ${ms()} compression check (threshold=${(MAX_RAW_UPLOAD_BYTES/1024/1024).toFixed(0)}MB, file=${(file.size/1024/1024).toFixed(2)}MB)`);
+        
         let uploadFile: File;
         if (file.size > MAX_RAW_UPLOAD_BYTES) {
           try {
