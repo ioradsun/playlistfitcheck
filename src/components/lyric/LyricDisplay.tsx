@@ -316,7 +316,7 @@ export function LyricDisplay({
   savedId,
   fmlyLines: initFmlyLines,
   versionMeta: initVersionMeta,
-  debugData,
+  // debugData removed
   initialBeatGrid,
   initialWaveform,
   initialRenderData,
