@@ -393,13 +393,13 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   , [projectId, title, notes, mixes, markerStart, markerEnd]);
 
   useEffect(() => {
-    if (!autosaveData || !projectId || !user) return;
+    if (!autosaveData || !projectId || !user || restoringAudio) return;
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
       saveProject(false);
     }, 2000);
     return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
-  }, [autosaveData, projectId, saveProject, user]);
+  }, [autosaveData, projectId, saveProject, user, restoringAudio]);
 
   const updateMix = useCallback((id: string, updates: Partial<AudioMix>) => {
     setMixes((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
