@@ -1525,7 +1525,7 @@ export function LyricDisplay({
         <div className="flex flex-col lg:flex-row gap-4 items-start">
           {/* LEFT — Lyrics editor */}
           <div className="flex-1 min-w-0 w-full space-y-3">
-          <div className="glass-card rounded-xl p-4 space-y-1">
+          <div className="glass-card rounded-xl p-4 flex flex-col space-y-1" style={{ maxHeight: "calc(100vh - 260px)" }}>
             {activeLines.length > 0 && (
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] text-muted-foreground">
