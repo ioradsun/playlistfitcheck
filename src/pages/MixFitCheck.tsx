@@ -358,7 +358,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         id: projectId,
         title,
         notes,
-        mixes: mixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments })),
+        mixes: mixes.map((m: any) => ({ name: m.name, rank: m.rank, comments: m.comments, audio_url: m.audio_url })),
         markerStart,
         markerEnd,
         createdAt: new Date().toISOString(),
@@ -368,7 +368,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       setRefreshKey((k) => k + 1);
       onProjectSaved?.();
       if (showToast) {
-        toast.success("Project saved — audio files are not stored, only filenames, rankings & notes.");
+        toast.success("Project saved.");
       }
     } catch {
       if (showToast) toast.error("Failed to save");
