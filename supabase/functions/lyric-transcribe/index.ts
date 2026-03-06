@@ -602,9 +602,7 @@ serve(async (req) => {
     let referenceLyrics: string | undefined;
 
     if (contentType.includes("multipart/form-data")) {
-      console.log(`[Transcribe Debug] ${ms()} parsing multipart form data`);
       const form = await req.formData();
-      console.log(`[Transcribe Debug] ${ms()} formData parsed`);
       const audio = form.get("audio");
       analysisModel = String(form.get("analysisModel") || "");
       transcriptionModel = String(form.get("transcriptionModel") || "");
