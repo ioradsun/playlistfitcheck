@@ -417,16 +417,15 @@ export function SongFitFeed() {
                   <div className="h-2.5 w-16 rounded bg-muted" />
                 </div>
               </div>
-              {/* Media skeleton — matches tier 1 card (310px) */}
+              {/* Media skeleton — reuses shared lyric-dance cover */}
               <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ height: 310 }}>
-                <div className="absolute inset-0 bg-gradient-to-br from-zinc-800/60 via-zinc-900/60 to-black/60" />
-                <div className="absolute left-3 bottom-3 right-3 space-y-1.5">
-                  <div className="h-3.5 w-40 rounded bg-white/10" />
-                  <div className="h-2.5 w-28 rounded bg-white/[0.06]" />
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="h-14 w-14 rounded-full bg-white/[0.06]" />
-                </div>
+                <LyricDanceCover
+                  songName=""
+                  artistName=""
+                  avatarUrl={null}
+                  initial=""
+                  waiting
+                />
               </div>
               {/* Action row skeleton */}
               <div className="flex items-center gap-3 px-3 py-2">
