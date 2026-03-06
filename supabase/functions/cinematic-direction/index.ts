@@ -645,7 +645,7 @@ async function callWithRetry(
 
   if (result.ok && missingCreative.length === 0) return result.value;
 
-  console.warn("[cinematic-direction] Errors on first attempt, retrying:", allErrors);
+  
   const retryMessages = [
     ...messages,
     { role: "assistant", content: JSON.stringify(first) },
