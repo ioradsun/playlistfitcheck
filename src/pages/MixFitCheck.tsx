@@ -22,7 +22,7 @@ interface MixFitCheckProps {
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void; rightContent?: React.ReactNode } | null) => void;
-  onSavedId?: (id: string) => void;
+  onSavedId?: (id: string, projectData?: MixProjectData) => void;
   onOptimisticItem?: (item: RecentItem) => void;
 }
 
@@ -172,8 +172,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     setMixes(decodedMixes);
     if (decodedMixes[0]?.waveform) setMarkerEnd(decodedMixes[0].waveform.duration);
 
-    try {
-      await save({
+    const projectData: MixProjectData = {
         id: newId,
         title: t,
         notes: n,
@@ -182,9 +181,11 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         markerEnd: decodedMixes[0]?.waveform?.duration ?? 10,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      });
+      };
+    try {
+      await save(projectData);
       onProjectSaved?.();
-      onSavedId?.(newId);
+      onSavedId?.(newId, projectData);
     } catch (e) {
       console.error("Failed initial save for MixFit project:", e);
     }
