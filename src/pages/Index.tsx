@@ -242,24 +242,39 @@ const Index = () => {
   }, [activeTab, projectId, authLoading, user?.id, loadedLyric?.id]);
 
   useEffect(() => {
-    if (!projectId || projectLoadedRef.current === projectId || !user) return;
+    if (!projectId) return;
     const tab = activeTab;
-    
+
     // Lyric projects are handled by the dedicated lyric loader effect
     if (tab === "lyric") return;
-    
-    // If data was already committed by handleLoadProject (sidebar click), skip the fetch
+
+    // Wait for auth to settle before any guarded fetch
+    if (authLoading) return;
+    if (!user) {
+      setIsFetchingProject(false);
+      return;
+    }
+
     const alreadyLoaded =
       (tab === "mix"      && loadedMixProject?.id === projectId) ||
       (tab === "profit"   && profitSavedReport?.reportId === projectId) ||
       (tab === "hitfit"   && !!loadedHitFitAnalysis) ||
       (tab === "vibefit"  && !!loadedVibeFitResult) ||
       (tab === "playlist" && !!result);
-    if (alreadyLoaded) {
-      projectLoadedRef.current = projectId;
+
+    // Only skip when ref and concrete state both agree this project is loaded
+    if (projectLoadedRef.current === projectId && alreadyLoaded) {
+      setIsFetchingProject(false);
       return;
     }
-    projectLoadedRef.current = projectId;
+
+    // If data was already committed by handleLoadProject (sidebar click), skip fetch
+    if (alreadyLoaded) {
+      projectLoadedRef.current = projectId;
+      setIsFetchingProject(false);
+      return;
+    }
+
     setIsFetchingProject(true);
     setProjectMissing(false);
 
@@ -291,6 +306,7 @@ const Index = () => {
         navigate(pathMap[tab] || "/CrowdFit", { replace: true });
         return;
       }
+      projectLoadedRef.current = projectId;
       setIsFetchingProject(false);
       // For profit, reshape data to match expected format
       if (tab === "profit" && data.blueprint_json) {
@@ -307,7 +323,7 @@ const Index = () => {
         handleLoadProject(tab, data);
       }
     })();
-  }, [projectId, activeTab, user?.id]);
+  }, [projectId, activeTab, authLoading, user?.id]);
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
