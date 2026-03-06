@@ -35,11 +35,9 @@ interface Props {
   onRefresh: () => void;
   isBillboard?: boolean;
   signalData?: { total: number; replay_yes: number; saves_count?: number; signal_velocity?: number };
-  isActive?: boolean;
-  onPlay?: () => void;
 }
 
-export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRefresh, isBillboard, signalData, isActive = false, onPlay }: Props) {
+export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRefresh, isBillboard, signalData }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
   const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
@@ -66,10 +64,6 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const isOwnPost = user?.id === post.user_id;
   const isBattlePost = !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
   const CAPTION_MAX = 300;
-  const [tier, setTier] = useState<1 | 3>(1);
-  const [isNearViewport, setIsNearViewport] = useState(false);
-  const viewportRef = useRef<HTMLDivElement>(null);
-
 
   // Impression tracking via IntersectionObserver
   useEffect(() => {
@@ -88,26 +82,6 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
     observer.observe(el);
     return () => observer.disconnect();
   }, [post.id]);
-
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsNearViewport(entry.isIntersecting),
-      { rootMargin: "200px" },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!isActive && tier === 3) setTier(1);
-  }, [isActive, tier]);
-
-  const handlePlayTap = () => {
-    onPlay?.();
-    setTier(3);
-  };
 
   const handleSaveEdit = async () => {
     setSaving(true);
@@ -293,43 +267,12 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         </DropdownMenu>
       </div>
 
-      {/* Tiered media rendering */}
-      <div
-        ref={viewportRef}
-        className={cn(
-          "transition-all duration-500",
-          isScored && "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.25)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]"
-        )}
-      >
-        {tier === 1 ? (
-          <div className="relative mx-3 rounded-xl overflow-hidden bg-black" style={{ minHeight: 300, height: 300 }}>
-            {post.album_art_url ? (
-              <img
-                src={post.album_art_url}
-                alt={post.track_title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-zinc-800 via-zinc-900 to-black" />
-            )}
-            <div className="absolute inset-0 bg-black/35" />
-            <div className="absolute left-3 bottom-3 right-3">
-              <p className="text-white font-semibold text-sm truncate">{post.track_title}</p>
-              <p className="text-white/75 text-xs truncate">{(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || displayName}</p>
-            </div>
-            <button
-              onClick={handlePlayTap}
-              className="absolute inset-0 flex items-center justify-center"
-              aria-label={`Play ${post.track_title}`}
-            >
-              <span className="h-14 w-14 rounded-full bg-white/20 backdrop-blur-sm text-white flex items-center justify-center text-xl">▶</span>
-            </button>
-            {isNearViewport && (
-              <span className="absolute top-2 right-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white/80 font-mono">Ready</span>
-            )}
-          </div>
-        ) : post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
+      {/* Music Embed Player or Lyric Dance Card */}
+      <div className={cn(
+        "transition-all duration-500",
+        isScored && "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.25)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]"
+      )}>
+        {post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
           <InlineLyricDance
             lyricDanceId={post.lyric_dance_id}
             lyricDanceUrl={post.lyric_dance_url}
