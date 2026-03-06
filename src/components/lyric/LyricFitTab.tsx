@@ -697,7 +697,7 @@ export function LyricFitTab({
                     .eq("id", resolvedDanceId);
                 } else {
                   // Create draft row
-                  console.log("[Pipeline] Creating draft dance row for image generation");
+                  
                   const mainLines = lyricData!.lines.filter((l: any) => l.tag !== "adlib");
 
                   // Upload audio
