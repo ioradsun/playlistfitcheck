@@ -1564,8 +1564,7 @@ export function LyricDisplay({
             {/* v3.7: scroll height anchored to last element's start time so Outro adlibs are reachable */}
             <div
               ref={lyricsContainerRef}
-              className="overflow-y-auto space-y-0.5"
-              style={{ maxHeight: "45vh" }}
+              className="overflow-y-auto space-y-0.5 flex-1 min-h-0 pb-6"
             >
               {activeLines.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
