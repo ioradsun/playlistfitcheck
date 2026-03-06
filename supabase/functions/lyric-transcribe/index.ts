@@ -62,7 +62,7 @@ async function runScribe(
     headers: { "xi-api-key": apiKey },
     body: form,
   });
-  console.log(`[Transcribe Debug] [scribe] ${sms()} ElevenLabs responded status=${res.status}`);
+  
 
   if (!res.ok) {
     const errText = await res.text();
