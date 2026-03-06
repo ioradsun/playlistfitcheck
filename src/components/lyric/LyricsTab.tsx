@@ -189,8 +189,6 @@ export function LyricsTab({
           uploadFile = file;
         }
 
-        console.log(`[Transcribe Debug] ${ms()} starting fetch to lyric-transcribe`);
-        console.log(`[LyricUpload] FETCH START (elapsed ${(performance.now() - t0).toFixed(0)}ms)`);
 
         let response: Response;
         if (storageAudioUrl) {
