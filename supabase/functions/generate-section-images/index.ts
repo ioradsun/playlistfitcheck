@@ -220,7 +220,7 @@ serve(async (req) => {
 
     const existingImages = danceRow?.section_images;
     if (!force && Array.isArray(existingImages) && existingImages.length > 0 && existingImages.every((url: string) => !!url)) {
-      console.log(`[section-images] Images already exist for ${lyric_dance_id} — returning cached (pass force:true to regenerate)`);
+      
       return new Response(
         JSON.stringify({ success: true, cached: true, section_images: existingImages, urls: existingImages }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
