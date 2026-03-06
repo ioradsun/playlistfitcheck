@@ -476,7 +476,7 @@ export function LyricFitTab({
       
       return true;
     } catch (e) {
-      console.warn("[persistRenderData] exception attempt", attempt, e);
+      
       if (attempt < 3) return persistRenderData(id, payload, attempt + 1);
       return false;
     }
