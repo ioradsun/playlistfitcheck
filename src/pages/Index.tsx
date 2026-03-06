@@ -38,7 +38,10 @@ const SongFitTab = lazy(() => SongFitTabImport().then((module) => ({ default: mo
 const HookFitTab = lazy(() => HookFitTabImport().then((module) => ({ default: module.HookFitTab })));
 const DreamFitTab = lazy(() => DreamFitTabImport().then((module) => ({ default: module.DreamFitTab })));
 const VibeFitTab = lazy(() => VibeFitTabImport().then((module) => ({ default: module.VibeFitTab })));
-const AppSidebar = lazy(() => AppSidebarImport().then((module) => ({ default: module.AppSidebar })));
+const AppSidebar = lazy(() => AppSidebarImport().then((module) => {
+  const Comp = module.AppSidebar;
+  return { default: (props: any) => <Comp {...props} /> };
+}));
 
 interface AnalysisResult {
   output: HealthOutput;
