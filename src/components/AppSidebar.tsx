@@ -343,17 +343,15 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
 
   const handleRecentClick = (item: RecentItem) => {
     const tool = TOOLS.find(t => t.value === item.type);
-
-    // IMPORTANT: do NOT trigger sidebar tab-change navigation first.
-    // It can briefly route to /LyricFit (new project) before /LyricFit/:id.
-    // Load + navigate directly to the concrete project route.
-    onLoadProject?.(item.type, item.rawData);
-
     if (tool) {
-      const targetPath = `${tool.path}/${item.id}`;
-      prefetchNavigationTarget(targetPath, { userId: user?.id, itemType: item.type, itemId: item.id });
-      navigate(targetPath);
+      // Prefetch the target route chunk before data lands
+      prefetchNavigationTarget(`${tool.path}/${item.id}`, { userId: user?.id, itemType: item.type, itemId: item.id });
     }
+
+    // onLoadProject (handleLoadProject in Index) owns both state commit AND navigation.
+    // Do NOT call navigate() here — it races with handleLoadProject's internal navigate
+    // and creates a duplicate history entry.
+    onLoadProject?.(item.type, item.rawData);
 
     closeMobileIfNeeded();
   };
