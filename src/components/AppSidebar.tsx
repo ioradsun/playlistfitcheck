@@ -345,15 +345,18 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
 
   const handleRecentClick = (item: RecentItem) => {
     const tool = TOOLS.find(t => t.value === item.type);
-    // Fire onLoadProject SYNCHRONOUSLY before navigate so Index.tsx
-    // sets data atomically before React processes the route change.
-    onTabChange?.(item.type);
+
+    // IMPORTANT: do NOT trigger sidebar tab-change navigation first.
+    // It can briefly route to /LyricFit (new project) before /LyricFit/:id.
+    // Load + navigate directly to the concrete project route.
     onLoadProject?.(item.type, item.rawData);
+
     if (tool) {
       const targetPath = `${tool.path}/${item.id}`;
       prefetchNavigationTarget(targetPath, { userId: user?.id, itemType: item.type, itemId: item.id });
       navigate(targetPath);
     }
+
     closeMobileIfNeeded();
   };
 
