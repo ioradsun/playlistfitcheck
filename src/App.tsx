@@ -81,7 +81,7 @@ const App = () => (
             <Route path="/*" element={
               <AuthProvider>
                 <SiteCopyProvider>
-                <WalletProvider>
+                
                 <SidebarProvider defaultOpen={true}>
                   <Routes>
                     <Route path="/" element={<Index />} />
