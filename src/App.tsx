@@ -15,8 +15,7 @@ import Index from "./pages/Index";
 
 import About from "./pages/About";
 
-const Admin = lazy(() => import("./pages/Admin"));
-const FitWidget = lazy(() => import("@/components/FitWidget").then((module) => ({ default: module.FitWidget })));
+import { FitWidget } from "@/components/FitWidget";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import PublicProfile from "./pages/PublicProfile";
@@ -26,10 +25,13 @@ import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import ArtistStage from "./pages/ArtistStage";
 import SeoPages from "./pages/SeoPages";
+import { AdminPageImport, ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
+
+const Admin = lazy(AdminPageImport);
 // Lazy-load ShareableHook — standalone page, no need in main bundle
-const ShareableHook = lazy(() => import("./pages/ShareableHook"));
+const ShareableHook = lazy(ShareableHookImport);
 // Lazy-load ShareableLyricDance — standalone page
-const ShareableLyricDance = lazy(() => import("./pages/ShareableLyricDance"));
+const ShareableLyricDance = lazy(ShareableLyricDanceImport);
 
 const queryClient = new QueryClient();
 
