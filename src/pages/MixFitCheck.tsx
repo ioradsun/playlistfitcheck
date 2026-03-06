@@ -47,6 +47,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   const [needsReupload, setNeedsReupload] = useState(false);
   const [playheadTime, setPlayheadTime] = useState(0);
   const rafRef = useRef<number | null>(null);
+  const loadSessionRef = useRef(0);
   const markerStartRef = useRef(markerStart);
   const markerEndRef = useRef(markerEnd);
   markerStartRef.current = markerStart;
@@ -80,6 +81,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   // (initialProject effect is below handleLoadProject)
 
   const resetProject = useCallback(() => {
+    // Invalidate any in-flight async project hydration before resetting
+    loadSessionRef.current += 1;
     stop();
     setProjectId(null);
     setTitle("");
@@ -96,6 +99,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       toast.error(mixQuota.tier === "anonymous" ? "Sign up for more uses" : "Invite an artist to unlock unlimited");
       return;
     }
+    // Cancel any stale async load before creating fresh project state
+    loadSessionRef.current += 1;
     const newId = crypto.randomUUID();
     setProjectId(newId);
     setTitle(t);
@@ -154,7 +159,12 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   }, [decodeFile, mixQuota, save, onProjectSaved, onSavedId, onOptimisticItem]);
 
   const handleLoadProject = useCallback(async (project: MixProjectData) => {
+    const loadSession = ++loadSessionRef.current;
+    const isStale = () => loadSessionRef.current !== loadSession;
+
     stop();
+    if (isStale()) return;
+
     setProjectId(project.id);
     setTitle(project.title);
     setNotes(project.notes);
@@ -165,10 +175,12 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     const restoredMixes: AudioMix[] = [];
     let anyMissing = false;
     for (const m of project.mixes) {
+      if (isStale()) return;
       const cached = sessionAudio.get("mix", `${project.id}::${m.name}`);
       if (cached) {
         try {
           const { buffer, waveform } = await decodeFile(cached);
+          if (isStale()) return;
           restoredMixes.push({
             id: crypto.randomUUID(),
             name: m.name,
@@ -192,6 +204,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         comments: m.comments,
       });
     }
+
+    if (isStale()) return;
     setMixes(restoredMixes);
     setNeedsReupload(anyMissing && project.mixes.length > 0);
 
