@@ -296,7 +296,7 @@ export function SongFitFeed() {
       .then(({ count }) => {
         const everPosted = (count ?? 0) > 0;
         setHasEverPosted(everPosted);
-        if (!everPosted) setComposerUnlocked(true); // first-timer: skip gate
+        if (!everPosted || isAdmin) setComposerUnlocked(true);
       });
   }, [user]);
 
