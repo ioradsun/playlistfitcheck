@@ -4,7 +4,7 @@ import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink,
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { InlineLyricDance } from "./InlineLyricDance";
-import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
+import { InlineBattleFeed } from "./InlineBattleFeed";
 import { InlineBattleFeed } from "./InlineBattleFeed";
 import { SubmissionBadge } from "./SubmissionBadge";
 import { useAuth } from "@/hooks/useAuth";
