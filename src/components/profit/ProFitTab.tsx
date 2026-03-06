@@ -27,7 +27,7 @@ interface ProFitTabProps {
   onOptimisticItem?: (item: RecentItem) => void;
 }
 
-export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved, onHeaderProject, onSavedId }: ProFitTabProps = {}) => {
+export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved, onHeaderProject, onSavedId, onOptimisticItem }: ProFitTabProps = {}) => {
   const [view, setView] = useState<View>("landing");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportState | null>(null);
