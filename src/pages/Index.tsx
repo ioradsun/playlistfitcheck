@@ -323,7 +323,7 @@ const Index = () => {
         handleLoadProject(tab, data);
       }
     })();
-  }, [projectId, activeTab, authLoading, user?.id, loadedMixProject?.id, profitSavedReport?.reportId, loadedHitFitAnalysis, loadedVibeFitResult, result, handleLoadProject, navigate]);
+  }, [projectId, activeTab, authLoading, user?.id]);
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
