@@ -1,12 +1,15 @@
-import type { HTMLAttributes } from "react";
+import { forwardRef, type HTMLAttributes } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type Variant = "new" | "existing";
 
-const S = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
-  <Skeleton className={cn("animate-none", className)} {...props} />
+const S = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <Skeleton ref={ref} className={cn("animate-none", className)} {...props} />
+  )
 );
+S.displayName = "S";
 
 const PostCardSkeleton = () => (
   <div className="border-b border-border/40">
