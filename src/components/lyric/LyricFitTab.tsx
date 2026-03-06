@@ -461,7 +461,7 @@ export function LyricFitTab({
         .select("id")
         .maybeSingle();
       if (error) {
-        console.warn("[persistRenderData] error attempt", attempt, error.message);
+        
         if (attempt < 3) return persistRenderData(id, payload, attempt + 1);
         return false;
       }
