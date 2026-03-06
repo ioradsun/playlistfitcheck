@@ -113,7 +113,7 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
 }
 
 async function generateImage(prompt: string, apiKey: string): Promise<string | null> {
-  console.log(`[section-images] Generating image with prompt: ${prompt.slice(0, 120)}...`);
+  
 
   const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
