@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle } from "react";
 import { Volume2, VolumeX, Maximize2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
@@ -53,6 +54,7 @@ function InlineLyricDanceInner(
   const [fetchError, setFetchError] = useState(false);
   const [muted, setMuted] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
+  const [showCover, setShowCover] = useState(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -141,7 +143,12 @@ function InlineLyricDanceInner(
 
   useEffect(() => {
     if (!player || !playerReady) return;
-    if (isVisible) player.play(); else player.pause();
+    if (isVisible) {
+      player.play();
+      setShowCover(false);
+    } else {
+      player.pause();
+    }
   }, [isVisible, playerReady, player]);
 
   // Mute sync
@@ -163,8 +170,11 @@ function InlineLyricDanceInner(
     );
   }
 
+  const isWaitingForPlayer =
+    loading || !fetchedData || !fetchedData.cinematic_direction || Array.isArray(fetchedData.cinematic_direction);
+
   return (
-    <div className="w-full overflow-hidden bg-black rounded-xl flex flex-col relative">
+    <div className="w-full overflow-hidden bg-black rounded-xl flex flex-col relative" style={{ height: 354 }}>
       {/* Canvas area — matches tier 1 height exactly */}
       <div ref={containerRef}
         className="relative w-full overflow-hidden cursor-pointer"
@@ -177,15 +187,34 @@ function InlineLyricDanceInner(
           style={{ display: "none" }} />
 
         {/* Shared cover — same as shareable page */}
-        {(loading || (!playerReady && !fetchError)) && (
-          <LyricDanceCover
-            songName={songTitle}
-            artistName={artistName || data?.artist_name || ""}
-            avatarUrl={null}
-            initial={(artistName || songTitle || "♪")[0]?.toUpperCase()}
-            waiting
-          />
-        )}
+        <AnimatePresence>
+          {(showCover || isWaitingForPlayer) && (
+            <motion.div
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="absolute inset-0"
+            >
+              <LyricDanceCover
+                songName={songTitle}
+                artistName={artistName || fetchedData?.artist_name || ""}
+                avatarUrl={null}
+                initial={(artistName || songTitle || "♪")[0]?.toUpperCase()}
+                waiting={isWaitingForPlayer}
+                onListen={(e) => {
+                  e.stopPropagation();
+                  setShowCover(false);
+                  if (player) {
+                    player.setMuted(false);
+                    player.seek(0);
+                    player.play();
+                  }
+                  setMuted(false);
+                }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {playerReady && (
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"

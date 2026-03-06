@@ -255,78 +255,84 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
     [data?.palette],
   );
 
-  if (!playerReady || !data) return null;
+  const isReady = playerReady && !!data;
 
   return (
-    <div>
-      {/* Progress bar */}
-      <div className="w-full h-1 cursor-pointer group relative" style={{ background: "rgba(255,255,255,0.05)" }}
-        onClick={(e) => {
-          if (!player) return;
-          const rect = e.currentTarget.getBoundingClientRect();
-          const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-          const lines = data.lyrics;
-          const songStart = lines.length > 0 ? Math.max(0, (lines[0] as any).start - 0.5) : 0;
-          const songEnd = lines.length > 0 ? (lines[lines.length - 1] as any).end + 1 : 0;
-          player.seek(songStart + ratio * (songEnd - songStart));
-        }}
-      >
-        <div className="absolute left-0 top-0 h-full transition-none"
-          style={{ width: `${progress * 100}%`, background: palette[1] ?? "#a855f7", opacity: 0.6 }} />
-      </div>
+    <div style={{ minHeight: 44 }}>
+      {isReady ? (
+        <>
+          {/* Progress bar */}
+          <div className="w-full h-1 cursor-pointer group relative" style={{ background: "rgba(255,255,255,0.05)" }}
+            onClick={(e) => {
+              if (!player || !data) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              const lines = data.lyrics;
+              const songStart = lines.length > 0 ? Math.max(0, (lines[0] as any).start - 0.5) : 0;
+              const songEnd = lines.length > 0 ? (lines[lines.length - 1] as any).end + 1 : 0;
+              player.seek(songStart + ratio * (songEnd - songStart));
+            }}
+          >
+            <div className="absolute left-0 top-0 h-full transition-none"
+              style={{ width: `${progress * 100}%`, background: palette[1] ?? "#a855f7", opacity: 0.6 }} />
+          </div>
 
-      {/* Now-playing row */}
-      <div className="flex items-center gap-2 px-3 py-2" style={{ background: "rgba(0,0,0,0.85)" }}
-        onClick={(e) => e.stopPropagation()}>
-        <button
-          className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.07] text-left overflow-hidden min-w-0 group hover:border-white/15 transition-all"
-          style={{ background: "rgba(255,255,255,0.02)" }}
-          onClick={() => setReactionPanelOpen(true)}
-        >
-          {activeLine ? (
-            <>
-              <div className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }} />
-              <span className="text-[10px] font-mono text-white/45 truncate group-hover:text-white/65 transition-colors">
-                {activeLine.text}
-              </span>
-            </>
-          ) : (
-            <span className="text-[10px] font-mono text-white/20 truncate">
-              {lyricSections.isReady ? "listening..." : "..."}
-            </span>
-          )}
-        </button>
+          {/* Now-playing row */}
+          <div className="flex items-center gap-2 px-3 py-2" style={{ background: "rgba(0,0,0,0.85)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <button
+              className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.07] text-left overflow-hidden min-w-0 group hover:border-white/15 transition-all"
+              style={{ background: "rgba(255,255,255,0.02)" }}
+              onClick={() => setReactionPanelOpen(true)}
+            >
+              {activeLine ? (
+                <>
+                  <div className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                    style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }} />
+                  <span className="text-[10px] font-mono text-white/45 truncate group-hover:text-white/65 transition-colors">
+                    {activeLine.text}
+                  </span>
+                </>
+              ) : (
+                <span className="text-[10px] font-mono text-white/20 truncate">
+                  {lyricSections.isReady ? "listening..." : "..."}
+                </span>
+              )}
+            </button>
 
-        <button
-          className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
-          onClick={() => setReactionPanelOpen(true)}
-        >
-          <span className="text-[10px] font-mono uppercase tracking-wider">React</span>
-          <span className="text-[9px] opacity-60">↑</span>
-        </button>
-      </div>
+            <button
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
+              onClick={() => setReactionPanelOpen(true)}
+            >
+              <span className="text-[10px] font-mono uppercase tracking-wider">React</span>
+              <span className="text-[9px] opacity-60">↑</span>
+            </button>
+          </div>
 
-      <ReactionPanel
-        displayMode="embedded"
-        isOpen={reactionPanelOpen}
-        onClose={handlePanelClose}
-        danceId={data.id}
-        activeLine={activeLine}
-        allLines={lyricSections.allLines}
-        audioSections={audioSections}
-        currentTimeSec={currentTimeSec}
-        palette={palette}
-        onSeekTo={(sec) => player?.seek(sec)}
-        player={player}
-        durationSec={durationSec}
-        reactionData={reactionData}
-        onReactionDataChange={setReactionData}
-        onReactionFired={(emoji) => player?.fireComment(emoji)}
-        engagementMode={engagementMode}
-        frozenLineIndex={frozenLineIndex}
-        onEngagementStart={handleEngagementStart}
-      />
+          <ReactionPanel
+            displayMode="embedded"
+            isOpen={reactionPanelOpen}
+            onClose={handlePanelClose}
+            danceId={data.id}
+            activeLine={activeLine}
+            allLines={lyricSections.allLines}
+            audioSections={audioSections}
+            currentTimeSec={currentTimeSec}
+            palette={palette}
+            onSeekTo={(sec) => player?.seek(sec)}
+            player={player}
+            durationSec={durationSec}
+            reactionData={reactionData}
+            onReactionDataChange={setReactionData}
+            onReactionFired={(emoji) => player?.fireComment(emoji)}
+            engagementMode={engagementMode}
+            frozenLineIndex={frozenLineIndex}
+            onEngagementStart={handleEngagementStart}
+          />
+        </>
+      ) : (
+        <div style={{ height: 44, background: "rgba(0,0,0,0.85)" }} />
+      )}
     </div>
   );
 });
