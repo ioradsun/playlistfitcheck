@@ -61,6 +61,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   // Upload/decode progress
   const [isCreating, setIsCreating] = useState(false);
   const [processingFile, setProcessingFile] = useState<{ name: string; index: number; total: number } | null>(null);
+  // Restoring audio from saved project URLs
+  const [restoringAudio, setRestoringAudio] = useState(false);
 
   // Animate playhead
   useEffect(() => {
@@ -201,6 +203,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     setNotes(project.notes);
     setMarkerStart(project.markerStart);
     setMarkerEnd(project.markerEnd);
+    setRestoringAudio(true);
 
     // Try to restore audio from session cache, then from stored URLs
     const restoredMixes: (AudioMix & { audio_url?: string })[] = [];
@@ -273,6 +276,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
 
     if (isStale()) return;
     setMixes(restoredMixes);
+    setRestoringAudio(false);
     setNeedsReupload(anyMissing && project.mixes.length > 0);
 
     // Update marker end from first decoded mix
@@ -564,7 +568,17 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       )}
 
       {activeMixes.length === 0 && !needsReupload && mixes.length === 0 && (
-        <p className="text-center py-12 text-[11px] font-mono text-muted-foreground">Upload your first mix to get started</p>
+        restoringAudio ? (
+          <div className="flex items-center justify-center gap-3 py-12">
+            <svg className="animate-spin h-4 w-4 text-primary" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <span className="text-[11px] font-mono text-muted-foreground">Restoring audio…</span>
+          </div>
+        ) : (
+          <p className="text-center py-12 text-[11px] font-mono text-muted-foreground">Upload your first mix to get started</p>
+        )
       )}
 
       <SignUpToSaveBanner />
