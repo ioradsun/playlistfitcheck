@@ -1950,7 +1950,7 @@ export class LyricDancePlayer {
       const fps = this.frameCount / 5;
       this.frameCount = 0;
       if (fps > 0 && fps < 20 && this.playing) {
-        console.warn(`[LyricEngine] low fps: ${fps.toFixed(1)} — quality tier: ${this._qualityTier}`);
+        
       }
     }, 5000);
   }
