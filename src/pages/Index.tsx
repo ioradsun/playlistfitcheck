@@ -816,7 +816,8 @@ const Index = () => {
                       type: "lyric",
                       rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
                     });
-                    navigate(`/LyricFit/${payload.projectId}`, { replace: true });
+                    // Do not navigate here — it remounts LyricFitTab during active transcription.
+                    // Navigation happens on onSavedId after successful transcription.
                   }
                 }}
               />
