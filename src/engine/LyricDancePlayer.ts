@@ -2288,7 +2288,7 @@ export class LyricDancePlayer {
       'editorial-light': 'Cormorant Garamond',
     };
     const fontName = fontMap[typoKey] ?? 'Montserrat';
-    console.log(`[fonts] typography=${typoKey ?? 'default'} → loading "${fontName}"`);
+    
 
     try {
       // Inject Google Fonts <link> tag if not already present
