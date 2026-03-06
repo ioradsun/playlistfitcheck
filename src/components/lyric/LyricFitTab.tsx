@@ -751,7 +751,7 @@ export function LyricFitTab({
                 });
                 if (error) throw error;
                 const urls = result?.urls || result?.section_images || [];
-                console.log(`[Pipeline] Image generation complete: ${urls.filter(Boolean).length}/${dirSections.length} images`);
+                
 
                 // Persist to saved_lyrics
                 if (savedIdRef.current && urls.length > 0) {
