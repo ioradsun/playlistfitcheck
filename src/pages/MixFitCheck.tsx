@@ -193,11 +193,13 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     setMarkerStart(project.markerStart);
     setMarkerEnd(project.markerEnd);
 
-    // Try to restore audio from session cache
-    const restoredMixes: AudioMix[] = [];
+    // Try to restore audio from session cache, then from stored URLs
+    const restoredMixes: (AudioMix & { audio_url?: string })[] = [];
     let anyMissing = false;
     for (const m of project.mixes) {
       if (isStale()) return;
+
+      // 1. Try session cache first
       const cached = sessionAudio.get("mix", `${project.id}::${m.name}`);
       if (cached) {
         try {
@@ -210,12 +212,44 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
             waveform,
             rank: m.rank,
             comments: m.comments,
+            audio_url: m.audio_url,
           });
           continue;
+        } catch {
+          // fall through
+        }
+      }
+
+      // 2. Try fetching from stored audio URL
+      if (m.audio_url) {
+        try {
+          const response = await fetch(m.audio_url);
+          if (isStale()) return;
+          if (response.ok) {
+            const blob = await response.blob();
+            if (isStale()) return;
+            const file = new File([blob], `${m.name}.mp3`, { type: blob.type || "audio/mpeg" });
+            const { buffer, waveform } = await decodeFile(file);
+            if (isStale()) return;
+            // Cache for session so subsequent navigations are instant
+            sessionAudio.set("mix", `${project.id}::${m.name}`, file, { ttlMs: 30 * 60 * 1000 });
+            restoredMixes.push({
+              id: crypto.randomUUID(),
+              name: m.name,
+              buffer,
+              waveform,
+              rank: m.rank,
+              comments: m.comments,
+              audio_url: m.audio_url,
+            });
+            continue;
+          }
         } catch {
           // fall through to placeholder
         }
       }
+
+      // 3. Placeholder — audio not available
       anyMissing = true;
       restoredMixes.push({
         id: crypto.randomUUID(),
@@ -224,6 +258,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         waveform: { peaks: [], duration: 0 },
         rank: m.rank,
         comments: m.comments,
+        audio_url: m.audio_url,
       });
     }
 
@@ -238,7 +273,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     }
 
     if (anyMissing && project.mixes.length > 0) {
-      toast.info("Project loaded — re-upload audio files to resume playback.");
+      toast.info("Some audio files couldn't be restored — re-upload to resume playback.");
     }
   }, [stop, decodeFile]);
 
