@@ -759,7 +759,7 @@ export function LyricFitTab({
                     .from("saved_lyrics")
                     .update({ section_images: urls as any })
                     .eq("id", savedIdRef.current);
-                  console.log(`[Pipeline] Saved ${urls.filter(Boolean).length} section images to DB`);
+                  
                 }
 
                 setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
