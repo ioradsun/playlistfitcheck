@@ -730,18 +730,35 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                         >
                           {line.text}
                         </span>
-                        {lineCommentCount > 0 && (
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              setExpandedLineIndex(prev => (prev === line.lineIndex ? null : line.lineIndex));
-                            }}
-                            className={`text-[9px] font-mono shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border transition-colors ${isExpanded ? 'border-white/25 text-white/60' : 'border-white/10 text-white/25 hover:text-white/50'}`}
-                          >
-                            <MessageCircle size={9} />
-                            {lineCommentCount}
-                          </button>
-                        )}
+                        {(() => {
+                          // Find top emoji for this line
+                          let topEmoji: string | null = null;
+                          let topCount = 0;
+                          for (const { key, symbol } of EMOJIS) {
+                            const c = reactionData[key]?.line[line.lineIndex] ?? 0;
+                            if (c > topCount) { topCount = c; topEmoji = symbol; }
+                          }
+                          const showBadge = lineCommentCount > 0 || topCount > 0;
+                          if (!showBadge) return null;
+                          return (
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                setExpandedLineIndex(prev => (prev === line.lineIndex ? null : line.lineIndex));
+                              }}
+                              className={`text-[9px] font-mono shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border transition-colors ${isExpanded ? 'border-white/25 text-white/60' : 'border-white/10 text-white/25 hover:text-white/50'}`}
+                            >
+                              {topEmoji && <span className="text-[10px]">{topEmoji}</span>}
+                              {topCount > 0 && <span className="text-white/20">{topCount}</span>}
+                              {lineCommentCount > 0 && (
+                                <>
+                                  <MessageCircle size={9} className="ml-0.5" />
+                                  <span>{lineCommentCount}</span>
+                                </>
+                              )}
+                            </button>
+                          );
+                        })()}
                       </div>
 
                       {/* Expanded comment thread */}
