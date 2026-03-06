@@ -288,8 +288,6 @@ export function LyricsTab({
         }
         await quota.increment();
       } catch (e) {
-        console.log(`[Transcribe Debug] ${ms()} ERROR: ${e instanceof Error ? e.message : String(e)}`);
-        console.error("Transcription error:", e);
         toast.error(e instanceof Error ? e.message : "Failed to transcribe lyrics");
       } finally {
         console.log(`[Transcribe Debug] ${ms()} DONE, setting loading=false`);
