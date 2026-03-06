@@ -202,33 +202,7 @@ function InlineLyricDanceInner(
           </div>
         )}
 
-        {playerReady && showCover && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center"
-            style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
-            onClick={e => e.stopPropagation()}>
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
-                <span className="text-lg font-mono text-white/40">
-                  {(artistName || data?.artist_name || songTitle || "?")[0].toUpperCase()}
-                </span>
-              </div>
-              <div className="text-center px-6">
-                <h3 className="text-lg font-bold text-white leading-tight">{songTitle}</h3>
-                {(artistName || data?.artist_name) && (
-                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mt-1">
-                    {artistName || data?.artist_name}
-                  </p>
-                )}
-              </div>
-              <button onClick={handleListenNow}
-                className="px-6 py-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors mt-2">
-                Listen Now
-              </button>
-            </div>
-          </div>
-        )}
-
-        {!showCover && playerReady && (
+        {playerReady && (
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
             onClick={e => e.stopPropagation()}>
             <span className="text-[10px] font-mono text-white/60 uppercase tracking-wider bg-black/40 backdrop-blur-sm rounded px-1.5 py-0.5">
@@ -248,10 +222,8 @@ function InlineLyricDanceInner(
         )}
       </div>
 
-      {/* Playbar — now-playing + react + progress */}
-      {!showCover && (
-        <InlineLyricDancePlaybar player={player} playerReady={playerReady} data={data} />
-      )}
+      {/* Playbar — always visible */}
+      <InlineLyricDancePlaybar player={player} playerReady={playerReady} data={data} />
     </div>
   );
 }
