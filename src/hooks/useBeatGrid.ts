@@ -124,7 +124,7 @@ export function useBeatGrid(buffer: AudioBuffer | null): {
         vectorSignal.delete();
         beatsVector.delete();
 
-        console.log(`[beat-grid] ${beats.length} beats, BPM: ${Math.round(bpm)}, conf: ${confidence.toFixed(2)}`);
+        
 
         // ═══ Step 2: Audio analysis (onsets, energy, brightness) ═══
         let analysis: AudioAnalysis | undefined;
