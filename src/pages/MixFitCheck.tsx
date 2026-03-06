@@ -99,6 +99,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       toast.error(mixQuota.tier === "anonymous" ? "Sign up for more uses" : "Invite an artist to unlock unlimited");
       return;
     }
+    // Cancel any stale async load before creating fresh project state
+    loadSessionRef.current += 1;
     const newId = crypto.randomUUID();
     setProjectId(newId);
     setTitle(t);
