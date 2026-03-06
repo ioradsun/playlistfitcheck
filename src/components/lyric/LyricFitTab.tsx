@@ -111,6 +111,8 @@ export function LyricFitTab({
   const [songSignature, setSongSignature] = useState<SongSignature | null>(null);
   const [audioSections, setAudioSections] = useState<any[]>([]);
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
+  const cinematicDirectionRef = useRef(cinematicDirection);
+  cinematicDirectionRef.current = cinematicDirection;
   // bgImageUrl and frameState removed — V3 derives from cinematicDirection
 
   const [fitReadiness, setFitReadiness] = useState<FitReadiness>("not_started");
@@ -312,10 +314,11 @@ export function LyricFitTab({
   }, [savedId]);
 
   useEffect(() => {
-    if (!cinematicDirection || !sectionOverrides?.length || !mergedSections.length) return;
-    if (!Array.isArray(cinematicDirection.sections)) return;
+    if (!sectionOverrides?.length || !mergedSections.length) return;
+    const cd = cinematicDirectionRef.current;
+    if (!cd || !Array.isArray(cd.sections)) return;
 
-    const patchedSections = cinematicDirection.sections.map((cs: any, i: number) => {
+    const patchedSections = cd.sections.map((cs: any, i: number) => {
       const merged = mergedSections[i];
       if (!merged) return cs;
       return {
@@ -326,15 +329,14 @@ export function LyricFitTab({
       };
     });
 
-    setCinematicDirection((prev: any) => {
-      if (!prev || !Array.isArray(prev.sections)) return prev;
-      const same = prev.sections.every((sec: any, i: number) => {
-        const next = patchedSections[i];
-        return !!next && sec.startSec === next.startSec && sec.endSec === next.endSec && sec.structuralLabel === next.structuralLabel;
-      });
-      return same ? prev : { ...prev, sections: patchedSections };
+    const same = cd.sections.every((sec: any, i: number) => {
+      const next = patchedSections[i];
+      return !!next && sec.startSec === next.startSec && sec.endSec === next.endSec && sec.structuralLabel === next.structuralLabel;
     });
-  }, [cinematicDirection, sectionOverrides, mergedSections]);
+    if (!same) {
+      setCinematicDirection({ ...cd, sections: patchedSections });
+    }
+  }, [sectionOverrides, mergedSections]);
 
   useEffect(() => {
     if (!savedId || !sectionOverrides) return;
@@ -887,7 +889,7 @@ export function LyricFitTab({
     console.log(`[FitTab Debug] ${fitPipelineMs()} effect [song-defaults-derivation] fired`);
     if (!lines?.length) return;
     // If all data already loaded from DB, skip pipeline entirely
-    if (renderData && beatGrid && cinematicDirection) {
+    if (renderData && beatGrid && cinematicDirectionRef.current) {
       pipelineTriggeredRef.current = true;
       setGenerationStatus({ beatGrid: "done", renderData: "done", cinematicDirection: "done", sectionImages: "done" });
       return;
@@ -898,7 +900,7 @@ export function LyricFitTab({
       startSongDefaultsDerivation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, pipelineRetryCount, startSongDefaultsDerivation, renderData, beatGrid, cinematicDirection, fitPipelineMs]);
+  }, [lines, pipelineRetryCount, startSongDefaultsDerivation, renderData, beatGrid, fitPipelineMs]);
 
   useEffect(() => {
     console.log(`[FitTab Debug] ${fitPipelineMs()} effect [fit-readiness-from-generation-status] fired`);
