@@ -64,11 +64,14 @@ export function useAudioProject(config: UseAudioProjectConfig) {
         const storagePath = getUnifiedStoragePath(user.id, config.tool, projectId, file.name);
         const audioUrl = await uploadAudioFile(storagePath, file);
 
-        const stubRow = {
+        const stubRow: Record<string, unknown> = {
           id: projectId,
           ...config.buildStubRow({ projectId, file, audioUrl, userId: user.id }),
-          audio_url: audioUrl,
         };
+        // Only include audio_url if the table supports it
+        if (config.includeAudioUrl !== false) {
+          stubRow.audio_url = audioUrl;
+        }
 
         const { error: dbError } = await supabase.from(config.dbTable as any).insert(stubRow as any);
         if (dbError) throw dbError;
