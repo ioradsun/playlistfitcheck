@@ -1735,7 +1735,7 @@ export function LyricDisplay({
                     >
                       <span
                         className="text-[10px] font-mono text-muted-foreground/60 pt-0.5 shrink-0 w-12 cursor-pointer hover:text-primary"
-                        onClick={() => seekTo(line.start)}
+                        onClick={() => { seekTo(line.start); if (!isPlaying) togglePlay(); }}
                       >
                         {formatTimeLRC(line.start)}
                       </span>
