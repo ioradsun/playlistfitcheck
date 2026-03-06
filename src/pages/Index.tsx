@@ -103,7 +103,17 @@ const ToolSkeleton = ({ tab }: { tab: string }) => {
     );
   }
 
-  if (tab === "lyric" || tab === "mix") {
+  if (tab === "lyric") {
+    return (
+      <div className="animate-pulse space-y-4 px-4 py-6 max-w-2xl mx-auto">
+        <div className="h-8 w-56 rounded-md bg-muted/60" />
+        <div className="h-48 rounded-xl bg-muted/50" />
+        <div className="h-72 rounded-xl bg-muted/50" />
+      </div>
+    );
+  }
+
+  if (tab === "mix") {
     return (
       <div className="animate-pulse space-y-4 px-4 py-6">
         <div className="h-8 w-56 rounded-md bg-muted/60" />
