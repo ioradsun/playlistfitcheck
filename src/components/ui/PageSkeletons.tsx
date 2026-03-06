@@ -1,3 +1,4 @@
+/* cache-bust: 2026-03-06-v1 */
 import { forwardRef, type HTMLAttributes } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -5,9 +6,9 @@ import { cn } from "@/lib/utils";
 type Variant = "new" | "existing";
 
 const S = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <Skeleton ref={ref} className={cn("animate-none", className)} {...props} />
-  )
+  function S({ className, ...props }, ref) {
+    return <Skeleton ref={ref} className={cn("animate-none", className)} {...props} />;
+  }
 );
 S.displayName = "S";
 
