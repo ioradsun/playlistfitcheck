@@ -14,19 +14,31 @@ import { toast } from "sonner";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
+import { useScrollRestore } from "@/hooks/useScrollRestore";
+import {
+  AppSidebarImport,
+  DreamFitTabImport,
+  HitFitTabImport,
+  HookFitTabImport,
+  LyricFitTabImport,
+  MixFitCheckImport,
+  ProFitTabImport,
+  SongFitTabImport,
+  VibeFitTabImport,
+} from "@/lib/routePrefetch";
 
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Music, ChevronRight, ArrowLeft } from "lucide-react";
 
-const MixFitCheck = lazy(() => import("@/pages/MixFitCheck"));
-const LyricFitTab = lazy(() => import("@/components/lyric/LyricFitTab").then((module) => ({ default: module.LyricFitTab })));
-const HitFitTab = lazy(() => import("@/components/hitfit/HitFitTab").then((module) => ({ default: module.HitFitTab })));
-const ProFitTab = lazy(() => import("@/components/profit/ProFitTab").then((module) => ({ default: module.ProFitTab })));
-const SongFitTab = lazy(() => import("@/components/songfit/SongFitTab").then((module) => ({ default: module.SongFitTab })));
-const HookFitTab = lazy(() => import("@/components/hookfit/HookFitTab").then((module) => ({ default: module.HookFitTab })));
-const DreamFitTab = lazy(() => import("@/components/dreamfit/DreamFitTab").then((module) => ({ default: module.DreamFitTab })));
-const VibeFitTab = lazy(() => import("@/components/vibefit/VibeFitTab").then((module) => ({ default: module.VibeFitTab })));
-const AppSidebar = lazy(() => import("@/components/AppSidebar").then((module) => ({ default: module.AppSidebar })));
+const MixFitCheck = lazy(MixFitCheckImport);
+const LyricFitTab = lazy(() => LyricFitTabImport().then((module) => ({ default: module.LyricFitTab })));
+const HitFitTab = lazy(() => HitFitTabImport().then((module) => ({ default: module.HitFitTab })));
+const ProFitTab = lazy(() => ProFitTabImport().then((module) => ({ default: module.ProFitTab })));
+const SongFitTab = lazy(() => SongFitTabImport().then((module) => ({ default: module.SongFitTab })));
+const HookFitTab = lazy(() => HookFitTabImport().then((module) => ({ default: module.HookFitTab })));
+const DreamFitTab = lazy(() => DreamFitTabImport().then((module) => ({ default: module.DreamFitTab })));
+const VibeFitTab = lazy(() => VibeFitTabImport().then((module) => ({ default: module.VibeFitTab })));
+const AppSidebar = lazy(() => AppSidebarImport().then((module) => ({ default: module.AppSidebar })));
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -60,10 +72,58 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 );
 
 const TabChunkFallback = () => (
-  <div className="flex-1 flex items-center justify-center py-8 text-muted-foreground">
-    <Loader2 size={18} className="animate-spin" />
+  <div className="animate-pulse w-full space-y-4 px-4 py-6">
+    <div className="h-7 w-56 rounded-md bg-muted/60" />
+    <div className="grid gap-4 md:grid-cols-3">
+      <div className="h-40 rounded-xl bg-muted/50 md:col-span-2" />
+      <div className="h-40 rounded-xl bg-muted/50" />
+    </div>
+    <div className="grid gap-4 md:grid-cols-2">
+      <div className="h-52 rounded-xl bg-muted/50" />
+      <div className="h-52 rounded-xl bg-muted/50" />
+    </div>
   </div>
 );
+
+const ToolSkeleton = ({ tab }: { tab: string }) => {
+  if (tab === "songfit" || tab === "hookfit") {
+    return (
+      <div className="animate-pulse space-y-4 px-4 py-6">
+        <div className="h-8 w-64 rounded-md bg-muted/60" />
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="h-64 rounded-xl bg-muted/50 lg:col-span-2" />
+          <div className="h-64 rounded-xl bg-muted/50" />
+        </div>
+        <div className="h-72 rounded-xl bg-muted/50" />
+      </div>
+    );
+  }
+
+  if (tab === "lyric" || tab === "mix") {
+    return (
+      <div className="animate-pulse space-y-4 px-4 py-6">
+        <div className="h-8 w-56 rounded-md bg-muted/60" />
+        <div className="h-48 rounded-xl bg-muted/50" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="h-72 rounded-xl bg-muted/50" />
+          <div className="h-72 rounded-xl bg-muted/50" />
+        </div>
+      </div>
+    );
+  }
+
+  if (tab === "hitfit") {
+    return (
+      <div className="animate-pulse space-y-4 px-4 py-6">
+        <div className="h-8 w-48 rounded-md bg-muted/60" />
+        <div className="h-40 rounded-xl bg-muted/50" />
+        <div className="h-80 rounded-xl bg-muted/50" />
+      </div>
+    );
+  }
+
+  return <TabChunkFallback />;
+};
 
 const PATH_TO_TAB: Record<string, string> = {
   "/CrowdFit": "songfit",
@@ -255,6 +315,9 @@ const Index = () => {
   const [optimisticSidebarItem, setOptimisticSidebarItem] = useState<{ id: string; label: string; meta: string; type: string; rawData?: any } | null>(null);
   // Tracks when we're loading a project from URL/sidebar — shows skeleton instead of uploader
   const [loadingProjectType, setLoadingProjectType] = useState<string | null>(null);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+
+  useScrollRestore(location.pathname, contentScrollRef);
 
   // Shared header UI persists across route transitions, so clear route-scoped
   // project chrome immediately whenever the pathname changes.
@@ -514,7 +577,9 @@ const Index = () => {
         navigate(pathMap[tab] || "/CrowdFit", { replace: true });
       }
     }
-    setActiveTab(tab);
+    startTransition(() => {
+      setActiveTab(tab);
+    });
   }, [activeTab, setActiveTab, navigate, loadedLyric, loadedMixProject, loadedHitFitAnalysis]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
@@ -628,10 +693,10 @@ const Index = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case "profit":
-        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><Suspense fallback={<TabChunkFallback />}><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></Suspense></div>;
+        return <div className="flex-1 flex flex-col min-h-0"><Suspense fallback={<TabChunkFallback />}><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></Suspense></div>;
       case "playlist":
         return result ? (
-          <div className="flex-1 overflow-y-auto px-4 py-6">
+          <div className="flex-1 px-4 py-6">
             {!isFullyLoaded ? (
               <div className="flex-1 flex items-center justify-center"><AnalysisLoadingScreen hasSong={!!result?.songUrl} /></div>
             ) : (
@@ -657,9 +722,9 @@ const Index = () => {
           </div>
         );
       case "dreamfit":
-        return <div className="flex-1 overflow-y-auto px-4 py-6"><Suspense fallback={<TabChunkFallback />}><DreamFitTab /></Suspense></div>;
+        return <div className="flex-1 px-4 py-6"><Suspense fallback={<TabChunkFallback />}><DreamFitTab /></Suspense></div>;
       case "vibefit":
-        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6"><Suspense fallback={<TabChunkFallback />}><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} /></Suspense></div>;
+        return <div className="flex-1 flex flex-col px-4 py-6"><Suspense fallback={<TabChunkFallback />}><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} /></Suspense></div>;
       default:
         return null;
     }
@@ -696,34 +761,31 @@ const Index = () => {
             )
           )}
         </header>
-        <div className="flex-1 flex flex-col min-h-0">
+        <main ref={contentScrollRef} className="flex-1 flex flex-col min-h-0 overflow-y-auto">
           {/* SongFitTab stays mounted to preserve feed state — hidden when not active */}
           {visitedTabs.has("songfit") && (
             <div
               id="songfit-scroll-container"
-              className={`flex-1 overflow-y-auto px-4 py-6 ${activeTab === "songfit" ? "" : "hidden"}`}
+              className={`flex-1 px-4 py-6 ${activeTab === "songfit" ? "" : "hidden"}`}
             >
-              <Suspense fallback={<TabChunkFallback />}><SongFitTab /></Suspense>
+              <Suspense fallback={<ToolSkeleton tab="songfit" />}><SongFitTab /></Suspense>
             </div>
           )}
           {/* HookFitTab stays mounted to preserve feed state — hidden when not active */}
           {hookfitEnabled && visitedTabs.has("hookfit") && (
             <div
-              className={`flex-1 overflow-y-auto px-4 py-6 ${activeTab === "hookfit" ? "" : "hidden"}`}
+              className={`flex-1 px-4 py-6 ${activeTab === "hookfit" ? "" : "hidden"}`}
             >
-              <Suspense fallback={<TabChunkFallback />}><HookFitTab /></Suspense>
+              <Suspense fallback={<ToolSkeleton tab="hookfit" />}><HookFitTab /></Suspense>
             </div>
           )}
           {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("lyric") && (
-            <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
+            <div className={`flex-1 flex flex-col min-h-0 ${activeTab === "lyric" ? "" : "hidden"}`}>
               {loadingProjectType === "lyric" ? (
-                <div className="flex-1 flex items-center justify-center py-8 text-muted-foreground">
-                  <Loader2 size={18} className="animate-spin mr-2" />
-                  <span className="text-sm">Loading project…</span>
-                </div>
+                <ToolSkeleton tab="lyric" />
               ) : (
-                <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
+                <Suspense fallback={<ToolSkeleton tab="lyric" />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
                   if (payload.projectId) {
                     projectLoadedRef.current = payload.projectId;
                     setOptimisticSidebarItem({
@@ -741,21 +803,21 @@ const Index = () => {
           )}
           {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("mix") && (
-            <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "mix" ? "" : "hidden"}`}>
-              <Suspense fallback={<TabChunkFallback />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>
+            <div className={`flex-1 flex flex-col min-h-0 ${activeTab === "mix" ? "" : "hidden"}`}>
+              <Suspense fallback={<ToolSkeleton tab="mix" />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>
             </div>
           )}
           {/* HitFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("hitfit") && (
-            <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto px-4 py-6 ${activeTab === "hitfit" ? "" : "hidden"}`}>
+            <div className={`flex-1 flex flex-col min-h-0 px-4 py-6 ${activeTab === "hitfit" ? "" : "hidden"}`}>
               {loadedHitFitAnalysis
-                ? <Suspense fallback={<TabChunkFallback />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
-                : <Suspense fallback={<TabChunkFallback />}><HitFitTab key="new" initialAnalysis={null} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
+                ? <Suspense fallback={<ToolSkeleton tab="hitfit" />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
+                : <Suspense fallback={<ToolSkeleton tab="hitfit" />}><HitFitTab key="new" initialAnalysis={null} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
               }
             </div>
           )}
           {!persistedTabs.includes(activeTab) && renderTabContent()}
-        </div>
+        </main>
       </SidebarInset>
       
     </>

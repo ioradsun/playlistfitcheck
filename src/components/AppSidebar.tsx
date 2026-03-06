@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo, useMemo } from "react";
+import { useState, useEffect, useCallback, memo, useMemo, startTransition } from "react";
 import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSiteCopySelector } from "@/hooks/useSiteCopy";
@@ -47,6 +47,7 @@ import { formatDistanceToNow } from "date-fns";
 import { VerificationModal } from "@/components/VerificationModal";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { prefetchNavigationTarget } from "@/lib/routePrefetch";
 
 const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 
@@ -333,18 +334,31 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   };
 
   const handleToolClick = (tool: ToolItem) => {
-    onTabChange?.(tool.value);
     const path = tool.path;
+    prefetchNavigationTarget(path, { userId: user?.id });
     navigate(path);
+    startTransition(() => {
+      onTabChange?.(tool.value);
+    });
     closeMobileIfNeeded();
   };
 
   const handleRecentClick = (item: RecentItem) => {
-    onTabChange?.(item.type);
     const tool = TOOLS.find(t => t.value === item.type);
-    if (tool) navigate(`${tool.path}/${item.id}`);
-    onLoadProject?.(item.type, item.rawData);
+    if (tool) {
+      const targetPath = `${tool.path}/${item.id}`;
+      prefetchNavigationTarget(targetPath, { userId: user?.id, itemType: item.type, itemId: item.id });
+      navigate(targetPath);
+    }
+    startTransition(() => {
+      onTabChange?.(item.type);
+      onLoadProject?.(item.type, item.rawData);
+    });
     closeMobileIfNeeded();
+  };
+
+  const handleNavHover = (path: string, itemType?: string, itemId?: string) => {
+    prefetchNavigationTarget(path, { userId: user?.id, itemType, itemId });
   };
 
   const softDeleteTable = (type: string) => {
@@ -428,6 +442,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
         {!authLoading && !user && (
           <div className="px-2 mt-2 space-y-1">
             <button
+              onMouseEnter={() => handleNavHover("/auth") }
               onClick={() => { navigate("/auth"); closeMobileIfNeeded(); }}
               className="w-full px-2 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-[0.1em] bg-foreground text-background hover:bg-foreground/80 transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
             >
@@ -466,6 +481,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                     <SidebarMenuButton
                       isActive={isActive && !hasSelectedChild}
                       tooltip={sidebarCopy.toolLabels[tool.value] || tool.label}
+                      onMouseEnter={() => handleNavHover(effectivePath)}
                       onClick={() => handleToolClick(tool)}
                     >
                       <span>{sidebarCopy.toolLabels[tool.value] || tool.label}</span>
@@ -502,6 +518,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                                       ? "bg-sidebar-accent text-sidebar-foreground font-medium"
                                       : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                                   }`}
+                                  onMouseEnter={() => handleNavHover(`${tool.path}/${item.id}`, item.type, item.id)}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleRecentClick(item);
@@ -646,6 +663,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                 <SidebarMenuButton
                   tooltip={sidebarCopy.story_link}
                   isActive={location.pathname === "/about"}
+                  onMouseEnter={() => handleNavHover("/about") }
                   onClick={() => { navigate("/about"); closeMobileIfNeeded(); }}
                 >
                   <span>{sidebarCopy.story_link}</span>
@@ -655,6 +673,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                 <SidebarMenuButton
                   tooltip="Let's agree"
                   isActive={location.pathname === "/terms"}
+                  onMouseEnter={() => handleNavHover("/terms") }
                   onClick={() => { navigate("/terms"); closeMobileIfNeeded(); }}
                 >
                   <span>Let's agree</span>
@@ -739,6 +758,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                             className={`flex items-start gap-2 px-1.5 py-1 rounded-md text-[11px] ${!n.is_read ? "bg-primary/5" : ""}`}
                           >
                             <button
+                              onMouseEnter={() => handleNavHover(`/u/${n.actor_user_id}`)}
                               onClick={() => { navigate(`/u/${n.actor_user_id}`); closeMobileIfNeeded(); }}
                               className="w-4 h-4 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 mt-0.5 hover:ring-1 hover:ring-primary transition-all"
                             >
@@ -751,7 +771,8 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                             <div className="min-w-0 flex-1">
                               <p className="leading-tight truncate">
                                 <button
-                                  onClick={() => { navigate(`/u/${n.actor_user_id}`); closeMobileIfNeeded(); }}
+                                  onMouseEnter={() => handleNavHover(`/u/${n.actor_user_id}`)}
+                              onClick={() => { navigate(`/u/${n.actor_user_id}`); closeMobileIfNeeded(); }}
                                   className="font-medium hover:underline"
                                 >
                                   {actorName}
@@ -775,6 +796,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                 <SidebarSeparator className="my-1" />
 
                 <button
+                  onMouseEnter={() => handleNavHover("/profile") }
                   onClick={() => { navigate("/profile"); closeMobileIfNeeded(); }}
                   className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                 >
@@ -790,6 +812,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                 )}
                 {ADMIN_EMAILS.includes(user.email ?? "") && (
                   <button
+                    onMouseEnter={() => handleNavHover("/admin") }
                     onClick={() => { navigate("/admin"); closeMobileIfNeeded(); }}
                     className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                   >
