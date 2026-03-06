@@ -772,10 +772,6 @@ serve(async (req) => {
     const title = "Unknown";
     const artist = "Unknown";
 
-    console.log(`[Transcribe Debug] ${ms()} Final: ${lines.length} lines, title="${title}", artist="${artist}"`);
-    console.log(`[v14.0] Final: ${lines.length} lines, title="${title}", artist="${artist}"`);
-
-    console.log(`[Transcribe Debug] ${ms()} sending response`);
     return new Response(
       JSON.stringify({
         title,
