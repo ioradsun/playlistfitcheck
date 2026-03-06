@@ -857,7 +857,7 @@ export function LyricFitTab({
     if (!sectionsReady || !lines?.length) return;
     if (cinematicTriggeredRef.current && pipelineRetryCount === 0) return;
     cinematicTriggeredRef.current = true;
-    console.log(`[FitTab Debug] ${fitPipelineMs()} [cinematic-direction-trigger] triggering`);
+    
     void startCinematicDirection(lines, pipelineRetryCount > 0);
   }, [sectionsReady, lines, pipelineRetryCount, startCinematicDirection, fitPipelineMs]);
 
