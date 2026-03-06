@@ -7,6 +7,7 @@ import { ProFitLanding } from "./ProFitLanding";
 import { ProFitReport } from "./ProFitReport";
 import { ProFitChat } from "./ProFitChat";
 import type { ArtistData, Blueprint } from "./types";
+import type { RecentItem } from "@/components/AppSidebar";
 
 type View = "landing" | "report" | "chat";
 
