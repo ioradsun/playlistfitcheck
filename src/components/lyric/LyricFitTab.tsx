@@ -549,7 +549,7 @@ export function LyricFitTab({
     };
 
     setRenderData(nextSongDefaults);
-    console.log(`[FitTab Debug] ${fitPipelineMs()} render data derivation complete`);
+    
     setGenerationStatus(prev => ({ ...prev, renderData: "done" }));
     setPipelineStages(prev => ({ ...prev, renderData: "done" }));
     setFitProgress(prev => Math.max(prev, 70));
