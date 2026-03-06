@@ -142,9 +142,6 @@ export async function compressAudioFile(
 
   const compressionPromise = (async () => {
     const useOpus = supportsWebmOpus();
-    console.log(
-      `[compressAudio] Compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB) → ${useOpus ? "WebM/Opus 32kbps" : "WAV"} @ ${TARGET_SAMPLE_RATE}Hz`
-    );
 
     const audioCtx = new AudioContext();
     try {
