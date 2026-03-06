@@ -16,7 +16,7 @@ import { Index } from "./pages/Index";
 import About from "./pages/About";
 
 const Admin = lazy(() => import("./pages/Admin"));
-const FitWidget = lazy(() => import("@/components/FitWidget").then((module) => ({ default: module.FitWidget })));
+import { FitWidget } from "@/components/FitWidget";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import PublicProfile from "./pages/PublicProfile";
