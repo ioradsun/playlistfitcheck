@@ -155,9 +155,7 @@ export function LyricsTab({
       // Same-datacenter fetch is ~1s vs 33s multipart upload from client
       let storageAudioUrl: string | null = null;
       if (user && projectId) {
-        console.log(`[Transcribe Debug] ${ms()} uploading audio to storage first`);
         storageAudioUrl = await uploadAudioImmediately(file, user.id, projectId);
-        console.log(`[Transcribe Debug] ${ms()} storage upload done, url=${storageAudioUrl ? 'yes' : 'null'}`);
         // Save project row with audio_url (fire-and-forget)
         void supabase.from("saved_lyrics").upsert({
           id: projectId,
