@@ -87,7 +87,7 @@ serve(async (req) => {
         max_tokens: 512,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: description.trim() },
+          { role: "user", content: normalizedDescription },
         ],
       }),
     });
