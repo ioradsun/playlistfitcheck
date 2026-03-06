@@ -698,7 +698,7 @@ const Index = () => {
     // Navigate AFTER flushSync so state is already committed
     if (navTarget) navigate(navTarget, { replace: true });
 
-    // Handle async playlist re-fetch outside flushSync
+    // Handle async playlist re-fetch outside flushSync (existing project — do NOT re-save)
     if (type === "playlist" && !data?.report_data && data?.playlist_url) {
       (async () => {
         setVibeLoading(true);
@@ -708,7 +708,20 @@ const Index = () => {
           });
           if (error) throw new Error(error.message);
           if (plData?.error) throw new Error(plData.error);
-          handleAnalyze({ ...(plData as PlaylistInput), _songUrl: data.song_url || undefined });
+          // Set result directly without saving (project already exists)
+          const plInput = plData as PlaylistInput;
+          const output = computePlaylistHealth(plInput);
+          const trackList = (plData as any)._trackList;
+          const songUrl = data.song_url || undefined;
+          setResult({ output, input: plInput, name: plInput.playlistName, key: Date.now(), trackList, songUrl });
+          // Update the existing saved_search with report data
+          savedSearchIdRef.current = data.id;
+          if (trackList && trackList.length > 0) {
+            fetchVibeAnalysis(plInput, trackList);
+            if (songUrl) {
+              fetchSongFitAnalysis(songUrl, plInput, trackList, output);
+            }
+          }
         } catch (e) {
           console.error("Re-run error:", e);
           toast.error("Failed to load report. Try running PlaylistFit again.");
