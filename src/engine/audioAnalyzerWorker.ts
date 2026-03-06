@@ -248,7 +248,7 @@ export function analyzeAudioAsync(
 
       const timeoutId = setTimeout(() => {
         worker.terminate();
-        console.warn('[audio-analyzer] Worker timed out, falling back to main thread');
+        // Worker timed out, falling back to main thread
         resolve(analyzeAudio(buffer, beats));
       }, 30000); // 30s timeout
 
