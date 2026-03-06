@@ -24,6 +24,7 @@ interface Props {
   artistName: string;
   prefetchedData?: LyricDanceData | null;
   bootMode?: "minimal" | "full";
+  albumArtUrl?: string;
 }
 
 // Shared IntersectionObserver across all embedded players
@@ -43,14 +44,13 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal" }: Props,
+  { lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal", albumArtUrl }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
   const [loading, setLoading] = useState(!prefetchedData);
   const [fetchError, setFetchError] = useState(false);
   const [muted, setMuted] = useState(true);
-  const [showCover, setShowCover] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -147,11 +147,6 @@ function InlineLyricDanceInner(
   useEffect(() => { if (player) player.audio.muted = muted; }, [muted, player]);
 
   // ── Handlers ─────────────────────────────────────────────────────────
-  const handleListenNow = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    player?.seek(0); player?.setMuted(false); player?.play();
-    setMuted(false); setShowCover(false);
-  }, [player]);
 
   const toggleMute = useCallback((e: React.MouseEvent) => { e.stopPropagation(); setMuted(m => !m); }, []);
   const openFullPage = useCallback((e: React.MouseEvent) => { e.stopPropagation(); window.open(lyricDanceUrl, "_blank"); }, [lyricDanceUrl]);
@@ -169,64 +164,39 @@ function InlineLyricDanceInner(
 
   return (
     <div className="w-full overflow-hidden bg-black rounded-xl flex flex-col relative">
-      {/* Canvas area */}
+      {/* Canvas area — matches tier 1 height exactly */}
       <div ref={containerRef}
         className="relative w-full overflow-hidden cursor-pointer"
         style={{ minHeight: 310, height: 310 }}
-        onClick={() => { if (!showCover) setMuted(m => !m); }}
+        onClick={() => { setMuted(m => !m); }}
       >
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
           style={{ display: playerReady ? "block" : "none" }} />
         <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
           style={{ display: "none" }} />
 
+        {/* CrowdFit skeleton — uses album art for zero-jump transition */}
         {(loading || (!playerReady && !fetchError)) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
-            <div className="w-12 h-12 rounded-full bg-white/[0.06] flex items-center justify-center mb-4">
-              <span className="text-base font-mono text-white/30">
-                {(artistName || songTitle || "?")[0].toUpperCase()}
-              </span>
-            </div>
-            <p className="text-sm font-semibold text-white/80 mb-1 px-6 text-center truncate max-w-[80%]">{songTitle}</p>
-            {artistName && (
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 mb-5">{artistName}</p>
-            )}
-            <div className="flex items-end gap-[3px] h-6">
-              {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
-                <div key={i} className="w-[3px] rounded-full bg-white/20"
-                  style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }} />
-              ))}
+            {albumArtUrl ? (
+              <>
+                <img src={albumArtUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/50" />
+              </>
+            ) : null}
+            <div className="relative z-10 flex flex-col items-center">
+              <div className="flex items-end gap-[3px] h-6 mb-3">
+                {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
+                  <div key={i} className="w-[3px] rounded-full bg-white/30"
+                    style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }} />
+                ))}
+              </div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/40">loading…</p>
             </div>
           </div>
         )}
 
-        {playerReady && showCover && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center"
-            style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
-            onClick={e => e.stopPropagation()}>
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
-                <span className="text-lg font-mono text-white/40">
-                  {(artistName || data?.artist_name || songTitle || "?")[0].toUpperCase()}
-                </span>
-              </div>
-              <div className="text-center px-6">
-                <h3 className="text-lg font-bold text-white leading-tight">{songTitle}</h3>
-                {(artistName || data?.artist_name) && (
-                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mt-1">
-                    {artistName || data?.artist_name}
-                  </p>
-                )}
-              </div>
-              <button onClick={handleListenNow}
-                className="px-6 py-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors mt-2">
-                Listen Now
-              </button>
-            </div>
-          </div>
-        )}
-
-        {!showCover && playerReady && (
+        {playerReady && (
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
             onClick={e => e.stopPropagation()}>
             <span className="text-[10px] font-mono text-white/60 uppercase tracking-wider bg-black/40 backdrop-blur-sm rounded px-1.5 py-0.5">
@@ -246,10 +216,8 @@ function InlineLyricDanceInner(
         )}
       </div>
 
-      {/* Playbar — now-playing + react + progress */}
-      {!showCover && (
-        <InlineLyricDancePlaybar player={player} playerReady={playerReady} data={data} />
-      )}
+      {/* Playbar — always visible */}
+      <InlineLyricDancePlaybar player={player} playerReady={playerReady} data={data} />
     </div>
   );
 }

@@ -302,7 +302,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         )}
       >
         {tier === 1 ? (
-          <div className="relative mx-3 rounded-xl overflow-hidden bg-black" style={{ minHeight: 300, height: 300 }}>
+          <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ minHeight: 310, height: 310 }}>
             {post.album_art_url ? (
               <img
                 src={post.album_art_url}
@@ -325,9 +325,6 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             >
               <span className="h-14 w-14 rounded-full bg-white/20 backdrop-blur-sm text-white flex items-center justify-center text-xl">▶</span>
             </button>
-            {isNearViewport && (
-              <span className="absolute top-2 right-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white/80 font-mono">Ready</span>
-            )}
           </div>
         ) : post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
           <InlineLyricDance
@@ -335,6 +332,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             lyricDanceUrl={post.lyric_dance_url}
             songTitle={post.track_title}
             artistName={displayName}
+            albumArtUrl={post.album_art_url ?? undefined}
           />
         ) : post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id ? (
           <InlineBattleFeed
