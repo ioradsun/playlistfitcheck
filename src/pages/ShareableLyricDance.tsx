@@ -183,65 +183,7 @@ const ProgressBar = React.forwardRef<HTMLDivElement, {
   );
 });
 
-// ─── Live Debug HUD ─────────────────────────────────────────────────
-
-function LiveDebugHUD({ player }: { player: LyricDancePlayer | null }) {
-  const [open, setOpen] = useState(false);
-  const [snap, setSnap] = useState<LiveDebugState>(DEFAULT_DEBUG_STATE);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "d" || e.key === "D") {
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-        setOpen(prev => !prev);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-  useEffect(() => {
-    if (!open || !player) return;
-    const id = setInterval(() => setSnap({ ...player.debugState }), 100);
-    return () => clearInterval(id);
-  }, [open, player]);
-
-  if (!open) return null;
-
-  const f = (v: number, d = 2) => v.toFixed(d);
-  const Row = ({ label, value }: { label: string; value: string }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-      <span style={{ color: "#4ade80" }}>{label}:</span>
-      <span style={{ color: "#d1fae5" }}>{value}</span>
-    </div>
-  );
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div style={{ marginBottom: 6 }}>
-      <div style={{ color: "#22c55e", fontWeight: 700, marginBottom: 2, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" as const }}>{title}</div>
-      {children}
-    </div>
-  );
-
-  return (
-    <div style={{
-      position: "fixed", bottom: 80, left: 12, zIndex: 200,
-      background: "rgba(0,0,0,0.88)", backdropFilter: "blur(4px)",
-      border: "1px solid rgba(74,222,128,0.15)", borderRadius: 6,
-      padding: 12, maxWidth: 280, minWidth: 240,
-      fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace",
-      fontSize: 11, lineHeight: "1.55", color: "#4ade80",
-      pointerEvents: "auto", overflowY: "auto", maxHeight: "70vh",
-    }}>
-      <Section title="BEAT"><Row label="intensity" value={f(snap.beatIntensity)} /><Row label="pulse" value={f(snap.bgBeatPulse)} /><Row label="phase" value={f(snap.bgBeatPhase)} /><Row label="physGlow" value={f(snap.physGlow)} /></Section>
-      <Section title="PHYSICS"><Row label="heat" value={f(snap.heat)} /><Row label="velocity" value={f(snap.velocity)} /><Row label="words" value={String(snap.wordCount)} /></Section>
-      <Section title="ANIMATION"><Row label="effect" value={snap.effectKey} /><Row label="entry" value={f(snap.entryProgress)} /><Row label="exit" value={f(snap.exitProgress)} /><Row label="mod" value={snap.activeMod ?? "none"} /></Section>
-      <Section title="PARTICLES"><Row label="system" value={snap.particleSystem} /><Row label="count" value={String(snap.particleCount)} /></Section>
-      <Section title="DIRECTION"><Row label="section" value={`${snap.secIndex}/${snap.secTotal}`} /><Row label="line" value={String(snap.lineIndex)} /><Row label="chapter" value={snap.dirChapter} /><Row label="hero" value={snap.lineHeroWord || "—"} /><Row label="active" value={snap.activeWord} /><Row label="line style" value={snap.resolvedLineStyle} /><Row label="word style" value={snap.resolvedWordStyle} /><Row label="layout" value={snap.layoutStable ? "stable" : "unstable"} /><Row label="tension" value={snap.tensionStage} /></Section>
-      <Section title="PERFORMANCE"><Row label="fps" value={String(Math.round(snap.fps))} /><Row label="total" value={snap.perfTotal.toFixed(2)} /><Row label="text" value={snap.perfText.toFixed(2)} /><Row label="bg" value={snap.perfBg.toFixed(2)} /></Section>
-      <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" as const }}>{f(snap.time, 2)}s · press D to close</div>
-    </div>
-  );
-}
+// LiveDebugHUD removed for production
 
 // DebugPanel removed — merged into LyricDanceDebugPanel with HUD + DATA tabs
 
