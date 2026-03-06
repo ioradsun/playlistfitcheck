@@ -5,7 +5,7 @@
  */
 
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
-import { useLyricSections, type LyricSectionLine, type LyricSection } from "@/hooks/useLyricSections";
+import { useLyricSections } from "@/hooks/useLyricSections";
 import { ReactionPanel, type CanonicalAudioSection } from "@/components/lyric/ReactionPanel";
 import { supabase } from "@/integrations/supabase/client";
 import type { LyricDancePlayer, LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -26,8 +26,13 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
   const [reactionData, setReactionData] = useState<
     Record<string, { line: Record<number, number>; total: number }>
   >({});
+  const [engagementMode, setEngagementMode] = useState<'spectator' | 'freezing' | 'engaged'>('spectator');
+  const [frozenLineIndex, setFrozenLineIndex] = useState<number | null>(null);
+
   const currentTimeRef = useRef(0);
   const lastProgressRef = useRef(0);
+  const engagementModeRef = useRef<'spectator' | 'freezing' | 'engaged'>('spectator');
+  const freezeAtSecRef = useRef<number | null>(null);
 
   const durationSec = useMemo(() => {
     const lines = data?.lyrics ?? [];
@@ -41,7 +46,6 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
     data?.cinematic_direction ?? null,
     durationSec,
   );
-
 
   const audioSections = useMemo<CanonicalAudioSection[]>(() => {
     const sections = data?.cinematic_direction?.sections;
@@ -81,7 +85,11 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
     return { text: line.text, lineIndex: line.lineIndex, sectionLabel: section?.label ?? null };
   }, [lyricSections, currentTimeSec]);
 
-  // Time tracking
+  useEffect(() => {
+    engagementModeRef.current = engagementMode;
+  }, [engagementMode]);
+
+  // Time tracking + engagement freeze handling
   useEffect(() => {
     if (!player || !playerReady) return;
     const audio = player.audio;
@@ -89,11 +97,25 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
 
     const tick = () => {
       const t = audio.currentTime;
+
+      if (engagementModeRef.current === 'freezing') {
+        const freezeAt = freezeAtSecRef.current ?? t;
+        if (t >= freezeAt) {
+          const clamped = Math.min(t, freezeAt);
+          currentTimeRef.current = clamped;
+          setCurrentTimeSec(clamped);
+          audio.pause();
+          setEngagementMode('engaged');
+          freezeAtSecRef.current = null;
+          return;
+        }
+      }
+
       if (Math.abs(t - currentTimeRef.current) > 0.05) {
         currentTimeRef.current = t;
         setCurrentTimeSec(t);
       }
-      // Progress
+
       const lines = data?.lyrics ?? [];
       if (lines.length) {
         const songStart = Math.max(0, (lines[0] as any).start - 0.5);
@@ -105,6 +127,12 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
           setProgress(p);
         }
       }
+
+      if (engagementModeRef.current === 'engaged') {
+        rafId = 0;
+        return;
+      }
+
       if (!audio.paused && !document.hidden) {
         rafId = requestAnimationFrame(tick);
       }
@@ -122,6 +150,61 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
       audio.removeEventListener("pause", onPause);
     };
   }, [player, playerReady, data?.lyrics]);
+
+  useEffect(() => {
+    if (!reactionPanelOpen && engagementMode !== 'spectator') {
+      setEngagementMode('spectator');
+      setFrozenLineIndex(null);
+      freezeAtSecRef.current = null;
+    }
+  }, [reactionPanelOpen, engagementMode]);
+
+  const handleEngagementStart = (targetLineIndex?: number) => {
+    if (!player || !playerReady) return;
+
+    if (engagementModeRef.current === 'engaged') {
+      if (targetLineIndex != null) setFrozenLineIndex(targetLineIndex);
+      return;
+    }
+
+    if (targetLineIndex != null) {
+      setFrozenLineIndex(targetLineIndex);
+    } else {
+      const liveLine = lyricSections.allLines.find(
+        (line) => player.audio.currentTime >= line.startSec && player.audio.currentTime < line.endSec + 0.1,
+      );
+      if (liveLine) setFrozenLineIndex(liveLine.lineIndex);
+    }
+
+    const currentLine = lyricSections.allLines.find(
+      (line) => player.audio.currentTime >= line.startSec && player.audio.currentTime < line.endSec + 0.1,
+    );
+    freezeAtSecRef.current = currentLine?.endSec ?? player.audio.currentTime;
+    setEngagementMode('freezing');
+  };
+
+  const handlePanelClose = () => {
+    setReactionPanelOpen(false);
+    freezeAtSecRef.current = null;
+    setEngagementMode('spectator');
+    setFrozenLineIndex(null);
+
+    const audio = player?.audio;
+    if (!audio || audio.ended) return;
+
+    try {
+      if (audio.paused) {
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn('InlineLyricDance audio resume failed:', err);
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('InlineLyricDance audio play error:', err);
+    }
+  };
 
   // Load reactions
   useEffect(() => {
@@ -182,7 +265,7 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
   if (!playerReady || !data) return null;
 
   return (
-    <>
+    <div className="relative overflow-hidden">
       {/* Progress bar */}
       <div className="w-full h-1 cursor-pointer group relative" style={{ background: "rgba(255,255,255,0.05)" }}
         onClick={(e) => {
@@ -231,10 +314,10 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
         </button>
       </div>
 
-      {/* Reaction panel — renders as fixed overlay */}
       <ReactionPanel
+        displayMode="embedded"
         isOpen={reactionPanelOpen}
-        onClose={() => setReactionPanelOpen(false)}
+        onClose={handlePanelClose}
         danceId={data.id}
         activeLine={activeLine}
         allLines={lyricSections.allLines}
@@ -247,10 +330,10 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
         reactionData={reactionData}
         onReactionDataChange={setReactionData}
         onReactionFired={(emoji) => player?.fireComment(emoji)}
-        engagementMode="spectator"
-        frozenLineIndex={null}
-        onEngagementStart={() => {}}
+        engagementMode={engagementMode}
+        frozenLineIndex={frozenLineIndex}
+        onEngagementStart={handleEngagementStart}
       />
-    </>
+    </div>
   );
 });

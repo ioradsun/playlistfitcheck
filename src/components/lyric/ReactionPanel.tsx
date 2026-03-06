@@ -25,6 +25,7 @@ interface CommentRow {
 }
 
 interface ReactionPanelProps {
+  displayMode: 'fullscreen' | 'embedded';
   engagementMode: 'spectator' | 'freezing' | 'engaged';
   frozenLineIndex: number | null;
   isOpen: boolean;
@@ -103,7 +104,7 @@ function isLineOutsideViewport(container: HTMLElement, row: HTMLElement, thresho
   return rowRect.top < containerRect.top + threshold || rowRect.bottom > containerRect.bottom - threshold;
 }
 
-function ReactionPanel({ isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart }: ReactionPanelProps) {
+function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -257,6 +258,10 @@ function ReactionPanel({ isOpen, onClose, engagementMode, frozenLineIndex, dance
     const currentLine = allLines.find(l => repeatTimeSec >= l.startSec && repeatTimeSec < l.endSec + 0.1);
     return currentLine?.lineIndex ?? null;
   }, [repeatMode, repeatTimeSec, allLines]);
+
+  const panelStyles = displayMode === 'fullscreen'
+    ? 'fixed bottom-0 left-0 right-0 z-[70] h-[88vh]'
+    : 'absolute bottom-0 left-0 right-0 z-10 h-full';
 
   useEffect(() => {
     if (!isOpen) {
@@ -601,7 +606,7 @@ function ReactionPanel({ isOpen, onClose, engagementMode, frozenLineIndex, dance
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: '100%', opacity: 0 }}
           transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
-          className="fixed left-0 right-0 bottom-0 z-[70] h-[88vh] flex flex-col overflow-hidden"
+          className={`${panelStyles} flex flex-col overflow-hidden`}
           style={{ background: '#0d0d0d', borderTop: '1px solid rgba(255,255,255,0.06)' }}
         >
           <div
