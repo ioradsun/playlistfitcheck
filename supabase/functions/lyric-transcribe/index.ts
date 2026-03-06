@@ -732,7 +732,7 @@ serve(async (req) => {
 
     if (transcribeResult.status === "rejected") {
       const err = (transcribeResult.reason as Error)?.message || "Transcription failed";
-      console.error("Transcription failed:", err);
+      
       return new Response(
         JSON.stringify({ error: `Transcription failed: ${err}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
