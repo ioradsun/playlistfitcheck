@@ -23,10 +23,6 @@ export function useBeatIntensity(analyserNode: AnalyserNode | null, isPlaying: b
       const bassAvg = bassSum / 4 / 255;
       const next = bassAvg;
       setIntensity((prev) => prev * 0.7 + next * 0.3);
-      debugFrameRef.current += 1;
-      if (debugFrameRef.current % 30 === 0) {
-        console.log("[useBeatIntensity]", { bassAvg: Number(next.toFixed(3)), isPlaying });
-      }
       frameRef.current = requestAnimationFrame(tick);
     };
 

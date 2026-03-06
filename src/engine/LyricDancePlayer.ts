@@ -5320,7 +5320,7 @@ export class LyricDancePlayer {
     // Sort by start time
     schedule.sort((a, b) => a.startSec - b.startSec);
     this._heroSchedule = schedule;
-    console.info(`[CameraLookahead] ${schedule.length} hero words scheduled`);
+    
   }
 
   /**

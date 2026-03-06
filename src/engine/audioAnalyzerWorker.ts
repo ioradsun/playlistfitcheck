@@ -275,7 +275,7 @@ export function analyzeAudioAsync(
         [mono.buffer]
       );
     } catch (err) {
-      console.warn('[audio-analyzer] Worker creation failed, falling back:', err);
+      // Worker creation failed, falling back
       resolve(analyzeAudio(buffer, beats));
     }
   });

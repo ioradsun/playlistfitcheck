@@ -138,7 +138,7 @@ export function useLyricDancePlayer(
             // auto-palette DB write failed
           });
       })
-      .catch((err) => console.error("[auto-palette] failed:", err));
+      .catch(() => { /* auto-palette failed */ });
 
     return () => { cancelled = true; };
   }, [data?.id, data?.section_images, data?.auto_palettes]);

@@ -181,7 +181,7 @@ export async function compressAudioFile(
       const mimeType = ext === "webm" ? "audio/webm" : "audio/wav";
       const compressed = new File([blob], `${baseName}_compressed.${ext}`, { type: mimeType });
 
-      console.log(`[compressAudio] Result: ${(compressed.size / 1024 / 1024).toFixed(2)} MB (${ext})`);
+      
 
       if (compressed.size > MAX_UPLOAD_BYTES) {
         throw new Error(

@@ -135,9 +135,8 @@ export function useBeatGrid(buffer: AudioBuffer | null): {
           analysis = await analyzeAudioAsync(buffer, beats);
           hits = analysis.hits;
           beatEnergies = analysis.beatEnergies;
-          console.log(`[beat-grid] V2: ${hits?.length ?? 0} hits, ${analysis.frames.length} frames`);
         } catch (analysisErr) {
-          console.warn("[beat-grid] Audio analysis failed (non-fatal):", analysisErr);
+          // Audio analysis failed (non-fatal)
         }
 
         if (!cancelled) {

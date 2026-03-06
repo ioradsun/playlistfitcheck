@@ -594,7 +594,7 @@ export function FitTab({
         }
       })();
     } catch (e: any) {
-      console.error("Dance publish error:", e);
+      
       toast.error(e.message || "Failed to publish lyric dance");
     } finally {
       clearTimeout(slowWarningId);

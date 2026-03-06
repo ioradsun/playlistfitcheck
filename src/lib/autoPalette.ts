@@ -189,7 +189,7 @@ export async function computeAutoPalettesFromUrls(urls: string[]): Promise<strin
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
-  console.log(`[auto-palette] computed ${palettes.length} palettes from ${urls.length} URLs`);
+  
   return palettes;
 }
 

@@ -137,7 +137,7 @@ export function HookDanceExporter({
       .sort((a, b) => a.time - b.time);
 
     if (audioEl) {
-      try { await audioEl.play(); } catch (e) { console.warn("Audio play failed:", e); }
+      try { await audioEl.play(); } catch (e) { /* Audio play failed */ }
     }
 
     mediaRecorder.start();

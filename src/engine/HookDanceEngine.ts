@@ -283,7 +283,7 @@ export class HookDanceEngine {
         })
         .catch((e) => {
           this.audioPlaying = false;
-          console.warn("[HookDanceEngine] audio play failed, using synthetic clock:", e);
+          // audio play failed, using synthetic clock
         });
     };
 

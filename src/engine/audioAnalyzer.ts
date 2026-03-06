@@ -211,7 +211,6 @@ export function analyzeAudio(buffer: AudioBuffer, beats?: number[]): AudioAnalys
   }
 
   const elapsed = performance.now() - startTime;
-  console.info(`[audio-analyzer] ${numFrames} frames analyzed in ${elapsed.toFixed(0)}ms, ${hits.length} hits detected, peak RMS: ${peakEnergy.toFixed(4)}`);
 
   return {
     hits,
