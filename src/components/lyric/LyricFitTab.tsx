@@ -473,7 +473,7 @@ export function LyricFitTab({
         }
         return false;
       }
-      console.log("[persistRenderData] success", id);
+      
       return true;
     } catch (e) {
       console.warn("[persistRenderData] exception attempt", attempt, e);
