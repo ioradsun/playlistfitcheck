@@ -586,7 +586,7 @@ serve(async (req) => {
 
   const T0 = Date.now();
   const ms = () => `${Date.now() - T0}ms`;
-  console.log(`[Transcribe Debug] ${ms()} edge function ENTRY`);
+  
 
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
