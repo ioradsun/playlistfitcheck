@@ -156,8 +156,6 @@ function isValidHttpUrl(s: string): boolean {
 }
 
 export async function computeAutoPalettesFromUrls(urls: string[]): Promise<string[][]> {
-  console.log(`[auto-palette] computeAutoPalettesFromUrls called with ${urls.length} URLs`);
-  urls.forEach((u, i) => console.log(`[auto-palette]   [${i}] ${typeof u === 'string' ? u.slice(0, 80) : typeof u}`));
 
   const canvas = document.createElement('canvas');
   canvas.width = SAMPLE_SIZE;
