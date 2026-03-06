@@ -975,6 +975,17 @@ export function LyricFitTab({
     setActiveTab(nextView);
   }, [fitUnlocked, fitReadiness]);
 
+  const handleBackToLyrics = useCallback(() => handleViewChange("lyrics"), [handleViewChange]);
+
+  const handleImageGenerationStatusChange = useCallback((status: "idle" | "running" | "done" | "error") => {
+    setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
+  }, []);
+
+  const handleRegenerateSectionsVisuals = useCallback(() => {
+    setSectionsDirty(false);
+    void startCinematicDirection(lines, true);
+  }, [lines]);
+
   const fitDisabled = !transcriptionDone;
 
 
