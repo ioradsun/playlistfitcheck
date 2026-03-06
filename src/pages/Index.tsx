@@ -345,7 +345,7 @@ const Index = () => {
   
   const [deferSidebarReady, setDeferSidebarReady] = useState(false);
   const [optimisticSidebarItem, setOptimisticSidebarItem] = useState<{ id: string; label: string; meta: string; type: string; rawData?: any } | null>(null);
-  const [lyricLoadingState, setLyricLoadingState] = useState<"loading" | "ready">(
+  const [lyricLoadingState, setLyricLoadingState] = useState<"loading" | "ready" | "missing">(
     tabFromPath === "lyric" && projectId ? "loading" : "ready"
   );
   // Tracks when we're loading a project from URL/sidebar — shows skeleton instead of uploader
