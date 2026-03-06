@@ -800,10 +800,8 @@ export function LyricFitTab({
     // songSignature analysis requires audioBuffer — wait for it only if we need to compute
     if (!songSignature && (!audioBufferReady || !audioBuffer)) return;
 
-    console.log(`[Transcribe Debug] section pipeline RUNNING`);
+
     fitPipelineT0Ref.current = performance.now();
-    console.log(`[FitTab Debug] ${fitPipelineMs()} section pipeline START`);
-    sectionPipelineRunningRef.current = true;
     try {
       let sig = songSignature;
       if (!sig) {
