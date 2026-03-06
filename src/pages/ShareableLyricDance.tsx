@@ -21,7 +21,6 @@ import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
-import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 import type { CinematicDirection } from "@/types/CinematicDirection";
 
 // ─── Helpers ────────────────────────────────────────────────────────
