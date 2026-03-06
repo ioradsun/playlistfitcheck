@@ -651,15 +651,59 @@ export default function ShareableLyricDance() {
           </div>
         )}
 
-        {/* Export buttons removed from canvas — moved to bottom bar */}
+        {/* Active line + React — frosted overlay at bottom of canvas */}
+        {!showCover && !isWaitingForPlayer && data && !reactionPanelOpen && (
+          <div className="absolute bottom-3 left-3 right-3 z-20 flex items-center gap-2">
+            <button
+              className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-left overflow-hidden min-w-0 group transition-all"
+              style={{
+                background: 'rgba(0,0,0,0.55)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}
+              onClick={() => setReactionPanelOpen(true)}
+            >
+              {activeLine ? (
+                <>
+                  <div
+                    className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                    style={{
+                      background: Array.isArray(data?.palette) ? data.palette[1] ?? '#ffffff' : '#ffffff',
+                      opacity: 0.6,
+                    }}
+                  />
+                  <span className="text-[11px] font-mono text-white/50 truncate group-hover:text-white/70 transition-colors">
+                    {activeLine.text}
+                  </span>
+                </>
+              ) : (
+                <span className="text-[11px] font-mono text-white/25 truncate">
+                  {lyricSections.isReady ? 'listening...' : '...'}
+                </span>
+              )}
+            </button>
+            <button
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg shrink-0 transition-all"
+              style={{
+                background: 'rgba(0,0,0,0.55)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255,255,255,0.10)',
+                color: 'rgba(255,255,255,0.45)',
+              }}
+              onClick={() => setReactionPanelOpen(true)}
+            >
+              <span className="text-[11px] font-mono uppercase tracking-wider">React</span>
+              <span className="text-[10px] opacity-60">↑</span>
+            </button>
+          </div>
+        )}
+
         </div>
 
       </div>
 
-      {/* Bottom action bar */}
+      {/* Bottom bar — progress only */}
       <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }}>
-
-        {/* Progress bar — full width, always visible */}
         {!showCover && !isWaitingForPlayer && data && (
           <ProgressBar
             player={playerRef.current}
@@ -669,46 +713,6 @@ export default function ShareableLyricDance() {
             palette={Array.isArray(data.palette) ? data.palette : ["#ffffff", "#ffffff", "#ffffff"]}
           />
         )}
-
-        <div className="w-full max-w-2xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-3">
-
-
-
-            {/* Now-playing chip — current lyric line, tappable to open reaction engine */}
-            <button
-              className="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg border border-white/[0.07] text-left overflow-hidden min-w-0 group hover:border-white/15 transition-all"
-              style={{ background: "rgba(255,255,255,0.02)" }}
-              onClick={() => setReactionPanelOpen(true)}
-            >
-              {activeLine ? (
-                <>
-                  <div
-                    className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                    style={{ background: Array.isArray(data?.palette) ? data.palette[1] ?? '#ffffff' : '#ffffff', opacity: 0.6 }}
-                  />
-                  <span className="text-[11px] font-mono text-white/45 truncate group-hover:text-white/65 transition-colors">
-                    {activeLine.text}
-                  </span>
-                </>
-              ) : (
-                <span className="text-[11px] font-mono text-white/20 truncate">
-                  {lyricSections.isReady ? 'listening...' : '...'}
-                </span>
-              )}
-            </button>
-
-            {/* React button */}
-            <button
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
-              onClick={() => setReactionPanelOpen(true)}
-            >
-              <span className="text-[11px] font-mono uppercase tracking-wider">React</span>
-              <span className="text-[10px] opacity-60">↑</span>
-            </button>
-
-          </div>
-        </div>
       </div>
 
       {/* Debug panels removed for production */}
