@@ -980,9 +980,6 @@ export function LyricFitTab({
 
   const fitDisabled = !transcriptionDone;
 
-  useEffect(() => {
-    console.log(`[FitTab Debug] ${fitPipelineMs()} FitTab enabled/disabled state: ${fitDisabled ? "disabled" : "enabled"}`);
-  }, [fitDisabled, fitPipelineMs]);
 
 
   useEffect(() => {
