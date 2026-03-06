@@ -11,7 +11,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 // import { WalletProvider } from "@/components/crypto/WalletProvider";
 import { PageLayout } from "@/components/PageLayout";
 import { lazy, Suspense } from "react";
-import Index from "./pages/Index";
+import { Index } from "./pages/Index";
 
 import About from "./pages/About";
 
