@@ -6,7 +6,7 @@
 
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { useLyricSections, type LyricSectionLine, type LyricSection } from "@/hooks/useLyricSections";
-import { ReactionPanel } from "@/components/lyric/ReactionPanel";
+import { ReactionPanel, type CanonicalAudioSection } from "@/components/lyric/ReactionPanel";
 import { supabase } from "@/integrations/supabase/client";
 import type { LyricDancePlayer, LyricDanceData } from "@/engine/LyricDancePlayer";
 
@@ -41,6 +41,33 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
     data?.cinematic_direction ?? null,
     durationSec,
   );
+
+
+  const audioSections = useMemo<CanonicalAudioSection[]>(() => {
+    const sections = data?.cinematic_direction?.sections;
+    const lines = data?.lyrics ?? [];
+    const fallbackDurationSec = lines.length ? ((lines[lines.length - 1] as any).end ?? 0) : 0;
+    const duration = Math.max(durationSec || fallbackDurationSec, 0);
+
+    if (!Array.isArray(sections) || !sections.length || duration <= 0) return [];
+
+    return sections
+      .map((section: any, index: number): CanonicalAudioSection | null => {
+        const startRatio = Number(section?.startRatio);
+        const endRatio = Number(section?.endRatio);
+        if (!Number.isFinite(startRatio) || !Number.isFinite(endRatio)) return null;
+        const startSec = Math.max(0, startRatio * duration);
+        const endSec = Math.max(startSec, endRatio * duration);
+        if (endSec <= startSec) return null;
+        return {
+          sectionIndex: Number.isFinite(Number(section?.sectionIndex)) ? Number(section.sectionIndex) : index,
+          startSec,
+          endSec,
+          role: typeof section?.mood === "string" ? section.mood : null,
+        };
+      })
+      .filter((section): section is CanonicalAudioSection => section != null);
+  }, [data?.cinematic_direction?.sections, data?.lyrics, durationSec]);
 
   const activeLine = useMemo(() => {
     if (!lyricSections.isReady) return null;
@@ -211,7 +238,7 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
         danceId={data.id}
         activeLine={activeLine}
         allLines={lyricSections.allLines}
-        sections={lyricSections.sections}
+        audioSections={audioSections}
         currentTimeSec={currentTimeSec}
         palette={palette}
         onSeekTo={(sec) => player?.seek(sec)}
@@ -220,6 +247,9 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
         reactionData={reactionData}
         onReactionDataChange={setReactionData}
         onReactionFired={(emoji) => player?.fireComment(emoji)}
+        engagementMode="spectator"
+        frozenLineIndex={null}
+        onEngagementStart={() => {}}
       />
     </>
   );
