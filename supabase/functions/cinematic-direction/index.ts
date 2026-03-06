@@ -617,8 +617,6 @@ async function callWithRetry(
     const completion = await resp.json();
     const raw = String(completion?.choices?.[0]?.message?.content ?? "");
     const finishReason = completion?.choices?.[0]?.finish_reason ?? "unknown";
-    const finishReason = completion?.choices?.[0]?.finish_reason ?? "unknown";
-    }
     return extractJson(raw);
   };
 
