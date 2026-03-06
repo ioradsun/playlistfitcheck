@@ -112,13 +112,13 @@ export function GlobalTimeline({
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
-    drawWaveform(canvasRef.current, waveform.peaks, beats, duration);
+    drawWaveform(canvasRef.current, waveform.peaks, beats, duration, markerStart, markerEnd);
     const observer = new ResizeObserver(() => {
-      if (canvasRef.current && waveform) drawWaveform(canvasRef.current, waveform.peaks, beats, duration);
+      if (canvasRef.current && waveform) drawWaveform(canvasRef.current, waveform.peaks, beats, duration, markerStart, markerEnd);
     });
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
-  }, [waveform, beats, duration]);
+  }, [waveform, beats, duration, markerStart, markerEnd]);
 
   const getTimeFromClientX = useCallback(
     (clientX: number) => {
