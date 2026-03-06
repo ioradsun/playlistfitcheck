@@ -168,7 +168,7 @@ function InlineLyricDanceInner(
   }
 
   return (
-    <div className="w-full overflow-hidden bg-black rounded-xl flex flex-col">
+    <div className="w-full overflow-hidden bg-black rounded-xl flex flex-col relative">
       {/* Canvas area */}
       <div ref={containerRef}
         className="relative w-full overflow-hidden cursor-pointer"
