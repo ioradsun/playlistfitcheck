@@ -718,7 +718,7 @@ serve(async (req) => {
           binary += String.fromCharCode(...audioRawBytes.subarray(i, i + chunkSize));
         }
         audioBase64 = btoa(binary);
-        console.log(`[Transcribe Debug] ${ms()} base64 encoding done, ${(audioBase64.length/1024/1024).toFixed(2)}MB`);
+        
       }
       transcribePromise = runGeminiTranscribe(audioBase64!, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics!.trim() : undefined);
     } else {
