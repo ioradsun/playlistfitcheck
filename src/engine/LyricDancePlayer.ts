@@ -2328,7 +2328,7 @@ export class LyricDancePlayer {
         }
       }
     } catch (e) {
-      console.warn(`[fonts] Failed to load "${fontName}":`, e);
+      
     }
   }
 
