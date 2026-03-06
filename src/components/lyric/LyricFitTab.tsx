@@ -819,7 +819,7 @@ export function LyricFitTab({
           }
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
-          console.warn("[Pipeline] Signature analysis failed, continuing:", err.message);
+          
           sig = {
             bpm: beatGrid.bpm,
             durationSec: audioDurationSec,
