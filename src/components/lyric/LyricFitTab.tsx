@@ -527,7 +527,7 @@ export function LyricFitTab({
     }
     if (generationStatus.beatGrid === "running" || generationStatus.beatGrid === "done") return;
 
-    console.log("[Pipeline] Starting beat grid analysis");
+    
     setGenerationStatus(prev => ({ ...prev, beatGrid: "running" }));
     setPipelineStages(prev => ({ ...prev, rhythm: "running" }));
   }, [beatGrid, generationStatus.beatGrid, audioBuffer]);
