@@ -99,7 +99,6 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [repeatMode, setRepeatMode] = useState(false);
   const [repeatTimeSec, setRepeatTimeSec] = useState(0);
-  const [loopingLineIndex, setLoopingLineIndex] = useState<number | null>(null);
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
   const [playheadLineIndex, setPlayheadLineIndex] = useState<number | null>(null);
   const [isManualSelectionLocked, setIsManualSelectionLocked] = useState(false);
@@ -148,7 +147,6 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
       player.seek(seekToSec);
     }
 
-    setLoopingLineIndex(null);
     setAutoFollowEnabled(false);
     setManualPlaybackEndTimeSec(null);
   };
@@ -362,7 +360,6 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
       clearLoopTimeout();
       player?.pause();
       setRepeatMode(false);
-      setLoopingLineIndex(null);
       setRepeatTimeSec(0);
     }
   }, [isOpen, repeatMode, player]);
@@ -379,7 +376,6 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
     releaseManualSelectionLock();
     clearLoopTimeout();
     setRepeatMode(true);
-    setLoopingLineIndex(null);
     setAutoFollowEnabled(true);
     player.seek(0);
     player.play();
@@ -389,7 +385,6 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
     clearLoopTimeout();
     player?.pause();
     setRepeatMode(false);
-    setLoopingLineIndex(null);
     setRepeatTimeSec(0);
   };
 
@@ -404,7 +399,6 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
     setAutoFollowEnabled(false);
 
     clearLoopTimeout();
-    if (loopingLineIndex != null) setLoopingLineIndex(null);
 
     // defer seek/play side effects so selected highlight paints first
     requestAnimationFrame(() => {
@@ -422,39 +416,6 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
         onSeekTo(line.startSec);
       }
     });
-  };
-
-  const handleReplay = (line: LyricSectionLine, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!player) return;
-    releaseManualSelectionLock();
-
-    clearLoopTimeout();
-
-    const lineDuration = line.endSec - line.startSec;
-    const playDuration = Math.max(lineDuration + 0.3, 2.5) * 1000;
-
-    if (repeatMode) {
-      setLoopingLineIndex(line.lineIndex);
-      player.seek(line.startSec);
-      player.play();
-
-      const loop = () => {
-        player.seek(line.startSec);
-        player.play();
-        loopTimeoutRef.current = setTimeout(loop, playDuration);
-      };
-      loopTimeoutRef.current = setTimeout(loop, playDuration);
-      return;
-    }
-
-    setLoopingLineIndex(line.lineIndex);
-    player.seek(line.startSec);
-    player.play();
-    loopTimeoutRef.current = setTimeout(() => {
-      player.pause();
-      setLoopingLineIndex(null);
-    }, playDuration);
   };
 
   const handleReact = async (emoji: EmojiKey, lineIndex?: number) => {
@@ -573,7 +534,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: '100%', opacity: 0 }}
           transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
-          className="fixed left-0 right-0 bottom-[48px] z-40 h-[88vh] flex flex-col overflow-hidden"
+          className="fixed left-0 right-0 bottom-0 z-40 h-[92vh] flex flex-col overflow-hidden"
           style={{ background: '#0d0d0d', borderTop: '1px solid rgba(255,255,255,0.06)' }}
         >
           <div
@@ -644,7 +605,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                 {displaySectionLabel ? `now playing · ${displaySectionLabel}` : 'now playing'}
               </p>
               <span className="text-[8px] font-mono uppercase tracking-[0.16em] text-white/22 shrink-0 min-w-[54px] text-right">
-                {displayLineComments.length} takes
+                {displayLineComments.length} comments
               </span>
             </div>
 
@@ -687,21 +648,6 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
             </div>
 
             <div className="px-4 pb-3 relative min-h-[78px]">
-              <div className="h-5 mb-2 flex items-center gap-2">
-                <span className="text-[9px] font-mono text-white/25 uppercase tracking-wide shrink-0">replying to</span>
-                <span className={`text-[10px] font-mono text-white/40 truncate ${replyingTo ? 'opacity-100' : 'opacity-0'}`}>
-                  {replyingTo ? `"${replyingTo.text.slice(0, 40)}"` : 'placeholder'}
-                </span>
-                <button
-                  onClick={() => setReplyingTo(null)}
-                  className={`text-white/20 hover:text-white/50 transition-colors ml-auto shrink-0 focus:outline-none ${replyingTo ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <line x1="2" y1="2" x2="8" y2="8" /><line x1="8" y1="2" x2="2" y2="8" />
-                  </svg>
-                </button>
-              </div>
-
               {liftingText && (
                 <div
                   className="absolute left-4 right-4 pointer-events-none"
@@ -731,14 +677,14 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                         else onClose();
                       }
                     }}
-                    placeholder={replyingTo ? 'write your reply...' : 'drop your take on this line...'}
+                    placeholder="leave a comment..."
                     maxLength={200}
                     className="w-full h-11 bg-white/[0.04] border border-white/[0.08] rounded-lg px-4 text-[12px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors pr-8"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/15 pointer-events-none">↵</span>
                 </div>
                 <div className={`absolute inset-0 flex items-center justify-center text-[10px] font-mono text-white/30 transition-opacity ${hasSubmitted ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                  ✓ take dropped
+                  ✓ posted
                 </div>
               </div>
             </div>
@@ -791,33 +737,24 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                             {line.text}
                           </span>
 
-                          <div className="w-[82px] shrink-0 flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={e => handleReplay(line, e)}
-                              className="h-6 w-6 rounded-full text-[10px] font-mono text-white/28 hover:text-white/58 transition-colors"
-                            >
-                              ↺
-                            </button>
-
+                          {(totalLineReactions > 0 || lineCommentCount > 0) && (() => (
                             <button
                               onClick={e => {
                                 e.stopPropagation();
                                 setExpandedLineIndex(prev => (prev === line.lineIndex ? null : line.lineIndex));
                               }}
-                              className={`h-6 min-w-[52px] px-2 rounded-full border text-[9px] font-mono transition-colors ${isExpanded ? 'border-white/30 text-white/70' : 'border-white/10 text-white/28 hover:text-white/55'}`}
+                              className={`h-6 px-2 rounded-full border text-[9px] font-mono transition-colors ${isExpanded ? 'border-white/30 text-white/70' : 'border-white/10 text-white/30 hover:text-white/55'}`}
                             >
-                              <span className="inline-flex items-center justify-center gap-1">
-                                <span style={{ opacity: lineCommentCount > 0 ? 1 : 0.25 }}>{lineCommentCount > 0 ? lineCommentCount : 0}</span>
-                                <span>takes</span>
+                              <span className="inline-flex items-center justify-center gap-1.5">
+                                {topReaction && (
+                                  <span>
+                                    {topReaction.symbol} {totalLineReactions}
+                                  </span>
+                                )}
+                                {lineCommentCount > 0 && <span>💬 {lineCommentCount}</span>}
                               </span>
                             </button>
-
-                            <div className="h-6 min-w-[20px] text-right text-[10px] font-mono text-white/35">
-                              <span className={totalLineReactions > 0 ? 'opacity-100' : 'opacity-0'}>
-                                {topReaction?.symbol ?? '·'}{totalLineReactions > 0 ? totalLineReactions : ''}
-                              </span>
-                            </div>
-                          </div>
+                          ))()}
                         </div>
 
                         {isExpanded && (
@@ -826,7 +763,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                             style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}
                           >
                             {expandedLineComments.length === 0 ? (
-                              <p className="text-[11px] font-mono text-white/20 text-center py-5">no takes yet — be first</p>
+                              <p className="text-[11px] font-mono text-white/20 text-center py-5">no comments yet</p>
                             ) : (
                               <div>
                                 {(() => {
