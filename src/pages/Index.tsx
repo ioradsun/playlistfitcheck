@@ -104,11 +104,23 @@ const ToolSkeleton = ({ tab }: { tab: string }) => {
   }
 
   if (tab === "lyric") {
+    // Matches LyricsTab State A: flex-1 px-4 py-6 space-y-3 → LyricDisplay layout
     return (
-      <div className="animate-pulse space-y-4 px-4 py-6 max-w-2xl mx-auto">
-        <div className="h-8 w-56 rounded-md bg-muted/60" />
-        <div className="h-48 rounded-xl bg-muted/50" />
-        <div className="h-72 rounded-xl bg-muted/50" />
+      <div className="flex-1 flex flex-col px-4 py-6 space-y-3">
+        {/* Title bar placeholder */}
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-md bg-muted/60" />
+          <div className="h-6 w-48 rounded-md bg-muted/60" />
+          <div className="ml-auto h-7 w-20 rounded-md bg-muted/50" />
+        </div>
+        {/* Waveform / timeline placeholder */}
+        <div className="h-16 rounded-lg bg-muted/40" />
+        {/* Lyric lines placeholder — fills remaining space */}
+        <div className="flex-1 space-y-2.5 min-h-0">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="h-5 rounded bg-muted/30" style={{ width: `${55 + Math.sin(i * 1.7) * 30}%` }} />
+          ))}
+        </div>
       </div>
     );
   }
