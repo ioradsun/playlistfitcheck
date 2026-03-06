@@ -339,7 +339,6 @@ const Index = () => {
   
   const [headerProject, setHeaderProject] = useState<{ title: string; onBack: () => void; rightContent?: React.ReactNode } | null>(null);
   const [loadedMixProject, setLoadedMixProject] = useState<MixProjectData | null>(null);
-  const [loadedLyric, setLoadedLyric] = useState<any>(null);
   const [vibeAnalysis, setVibeAnalysis] = useState<VibeAnalysis | null>(null);
   const [vibeLoading, setVibeLoading] = useState(false);
   const [songFitAnalysis, setSongFitAnalysis] = useState<SongFitAnalysis | null>(null);
