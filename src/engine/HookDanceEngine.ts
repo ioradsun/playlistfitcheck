@@ -274,7 +274,7 @@ export class HookDanceEngine {
       try {
         this.audioRef.currentTime = this.hookStart;
       } catch (e) {
-        console.warn("[HookDanceEngine] seek failed, retrying after load:", e);
+        // seek failed, retrying after load
       }
       this.audioRef.play()
         .then(() => {
