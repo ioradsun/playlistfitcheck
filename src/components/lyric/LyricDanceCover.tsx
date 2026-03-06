@@ -1,4 +1,5 @@
 import React from "react";
+import { RotateCcw } from "lucide-react";
 
 interface LyricDanceCoverProps {
   songName: string;
@@ -42,7 +43,7 @@ export function LyricDanceCover({
         )}
       </div>
 
-      {/* Center: song title + Listen Now */}
+      {/* Center: song title + Replay button */}
       <div className="flex-1 flex flex-col items-center justify-center px-6">
         {songName ? (
           <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[85%] mb-6">{songName}</h2>
@@ -63,9 +64,10 @@ export function LyricDanceCover({
         ) : (
           <button
             onClick={onListen}
-            className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+            className="flex items-center gap-2 px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
           >
-            Listen Now
+            <RotateCcw size={14} />
+            Replay
           </button>
         )}
       </div>
