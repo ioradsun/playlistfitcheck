@@ -264,10 +264,11 @@ const Index = () => {
         return;
       }
       projectLoadedRef.current = projectId;
-      startTransition(() => {
+      // Set both atomically — no intermediate render with null data + "ready" state
+      ReactDOM.flushSync(() => {
         setLoadedLyric(data);
+        setLyricLoadingState("ready");
       });
-      setLyricLoadingState("ready");
     })();
   }, [activeTab, projectId, user?.id]);
 
