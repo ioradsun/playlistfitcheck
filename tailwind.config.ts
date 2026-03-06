@@ -95,16 +95,11 @@ export default {
           "0%, 100%": { opacity: "1", filter: "blur(0px)" },
           "50%": { opacity: "0.55", filter: "blur(0.3px)" },
         },
-        marquee: {
-          "0%": { transform: "translateX(0%)" },
-          "100%": { transform: "translateX(-50%)" },
-        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "signal-pulse": "signal-pulse 1400ms ease-in-out infinite",
-        marquee: "marquee 14s linear infinite",
       },
     },
   },

@@ -247,7 +247,9 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
           <div className="flex items-center gap-2 px-3 py-2" style={{ background: "rgba(0,0,0,0.85)" }}
             onClick={(e) => e.stopPropagation()}>
             <button
-              className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.07] text-left overflow-hidden min-w-0 group hover:border-white/15 transition-all"
+              className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border text-left overflow-hidden min-w-0 transition-all duration-300 ${
+                reactionPanelOpen ? 'border-white/15' : 'border-white/[0.05]'
+              }`}
               style={{ background: "rgba(255,255,255,0.02)" }}
               onClick={() => setReactionPanelOpen(true)}
             >
@@ -256,13 +258,25 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
                   {(() => {
                     const topEmoji = getTopEmojiForLine(reactionData, activeLine.lineIndex);
                     return topEmoji ? (
-                      <span className="text-[11px] leading-none shrink-0 select-none">{topEmoji}</span>
+                      <span
+                        className="text-[11px] leading-none shrink-0 select-none transition-all duration-300"
+                        style={{ filter: reactionPanelOpen ? 'none' : 'grayscale(1)', opacity: reactionPanelOpen ? 1 : 0.5 }}
+                      >
+                        {topEmoji}
+                      </span>
                     ) : (
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                        style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }} />
+                      <div
+                        className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse transition-all duration-300"
+                        style={{
+                          background: reactionPanelOpen ? (palette[1] ?? "#ffffff") : "#ffffff",
+                          opacity: reactionPanelOpen ? 0.6 : 0.25,
+                        }}
+                      />
                     );
                   })()}
-                  <span className="text-[10px] font-mono text-white/45 truncate group-hover:text-white/65 transition-colors">
+                  <span className={`text-[10px] font-mono truncate transition-colors duration-300 ${
+                    reactionPanelOpen ? 'text-white/65' : 'text-white/30'
+                  }`}>
                     {activeLine.text}
                   </span>
                 </>
@@ -274,11 +288,15 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
             </button>
 
             <button
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-md border transition-all duration-300 shrink-0 ${
+                reactionPanelOpen
+                  ? 'border-white/25 text-white/80 bg-white/[0.06]'
+                  : 'border-white/[0.08] text-white/25 hover:text-white/50 hover:border-white/15'
+              }`}
               onClick={() => setReactionPanelOpen(true)}
             >
               <span className="text-[10px] font-mono uppercase tracking-wider">React</span>
-              <span className="text-[9px] opacity-60">↑</span>
+              <span className={`text-[9px] transition-opacity duration-300 ${reactionPanelOpen ? 'opacity-80' : 'opacity-30'}`}>↑</span>
             </button>
           </div>
 
