@@ -1,31 +1,34 @@
 
 
-# Download Export Modal — Implementation Complete
+## Optimistic Sidebar Items for VibeFit, ProFit, and MixFit
 
-## Summary
+### What
+Wire `onOptimisticItem` prop to VibeFitTab, ProFitTab, and MixFitCheck so newly created projects appear instantly in the sidebar — matching the pattern already implemented for HitFitTab and PlaylistFit.
 
-Replaced the "Republish" button in the FIT tab with a "Download" button that opens a full export modal (`FitExportModal`). Removed the download popover from the `ShareableLyricDance` page.
+### Changes
 
-## Files Changed
+**1. `src/components/vibefit/VibeFitTab.tsx`**
+- Add `import type { RecentItem } from "@/components/AppSidebar"`
+- Add `onOptimisticItem?: (item: RecentItem) => void` to `VibeFitTabProps`
+- Destructure `onOptimisticItem` in function signature
+- After `onSavedId?.(inserted.id)` (line ~123), call `onOptimisticItem` with `{ id: inserted.id, label: input.songTitle || "VibeFit", meta: "just now", type: "vibefit", rawData: { input, result: output } }`
 
-| File | Action |
-|------|--------|
-| `src/components/lyric/FitExportModal.tsx` | **Created** — Export modal with format/quality selection, progress states, download |
-| `src/components/songfit/InlineLyricDance.tsx` | **Edited** — Added `forwardRef` + `useImperativeHandle` to expose player |
-| `src/components/lyric/FitTab.tsx` | **Edited** — Replaced Republish with Download button + FitExportModal |
-| `src/pages/ShareableLyricDance.tsx` | **Edited** — Removed download popover, export state, and handleExport |
+**2. `src/components/profit/ProFitTab.tsx`**
+- Add `import type { RecentItem } from "@/components/AppSidebar"`
+- Add `onOptimisticItem?: (item: RecentItem) => void` to `ProFitTabProps`
+- Destructure `onOptimisticItem` in function signature
+- Expand the `if (data.reportId)` block (line ~58) to also call `onOptimisticItem` with `{ id: data.reportId, label: data.artist?.name || "Artist Report", meta: "just now", type: "profit", rawData: { reportId, shareToken, blueprint, artist } }`
 
-## Architecture
+**3. `src/pages/MixFitCheck.tsx`**
+- Add `import type { RecentItem } from "@/components/AppSidebar"`
+- Add `onOptimisticItem?: (item: RecentItem) => void` to `MixFitCheckProps`
+- Destructure `onOptimisticItem` in function signature
+- After `onSavedId?.(newId)` (line ~140), call `onOptimisticItem` with `{ id: newId, label: t || "Mix Project", meta: "just now", type: "mix", rawData: { id, title, notes, mixes metadata } }`
 
-- `InlineLyricDance` exposes `InlineLyricDanceHandle.getPlayer()` via `forwardRef`
-- `FitTab` holds a ref to `InlineLyricDance` and passes `getPlayer` to `FitExportModal`
-- `FitExportModal` uses `exportVideoAsMP4` from `src/engine/exportVideo.ts` (WebCodecs + mp4-muxer)
-- Export is video-only; audio notice is displayed in the modal
+**4. `src/pages/Index.tsx`**
+- Add `onOptimisticItem={(item) => setOptimisticSidebarItem(item)}` to:
+  - `<MixFitCheck>` (line ~805)
+  - `<ProFitTab>` (line ~839)
+  - `<VibeFitTab>` (line ~883)
+- HitFitTab already has it — no change needed.
 
-## Export Options
-
-| Quality | 9:16 | 16:9 | 1:1 |
-|---------|------|------|-----|
-| 1080p | 1080×1920 | 1920×1080 | 1080×1080 |
-| 720p | 720×1280 | 1280×720 | 720×720 |
-| 480p | 480×854 | 854×480 | 480×480 |
