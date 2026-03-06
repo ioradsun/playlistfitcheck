@@ -405,8 +405,40 @@ export function SongFitFeed() {
       />
 
       {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 size={24} className="animate-spin text-muted-foreground" />
+        <div className="space-y-0">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="border-b border-border/40 animate-pulse">
+              {/* Header skeleton */}
+              <div className="flex items-center gap-3 px-3 py-2.5">
+                <div className="h-10 w-10 rounded-full bg-muted" />
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-3 w-24 rounded bg-muted" />
+                  <div className="h-2.5 w-16 rounded bg-muted" />
+                </div>
+              </div>
+              {/* Media skeleton — matches tier 1 card (310px) */}
+              <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ height: 310 }}>
+                <div className="absolute inset-0 bg-gradient-to-br from-zinc-800/60 via-zinc-900/60 to-black/60" />
+                <div className="absolute left-3 bottom-3 right-3 space-y-1.5">
+                  <div className="h-3.5 w-40 rounded bg-white/10" />
+                  <div className="h-2.5 w-28 rounded bg-white/[0.06]" />
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="h-14 w-14 rounded-full bg-white/[0.06]" />
+                </div>
+              </div>
+              {/* Action row skeleton */}
+              <div className="flex items-center gap-3 px-3 py-2">
+                {[0, 1, 2, 3].map(j => (
+                  <div key={j} className="h-5 w-5 rounded-full bg-muted" />
+                ))}
+              </div>
+              {/* Caption skeleton */}
+              <div className="px-3 pb-3 space-y-1">
+                <div className="h-2.5 w-3/4 rounded bg-muted" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : posts.length === 0 ? (
         <div className="text-center py-16 space-y-3">
