@@ -974,24 +974,6 @@ export function LyricFitTab({
 
   const fitDisabled = !transcriptionDone;
 
-  useEffect(() => {
-    console.log(`[FitTab Debug] ${fitPipelineMs()} FitTab enabled/disabled state: ${fitDisabled ? "disabled" : "enabled"}`);
-  }, [fitDisabled, fitPipelineMs]);
-
-
-  useEffect(() => {
-    console.log(`[FitTab Debug] ${fitPipelineMs()} sectionsReady changed to ${sectionsReady}`);
-  }, [sectionsReady, fitPipelineMs]);
-
-  useEffect(() => {
-    const directionReady = !!cinematicDirection;
-    console.log(`[FitTab Debug] ${fitPipelineMs()} directionReady changed to ${directionReady}`);
-  }, [cinematicDirection, fitPipelineMs]);
-
-  useEffect(() => {
-    const imagesReady = !!(cinematicDirection?.sections && cinematicDirection.sections.some((section: any) => section.imagePrompt || section.image));
-    console.log(`[FitTab Debug] ${fitPipelineMs()} imagesReady changed to ${imagesReady}`);
-  }, [cinematicDirection, fitPipelineMs]);
 
 
   const sceneInputNode = !lyricData ? (
