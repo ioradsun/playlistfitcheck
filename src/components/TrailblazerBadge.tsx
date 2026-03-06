@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { motion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTrailblazer } from "@/hooks/useTrailblazer";
@@ -7,7 +8,7 @@ interface TrailblazerBadgeProps {
   compact?: boolean;
 }
 
-export function TrailblazerBadge({ userId, compact = false }: TrailblazerBadgeProps) {
+export const TrailblazerBadge = forwardRef<HTMLSpanElement, TrailblazerBadgeProps>(function TrailblazerBadge({ userId, compact = false }, ref) {
   const { number, total, isBlazer, loading } = useTrailblazer(userId);
 
   if (loading || !isBlazer) return null;
