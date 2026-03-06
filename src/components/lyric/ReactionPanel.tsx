@@ -631,7 +631,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   }}
                   className="text-[8px] font-mono uppercase tracking-[0.15em] text-white/30 hover:text-white/60 transition-colors px-1.5 py-0.5 rounded border border-white/[0.08] hover:border-white/15"
                 >
-                  ▶ Play
+                  ↺ Replay
                 </button>
                 <button
                   onClick={onClose}
