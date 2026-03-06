@@ -701,11 +701,6 @@ serve(async (req) => {
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
     const transcriptionEngine = useGeminiTranscription ? "gemini" : "scribe_v2";
-    console.log(
-      `[v12.0] Pipeline: transcription=${transcriptionEngine}, ` +
-      `analysis=${analysisDisabled ? "disabled" : resolvedAnalysisModel}, ` +
-      `~${(estimatedBytes / 1024 / 1024).toFixed(1)} MB, format: ${ext}`
-    );
 
     // ── Stage 1: Transcription ──
     // For Scribe: pass raw bytes directly (no base64 round-trip)
