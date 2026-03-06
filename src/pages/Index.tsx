@@ -656,8 +656,10 @@ const Index = () => {
             setVibeLoading(false);
             setSongFitLoading(false);
             if (data.id) navTarget = `/PlaylistFit/${data.id}`;
+          } else if (data?.playlist_url) {
+            // No report_data yet — navigate now, re-fetch handled below
+            if (data.id) navTarget = `/PlaylistFit/${data.id}`;
           }
-          // NOTE: playlist_url re-fetch path handled below outside flushSync
           break;
         }
         case "mix": {
@@ -703,30 +705,36 @@ const Index = () => {
     if (type === "playlist" && !data?.report_data && data?.playlist_url) {
       (async () => {
         setVibeLoading(true);
+        setSongFitLoading(false);
         try {
           const { data: plData, error } = await supabase.functions.invoke("spotify-playlist", {
             body: { playlistUrl: data.playlist_url, sessionId: null, songUrl: data.song_url || null },
           });
           if (error) throw new Error(error.message);
           if (plData?.error) throw new Error(plData.error);
-          // Set result directly without saving (project already exists)
           const plInput = plData as PlaylistInput;
           const output = computePlaylistHealth(plInput);
           const trackList = (plData as any)._trackList;
           const songUrl = data.song_url || undefined;
           setResult({ output, input: plInput, name: plInput.playlistName, key: Date.now(), trackList, songUrl });
-          // Update the existing saved_search with report data
           savedSearchIdRef.current = data.id;
           if (trackList && trackList.length > 0) {
             fetchVibeAnalysis(plInput, trackList);
             if (songUrl) {
               fetchSongFitAnalysis(songUrl, plInput, trackList, output);
+            } else {
+              setSongFitLoading(false);
             }
+          } else {
+            // No trackList — mark loading as done so report_data saves
+            setVibeLoading(false);
+            setSongFitLoading(false);
           }
         } catch (e) {
           console.error("Re-run error:", e);
           toast.error("Failed to load report. Try running PlaylistFit again.");
           setVibeLoading(false);
+          setSongFitLoading(false);
         }
       })();
     }
