@@ -12,12 +12,12 @@ import { sessionAudio } from "@/lib/sessionAudioCache";
 import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import type { LyricData, LyricLine } from "./LyricDisplay";
 import { songSignatureAnalyzer, type SongSignature } from "@/lib/songSignatureAnalyzer";
-import { detectSections, type TimestampedLine } from "@/engine/sectionDetector";
+import { detectSections, type SectionRole, type TimestampedLine } from "@/engine/sectionDetector";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
-import { computeConfidence, useLyricSections } from "@/hooks/useLyricSections";
-import { mergeSectionOverrides, type SectionOverrides } from "@/lib/mergeSectionOverrides";
+import { useLyricSections } from "@/hooks/useLyricSections";
+import { mergeSectionOverrides, type SectionOverride, type SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { SceneContextResult } from "@/lib/sceneContexts";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
@@ -104,6 +104,7 @@ export function LyricFitTab({
   const [versionMeta, setVersionMeta] = useState<any | null>(initialLyric?.version_meta ?? null);
   const [words, setWords] = useState<Array<{ word: string; start: number; end: number }> | null>(initialLyric?.words ?? null);
   const [sectionOverrides, setSectionOverrides] = useState<SectionOverrides | null>(initialLyric?.section_overrides ?? null);
+  const [sectionsDirty, setSectionsDirty] = useState(false);
 
   const [renderData, setRenderData] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
@@ -156,6 +157,43 @@ export function LyricFitTab({
     () => mergeSectionOverrides(detectedSections, sectionOverrides),
     [detectedSections, sectionOverrides],
   );
+
+  const handleSectionOverridesChange = useCallback((overrides: SectionOverrides) => {
+    const prev = sectionOverrides || [];
+    const rolesChanged = overrides.some((override) => {
+      const old = prev.find((item) => item.sectionIndex === override.sectionIndex);
+      return !!(override.role && (!old || old.role !== override.role));
+    });
+    const newSections = overrides.some((override) => override.isNew && !prev.some((item) => item.sectionIndex === override.sectionIndex));
+    if (rolesChanged || newSections) setSectionsDirty(true);
+    setSectionOverrides(overrides);
+  }, [sectionOverrides]);
+
+  const handleAddSection = useCallback((role: SectionRole, startSec: number, endSec: number) => {
+    const maxIndex = Math.max(0, ...(sectionOverrides || []).map((o) => o.sectionIndex), ...detectedSections.map((section) => section.sectionIndex));
+    const newOverride: SectionOverride = {
+      sectionIndex: maxIndex + 100,
+      role,
+      startSec,
+      endSec: Math.min(endSec, audioDurationSec),
+      isNew: true,
+    };
+    setSectionOverrides((prev) => [...(prev || []), newOverride]);
+    setSectionsDirty(true);
+  }, [sectionOverrides, detectedSections, audioDurationSec]);
+
+  const handleRemoveSection = useCallback((sectionIndex: number) => {
+    setSectionOverrides((prev) => {
+      const current = prev || [];
+      const existing = current.find((item) => item.sectionIndex === sectionIndex);
+      if (existing?.isNew) {
+        return current.filter((item) => item.sectionIndex !== sectionIndex);
+      }
+      const withoutExisting = current.filter((item) => item.sectionIndex !== sectionIndex);
+      return [...withoutExisting, { sectionIndex, removed: true }];
+    });
+    setSectionsDirty(true);
+  }, []);
 
   const sectionsReady = audioSections.length > 0;
   const fitPipelineT0Ref = useRef<number | null>(null);
@@ -538,9 +576,17 @@ export function LyricFitTab({
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
       const sceneContext = resolvedScene ?? null;
-      const enrichedAudioSections = audioSections.map((s) => ({
-        ...s,
-        confidence: computeConfidence(s),
+      const sectionsForAI = mergedSections.map((section, i) => ({
+        index: i,
+        startSec: section.startSec,
+        endSec: section.endSec,
+        role: section.role,
+        avgEnergy: 0.5,
+        beatDensity: 1.5,
+        confidence: section.confidence,
+        lyrics: sourceLines
+          .filter((line) => line.start >= section.startSec - 0.5 && line.end <= section.endSec + 0.5)
+          .map((line, lineIndex) => ({ text: line.text, lineIndex })),
       }));
 
       const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
@@ -564,7 +610,7 @@ export function LyricFitTab({
                 lyricDensity: songSignature.lyricDensity,
               }
             : undefined,
-          audioSections: enrichedAudioSections.length ? enrichedAudioSections : undefined,
+          audioSections: sectionsForAI.length ? sectionsForAI : undefined,
           lyricId: savedIdRef.current || undefined,
           scene_context: sceneContext,
           words: words ?? undefined,
@@ -579,11 +625,11 @@ export function LyricFitTab({
           : dirResult.cinematicDirection;
 
         // Merge audioSections time boundaries into direction sections
-        if (audioSections.length > 0 && Array.isArray(enrichedDirection.sections)) {
+        if (sectionsForAI.length > 0 && Array.isArray(enrichedDirection.sections)) {
           enrichedDirection.sections = enrichedDirection.sections.map((s: any, i: number) => ({
             ...s,
-            startSec: audioSections[i]?.startSec ?? s.startSec,
-            endSec: audioSections[i]?.endSec ?? s.endSec,
+            startSec: sectionsForAI[i]?.startSec ?? s.startSec,
+            endSec: sectionsForAI[i]?.endSec ?? s.endSec,
           }));
           console.log('[Pipeline] Merged audioSections time boundaries into direction sections:', 
             enrichedDirection.sections.map((s: any, i: number) => ({ index: i, startSec: s.startSec, endSec: s.endSec })));
@@ -735,7 +781,7 @@ export function LyricFitTab({
     } catch {
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error", sectionImages: "idle" }));
     }
-  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, renderData, persistRenderData, songSignature, audioSections, fitPipelineMs]);
+  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, renderData, persistRenderData, songSignature, audioSections, fitPipelineMs, mergedSections, words, user, audioFile, initialLyric]);
 
   const sectionPipelineRunningRef = useRef(false);
   const sectionPipelineDoneRef = useRef(false);
@@ -1045,6 +1091,7 @@ export function LyricFitTab({
             setAudioSections([]);
             setGenerationStatus({ beatGrid: "idle", renderData: "idle", cinematicDirection: "idle", sectionImages: "idle" });
             setSectionOverrides(null);
+            setSectionsDirty(false);
             setFitReadiness("not_started");
             setFitUnlocked(false);
             cinematicTriggeredRef.current = false;
@@ -1085,8 +1132,15 @@ export function LyricFitTab({
           audioSections={audioSections}
           words={words}
           sectionOverrides={sectionOverrides}
-          onSectionOverridesChange={setSectionOverrides}
+          onSectionOverridesChange={handleSectionOverridesChange}
           mergedSections={mergedSections}
+          sectionsDirty={sectionsDirty}
+          onRegenerateSectionsVisuals={() => {
+            setSectionsDirty(false);
+            void startCinematicDirection(lines, true);
+          }}
+          onAddSection={handleAddSection}
+          onRemoveSection={handleRemoveSection}
           onRetry={retryGeneration}
           onHeaderProject={onHeaderProject}
           onBack={() => handleViewChange("lyrics")}

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { SectionRole } from "@/engine/sectionDetector";
 import type { LyricLine } from "./LyricDisplay";
 import type { LyricSection } from "@/hooks/useLyricSections";
-import type { SectionOverrides } from "@/lib/mergeSectionOverrides";
+import type { SectionOverride, SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { CinematicSection } from "@/types/CinematicDirection";
 
 interface SectionTimelineProps {
@@ -20,6 +20,8 @@ interface SectionTimelineProps {
   onSectionOverridesChange: (overrides: SectionOverrides) => void;
   palette: string[];
   cinematicSections?: CinematicSection[];
+  onAddSection?: (role: SectionRole, startSec: number, endSec: number) => void;
+  onRemoveSection?: (sectionIndex: number) => void;
 }
 
 const SECTION_COLORS: Record<SectionRole, string> = {
@@ -31,6 +33,17 @@ const SECTION_COLORS: Record<SectionRole, string> = {
   drop: "#EC4899",
   breakdown: "#14B8A6",
   outro: "#6B7280",
+};
+
+const LABEL_MAP: Record<SectionRole, string> = {
+  intro: "Intro",
+  verse: "Verse",
+  prechorus: "Pre-Chorus",
+  chorus: "Chorus",
+  bridge: "Bridge",
+  drop: "Drop",
+  breakdown: "Breakdown",
+  outro: "Outro",
 };
 
 const ROLES = Object.keys(SECTION_COLORS) as SectionRole[];
@@ -45,106 +58,110 @@ function formatTime(sec: number): string {
   return `${m}:${s}`;
 }
 
+function sectionUid(section: LyricSection): string {
+  return String(section.sectionIndex);
+}
+
+function instanceLabel(section: LyricSection, allSections: LyricSection[]): string {
+  const same = allSections.filter((s) => s.role === section.role).sort((a, b) => a.startSec - b.startSec);
+  if (same.length <= 1) return LABEL_MAP[section.role];
+  return `${LABEL_MAP[section.role]} ${same.findIndex((s) => s.sectionIndex === section.sectionIndex) + 1}`;
+}
+
+function firstLineForSection(section: LyricSection, lyrics: LyricLine[]): LyricLine | null {
+  return lyrics.find((line) => line.start < section.endSec && line.end >= section.startSec) ?? null;
+}
+
+function autoAdjust(sections: LyricSection[], movedIndex: number): LyricSection[] {
+  const next = sections.map((section) => ({ ...section }));
+  const moved = next[movedIndex];
+  if (!moved) return next;
+
+  if (movedIndex > 0) {
+    next[movedIndex - 1].endSec = moved.startSec;
+  }
+  if (movedIndex < next.length - 1) {
+    next[movedIndex + 1].startSec = moved.endSec;
+  }
+
+  return next.filter((section) => section.endSec - section.startSec >= MIN_SECTION_DURATION_SEC);
+}
+
+function buildOverrides(sections: LyricSection[], previous: SectionOverrides | null): SectionOverrides {
+  const prev = previous ?? [];
+  return sections.map<SectionOverride>((section) => {
+    const old = prev.find((o) => o.sectionIndex === section.sectionIndex);
+    return {
+      sectionIndex: section.sectionIndex,
+      role: section.role,
+      startSec: section.startSec,
+      endSec: section.endSec,
+      isNew: old?.isNew,
+    };
+  });
+}
+
 export function SectionTimeline({
   sections,
   lyrics,
   waveformPeaks,
   durationSec,
   currentTimeSec,
+  isPlaying,
   onSeek,
   onTogglePlay,
   sectionOverrides,
   onSectionOverridesChange,
-  cinematicSections,
+  onAddSection,
+  onRemoveSection,
 }: SectionTimelineProps) {
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [rolePickerOpen, setRolePickerOpen] = useState(false);
-  const [draggingBoundary, setDraggingBoundary] = useState<number | null>(null);
+  const [activeUid, setActiveUid] = useState<string | null>(null);
+  const [drag, setDrag] = useState<{ uid: string; edge: "start" | "end" } | null>(null);
+  const [addDropdownOpen, setAddDropdownOpen] = useState(false);
   const timelineRef = useRef<HTMLDivElement | null>(null);
-  const pickerRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setRolePickerOpen(false);
-      }
-    };
-    window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
-  }, []);
-
-  const activeSection = useMemo(
-    () => sections.find((s) => currentTimeSec >= s.startSec && currentTimeSec < s.endSec) ?? sections[0] ?? null,
-    [sections, currentTimeSec],
-  );
-
-  useEffect(() => {
-    if (selectedIndex === null && activeSection) setSelectedIndex(activeSection.sectionIndex);
-  }, [activeSection, selectedIndex]);
-
-  const selected = useMemo(
-    () => sections.find((s) => s.sectionIndex === selectedIndex) ?? null,
-    [sections, selectedIndex],
-  );
-
-  const aiSuggestions = useMemo(() => {
-    if (!cinematicSections?.length) return new Map();
-    const map = new Map<number, {
-      label?: string;
-      suggestedStartSec?: number;
-      suggestedEndSec?: number;
-      aiLabelDiffersFromRole: boolean;
-    }>();
-    for (const cs of cinematicSections) {
-      const matchedSection = sections.find((s) => s.sectionIndex === cs.sectionIndex);
-      if (!matchedSection) continue;
-      const aiLabel = cs.structuralLabel?.trim();
-      const aiLabelDiffersFromRole = !!(
-        aiLabel &&
-        matchedSection.labelSource !== "user" &&
-        aiLabel.toLowerCase() !== matchedSection.label.toLowerCase()
-      );
-      if (aiLabelDiffersFromRole || cs.suggestedStartSec != null || cs.suggestedEndSec != null) {
-        map.set(cs.sectionIndex, {
-          label: aiLabel,
-          suggestedStartSec: cs.suggestedStartSec,
-          suggestedEndSec: cs.suggestedEndSec,
-          aiLabelDiffersFromRole,
-        });
-      }
+  const activeSection = useMemo(() => {
+    if (!sections.length) return null;
+    if (activeUid) {
+      return sections.find((section) => sectionUid(section) === activeUid) ?? null;
     }
-    return map;
-  }, [cinematicSections, sections]);
-
-
-  const upsertOverride = (patch: { sectionIndex: number; role?: SectionRole; startSec?: number; endSec?: number }) => {
-    const current = sectionOverrides ?? [];
-    const existing = current.find((o) => o.sectionIndex === patch.sectionIndex);
-    const next = existing
-      ? current.map((o) => (o.sectionIndex === patch.sectionIndex ? { ...o, ...patch } : o))
-      : [...current, patch];
-    onSectionOverridesChange(next);
-  };
+    return sections.find((section) => currentTimeSec >= section.startSec && currentTimeSec < section.endSec) ?? sections[0];
+  }, [sections, activeUid, currentTimeSec]);
 
   useEffect(() => {
-    if (draggingBoundary === null) return;
+    if (!sections.length) {
+      setActiveUid(null);
+      return;
+    }
+    if (!activeSection) {
+      setActiveUid(sectionUid(sections[0]));
+    }
+  }, [sections, activeSection]);
+
+  useEffect(() => {
+    if (!drag) return;
 
     const onMove = (e: MouseEvent) => {
       if (!timelineRef.current) return;
       const rect = timelineRef.current.getBoundingClientRect();
       const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       const t = ratio * durationSec;
-      const left = sections[draggingBoundary];
-      const right = sections[draggingBoundary + 1];
-      if (!left || !right) return;
-      const min = left.startSec + MIN_SECTION_DURATION_SEC;
-      const max = right.endSec - MIN_SECTION_DURATION_SEC;
-      const clamped = Math.max(min, Math.min(max, t));
-      upsertOverride({ sectionIndex: left.sectionIndex, endSec: clamped });
-      upsertOverride({ sectionIndex: right.sectionIndex, startSec: clamped });
+      const movedIndex = sections.findIndex((section) => sectionUid(section) === drag.uid);
+      if (movedIndex === -1) return;
+
+      const moved = { ...sections[movedIndex] };
+      if (drag.edge === "start") {
+        moved.startSec = Math.max(0, Math.min(moved.endSec - MIN_SECTION_DURATION_SEC, t));
+      } else {
+        moved.endSec = Math.min(durationSec, Math.max(moved.startSec + MIN_SECTION_DURATION_SEC, t));
+      }
+
+      const next = sections.map((section, idx) => (idx === movedIndex ? moved : { ...section }));
+      const adjusted = autoAdjust(next, movedIndex);
+      onSectionOverridesChange(buildOverrides(adjusted, sectionOverrides));
     };
 
-    const onUp = () => setDraggingBoundary(null);
+    const onUp = () => setDrag(null);
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -152,230 +169,197 @@ export function SectionTimeline({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [draggingBoundary, durationSec, sectionOverrides, sections]);
+  }, [drag, durationSec, sections, onSectionOverridesChange, sectionOverrides]);
+
+  const roleCounts = useMemo(() => {
+    const counts = new Map<SectionRole, number>();
+    sections.forEach((section) => {
+      counts.set(section.role, (counts.get(section.role) ?? 0) + 1);
+    });
+    return counts;
+  }, [sections]);
 
   return (
-    <div className="glass-card rounded-xl p-3 space-y-3 border border-border/40">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Section Editor</span>
-        <button onClick={onTogglePlay} className="text-[10px] font-mono text-primary hover:text-primary/80 transition-all duration-200">
-          {"Toggle Play"}
-        </button>
-      </div>
-
-      <div
-        ref={timelineRef}
-        className="relative h-[72px] rounded-lg bg-white/[0.03] overflow-hidden cursor-pointer"
-        onClick={(e) => {
-          if (!timelineRef.current) return;
-          const rect = timelineRef.current.getBoundingClientRect();
-          const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-          onSeek(ratio * durationSec);
-        }}
-      >
-        <div className="absolute inset-0 flex items-end gap-px px-1">
-          {(waveformPeaks.length ? waveformPeaks : new Array(120).fill(0.25)).map((peak, i, arr) => {
-            const t = (i / Math.max(arr.length - 1, 1)) * durationSec;
-            const sec = sections.find((s) => t >= s.startSec && t < s.endSec);
-            return (
-              <div key={i} className="w-full" style={{ height: `${Math.max(10, peak * 100)}%`, backgroundColor: sec ? SECTION_COLORS[sec.role] : "#64748B", opacity: 0.7 }} />
-            );
-          })}
+    <div className="glass-card rounded-xl border border-border/40 overflow-hidden">
+      <div className="p-3 border-b border-border/30">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Section Editor</span>
+          <button onClick={onTogglePlay} className="text-[10px] font-mono text-primary hover:text-primary/80 transition-colors">
+            {isPlaying ? "Pause" : "Play"}
+          </button>
         </div>
-
-        {sections.map((section, i) => (
-          <div key={section.sectionIndex}>
-            <div
-              className="absolute top-1 text-[9px] uppercase font-mono tracking-wide"
-              style={{ left: `${(section.startSec / durationSec) * 100}%`, color: SECTION_COLORS[section.role] }}
-            >
-              {section.role}
-            </div>
-            {i < sections.length - 1 && (
+        <div
+          ref={timelineRef}
+          className="relative h-[72px] rounded-lg bg-white/[0.03] overflow-hidden cursor-pointer"
+          onClick={(e) => {
+            if (!timelineRef.current) return;
+            const rect = timelineRef.current.getBoundingClientRect();
+            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            onSeek(ratio * durationSec);
+          }}
+        >
+          {sections.map((section) => {
+            const isActive = activeSection?.sectionIndex === section.sectionIndex;
+            return (
               <button
-                className="absolute top-0 bottom-0 w-2 -ml-1 cursor-ew-resize bg-white/30 hover:bg-white/60"
-                style={{ left: `${(section.endSec / durationSec) * 100}%` }}
-                onMouseDown={(e) => {
+                key={`band-${section.sectionIndex}`}
+                className="absolute top-0 bottom-0 transition-all duration-200"
+                style={{
+                  left: `${(section.startSec / Math.max(durationSec, 0.001)) * 100}%`,
+                  width: `${((section.endSec - section.startSec) / Math.max(durationSec, 0.001)) * 100}%`,
+                  background: `linear-gradient(180deg, ${SECTION_COLORS[section.role]}${isActive ? "99" : "3d"}, transparent)`,
+                  opacity: isActive ? 1 : 0.45,
+                }}
+                onClick={(e) => {
                   e.stopPropagation();
-                  setDraggingBoundary(i);
+                  setActiveUid(sectionUid(section));
                 }}
               />
-            )}
-          </div>
-        ))}
+            );
+          })}
 
-        {/* AI suggested boundaries — dashed markers */}
-        {sections.map((s) => {
-          const sug = aiSuggestions.get(s.sectionIndex);
-          if (!sug) return null;
+          <div className="absolute inset-0 flex items-end gap-px px-1 pointer-events-none">
+            {(waveformPeaks.length ? waveformPeaks : new Array(120).fill(0.25)).map((peak, i, arr) => {
+              const t = (i / Math.max(arr.length - 1, 1)) * durationSec;
+              const sec = sections.find((s) => t >= s.startSec && t < s.endSec);
+              const active = sec && activeSection?.sectionIndex === sec.sectionIndex;
+              return (
+                <div
+                  key={i}
+                  className="w-full transition-all duration-200"
+                  style={{
+                    height: `${Math.max(10, peak * 100)}%`,
+                    backgroundColor: sec ? SECTION_COLORS[sec.role] : "#64748B",
+                    opacity: active ? 0.95 : 0.55,
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          {activeSection && (
+            <>
+              <button
+                className="absolute top-0 bottom-0 w-1.5 -ml-[3px] cursor-ew-resize"
+                style={{
+                  left: `${(activeSection.startSec / Math.max(durationSec, 0.001)) * 100}%`,
+                  backgroundColor: SECTION_COLORS[activeSection.role],
+                  boxShadow: `0 0 10px ${SECTION_COLORS[activeSection.role]}`,
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  setDrag({ uid: sectionUid(activeSection), edge: "start" });
+                }}
+              />
+              <button
+                className="absolute top-0 bottom-0 w-1.5 -ml-[3px] cursor-ew-resize"
+                style={{
+                  left: `${(activeSection.endSec / Math.max(durationSec, 0.001)) * 100}%`,
+                  backgroundColor: SECTION_COLORS[activeSection.role],
+                  boxShadow: `0 0 10px ${SECTION_COLORS[activeSection.role]}`,
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  setDrag({ uid: sectionUid(activeSection), edge: "end" });
+                }}
+              />
+            </>
+          )}
+
+          <div className="absolute top-0 bottom-0 w-px bg-white" style={{ left: `${(currentTimeSec / Math.max(durationSec, 0.001)) * 100}%` }} />
+          <div className="absolute top-0 -ml-1.5 mt-1 h-3 w-3 rounded-full bg-white" style={{ left: `${(currentTimeSec / Math.max(durationSec, 0.001)) * 100}%` }} />
+        </div>
+      </div>
+
+      <div>
+        {sections.map((section, idx) => {
+          const isActive = activeSection?.sectionIndex === section.sectionIndex;
+          const preview = firstLineForSection(section, lyrics);
+          const rowLyrics = lyrics.filter((line) => line.start < section.endSec && line.end >= section.startSec);
           return (
-            <div key={`sug-${s.sectionIndex}`}>
-              {sug.suggestedStartSec != null && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: `${(sug.suggestedStartSec / durationSec) * 100}%`,
-                    top: 0,
-                    bottom: 0,
-                    width: 0,
-                    borderLeft: "1.5px dashed rgba(245, 158, 11, 0.4)",
-                    zIndex: 5,
-                    pointerEvents: "none",
-                  }}
-                />
-              )}
-              {sug.suggestedEndSec != null && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: `${(sug.suggestedEndSec / durationSec) * 100}%`,
-                    top: 0,
-                    bottom: 0,
-                    width: 0,
-                    borderLeft: "1.5px dashed rgba(245, 158, 11, 0.4)",
-                    zIndex: 5,
-                    pointerEvents: "none",
-                  }}
-                />
+            <div
+              key={section.sectionIndex}
+              className="transition-all duration-200 border-b border-border/30"
+              style={{
+                backgroundColor: isActive ? `${SECTION_COLORS[section.role]}12` : "transparent",
+                borderLeft: isActive ? `2px solid ${SECTION_COLORS[section.role]}` : "2px solid transparent",
+              }}
+            >
+              <div
+                className={`w-full px-3 py-2 text-left cursor-pointer ${isActive ? "" : "hover:bg-white/[0.015]"}`}
+                onClick={() => setActiveUid(sectionUid(section))}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setActiveUid(sectionUid(section)); }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: SECTION_COLORS[section.role] }} />
+                    <span className="text-sm text-foreground">{instanceLabel(section, sections)}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">{formatTime(section.startSec)}–{formatTime(section.endSec)}</span>
+                  </div>
+                  {isActive && onRemoveSection ? (
+                    <button
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveSection(section.sectionIndex);
+                        setActiveUid(null);
+                      }}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground truncate mt-1">{preview?.text || "No lyric preview"}</p>
+              </div>
+
+              {isActive && (
+                <div className="px-3 pb-2 space-y-1">
+                  {rowLyrics.map((line, li) => {
+                    const isCurrent = currentTimeSec >= line.start && currentTimeSec < line.end;
+                    return (
+                      <button
+                        key={`${idx}-${li}-${line.start}`}
+                        onClick={() => onSeek(line.start)}
+                        className={`w-full text-left rounded px-2 py-1 text-xs transition-all duration-200 ${isCurrent ? "bg-white/10 text-foreground" : "text-muted-foreground hover:bg-white/[0.03]"}`}
+                      >
+                        <span className="text-[10px] font-mono mr-2">{formatTime(line.start)}</span>
+                        {line.text}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
           );
         })}
 
-        <div className="absolute top-0 bottom-0 w-px bg-white" style={{ left: `${(currentTimeSec / Math.max(durationSec, 0.001)) * 100}%` }} />
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {sections.map((section) => {
-          const active = activeSection?.sectionIndex === section.sectionIndex;
-          return (
-            <button
-              key={section.sectionIndex}
-              onClick={() => setSelectedIndex(section.sectionIndex)}
-              className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-mono transition-all duration-200 ${
-                active ? "border-primary text-foreground" : "border-border/40 text-muted-foreground"
-              }`}
-            >
-              <span className="inline-block w-1.5 h-1.5 rounded-full mr-1" style={{ background: SECTION_COLORS[section.role] }} />
-              {section.label}
-              {section.confidence < 0.55 ? <span className="ml-1 text-amber-300">?</span> : null}
-            </button>
-          );
-        })}
-      </div>
-
-      {selected && (
-        <div className="rounded-lg border border-border/40 bg-white/[0.02] p-3 space-y-2" ref={pickerRef}>
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setRolePickerOpen((v) => !v)}
-              className="text-sm font-medium text-foreground flex items-center gap-2"
-            >
-              <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: SECTION_COLORS[selected.role] }} />
-              {selected.label}
-            </button>
-            <span className="text-[10px] font-mono text-muted-foreground">{formatTime(selected.startSec)}–{formatTime(selected.endSec)}</span>
-          </div>
-          {rolePickerOpen && (
-            <div className="grid grid-cols-2 gap-1 rounded-md border border-border/40 p-2 bg-background/90">
+        <div className="px-3 py-2">
+          <button className="text-xs text-primary hover:text-primary/80 transition-colors" onClick={() => setAddDropdownOpen((v) => !v)}>
+            + Add section
+          </button>
+          {addDropdownOpen && (
+            <div className="mt-2 rounded-md border border-border/40 bg-background/80 p-2 grid grid-cols-2 gap-1">
               {ROLES.map((role) => (
                 <button
                   key={role}
+                  className="text-xs text-left rounded px-2 py-1 hover:bg-white/[0.05]"
                   onClick={() => {
-                    upsertOverride({ sectionIndex: selected.sectionIndex, role });
-                    setRolePickerOpen(false);
+                    const start = Math.min(currentTimeSec, Math.max(durationSec - MIN_SECTION_DURATION_SEC, 0));
+                    const end = Math.min(durationSec, start + 20);
+                    onAddSection?.(role, start, end);
+                    setAddDropdownOpen(false);
                   }}
-                  className="text-xs text-left px-2 py-1 rounded hover:bg-white/[0.05]"
                 >
                   <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: SECTION_COLORS[role] }} />
-                  {role}
-                  {selected.role === role ? " ✓" : ""}
+                  {LABEL_MAP[role]} ({roleCounts.get(role) ?? 0})
                 </button>
               ))}
             </div>
           )}
-
-          {selected.confidence < 0.55 && selected.labelSource !== "user" && (
-            <div className="text-[10px] text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1">
-              Low confidence detection. Tap the section name to correct it.
-            </div>
-          )}
-
-          {(() => {
-            const sug = aiSuggestions.get(selected.sectionIndex);
-            if (!sug) return null;
-            return (
-              <div className="space-y-1.5 mt-2">
-                {sug.aiLabelDiffersFromRole && sug.label && (
-                  <button
-                    onClick={() => {
-                      const roleMap: Record<string, SectionRole> = {
-                        intro: "intro",
-                        verse: "verse",
-                        "pre-chorus": "prechorus",
-                        chorus: "chorus",
-                        bridge: "bridge",
-                        drop: "drop",
-                        breakdown: "breakdown",
-                        outro: "outro",
-                        hook: "chorus",
-                        "post-chorus": "chorus",
-                      };
-                      const normalized = sug.label.toLowerCase().replace(/\s*\d+$/, "");
-                      const newRole = roleMap[normalized];
-                      if (newRole) {
-                        upsertOverride({ sectionIndex: selected.sectionIndex, role: newRole });
-                      }
-                    }}
-                    className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-300/80 hover:bg-purple-500/15 hover:text-purple-200 transition-colors"
-                  >
-                    <span className="text-[8px] font-bold tracking-wider uppercase opacity-60">AI</span>
-                    suggests: {sug.label}
-                  </button>
-                )}
-                {(sug.suggestedStartSec != null || sug.suggestedEndSec != null) && (
-                  <button
-                    onClick={() => {
-                      const override: { sectionIndex: number; startSec?: number; endSec?: number } = { sectionIndex: selected.sectionIndex };
-                      if (sug.suggestedStartSec != null) override.startSec = sug.suggestedStartSec;
-                      if (sug.suggestedEndSec != null) override.endSec = sug.suggestedEndSec;
-                      upsertOverride(override);
-                    }}
-                    className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-300/80 hover:bg-amber-500/15 hover:text-amber-200 transition-colors"
-                  >
-                    <span className="text-[8px] font-bold tracking-wider uppercase opacity-60">AI</span>
-                    boundary:
-                    {sug.suggestedStartSec != null && ` start → ${formatTime(sug.suggestedStartSec)}`}
-                    {sug.suggestedEndSec != null && ` end → ${formatTime(sug.suggestedEndSec)}`}
-                  </button>
-                )}
-              </div>
-            );
-          })()}
-
-          <div className="text-[10px] font-mono text-muted-foreground">
-            Source: {selected.labelSource === "user" ? "YOU" : selected.labelSource === "ai" ? "AI" : "AUTO"} · Confidence {(selected.confidence * 100).toFixed(0)}%
-          </div>
-
-          <div className="max-h-36 overflow-y-auto space-y-1">
-            {lyrics
-              .filter((line) => line.start < selected.endSec && line.end >= selected.startSec)
-              .map((line, idx) => {
-                const isCurrent = currentTimeSec >= line.start && currentTimeSec < line.end;
-                return (
-                  <button
-                    key={`${line.start}-${idx}`}
-                    onClick={() => onSeek(line.start)}
-                    className={`block w-full text-left text-xs rounded px-2 py-1 transition-all duration-200 ${isCurrent ? "bg-primary/15 text-foreground" : "text-muted-foreground hover:bg-white/[0.03]"}`}
-                  >
-                    <span className="font-mono text-[10px] mr-2">{formatTime(line.start)}</span>
-                    {line.text}
-                  </button>
-                );
-              })}
-          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

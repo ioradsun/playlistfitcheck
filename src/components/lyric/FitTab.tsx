@@ -24,7 +24,7 @@ import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 // FrameRenderState import removed — V3 derives from cinematicDirection
-import type { AudioSection } from "@/engine/sectionDetector";
+import type { AudioSection, SectionRole } from "@/engine/sectionDetector";
 import type { LyricSection } from "@/hooks/useLyricSections";
 import type { SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { HeaderProjectSetter } from "./LyricsTab";
@@ -75,6 +75,10 @@ interface Props {
   onBack?: () => void;
   onImageGenerationStatusChange?: (status: "idle" | "running" | "done" | "error") => void;
   cinematicSections?: CinematicSection[];
+  sectionsDirty?: boolean;
+  onRegenerateSectionsVisuals?: () => void;
+  onAddSection?: (role: SectionRole, startSec: number, endSec: number) => void;
+  onRemoveSection?: (sectionIndex: number) => void;
 }
 
 export function FitTab({
@@ -101,6 +105,10 @@ export function FitTab({
   onBack,
   onImageGenerationStatusChange,
   cinematicSections,
+  sectionsDirty,
+  onRegenerateSectionsVisuals,
+  onAddSection,
+  onRemoveSection,
 }: Props) {
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
@@ -1017,6 +1025,16 @@ export function FitTab({
                 </div>
               )}
 
+              {sectionsDirty && onRegenerateSectionsVisuals && (
+                <button
+                  onClick={onRegenerateSectionsVisuals}
+                  className="text-[10px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1.5"
+                >
+                  <RefreshCw size={10} />
+                  Update visuals for new structure
+                </button>
+              )}
+
               {mergedSections.length > 0 && waveform && (
                 <SectionTimeline
                   sections={mergedSections}
@@ -1032,6 +1050,8 @@ export function FitTab({
                   onSectionOverridesChange={onSectionOverridesChange}
                   palette={Array.isArray(cinematicDirection?.palette) ? cinematicDirection.palette : []}
                   cinematicSections={cinematicSections}
+                  onAddSection={onAddSection}
+                  onRemoveSection={onRemoveSection}
                 />
               )}
 
