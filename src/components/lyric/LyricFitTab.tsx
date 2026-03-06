@@ -256,7 +256,6 @@ export function LyricFitTab({
     audioFile.arrayBuffer().then((ab) =>
       ctx.decodeAudioData(ab).then((buf) => {
         if (!cancelled) {
-          console.log(`[Transcribe Debug] audioBufferReady=true, duration=${buf.duration.toFixed(1)}s`);
           setAudioBuffer(buf);
           setAudioBufferReady(true);
           setWaveformData(extractPeaksFromBuffer(buf));
