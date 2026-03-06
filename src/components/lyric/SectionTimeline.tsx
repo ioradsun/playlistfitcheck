@@ -118,8 +118,43 @@ export function SectionTimeline({
   const [activeUid, setActiveUid] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ uid: string; edge: "start" | "end" } | null>(null);
   const [addDropdownOpen, setAddDropdownOpen] = useState(false);
+  const [orderPickerForUid, setOrderPickerForUid] = useState<string | null>(null);
   const [rolePickerForUid, setRolePickerForUid] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
+
+  const activateSection = (uid: string | null) => {
+    setActiveUid(uid);
+    setOrderPickerForUid(null);
+    setRolePickerForUid(null);
+  };
+
+  const reorderSection = (sectionIndex: number, newPosition: number) => {
+    const sorted = [...sections].sort((a, b) => a.startSec - b.startSec);
+    const currentIdx = sorted.findIndex((s) => s.sectionIndex === sectionIndex);
+    if (currentIdx === -1 || currentIdx === newPosition) return;
+
+    const timeSlots = sorted.map((s) => ({ startSec: s.startSec, endSec: s.endSec }));
+    const roles = sorted.map((s) => s.role);
+
+    const [movedRole] = roles.splice(currentIdx, 1);
+    roles.splice(newPosition, 0, movedRole);
+
+    const newOverrides: SectionOverrides = sorted.map((s, i) => ({
+      sectionIndex: s.sectionIndex,
+      role: roles[i],
+      startSec: timeSlots[i].startSec,
+      endSec: timeSlots[i].endSec,
+      isNew: (sectionOverrides ?? []).find((o) => o.sectionIndex === s.sectionIndex)?.isNew,
+    }));
+
+    onSectionOverridesChange(newOverrides);
+    setOrderPickerForUid(null);
+  };
+
+  const sortedSections = useMemo(
+    () => sections.slice().sort((a, b) => a.startSec - b.startSec),
+    [sections],
+  );
 
   const activeSection = useMemo(() => {
     if (!sections.length) return null;
@@ -131,11 +166,11 @@ export function SectionTimeline({
 
   useEffect(() => {
     if (!sections.length) {
-      setActiveUid(null);
+      activateSection(null);
       return;
     }
     if (!activeSection) {
-      setActiveUid(sectionUid(sections[0]));
+      activateSection(sectionUid(sections[0]));
     }
   }, [sections, activeSection]);
 
@@ -186,7 +221,15 @@ export function SectionTimeline({
       <div className="p-3 border-b border-border/30">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Section Editor</span>
-          <button onClick={onTogglePlay} className="text-[10px] font-mono text-primary hover:text-primary/80 transition-colors">
+          <button
+            onClick={() => {
+              if (!isPlaying && activeSection) {
+                onSeek(activeSection.startSec);
+              }
+              onTogglePlay();
+            }}
+            className="text-[10px] font-mono text-primary hover:text-primary/80 transition-colors"
+          >
             {isPlaying ? "Pause" : "Play"}
           </button>
         </div>
@@ -215,7 +258,7 @@ export function SectionTimeline({
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setActiveUid(sectionUid(section));
+                  activateSection(sectionUid(section));
                 }}
               />
             );
@@ -340,13 +383,62 @@ export function SectionTimeline({
             >
               <div
                 className={`w-full px-3 py-2 text-left cursor-pointer ${isActive ? "" : "hover:bg-white/[0.015]"}`}
-                onClick={() => setActiveUid(sectionUid(section))}
+                onClick={() => activateSection(sectionUid(section))}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setActiveUid(sectionUid(section)); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") activateSection(sectionUid(section)); }}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex items-center gap-2 relative">
+                    <div className="relative">
+                      <button
+                        className="text-[9px] font-mono text-muted-foreground/40 hover:text-muted-foreground w-4 text-center transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOrderPickerForUid(
+                            orderPickerForUid === sectionUid(section) ? null : sectionUid(section),
+                          );
+                        }}
+                        title="Reorder"
+                      >
+                        {sortedSections.findIndex((s) => s.sectionIndex === section.sectionIndex) + 1}
+                      </button>
+
+                      {orderPickerForUid === sectionUid(section) && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOrderPickerForUid(null);
+                            }}
+                          />
+                          <div className="absolute top-full left-0 mt-1 z-50 min-w-[40px] rounded-md border border-border/40 bg-background/95 backdrop-blur-md shadow-xl py-1">
+                            {sections.map((_, i) => {
+                              const currentPos = sortedSections.findIndex((s) => s.sectionIndex === section.sectionIndex);
+                              const isCurrent = i === currentPos;
+                              return (
+                                <button
+                                  key={i}
+                                  className={`w-full px-3 py-1 text-xs text-center transition-colors ${
+                                    isCurrent
+                                      ? "text-foreground font-medium"
+                                      : "text-muted-foreground hover:bg-white/[0.05]"
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    reorderSection(section.sectionIndex, i);
+                                  }}
+                                >
+                                  {i + 1}
+                                  {isCurrent && " ·"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
                     <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: SECTION_COLORS[section.role] }} />
                     <button
                       className="text-sm text-foreground flex items-center gap-1 hover:text-primary transition-colors"
@@ -402,7 +494,7 @@ export function SectionTimeline({
                       onClick={(e) => {
                         e.stopPropagation();
                         onRemoveSection(section.sectionIndex);
-                        setActiveUid(null);
+                        activateSection(null);
                       }}
                     >
                       ×
