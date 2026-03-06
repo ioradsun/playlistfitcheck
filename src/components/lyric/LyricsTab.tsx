@@ -259,7 +259,7 @@ export function LyricsTab({
             filename: file.name,
             updated_at: new Date().toISOString(),
           } as any).then(({ error }) => {
-            if (error) console.warn("[LyricUpload] post-transcription upsert failed:", error.message);
+            // post-transcription upsert failed
           });
         }
 
