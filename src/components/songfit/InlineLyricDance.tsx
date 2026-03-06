@@ -24,6 +24,7 @@ interface Props {
   artistName: string;
   prefetchedData?: LyricDanceData | null;
   bootMode?: "minimal" | "full";
+  albumArtUrl?: string;
 }
 
 // Shared IntersectionObserver across all embedded players
