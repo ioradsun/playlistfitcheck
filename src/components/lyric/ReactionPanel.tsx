@@ -626,6 +626,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                     if (!player) return;
                     releaseManualSelectionLock();
                     setAutoFollowEnabled(true);
+                    setRepeatMode(false);
+                    onResetEngagement?.();
                     player.setMuted(false);
                     player.seek(0);
                     player.play();
