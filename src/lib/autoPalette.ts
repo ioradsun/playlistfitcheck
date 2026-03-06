@@ -167,7 +167,7 @@ export async function computeAutoPalettesFromUrls(urls: string[]): Promise<strin
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i];
     if (!url) {
-      console.warn(`[auto-palette] [${i}] skipping falsy URL`);
+      // skipping falsy URL
       continue;
     }
     if (!isValidHttpUrl(url)) {
