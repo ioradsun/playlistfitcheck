@@ -1198,7 +1198,7 @@ export function LyricDisplay({
     saveStatus,
     user,
     isAdmin,
-    debugData,
+    
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────
