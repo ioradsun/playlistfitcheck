@@ -92,6 +92,11 @@ export function useBeatGrid(buffer: AudioBuffer | null): {
     (async () => {
       try {
         const essentia = await loadEssentia();
+        
+        // Yield to event loop so React can paint the new component if user navigated away
+        await new Promise<void>((r) => setTimeout(r, 0));
+        if (cancelled) return;
+        
         const monoData = getMonoChannel(buffer);
 
         // Resample to 44100 if needed
