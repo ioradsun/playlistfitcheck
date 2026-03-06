@@ -363,7 +363,7 @@ export function FitTab({
       return;
     }
 
-    console.log('[SYNC:B] lyricData changed — queuing sync. lines:', lyricData.lines.length, 'publishedDanceId:', !!publishedDanceId, 'dancePlayerRef:', !!dancePlayerRef.current);
+    
 
     if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current);
     transcriptSyncTimerRef.current = setTimeout(() => {
