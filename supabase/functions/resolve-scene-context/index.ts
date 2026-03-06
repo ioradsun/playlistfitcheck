@@ -120,7 +120,7 @@ serve(async (req) => {
     const parsed = JSON.parse(jsonStr);
 
     // Ensure sourceDescription is set
-    parsed.sourceDescription = description.trim();
+    parsed.sourceDescription = normalizedDescription;
 
     // Clamp numeric values
     parsed.backgroundOpacity = Math.max(0.3, Math.min(0.6, Number(parsed.backgroundOpacity) || 0.35));
