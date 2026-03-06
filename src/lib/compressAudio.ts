@@ -168,7 +168,7 @@ export async function compressAudioFile(
           blob = await encodeWebmOpus(monoSamples, TARGET_SAMPLE_RATE);
           ext = "webm";
         } catch (e) {
-          console.warn("[compressAudio] WebM/Opus failed, falling back to WAV:", e);
+          // WebM/Opus failed, falling back to WAV
           blob = encodeWav(monoSamples, TARGET_SAMPLE_RATE);
           ext = "wav";
         }
