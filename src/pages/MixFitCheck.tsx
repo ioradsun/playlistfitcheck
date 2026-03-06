@@ -47,6 +47,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   const [needsReupload, setNeedsReupload] = useState(false);
   const [playheadTime, setPlayheadTime] = useState(0);
   const rafRef = useRef<number | null>(null);
+  const loadSessionRef = useRef(0);
   const markerStartRef = useRef(markerStart);
   const markerEndRef = useRef(markerEnd);
   markerStartRef.current = markerStart;
