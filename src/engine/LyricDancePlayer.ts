@@ -1975,7 +1975,6 @@ export class LyricDancePlayer {
       this._qualityTier = Math.min(3, tier + 1) as 0 | 1 | 2 | 3;
       this._qUpgradeStreak = 0;
       this._qLastDowngradeMs = nowMs;
-      console.info(`[LyricEngine] quality → tier ${this._qualityTier} (fps: ${fps.toFixed(1)})`);
       // Crossing into tier 2: switch to half-DPR backing store (cuts pixel fill 4×)
       if (prevDprBucket === 'full' && this._qualityTier >= 2) {
         this._applyDprToCanvas();
