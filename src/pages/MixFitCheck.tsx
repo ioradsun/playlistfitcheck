@@ -81,6 +81,8 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   // (initialProject effect is below handleLoadProject)
 
   const resetProject = useCallback(() => {
+    // Invalidate any in-flight async project hydration before resetting
+    loadSessionRef.current += 1;
     stop();
     setProjectId(null);
     setTitle("");
