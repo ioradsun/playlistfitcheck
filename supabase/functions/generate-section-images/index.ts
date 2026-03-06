@@ -267,9 +267,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[section-images] Generating ${sections.length} images for dance ${lyric_dance_id}`);
     const prompts = sections.map((section: SectionInput) => buildImagePrompt(section, sections.length));
-    prompts.forEach((p, i) => console.log(`[section-images] prompt[${i}]: ${p.slice(0, 150)}...`));
     const imageResults = await Promise.all(prompts.map((prompt: string) => generateImage(prompt, apiKey)));
 
     const uploadResults = await Promise.all(
