@@ -440,6 +440,27 @@ export default function ShareableLyricDance() {
     return () => { supabase.removeChannel(channel); };
   }, [data?.id]);
 
+
+  // ── Realtime canonical section sync (shareable_lyric_dances.cinematic_direction.sections) ──
+  useEffect(() => {
+    if (!data?.id) return;
+    const channel = supabase
+      .channel(`dance-sections-${data.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'shareable_lyric_dances',
+        filter: `id=eq.${data.id}`,
+      }, (payload: any) => {
+        const nextDirection = payload.new?.cinematic_direction;
+        if (nextDirection === undefined) return;
+        setDataRaw(prev => prev ? { ...prev, cinematic_direction: nextDirection } : prev);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [data?.id]);
+
   // ── Mute toggle ─────────────────────────────────────────────────────
 
   const handleMuteToggle = useCallback(() => {
@@ -789,7 +810,7 @@ export default function ShareableLyricDance() {
         danceId={data?.id ?? ''}
         activeLine={activeLine}
         allLines={lyricSections.allLines}
-        sections={lyricSections.sections}
+        audioSections={audioSections}
         currentTimeSec={currentTimeSec}
         palette={Array.isArray(data?.palette) ? data.palette : []}
         onSeekTo={(sec) => playerInstance?.seek(sec)}
