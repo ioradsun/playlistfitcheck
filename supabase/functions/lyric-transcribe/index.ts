@@ -728,7 +728,7 @@ serve(async (req) => {
     }
 
     const [transcribeResult] = await Promise.allSettled([transcribePromise]);
-    console.log(`[Transcribe Debug] ${ms()} transcription settled, status=${transcribeResult.status}`);
+    
 
     if (transcribeResult.status === "rejected") {
       const err = (transcribeResult.reason as Error)?.message || "Transcription failed";
