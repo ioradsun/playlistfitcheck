@@ -11,6 +11,7 @@ import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { InlineLyricDancePlaybar } from "./InlineLyricDancePlaybar";
+import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 
 export interface InlineLyricDanceHandle {
   getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;

@@ -17,6 +17,7 @@ import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections, type LyricSectionLine } from "@/hooks/useLyricSections";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { HotSectionPill } from "@/components/lyric/HotSectionPill";
+import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";

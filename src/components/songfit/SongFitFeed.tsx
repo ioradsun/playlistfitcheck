@@ -11,6 +11,7 @@ import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
 import { BillboardToggle } from "./BillboardToggle";
 import { StagePresence } from "./StagePresence";
+import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 520;
