@@ -57,7 +57,21 @@ export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved
       setView("report");
       await quota.increment();
       onProjectSaved?.();
-      if (data.reportId) onSavedId?.(data.reportId);
+      if (data.reportId) {
+        onSavedId?.(data.reportId);
+        onOptimisticItem?.({
+          id: data.reportId,
+          label: data.artist?.name || "Artist Report",
+          meta: "just now",
+          type: "profit",
+          rawData: {
+            reportId: data.reportId,
+            shareToken: data.shareToken,
+            blueprint: data.blueprint,
+            artist: data.artist,
+          },
+        });
+      }
       // Save to localStorage history
       try {
         const history = JSON.parse(localStorage.getItem("profit_history") || "[]");

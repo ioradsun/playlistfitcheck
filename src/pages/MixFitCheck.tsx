@@ -140,11 +140,18 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       });
       onProjectSaved?.();
       onSavedId?.(newId);
+      onOptimisticItem?.({
+        id: newId,
+        label: t || "Mix Project",
+        meta: "just now",
+        type: "mix",
+        rawData: { id: newId, title: t, notes: n, mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments })) },
+      });
     } catch (e) {
       console.error("Failed initial save for MixFit project:", e);
     }
     await mixQuota.increment();
-  }, [decodeFile, mixQuota, save, onProjectSaved, onSavedId]);
+  }, [decodeFile, mixQuota, save, onProjectSaved, onSavedId, onOptimisticItem]);
 
   const handleLoadProject = useCallback(async (project: MixProjectData) => {
     stop();

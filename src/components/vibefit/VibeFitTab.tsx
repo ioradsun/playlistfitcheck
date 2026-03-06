@@ -122,7 +122,16 @@ export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject, onS
             result_json: { input, result: output } as any,
           }).select("id").single();
           onProjectSaved?.();
-          if (inserted) onSavedId?.(inserted.id);
+          if (inserted) {
+            onSavedId?.(inserted.id);
+            onOptimisticItem?.({
+              id: inserted.id,
+              label: input.songTitle || "VibeFit",
+              meta: "just now",
+              type: "vibefit",
+              rawData: { input, result: output },
+            });
+          }
         } catch (e) {
           console.error("Failed to save VibeFit:", e);
         }

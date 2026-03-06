@@ -880,7 +880,7 @@ const Index = () => {
           <div className="flex-1 flex flex-col px-4 py-6">
             {isHydratingVibeFit ? <TabChunkFallback /> : (
               <Suspense fallback={<TabChunkFallback />}>
-                <VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} />
+                <VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
               </Suspense>
             )}
           </div>
