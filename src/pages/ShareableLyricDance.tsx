@@ -714,6 +714,7 @@ export default function ShareableLyricDance() {
       </div>
 
       {/* Bottom action bar */}
+      {!reactionPanelOpen && (
       <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }}>
 
         {/* Progress bar — full width, always visible */}
@@ -767,6 +768,7 @@ export default function ShareableLyricDance() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Debug — only when data is fully loaded */}
       <LiveDebugHUD player={playerInstance} />
