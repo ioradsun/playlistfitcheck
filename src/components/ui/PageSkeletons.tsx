@@ -37,7 +37,7 @@ const PostCardSkeleton = () => (
 );
 
 export const CrowdFitSkeleton = ({ variant }: { variant: Variant }) => (
-  <div className="w-full max-w-2xl mx-auto space-y-4">
+  <div className="w-full animate-pulse">
     <div className="border-b border-border/40 flex">
       <div className="flex-1 flex items-center justify-center py-3">
         <S className="h-4 w-16 rounded-full" />
@@ -64,7 +64,7 @@ export const CrowdFitSkeleton = ({ variant }: { variant: Variant }) => (
 export const LyricFitSkeleton = ({ variant }: { variant: Variant }) => {
   if (variant === "new") {
     return (
-      <div className="flex-1 flex flex-col px-4 py-4 min-h-0">
+      <div className="flex-1 flex flex-col px-4 py-4 space-y-4 animate-pulse min-h-0">
         <div className="self-start flex items-center gap-2">
           <S className="h-8 w-20 rounded-full" />
           <S className="h-8 w-20 rounded-full" />
@@ -88,7 +88,7 @@ export const LyricFitSkeleton = ({ variant }: { variant: Variant }) => {
   const lyricWidths = ["65%", "80%", "55%", "75%", "90%", "60%", "70%", "85%", "50%", "78%", "63%", "88%", "45%", "72%"];
 
   return (
-    <div className="flex-1 flex flex-col px-4 py-4 min-h-0">
+    <div className="flex-1 flex flex-col px-4 py-4 space-y-3 animate-pulse min-h-0">
       <div className="self-start flex items-center gap-2">
         <S className="h-8 w-20 rounded-full" />
         <S className="h-8 w-20 rounded-full" />
@@ -131,7 +131,7 @@ const UploadZoneSkeleton = ({ showBadge = false }: { showBadge?: boolean }) => (
 export const HitFitSkeleton = ({ variant }: { variant: Variant }) => {
   if (variant === "new") {
     return (
-      <div className="w-full max-w-2xl mx-auto space-y-4">
+      <div className="w-full max-w-2xl mx-auto space-y-5 animate-pulse">
         <div className="space-y-2">
           <S className="h-6 w-72 rounded mx-auto" />
           <S className="h-4 w-52 rounded mx-auto" />
@@ -159,7 +159,7 @@ export const HitFitSkeleton = ({ variant }: { variant: Variant }) => {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-4">
+    <div className="w-full max-w-2xl mx-auto space-y-5 animate-pulse">
       <div className="space-y-2">
         <S className="h-5 w-64 rounded" />
         <S className="h-4 w-44 rounded" />
@@ -204,7 +204,7 @@ export const HitFitSkeleton = ({ variant }: { variant: Variant }) => {
 export const PlaylistFitSkeleton = ({ variant }: { variant: Variant }) => {
   if (variant === "new") {
     return (
-      <div className="w-full max-w-2xl mx-auto space-y-4">
+      <div className="w-full max-w-2xl mx-auto space-y-4 animate-pulse">
         <div className="space-y-2">
           <S className="h-6 w-80 rounded mx-auto" />
           <S className="h-4 w-56 rounded mx-auto" />
@@ -228,7 +228,7 @@ export const PlaylistFitSkeleton = ({ variant }: { variant: Variant }) => {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-4">
+    <div className="w-full space-y-6 animate-pulse">
       <S className="h-3.5 w-48 rounded" />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -286,7 +286,7 @@ const MixCardSkeleton = () => (
 export const MixFitSkeleton = ({ variant }: { variant: Variant }) => {
   if (variant === "new") {
     return (
-      <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
+      <div className="w-full max-w-2xl mx-auto space-y-4 animate-pulse">
         <div className="space-y-2">
           <S className="h-5 w-72 rounded mx-auto" />
           <S className="h-4 w-48 rounded mx-auto" />
@@ -311,7 +311,7 @@ export const MixFitSkeleton = ({ variant }: { variant: Variant }) => {
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto py-6 px-4 space-y-5">
+    <div className="w-full space-y-4 animate-pulse">
       <div className="space-y-2">
         <S className="h-6 w-48 rounded" />
         <S className="h-3.5 w-64 rounded" />
@@ -372,7 +372,7 @@ const DreamCardSkeleton = () => (
 );
 
 export const DreamFitSkeleton = ({ variant: _variant }: { variant: Variant }) => (
-  <div className="w-full max-w-[470px] mx-auto">
+  <div className="w-full animate-pulse">
     <div className="border-b border-border/40 px-4 pt-3 pb-3 flex gap-3">
       <S className="h-10 w-10 rounded-full" />
       <S className="h-10 flex-1 rounded-xl bg-muted/30" />

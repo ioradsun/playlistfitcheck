@@ -27,6 +27,7 @@ interface Props {
   prefetchedData?: LyricDanceData | null;
   bootMode?: "minimal" | "full";
   albumArtUrl?: string;
+  avatarUrl?: string | null;
 }
 
 // Shared IntersectionObserver across all embedded players
@@ -46,7 +47,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal", albumArtUrl }: Props,
+  { lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal", albumArtUrl, avatarUrl }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
@@ -197,7 +198,7 @@ function InlineLyricDanceInner(
               <LyricDanceCover
                 songName={songTitle}
                 artistName={artistName || fetchedData?.artist_name || ""}
-                avatarUrl={null}
+                avatarUrl={avatarUrl ?? null}
                 initial={(artistName || songTitle || "♪")[0]?.toUpperCase()}
                 waiting={isWaitingForPlayer}
                 onListen={(e) => {

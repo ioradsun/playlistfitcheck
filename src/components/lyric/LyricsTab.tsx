@@ -361,22 +361,6 @@ export function LyricsTab({
     );
   }
 
-  // State C.5: lyricData has lines but audioFile not yet hydrated — avoid uploader flash
-  if (lyricData && lyricData.lines.length > 0) {
-    return (
-      <div className="flex-1 px-4 py-6">
-        <LyricSkeleton
-          title={lyricData.title}
-          fileName=""
-          loading={true}
-          waveformData={null}
-          onRetry={() => {}}
-          onBack={() => {}}
-        />
-      </div>
-    );
-  }
-
   // State D: nothing yet → uploader
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto">

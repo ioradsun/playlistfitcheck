@@ -94,10 +94,7 @@ export function LyricFitTab({
   const [resolvingScene, setResolvingScene] = useState(false);
   const [fitUnlocked, setFitUnlocked] = useState(false);
   const [lyricData, setLyricData] = useState<LyricData | null>(initLyricData);
-  const [audioFile, setAudioFile] = useState<File | null>(() => {
-    if (!initialLyric?.id) return null;
-    return sessionAudio.get("lyric", initialLyric.id) ?? null;
-  });
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(initialLyric?.id ?? null);
   const savedIdRef = useRef<string | null>(initialLyric?.id ?? null);
