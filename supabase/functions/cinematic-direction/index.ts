@@ -699,7 +699,7 @@ async function persist(direction: Record<string, any>, lyricId: string): Promise
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      console.log(`[cinematic-direction] Stored in ${table}`);
+      
       return;
     }
   }
