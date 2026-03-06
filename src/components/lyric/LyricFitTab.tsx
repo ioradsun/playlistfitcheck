@@ -515,7 +515,7 @@ export function LyricFitTab({
         setWaveformData(extractPeaksFromBuffer(buf));
         ctx.close();
       } catch {
-        console.warn("[Pipeline] AudioBuffer decode failed");
+        
       }
     }
 
