@@ -263,7 +263,7 @@ export function LyricsTab({
           });
         }
 
-        console.log(`[Transcribe Debug] ${ms()} setting lyric data`);
+        
         const newLyricData: LyricData = {
           title: resolveProjectTitle(data.title, file.name),
           artist: data.artist || undefined,
