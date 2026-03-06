@@ -3,8 +3,15 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getSessionId } from '@/lib/sessionId';
-import type { LyricSection, LyricSectionLine } from '@/hooks/useLyricSections';
+import type { LyricSectionLine } from '@/hooks/useLyricSections';
 import type { LyricDancePlayer } from '@/engine/LyricDancePlayer';
+
+export interface CanonicalAudioSection {
+  sectionIndex: number;
+  startSec: number;
+  endSec: number;
+  role: string | null;
+}
 
 interface CommentRow {
   id: string;
@@ -23,7 +30,7 @@ interface ReactionPanelProps {
   danceId: string;
   activeLine: { text: string; lineIndex: number; sectionLabel: string | null } | null;
   allLines: LyricSectionLine[];
-  sections: LyricSection[];
+  audioSections: CanonicalAudioSection[];
   currentTimeSec: number;
   palette: string[];
   onSeekTo: (sec: number) => void;
@@ -93,7 +100,7 @@ function isLineOutsideViewport(container: HTMLElement, row: HTMLElement, thresho
   return rowRect.top < containerRect.top + threshold || rowRect.bottom > containerRect.bottom - threshold;
 }
 
-function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, sections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange }: ReactionPanelProps) {
+function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange }: ReactionPanelProps) {
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
@@ -158,13 +165,54 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
     return map;
   }, [allLines]);
 
-  const sectionLabelByLineIndex = useMemo(() => {
-    const map = new Map<number, string | null>();
-    sections.forEach(section => {
-      section.lines.forEach(line => map.set(line.lineIndex, section.label ?? null));
+  const sectionMeta = useMemo(() => {
+    const canonical = (audioSections ?? [])
+      .filter((section) => Number.isFinite(section.startSec) && Number.isFinite(section.endSec) && section.endSec > section.startSec)
+      .slice()
+      .sort((a, b) => a.startSec - b.startSec);
+
+    const totalByRole = new Map<string, number>();
+    canonical.forEach((section) => {
+      const role = section.role?.trim().toLowerCase();
+      if (!role) return;
+      totalByRole.set(role, (totalByRole.get(role) ?? 0) + 1);
     });
-    return map;
-  }, [sections]);
+
+    const seenByRole = new Map<string, number>();
+    const labelBySectionIndex = new Map<number, string | null>();
+    canonical.forEach((section) => {
+      const role = section.role?.trim().toLowerCase();
+      if (!role) {
+        labelBySectionIndex.set(section.sectionIndex, null);
+        return;
+      }
+      const seenCount = (seenByRole.get(role) ?? 0) + 1;
+      seenByRole.set(role, seenCount);
+      const totalCount = totalByRole.get(role) ?? 0;
+      const base = role.toUpperCase();
+      labelBySectionIndex.set(section.sectionIndex, totalCount > 1 ? `${base} ${seenCount}` : base);
+    });
+
+    const sectionForLine = new Map<number, CanonicalAudioSection | null>();
+    const labelByLineIndex = new Map<number, string | null>();
+
+    allLines.forEach((line) => {
+      const lineStart = line.startSec;
+      const matchedSection = canonical.find((section, index) => {
+        const isLast = index === canonical.length - 1;
+        return isLast
+          ? lineStart >= section.startSec && lineStart <= section.endSec + 0.05
+          : lineStart >= section.startSec && lineStart < section.endSec;
+      }) ?? null;
+      sectionForLine.set(line.lineIndex, matchedSection);
+      labelByLineIndex.set(
+        line.lineIndex,
+        matchedSection ? (labelBySectionIndex.get(matchedSection.sectionIndex) ?? null) : null,
+      );
+    });
+
+    return { sectionForLine, labelByLineIndex };
+  }, [allLines, audioSections]);
 
   const commentCountByLine = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -185,7 +233,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
     : (activeLine ?? allLines[0] ?? null);
 
   const displaySectionLabel = displayLine?.lineIndex != null
-    ? (sectionLabelByLineIndex.get(displayLine.lineIndex) ?? activeLine?.sectionLabel ?? null)
+    ? (sectionMeta.labelByLineIndex.get(displayLine.lineIndex) ?? activeLine?.sectionLabel ?? null)
     : null;
 
   const displayLineComments = useMemo(() => {
@@ -709,14 +757,15 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
 
           <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
             <div className="pb-2">
-              {sections.map((section, sectionIndex) => (
-                <div key={section.sectionIndex} className={sectionIndex === 0 ? 'mt-3 mb-1' : 'mt-5 mb-1'}>
-                  <div className="flex items-center gap-2 px-5 mb-1">
-                    <span className="text-[8px] font-mono uppercase tracking-[0.22em] text-white/18">{section.label}</span>
-                    <div className="flex-1 h-px bg-white/[0.035]" />
-                  </div>
-
-                  {section.lines.map(line => {
+              {allLines.map((line, linePosition) => {
+                    const currentSection = sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
+                    const previousSection = linePosition > 0
+                      ? (sectionMeta.sectionForLine.get(allLines[linePosition - 1].lineIndex) ?? null)
+                      : null;
+                    const sectionLabel = sectionMeta.labelByLineIndex.get(line.lineIndex) ?? null;
+                    const shouldShowSectionHeader = !!currentSection
+                      && currentSection.sectionIndex !== previousSection?.sectionIndex
+                      && !!sectionLabel;
                     const isSelected = selectedLineIndex === line.lineIndex;
                     const isPlayhead = playheadLineIndex === line.lineIndex;
                     const isRepeatActive = repeatMode && repeatActiveLineIndex === line.lineIndex;
@@ -734,7 +783,15 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                     const isExpanded = expandedLineIndex === line.lineIndex;
 
                     return (
-                      <div key={line.lineIndex}>
+                      <div key={line.lineIndex} className={linePosition === 0 ? 'mt-3' : undefined}>
+                        {shouldShowSectionHeader && (
+                          <div className={linePosition === 0 ? 'mb-1' : 'mt-5 mb-1'}>
+                            <div className="flex items-center gap-2 px-5 mb-1">
+                              <span className="text-[8px] font-mono uppercase tracking-[0.22em] text-white/18">{sectionLabel}</span>
+                              <div className="flex-1 h-px bg-white/[0.035]" />
+                            </div>
+                          </div>
+                        )}
                         <div
                           ref={node => {
                             rowRefs.current[line.lineIndex] = node;
@@ -871,8 +928,6 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                       </div>
                     );
                   })}
-                </div>
-              ))}
             </div>
           </div>
 
