@@ -277,9 +277,8 @@ const Index = () => {
     if (!projectId || projectLoadedRef.current === projectId || !user) return;
     const tab = activeTab;
     
-    // Lyric projects are handled by the dedicated effect above
+    // Lyric projects are handled by the dedicated lyric loader effect
     if (tab === "lyric") {
-      projectLoadedRef.current = projectId;
       return;
     }
     
