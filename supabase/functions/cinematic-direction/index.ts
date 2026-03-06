@@ -442,7 +442,7 @@ function unwrapNested(obj: Record<string, any>): Record<string, any> {
     if (inner && typeof inner === "object" && !Array.isArray(inner)) {
       // Check if the inner object looks like our expected structure
       if (inner.sceneTone || inner.storyboard || inner.wordDirectives || inner.sections) {
-        console.log(`[cinematic-direction] Unwrapped nested key "${keys[0]}"`);
+        
         return inner;
       }
     }
