@@ -823,9 +823,10 @@ export function FitTab({
               lyricDanceId={publishedDanceId}
               lyricDanceUrl={publishedUrl}
               songTitle={lyricData.title || "Untitled"}
-              artistName=""
+              artistName={userProfile?.display_name || ""}
               prefetchedData={prefetchedDanceData}
               bootMode="full"
+              avatarUrl={userProfile?.avatar_url}
             />
           </div>
           {/* Action toolbar — single row of icon buttons */}
