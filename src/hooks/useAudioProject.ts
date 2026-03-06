@@ -22,6 +22,8 @@ interface UseAudioProjectConfig {
   getSidebarRawData: (opts: { projectId: string; file: File; audioUrl: string }) => unknown;
   onOptimisticItem?: (item: RecentItem) => void;
   onProjectCreated?: (projectId: string) => void;
+  /** Set to false if the target table has no audio_url column. Defaults to true. */
+  includeAudioUrl?: boolean;
 }
 
 interface AudioProject {
