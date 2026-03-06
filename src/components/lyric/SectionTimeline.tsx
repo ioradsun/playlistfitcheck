@@ -4,6 +4,7 @@ import type { SectionRole } from "@/engine/sectionDetector";
 import type { LyricLine } from "./LyricDisplay";
 import type { LyricSection } from "@/hooks/useLyricSections";
 import type { SectionOverrides } from "@/lib/mergeSectionOverrides";
+import type { CinematicSection } from "@/types/CinematicDirection";
 
 interface SectionTimelineProps {
   sections: LyricSection[];
@@ -18,6 +19,7 @@ interface SectionTimelineProps {
   sectionOverrides: SectionOverrides | null;
   onSectionOverridesChange: (overrides: SectionOverrides) => void;
   palette: string[];
+  cinematicSections?: CinematicSection[];
 }
 
 const SECTION_COLORS: Record<SectionRole, string> = {
@@ -53,6 +55,7 @@ export function SectionTimeline({
   onTogglePlay,
   sectionOverrides,
   onSectionOverridesChange,
+  cinematicSections,
 }: SectionTimelineProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
@@ -83,6 +86,36 @@ export function SectionTimeline({
     () => sections.find((s) => s.sectionIndex === selectedIndex) ?? null,
     [sections, selectedIndex],
   );
+
+  const aiSuggestions = useMemo(() => {
+    if (!cinematicSections?.length) return new Map();
+    const map = new Map<number, {
+      label?: string;
+      suggestedStartSec?: number;
+      suggestedEndSec?: number;
+      aiLabelDiffersFromRole: boolean;
+    }>();
+    for (const cs of cinematicSections) {
+      const matchedSection = sections.find((s) => s.sectionIndex === cs.sectionIndex);
+      if (!matchedSection) continue;
+      const aiLabel = cs.structuralLabel?.trim();
+      const aiLabelDiffersFromRole = !!(
+        aiLabel &&
+        matchedSection.labelSource !== "user" &&
+        aiLabel.toLowerCase() !== matchedSection.label.toLowerCase()
+      );
+      if (aiLabelDiffersFromRole || cs.suggestedStartSec != null || cs.suggestedEndSec != null) {
+        map.set(cs.sectionIndex, {
+          label: aiLabel,
+          suggestedStartSec: cs.suggestedStartSec,
+          suggestedEndSec: cs.suggestedEndSec,
+          aiLabelDiffersFromRole,
+        });
+      }
+    }
+    return map;
+  }, [cinematicSections, sections]);
+
 
   const upsertOverride = (patch: { sectionIndex: number; role?: SectionRole; startSec?: number; endSec?: number }) => {
     const current = sectionOverrides ?? [];
@@ -171,6 +204,44 @@ export function SectionTimeline({
           </div>
         ))}
 
+        {/* AI suggested boundaries — dashed markers */}
+        {sections.map((s) => {
+          const sug = aiSuggestions.get(s.sectionIndex);
+          if (!sug) return null;
+          return (
+            <div key={`sug-${s.sectionIndex}`}>
+              {sug.suggestedStartSec != null && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: `${(sug.suggestedStartSec / durationSec) * 100}%`,
+                    top: 0,
+                    bottom: 0,
+                    width: 0,
+                    borderLeft: "1.5px dashed rgba(245, 158, 11, 0.4)",
+                    zIndex: 5,
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+              {sug.suggestedEndSec != null && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: `${(sug.suggestedEndSec / durationSec) * 100}%`,
+                    top: 0,
+                    bottom: 0,
+                    width: 0,
+                    borderLeft: "1.5px dashed rgba(245, 158, 11, 0.4)",
+                    zIndex: 5,
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
+
         <div className="absolute top-0 bottom-0 w-px bg-white" style={{ left: `${(currentTimeSec / Math.max(durationSec, 0.001)) * 100}%` }} />
       </div>
 
@@ -229,6 +300,58 @@ export function SectionTimeline({
               Low confidence detection. Tap the section name to correct it.
             </div>
           )}
+
+          {(() => {
+            const sug = aiSuggestions.get(selected.sectionIndex);
+            if (!sug) return null;
+            return (
+              <div className="space-y-1.5 mt-2">
+                {sug.aiLabelDiffersFromRole && sug.label && (
+                  <button
+                    onClick={() => {
+                      const roleMap: Record<string, SectionRole> = {
+                        intro: "intro",
+                        verse: "verse",
+                        "pre-chorus": "prechorus",
+                        chorus: "chorus",
+                        bridge: "bridge",
+                        drop: "drop",
+                        breakdown: "breakdown",
+                        outro: "outro",
+                        hook: "chorus",
+                        "post-chorus": "chorus",
+                      };
+                      const normalized = sug.label.toLowerCase().replace(/\s*\d+$/, "");
+                      const newRole = roleMap[normalized];
+                      if (newRole) {
+                        upsertOverride({ sectionIndex: selected.sectionIndex, role: newRole });
+                      }
+                    }}
+                    className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-300/80 hover:bg-purple-500/15 hover:text-purple-200 transition-colors"
+                  >
+                    <span className="text-[8px] font-bold tracking-wider uppercase opacity-60">AI</span>
+                    suggests: {sug.label}
+                  </button>
+                )}
+                {(sug.suggestedStartSec != null || sug.suggestedEndSec != null) && (
+                  <button
+                    onClick={() => {
+                      const override: { sectionIndex: number; startSec?: number; endSec?: number } = { sectionIndex: selected.sectionIndex };
+                      if (sug.suggestedStartSec != null) override.startSec = sug.suggestedStartSec;
+                      if (sug.suggestedEndSec != null) override.endSec = sug.suggestedEndSec;
+                      upsertOverride(override);
+                    }}
+                    className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-300/80 hover:bg-amber-500/15 hover:text-amber-200 transition-colors"
+                  >
+                    <span className="text-[8px] font-bold tracking-wider uppercase opacity-60">AI</span>
+                    boundary:
+                    {sug.suggestedStartSec != null && ` start → ${formatTime(sug.suggestedStartSec)}`}
+                    {sug.suggestedEndSec != null && ` end → ${formatTime(sug.suggestedEndSec)}`}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="text-[10px] font-mono text-muted-foreground">
             Source: {selected.labelSource === "user" ? "YOU" : selected.labelSource === "ai" ? "AI" : "AUTO"} · Confidence {(selected.confidence * 100).toFixed(0)}%

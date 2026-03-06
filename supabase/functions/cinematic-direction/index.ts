@@ -11,7 +11,7 @@ You are a film director designing a cinematic lyric video.
 
 You will receive:
 1. Song lyrics organized into SECTIONS with timestamps and roles
-   (computed from audio — these boundaries are facts, do not change them)
+   (computed from audio — boundaries are detector outputs and may be imperfect)
 2. A listener scene — where the listener is when they hear this song
 
 Your job:
@@ -111,16 +111,28 @@ OPTIONAL — override song defaults for this section:
 - "texture": override
 - "typography": override
 - "atmosphere": override
-- "structuralLabel": human-readable section name.
-  Use the heuristic role provided as a strong prior.
-  Correct it only if the actual lyrics clearly contradict it.
+- "structuralLabel": human-readable section name. ALWAYS return this field.
+  Each section includes a heuristic role and a confidence percentage.
+  HIGH confidence (≥70%): trust the heuristic role unless lyrics clearly contradict.
+  LOW confidence (<70%): the detector is uncertain — analyze the lyrics to decide:
+    · Lyrics repeat verbatim from an earlier section → Chorus
+    · Energy builds, lyrics are transitional, next section is a chorus → Pre-Chorus
+    · Fresh lyrical content, narrative progression → Verse (number sequentially)
+    · Contrasting one-off section with different feel → Bridge
+    · High energy, sparse or no lyrics → Drop
+    · Energy dip, sparse texture → Breakdown
   Standard values: "Intro", "Verse 1", "Verse 2", "Verse 3",
   "Pre-Chorus", "Chorus", "Post-Chorus", "Bridge", "Hook",
   "Breakdown", "Drop", "Outro".
   Number repeated types sequentially: "Verse 1", "Verse 2".
-  Number Chorus only if the lyrics differ significantly between
-  occurrences — otherwise all chorus sections share the label "Chorus".
-  Always return this field. Never leave it null or omit it.
+  Number Chorus only if lyrics differ significantly between occurrences.
+
+OPTIONAL — boundary correction (LOW confidence sections only):
+- "suggestedStartSec": number — if lyrics clearly begin earlier/later than the given startSec
+- "suggestedEndSec": number — if lyrics clearly end earlier/later than the given endSec
+  Only include these when the timestamps of the first/last lyric in a section are
+  significantly misaligned with the given boundary (>2s gap). These are suggestions
+  for the user — not authoritative.
 
 ═══════════════════════════════════════
 STORYBOARD (sparse)
@@ -199,6 +211,7 @@ interface AudioSectionInput {
   avgEnergy: number;
   beatDensity: number;
   lyrics: Array<{ text: string; lineIndex: number }>;
+  confidence?: number;
 }
 
 interface SceneContext {
@@ -365,9 +378,10 @@ function buildUserMessage(
   msg += `Song: ${artist} — ${title}\n\n`;
 
   if (audioSections && audioSections.length > 0) {
-    msg += `SECTIONS (${audioSections.length} sections — boundaries are facts, do not change):\n\n`;
+    msg += `SECTIONS (${audioSections.length} sections — boundaries detected from audio):\n\n`;
     for (const s of audioSections) {
-      msg += `Section ${s.index}: ${fmt(s.startSec)}–${fmt(s.endSec)} | ${s.role}\n`;
+      const confStr = typeof s.confidence === "number" ? ` (${Math.round(s.confidence * 100)}% conf)` : "";
+      msg += `Section ${s.index}: ${fmt(s.startSec)}–${fmt(s.endSec)} | ${s.role}${confStr}\n`;
       const cap = s.lyrics.slice(0, 8);
       if (cap.length > 0) {
         for (const l of cap) msg += `  "${l.text}"\n`;
@@ -499,6 +513,17 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
         if (s[field] !== undefined && !(ENUMS[field] as readonly string[]).includes(s[field])) {
           errors.push(`Section ${s.sectionIndex}: invalid ${field} "${s[field]}"`);
           delete s[field];
+        }
+      }
+      // Pass through boundary suggestions — optional floats
+      if (s.suggestedStartSec !== undefined) {
+        if (typeof s.suggestedStartSec !== "number" || !Number.isFinite(s.suggestedStartSec)) {
+          delete s.suggestedStartSec;
+        }
+      }
+      if (s.suggestedEndSec !== undefined) {
+        if (typeof s.suggestedEndSec !== "number" || !Number.isFinite(s.suggestedEndSec)) {
+          delete s.suggestedEndSec;
         }
       }
     }

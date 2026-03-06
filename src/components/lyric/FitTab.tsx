@@ -29,6 +29,7 @@ import type { LyricSection } from "@/hooks/useLyricSections";
 import type { SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus } from "./LyricFitTab";
+import type { CinematicSection } from "@/types/CinematicDirection";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 
 const PEAK_SAMPLES = 200;
@@ -73,6 +74,7 @@ interface Props {
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
   onImageGenerationStatusChange?: (status: "idle" | "running" | "done" | "error") => void;
+  cinematicSections?: CinematicSection[];
 }
 
 export function FitTab({
@@ -98,6 +100,7 @@ export function FitTab({
   onHeaderProject,
   onBack,
   onImageGenerationStatusChange,
+  cinematicSections,
 }: Props) {
   const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
@@ -1028,6 +1031,7 @@ export function FitTab({
                   sectionOverrides={sectionOverrides}
                   onSectionOverridesChange={onSectionOverridesChange}
                   palette={Array.isArray(cinematicDirection?.palette) ? cinematicDirection.palette : []}
+                  cinematicSections={cinematicSections}
                 />
               )}
 
