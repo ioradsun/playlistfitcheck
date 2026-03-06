@@ -619,15 +619,30 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   {engagementMode === 'freezing' ? 'finishing…' : engagementMode === 'engaged' ? 'paused' : 'live'}
                 </span>
               </div>
-              <button
-                onClick={onClose}
-                className="text-white/25 hover:text-white/60 transition-colors p-1 -mr-1 focus:outline-none"
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <line x1="2" y1="2" x2="8" y2="8" />
-                  <line x1="8" y1="2" x2="2" y2="8" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (!player) return;
+                    releaseManualSelectionLock();
+                    setAutoFollowEnabled(true);
+                    player.setMuted(false);
+                    player.seek(0);
+                    player.play();
+                  }}
+                  className="text-[8px] font-mono uppercase tracking-[0.15em] text-white/30 hover:text-white/60 transition-colors px-1.5 py-0.5 rounded border border-white/[0.08] hover:border-white/15"
+                >
+                  ▶ Play
+                </button>
+                <button
+                  onClick={onClose}
+                  className="text-white/25 hover:text-white/60 transition-colors p-1 -mr-1 focus:outline-none"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <line x1="2" y1="2" x2="8" y2="8" />
+                    <line x1="8" y1="2" x2="2" y2="8" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* ── Compact emoji strip: 32px ── */}
