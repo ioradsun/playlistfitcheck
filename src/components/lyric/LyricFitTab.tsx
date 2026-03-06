@@ -650,7 +650,7 @@ export function LyricFitTab({
         const atmospherePreset = enrichedDirection.atmosphere || "cinematic";
 
         deriveFrameState(enrichedDirection, 0, 0.5); // warm up cache
-        console.log(`[FitTab Debug] ${fitPipelineMs()} frame state warmup complete`);
+        
 
         // Persist cinematic direction back to render_data in DB
         if (savedIdRef.current) {
