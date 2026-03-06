@@ -242,11 +242,17 @@ const Index = () => {
   }, [activeTab, projectId, authLoading, user?.id, loadedLyric?.id]);
 
   useEffect(() => {
-    if (!projectId || projectLoadedRef.current === projectId || !user) return;
+    if (!projectId) return;
     const tab = activeTab;
     
     // Lyric projects are handled by the dedicated lyric loader effect
     if (tab === "lyric") return;
+    
+    // Wait for auth to settle before attempting fetch (mirrors lyric loader)
+    if (authLoading) return;
+    if (!user) return;
+    
+    if (projectLoadedRef.current === projectId) return;
     
     // If data was already committed by handleLoadProject (sidebar click), skip the fetch
     const alreadyLoaded =
@@ -307,7 +313,7 @@ const Index = () => {
         handleLoadProject(tab, data);
       }
     })();
-  }, [projectId, activeTab, user?.id]);
+  }, [projectId, activeTab, user?.id, authLoading]);
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
