@@ -1860,7 +1860,7 @@ export class LyricDancePlayer {
     this._updateViewportScale();
     this.audio.currentTime = t;
     const groupCount = this.compiledScene?.phraseGroups?.length ?? 0;
-    console.info('[SYNC:K] updateTranscript done. lines:', lines.length, 'phraseGroups:', groupCount, 'payload:', !!this.payload, 'compiledScene:', !!this.compiledScene);
+    
   }
 
   updateSectionImages(urls: string[]): void {
