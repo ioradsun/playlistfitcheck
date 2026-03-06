@@ -787,19 +787,45 @@ const Index = () => {
           </div>
         );
       }
-      case "mix":
-        return <div className="flex-1 flex flex-col min-h-0"><Suspense fallback={<ToolSkeleton tab="mix" />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense></div>;
-      case "hitfit":
-        return <div className="flex-1 flex flex-col min-h-0 px-4 py-6">{loadedHitFitAnalysis
-          ? <Suspense fallback={<ToolSkeleton tab="hitfit" />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
-          : <Suspense fallback={<ToolSkeleton tab="hitfit" />}><HitFitTab key="new" initialAnalysis={null} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
-        }</div>;
-      case "profit":
-        return <div className="flex-1 flex flex-col min-h-0"><Suspense fallback={<TabChunkFallback />}><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></Suspense></div>;
-      case "playlist":
-        if (loadingProjectType === "playlist") {
-          return <TabChunkFallback />;
-        }
+      case "mix": {
+        const isHydratingMix = Boolean(projectId && (authLoading || loadingProjectType === "mix" || (loadedMixProject?.id !== projectId && projectLoadedRef.current !== projectId)));
+        return (
+          <div className="flex-1 flex flex-col min-h-0">
+            {isHydratingMix ? <ToolSkeleton tab="mix" /> : (
+              <Suspense fallback={<ToolSkeleton tab="mix" />}>
+                <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} />
+              </Suspense>
+            )}
+          </div>
+        );
+      }
+      case "hitfit": {
+        const isHydratingHitFit = Boolean(projectId && (authLoading || loadingProjectType === "hitfit") && !loadedHitFitAnalysis);
+        return (
+          <div className="flex-1 flex flex-col min-h-0 px-4 py-6">
+            {isHydratingHitFit ? <ToolSkeleton tab="hitfit" /> : (
+              <Suspense fallback={<ToolSkeleton tab="hitfit" />}>
+                <HitFitTab key={loadedHitFitAnalysis ? "loaded" : "new"} initialAnalysis={loadedHitFitAnalysis} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} />
+              </Suspense>
+            )}
+          </div>
+        );
+      }
+      case "profit": {
+        const isHydratingProfit = Boolean(projectId && (authLoading || loadingProjectType === "profit") && !profitSavedReport);
+        return (
+          <div className="flex-1 flex flex-col min-h-0">
+            {isHydratingProfit ? <TabChunkFallback /> : (
+              <Suspense fallback={<TabChunkFallback />}>
+                <ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} />
+              </Suspense>
+            )}
+          </div>
+        );
+      }
+      case "playlist": {
+        const isHydratingPlaylist = Boolean(projectId && (authLoading || loadingProjectType === "playlist") && !result);
+        if (isHydratingPlaylist) return <TabChunkFallback />;
         return result ? (
           <div className="flex-1 px-4 py-6">
             {!isFullyLoaded ? (
@@ -826,10 +852,21 @@ const Index = () => {
             <PlaylistInputSection onAnalyze={handleAnalyze} />
           </div>
         );
+      }
       case "dreamfit":
         return <div className="flex-1 px-4 py-6"><Suspense fallback={<TabChunkFallback />}><DreamFitTab /></Suspense></div>;
-      case "vibefit":
-        return <div className="flex-1 flex flex-col px-4 py-6"><Suspense fallback={<TabChunkFallback />}><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} /></Suspense></div>;
+      case "vibefit": {
+        const isHydratingVibeFit = Boolean(projectId && (authLoading || loadingProjectType === "vibefit") && !loadedVibeFitResult);
+        return (
+          <div className="flex-1 flex flex-col px-4 py-6">
+            {isHydratingVibeFit ? <TabChunkFallback /> : (
+              <Suspense fallback={<TabChunkFallback />}>
+                <VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} />
+              </Suspense>
+            )}
+          </div>
+        );
+      }
       default:
         return null;
     }
