@@ -10,6 +10,7 @@ import { VibeFitResults, type VibeFitOutput } from "./VibeFitResults";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AuthNudge } from "@/components/ui/AuthNudge";
+import type { RecentItem } from "@/components/AppSidebar";
 
 const DAILY_LIMIT = 20;
 const STORAGE_KEY = "vibefit_usage";
