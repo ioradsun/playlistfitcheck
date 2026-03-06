@@ -100,9 +100,9 @@ const Index = () => {
   const hookfitEnabled = siteCopy.features?.tools_enabled?.hookfit !== false;
   const location = useLocation();
   const navigate = useNavigate();
-  const transitionNavigate = useCallback((...args: Parameters<typeof navigate>) => {
+  const transitionNavigate = useCallback((to: string, options?: { replace?: boolean; state?: any }) => {
     startTransition(() => {
-      navigate(...args);
+      navigate(to, options);
     });
   }, [navigate]);
   const autoRunRef = useRef(false);
