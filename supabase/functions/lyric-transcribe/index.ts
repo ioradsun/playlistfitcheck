@@ -616,9 +616,7 @@ serve(async (req) => {
       const ext = audio.name.split(".").pop()?.toLowerCase() || "mp3";
       format = ext;
 
-      console.log(`[Transcribe Debug] ${ms()} reading arrayBuffer`);
       audioRawBytes = new Uint8Array(await audio.arrayBuffer());
-      console.log(`[Transcribe Debug] ${ms()} arrayBuffer read, ${audioRawBytes.length} bytes`);
     } else {
       let payload: any;
       try {
