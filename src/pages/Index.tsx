@@ -588,7 +588,7 @@ const Index = () => {
 
   const handleSidebarTabChange = useCallback((tab: string) => {
     setLoadingProjectType(null);
-    // Always reset to New Project for the target tool
+    // Always reset to New Project for the target tool — synchronous, no startTransition
     if (tab === "lyric") setLoadedLyric(null);
     else if (tab === "mix") setLoadedMixProject(null);
     else if (tab === "hitfit") setLoadedHitFitAnalysis(null);
@@ -596,12 +596,10 @@ const Index = () => {
     if (tab === "profit") setProfitSavedReport(null);
     if (tab === "vibefit") setLoadedVibeFitResult(null);
 
+    setActiveTab(tab);
     const pathMap: Record<string, string> = { songfit: "/CrowdFit", hookfit: "/HookFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
-    transitionNavigate(pathMap[tab] || "/CrowdFit", { replace: true });
-    startTransition(() => {
-      setActiveTab(tab);
-    });
-  }, [setActiveTab, transitionNavigate]);
+    navigate(pathMap[tab] || "/CrowdFit", { replace: true });
+  }, [setActiveTab, navigate]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
     // Collect the navigate target so we can call it AFTER flushSync
