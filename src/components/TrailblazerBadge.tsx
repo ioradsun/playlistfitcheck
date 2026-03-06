@@ -19,6 +19,7 @@ export const TrailblazerBadge = forwardRef<HTMLSpanElement, TrailblazerBadgeProp
     <Tooltip>
       <TooltipTrigger asChild>
         <motion.span
+          ref={ref}
           className={`inline-flex items-center font-mono rounded-sm border-[0.5px] border-foreground/20 bg-transparent text-foreground/80 cursor-default tracking-tighter ${
             compact ? "px-1.5 py-0.5 text-[9px]" : "px-1.5 py-0.5 text-[10px]"
           }`}
@@ -34,4 +35,4 @@ export const TrailblazerBadge = forwardRef<HTMLSpanElement, TrailblazerBadgeProp
       </TooltipContent>
     </Tooltip>
   );
-}
+});
