@@ -373,7 +373,7 @@ export function FitTab({
         return;
       }
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
-      console.log('[SYNC:D] calling reloadTranscript with', mainLines.length, 'lines');
+      
       void handle.reloadTranscript(mainLines, wordsRef.current ?? undefined);
     }, 300);
 
