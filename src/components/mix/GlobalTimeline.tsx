@@ -110,15 +110,25 @@ export function GlobalTimeline({
   const startPct = (markerStart / duration) * 100;
   const endPct = (markerEnd / duration) * 100;
 
+  const redraw = useCallback(() => {
+    if (canvasRef.current && waveform)
+      drawWaveform(canvasRef.current, waveform.peaks, beats, duration, markerStart, markerEnd);
+  }, [waveform, beats, duration, markerStart, markerEnd]);
+
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
-    drawWaveform(canvasRef.current, waveform.peaks, beats, duration, markerStart, markerEnd);
-    const observer = new ResizeObserver(() => {
-      if (canvasRef.current && waveform) drawWaveform(canvasRef.current, waveform.peaks, beats, duration, markerStart, markerEnd);
-    });
+    redraw();
+    const observer = new ResizeObserver(redraw);
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
-  }, [waveform, beats, duration, markerStart, markerEnd]);
+  }, [redraw]);
+
+  // Re-draw when dark/light theme changes
+  useEffect(() => {
+    const mo = new MutationObserver(redraw);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
+  }, [redraw]);
 
   const getTimeFromClientX = useCallback(
     (clientX: number) => {
