@@ -636,7 +636,7 @@ export function LyricFitTab({
         setCinematicDirection(enrichedDirection);
 
         // Derive FrameRenderState from cinematic direction presets
-        console.log(`[FitTab Debug] ${fitPipelineMs()} deriving frame state preset (local computation)`);
+        
         const { deriveFrameState } = await import("@/engine/presetDerivation");
         const { getTypography } = await import("@/engine/presetDerivation");
 
