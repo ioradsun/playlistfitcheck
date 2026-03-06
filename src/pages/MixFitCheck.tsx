@@ -477,7 +477,11 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
               ? `Reupload Mixes (${activeMixes.length}/${MAX_MIXES})`
               : `+ Add Mix (${activeMixes.length}/${MAX_MIXES})`}
           </button>
-          <span className="text-[10px] text-muted-foreground/60 font-mono">Audio files aren't saved or stored.</span>
+          {user ? (
+            <span className="text-[10px] text-muted-foreground/60 font-mono">Audio saved to your account.</span>
+          ) : (
+            <span className="text-[10px] text-muted-foreground/60 font-mono">Sign in to save audio between sessions.</span>
+          )}
         </div>
       )}
 
