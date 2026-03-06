@@ -571,8 +571,6 @@ export function LyricFitTab({
     setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running", sectionImages: "idle" }));
     setPipelineStages(prev => ({ ...prev, cinematic: "running" }));
 
-    console.log(`[FitTab Debug] ${fitPipelineMs()} starting cinematic direction`);
-    console.log(`[FitTab Debug] ${fitPipelineMs()} cinematic direction source: API call (supabase.functions.invoke)`);
 
     try {
       const lyricsForDirection = sourceLines
