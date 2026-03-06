@@ -881,7 +881,7 @@ export function LyricFitTab({
     }
     if (!pipelineTriggeredRef.current || pipelineRetryCount > 0) {
       pipelineTriggeredRef.current = true;
-      console.log(`[FitTab Debug] ${fitPipelineMs()} [song-defaults-derivation] triggering`);
+      
       startSongDefaultsDerivation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
