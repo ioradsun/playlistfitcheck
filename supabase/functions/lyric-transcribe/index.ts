@@ -514,7 +514,7 @@ async function runGeminiTranscribe(
   if (referenceLyrics) {
     const alignTemplate = await getPrompt("lyric-align", DEFAULT_ALIGN_PROMPT);
     transcribePrompt = alignTemplate.replace("{referenceLyrics}", referenceLyrics);
-    console.log("[editor-mode] Using Gemini forced alignment with reference lyrics");
+    
   } else {
     transcribePrompt = await getPrompt("lyric-transcribe", DEFAULT_TRANSCRIBE_PROMPT);
   }
