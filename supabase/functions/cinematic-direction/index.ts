@@ -667,7 +667,7 @@ async function callWithRetry(
   const retryDirectives = Array.isArray(retryResult.value.wordDirectives) ? retryResult.value.wordDirectives.length : 0;
 
   if (retryStoryboard === 0 || retryDirectives === 0) {
-    console.error(`[cinematic-direction] Retry still empty: ${retryStoryboard} storyboard, ${retryDirectives} wordDirectives`);
+    
     throw {
       status: 422,
       message: `Cinematic direction failed after retry: storyboard=${retryStoryboard}, wordDirectives=${retryDirectives}`,
