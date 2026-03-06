@@ -170,33 +170,34 @@ function InlineLyricDanceInner(
 
   return (
     <div className="w-full overflow-hidden bg-black rounded-xl flex flex-col relative">
-      {/* Canvas area */}
+      {/* Canvas area — matches tier 1 height exactly */}
       <div ref={containerRef}
         className="relative w-full overflow-hidden cursor-pointer"
         style={{ minHeight: 310, height: 310 }}
-        onClick={() => { if (!showCover) setMuted(m => !m); }}
+        onClick={() => { setMuted(m => !m); }}
       >
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
           style={{ display: playerReady ? "block" : "none" }} />
         <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
           style={{ display: "none" }} />
 
+        {/* CrowdFit skeleton — uses album art for zero-jump transition */}
         {(loading || (!playerReady && !fetchError)) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
-            <div className="w-12 h-12 rounded-full bg-white/[0.06] flex items-center justify-center mb-4">
-              <span className="text-base font-mono text-white/30">
-                {(artistName || songTitle || "?")[0].toUpperCase()}
-              </span>
-            </div>
-            <p className="text-sm font-semibold text-white/80 mb-1 px-6 text-center truncate max-w-[80%]">{songTitle}</p>
-            {artistName && (
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 mb-5">{artistName}</p>
-            )}
-            <div className="flex items-end gap-[3px] h-6">
-              {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
-                <div key={i} className="w-[3px] rounded-full bg-white/20"
-                  style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }} />
-              ))}
+            {albumArtUrl ? (
+              <>
+                <img src={albumArtUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/50" />
+              </>
+            ) : null}
+            <div className="relative z-10 flex flex-col items-center">
+              <div className="flex items-end gap-[3px] h-6 mb-3">
+                {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
+                  <div key={i} className="w-[3px] rounded-full bg-white/30"
+                    style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }} />
+                ))}
+              </div>
+              <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/40">loading…</p>
             </div>
           </div>
         )}
