@@ -632,8 +632,10 @@ const Index = () => {
   }, [activeTab, setActiveTab, navigate, loadedLyric, loadedMixProject, loadedHitFitAnalysis]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
-    // Use startTransition so heavy state updates don't block the sidebar
-    startTransition(() => {
+    // Use flushSync so data is committed BEFORE React processes the next
+    // render frame — this prevents the "New Project" screen from flashing
+    // between the old project and the newly-loaded one.
+    flushSync(() => {
       // Only reset state for the tool being loaded — don't touch other tools'
       // persisted state (e.g. loadedLyric) to prevent unnecessary remounts.
       setResult(null);

@@ -345,15 +345,15 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
 
   const handleRecentClick = (item: RecentItem) => {
     const tool = TOOLS.find(t => t.value === item.type);
+    // Fire onLoadProject SYNCHRONOUSLY before navigate so Index.tsx
+    // sets data atomically before React processes the route change.
+    onTabChange?.(item.type);
+    onLoadProject?.(item.type, item.rawData);
     if (tool) {
       const targetPath = `${tool.path}/${item.id}`;
       prefetchNavigationTarget(targetPath, { userId: user?.id, itemType: item.type, itemId: item.id });
       navigate(targetPath);
     }
-    startTransition(() => {
-      onTabChange?.(item.type);
-      onLoadProject?.(item.type, item.rawData);
-    });
     closeMobileIfNeeded();
   };
 
