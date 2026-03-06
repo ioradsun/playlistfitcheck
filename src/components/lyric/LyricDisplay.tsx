@@ -46,7 +46,7 @@ import {
 } from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
-import { LyricDanceDebugPanel } from "./LyricDanceDebugPanel";
+// LyricDanceDebugPanel removed for production
 import { HookDanceCanvas } from "./HookDanceCanvas";
 import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
 import { LyricStage } from "./LyricStage";
