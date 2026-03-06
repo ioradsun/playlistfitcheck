@@ -167,7 +167,7 @@ export function LyricsTab({
           ...(storageAudioUrl ? { audio_url: storageAudioUrl } : {}),
           updated_at: new Date().toISOString(),
         } as any).then(({ error }) => {
-          if (error) console.warn("[Pipeline] Initial project save failed:", error.message);
+          // Initial project save failed
         });
       }
 
