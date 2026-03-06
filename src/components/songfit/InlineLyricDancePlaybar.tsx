@@ -265,7 +265,7 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
   if (!playerReady || !data) return null;
 
   return (
-    <div className="relative overflow-hidden">
+    <div>
       {/* Progress bar */}
       <div className="w-full h-1 cursor-pointer group relative" style={{ background: "rgba(255,255,255,0.05)" }}
         onClick={(e) => {
