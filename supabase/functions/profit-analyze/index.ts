@@ -175,7 +175,7 @@ serve(async (req) => {
     try {
       relatedData = await spotifyGet(`/artists/${artistId}/related-artists`, token);
     } catch (e) {
-      console.warn("Related artists unavailable (likely Dev Mode):", (e as Error).message);
+      // Related artists unavailable (likely Dev Mode)
     }
 
     const topTracks = topTracksData.tracks || [];
