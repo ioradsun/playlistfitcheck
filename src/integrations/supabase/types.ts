@@ -1028,6 +1028,7 @@ export type Database = {
       saved_hitfit: {
         Row: {
           analysis_json: Json
+          audio_url: string | null
           created_at: string
           deleted_at: string | null
           filename: string
@@ -1037,6 +1038,7 @@ export type Database = {
         }
         Insert: {
           analysis_json: Json
+          audio_url?: string | null
           created_at?: string
           deleted_at?: string | null
           filename?: string
@@ -1046,6 +1048,7 @@ export type Database = {
         }
         Update: {
           analysis_json?: Json
+          audio_url?: string | null
           created_at?: string
           deleted_at?: string | null
           filename?: string

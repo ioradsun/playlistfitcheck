@@ -10,6 +10,7 @@ import { useBeatGrid } from "@/hooks/useBeatGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
+import { supabase } from "@/integrations/supabase/client";
 
 import { toast } from "sonner";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
@@ -105,19 +106,40 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     setProjectId(newId);
     setTitle(t);
     setNotes(n);
-    // Decode uploaded files
-    const decodedMixes: AudioMix[] = [];
+    // Decode uploaded files and upload to storage
+    const decodedMixes: (AudioMix & { audio_url?: string })[] = [];
     for (const file of files) {
       try {
         const { buffer, waveform } = await decodeFile(file);
         const mixName = file.name.replace(/\.(mp3|wav|m4a)$/i, "");
-        const newMix: AudioMix = {
-          id: crypto.randomUUID(),
+        const mixId = crypto.randomUUID();
+        let audioUrl: string | undefined;
+
+        // Upload audio to storage for logged-in users
+        if (user) {
+          try {
+            const ext = file.name.split(".").pop() || "mp3";
+            const storagePath = `${user.id}/mix/${newId}/${mixId}.${ext}`;
+            const { error: uploadError } = await supabase.storage
+              .from("audio-clips")
+              .upload(storagePath, file, { upsert: true, contentType: file.type || undefined });
+            if (!uploadError) {
+              const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+              audioUrl = urlData.publicUrl;
+            }
+          } catch (e) {
+            console.error("Failed to upload mix audio:", e);
+          }
+        }
+
+        const newMix: AudioMix & { audio_url?: string } = {
+          id: mixId,
           name: mixName,
           buffer,
           waveform,
           rank: null,
           comments: "",
+          audio_url: audioUrl,
         };
         // Cache file for session persistence
         sessionAudio.set("mix", `${newId}::${mixName}`, file, { ttlMs: 30 * 60 * 1000 });
@@ -137,7 +159,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         id: newId,
         title: t,
         notes: n,
-        mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments })),
+        mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments, audio_url: m.audio_url })),
         markerStart: 0,
         markerEnd: decodedMixes[0]?.waveform?.duration ?? 10,
         createdAt: new Date().toISOString(),
@@ -150,13 +172,13 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         label: t || "Mix Project",
         meta: "just now",
         type: "mix",
-        rawData: { id: newId, title: t, notes: n, mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments })) },
+        rawData: { id: newId, title: t, notes: n, mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments, audio_url: m.audio_url })) },
       });
     } catch (e) {
       console.error("Failed initial save for MixFit project:", e);
     }
     await mixQuota.increment();
-  }, [decodeFile, mixQuota, save, onProjectSaved, onSavedId, onOptimisticItem]);
+  }, [decodeFile, mixQuota, save, onProjectSaved, onSavedId, onOptimisticItem, user]);
 
   const handleLoadProject = useCallback(async (project: MixProjectData) => {
     const loadSession = ++loadSessionRef.current;
@@ -171,11 +193,13 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     setMarkerStart(project.markerStart);
     setMarkerEnd(project.markerEnd);
 
-    // Try to restore audio from session cache
-    const restoredMixes: AudioMix[] = [];
+    // Try to restore audio from session cache, then from stored URLs
+    const restoredMixes: (AudioMix & { audio_url?: string })[] = [];
     let anyMissing = false;
     for (const m of project.mixes) {
       if (isStale()) return;
+
+      // 1. Try session cache first
       const cached = sessionAudio.get("mix", `${project.id}::${m.name}`);
       if (cached) {
         try {
@@ -188,12 +212,44 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
             waveform,
             rank: m.rank,
             comments: m.comments,
+            audio_url: m.audio_url,
           });
           continue;
+        } catch {
+          // fall through
+        }
+      }
+
+      // 2. Try fetching from stored audio URL
+      if (m.audio_url) {
+        try {
+          const response = await fetch(m.audio_url);
+          if (isStale()) return;
+          if (response.ok) {
+            const blob = await response.blob();
+            if (isStale()) return;
+            const file = new File([blob], `${m.name}.mp3`, { type: blob.type || "audio/mpeg" });
+            const { buffer, waveform } = await decodeFile(file);
+            if (isStale()) return;
+            // Cache for session so subsequent navigations are instant
+            sessionAudio.set("mix", `${project.id}::${m.name}`, file, { ttlMs: 30 * 60 * 1000 });
+            restoredMixes.push({
+              id: crypto.randomUUID(),
+              name: m.name,
+              buffer,
+              waveform,
+              rank: m.rank,
+              comments: m.comments,
+              audio_url: m.audio_url,
+            });
+            continue;
+          }
         } catch {
           // fall through to placeholder
         }
       }
+
+      // 3. Placeholder — audio not available
       anyMissing = true;
       restoredMixes.push({
         id: crypto.randomUUID(),
@@ -202,6 +258,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         waveform: { peaks: [], duration: 0 },
         rank: m.rank,
         comments: m.comments,
+        audio_url: m.audio_url,
       });
     }
 
@@ -216,7 +273,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     }
 
     if (anyMissing && project.mixes.length > 0) {
-      toast.info("Project loaded — re-upload audio files to resume playback.");
+      toast.info("Some audio files couldn't be restored — re-upload to resume playback.");
     }
   }, [stop, decodeFile]);
 
@@ -244,13 +301,34 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       try {
           const { buffer, waveform } = await decodeFile(file);
           const mixName = file.name.replace(/\.(mp3|wav|m4a)$/i, "");
-          const newMix: AudioMix = {
-            id: crypto.randomUUID(),
+          const mixId = crypto.randomUUID();
+          let audioUrl: string | undefined;
+
+          // Upload audio to storage for logged-in users
+          if (user && projectId) {
+            try {
+              const ext = file.name.split(".").pop() || "mp3";
+              const storagePath = `${user.id}/mix/${projectId}/${mixId}.${ext}`;
+              const { error: uploadError } = await supabase.storage
+                .from("audio-clips")
+                .upload(storagePath, file, { upsert: true, contentType: file.type || undefined });
+              if (!uploadError) {
+                const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+                audioUrl = urlData.publicUrl;
+              }
+            } catch (err) {
+              console.error("Failed to upload mix audio:", err);
+            }
+          }
+
+          const newMix: AudioMix & { audio_url?: string } = {
+            id: mixId,
             name: mixName,
             buffer,
             waveform,
             rank: null,
             comments: "",
+            audio_url: audioUrl,
           };
           // Cache file for session persistence
           if (projectId) sessionAudio.set("mix", `${projectId}::${mixName}`, file, { ttlMs: 30 * 60 * 1000 });
@@ -269,7 +347,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       if (fileRef.current) fileRef.current.value = "";
       setNeedsReupload(false);
     },
-    [decodeFile, mixes]
+    [decodeFile, mixes, user, projectId]
   );
 
   const saveProject = useCallback(async (showToast = false) => {
@@ -280,7 +358,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         id: projectId,
         title,
         notes,
-        mixes: mixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments })),
+        mixes: mixes.map((m: any) => ({ name: m.name, rank: m.rank, comments: m.comments, audio_url: m.audio_url })),
         markerStart,
         markerEnd,
         createdAt: new Date().toISOString(),
@@ -290,7 +368,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       setRefreshKey((k) => k + 1);
       onProjectSaved?.();
       if (showToast) {
-        toast.success("Project saved — audio files are not stored, only filenames, rankings & notes.");
+        toast.success("Project saved.");
       }
     } catch {
       if (showToast) toast.error("Failed to save");
@@ -399,7 +477,11 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
               ? `Reupload Mixes (${activeMixes.length}/${MAX_MIXES})`
               : `+ Add Mix (${activeMixes.length}/${MAX_MIXES})`}
           </button>
-          <span className="text-[10px] text-muted-foreground/60 font-mono">Audio files aren't saved or stored.</span>
+          {user ? (
+            <span className="text-[10px] text-muted-foreground/60 font-mono">Audio saved to your account.</span>
+          ) : (
+            <span className="text-[10px] text-muted-foreground/60 font-mono">Sign in to save audio between sessions.</span>
+          )}
         </div>
       )}
 
