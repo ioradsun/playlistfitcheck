@@ -1186,14 +1186,6 @@ export function LyricDisplay({
             {saveStatus === "saving" ? "● Saving…" : "✓ Saved"}
           </span>
         )}
-        {isAdmin && debugData && (
-          <button
-            onClick={() => setShowDebug((v) => !v)}
-            className="text-[10px] font-mono text-muted-foreground/50 hover:text-foreground border border-border/30 rounded px-2 py-1 transition-colors"
-          >
-            ⚙ Debug
-          </button>
-        )}
       </>
     );
     onHeaderProject?.({ title, onBack, rightContent });
