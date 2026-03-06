@@ -7,7 +7,8 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SiteCopyProvider } from "@/hooks/useSiteCopy";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { WalletProvider } from "@/components/crypto/WalletProvider";
+// WalletProvider disabled — uncomment when crypto features are re-enabled
+// import { WalletProvider } from "@/components/crypto/WalletProvider";
 import { PageLayout } from "@/components/PageLayout";
 import { lazy, Suspense } from "react";
 import Index from "./pages/Index";
@@ -80,7 +81,7 @@ const App = () => (
             <Route path="/*" element={
               <AuthProvider>
                 <SiteCopyProvider>
-                <WalletProvider>
+                
                 <SidebarProvider defaultOpen={true}>
                   <Routes>
                     <Route path="/" element={<Index />} />
@@ -132,7 +133,6 @@ const App = () => (
                 <Suspense fallback={null}>
                   <FitWidget />
                 </Suspense>
-                </WalletProvider>
                 </SiteCopyProvider>
               </AuthProvider>
             } />
