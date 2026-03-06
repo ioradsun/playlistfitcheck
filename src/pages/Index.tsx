@@ -632,12 +632,12 @@ const Index = () => {
   }, [activeTab, setActiveTab, navigate, loadedLyric, loadedMixProject, loadedHitFitAnalysis]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
+    // Collect the navigate target so we can call it AFTER flushSync
+    let navTarget: string | null = null;
+
     // Use flushSync so data is committed BEFORE React processes the next
-    // render frame — this prevents the "New Project" screen from flashing
-    // between the old project and the newly-loaded one.
+    // render frame — this prevents the "New Project" screen from flashing.
     flushSync(() => {
-      // Only reset state for the tool being loaded — don't touch other tools'
-      // persisted state (e.g. loadedLyric) to prevent unnecessary remounts.
       setResult(null);
       setVibeAnalysis(null);
       setSongFitAnalysis(null);
@@ -651,7 +651,7 @@ const Index = () => {
           if (data?.reportId && data?.blueprint && data?.artist) {
             setProfitSavedReport(data);
             setProfitLoadKey(k => k + 1);
-            navigate(`/ProFit/${data.reportId}`, { replace: true });
+            navTarget = `/ProFit/${data.reportId}`;
           } else {
             const artistId = data?.spotify_artist_id;
             if (artistId) {
@@ -664,7 +664,7 @@ const Index = () => {
         case "hitfit": {
           if (data?.analysis) {
             setLoadedHitFitAnalysis(data.analysis);
-            if (data.id) navigate(`/HitFit/${data.id}`, { replace: true });
+            if (data.id) navTarget = `/HitFit/${data.id}`;
           }
           break;
         }
@@ -676,24 +676,9 @@ const Index = () => {
             setSongFitAnalysis(songFit ?? null);
             setVibeLoading(false);
             setSongFitLoading(false);
-            if (data.id) navigate(`/PlaylistFit/${data.id}`, { replace: true });
-          } else if (data?.playlist_url) {
-            (async () => {
-              setVibeLoading(true);
-              try {
-                const { data: plData, error } = await supabase.functions.invoke("spotify-playlist", {
-                  body: { playlistUrl: data.playlist_url, sessionId: null, songUrl: data.song_url || null },
-                });
-                if (error) throw new Error(error.message);
-                if (plData?.error) throw new Error(plData.error);
-                handleAnalyze({ ...(plData as PlaylistInput), _songUrl: data.song_url || undefined });
-              } catch (e) {
-                console.error("Re-run error:", e);
-                toast.error("Failed to load report. Try running PlaylistFit again.");
-                setVibeLoading(false);
-              }
-            })();
+            if (data.id) navTarget = `/PlaylistFit/${data.id}`;
           }
+          // NOTE: playlist_url re-fetch path handled below outside flushSync
           break;
         }
         case "mix": {
@@ -709,7 +694,7 @@ const Index = () => {
               updatedAt: data.updated_at || new Date().toISOString(),
             };
             setLoadedMixProject(mixData);
-            if (data.id) navigate(`/MixFit/${data.id}`, { replace: true });
+            if (data.id) navTarget = `/MixFit/${data.id}`;
           }
           break;
         }
@@ -717,7 +702,7 @@ const Index = () => {
           if (data) {
             setLoadedLyric(data);
             setLoadingProjectType(null);
-            if (data.id) navigate(`/LyricFit/${data.id}`, { replace: true });
+            if (data.id) navTarget = `/LyricFit/${data.id}`;
           }
           break;
         }
@@ -725,12 +710,34 @@ const Index = () => {
           if (data) {
             setLoadedVibeFitResult(data);
             setVibeFitLoadKey((k) => k + 1);
-            if (data.id) navigate(`/VibeFit/${data.id}`, { replace: true });
+            if (data.id) navTarget = `/VibeFit/${data.id}`;
           }
           break;
         }
       }
     });
+
+    // Navigate AFTER flushSync so state is already committed
+    if (navTarget) navigate(navTarget, { replace: true });
+
+    // Handle async playlist re-fetch outside flushSync
+    if (type === "playlist" && !data?.report_data && data?.playlist_url) {
+      (async () => {
+        setVibeLoading(true);
+        try {
+          const { data: plData, error } = await supabase.functions.invoke("spotify-playlist", {
+            body: { playlistUrl: data.playlist_url, sessionId: null, songUrl: data.song_url || null },
+          });
+          if (error) throw new Error(error.message);
+          if (plData?.error) throw new Error(plData.error);
+          handleAnalyze({ ...(plData as PlaylistInput), _songUrl: data.song_url || undefined });
+        } catch (e) {
+          console.error("Re-run error:", e);
+          toast.error("Failed to load report. Try running PlaylistFit again.");
+          setVibeLoading(false);
+        }
+      })();
+    }
   }, [handleAnalyze, navigate]);
 
   const navigateToProject = useCallback((tool: string, id: string) => {
