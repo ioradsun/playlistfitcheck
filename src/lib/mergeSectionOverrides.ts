@@ -6,6 +6,8 @@ export interface SectionOverride {
   role?: SectionRole;
   startSec?: number;
   endSec?: number;
+  isNew?: boolean;
+  removed?: boolean;
 }
 
 export type SectionOverrides = SectionOverride[];
@@ -40,8 +42,10 @@ export function mergeSectionOverrides(
   if (!overrides?.length) return detectedSections;
 
   const next = detectedSections.map((section) => ({ ...section }));
+  const detectedIndexSet = new Set(detectedSections.map((section) => section.sectionIndex));
 
   overrides.forEach((override) => {
+    if (override.isNew || override.removed) return;
     const idx = next.findIndex((section) => section.sectionIndex === override.sectionIndex);
     if (idx === -1) return;
     const current = next[idx];
@@ -63,19 +67,41 @@ export function mergeSectionOverrides(
     }
   });
 
+  const removedIndices = new Set(overrides.filter((override) => override.removed).map((override) => override.sectionIndex));
+
+  const withoutRemoved = next.filter((section) => !removedIndices.has(section.sectionIndex));
+
+  const addedSections = overrides
+    .filter((override) => override.isNew && !override.removed)
+    .map<LyricSection | null>((override) => {
+      if (typeof override.startSec !== "number" || typeof override.endSec !== "number" || !override.role) {
+        return null;
+      }
+      return {
+        sectionIndex: override.sectionIndex,
+        role: override.role,
+        label: labelFromRole(override.role, 1),
+        labelSource: "user",
+        startSec: override.startSec,
+        endSec: override.endSec,
+        lines: [],
+        confidence: 1,
+      };
+    })
+    .filter((section): section is LyricSection => !!section)
+    .filter((section) => !detectedIndexSet.has(section.sectionIndex));
+
+  const sorted = [...withoutRemoved, ...addedSections].sort((a, b) => a.startSec - b.startSec);
+
   // Recompute labels by role order for consistency after role changes.
   const roleCounts: Partial<Record<SectionRole, number>> = {};
-  return next.map((section) => {
+  return sorted.map((section, idx) => {
     const count = (roleCounts[section.role] ?? 0) + 1;
     roleCounts[section.role] = count;
-
-    if (section.labelSource === "user") {
-      return {
-        ...section,
-        label: labelFromRole(section.role, count),
-      };
-    }
-
-    return section;
+    return {
+      ...section,
+      sectionIndex: idx,
+      label: labelFromRole(section.role, count),
+    };
   });
 }
