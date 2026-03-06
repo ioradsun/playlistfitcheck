@@ -303,7 +303,7 @@ export function LyricFitTab({
     const timer = setTimeout(() => {
       void supabase
         .from("saved_lyrics")
-        .update({ section_overrides: sectionOverrides as any })
+        .update({ render_data: { section_overrides: sectionOverrides } as any })
         .eq("id", savedId);
     }, 1500);
     return () => clearTimeout(timer);
