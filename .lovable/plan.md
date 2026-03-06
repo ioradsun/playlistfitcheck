@@ -1,31 +1,50 @@
 
 
-# Download Export Modal — Implementation Complete
+## Universal Navigation Fix + Remove Back Arrow
 
-## Summary
+### Problem
+1. Clicking a tool category (e.g. "LyricFit") preserves existing project state when switching tabs instead of always opening a fresh "New Project" screen
+2. Header shows a back arrow (`←`) on existing projects that needs to be removed — navigation should be sidebar-only
 
-Replaced the "Republish" button in the FIT tab with a "Download" button that opens a full export modal (`FitExportModal`). Removed the download popover from the `ShareableLyricDance` page.
+### Changes
 
-## Files Changed
+**1. `src/pages/Index.tsx` — `handleSidebarTabChange` (lines 589-611)**
 
-| File | Action |
-|------|--------|
-| `src/components/lyric/FitExportModal.tsx` | **Created** — Export modal with format/quality selection, progress states, download |
-| `src/components/songfit/InlineLyricDance.tsx` | **Edited** — Added `forwardRef` + `useImperativeHandle` to expose player |
-| `src/components/lyric/FitTab.tsx` | **Edited** — Replaced Republish with Download button + FitExportModal |
-| `src/pages/ShareableLyricDance.tsx` | **Edited** — Removed download popover, export state, and handleExport |
+Remove the `isAlreadyOnTab` branching. Every tool category click should clear tool state and navigate to the bare path:
 
-## Architecture
+```tsx
+const handleSidebarTabChange = useCallback((tab: string) => {
+  setLoadingProjectType(null);
+  // Always reset to New Project for the target tool
+  if (tab === "lyric") setLoadedLyric(null);
+  else if (tab === "mix") setLoadedMixProject(null);
+  else if (tab === "hitfit") setLoadedHitFitAnalysis(null);
+  // Clear playlist/profit/vibefit state too
+  if (tab === "playlist") { setResult(null); savedSearchIdRef.current = null; }
+  if (tab === "profit") setProfitSavedReport(null);
+  if (tab === "vibefit") setLoadedVibeFitResult(null);
 
-- `InlineLyricDance` exposes `InlineLyricDanceHandle.getPlayer()` via `forwardRef`
-- `FitTab` holds a ref to `InlineLyricDance` and passes `getPlayer` to `FitExportModal`
-- `FitExportModal` uses `exportVideoAsMP4` from `src/engine/exportVideo.ts` (WebCodecs + mp4-muxer)
-- Export is video-only; audio notice is displayed in the modal
+  const pathMap = { songfit: "/CrowdFit", hookfit: "/HookFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
+  transitionNavigate(pathMap[tab] || "/CrowdFit", { replace: true });
+  startTransition(() => { setActiveTab(tab); });
+}, [setActiveTab, transitionNavigate]);
+```
 
-## Export Options
+**2. `src/pages/Index.tsx` — Header (lines 907-914)**
 
-| Quality | 9:16 | 16:9 | 1:1 |
-|---------|------|------|-----|
-| 1080p | 1080×1920 | 1920×1080 | 1080×1080 |
-| 720p | 720×1280 | 1280×720 | 720×720 |
-| 480p | 480×854 | 854×480 | 480×480 |
+Remove the back arrow button. Keep project title and right content:
+
+```tsx
+{headerProject ? (
+  <>
+    <span className="text-xs font-semibold">{headerProject.title}</span>
+    {headerProject.rightContent && <div className="ml-auto flex items-center gap-2">{headerProject.rightContent}</div>}
+  </>
+) : (
+  // ... existing subtitle fallback
+)}
+```
+
+### Files Changed
+- `src/pages/Index.tsx` only — two surgical edits
+
