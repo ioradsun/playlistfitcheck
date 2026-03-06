@@ -265,7 +265,7 @@ export function analyzeAudioAsync(
       worker.onerror = (err) => {
         clearTimeout(timeoutId);
         worker.terminate();
-        console.warn('[audio-analyzer] Worker error, falling back to main thread:', err);
+        // Worker error, falling back to main thread
         resolve(analyzeAudio(buffer, beats));
       };
 
