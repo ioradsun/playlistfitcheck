@@ -43,6 +43,7 @@ interface ReactionPanelProps {
   onReactionDataChange: (data: Record<string, { line: Record<number, number>; total: number }> | ((prev: Record<string, { line: Record<number, number>; total: number }>) => Record<string, { line: Record<number, number>; total: number }>)) => void;
   onReactionFired: (emoji: string) => void;
   onEngagementStart: (targetLineIndex?: number) => void;
+  onResetEngagement?: () => void;
 }
 
 const EMOJIS = [
@@ -104,7 +105,7 @@ function isLineOutsideViewport(container: HTMLElement, row: HTMLElement, thresho
   return rowRect.top < containerRect.top + threshold || rowRect.bottom > containerRect.bottom - threshold;
 }
 
-function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart }: ReactionPanelProps) {
+function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart, onResetEngagement }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -625,6 +626,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                     if (!player) return;
                     releaseManualSelectionLock();
                     setAutoFollowEnabled(true);
+                    setRepeatMode(false);
+                    onResetEngagement?.();
                     player.setMuted(false);
                     player.seek(0);
                     player.play();

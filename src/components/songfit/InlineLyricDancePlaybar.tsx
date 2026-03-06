@@ -328,6 +328,11 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
             engagementMode={engagementMode}
             frozenLineIndex={frozenLineIndex}
             onEngagementStart={handleEngagementStart}
+            onResetEngagement={() => {
+              setEngagementMode('spectator');
+              setFrozenLineIndex(null);
+              freezeAtSecRef.current = null;
+            }}
           />
         </>
       ) : (
