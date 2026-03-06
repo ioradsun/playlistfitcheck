@@ -566,7 +566,7 @@ async function runGeminiTranscribe(
   const duration = lastSeg ? lastSeg.end + 0.5 : 0;
   const rawText = segments.map(s => s.text).join(" ");
 
-  console.log(`[gemini-transcribe] ${segments.length} lines, ${words.length} words, duration: ${duration.toFixed(1)}s`);
+  
 
   return { words, segments, rawText, duration };
 }
