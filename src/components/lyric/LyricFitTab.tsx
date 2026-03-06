@@ -159,6 +159,8 @@ export function LyricFitTab({
     () => mergeSectionOverrides(detectedSections, sectionOverrides),
     [detectedSections, sectionOverrides],
   );
+  const mergedSectionsRef = useRef(mergedSections);
+  mergedSectionsRef.current = mergedSections;
 
   const handleSectionOverridesChange = useCallback((overrides: SectionOverrides) => {
     const prev = sectionOverrides || [];
@@ -560,7 +562,7 @@ export function LyricFitTab({
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[], force = false) => {
     if (!lyricData || !sourceLines.length) return;
     // Data-existence guard: if we already have cinematicDirection (e.g. loaded from DB), skip
-    if (!force && cinematicDirection) {
+    if (!force && cinematicDirectionRef.current) {
       setGenerationStatus(prev => prev.cinematicDirection === "done" ? prev : ({ ...prev, cinematicDirection: "done" }));
       return;
     }
@@ -578,7 +580,7 @@ export function LyricFitTab({
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
       const sceneContext = resolvedScene ?? null;
-      const sectionsForAI = mergedSections.map((section, i) => ({
+      const sectionsForAI = mergedSectionsRef.current.map((section, i) => ({
         index: i,
         startSec: section.startSec,
         endSec: section.endSec,
@@ -783,7 +785,7 @@ export function LyricFitTab({
     } catch {
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error", sectionImages: "idle" }));
     }
-  }, [lyricData, generationStatus.cinematicDirection, beatGrid, cinematicDirection, renderData, persistRenderData, songSignature, audioSections, fitPipelineMs, mergedSections, words, user, audioFile, initialLyric]);
+  }, [lyricData, generationStatus.cinematicDirection, beatGrid, renderData, persistRenderData, songSignature, audioSections, fitPipelineMs, words, user, audioFile, initialLyric]);
 
   const sectionPipelineRunningRef = useRef(false);
   const sectionPipelineDoneRef = useRef(false);
@@ -866,12 +868,10 @@ export function LyricFitTab({
   const [pipelineRetryCount, setPipelineRetryCount] = useState(0);
   const cinematicTriggeredRef = useRef(false);
   useEffect(() => {
-    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [cinematic-direction-trigger] fired`);
     if (!sectionsReady || !lines?.length) return;
     if (cinematicTriggeredRef.current && pipelineRetryCount === 0) return;
     cinematicTriggeredRef.current = true;
-    console.log(`[Transcribe Debug] starting cinematic direction`);
-    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [cinematic-direction-trigger] triggering startCinematicDirection`);
+    console.log(`[FitTab Debug] ${fitPipelineMs()} [cinematic-direction-trigger] triggering`);
     void startCinematicDirection(lines, pipelineRetryCount > 0);
   }, [sectionsReady, lines, pipelineRetryCount, startCinematicDirection, fitPipelineMs]);
 
@@ -886,7 +886,6 @@ export function LyricFitTab({
 
   // ── Fork 2: Song defaults derivation starts when lyrics arrive ──
   useEffect(() => {
-    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [song-defaults-derivation] fired`);
     if (!lines?.length) return;
     // If all data already loaded from DB, skip pipeline entirely
     if (renderData && beatGrid && cinematicDirectionRef.current) {
@@ -896,14 +895,13 @@ export function LyricFitTab({
     }
     if (!pipelineTriggeredRef.current || pipelineRetryCount > 0) {
       pipelineTriggeredRef.current = true;
-      console.log(`[FitTab Debug] ${fitPipelineMs()} effect [song-defaults-derivation] triggering startSongDefaultsDerivation`);
+      console.log(`[FitTab Debug] ${fitPipelineMs()} [song-defaults-derivation] triggering`);
       startSongDefaultsDerivation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, pipelineRetryCount, startSongDefaultsDerivation, renderData, beatGrid, fitPipelineMs]);
 
   useEffect(() => {
-    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [fit-readiness-from-generation-status] fired`);
     const values = Object.values(generationStatus);
     const allDone = values.every(v => v === "done");
     const hasRunning = values.includes("running");
