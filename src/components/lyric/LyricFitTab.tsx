@@ -785,7 +785,7 @@ export function LyricFitTab({
   const sectionPipelineDoneRef = useRef(false);
 
   const maybeRunSectionPipeline = useCallback(async () => {
-    console.log(`[Transcribe Debug] maybeRunSectionPipeline called, flags: t=${transcriptionDone} b=${beatGridDone} a=${audioBufferReady}`);
+    
     if (!transcriptionDone || !beatGridDone) return;
     if (!beatGrid) return;
     if (sectionPipelineRunningRef.current || sectionPipelineDoneRef.current) return;
