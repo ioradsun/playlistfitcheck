@@ -617,7 +617,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   }}
                 />
                 <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/20">
-                  {engagementMode === 'freezing' ? 'finishing…' : engagementMode === 'engaged' ? 'paused' : 'live'}
+                  {engagementMode === 'freezing' ? 'finishing…' : !autoFollowEnabled || engagementMode === 'engaged' ? 'locked' : 'live'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
