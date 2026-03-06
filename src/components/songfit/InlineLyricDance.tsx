@@ -144,12 +144,13 @@ function InlineLyricDanceInner(
 
   useEffect(() => {
     if (!player || !playerReady) return;
-    if (isVisible && !showCover) {
+    if (isVisible) {
+      player.audio.muted = true;
       player.play();
     } else {
       player.pause();
     }
-  }, [isVisible, playerReady, player, showCover]);
+  }, [isVisible, playerReady, player]);
 
   // Mute sync
   useEffect(() => { if (player) player.audio.muted = muted; }, [muted, player]);
