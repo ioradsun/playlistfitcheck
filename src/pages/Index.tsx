@@ -614,8 +614,10 @@ const Index = () => {
     // Collect the navigate target so we can call it AFTER flushSync
     let navTarget: string | null = null;
 
-    // Use flushSync so data is committed BEFORE React processes the next
-    // render frame — this prevents the "New Project" screen from flashing.
+    // flushSync commits state synchronously before navigate() runs.
+    // This ensures toolDataLoaded is already true when the new URL renders,
+    // so screen.status resolves to "ready" immediately — no skeleton flash
+    // on sidebar project clicks. This is intentional, not a workaround.
     flushSync(() => {
       setResult(null);
       setVibeAnalysis(null);
