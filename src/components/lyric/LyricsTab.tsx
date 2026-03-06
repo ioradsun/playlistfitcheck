@@ -179,8 +179,6 @@ export function LyricsTab({
           try {
             const ct0 = performance.now();
             uploadFile = await compressAudioFile(file);
-          console.log(`[Transcribe Debug] ${ms()} compressed to ${(uploadFile.size / 1024 / 1024).toFixed(2)}MB`);
-          console.log(`[LyricUpload] COMPRESS done in ${(performance.now() - ct0).toFixed(0)}ms => ${(uploadFile.size / 1024 / 1024).toFixed(2)}MB`);
           } catch (compErr) {
             toast.error(compErr instanceof Error ? compErr.message : "Compression failed");
             setLoading(false);
