@@ -30,6 +30,14 @@ import {
 
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { ChevronRight, ArrowLeft } from "lucide-react";
+import {
+  CrowdFitSkeleton,
+  DreamFitSkeleton,
+  HitFitSkeleton,
+  LyricFitSkeleton,
+  MixFitSkeleton,
+  PlaylistFitSkeleton,
+} from "@/components/ui/PageSkeletons";
 
 const MixFitCheck = lazy(MixFitCheckImport);
 const LyricFitTab = lazy(() => LyricFitTabImport().then((module) => ({ default: module.LyricFitTab })));
@@ -76,79 +84,27 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
 );
 
 const TabChunkFallback = () => (
-  <div className="animate-pulse w-full space-y-4 px-4 py-6">
-    <div className="h-7 w-56 rounded-md bg-muted/60" />
-    <div className="grid gap-4 md:grid-cols-3">
-      <div className="h-40 rounded-xl bg-muted/50 md:col-span-2" />
-      <div className="h-40 rounded-xl bg-muted/50" />
-    </div>
-    <div className="grid gap-4 md:grid-cols-2">
-      <div className="h-52 rounded-xl bg-muted/50" />
-      <div className="h-52 rounded-xl bg-muted/50" />
-    </div>
+  <div className="w-full px-4 py-6">
+    <PlaylistFitSkeleton variant="new" />
   </div>
 );
 
-const ToolSkeleton = ({ tab }: { tab: string }) => {
-  if (tab === "songfit" || tab === "hookfit") {
-    return (
-      <div className="animate-pulse space-y-4 px-4 py-6">
-        <div className="h-8 w-64 rounded-md bg-muted/60" />
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="h-64 rounded-xl bg-muted/50 lg:col-span-2" />
-          <div className="h-64 rounded-xl bg-muted/50" />
-        </div>
-        <div className="h-72 rounded-xl bg-muted/50" />
-      </div>
-    );
+const ToolSkeleton = ({ tab, variant = "new" }: { tab: string; variant?: "new" | "existing" }) => {
+  switch (tab) {
+    case "songfit":
+    case "hookfit":
+      return <div className="px-4 py-6"><CrowdFitSkeleton variant={variant} /></div>;
+    case "lyric":
+      return <LyricFitSkeleton variant={variant} />;
+    case "hitfit":
+      return <div className="px-4 py-6"><HitFitSkeleton variant={variant} /></div>;
+    case "mix":
+      return <div className="px-4 py-6"><MixFitSkeleton variant={variant} /></div>;
+    case "dreamfit":
+      return <div className="px-4 py-6"><DreamFitSkeleton variant={variant} /></div>;
+    default:
+      return <TabChunkFallback />;
   }
-
-  if (tab === "lyric") {
-    // Matches LyricsTab State A: flex-1 px-4 py-6 space-y-3 → LyricDisplay layout
-    return (
-      <div className="flex-1 flex flex-col px-4 py-6 space-y-3">
-        {/* Title bar placeholder */}
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-md bg-muted/60" />
-          <div className="h-6 w-48 rounded-md bg-muted/60" />
-          <div className="ml-auto h-7 w-20 rounded-md bg-muted/50" />
-        </div>
-        {/* Waveform / timeline placeholder */}
-        <div className="h-16 rounded-lg bg-muted/40" />
-        {/* Lyric lines placeholder — fills remaining space */}
-        <div className="flex-1 space-y-2.5 min-h-0">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-5 rounded bg-muted/30" style={{ width: `${55 + Math.sin(i * 1.7) * 30}%` }} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (tab === "mix") {
-    return (
-      <div className="animate-pulse space-y-4 px-4 py-6">
-        <div className="h-8 w-56 rounded-md bg-muted/60" />
-        <div className="h-48 rounded-xl bg-muted/50" />
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="h-72 rounded-xl bg-muted/50" />
-          <div className="h-72 rounded-xl bg-muted/50" />
-        </div>
-      </div>
-    );
-  }
-
-  if (tab === "hitfit") {
-    return (
-      <div className="animate-pulse space-y-4 px-4 py-6">
-        <div className="h-8 w-48 rounded-md bg-muted/60" />
-        <div className="h-40 rounded-xl bg-muted/50" />
-        <div className="h-80 rounded-xl bg-muted/50" />
-      </div>
-    );
-  }
-
-  return <TabChunkFallback />;
 };
 
 const PATH_TO_TAB: Record<string, string> = {
@@ -773,9 +729,9 @@ const Index = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case "songfit":
-        return <div id="songfit-scroll-container" className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="songfit" />}><SongFitTab /></Suspense></div>;
+        return <div id="songfit-scroll-container" className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="songfit" variant={projectId ? "existing" : "new"} />}><SongFitTab /></Suspense></div>;
       case "hookfit":
-        return hookfitEnabled ? <div className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="hookfit" />}><HookFitTab /></Suspense></div> : null;
+        return hookfitEnabled ? <div className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="hookfit" variant={projectId ? "existing" : "new"} />}><HookFitTab /></Suspense></div> : null;
       case "lyric": {
         const isHydratingExistingLyricProject = Boolean(
           projectId &&
@@ -787,9 +743,9 @@ const Index = () => {
         return (
           <div className="flex-1 flex flex-col min-h-0">
             {isHydratingExistingLyricProject ? (
-              <ToolSkeleton tab="lyric" />
+              <ToolSkeleton tab="lyric" variant={projectId ? "existing" : "new"} />
             ) : (
-              <Suspense fallback={<ToolSkeleton tab="lyric" />}>
+              <Suspense fallback={<ToolSkeleton tab="lyric" variant={projectId ? "existing" : "new"} />}>
                 <LyricFitTab
                   key={loadedLyric?.id || "new"}
                   initialLyric={loadedLyric}
@@ -822,8 +778,8 @@ const Index = () => {
         const isHydratingMix = Boolean(projectId && (authLoading || loadingProjectType === "mix" || (loadedMixProject?.id !== projectId && projectLoadedRef.current !== projectId)));
         return (
           <div className="flex-1 flex flex-col min-h-0">
-            {isHydratingMix ? <ToolSkeleton tab="mix" /> : (
-              <Suspense fallback={<ToolSkeleton tab="mix" />}>
+            {isHydratingMix ? <ToolSkeleton tab="mix" variant={projectId ? "existing" : "new"} /> : (
+              <Suspense fallback={<ToolSkeleton tab="mix" variant={projectId ? "existing" : "new"} />}>
                 <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} />
               </Suspense>
             )}
@@ -834,8 +790,8 @@ const Index = () => {
         const isHydratingHitFit = Boolean(projectId && (authLoading || loadingProjectType === "hitfit") && !loadedHitFitAnalysis);
         return (
           <div className="flex-1 flex flex-col min-h-0 px-4 py-6">
-            {isHydratingHitFit ? <ToolSkeleton tab="hitfit" /> : (
-              <Suspense fallback={<ToolSkeleton tab="hitfit" />}>
+            {isHydratingHitFit ? <ToolSkeleton tab="hitfit" variant={projectId ? "existing" : "new"} /> : (
+              <Suspense fallback={<ToolSkeleton tab="hitfit" variant={projectId ? "existing" : "new"} />}>
                 <HitFitTab key={loadedHitFitAnalysis ? "loaded" : "new"} initialAnalysis={loadedHitFitAnalysis} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} />
               </Suspense>
             )}
@@ -856,7 +812,7 @@ const Index = () => {
       }
       case "playlist": {
         const isHydratingPlaylist = Boolean(projectId && (authLoading || loadingProjectType === "playlist") && !result);
-        if (isHydratingPlaylist) return <TabChunkFallback />;
+        if (isHydratingPlaylist) return <div className="px-4 py-6"><PlaylistFitSkeleton variant="existing" /></div>;
         return result ? (
           <div className="flex-1 px-4 py-6">
             {!isFullyLoaded ? (
@@ -885,7 +841,7 @@ const Index = () => {
         );
       }
       case "dreamfit":
-        return <div className="flex-1 px-4 py-6"><Suspense fallback={<TabChunkFallback />}><DreamFitTab /></Suspense></div>;
+        return <div className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="dreamfit" variant={projectId ? "existing" : "new"} />}><DreamFitTab /></Suspense></div>;
       case "vibefit": {
         const isHydratingVibeFit = Boolean(projectId && (authLoading || loadingProjectType === "vibefit") && !loadedVibeFitResult);
         return (
