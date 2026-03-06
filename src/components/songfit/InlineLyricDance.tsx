@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle } from "react";
-import { Volume2, VolumeX, Maximize2 } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
