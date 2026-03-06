@@ -15,7 +15,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
-import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
+// Debug panels removed for production
+// import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { HotSectionPill } from "@/components/lyric/HotSectionPill";
 import { LyricDancePlayer, DEFAULT_DEBUG_STATE, type LyricDanceData, type LiveDebugState } from "@/engine/LyricDancePlayer";
