@@ -1213,7 +1213,7 @@ export class LyricDancePlayer {
     this.audio.preload = "auto";
     this.bootMode = options?.bootMode ?? "minimal";
 
-    console.info(LYRIC_DANCE_PLAYER_BUILD_STAMP);
+    
 
     this.ambientParticleEngine = new ParticleEngine({
       particleSystem: this.resolvedState.particleConfig.system,
