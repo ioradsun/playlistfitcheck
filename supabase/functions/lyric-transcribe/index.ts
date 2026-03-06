@@ -97,12 +97,6 @@ async function runScribe(
   const duration = lastWord ? lastWord.end + 0.5 : 0;
   const rawText = data.text || words.map(w => w.word).join(" ");
 
-  console.log(`[scribe] ${words.length} words, ${segments.length} segments, duration: ${duration.toFixed(1)}s`);
-
-  const audioEvents = (data.words || []).filter((w: any) => w.type === "audio_event");
-  if (audioEvents.length > 0) {
-    console.log(`[scribe] Audio events: ${audioEvents.map((e: any) => `${e.text}@${e.start?.toFixed(1)}s`).join(", ")}`);
-  }
 
   return { words, segments, rawText, duration };
 }
