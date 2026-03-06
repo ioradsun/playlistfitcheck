@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense, startTransition } from "react";
+import { flushSync } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
@@ -264,10 +265,11 @@ const Index = () => {
         return;
       }
       projectLoadedRef.current = projectId;
-      startTransition(() => {
+      // Set both atomically — no intermediate render with null data + "ready" state
+      flushSync(() => {
         setLoadedLyric(data);
+        setLyricLoadingState("ready");
       });
-      setLyricLoadingState("ready");
     })();
   }, [activeTab, projectId, user?.id]);
 
