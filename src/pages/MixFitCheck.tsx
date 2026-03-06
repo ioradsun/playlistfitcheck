@@ -301,13 +301,34 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       try {
           const { buffer, waveform } = await decodeFile(file);
           const mixName = file.name.replace(/\.(mp3|wav|m4a)$/i, "");
-          const newMix: AudioMix = {
-            id: crypto.randomUUID(),
+          const mixId = crypto.randomUUID();
+          let audioUrl: string | undefined;
+
+          // Upload audio to storage for logged-in users
+          if (user && projectId) {
+            try {
+              const ext = file.name.split(".").pop() || "mp3";
+              const storagePath = `${user.id}/mix/${projectId}/${mixId}.${ext}`;
+              const { error: uploadError } = await supabase.storage
+                .from("audio-clips")
+                .upload(storagePath, file, { upsert: true, contentType: file.type || undefined });
+              if (!uploadError) {
+                const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+                audioUrl = urlData.publicUrl;
+              }
+            } catch (err) {
+              console.error("Failed to upload mix audio:", err);
+            }
+          }
+
+          const newMix: AudioMix & { audio_url?: string } = {
+            id: mixId,
             name: mixName,
             buffer,
             waveform,
             rank: null,
             comments: "",
+            audio_url: audioUrl,
           };
           // Cache file for session persistence
           if (projectId) sessionAudio.set("mix", `${projectId}::${mixName}`, file, { ttlMs: 30 * 60 * 1000 });
@@ -326,7 +347,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       if (fileRef.current) fileRef.current.value = "";
       setNeedsReupload(false);
     },
-    [decodeFile, mixes]
+    [decodeFile, mixes, user, projectId]
   );
 
   const saveProject = useCallback(async (showToast = false) => {
