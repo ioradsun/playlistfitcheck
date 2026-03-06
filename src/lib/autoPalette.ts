@@ -156,8 +156,6 @@ function isValidHttpUrl(s: string): boolean {
 }
 
 export async function computeAutoPalettesFromUrls(urls: string[]): Promise<string[][]> {
-  console.log(`[auto-palette] computeAutoPalettesFromUrls called with ${urls.length} URLs`);
-  urls.forEach((u, i) => console.log(`[auto-palette]   [${i}] ${typeof u === 'string' ? u.slice(0, 80) : typeof u}`));
 
   const canvas = document.createElement('canvas');
   canvas.width = SAMPLE_SIZE;
@@ -169,21 +167,21 @@ export async function computeAutoPalettesFromUrls(urls: string[]): Promise<strin
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i];
     if (!url) {
-      console.warn(`[auto-palette] [${i}] skipping falsy URL`);
+      // skipping falsy URL
       continue;
     }
     if (!isValidHttpUrl(url)) {
-      console.warn(`[auto-palette] [${i}] skipping non-HTTP URL: ${String(url).slice(0, 80)}`);
+      // skipping non-HTTP URL
       continue;
     }
     try {
       const img = await loadImage(url);
       const sample = sampleChapterImage(img, ctx, SAMPLE_SIZE);
       const palette = generateAutoPalette(sample);
-      console.log(`[auto-palette] [${i}] OK → bg=${palette[0]} accent=${palette[1]} text=${palette[2]}`);
+      // palette computed OK
       palettes.push(palette);
     } catch (err) {
-      console.warn(`[auto-palette] [${i}] image load failed, skipping:`, err);
+      // image load failed, skipping
       // Push a safe fallback palette so indices stay aligned with section indices
       palettes.push(['#0a0a0f', '#a855f7', '#f0f0f0', '#e879f9', '#555555']);
     }
@@ -191,7 +189,7 @@ export async function computeAutoPalettesFromUrls(urls: string[]): Promise<strin
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
-  console.log(`[auto-palette] computed ${palettes.length} palettes from ${urls.length} URLs`);
+  
   return palettes;
 }
 

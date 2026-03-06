@@ -352,7 +352,7 @@ export function FitTab({
   const transcriptInitRef = useRef(false);
   useEffect(() => {
     if (!lyricData?.lines) {
-      return;
+      
       return;
     }
 
@@ -369,7 +369,7 @@ export function FitTab({
     transcriptSyncTimerRef.current = setTimeout(() => {
       const handle = dancePlayerRef.current;
       if (!handle) {
-        return;
+        
         return;
       }
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
@@ -413,9 +413,7 @@ export function FitTab({
         .update({ lyrics: mainLines, words: reconciledWords })
         .eq('id', danceId);
       if (error) {
-        console.error('[auto-save] lyrics save failed:', error.message);
-      } else {
-        
+        // auto-save failed silently
       }
     }, 1500); // 1.5s debounce — wait for user to stop typing
 
@@ -496,7 +494,7 @@ export function FitTab({
             }
           }
         } catch (paletteError) {
-          
+          // auto palette precompute failed (non-blocking)
         }
       }
       // When regenerating, both section_images and auto_palettes are nullified
@@ -591,11 +589,12 @@ export function FitTab({
           }
 
           window.dispatchEvent(new Event("songfit:dance-published"));
-        } catch {
+        } catch (e: any) {
+          // CrowdFit auto-post failed (non-blocking)
         }
       })();
     } catch (e: any) {
-      console.error("Dance publish error:", e);
+      
       toast.error(e.message || "Failed to publish lyric dance");
     } finally {
       clearTimeout(slowWarningId);

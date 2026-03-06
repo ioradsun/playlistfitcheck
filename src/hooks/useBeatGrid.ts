@@ -46,7 +46,7 @@ async function loadEssentia(): Promise<any> {
     const w = window as any;
     const wasmModule = await w.EssentiaWASM();
     essentiaInstance = new w.Essentia(wasmModule);
-    console.log("[beat-grid] Essentia.js loaded, version:", essentiaInstance.version);
+    
     return essentiaInstance;
   })();
 
@@ -124,7 +124,7 @@ export function useBeatGrid(buffer: AudioBuffer | null): {
         vectorSignal.delete();
         beatsVector.delete();
 
-        console.log(`[beat-grid] ${beats.length} beats, BPM: ${Math.round(bpm)}, conf: ${confidence.toFixed(2)}`);
+        
 
         // ═══ Step 2: Audio analysis (onsets, energy, brightness) ═══
         let analysis: AudioAnalysis | undefined;
@@ -135,9 +135,8 @@ export function useBeatGrid(buffer: AudioBuffer | null): {
           analysis = await analyzeAudioAsync(buffer, beats);
           hits = analysis.hits;
           beatEnergies = analysis.beatEnergies;
-          console.log(`[beat-grid] V2: ${hits?.length ?? 0} hits, ${analysis.frames.length} frames`);
         } catch (analysisErr) {
-          console.warn("[beat-grid] Audio analysis failed (non-fatal):", analysisErr);
+          // Audio analysis failed (non-fatal)
         }
 
         if (!cancelled) {

@@ -1213,7 +1213,7 @@ export class LyricDancePlayer {
     this.audio.preload = "auto";
     this.bootMode = options?.bootMode ?? "minimal";
 
-    console.info(LYRIC_DANCE_PLAYER_BUILD_STAMP);
+    
 
     this.ambientParticleEngine = new ParticleEngine({
       particleSystem: this.resolvedState.particleConfig.system,
@@ -1382,7 +1382,7 @@ export class LyricDancePlayer {
         if ((beatGridData as any)._analysis) {
           this.conductor.setAnalysis((beatGridData as any)._analysis);
         }
-        console.info(`[V2] BeatConductor created: ${this.conductor.beatsPerMinute} BPM, ${this.conductor.totalBeats} beats, ${songDuration.toFixed(1)}s, hits: ${(beatGridData as any).hits?.length ?? 0}`);
+        
         // ═══ V4: Load song structure into CameraRig ═══
         // CameraRig pre-analyzes beatGrid + cinematic sections to build the song arc:
         // energy profile per section, drop detection, anticipation timing.
@@ -1396,7 +1396,7 @@ export class LyricDancePlayer {
         if (compiled.phraseGroups?.length > 0 && this.conductor) {
           this.timingBudgets = computeTimingBudgets(compiled.phraseGroups as any, this.conductor);
           this._buildWordBudgetMap();
-          console.info(`[V2] EffectBudgeter: ${this.timingBudgets.length} group budgets, ${this._wordBudgetMap.size} word budgets`);
+          
         }
 
         // Build chunk cache from compiled scene
@@ -1860,7 +1860,7 @@ export class LyricDancePlayer {
     this._updateViewportScale();
     this.audio.currentTime = t;
     const groupCount = this.compiledScene?.phraseGroups?.length ?? 0;
-    console.info('[SYNC:K] updateTranscript done. lines:', lines.length, 'phraseGroups:', groupCount, 'payload:', !!this.payload, 'compiledScene:', !!this.compiledScene);
+    
   }
 
   updateSectionImages(urls: string[]): void {
@@ -1975,7 +1975,6 @@ export class LyricDancePlayer {
       this._qualityTier = Math.min(3, tier + 1) as 0 | 1 | 2 | 3;
       this._qUpgradeStreak = 0;
       this._qLastDowngradeMs = nowMs;
-      console.info(`[LyricEngine] quality → tier ${this._qualityTier} (fps: ${fps.toFixed(1)})`);
       // Crossing into tier 2: switch to half-DPR backing store (cuts pixel fill 4×)
       if (prevDprBucket === 'full' && this._qualityTier >= 2) {
         this._applyDprToCanvas();
@@ -1988,7 +1987,7 @@ export class LyricDancePlayer {
       if (this._qUpgradeStreak >= 3) {
         this._qualityTier = Math.max(0, tier - 1) as 0 | 1 | 2 | 3;
         this._qUpgradeStreak = 0;
-        console.info(`[LyricEngine] quality → tier ${this._qualityTier} (fps: ${fps.toFixed(1)})`);
+        
         // Crossing back out of tier 2: restore full-DPR backing store
         if (prevDprBucket === 'low' && this._qualityTier < 2) {
           this._applyDprToCanvas();
@@ -2133,16 +2132,6 @@ export class LyricDancePlayer {
     this.frameBudget.frames += 1;
     if (deltaMs > 24) {
       this.frameBudget.spikeFrames += 1;
-      if (this.perfDebugEnabled && this.frameBudget.spikeFrames % 30 === 0) {
-        console.warn('[LyricEngine] frame spike', {
-          dtMs: Number(deltaMs.toFixed(2)),
-          fpsAvg: Number(this.frameBudget.fpsAvg.toFixed(1)),
-          entities: this._boundsBuffer.length,
-          collisionPairsTested: this._pairsTestedLast,
-          collisionPairsHit: this._pairsCollidingLast,
-          drawCalls: this.debugState.drawCalls,
-        });
-      }
     }
   }
 
@@ -2328,7 +2317,7 @@ export class LyricDancePlayer {
         }
       }
     } catch (e) {
-      
+      // font load failed
     }
   }
 
@@ -5331,7 +5320,7 @@ export class LyricDancePlayer {
     // Sort by start time
     schedule.sort((a, b) => a.startSec - b.startSec);
     this._heroSchedule = schedule;
-    console.info(`[CameraLookahead] ${schedule.length} hero words scheduled`);
+    
   }
 
   /**

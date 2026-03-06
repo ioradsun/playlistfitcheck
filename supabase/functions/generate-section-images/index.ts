@@ -107,13 +107,13 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
 
   const prompt = parts.join(", ");
   if (!description) {
-    console.warn(`[section-images] No description for section ${section.sectionIndex} — using visualMood/color seed`);
+    // No description for section — using visualMood/color seed
   }
   return prompt;
 }
 
 async function generateImage(prompt: string, apiKey: string): Promise<string | null> {
-  console.log(`[section-images] Generating image with prompt: ${prompt.slice(0, 120)}...`);
+  
 
   const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -220,7 +220,7 @@ serve(async (req) => {
 
     const existingImages = danceRow?.section_images;
     if (!force && Array.isArray(existingImages) && existingImages.length > 0 && existingImages.every((url: string) => !!url)) {
-      console.log(`[section-images] Images already exist for ${lyric_dance_id} — returning cached (pass force:true to regenerate)`);
+      
       return new Response(
         JSON.stringify({ success: true, cached: true, section_images: existingImages, urls: existingImages }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -267,9 +267,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[section-images] Generating ${sections.length} images for dance ${lyric_dance_id}`);
     const prompts = sections.map((section: SectionInput) => buildImagePrompt(section, sections.length));
-    prompts.forEach((p, i) => console.log(`[section-images] prompt[${i}]: ${p.slice(0, 150)}...`));
     const imageResults = await Promise.all(prompts.map((prompt: string) => generateImage(prompt, apiKey)));
 
     const uploadResults = await Promise.all(
@@ -283,7 +281,7 @@ serve(async (req) => {
 
     const urls = uploadResults.map((url) => url ?? null);
     const successCount = urls.filter(Boolean).length;
-    console.log(`[section-images] Generated ${successCount}/${sections.length} images`);
+    
 
     if (successCount > 0) {
       const { error: updateError } = await supabase
@@ -292,9 +290,7 @@ serve(async (req) => {
         .eq("id", lyric_dance_id);
 
       if (updateError) {
-        console.error("[section-images] DB update error:", updateError.message);
-      } else {
-        console.log(`[section-images] Saved ${successCount} image URLs to DB`);
+        // DB update error
       }
     }
 

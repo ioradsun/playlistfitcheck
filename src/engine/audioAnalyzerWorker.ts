@@ -225,7 +225,7 @@ export function analyzeAudioAsync(
 ): Promise<AudioAnalysis> {
   // Fallback: no Worker support
   if (typeof Worker === 'undefined') {
-    console.warn('[audio-analyzer] No Worker support, running on main thread');
+    // No Worker support, running on main thread
     return Promise.resolve(analyzeAudio(buffer, beats));
   }
 
@@ -248,7 +248,7 @@ export function analyzeAudioAsync(
 
       const timeoutId = setTimeout(() => {
         worker.terminate();
-        console.warn('[audio-analyzer] Worker timed out, falling back to main thread');
+        // Worker timed out, falling back to main thread
         resolve(analyzeAudio(buffer, beats));
       }, 30000); // 30s timeout
 
@@ -265,7 +265,7 @@ export function analyzeAudioAsync(
       worker.onerror = (err) => {
         clearTimeout(timeoutId);
         worker.terminate();
-        console.warn('[audio-analyzer] Worker error, falling back to main thread:', err);
+        // Worker error, falling back to main thread
         resolve(analyzeAudio(buffer, beats));
       };
 
@@ -275,7 +275,7 @@ export function analyzeAudioAsync(
         [mono.buffer]
       );
     } catch (err) {
-      console.warn('[audio-analyzer] Worker creation failed, falling back:', err);
+      // Worker creation failed, falling back
       resolve(analyzeAudio(buffer, beats));
     }
   });

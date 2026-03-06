@@ -142,18 +142,12 @@ export async function compressAudioFile(
 
   const compressionPromise = (async () => {
     const useOpus = supportsWebmOpus();
-    console.log(
-      `[compressAudio] Compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB) → ${useOpus ? "WebM/Opus 32kbps" : "WAV"} @ ${TARGET_SAMPLE_RATE}Hz`
-    );
 
     const audioCtx = new AudioContext();
     try {
       const arrayBuffer = await file.arrayBuffer();
       const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-      console.log(
-        `[compressAudio] Decoded: ${audioBuffer.duration.toFixed(1)}s, ${audioBuffer.numberOfChannels}ch, ${audioBuffer.sampleRate}Hz`
-      );
 
       // Render to mono at target sample rate
       const length = Math.ceil(audioBuffer.duration * TARGET_SAMPLE_RATE);
@@ -174,7 +168,7 @@ export async function compressAudioFile(
           blob = await encodeWebmOpus(monoSamples, TARGET_SAMPLE_RATE);
           ext = "webm";
         } catch (e) {
-          console.warn("[compressAudio] WebM/Opus failed, falling back to WAV:", e);
+          // WebM/Opus failed, falling back to WAV
           blob = encodeWav(monoSamples, TARGET_SAMPLE_RATE);
           ext = "wav";
         }
@@ -187,7 +181,7 @@ export async function compressAudioFile(
       const mimeType = ext === "webm" ? "audio/webm" : "audio/wav";
       const compressed = new File([blob], `${baseName}_compressed.${ext}`, { type: mimeType });
 
-      console.log(`[compressAudio] Result: ${(compressed.size / 1024 / 1024).toFixed(2)} MB (${ext})`);
+      
 
       if (compressed.size > MAX_UPLOAD_BYTES) {
         throw new Error(

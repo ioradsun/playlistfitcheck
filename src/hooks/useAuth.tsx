@@ -50,7 +50,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!isMounted) return;
-        console.log("[auth] onAuthStateChange:", event, !!session);
         setSession(session);
         setUser(session?.user ?? null);
 
@@ -82,7 +81,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!isMounted) return;
-        console.log("[auth] getSession:", !!session);
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {

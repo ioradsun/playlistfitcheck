@@ -53,7 +53,7 @@ serve(async (req) => {
 
     // ── DELETE ALL DATA action ──
     if (body.action === "delete_all_data") {
-      console.log(`[admin] DELETE ALL DATA requested by ${user.email}`);
+      
       const tables = [
         "hook_comments", "hook_votes", "hookfit_posts",
         "lyric_dance_comments", "lyric_dance_signals",
@@ -81,12 +81,12 @@ serve(async (req) => {
       for (const table of tables) {
         const { error: delErr } = await supabase.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
         if (delErr) {
-          console.warn(`[admin] Failed to delete from ${table}: ${delErr.message}`);
+          // Failed to delete from table
           errors.push(`${table}: ${delErr.message}`);
         }
       }
 
-      console.log(`[admin] DELETE ALL DATA complete. ${errors.length} errors.`);
+      
       return new Response(JSON.stringify({ success: true, errors }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

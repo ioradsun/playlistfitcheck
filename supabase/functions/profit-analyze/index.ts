@@ -175,7 +175,7 @@ serve(async (req) => {
     try {
       relatedData = await spotifyGet(`/artists/${artistId}/related-artists`, token);
     } catch (e) {
-      console.warn("Related artists unavailable (likely Dev Mode):", (e as Error).message);
+      // Related artists unavailable (likely Dev Mode)
     }
 
     const topTracks = topTracksData.tracks || [];
@@ -271,7 +271,7 @@ ${JSON.stringify(signals, null, 2)}`;
         blueprint = JSON.parse(blueprintText);
         break; // success
       } catch {
-        console.warn(`Attempt ${attempt + 1}: AI returned invalid JSON (len=${blueprintText.length}):`, blueprintText.substring(0, 300));
+        // AI returned invalid JSON, retrying
         if (attempt === MAX_RETRIES - 1) {
           // Try to repair truncated JSON by closing open brackets
           try {
@@ -287,7 +287,7 @@ ${JSON.stringify(signals, null, 2)}`;
             for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += "]";
             for (let i = 0; i < openBraces - closeBraces; i++) repaired += "}";
             blueprint = JSON.parse(repaired);
-            console.log("Repaired truncated JSON successfully");
+            // Repaired truncated JSON successfully
             break;
           } catch {
             console.error("JSON repair also failed");

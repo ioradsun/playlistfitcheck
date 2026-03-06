@@ -135,10 +135,10 @@ export function useLyricDancePlayer(
           .update({ auto_palettes: palettes, updated_at: new Date().toISOString() } as any)
           .eq("id", data.id)
           .then(({ error }) => {
-            if (error) { /* silenced */ }
+            // auto-palette DB write failed
           });
       })
-      .catch((err) => console.error("[auto-palette] failed:", err));
+      .catch(() => { /* auto-palette failed */ });
 
     return () => { cancelled = true; };
   }, [data?.id, data?.section_images, data?.auto_palettes]);

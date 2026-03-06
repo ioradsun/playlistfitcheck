@@ -442,7 +442,7 @@ function unwrapNested(obj: Record<string, any>): Record<string, any> {
     if (inner && typeof inner === "object" && !Array.isArray(inner)) {
       // Check if the inner object looks like our expected structure
       if (inner.sceneTone || inner.storyboard || inner.wordDirectives || inner.sections) {
-        console.log(`[cinematic-direction] Unwrapped nested key "${keys[0]}"`);
+        
         return inner;
       }
     }
@@ -617,10 +617,6 @@ async function callWithRetry(
     const completion = await resp.json();
     const raw = String(completion?.choices?.[0]?.message?.content ?? "");
     const finishReason = completion?.choices?.[0]?.finish_reason ?? "unknown";
-    console.log(`[cinematic-direction] AI response: ${raw.length} chars, finish_reason: ${finishReason}`);
-    if (finishReason === "length") {
-      console.warn("[cinematic-direction] Response truncated by token limit!");
-    }
     return extractJson(raw);
   };
 
@@ -647,7 +643,7 @@ async function callWithRetry(
 
   if (result.ok && missingCreative.length === 0) return result.value;
 
-  console.warn("[cinematic-direction] Errors on first attempt, retrying:", allErrors);
+  
   const retryMessages = [
     ...messages,
     { role: "assistant", content: JSON.stringify(first) },
@@ -669,14 +665,14 @@ async function callWithRetry(
   const retryDirectives = Array.isArray(retryResult.value.wordDirectives) ? retryResult.value.wordDirectives.length : 0;
 
   if (retryStoryboard === 0 || retryDirectives === 0) {
-    console.error(`[cinematic-direction] Retry still empty: ${retryStoryboard} storyboard, ${retryDirectives} wordDirectives`);
+    
     throw {
       status: 422,
       message: `Cinematic direction failed after retry: storyboard=${retryStoryboard}, wordDirectives=${retryDirectives}`,
     };
   }
 
-  console.log(`[cinematic-direction] Retry: ${retryResult.errors.length} errors remaining, ${retryStoryboard} storyboard, ${retryDirectives} wordDirectives`);
+  
   return retryResult.value;
 }
 
@@ -701,7 +697,7 @@ async function persist(direction: Record<string, any>, lyricId: string): Promise
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      console.log(`[cinematic-direction] Stored in ${table}`);
+      
       return;
     }
   }
@@ -742,7 +738,7 @@ serve(async (req) => {
     const sectionCount = body.audioSections?.length ?? 0;
 
     const heldCount = body.words?.length ? extractHeldWords(body.words, lines[0]?.start ?? 0, lines[lines.length - 1]?.end ?? 1).heldWords.length : 0;
-    console.log(`[cinematic-direction] ${title} by ${artist} | ${lines.length} lines | ${sectionCount} sections | ${heldCount} held words`);
+    
 
     const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount);
 
