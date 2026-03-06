@@ -290,20 +290,14 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     }
   }, [stop, decodeFile]);
 
-  // Sync with parent: load project or reset to new
-  // Initialize to null so the effect always treats the first non-null initialProject as a change,
-  // even when initialProject is already set before this component mounts (sidebar project load).
-  const prevInitialRef = useRef<MixProjectData | null | undefined>(null);
+  // Index uses key={loadedMixProject?.id ?? "new"} so this component remounts fresh for each project.
+  // Load initialProject once on mount — no ref tracking needed.
   useEffect(() => {
-    if (initialProject && initialProject !== prevInitialRef.current) {
+    if (initialProject) {
       handleLoadProject(initialProject);
-    } else if (!initialProject && prevInitialRef.current) {
-      // Parent cleared the project — reset instantly
-      resetProject();
     }
-    prevInitialRef.current = initialProject;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialProject]);
+  }, []);
 
   const handleUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
