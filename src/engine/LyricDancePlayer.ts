@@ -1877,7 +1877,7 @@ export class LyricDancePlayer {
   /** Hot-patch auto_palettes and recompile scene so word colors update */
   updateAutoPalettes(palettes: string[][]): void {
     if (!palettes?.length) return;
-    console.log('[auto-palette] updateAutoPalettes received:', palettes.length, 'text color[0]:', palettes[0]?.[2]);
+    
     (this as any)._paletteDiagLogged = false; // reset so next getResolvedPalette logs the new state
     this.data = { ...this.data, auto_palettes: palettes };
     // Recompile scene with fresh palette data
@@ -1950,7 +1950,7 @@ export class LyricDancePlayer {
       const fps = this.frameCount / 5;
       this.frameCount = 0;
       if (fps > 0 && fps < 20 && this.playing) {
-        console.warn(`[LyricEngine] low fps: ${fps.toFixed(1)} — quality tier: ${this._qualityTier}`);
+        
       }
     }, 5000);
   }
@@ -2299,7 +2299,7 @@ export class LyricDancePlayer {
       'editorial-light': 'Cormorant Garamond',
     };
     const fontName = fontMap[typoKey] ?? 'Montserrat';
-    console.log(`[fonts] typography=${typoKey ?? 'default'} → loading "${fontName}"`);
+    
 
     try {
       // Inject Google Fonts <link> tag if not already present
@@ -2312,7 +2312,7 @@ export class LyricDancePlayer {
           link.rel = 'stylesheet';
           link.href = `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@400;500;600;700;800;900&display=swap`;
           document.head.appendChild(link);
-          console.log(`[fonts] injected Google Fonts link for "${fontName}"`);
+          
         }
         // Wait for font to actually load (with timeout)
         const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
@@ -2328,7 +2328,7 @@ export class LyricDancePlayer {
         }
       }
     } catch (e) {
-      console.warn(`[fonts] Failed to load "${fontName}":`, e);
+      
     }
   }
 

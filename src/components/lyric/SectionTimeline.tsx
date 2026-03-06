@@ -395,7 +395,6 @@ export function SectionTimeline({
                         className="text-[9px] font-mono text-muted-foreground/40 hover:text-muted-foreground w-4 text-center transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setRolePickerForUid(null);
                           setOrderPickerForUid(
                             orderPickerForUid === sectionUid(section) ? null : sectionUid(section),
                           );
@@ -415,7 +414,7 @@ export function SectionTimeline({
                             }}
                           />
                           <div className="absolute top-full left-0 mt-1 z-50 min-w-[40px] rounded-md border border-border/40 bg-background/95 backdrop-blur-md shadow-xl py-1">
-                            {sortedSections.map((_, i) => {
+                            {sections.map((_, i) => {
                               const currentPos = sortedSections.findIndex((s) => s.sectionIndex === section.sectionIndex);
                               const isCurrent = i === currentPos;
                               return (
@@ -445,7 +444,6 @@ export function SectionTimeline({
                       className="text-sm text-foreground flex items-center gap-1 hover:text-primary transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOrderPickerForUid(null);
                         setRolePickerForUid(rolePickerForUid === sectionUid(section) ? null : sectionUid(section));
                       }}
                     >

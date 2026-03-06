@@ -46,7 +46,7 @@ import {
 } from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
-import { LyricDanceDebugPanel } from "./LyricDanceDebugPanel";
+// LyricDanceDebugPanel removed for production
 import { HookDanceCanvas } from "./HookDanceCanvas";
 import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
 import { LyricStage } from "./LyricStage";
@@ -149,7 +149,7 @@ interface Props {
     explicit?: Partial<VersionMeta>;
     fmly?: Partial<VersionMeta>;
   } | null;
-  debugData?: any | null;
+  // debugData removed for production
   initialBeatGrid?: BeatGridData | null;
   initialWaveform?: WaveformData | null;
   initialRenderData?: any | null;
@@ -316,7 +316,7 @@ export function LyricDisplay({
   savedId,
   fmlyLines: initFmlyLines,
   versionMeta: initVersionMeta,
-  debugData,
+  // debugData removed
   initialBeatGrid,
   initialWaveform,
   initialRenderData,
@@ -1186,14 +1186,6 @@ export function LyricDisplay({
             {saveStatus === "saving" ? "● Saving…" : "✓ Saved"}
           </span>
         )}
-        {isAdmin && debugData && (
-          <button
-            onClick={() => setShowDebug((v) => !v)}
-            className="text-[10px] font-mono text-muted-foreground/50 hover:text-foreground border border-border/30 rounded px-2 py-1 transition-colors"
-          >
-            ⚙ Debug
-          </button>
-        )}
       </>
     );
     onHeaderProject?.({ title, onBack, rightContent });
@@ -1206,7 +1198,7 @@ export function LyricDisplay({
     saveStatus,
     user,
     isAdmin,
-    debugData,
+    
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1240,216 +1232,7 @@ export function LyricDisplay({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      {/* Debug panel (admin only, toggled from header) */}
-      {isAdmin && debugData && showDebug && (
-        <div className="w-full glass-card rounded-xl p-4 border border-border/40 shadow-lg max-h-[85vh] overflow-y-auto">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-mono font-semibold text-foreground">
-              🔬 Full Debug Panel
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-muted-foreground/40">
-                v{debugData.version} ·{" "}
-                {Math.round((debugData.inputBytes || 0) / 1024)}KB
-              </span>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(
-                    JSON.stringify(debugData, null, 2),
-                  );
-                  toast.success("Full debug data copied");
-                }}
-                className="text-[10px] font-mono text-muted-foreground/60 hover:text-foreground border border-border/30 rounded px-1.5 py-0.5"
-              >
-                Copy All
-              </button>
-            </div>
-          </div>
-
-          {/* ── WHISPER INPUT ── */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">
-                📥 Whisper — Input
-              </p>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(
-                      JSON.stringify(debugData.whisper?.input, null, 2),
-                    )
-                    .then(() => toast.success("Copied"))
-                }
-                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
-              >
-                copy
-              </button>
-            </div>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
-              {JSON.stringify(debugData.whisper?.input, null, 2) || "(no data)"}
-            </pre>
-          </div>
-
-          {/* ── WHISPER OUTPUT ── */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">
-                📤 Whisper — Output ({debugData.whisper?.output?.wordCount ?? 0}{" "}
-                words / {debugData.whisper?.output?.segmentCount} segments)
-              </p>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(
-                      JSON.stringify(debugData.whisper?.output, null, 2),
-                    )
-                    .then(() => toast.success("Copied"))
-                }
-                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
-              >
-                copy
-              </button>
-            </div>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Raw text:
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
-              {debugData.whisper?.output?.rawText || "(no raw text)"}
-            </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Words — source of truth (first 40):
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap mb-1">
-              {JSON.stringify(
-                debugData.whisper?.output?.words?.slice(0, 40),
-                null,
-                2,
-              ) || "(no words — upgrade needed)"}
-            </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Segments — grouping context (first 20):
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
-              {JSON.stringify(
-                debugData.whisper?.output?.segments?.slice(0, 20),
-                null,
-                2,
-              ) || "(no segments)"}
-            </pre>
-          </div>
-
-          {/* ── GEMINI INPUT ── */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-purple-400/90 uppercase tracking-wider">
-                📥 Gemini — Input
-              </p>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(JSON.stringify(debugData.gemini?.input, null, 2))
-                    .then(() => toast.success("Copied"))
-                }
-                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
-              >
-                copy
-              </button>
-            </div>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
-              {JSON.stringify(debugData.gemini?.input, null, 2) || "(no data)"}
-            </pre>
-          </div>
-
-          {/* ── GEMINI OUTPUT ── */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-purple-400/90 uppercase tracking-wider">
-                📤 Gemini — Output{" "}
-                {debugData.gemini?.output?.status === "failed"
-                  ? "❌ FAILED"
-                  : `✓ (${debugData.gemini?.output?.adlibsCount} adlibs)`}
-              </p>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(
-                      JSON.stringify(debugData.gemini?.output, null, 2),
-                    )
-                    .then(() => toast.success("Copied"))
-                }
-                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
-              >
-                copy
-              </button>
-            </div>
-            {debugData.gemini?.output?.status === "failed" && (
-              <pre className="text-[10px] font-mono text-red-400 bg-red-950/20 border border-red-500/20 rounded p-2 mb-1 whitespace-pre-wrap">
-                Error: {debugData.gemini?.output?.error}
-              </pre>
-            )}
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Raw response ({debugData.gemini?.output?.rawResponseLength || 0}{" "}
-              chars):
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap mb-1">
-              {debugData.gemini?.output?.rawResponseContent?.slice(0, 800) ||
-                "(no response)"}
-            </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Parsed metadata:
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
-              {JSON.stringify(debugData.gemini?.output?.metadata, null, 2) ||
-                "(none)"}
-            </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Hook detected:
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
-              {JSON.stringify(
-                debugData.gemini?.output?.hottest_hook,
-                null,
-                2,
-              ) || "null"}
-            </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Adlibs ({(debugData.gemini?.output?.adlibs || []).length}):
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap">
-              {JSON.stringify(debugData.gemini?.output?.adlibs, null, 2) ||
-                "[]"}
-            </pre>
-          </div>
-
-          {/* ── MERGED OUTPUT ── */}
-          <div className="mb-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-green-400/90 uppercase tracking-wider">
-                🎯 Merged Output — {debugData.merged?.totalLines} lines (
-                {debugData.merged?.mainLines} main /{" "}
-                {debugData.merged?.adlibLines} adlib) ·{" "}
-                {debugData.merged?.hooks?.length || 0} hooks
-              </p>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(JSON.stringify(debugData.merged, null, 2))
-                    .then(() => toast.success("Copied"))
-                }
-                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
-              >
-                copy
-              </button>
-            </div>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              All lines:
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-green-950/20 border border-green-500/10 rounded p-2 overflow-auto max-h-48 whitespace-pre-wrap">
-              {JSON.stringify(debugData.merged?.allLines, null, 2) || "[]"}
-            </pre>
-          </div>
-        </div>
-      )}
+      {/* Debug panel removed for production */}
 
       {/* Metadata strip removed — mood/description now in Song DNA */}
 
@@ -2475,105 +2258,7 @@ export function LyricDisplay({
         />
       )}
 
-      {/* Debug Panel */}
-      <LyricDanceDebugPanel
-        data={{
-          renderData: renderData ?? null,
-          beatGrid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : null,
-          lines: data.lines,
-          title: data.title,
-          artist: profileDisplayName,
-          overrides: hookDanceOverrides as unknown as Record<string, unknown>,
-          fingerprint: artistFingerprint,
-        }}
-        onRegenerateDirector={async () => {
-          if (!renderData) return;
-          toast.info("Re-generating cinematic direction…");
-          try {
-            const lyricsForDirection = data.lines
-              .filter((l: any) => l.tag !== "adlib")
-              .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-             const audioLen2 = audioBuffer?.duration ?? (data.lines.length > 0 ? data.lines[data.lines.length - 1].end : 1);
-            const existingSections2 = (renderData as any)?.cinematic_direction?.sections;
-            const audioSections2 = Array.isArray(existingSections2) && existingSections2.length > 0
-              ? existingSections2.map((s: any, i: number) => ({
-                  index: s.sectionIndex ?? i,
-                  startSec: (s.startRatio ?? 0) * audioLen2,
-                  endSec: (s.endRatio ?? 1) * audioLen2,
-                  role: s.mood ?? "verse",
-                  avgEnergy: 0.5,
-                  beatDensity: 1,
-                  lyrics: lyricsForDirection.filter((l: any) => {
-                    const secStart = (s.startRatio ?? 0) * audioLen2;
-                    const secEnd = (s.endRatio ?? 1) * audioLen2;
-                    return (l.start ?? 0) >= secStart && (l.start ?? 0) < secEnd;
-                  }).map((l: any, li: number) => ({ text: l.text, lineIndex: li })),
-                }))
-              : undefined;
-            const { data: result, error } = await supabase.functions.invoke("cinematic-direction", {
-              body: {
-                title: data.title,
-                artist: profileDisplayName,
-                lines: lyricsForDirection,
-                lyricId: currentSavedId ?? undefined,
-                audioSections: audioSections2,
-              },
-            });
-            if (error) throw error;
-            if (result?.cinematicDirection) {
-              setRenderData((prev) => prev ? normalizeRenderDataWithManifest({ ...prev, cinematic_direction: result.cinematicDirection }, data.title) : prev);
-              toast.success("Cinematic direction updated");
-            } else {
-              toast.error("No cinematic direction returned");
-            }
-          } catch (e: any) {
-            console.error("[DEBUG] Director error:", e);
-            toast.error(e.message || "Failed to generate cinematic direction");
-          }
-        }}
-        onRunCustomPrompt={async (systemPrompt: string) => {
-          toast.info("Running cinematic-direction with custom prompt…");
-          try {
-            const lyricsForDirection = data.lines
-              .filter((l: any) => l.tag !== "adlib")
-              .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-             const audioLen3 = audioBuffer?.duration ?? (data.lines.length > 0 ? data.lines[data.lines.length - 1].end : 1);
-             const existingSections3 = (renderData as any)?.cinematic_direction?.sections;
-            const audioSections3 = Array.isArray(existingSections3) && existingSections3.length > 0
-               ? existingSections3.map((s: any, i: number) => ({
-                  index: s.sectionIndex ?? i,
-                  startSec: (s.startRatio ?? 0) * audioLen3,
-                  endSec: (s.endRatio ?? 1) * audioLen3,
-                  role: s.mood ?? "verse",
-                  avgEnergy: 0.5,
-                  beatDensity: 1,
-                  lyrics: [],
-                }))
-              : undefined;
-            const { data: dirResult, error } = await supabase.functions.invoke("cinematic-direction", {
-              body: {
-                title: data.title,
-                artist: profileDisplayName,
-                lines: lyricsForDirection,
-                beatGrid: beatGrid ? { bpm: beatGrid.bpm } : undefined,
-                lyricId: currentSavedId ?? undefined,
-                systemPromptOverride: systemPrompt,
-                audioSections: audioSections3,
-              },
-            });
-            if (error) throw error;
-            if (dirResult?.cinematicDirection) {
-              setRenderData((prev) => prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev);
-              toast.success("Custom prompt result applied");
-            } else {
-              toast.error("No cinematic direction returned");
-            }
-          } catch (e: any) {
-            console.error("[DEBUG] Custom prompt error:", e);
-            toast.error(e.message || "Failed to run custom prompt");
-          }
-        }}
-      />
+      {/* Debug Panel removed for production */}
 
       {/* Battle Page Popup Overlay */}
       <AnimatePresence>

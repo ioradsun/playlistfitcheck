@@ -352,28 +352,28 @@ export function FitTab({
   const transcriptInitRef = useRef(false);
   useEffect(() => {
     if (!lyricData?.lines) {
-      console.log('[SYNC:A] no lyricData.lines, skip');
+      return;
       return;
     }
 
     // Skip first fire — player initializes from prefetchedData already containing these lines
     if (!transcriptInitRef.current) {
       transcriptInitRef.current = true;
-      console.log('[SYNC:A] first fire — skipping (init guard). lines:', lyricData.lines.length, 'publishedDanceId:', publishedDanceId, 'dancePlayerRef:', !!dancePlayerRef.current);
+      
       return;
     }
 
-    console.log('[SYNC:B] lyricData changed — queuing sync. lines:', lyricData.lines.length, 'publishedDanceId:', !!publishedDanceId, 'dancePlayerRef:', !!dancePlayerRef.current);
+    
 
     if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current);
     transcriptSyncTimerRef.current = setTimeout(() => {
       const handle = dancePlayerRef.current;
       if (!handle) {
-        console.log('[SYNC:C] FAIL — dancePlayerRef.current is null. publishedUrl:', publishedUrl, 'publishedDanceId:', publishedDanceId);
+        return;
         return;
       }
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
-      console.log('[SYNC:D] calling reloadTranscript with', mainLines.length, 'lines');
+      
       void handle.reloadTranscript(mainLines, wordsRef.current ?? undefined);
     }, 300);
 
@@ -415,7 +415,7 @@ export function FitTab({
       if (error) {
         console.error('[auto-save] lyrics save failed:', error.message);
       } else {
-        console.log('[auto-save] lyrics + reconciled words saved. lines:', mainLines.length, 'words:', reconciledWords?.length ?? 0);
+        
       }
     }, 1500); // 1.5s debounce — wait for user to stop typing
 
@@ -423,7 +423,7 @@ export function FitTab({
   }, [lyricData?.lines, words]);
 
   const handleDance = useCallback(async () => {
-    console.log("[FitTab] handleDance called", { user: !!user, lyricData: !!lyricData, audioFile: !!audioFile, publishing });
+    
     if (!user) { toast.error("Sign in to publish your Dance"); return; }
     if (!cinematicDirection || !lyricData || !audioFile || publishing) return;
     setPublishing(true);
@@ -496,7 +496,7 @@ export function FitTab({
             }
           }
         } catch (paletteError) {
-          console.warn("[FitTab] failed to precompute auto palettes (non-blocking):", paletteError);
+          
         }
       }
       // When regenerating, both section_images and auto_palettes are nullified
@@ -591,9 +591,7 @@ export function FitTab({
           }
 
           window.dispatchEvent(new Event("songfit:dance-published"));
-          console.log("[FitTab] CrowdFit post created for lyric dance");
-        } catch (e: any) {
-          console.warn("[FitTab] CrowdFit auto-post failed (non-blocking):", e?.message);
+        } catch {
         }
       })();
     } catch (e: any) {

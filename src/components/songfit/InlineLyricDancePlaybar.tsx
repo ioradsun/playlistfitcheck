@@ -4,7 +4,7 @@
  * bottom bar but in compact inline form.
  */
 
-import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useLyricSections, type LyricSectionLine, type LyricSection } from "@/hooks/useLyricSections";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,10 +16,7 @@ interface Props {
   data: LyricDanceData | null;
 }
 
-export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(function InlineLyricDancePlaybar(
-  { player, playerReady, data }: Props,
-  _ref,
-) {
+export function InlineLyricDancePlaybar({ player, playerReady, data }: Props) {
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -223,4 +220,4 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
       />
     </>
   );
-});
+}

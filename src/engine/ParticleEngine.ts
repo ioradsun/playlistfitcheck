@@ -177,14 +177,6 @@ export class ParticleEngine {
 
   constructor(frame: FrameRenderState) {
     this.config = ParticleEngine.fromFrameState(frame);
-    console.log("[Particles] init:", {
-      texture: this.config.system,
-      density: this.config.density,
-      canvas: false,
-      ctx: false,
-      enabled: this.config.system !== "none",
-      maxCount: this.maxParticles,
-    });
   }
 
   static fromFrameState(frame: FrameRenderState): ParticleRuntimeConfig {
@@ -288,14 +280,6 @@ export class ParticleEngine {
     this.setFrameState(frame);
     this.maxParticles = getMaxParticles();
     this.clear();
-    console.log("[Particles] init:", {
-      texture: this.config.system,
-      density: this.config.density,
-      canvas: this.hasValidBounds(),
-      ctx: true,
-      enabled: this.config.system !== "none",
-      maxCount: this.maxParticles,
-    });
 
     if (this.hasValidBounds()) {
       const warmCount = Math.floor(this.maxParticles * config.density * 0.3);

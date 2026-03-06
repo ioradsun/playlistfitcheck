@@ -15,10 +15,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
-import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
+// Debug panels removed for production
+// import { LyricDanceDebugPanel } from "@/components/lyric/LyricDanceDebugPanel";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { HotSectionPill } from "@/components/lyric/HotSectionPill";
-import { LyricDancePlayer, DEFAULT_DEBUG_STATE, type LyricDanceData, type LiveDebugState } from "@/engine/LyricDancePlayer";
+import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
@@ -182,65 +183,7 @@ const ProgressBar = React.forwardRef<HTMLDivElement, {
   );
 });
 
-// ─── Live Debug HUD ─────────────────────────────────────────────────
-
-function LiveDebugHUD({ player }: { player: LyricDancePlayer | null }) {
-  const [open, setOpen] = useState(false);
-  const [snap, setSnap] = useState<LiveDebugState>(DEFAULT_DEBUG_STATE);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "d" || e.key === "D") {
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-        setOpen(prev => !prev);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-  useEffect(() => {
-    if (!open || !player) return;
-    const id = setInterval(() => setSnap({ ...player.debugState }), 100);
-    return () => clearInterval(id);
-  }, [open, player]);
-
-  if (!open) return null;
-
-  const f = (v: number, d = 2) => v.toFixed(d);
-  const Row = ({ label, value }: { label: string; value: string }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-      <span style={{ color: "#4ade80" }}>{label}:</span>
-      <span style={{ color: "#d1fae5" }}>{value}</span>
-    </div>
-  );
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div style={{ marginBottom: 6 }}>
-      <div style={{ color: "#22c55e", fontWeight: 700, marginBottom: 2, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" as const }}>{title}</div>
-      {children}
-    </div>
-  );
-
-  return (
-    <div style={{
-      position: "fixed", bottom: 80, left: 12, zIndex: 200,
-      background: "rgba(0,0,0,0.88)", backdropFilter: "blur(4px)",
-      border: "1px solid rgba(74,222,128,0.15)", borderRadius: 6,
-      padding: 12, maxWidth: 280, minWidth: 240,
-      fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace",
-      fontSize: 11, lineHeight: "1.55", color: "#4ade80",
-      pointerEvents: "auto", overflowY: "auto", maxHeight: "70vh",
-    }}>
-      <Section title="BEAT"><Row label="intensity" value={f(snap.beatIntensity)} /><Row label="pulse" value={f(snap.bgBeatPulse)} /><Row label="phase" value={f(snap.bgBeatPhase)} /><Row label="physGlow" value={f(snap.physGlow)} /></Section>
-      <Section title="PHYSICS"><Row label="heat" value={f(snap.heat)} /><Row label="velocity" value={f(snap.velocity)} /><Row label="words" value={String(snap.wordCount)} /></Section>
-      <Section title="ANIMATION"><Row label="effect" value={snap.effectKey} /><Row label="entry" value={f(snap.entryProgress)} /><Row label="exit" value={f(snap.exitProgress)} /><Row label="mod" value={snap.activeMod ?? "none"} /></Section>
-      <Section title="PARTICLES"><Row label="system" value={snap.particleSystem} /><Row label="count" value={String(snap.particleCount)} /></Section>
-      <Section title="DIRECTION"><Row label="section" value={`${snap.secIndex}/${snap.secTotal}`} /><Row label="line" value={String(snap.lineIndex)} /><Row label="chapter" value={snap.dirChapter} /><Row label="hero" value={snap.lineHeroWord || "—"} /><Row label="active" value={snap.activeWord} /><Row label="line style" value={snap.resolvedLineStyle} /><Row label="word style" value={snap.resolvedWordStyle} /><Row label="layout" value={snap.layoutStable ? "stable" : "unstable"} /><Row label="tension" value={snap.tensionStage} /></Section>
-      <Section title="PERFORMANCE"><Row label="fps" value={String(Math.round(snap.fps))} /><Row label="total" value={snap.perfTotal.toFixed(2)} /><Row label="text" value={snap.perfText.toFixed(2)} /><Row label="bg" value={snap.perfBg.toFixed(2)} /></Section>
-      <div style={{ marginTop: 6, fontSize: 9, color: "rgba(74,222,128,0.4)", textAlign: "center" as const }}>{f(snap.time, 2)}s · press D to close</div>
-    </div>
-  );
-}
+// LiveDebugHUD removed for production
 
 // DebugPanel removed — merged into LyricDanceDebugPanel with HUD + DATA tabs
 
@@ -457,13 +400,6 @@ export default function ShareableLyricDance() {
     return () => { supabase.removeChannel(channel); };
   }, [data?.id]);
 
-  useEffect(() => {
-    if (!data) return;
-    console.log('[Player Data] cinematic_direction keys:', Object.keys(data.cinematic_direction ?? {}));
-    console.log('[Player Data] beat_grid:', data.beat_grid ? `BPM=${data.beat_grid.bpm}` : 'null');
-    console.log('[Player Data] wordDirectives count:', data.cinematic_direction?.wordDirectives?.length ?? 0);
-    console.log('[Player Data] texture:', data.cinematic_direction?.texture);
-  }, [data]);
 
   // ── Realtime comment comets ─────────────────────────────────────────
   useEffect(() => {
@@ -775,132 +711,7 @@ export default function ShareableLyricDance() {
         </div>
       </div>
 
-      {/* Debug — only when data is fully loaded */}
-      <LiveDebugHUD player={playerInstance} />
-      {data && (
-      <LyricDanceDebugPanel
-        player={playerInstance}
-        onRegenerateSong={() => {
-          toast.info("Re-generating cinematic direction…");
-          if (!data) return;
-          const lyricsForDirection = (data.lyrics as any[])
-            .filter((l: any) => l.tag !== "adlib")
-            .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-          const existingAudioSections = extractAudioSectionsFromDirection(data.cinematic_direction, lyricsForDirection);
-          supabase.functions.invoke("cinematic-direction", {
-            body: {
-              title: data.song_name,
-              artist: data.artist_name,
-              lines: lyricsForDirection,
-              lyricId: data.id,
-              audioSections: existingAudioSections,
-              words: data.words ?? undefined,
-            },
-          }).then(({ data: dirResult, error }) => {
-            if (error) { toast.error("Cinematic direction failed"); return; }
-            supabase.from("shareable_lyric_dances" as any)
-              .update({ cinematic_direction: dirResult?.cinematicDirection ?? null, updated_at: new Date().toISOString() } as any)
-              .eq("id", data.id)
-              .then(() => {
-                toast.success("Cinematic direction updated — reloading…");
-                setTimeout(() => window.location.reload(), 1000);
-              });
-          });
-        }}
-        onRegenerateDance={async () => {
-          if (!data) return;
-          toast.info("Syncing words from saved project…");
-          try {
-            const { data: result, error } = await supabase.functions.invoke("sync-dance-words", {
-              body: { dance_id: data.id },
-            });
-            if (error) throw error;
-            if (result?.error) {
-              toast.error(result.error);
-              return;
-            }
-            toast.success(`Synced ${result.count} words — reloading…`);
-            setTimeout(() => window.location.reload(), 800);
-          } catch (e: any) {
-            console.error("[DEBUG] Dance sync error:", e);
-            toast.error(e.message || "Failed to sync words");
-          }
-        }}
-        onRegenerateDirector={async () => {
-          if (!data) return;
-          toast.info("Refreshing cinematic direction…");
-          try {
-            const lyricsForDirection = (data.lyrics as any[])
-              .filter((l: any) => l.tag !== "adlib")
-              .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-            const existingAudioSections2 = extractAudioSectionsFromDirection(data.cinematic_direction, lyricsForDirection);
-            const { data: result, error } = await supabase.functions.invoke("cinematic-direction", {
-              body: {
-                title: data.song_name,
-                artist: data.artist_name,
-                lines: lyricsForDirection,
-                lyricId: data.id,
-                audioSections: existingAudioSections2,
-                words: data.words ?? undefined,
-              },
-            });
-            if (error) throw error;
-            if (result?.cinematicDirection) {
-              toast.success("Cinematic direction updated — reloading…");
-              setTimeout(() => window.location.reload(), 800);
-            } else {
-              toast.error("No cinematic direction returned");
-            }
-          } catch (e: any) {
-            console.error("[DEBUG] Director error:", e);
-            toast.error(e.message || "Failed to generate cinematic direction");
-          }
-        }}
-        onRunCustomPrompt={async (systemPrompt: string) => {
-          if (!data) return;
-          toast.info("Running cinematic-direction with custom prompt…");
-          try {
-            const lyricsForDirection = (data.lyrics as any[])
-              .filter((l: any) => l.tag !== "adlib")
-              .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-            const existingAudioSections3 = extractAudioSectionsFromDirection(data.cinematic_direction, lyricsForDirection);
-            const { data: dirResult, error } = await supabase.functions.invoke("cinematic-direction", {
-              body: {
-                title: data.song_name,
-                artist: data.artist_name,
-                lines: lyricsForDirection,
-                beatGrid: data.beat_grid ? { bpm: (data.beat_grid as any).bpm } : undefined,
-                lyricId: data.id,
-                scene_context: data.scene_context ?? null,
-                systemPromptOverride: systemPrompt,
-                audioSections: existingAudioSections3,
-                words: data.words ?? undefined,
-              },
-            });
-            if (error) throw error;
-            if (dirResult?.cinematicDirection) {
-              toast.success("Custom prompt result received — reloading…");
-              setTimeout(() => window.location.reload(), 800);
-            } else {
-              toast.error("No cinematic direction returned");
-            }
-          } catch (e: any) {
-            console.error("[DEBUG] Custom prompt error:", e);
-            toast.error(e.message || "Failed to run custom prompt");
-          }
-        }}
-        data={{
-          renderData: {
-            cinematic_direction: data.cinematic_direction as any,
-          },
-          beatGrid: data.beat_grid ? { bpm: (data.beat_grid as any).bpm ?? 0, beats: (data.beat_grid as any).beats ?? [], confidence: (data.beat_grid as any).confidence ?? 0 } : null, lines: data.lyrics,
-          title: data.song_name, artist: data.artist_name,
-          overrides: {},  fingerprint: null,
-          section_images: data.section_images,
-          words: data.words,
-        }}
-      />
-      )}
+      {/* Debug panels removed for production */}
       <ReactionPanel
         isOpen={reactionPanelOpen}
         onClose={() => setReactionPanelOpen(false)}

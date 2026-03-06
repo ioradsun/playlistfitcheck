@@ -334,7 +334,7 @@ export function LyricsTab({
           initialWaveform={waveformData}
           fmlyLines={fmlyLines}
           versionMeta={versionMeta}
-          debugData={debugData}
+          
           onBack={handleBack}
           onSaved={(id) => {
             setSavedId(id);
