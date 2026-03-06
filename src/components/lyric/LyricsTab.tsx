@@ -114,7 +114,7 @@ export function LyricsTab({
         return null;
       }
       const { data } = supabase.storage.from("audio-clips").getPublicUrl(path);
-      console.log("[Pipeline] Audio uploaded to storage:", data.publicUrl);
+      
       return data.publicUrl;
     },
     [],
