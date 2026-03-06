@@ -193,7 +193,7 @@ export function LyricsTab({
         let response: Response;
         if (storageAudioUrl) {
           // Fast path: send URL, edge function fetches from same datacenter
-          console.log(`[Transcribe Debug] ${ms()} using URL-based transcription (fast path)`);
+          
           response = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
             {
