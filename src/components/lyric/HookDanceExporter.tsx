@@ -111,7 +111,7 @@ export function HookDanceExporter({
       source.connect(muteGain);
       muteGain.connect(audioCtx.destination);
     } catch (e) {
-      console.warn("Could not set up audio for recording:", e);
+      // Could not set up audio for recording
     }
 
     // MediaRecorder with manual frame capture
