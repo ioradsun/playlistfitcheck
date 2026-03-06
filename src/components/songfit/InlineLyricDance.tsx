@@ -147,11 +147,6 @@ function InlineLyricDanceInner(
   useEffect(() => { if (player) player.audio.muted = muted; }, [muted, player]);
 
   // ── Handlers ─────────────────────────────────────────────────────────
-  const handleListenNow = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    player?.seek(0); player?.setMuted(false); player?.play();
-    setMuted(false); setShowCover(false);
-  }, [player]);
 
   const toggleMute = useCallback((e: React.MouseEvent) => { e.stopPropagation(); setMuted(m => !m); }, []);
   const openFullPage = useCallback((e: React.MouseEvent) => { e.stopPropagation(); window.open(lyricDanceUrl, "_blank"); }, [lyricDanceUrl]);
