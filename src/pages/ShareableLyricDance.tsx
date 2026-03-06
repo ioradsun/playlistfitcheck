@@ -504,12 +504,31 @@ export default function ShareableLyricDance() {
     setFrozenLineIndex(null);
 
     const player = playerRef.current;
-    if (!player) return;
-    const audio = player.audio;
-    if (audio.ended) return;
-    if (audio.paused) player.play();
+    const audio = player?.audio;
+    if (!audio || audio.ended) return;
+
+    try {
+      if (audio.paused) {
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn('ShareableLyricDance audio resume failed:', err);
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('ShareableLyricDance audio play error:', err);
+    }
   }, []);
 
+
+  useEffect(() => {
+    if (!reactionPanelOpen && engagementMode !== 'spectator') {
+      setEngagementMode('spectator');
+      setFrozenLineIndex(null);
+      freezeAtSecRef.current = null;
+    }
+  }, [reactionPanelOpen, engagementMode]);
   // ── Current time tracking for active lyric UI ───────────────────────
   useEffect(() => {
     const player = playerInstance;
@@ -808,6 +827,7 @@ export default function ShareableLyricDance() {
       )}
 
       <ReactionPanel
+        displayMode="fullscreen"
         isOpen={reactionPanelOpen}
         onClose={handlePanelClose}
         engagementMode={engagementMode}
