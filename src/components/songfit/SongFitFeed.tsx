@@ -84,6 +84,7 @@ function LazyFeedCard({
 export function SongFitFeed() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isAdmin = user?.email === "sunpatel@gmail.com" || user?.email === "spatel@iorad.com";
   const [posts, setPosts] = useState<SongFitPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
