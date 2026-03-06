@@ -840,7 +840,7 @@ export function LyricFitTab({
       setAudioSections(nextSections);
       sectionPipelineDoneRef.current = true;
     } catch (error) {
-      console.warn("[section-pipeline] failed", error);
+      
     } finally {
       sectionPipelineRunningRef.current = false;
     }
