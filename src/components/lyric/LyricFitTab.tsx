@@ -805,7 +805,7 @@ export function LyricFitTab({
     try {
       let sig = songSignature;
       if (!sig) {
-        console.log(`[FitTab Debug] ${fitPipelineMs()} starting section detection`);
+        
         const lyricsText = timestampedLines.map((line) => line.text).join("\n");
         try {
           sig = await songSignatureAnalyzer.analyze(audioBuffer!, beatGrid, lyricsText, audioDurationSec);
