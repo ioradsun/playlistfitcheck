@@ -740,7 +740,7 @@ serve(async (req) => {
     const sectionCount = body.audioSections?.length ?? 0;
 
     const heldCount = body.words?.length ? extractHeldWords(body.words, lines[0]?.start ?? 0, lines[lines.length - 1]?.end ?? 1).heldWords.length : 0;
-    console.log(`[cinematic-direction] ${title} by ${artist} | ${lines.length} lines | ${sectionCount} sections | ${heldCount} held words`);
+    
 
     const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount);
 

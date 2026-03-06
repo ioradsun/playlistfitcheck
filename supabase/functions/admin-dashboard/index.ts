@@ -86,7 +86,7 @@ serve(async (req) => {
         }
       }
 
-      console.log(`[admin] DELETE ALL DATA complete. ${errors.length} errors.`);
+      
       return new Response(JSON.stringify({ success: true, errors }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

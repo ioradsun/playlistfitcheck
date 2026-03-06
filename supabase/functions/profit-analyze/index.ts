@@ -287,7 +287,7 @@ ${JSON.stringify(signals, null, 2)}`;
             for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += "]";
             for (let i = 0; i < openBraces - closeBraces; i++) repaired += "}";
             blueprint = JSON.parse(repaired);
-            console.log("Repaired truncated JSON successfully");
+            // Repaired truncated JSON successfully
             break;
           } catch {
             console.error("JSON repair also failed");

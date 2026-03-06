@@ -290,9 +290,7 @@ serve(async (req) => {
         .eq("id", lyric_dance_id);
 
       if (updateError) {
-        console.error("[section-images] DB update error:", updateError.message);
-      } else {
-        console.log(`[section-images] Saved ${successCount} image URLs to DB`);
+        // DB update error
       }
     }
 
