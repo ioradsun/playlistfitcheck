@@ -16,7 +16,7 @@ import Index from "./pages/Index";
 import About from "./pages/About";
 
 const Admin = lazy(() => import("./pages/Admin"));
-import { FitWidget } from "@/components/FitWidget";
+const FitWidget = lazy(() => import("@/components/FitWidget").then((module) => ({ default: module.FitWidget })));
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import PublicProfile from "./pages/PublicProfile";
@@ -130,7 +130,9 @@ const App = () => (
                     <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
                   </Routes>
                 </SidebarProvider>
-                <FitWidget />
+                <Suspense fallback={null}>
+                  <FitWidget />
+                </Suspense>
                 </SiteCopyProvider>
               </AuthProvider>
             } />
