@@ -429,6 +429,7 @@ const Index = () => {
       }).select("id").single();
       if (inserted) {
         savedSearchIdRef.current = inserted.id;
+        projectLoadedRef.current = inserted.id;
         navigate(`/PlaylistFit/${inserted.id}`, { replace: true });
         // Optimistic update — inject into sidebar immediately, no refetch needed
         setOptimisticSidebarItem({
