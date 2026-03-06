@@ -802,7 +802,7 @@ const Index = () => {
           <div className="flex-1 flex flex-col min-h-0">
             {isHydratingMix ? <ToolSkeleton tab="mix" variant={projectId ? "existing" : "new"} /> : (
               <Suspense fallback={<ToolSkeleton tab="mix" variant={projectId ? "existing" : "new"} />}>
-                <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} />
+                <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
               </Suspense>
             )}
           </div>
