@@ -132,8 +132,6 @@ export function LyricsTab({
       }
       const t0 = performance.now();
       const ms = () => `${(performance.now() - t0).toFixed(0)}ms`;
-      console.log(`[Transcribe Debug] ${ms()} ENTRY file="${file.name}" size=${(file.size / 1024 / 1024).toFixed(2)}MB type=${file.type}`);
-      console.log(`[LyricUpload] START file="${file.name}" size=${(file.size / 1024 / 1024).toFixed(2)}MB`);
       setLoading(true);
 
       const projectId = user ? crypto.randomUUID() : null;
