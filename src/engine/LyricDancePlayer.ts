@@ -1877,7 +1877,7 @@ export class LyricDancePlayer {
   /** Hot-patch auto_palettes and recompile scene so word colors update */
   updateAutoPalettes(palettes: string[][]): void {
     if (!palettes?.length) return;
-    console.log('[auto-palette] updateAutoPalettes received:', palettes.length, 'text color[0]:', palettes[0]?.[2]);
+    
     (this as any)._paletteDiagLogged = false; // reset so next getResolvedPalette logs the new state
     this.data = { ...this.data, auto_palettes: palettes };
     // Recompile scene with fresh palette data
