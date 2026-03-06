@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, AlertCircle, ArrowLeft, RotateCcw } from "lucide-react";
+import { Loader2, AlertCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LyricWaveform } from "./LyricWaveform";
 import type { WaveformData } from "@/hooks/useAudioEngine";
