@@ -625,6 +625,43 @@ export default function ShareableLyricDance() {
   const coverAvatarUrl = profile?.avatar_url ?? null;
   const coverInitial   = (data?.artist_name || data?.song_name || "♪")[0].toUpperCase();
 
+  const topReaction = useMemo(() => {
+    const EMOJI_SYMBOLS: Record<string, string> = {
+      fire: '🔥', dead: '💀', mind_blown: '🤯',
+      emotional: '😭', respect: '🙏', accurate: '🎯',
+    };
+
+    const lineTotals = new Map<number, number>();
+    for (const d of Object.values(reactionData)) {
+      for (const [lineIdxStr, count] of Object.entries(d.line)) {
+        const idx = Number(lineIdxStr);
+        lineTotals.set(idx, (lineTotals.get(idx) ?? 0) + count);
+      }
+    }
+
+    if (lineTotals.size === 0) return null;
+
+    let bestLineIndex = -1;
+    let bestLineTotal = 0;
+    for (const [idx, total] of lineTotals.entries()) {
+      if (total > bestLineTotal) { bestLineTotal = total; bestLineIndex = idx; }
+    }
+
+    let topEmojiKey: string | null = null;
+    let topEmojiCount = 0;
+    for (const [key, d] of Object.entries(reactionData)) {
+      const count = d.line[bestLineIndex] ?? 0;
+      if (count > topEmojiCount) { topEmojiCount = count; topEmojiKey = key; }
+    }
+
+    const symbol = topEmojiKey ? (EMOJI_SYMBOLS[topEmojiKey] ?? '🔥') : '🔥';
+    const lines = data?.lyrics ?? [];
+    const line = (lines as any[])[bestLineIndex];
+    const lineText = (line?.text ?? '').slice(0, 60);
+
+    return { symbol, count: topEmojiCount, lineText, lineReactionCount: bestLineTotal };
+  }, [reactionData, data?.lyrics]);
+
   // ── Render ──────────────────────────────────────────────────────────
 
   return (
@@ -689,10 +726,10 @@ export default function ShareableLyricDance() {
             >
               <LyricDanceCover
                 songName={coverSongName}
-                artistName={coverArtist}
-                avatarUrl={coverAvatarUrl}
-                initial={coverInitial}
                 waiting={isWaitingForPlayer}
+                badge="In Studio"
+                onExpand={undefined}
+                topReaction={!isWaitingForPlayer ? topReaction : null}
                 onListen={(e) => {
                   e.stopPropagation();
                   setShowCover(false);

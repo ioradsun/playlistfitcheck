@@ -166,19 +166,39 @@ function InlineLyricDanceInner(
       emotional: '😭', respect: '🙏', accurate: '🎯',
     };
 
-    let best: { symbol: string; count: number; lineIndex: number } | null = null;
-    for (const [key, data] of Object.entries(reactionData)) {
+    const lineTotals = new Map<number, number>();
+    for (const data of Object.values(reactionData)) {
       for (const [lineIdxStr, count] of Object.entries(data.line)) {
-        if (count > (best?.count ?? 0)) {
-          best = { symbol: EMOJI_SYMBOLS[key] ?? '🔥', count, lineIndex: Number(lineIdxStr) };
-        }
+        const idx = Number(lineIdxStr);
+        lineTotals.set(idx, (lineTotals.get(idx) ?? 0) + count);
       }
     }
-    if (!best) return null;
 
-    const line = (fetchedData.lyrics as any[]).find((_: any, i: number) => i === best!.lineIndex);
-    const lineText = (line?.text ?? "").slice(0, 60);
-    return { symbol: best.symbol, count: best.count, lineText };
+    if (lineTotals.size === 0) return null;
+
+    let bestLineIndex = -1;
+    let bestLineTotal = 0;
+    for (const [idx, total] of lineTotals.entries()) {
+      if (total > bestLineTotal) { bestLineTotal = total; bestLineIndex = idx; }
+    }
+
+    let topEmojiKey: string | null = null;
+    let topEmojiCount = 0;
+    for (const [key, data] of Object.entries(reactionData)) {
+      const count = data.line[bestLineIndex] ?? 0;
+      if (count > topEmojiCount) { topEmojiCount = count; topEmojiKey = key; }
+    }
+
+    const symbol = topEmojiKey ? (EMOJI_SYMBOLS[topEmojiKey] ?? '🔥') : '🔥';
+    const line = (fetchedData.lyrics as any[])[bestLineIndex];
+    const lineText = (line?.text ?? '').slice(0, 60);
+
+    return {
+      symbol,
+      count: topEmojiCount,
+      lineText,
+      lineReactionCount: bestLineTotal,
+    };
   }, [reactionData, fetchedData?.lyrics]);
 
   // ── Player lifecycle ──────────────────────────────────────────────────

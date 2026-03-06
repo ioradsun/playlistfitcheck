@@ -9,7 +9,7 @@ interface LyricDanceCoverProps {
   onListen?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   badge?: string | null;
   onExpand?: () => void;
-  topReaction?: { symbol: string; count: number; lineText: string } | null;
+  topReaction?: { symbol: string; count: number; lineText: string; lineReactionCount: number } | null;
 }
 
 export function LyricDanceCover({
@@ -79,14 +79,19 @@ export function LyricDanceCover({
 
       {/* Social proof bar — pinned bottom, only when reactions exist */}
       {topReaction && !waiting && (
-        <div className="absolute bottom-0 left-0 right-0 flex items-center gap-2 px-3 py-2.5"
-          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+        <div
+          className="absolute bottom-0 left-0 right-0 px-3 py-2.5"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
         >
-          <span className="text-base leading-none shrink-0">{topReaction.symbol}</span>
-          <span className="text-[10px] font-mono text-white/40 shrink-0">{topReaction.count}</span>
-          <span className="text-[10px] font-mono text-white/30 truncate min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-sm leading-none">{topReaction.symbol}</span>
+            <span className="text-[10px] font-mono text-white/55 tracking-wide">
+              {topReaction.lineReactionCount} reaction{topReaction.lineReactionCount !== 1 ? 's' : ''} on this line
+            </span>
+          </div>
+          <p className="text-[10px] font-mono text-white/30 truncate">
             "{topReaction.lineText}"
-          </span>
+          </p>
         </div>
       )}
     </div>
