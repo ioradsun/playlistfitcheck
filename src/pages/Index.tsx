@@ -548,6 +548,8 @@ const Index = () => {
   const toolDataLoaded = useMemo(() => {
     if (!projectId) return true;
     if (isFetchingProject) return false;
+    // If ref matches, data was committed locally (new project save or sidebar load) — no fetch needed
+    if (projectLoadedRef.current === projectId) return true;
     switch (activeTab) {
       case "lyric":    return loadedLyric?.id === projectId;
       case "mix":      return loadedMixProject?.id === projectId;
@@ -803,7 +805,7 @@ const Index = () => {
         return (
           <div className="flex-1 flex flex-col min-h-0">
             <Suspense fallback={<PageSkeleton tool="mix" mode={screen.mode} />}>
-              <MixFitCheck initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+              <MixFitCheck initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("mix", id); }} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>
         );
