@@ -47,7 +47,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal", albumArtUrl }: Props,
+  { lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal", albumArtUrl, avatarUrl }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
