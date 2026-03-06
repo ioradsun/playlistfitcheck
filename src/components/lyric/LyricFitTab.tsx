@@ -207,7 +207,7 @@ export function LyricFitTab({
 
   useEffect(() => {
     const done = timestampedLines.length > 0;
-    if (done) console.log(`[Transcribe Debug] transcriptionDone=true, lines=${timestampedLines.length}`);
+    if (done) { /* debug removed */ }
     setTranscriptionDone(done);
   }, [timestampedLines]);
 
