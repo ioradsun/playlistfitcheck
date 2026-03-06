@@ -736,7 +736,7 @@ export function LyricFitTab({
                     .eq("song_slug", songSlugVal)
                     .maybeSingle();
                   resolvedDanceId = newRow?.id ?? null;
-                  if (resolvedDanceId) console.log(`[Pipeline] Draft dance row created: ${resolvedDanceId}`);
+                  
                 }
 
                 if (!resolvedDanceId) {
