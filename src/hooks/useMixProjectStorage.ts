@@ -8,7 +8,7 @@ export interface MixProjectData {
   id: string;
   title: string;
   notes: string;
-  mixes: { name: string; rank: number | null; comments: string }[];
+  mixes: { name: string; rank: number | null; comments: string; audio_url?: string }[];
   markerStart: number;
   markerEnd: number;
   createdAt: string;

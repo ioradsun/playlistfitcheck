@@ -30,7 +30,7 @@ export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHea
   const { handleFileSelected, showAuthNudge, dismissAuthNudge } = useAudioProject({
     tool: "hitfit",
     dbTable: "saved_hitfit",
-    includeAudioUrl: false,
+    includeAudioUrl: true,
     buildStubRow: ({ file, userId }) => ({
       user_id: userId,
       filename: file.name.replace(/\.[^.]+$/, ""),
