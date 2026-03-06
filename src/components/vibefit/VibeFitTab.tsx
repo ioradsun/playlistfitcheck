@@ -10,6 +10,7 @@ import { VibeFitResults, type VibeFitOutput } from "./VibeFitResults";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AuthNudge } from "@/components/ui/AuthNudge";
+import type { RecentItem } from "@/components/AppSidebar";
 
 const DAILY_LIMIT = 20;
 const STORAGE_KEY = "vibefit_usage";
@@ -57,9 +58,10 @@ interface VibeFitTabProps {
   onProjectSaved?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
   onSavedId?: (id: string) => void;
+  onOptimisticItem?: (item: RecentItem) => void;
 }
 
-export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject, onSavedId }: VibeFitTabProps = {}) {
+export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject, onSavedId, onOptimisticItem }: VibeFitTabProps = {}) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VibeFitOutput | null>(initialResult?.result || null);
   const [lastInput, setLastInput] = useState<VibeFitInput | null>(initialResult?.input || null);
@@ -120,7 +122,16 @@ export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject, onS
             result_json: { input, result: output } as any,
           }).select("id").single();
           onProjectSaved?.();
-          if (inserted) onSavedId?.(inserted.id);
+          if (inserted) {
+            onSavedId?.(inserted.id);
+            onOptimisticItem?.({
+              id: inserted.id,
+              label: input.songTitle || "VibeFit",
+              meta: "just now",
+              type: "vibefit",
+              rawData: { input, result: output },
+            });
+          }
         } catch (e) {
           console.error("Failed to save VibeFit:", e);
         }

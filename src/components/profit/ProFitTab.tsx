@@ -7,6 +7,7 @@ import { ProFitLanding } from "./ProFitLanding";
 import { ProFitReport } from "./ProFitReport";
 import { ProFitChat } from "./ProFitChat";
 import type { ArtistData, Blueprint } from "./types";
+import type { RecentItem } from "@/components/AppSidebar";
 
 type View = "landing" | "report" | "chat";
 
@@ -23,9 +24,10 @@ interface ProFitTabProps {
   onProjectSaved?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
   onSavedId?: (id: string) => void;
+  onOptimisticItem?: (item: RecentItem) => void;
 }
 
-export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved, onHeaderProject, onSavedId }: ProFitTabProps = {}) => {
+export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved, onHeaderProject, onSavedId, onOptimisticItem }: ProFitTabProps = {}) => {
   const [view, setView] = useState<View>("landing");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<ReportState | null>(null);
@@ -55,7 +57,21 @@ export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved
       setView("report");
       await quota.increment();
       onProjectSaved?.();
-      if (data.reportId) onSavedId?.(data.reportId);
+      if (data.reportId) {
+        onSavedId?.(data.reportId);
+        onOptimisticItem?.({
+          id: data.reportId,
+          label: data.artist?.name || "Artist Report",
+          meta: "just now",
+          type: "profit",
+          rawData: {
+            reportId: data.reportId,
+            shareToken: data.shareToken,
+            blueprint: data.blueprint,
+            artist: data.artist,
+          },
+        });
+      }
       // Save to localStorage history
       try {
         const history = JSON.parse(localStorage.getItem("profit_history") || "[]");

@@ -13,6 +13,7 @@ import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProject
 
 import { toast } from "sonner";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
+import type { RecentItem } from "@/components/AppSidebar";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 
 const MAX_MIXES = 6;
@@ -23,9 +24,10 @@ interface MixFitCheckProps {
   onNewProject?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void; rightContent?: React.ReactNode } | null) => void;
   onSavedId?: (id: string) => void;
+  onOptimisticItem?: (item: RecentItem) => void;
 }
 
-export default function MixFitCheck({ initialProject, onProjectSaved, onNewProject, onHeaderProject, onSavedId }: MixFitCheckProps = {}) {
+export default function MixFitCheck({ initialProject, onProjectSaved, onNewProject, onHeaderProject, onSavedId, onOptimisticItem }: MixFitCheckProps = {}) {
   const { user } = useAuth();
   const mixQuota = useUsageQuota("mix");
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
@@ -138,11 +140,18 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       });
       onProjectSaved?.();
       onSavedId?.(newId);
+      onOptimisticItem?.({
+        id: newId,
+        label: t || "Mix Project",
+        meta: "just now",
+        type: "mix",
+        rawData: { id: newId, title: t, notes: n, mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments })) },
+      });
     } catch (e) {
       console.error("Failed initial save for MixFit project:", e);
     }
     await mixQuota.increment();
-  }, [decodeFile, mixQuota, save, onProjectSaved, onSavedId]);
+  }, [decodeFile, mixQuota, save, onProjectSaved, onSavedId, onOptimisticItem]);
 
   const handleLoadProject = useCallback(async (project: MixProjectData) => {
     stop();

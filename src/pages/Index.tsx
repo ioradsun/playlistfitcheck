@@ -802,7 +802,7 @@ const Index = () => {
           <div className="flex-1 flex flex-col min-h-0">
             {isHydratingMix ? <ToolSkeleton tab="mix" variant={projectId ? "existing" : "new"} /> : (
               <Suspense fallback={<ToolSkeleton tab="mix" variant={projectId ? "existing" : "new"} />}>
-                <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} />
+                <MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
               </Suspense>
             )}
           </div>
@@ -836,7 +836,7 @@ const Index = () => {
           <div className="flex-1 flex flex-col min-h-0">
             {isHydratingProfit ? <TabChunkFallback /> : (
               <Suspense fallback={<TabChunkFallback />}>
-                <ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} />
+                <ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
               </Suspense>
             )}
           </div>
@@ -880,7 +880,7 @@ const Index = () => {
           <div className="flex-1 flex flex-col px-4 py-6">
             {isHydratingVibeFit ? <TabChunkFallback /> : (
               <Suspense fallback={<TabChunkFallback />}>
-                <VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} />
+                <VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
               </Suspense>
             )}
           </div>
