@@ -61,7 +61,7 @@ interface VibeFitTabProps {
   onOptimisticItem?: (item: RecentItem) => void;
 }
 
-export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject, onSavedId }: VibeFitTabProps = {}) {
+export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject, onSavedId, onOptimisticItem }: VibeFitTabProps = {}) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VibeFitOutput | null>(initialResult?.result || null);
   const [lastInput, setLastInput] = useState<VibeFitInput | null>(initialResult?.input || null);
