@@ -49,10 +49,12 @@ export function LyricDanceCover({
         </div>
       )}
 
-      {/* Center: song title + Listen Now */}
-      <div className="flex flex-col items-center justify-center px-6">
+      {/* Center: song title + CTA + social proof */}
+      <div className="flex flex-col items-center justify-center px-6 text-center">
         {songName ? (
-          <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[85%] mb-6">{songName}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[85%] mb-6">
+            {songName}
+          </h2>
         ) : (
           <div className="h-8 w-48 rounded bg-white/[0.07] animate-pulse mb-6" />
         )}
@@ -68,41 +70,29 @@ export function LyricDanceCover({
             ))}
           </div>
         ) : (
-          <button
-            onClick={onListen}
-            className="mb-6 px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
-          >
-            Listen Now
-          </button>
+          <>
+            <button
+              onClick={onListen}
+              className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+            >
+              Listen Now
+            </button>
+
+            {/* Social proof — tight under button, only when reactions exist */}
+            {topReaction && (
+              <div className="flex items-center gap-1.5 mt-3">
+                <span className="text-[11px] leading-none select-none">{topReaction.symbol}</span>
+                <span className="text-[10px] font-mono text-white/50">
+                  {topReaction.lineReactionCount}
+                </span>
+                <span className="text-[10px] font-mono text-white/25 truncate max-w-[180px]">
+                  &ldquo;{topReaction.lineText}&rdquo;
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
-
-      {/* Social proof bar — pinned bottom, only when reactions exist */}
-      {topReaction && !waiting && (
-        <div
-          className="absolute bottom-0 left-0 right-0 flex items-center gap-2 px-3 py-2.5 overflow-hidden"
-          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
-        >
-          {/* Emoji — small, matches pill size */}
-          <span className="text-[11px] leading-none shrink-0 select-none">
-            {topReaction.symbol}
-          </span>
-
-          {/* Scrolling text container */}
-          <div className="overflow-hidden flex-1 min-w-0">
-            {/* Inner div duplicates content for seamless loop */}
-            <div className="flex animate-marquee whitespace-nowrap">
-              <span className="text-[10px] font-mono text-white/40 pr-16">
-                {topReaction.lineReactionCount} reactions on this line &nbsp;·&nbsp; &ldquo;{topReaction.lineText}&rdquo;
-              </span>
-              {/* Duplicate for seamless loop */}
-              <span className="text-[10px] font-mono text-white/40 pr-16" aria-hidden="true">
-                {topReaction.lineReactionCount} reactions on this line &nbsp;·&nbsp; &ldquo;{topReaction.lineText}&rdquo;
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
