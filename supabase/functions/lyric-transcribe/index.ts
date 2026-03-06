@@ -612,7 +612,7 @@ serve(async (req) => {
         throw new Error("No audio file provided");
       }
 
-      console.log(`[Transcribe Debug] ${ms()} audio file: ${audio.name}, size=${(audio.size/1024/1024).toFixed(2)}MB`);
+      
       const ext = audio.name.split(".").pop()?.toLowerCase() || "mp3";
       format = ext;
 
