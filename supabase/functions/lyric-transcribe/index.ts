@@ -634,7 +634,7 @@ serve(async (req) => {
 
       // URL-based path: fetch audio from storage (same datacenter, ~1s)
       if (typeof payload.audioUrl === "string" && payload.audioUrl.length > 0) {
-        console.log(`[Transcribe Debug] ${ms()} fetching audio from storage URL`);
+        
         const audioResp = await fetch(payload.audioUrl);
         if (!audioResp.ok) {
           throw new Error(`Failed to fetch audio from storage: ${audioResp.status}`);
