@@ -291,7 +291,9 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   }, [stop, decodeFile]);
 
   // Sync with parent: load project or reset to new
-  const prevInitialRef = useRef<MixProjectData | null | undefined>(initialProject);
+  // Initialize to null so the effect always treats the first non-null initialProject as a change,
+  // even when initialProject is already set before this component mounts (sidebar project load).
+  const prevInitialRef = useRef<MixProjectData | null | undefined>(null);
   useEffect(() => {
     if (initialProject && initialProject !== prevInitialRef.current) {
       handleLoadProject(initialProject);
