@@ -809,7 +809,7 @@ export function LyricFitTab({
         const lyricsText = timestampedLines.map((line) => line.text).join("\n");
         try {
           sig = await songSignatureAnalyzer.analyze(audioBuffer!, beatGrid, lyricsText, audioDurationSec);
-          console.log(`[FitTab Debug] ${fitPipelineMs()} section detection complete (song signature analyzed)`);
+          
           setSongSignature(sig);
           if (savedIdRef.current) {
             await supabase
