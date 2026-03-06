@@ -290,8 +290,6 @@ export function LyricsTab({
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to transcribe lyrics");
       } finally {
-        console.log(`[Transcribe Debug] ${ms()} DONE, setting loading=false`);
-        console.log(`[LyricUpload] DONE (total ${(performance.now() - t0).toFixed(0)}ms)`);
         setLoading(false);
       }
     },
