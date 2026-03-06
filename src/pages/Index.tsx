@@ -248,10 +248,13 @@ const Index = () => {
     // Lyric projects are handled by the dedicated lyric loader effect
     if (tab === "lyric") return;
     
-    // If already loaded via sidebar, just mark as loaded
-    const alreadyLoaded = 
-      (tab === "mix" && loadedMixProject?.id === projectId) ||
-      (tab === "profit" && profitSavedReport?.reportId === projectId);
+    // If data was already committed by handleLoadProject (sidebar click), skip the fetch
+    const alreadyLoaded =
+      (tab === "mix"      && loadedMixProject?.id === projectId) ||
+      (tab === "profit"   && profitSavedReport?.reportId === projectId) ||
+      (tab === "hitfit"   && !!loadedHitFitAnalysis) ||
+      (tab === "vibefit"  && !!loadedVibeFitResult) ||
+      (tab === "playlist" && !!result);
     if (alreadyLoaded) {
       projectLoadedRef.current = projectId;
       return;
@@ -633,6 +636,7 @@ const Index = () => {
             setProfitSavedReport(data);
             setProfitLoadKey(k => k + 1);
             navTarget = `/ProFit/${data.reportId}`;
+            projectLoadedRef.current = data.reportId;
           } else {
             const artistId = data?.spotify_artist_id;
             if (artistId) {
@@ -646,7 +650,7 @@ const Index = () => {
           if (data?.analysis) {
             const analysisWithFilename = { ...data.analysis, _projectFilename: data.filename };
             setLoadedHitFitAnalysis(analysisWithFilename);
-            if (data.id) navTarget = `/HitFit/${data.id}`;
+            if (data.id) { navTarget = `/HitFit/${data.id}`; projectLoadedRef.current = data.id; }
           }
           break;
         }
@@ -658,10 +662,9 @@ const Index = () => {
             setSongFitAnalysis(songFit ?? null);
             setVibeLoading(false);
             setSongFitLoading(false);
-            if (data.id) navTarget = `/PlaylistFit/${data.id}`;
+            if (data.id) { navTarget = `/PlaylistFit/${data.id}`; projectLoadedRef.current = data.id; }
           } else if (data?.playlist_url) {
-            // No report_data yet — navigate now, re-fetch handled below
-            if (data.id) navTarget = `/PlaylistFit/${data.id}`;
+            if (data.id) { navTarget = `/PlaylistFit/${data.id}`; projectLoadedRef.current = data.id; }
           }
           break;
         }
@@ -678,7 +681,7 @@ const Index = () => {
               updatedAt: data.updated_at || new Date().toISOString(),
             };
             setLoadedMixProject(mixData);
-            if (data.id) navTarget = `/MixFit/${data.id}`;
+            if (data.id) { navTarget = `/MixFit/${data.id}`; projectLoadedRef.current = data.id; }
           }
           break;
         }
@@ -686,7 +689,7 @@ const Index = () => {
           if (data) {
             setLoadedLyric(data);
             setIsFetchingProject(false);
-            if (data.id) navTarget = `/LyricFit/${data.id}`;
+            if (data.id) { navTarget = `/LyricFit/${data.id}`; projectLoadedRef.current = data.id; }
           }
           break;
         }
@@ -694,7 +697,7 @@ const Index = () => {
           if (data) {
             setLoadedVibeFitResult(data);
             setVibeFitLoadKey((k) => k + 1);
-            if (data.id) navTarget = `/VibeFit/${data.id}`;
+            if (data.id) { navTarget = `/VibeFit/${data.id}`; projectLoadedRef.current = data.id; }
           }
           break;
         }
