@@ -135,7 +135,7 @@ export function useLyricDancePlayer(
           .update({ auto_palettes: palettes, updated_at: new Date().toISOString() } as any)
           .eq("id", data.id)
           .then(({ error }) => {
-            if (error) console.warn("[auto-palette] DB write failed:", error.message);
+            // auto-palette DB write failed
           });
       })
       .catch((err) => console.error("[auto-palette] failed:", err));
