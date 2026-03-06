@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense, startTransition } from "react";
+import { flushSync } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
