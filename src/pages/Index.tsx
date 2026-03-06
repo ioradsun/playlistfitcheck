@@ -596,7 +596,7 @@ const Index = () => {
   }, [user, authLoading]);
 
   const handleNewLyric = useCallback(() => { setLoadedLyric(null); transitionNavigate("/LyricFit", { replace: true }); }, [transitionNavigate]);
-  const handleNewMix = useCallback(() => { setLoadedMixProject(null); transitionNavigate("/MixFit", { replace: true }); }, [transitionNavigate]);
+  const handleNewMix = useCallback(() => { setLoadedMixProject(null); projectLoadedRef.current = null; transitionNavigate("/MixFit", { replace: true }); }, [transitionNavigate]);
   const handleNewHitFit = useCallback(() => { setLoadedHitFitAnalysis(null); transitionNavigate("/HitFit", { replace: true }); }, [transitionNavigate]);
 
   const handleSidebarTabChange = useCallback((tab: string) => {
@@ -604,7 +604,7 @@ const Index = () => {
     setProjectMissing(false);
     // Always reset to New Project for the target tool — synchronous, no startTransition
     if (tab === "lyric") setLoadedLyric(null);
-    else if (tab === "mix") setLoadedMixProject(null);
+    else if (tab === "mix") { setLoadedMixProject(null); projectLoadedRef.current = null; }
     else if (tab === "hitfit") setLoadedHitFitAnalysis(null);
     if (tab === "playlist") { setResult(null); savedSearchIdRef.current = null; }
     if (tab === "profit") setProfitSavedReport(null);
@@ -627,7 +627,7 @@ const Index = () => {
       setResult(null);
       setVibeAnalysis(null);
       setSongFitAnalysis(null);
-      if (type === "mix") setLoadedMixProject(null);
+      if (type === "mix") { setLoadedMixProject(null); projectLoadedRef.current = null; }
       if (type === "profit") { setProfitArtistUrl(null); setProfitSavedReport(null); }
       if (type === "hitfit") setLoadedHitFitAnalysis(null);
       if (type === "vibefit") setLoadedVibeFitResult(null);
@@ -683,7 +683,13 @@ const Index = () => {
               updatedAt: data.updated_at || new Date().toISOString(),
             };
             setLoadedMixProject(mixData);
-            if (data.id) { navTarget = `/MixFit/${data.id}`; projectLoadedRef.current = data.id; }
+            if (data.id) {
+              navTarget = `/MixFit/${data.id}`;
+              // Only mark as loaded if mixes have audio data — otherwise let the
+              // URL loader do a fresh DB fetch to get the real audio_urls.
+              const hasMixData = Array.isArray(data.mixes) && data.mixes.length > 0 && data.mixes[0]?.audio_url;
+              if (hasMixData) projectLoadedRef.current = data.id;
+            }
           }
           break;
         }
@@ -805,7 +811,7 @@ const Index = () => {
         return (
           <div className="flex-1 flex flex-col min-h-0">
             <Suspense fallback={<PageSkeleton tool="mix" mode={screen.mode} />}>
-              <MixFitCheck key={loadedMixProject?.id ?? "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("mix", id); }} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+              <MixFitCheck key={loadedMixProject?.id ?? "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id, projectData) => { if (projectData) { setLoadedMixProject(projectData); projectLoadedRef.current = id; } navigateToProject("mix", id); }} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>
         );
