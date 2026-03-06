@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle } from "react";
-import { Volume2, VolumeX, Maximize2 } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -223,16 +223,10 @@ function InlineLyricDanceInner(
             <span className="text-[10px] font-mono text-white/60 uppercase tracking-wider bg-black/40 backdrop-blur-sm rounded px-1.5 py-0.5">
               {songTitle}
             </span>
-            <div className="flex items-center gap-1">
-              <button onClick={toggleMute}
-                className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors">
-                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              </button>
-              <button onClick={openFullPage}
-                className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors">
-                <Maximize2 size={14} />
-              </button>
-            </div>
+            <button onClick={openFullPage}
+              className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors">
+              <Maximize2 size={14} />
+            </button>
           </div>
         )}
       </div>
