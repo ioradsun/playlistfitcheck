@@ -683,6 +683,11 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   const isActive = (autoFollowEnabled && isPlayhead) || (!autoFollowEnabled && isSelected) || isRepeatActive;
                   const lineCommentCount = commentCountByLine[line.lineIndex] ?? 0;
                   const isCommentPulsing = submittedLineIndex === line.lineIndex;
+                  const isExpanded = expandedLineIndex === line.lineIndex;
+
+                  const lineExpandedComments = isExpanded
+                    ? comments.filter(c => c.line_index === line.lineIndex && !c.parent_comment_id)
+                    : [];
 
                   return (
                     <div key={line.lineIndex}>
@@ -711,12 +716,47 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                           {line.text}
                         </span>
                         {lineCommentCount > 0 && (
-                          <span className="text-[9px] font-mono text-white/20 shrink-0 inline-flex items-center gap-0.5">
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              setExpandedLineIndex(prev => (prev === line.lineIndex ? null : line.lineIndex));
+                            }}
+                            className={`text-[9px] font-mono shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border transition-colors ${isExpanded ? 'border-white/25 text-white/60' : 'border-white/10 text-white/25 hover:text-white/50'}`}
+                          >
                             <MessageCircle size={9} />
                             {lineCommentCount}
-                          </span>
+                          </button>
                         )}
                       </div>
+
+                      {/* Expanded comment thread */}
+                      {isExpanded && (
+                        <div
+                          className="mx-3 mb-1 rounded-lg overflow-hidden"
+                          style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}
+                        >
+                          {lineExpandedComments.length === 0 ? (
+                            <p className="text-[10px] font-mono text-white/20 text-center py-3">no comments yet</p>
+                          ) : (
+                            lineExpandedComments.map(comment => (
+                              <div key={comment.id} className="px-3 py-2 border-b border-white/[0.04] last:border-b-0">
+                                {comment.is_pinned && (
+                                  <span className="text-[7px] font-mono uppercase tracking-wider text-white/25 mb-0.5 block">📌 pinned</span>
+                                )}
+                                <p className="text-[11px] font-light leading-relaxed text-white/60">{comment.text}</p>
+                                {comment.replies && comment.replies.length > 0 && (
+                                  <div className="mt-1 ml-3 border-l border-white/[0.06] pl-2">
+                                    {comment.replies.map(reply => (
+                                      <p key={reply.id} className="text-[10px] font-light text-white/45 py-1">{reply.text}</p>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+
                       {isCommentPulsing && (
                         <div className="h-[1px] mx-3">
                           <div className="h-full rounded-full" style={{ background: palette[1] ?? 'rgba(255,255,255,0.4)', opacity: 0.5 }} />
