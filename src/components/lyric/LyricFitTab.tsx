@@ -983,6 +983,10 @@ export function LyricFitTab({
 
   const fitDisabled = !transcriptionDone;
 
+  const handleRegenerateSectionsVisuals = useCallback(() => {
+    setSectionsDirty(false);
+    void startCinematicDirection(lines, true);
+  }, [lines, startCinematicDirection]);
 
 
   const sceneInputNode = !lyricData ? (
