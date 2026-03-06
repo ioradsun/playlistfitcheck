@@ -514,7 +514,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                                 <button
                                   className={`flex-1 min-w-0 text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${
                                     isItemSelected
-                                      ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+                                      ? "bg-primary/15 text-primary font-semibold ring-1 ring-primary/25"
                                       : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                                   }`}
                                   onMouseEnter={() => handleNavHover(`${tool.path}/${item.id}`, item.type, item.id)}
