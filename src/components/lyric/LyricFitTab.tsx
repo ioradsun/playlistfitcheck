@@ -841,8 +841,6 @@ export function LyricFitTab({
   }, [transcriptionDone, beatGridDone, audioBufferReady, audioBuffer, beatGrid, timestampedLines, audioDurationSec, songSignature, audioSections.length, fitPipelineMs]);
 
   useEffect(() => {
-    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [section-pipeline-trigger] fired`);
-    console.log(`[FitTab Debug] ${fitPipelineMs()} effect [section-pipeline-trigger] invoking maybeRunSectionPipeline`);
     void maybeRunSectionPipeline();
   }, [maybeRunSectionPipeline, fitPipelineMs]);
 
