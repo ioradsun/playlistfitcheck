@@ -56,7 +56,7 @@ async function runScribe(
   form.append("tag_audio_events", "true");
   form.append("diarize", "true");
 
-  console.log(`[Transcribe Debug] [scribe] ${sms()} sending to ElevenLabs`);
+  
   const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
     method: "POST",
     headers: { "xi-api-key": apiKey },
