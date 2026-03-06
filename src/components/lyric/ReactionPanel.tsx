@@ -43,6 +43,7 @@ interface ReactionPanelProps {
   onReactionDataChange: (data: Record<string, { line: Record<number, number>; total: number }> | ((prev: Record<string, { line: Record<number, number>; total: number }>) => Record<string, { line: Record<number, number>; total: number }>)) => void;
   onReactionFired: (emoji: string) => void;
   onEngagementStart: (targetLineIndex?: number) => void;
+  onResetEngagement?: () => void;
 }
 
 const EMOJIS = [
