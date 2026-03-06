@@ -352,7 +352,7 @@ export function FitTab({
   const transcriptInitRef = useRef(false);
   useEffect(() => {
     if (!lyricData?.lines) {
-      console.log('[SYNC:A] no lyricData.lines, skip');
+      
       return;
     }
 
