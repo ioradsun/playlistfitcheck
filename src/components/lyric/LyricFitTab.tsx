@@ -620,8 +620,6 @@ export function LyricFitTab({
       });
 
       if (dirResult?.cinematicDirection) {
-        console.log(`[FitTab Debug] ${fitPipelineMs()} cinematic direction complete, sections: ${dirResult.cinematicDirection.sections?.length ?? 0}`);
-        console.log(`[FitTab Debug] ${fitPipelineMs()} direction keys: ${Object.keys(dirResult.cinematicDirection || {}).join(", ")}`);
         const enrichedDirection = beatGrid
           ? { ...dirResult.cinematicDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
           : dirResult.cinematicDirection;
