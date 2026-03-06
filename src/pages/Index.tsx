@@ -266,7 +266,7 @@ const Index = () => {
       }
       projectLoadedRef.current = projectId;
       // Set both atomically — no intermediate render with null data + "ready" state
-      ReactDOM.flushSync(() => {
+      flushSync(() => {
         setLoadedLyric(data);
         setLyricLoadingState("ready");
       });
