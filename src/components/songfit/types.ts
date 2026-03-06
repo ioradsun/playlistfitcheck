@@ -29,6 +29,7 @@ export interface SongFitPost {
   profiles?: { display_name: string | null; avatar_url: string | null; spotify_artist_id: string | null; wallet_address?: string | null; is_verified?: boolean };
   user_has_liked?: boolean;
   user_has_saved?: boolean;
+  saves_count?: number;
   // lyric dance link
   lyric_dance_url?: string | null;
   lyric_dance_id?: string | null;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,6 +11,74 @@ import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
 import { BillboardToggle } from "./BillboardToggle";
 import { StagePresence } from "./StagePresence";
+
+const FEED_PAGE_SIZE = 20;
+const FEED_CARD_MIN_HEIGHT = 520;
+
+function FeedCardPlaceholder() {
+  return (
+    <div className="mx-3 mt-3 rounded-2xl border border-border/50 bg-muted/20 animate-pulse" style={{ minHeight: FEED_CARD_MIN_HEIGHT }} />
+  );
+}
+
+function LazyFeedCard({
+  post,
+  rank,
+  onOpenComments,
+  onOpenLikes,
+  onRefresh,
+  isBillboard,
+  signalData,
+  isActive,
+  onPlay,
+}: {
+  post: SongFitPost;
+  rank?: number;
+  onOpenComments: (postId: string) => void;
+  onOpenLikes: (postId: string) => void;
+  onRefresh: () => void;
+  isBillboard?: boolean;
+  signalData?: { total: number; replay_yes: number; saves_count?: number; signal_velocity?: number };
+  isActive: boolean;
+  onPlay: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shouldMount, setShouldMount] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldMount(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} style={{ minHeight: FEED_CARD_MIN_HEIGHT }}>
+      {shouldMount ? (
+        <SongFitPostCard
+          post={post}
+          rank={rank}
+          onOpenComments={onOpenComments}
+          onOpenLikes={onOpenLikes}
+          onRefresh={onRefresh}
+          isBillboard={isBillboard}
+          signalData={signalData}
+          isActive={isActive}
+          onPlay={onPlay}
+        />
+      ) : (
+        <FeedCardPlaceholder />
+      )}
+    </div>
+  );
+}
 
 export function SongFitFeed() {
   const navigate = useNavigate();
@@ -28,6 +96,10 @@ export function SongFitFeed() {
   const [hasPosted, setHasPosted] = useState(false);
   const [hasEverPosted, setHasEverPosted] = useState<boolean | null>(null);
   const [signalMap, setSignalMap] = useState<Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }>>({});
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -38,7 +110,7 @@ export function SongFitFeed() {
         .from("songfit_posts")
         .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
         .eq("status", "live")
-        .limit(100)
+        .limit(FEED_PAGE_SIZE)
         .order("created_at", { ascending: false });
 
       let enriched = (allPosts || []) as unknown as SongFitPost[];
@@ -57,8 +129,8 @@ export function SongFitFeed() {
         }
       }
 
-      enriched = await enrichWithUserData(enriched);
-      setPosts(enriched);
+      setPosts(enriched.map((p) => ({ ...p, user_has_liked: false, user_has_saved: false, saves_count: 0 })));
+      setHasMore(enriched.length === FEED_PAGE_SIZE);
     } else {
       // Billboard: Signal Velocity scoring
       // Time-window cutoffs applied to SIGNAL created_at, not post submitted_at
@@ -145,9 +217,10 @@ export function SongFitFeed() {
       scored.sort((a, b) => b.velocity - a.velocity);
       const top40 = scored.slice(0, 40);
 
-      let enriched = await enrichWithUserData(top40.map(s => s.post));
+      let enriched = top40.map(s => s.post);
       enriched = enriched.map((p, i) => ({ ...p, current_rank: i + 1 }));
       setPosts(enriched);
+      setHasMore(false);
 
       // Build signalMap with extended data for display
       const newSignalMap: Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }> = {};
@@ -163,42 +236,53 @@ export function SongFitFeed() {
     }
 
     setLoading(false);
-  }, [user, feedView, billboardMode]);
+  }, [feedView, billboardMode]);
 
-  const enrichWithUserData = async (posts: SongFitPost[]) => {
-    if (posts.length === 0) return posts;
-    const postIds = posts.map(p => p.id);
+  const loadMore = useCallback(async () => {
+    if (feedView === "billboard" || isLoadingMore || !hasMore || posts.length === 0) return;
+    setIsLoadingMore(true);
+    const cursor = posts[posts.length - 1]?.created_at;
 
-    const savesCountRes = await supabase
-      .from("songfit_saves")
-      .select("post_id")
-      .in("post_id", postIds);
-    const savesCountMap = new Map<string, number>();
-    (savesCountRes.data || []).forEach(s => {
-      savesCountMap.set(s.post_id, (savesCountMap.get(s.post_id) || 0) + 1);
-    });
+    const { data } = await supabase
+      .from("songfit_posts")
+      .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
+      .eq("status", "live")
+      .lt("created_at", cursor)
+      .order("created_at", { ascending: false })
+      .limit(FEED_PAGE_SIZE);
 
-    let enriched = posts.map(p => ({
-      ...p,
-      saves_count: savesCountMap.get(p.id) || 0,
-    }));
+    let nextPosts = (data || []) as unknown as SongFitPost[];
+    if (feedView === "pending" || feedView === "resolved") {
+      const postIds = nextPosts.map(p => p.id);
+      const { data: reviews } = postIds.length > 0
+        ? await supabase.from("songfit_hook_reviews").select("post_id").in("post_id", postIds)
+        : { data: [] };
+      const signaled = new Set((reviews || []).map(r => r.post_id));
+      nextPosts = feedView === "pending"
+        ? nextPosts.filter(p => !signaled.has(p.id))
+        : nextPosts.filter(p => signaled.has(p.id));
+    }
 
-    if (!user) return enriched;
-
-    const [likesRes, savesRes] = await Promise.all([
-      supabase.from("songfit_likes").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-      supabase.from("songfit_saves").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-    ]);
-    const likedSet = new Set((likesRes.data || []).map(l => l.post_id));
-    const savedSet = new Set((savesRes.data || []).map(s => s.post_id));
-    return enriched.map(p => ({
-      ...p,
-      user_has_liked: likedSet.has(p.id),
-      user_has_saved: savedSet.has(p.id),
-    }));
-  };
+    if (nextPosts.length > 0) {
+      setPosts(prev => [...prev, ...nextPosts.map((p) => ({ ...p, user_has_liked: false, user_has_saved: false, saves_count: 0 }))]);
+    }
+    setHasMore((data || []).length === FEED_PAGE_SIZE);
+    setIsLoadingMore(false);
+  }, [feedView, hasMore, isLoadingMore, posts]);
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
+
+  useEffect(() => {
+    if (feedView === "billboard") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) loadMore();
+      },
+      { rootMargin: "600px" }
+    );
+    if (loadMoreRef.current) observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [feedView, loadMore]);
 
   // Check if user has ever posted — first-timers skip the gate
   useEffect(() => {
@@ -334,7 +418,7 @@ export function SongFitFeed() {
         <EagerEmbedProvider>
           <div className="pb-24">
             {posts.map((post, idx) => (
-              <SongFitPostCard
+              <LazyFeedCard
                 key={post.id}
                 post={post}
                 rank={feedView === "billboard" ? idx + 1 : undefined}
@@ -343,8 +427,16 @@ export function SongFitFeed() {
                 onRefresh={fetchPosts}
                 isBillboard={feedView === "billboard"}
                 signalData={feedView === "billboard" ? signalMap[post.id] : undefined}
+                isActive={activeCardId === post.id}
+                onPlay={() => setActiveCardId(post.id)}
               />
             ))}
+            {feedView !== "billboard" && <div ref={loadMoreRef} className="h-1" />}
+            {isLoadingMore && (
+              <div className="flex justify-center py-5">
+                <Loader2 size={18} className="animate-spin text-muted-foreground" />
+              </div>
+            )}
           </div>
         </EagerEmbedProvider>
       )}
