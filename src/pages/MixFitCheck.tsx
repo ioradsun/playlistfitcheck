@@ -206,11 +206,16 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     }
   }, [stop, decodeFile]);
 
-  // Load initial project from dashboard navigation
+  // Sync with parent: load project or reset to new
+  const prevInitialRef = useRef<MixProjectData | null | undefined>(initialProject);
   useEffect(() => {
-    if (initialProject && !projectId) {
+    if (initialProject && initialProject !== prevInitialRef.current) {
       handleLoadProject(initialProject);
+    } else if (!initialProject && prevInitialRef.current) {
+      // Parent cleared the project — reset instantly
+      resetProject();
     }
+    prevInitialRef.current = initialProject;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialProject]);
 
