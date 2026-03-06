@@ -24,6 +24,7 @@ interface ProFitTabProps {
   onProjectSaved?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
   onSavedId?: (id: string) => void;
+  onOptimisticItem?: (item: RecentItem) => void;
 }
 
 export const ProFitTab = ({ initialArtistUrl, initialSavedReport, onProjectSaved, onHeaderProject, onSavedId }: ProFitTabProps = {}) => {
