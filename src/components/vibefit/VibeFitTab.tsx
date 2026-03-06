@@ -9,7 +9,6 @@ import { VibeFitForm, type VibeFitInput } from "./VibeFitForm";
 import { VibeFitResults, type VibeFitOutput } from "./VibeFitResults";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { AuthNudge } from "@/components/ui/AuthNudge";
 
 const DAILY_LIMIT = 20;
 const STORAGE_KEY = "vibefit_usage";
@@ -65,7 +64,6 @@ export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject, onS
   const [lastInput, setLastInput] = useState<VibeFitInput | null>(initialResult?.input || null);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [hitfitContext, setHitfitContext] = useState<Record<string, any> | null>(null);
-  const [showAuthNudge, setShowAuthNudge] = useState(true);
   const { user } = useAuth();
   const quota = useUsageQuota("vibefit");
 
@@ -171,7 +169,6 @@ export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject, onS
     <>
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
         <h1 className="text-xl font-semibold text-center">Art & Captions for your song</h1>
-        {!user && showAuthNudge ? <div className="w-full max-w-xl"><AuthNudge onDismiss={() => setShowAuthNudge(false)} /></div> : null}
         <VibeFitForm
           onSubmit={generate}
           loading={loading}

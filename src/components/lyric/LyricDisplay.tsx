@@ -1525,7 +1525,7 @@ export function LyricDisplay({
         <div className="flex flex-col lg:flex-row gap-4 items-start">
           {/* LEFT — Lyrics editor */}
           <div className="flex-1 min-w-0 w-full space-y-3">
-          <div className="glass-card rounded-xl p-4 space-y-1">
+          <div className="glass-card rounded-xl p-4 flex flex-col space-y-1 min-h-0" style={{ maxHeight: "calc(100vh - 260px)" }}>
             {activeLines.length > 0 && (
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] text-muted-foreground">
@@ -1564,8 +1564,7 @@ export function LyricDisplay({
             {/* v3.7: scroll height anchored to last element's start time so Outro adlibs are reachable */}
             <div
               ref={lyricsContainerRef}
-              className="overflow-y-auto space-y-0.5"
-              style={{ maxHeight: "45vh" }}
+              className="overflow-y-auto space-y-0.5 flex-1 min-h-0 pb-6"
             >
               {activeLines.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
