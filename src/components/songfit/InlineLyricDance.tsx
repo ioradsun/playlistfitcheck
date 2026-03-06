@@ -198,7 +198,7 @@ function InlineLyricDanceInner(
               <LyricDanceCover
                 songName={songTitle}
                 artistName={artistName || fetchedData?.artist_name || ""}
-                avatarUrl={null}
+                avatarUrl={avatarUrl ?? null}
                 initial={(artistName || songTitle || "♪")[0]?.toUpperCase()}
                 waiting={isWaitingForPlayer}
                 onListen={(e) => {

@@ -333,6 +333,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             songTitle={post.track_title}
             artistName={displayName}
             albumArtUrl={post.album_art_url ?? undefined}
+            avatarUrl={post.profiles?.avatar_url}
           />
         ) : post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id ? (
           <InlineBattleFeed
