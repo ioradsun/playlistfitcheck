@@ -792,7 +792,7 @@ export function LyricFitTab({
 
     // If we already have both songSignature and audioSections from DB, skip entirely
     if (songSignature && audioSections.length > 0) {
-      console.log(`[Transcribe Debug] section pipeline SKIPPED — data loaded from DB`);
+      
       sectionPipelineDoneRef.current = true;
       return;
     }
