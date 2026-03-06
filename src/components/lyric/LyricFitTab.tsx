@@ -864,7 +864,7 @@ export function LyricFitTab({
   // ── Fork 1: Beat grid starts when audio file is submitted (parallel with transcription) ──
   // Called from onAudioSubmitted callback, not from an effect waiting on lines.
   const handleAudioSubmitted = useCallback((file: File) => {
-    console.log("[Pipeline] Audio submitted — starting beat grid analysis (parallel with transcription)");
+    
     setActiveTab("lyrics");
     setPipelineStages(prev => ({ ...prev, transcript: "running" }));
     startBeatAnalysis(file);
