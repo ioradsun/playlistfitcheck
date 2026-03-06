@@ -225,7 +225,7 @@ export function analyzeAudioAsync(
 ): Promise<AudioAnalysis> {
   // Fallback: no Worker support
   if (typeof Worker === 'undefined') {
-    console.warn('[audio-analyzer] No Worker support, running on main thread');
+    // No Worker support, running on main thread
     return Promise.resolve(analyzeAudio(buffer, beats));
   }
 
