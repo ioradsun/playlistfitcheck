@@ -58,6 +58,7 @@ interface VibeFitTabProps {
   onProjectSaved?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
   onSavedId?: (id: string) => void;
+  onOptimisticItem?: (item: RecentItem) => void;
 }
 
 export function VibeFitTab({ initialResult, onProjectSaved, onHeaderProject, onSavedId }: VibeFitTabProps = {}) {
