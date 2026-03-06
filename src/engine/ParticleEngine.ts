@@ -177,11 +177,6 @@ export class ParticleEngine {
 
   constructor(frame: FrameRenderState) {
     this.config = ParticleEngine.fromFrameState(frame);
-      canvas: false,
-      ctx: false,
-      enabled: this.config.system !== "none",
-      maxCount: this.maxParticles,
-    });
   }
 
   static fromFrameState(frame: FrameRenderState): ParticleRuntimeConfig {
