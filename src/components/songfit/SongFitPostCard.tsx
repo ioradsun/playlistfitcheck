@@ -5,7 +5,6 @@ import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { InlineLyricDance } from "./InlineLyricDance";
 import { InlineBattleFeed } from "./InlineBattleFeed";
-import { InlineBattleFeed } from "./InlineBattleFeed";
 import { SubmissionBadge } from "./SubmissionBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
