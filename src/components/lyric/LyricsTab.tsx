@@ -8,8 +8,8 @@ import type { BeatGridData } from "@/hooks/useBeatGrid";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
+import { useAudioProject } from "@/hooks/useAudioProject";
 import { compressAudioFile } from "@/lib/compressAudio";
-import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { toast } from "sonner";
 import { LyricUploader } from "./LyricUploader";
@@ -17,6 +17,7 @@ import { LyricDisplay, type LyricData, type LyricLine } from "./LyricDisplay";
 import { LyricSkeleton } from "./LyricSkeleton";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { ReactNode } from "react";
+import { AuthNudge } from "@/components/ui/AuthNudge";
 
 const MAX_RAW_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
@@ -102,23 +103,20 @@ export function LyricsTab({
     },
     [],
   );
-
-  const uploadAudioImmediately = useCallback(
-    async (file: File, userId: string, projectId: string): Promise<string | null> => {
-      const path = getAudioStoragePath(userId, projectId, file.name);
-      const { error } = await supabase.storage
-        .from("audio-clips")
-        .upload(path, file, { upsert: true, contentType: file.type || undefined });
-      if (error) {
-        // Audio upload failed during transcription pipeline
-        return null;
-      }
-      const { data } = supabase.storage.from("audio-clips").getPublicUrl(path);
-      
-      return data.publicUrl;
-    },
-    [],
-  );
+  const { handleFileSelected, showAuthNudge, dismissAuthNudge } = useAudioProject({
+    tool: "lyric",
+    dbTable: "saved_lyrics",
+    buildStubRow: ({ file, userId }) => ({
+      user_id: userId,
+      title: resolveProjectTitle(null, file.name),
+      lines: [],
+      words: null,
+      filename: file.name,
+      updated_at: new Date().toISOString(),
+    }),
+    getSidebarLabel: (file) => resolveProjectTitle(null, file.name),
+    getSidebarRawData: ({ projectId, file, audioUrl }) => ({ id: projectId, title: resolveProjectTitle(null, file.name), lines: [], filename: file.name, audio_url: audioUrl }),
+  });
 
   const handleTranscribe = useCallback(
     async (file: File, referenceLyrics?: string) => {
@@ -136,7 +134,9 @@ export function LyricsTab({
       const ms = () => `${(performance.now() - t0).toFixed(0)}ms`;
       setLoading(true);
 
-      const projectId = user ? crypto.randomUUID() : null;
+      const project = await handleFileSelected(file);
+      const projectId = project?.projectId ?? null;
+      const storageAudioUrl = project?.audioUrl ?? null;
       const draftTitle = resolveProjectTitle(null, file.name);
       setLyricData({ title: draftTitle, lines: [] });
       setLines([]);
@@ -152,26 +152,6 @@ export function LyricsTab({
 
       // Start beat grid analysis in parallel with transcription
       onAudioSubmitted?.(file);
-
-      // Upload audio to storage FIRST, then pass URL to edge function
-      // Same-datacenter fetch is ~1s vs 33s multipart upload from client
-      let storageAudioUrl: string | null = null;
-      if (user && projectId) {
-        storageAudioUrl = await uploadAudioImmediately(file, user.id, projectId);
-        // Save project row with audio_url (fire-and-forget)
-        void supabase.from("saved_lyrics").upsert({
-          id: projectId,
-          user_id: user.id,
-          title: draftTitle,
-          lines: [],
-          words: null,
-          filename: file.name,
-          ...(storageAudioUrl ? { audio_url: storageAudioUrl } : {}),
-          updated_at: new Date().toISOString(),
-        } as any).then(({ error }) => {
-          // Initial project save failed
-        });
-      }
 
       try {
         // Only compress if over 25MB (only needed for fallback multipart path)
@@ -295,7 +275,7 @@ export function LyricsTab({
         setLoading(false);
       }
     },
-    [analysisModel, transcriptionModel, quota, uploadAudioImmediately, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted],
+    [analysisModel, transcriptionModel, quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted],
   );
 
   const handleBack = useCallback(() => {
@@ -382,6 +362,7 @@ export function LyricsTab({
   // State D: nothing yet → uploader
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto">
+      {showAuthNudge ? <div className="w-full max-w-3xl mb-3"><AuthNudge onDismiss={dismissAuthNudge} /></div> : null}
       <LyricUploader
         onTranscribe={handleTranscribe}
         loading={loading}

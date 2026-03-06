@@ -1,0 +1,2 @@
+ALTER TABLE public.saved_hitfit
+  ADD COLUMN IF NOT EXISTS audio_url text;

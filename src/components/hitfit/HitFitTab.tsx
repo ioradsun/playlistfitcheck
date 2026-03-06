@@ -3,10 +3,14 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
+import { useAudioProject } from "@/hooks/useAudioProject";
+import { AuthNudge } from "@/components/ui/AuthNudge";
 import { HitFitUploader, type ReferenceSource } from "./HitFitUploader";
 import { HitFitResults, type HitFitAnalysis } from "./HitFitResults";
 import { compressAudioFile } from "@/lib/compressAudio";
 import { sessionAudio } from "@/lib/sessionAudioCache";
+import type { RecentItem } from "@/components/AppSidebar";
+import { useNavigate } from "react-router-dom";
 
 interface HitFitTabProps {
   initialAnalysis?: HitFitAnalysis | null;
@@ -14,13 +18,28 @@ interface HitFitTabProps {
   onNewProject?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void } | null) => void;
   onSavedId?: (id: string) => void;
+  onOptimisticItem?: (item: RecentItem) => void;
 }
 
-export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHeaderProject, onSavedId }: HitFitTabProps = {}) {
+export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHeaderProject, onSavedId, onOptimisticItem }: HitFitTabProps = {}) {
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<HitFitAnalysis | null>(initialAnalysis || null);
   const { user } = useAuth();
+  const navigate = useNavigate();
   const quota = useUsageQuota("hitfit");
+  const { handleFileSelected, showAuthNudge, dismissAuthNudge } = useAudioProject({
+    tool: "hitfit",
+    dbTable: "saved_hitfit",
+    buildStubRow: ({ file, userId }) => ({
+      user_id: userId,
+      filename: file.name.replace(/\.[^.]+$/, ""),
+      analysis_json: {},
+    }),
+    getSidebarLabel: (file) => file.name.replace(/\.[^.]+$/, ""),
+    getSidebarRawData: ({ projectId, audioUrl }) => ({ id: projectId, analysis: null, audio_url: audioUrl }),
+    onOptimisticItem,
+    onProjectCreated: (id) => navigate(`/HitFit/${id}`, { replace: true }),
+  });
 
   // Sync if initialAnalysis changes (loaded from sidebar)
   useEffect(() => {
@@ -30,6 +49,9 @@ export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHea
   const handleAnalyze = useCallback(async (master1: File, master2: File | null, reference: ReferenceSource) => {
     setLoading(true);
     try {
+      const project = await handleFileSelected(master1);
+      const projectId = project?.projectId ?? null;
+
       // Cache uploaded files for session persistence
       sessionAudio.set("hitfit", "master1", master1, { ttlMs: 20 * 60 * 1000 });
       if (master2) sessionAudio.set("hitfit", "master2", master2, { ttlMs: 20 * 60 * 1000 });
@@ -83,16 +105,13 @@ export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHea
       setAnalysis(result);
       await quota.increment();
 
-      // Save to DB for authenticated users
-      if (user) {
+      if (projectId && user) {
         try {
-          const { data: inserted } = await supabase.from("saved_hitfit").insert({
-            user_id: user.id,
-            filename: master1.name.replace(/\.[^.]+$/, ""),
+          await supabase.from("saved_hitfit").update({
             analysis_json: result as any,
-          }).select("id").single();
+          }).eq("id", projectId);
           onProjectSaved?.();
-          if (inserted) onSavedId?.(inserted.id);
+          onSavedId?.(projectId);
         } catch (e) {
           console.error("Failed to save HitFit analysis:", e);
         }
@@ -103,7 +122,7 @@ export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHea
     } finally {
       setLoading(false);
     }
-  }, [user, onProjectSaved]);
+  }, [handleFileSelected, onProjectSaved, onSavedId, quota, user]);
 
   const handleBack = useCallback(() => {
     setAnalysis(null);
@@ -115,7 +134,8 @@ export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHea
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center">
+    <div className="flex-1 flex flex-col items-center justify-center gap-3">
+      {showAuthNudge ? <div className="w-full max-w-xl"><AuthNudge onDismiss={dismissAuthNudge} /></div> : null}
       <HitFitUploader
         onAnalyze={handleAnalyze}
         loading={loading}
