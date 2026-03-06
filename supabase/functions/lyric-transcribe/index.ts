@@ -640,7 +640,7 @@ serve(async (req) => {
           throw new Error(`Failed to fetch audio from storage: ${audioResp.status}`);
         }
         audioRawBytes = new Uint8Array(await audioResp.arrayBuffer());
-        console.log(`[Transcribe Debug] ${ms()} fetched ${(audioRawBytes.length/1024/1024).toFixed(2)}MB from storage`);
+        
       } else {
         audioBase64 = typeof payload.audioBase64 === "string" ? payload.audioBase64 : undefined;
       }
