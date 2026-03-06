@@ -445,7 +445,7 @@ function applyReferenceLyricsDiff(
     }
   }
 
-  console.log(`[editor-mode] Scribe diff: ${words.length} scribe words → ${result.length} corrected words, ${refWords.length} ref words`);
+  
   return result;
 }
 
