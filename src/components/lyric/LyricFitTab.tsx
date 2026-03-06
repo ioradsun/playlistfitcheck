@@ -631,8 +631,6 @@ export function LyricFitTab({
             startSec: sectionsForAI[i]?.startSec ?? s.startSec,
             endSec: sectionsForAI[i]?.endSec ?? s.endSec,
           }));
-          console.log('[Pipeline] Merged audioSections time boundaries into direction sections:', 
-            enrichedDirection.sections.map((s: any, i: number) => ({ index: i, startSec: s.startSec, endSec: s.endSec })));
         }
 
         setCinematicDirection(enrichedDirection);
