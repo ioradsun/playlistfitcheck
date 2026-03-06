@@ -711,7 +711,7 @@ serve(async (req) => {
     if (useGeminiTranscription) {
       // Gemini needs base64 — encode only here
       if (!audioBase64 && audioRawBytes) {
-        console.log(`[Transcribe Debug] ${ms()} base64 encoding for Gemini`);
+        
         let binary = "";
         const chunkSize = 8192;
         for (let i = 0; i < audioRawBytes.length; i += chunkSize) {
