@@ -214,7 +214,7 @@ export function LyricsTab({
           );
         } else {
           // Fallback: multipart upload (anonymous users without storage)
-          console.log(`[Transcribe Debug] ${ms()} using multipart upload (fallback)`);
+          
           const formData = new FormData();
           formData.append("audio", uploadFile, uploadFile.name);
           formData.append("analysisModel", analysisModel);
