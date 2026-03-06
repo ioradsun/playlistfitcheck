@@ -107,7 +107,7 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
 
   const prompt = parts.join(", ");
   if (!description) {
-    console.warn(`[section-images] No description for section ${section.sectionIndex} — using visualMood/color seed`);
+    // No description for section — using visualMood/color seed
   }
   return prompt;
 }
