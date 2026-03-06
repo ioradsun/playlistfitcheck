@@ -535,7 +535,6 @@ export function LyricFitTab({
     }
     if (generationStatus.renderData === "running" || generationStatus.renderData === "done") return;
 
-    console.log(`[FitTab Debug] ${fitPipelineMs()} starting render data derivation`);
     setGenerationStatus(prev => ({ ...prev, renderData: "running" }));
     setPipelineStages(prev => ({ ...prev, renderData: "running" }));
 
