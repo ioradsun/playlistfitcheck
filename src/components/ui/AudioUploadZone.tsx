@@ -71,16 +71,46 @@ export function AudioUploadZone({
       />
 
       {files.length > 0 ? (
-        <div className="flex flex-col items-center gap-1 py-4">
-          <span className="text-sm font-medium text-foreground truncate max-w-[80%]">{files[0].name}</span>
-          <button
-            type="button"
-            onClick={() => { removeFile(0); inputRef.current?.click(); }}
-            className="text-xs text-primary hover:text-primary/80 transition-colors"
-          >
-            Change song
-          </button>
-        </div>
+        maxFiles === 1 ? (
+          /* Single-file mode: show name + "Change song" */
+          <div className="flex flex-col items-center gap-1 py-4">
+            <span className="text-sm font-medium text-foreground truncate max-w-[80%]">{files[0].name}</span>
+            <button
+              type="button"
+              onClick={() => { removeFile(0); inputRef.current?.click(); }}
+              className="text-xs text-primary hover:text-primary/80 transition-colors"
+            >
+              Change song
+            </button>
+          </div>
+        ) : (
+          /* Multi-file mode: list all files with remove buttons */
+          <div className="space-y-1.5">
+            {files.map((file, idx) => (
+              <div key={`${file.name}-${idx}`} className="flex items-center gap-2 py-1.5 px-2 rounded-md bg-muted/30 border border-border/30">
+                <span className="text-xs font-mono text-foreground truncate flex-1">{file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeFile(idx)}
+                  className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                  aria-label={`Remove ${file.name}`}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            {files.length < maxFiles && (
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="w-full text-xs font-mono text-muted-foreground hover:text-foreground py-2 rounded-md border border-dashed border-border/40 hover:border-primary/40 transition-colors"
+                disabled={disabled}
+              >
+                + Add more ({files.length}/{maxFiles})
+              </button>
+            )}
+          </div>
+        )
       ) : (
         <button
           type="button"
@@ -91,8 +121,8 @@ export function AudioUploadZone({
           disabled={disabled}
           aria-label="Upload your song"
         >
-          <span className="text-base font-medium text-foreground">Upload your song</span>
-          <span className="text-xs text-muted-foreground">MP3 or WAV</span>
+          <span className="text-base font-medium text-foreground">{maxFiles > 1 ? "Upload your mixes" : "Upload your song"}</span>
+          <span className="text-xs text-muted-foreground">MP3, WAV, or M4A</span>
         </button>
       )}
     </div>
