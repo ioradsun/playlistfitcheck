@@ -227,7 +227,7 @@ interface Props {
 
 export function HitFitResults({ analysis, onBack, onHeaderProject }: Props) {
   const masters = (analysis.masters ?? []).map(normalizeMaster);
-  const headerTitle = masters[0]?.filename || "Hit Potential Analysis";
+  const headerTitle = (analysis as any)._projectFilename || masters[0]?.filename || "Hit Potential Analysis";
 
   useEffect(() => {
     onHeaderProject?.({ title: headerTitle, onBack });

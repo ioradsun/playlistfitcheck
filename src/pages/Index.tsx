@@ -313,7 +313,7 @@ const Index = () => {
           artist,
         });
       } else if (tab === "hitfit" && data.analysis_json) {
-        handleLoadProject("hitfit", { id: data.id, analysis: data.analysis_json });
+        handleLoadProject("hitfit", { id: data.id, analysis: data.analysis_json, filename: data.filename });
       } else {
         handleLoadProject(tab, data);
       }
@@ -633,7 +633,8 @@ const Index = () => {
         }
         case "hitfit": {
           if (data?.analysis) {
-            setLoadedHitFitAnalysis(data.analysis);
+            const analysisWithFilename = { ...data.analysis, _projectFilename: data.filename };
+            setLoadedHitFitAnalysis(analysisWithFilename);
             if (data.id) navTarget = `/HitFit/${data.id}`;
           }
           break;
