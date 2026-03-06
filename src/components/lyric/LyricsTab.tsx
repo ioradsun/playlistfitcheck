@@ -110,7 +110,7 @@ export function LyricsTab({
         .from("audio-clips")
         .upload(path, file, { upsert: true, contentType: file.type || undefined });
       if (error) {
-        console.warn("[Pipeline] Audio upload failed during transcription pipeline:", error.message);
+        // Audio upload failed during transcription pipeline
         return null;
       }
       const { data } = supabase.storage.from("audio-clips").getPublicUrl(path);
