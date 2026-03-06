@@ -496,7 +496,7 @@ export function FitTab({
             }
           }
         } catch (paletteError) {
-          console.warn("[FitTab] failed to precompute auto palettes (non-blocking):", paletteError);
+          
         }
       }
       // When regenerating, both section_images and auto_palettes are nullified
