@@ -271,7 +271,7 @@ ${JSON.stringify(signals, null, 2)}`;
         blueprint = JSON.parse(blueprintText);
         break; // success
       } catch {
-        console.warn(`Attempt ${attempt + 1}: AI returned invalid JSON (len=${blueprintText.length}):`, blueprintText.substring(0, 300));
+        // AI returned invalid JSON, retrying
         if (attempt === MAX_RETRIES - 1) {
           // Try to repair truncated JSON by closing open brackets
           try {
