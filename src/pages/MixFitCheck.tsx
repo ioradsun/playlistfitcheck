@@ -10,6 +10,7 @@ import { useBeatGrid } from "@/hooks/useBeatGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
+import { supabase } from "@/integrations/supabase/client";
 
 import { toast } from "sonner";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
