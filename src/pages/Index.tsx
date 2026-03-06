@@ -701,7 +701,7 @@ const Index = () => {
         return <div className="flex-1 flex flex-col min-h-0"><Suspense fallback={<TabChunkFallback />}><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></Suspense></div>;
       case "playlist":
         if (loadingProjectType === "playlist") {
-          return <ProjectLoadingFallback />;
+          return <TabChunkFallback />;
         }
         return result ? (
           <div className="flex-1 px-4 py-6">
