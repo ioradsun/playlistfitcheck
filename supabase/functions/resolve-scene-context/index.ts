@@ -52,9 +52,22 @@ serve(async (req) => {
 
   try {
     const { description } = await req.json();
-    if (!description || typeof description !== "string" || description.trim().length < 10) {
-      return new Response(JSON.stringify({ error: "Description too short" }), {
-        status: 400,
+    const normalizedDescription = typeof description === "string" ? description.trim() : "";
+
+    if (normalizedDescription.length < 10) {
+      const fallback = {
+        baseLuminance: "medium",
+        colorTemperature: "neutral",
+        timeOfDay: "night",
+        backgroundOpacity: 0.4,
+        crushOpacity: 0.55,
+        textStyle: "light",
+        fluxPromptSuffix: "cinematic low-light atmosphere, abstract texture background, moody depth, soft focus",
+        moodSummary: "A neutral cinematic world with balanced contrast and moody texture.",
+        sourceDescription: normalizedDescription,
+      };
+
+      return new Response(JSON.stringify(fallback), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -74,7 +87,7 @@ serve(async (req) => {
         max_tokens: 512,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: description.trim() },
+          { role: "user", content: normalizedDescription },
         ],
       }),
     });
@@ -107,7 +120,7 @@ serve(async (req) => {
     const parsed = JSON.parse(jsonStr);
 
     // Ensure sourceDescription is set
-    parsed.sourceDescription = description.trim();
+    parsed.sourceDescription = normalizedDescription;
 
     // Clamp numeric values
     parsed.backgroundOpacity = Math.max(0.3, Math.min(0.6, Number(parsed.backgroundOpacity) || 0.35));
