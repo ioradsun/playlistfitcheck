@@ -235,8 +235,6 @@ export function LyricsTab({
           );
         }
 
-        console.log(`[Transcribe Debug] ${ms()} fetch returned status=${response.status}`);
-        console.log(`[LyricUpload] FETCH DONE (elapsed ${(performance.now() - t0).toFixed(0)}ms) status=${response.status}`);
 
         if (!response.ok) {
           const err = await response.json().catch(() => ({ error: "Transcription failed" }));
