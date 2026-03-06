@@ -178,7 +178,7 @@ export async function computeAutoPalettesFromUrls(urls: string[]): Promise<strin
       const img = await loadImage(url);
       const sample = sampleChapterImage(img, ctx, SAMPLE_SIZE);
       const palette = generateAutoPalette(sample);
-      console.log(`[auto-palette] [${i}] OK → bg=${palette[0]} accent=${palette[1]} text=${palette[2]}`);
+      // palette computed OK
       palettes.push(palette);
     } catch (err) {
       console.warn(`[auto-palette] [${i}] image load failed, skipping:`, err);
