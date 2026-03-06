@@ -189,18 +189,11 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
     setEngagementMode('spectator');
     setFrozenLineIndex(null);
 
-    const audio = player?.audio;
-    if (!audio || audio.ended) return;
+    if (!player || player.audio.ended) return;
 
     try {
-      if (audio.paused) {
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise.catch((err) => {
-            console.warn('InlineLyricDance audio resume failed:', err);
-          });
-        }
-      }
+      // Resume both audio AND visual render loop via player.play()
+      player.play();
     } catch (err) {
       console.warn('InlineLyricDance audio play error:', err);
     }

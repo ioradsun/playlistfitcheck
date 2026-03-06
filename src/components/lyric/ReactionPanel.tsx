@@ -619,15 +619,30 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   {engagementMode === 'freezing' ? 'finishing…' : engagementMode === 'engaged' ? 'paused' : 'live'}
                 </span>
               </div>
-              <button
-                onClick={onClose}
-                className="text-white/25 hover:text-white/60 transition-colors p-1 -mr-1 focus:outline-none"
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <line x1="2" y1="2" x2="8" y2="8" />
-                  <line x1="8" y1="2" x2="2" y2="8" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (!player) return;
+                    releaseManualSelectionLock();
+                    setAutoFollowEnabled(true);
+                    player.setMuted(false);
+                    player.seek(0);
+                    player.play();
+                  }}
+                  className="text-[8px] font-mono uppercase tracking-[0.15em] text-white/30 hover:text-white/60 transition-colors px-1.5 py-0.5 rounded border border-white/[0.08] hover:border-white/15"
+                >
+                  ▶ Play
+                </button>
+                <button
+                  onClick={onClose}
+                  className="text-white/25 hover:text-white/60 transition-colors p-1 -mr-1 focus:outline-none"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <line x1="2" y1="2" x2="8" y2="8" />
+                    <line x1="8" y1="2" x2="2" y2="8" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* ── Compact emoji strip: 32px ── */}
@@ -715,18 +730,35 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                         >
                           {line.text}
                         </span>
-                        {lineCommentCount > 0 && (
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              setExpandedLineIndex(prev => (prev === line.lineIndex ? null : line.lineIndex));
-                            }}
-                            className={`text-[9px] font-mono shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border transition-colors ${isExpanded ? 'border-white/25 text-white/60' : 'border-white/10 text-white/25 hover:text-white/50'}`}
-                          >
-                            <MessageCircle size={9} />
-                            {lineCommentCount}
-                          </button>
-                        )}
+                        {(() => {
+                          // Find top emoji for this line
+                          let topEmoji: string | null = null;
+                          let topCount = 0;
+                          for (const { key, symbol } of EMOJIS) {
+                            const c = reactionData[key]?.line[line.lineIndex] ?? 0;
+                            if (c > topCount) { topCount = c; topEmoji = symbol; }
+                          }
+                          const showBadge = lineCommentCount > 0 || topCount > 0;
+                          if (!showBadge) return null;
+                          return (
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                setExpandedLineIndex(prev => (prev === line.lineIndex ? null : line.lineIndex));
+                              }}
+                              className={`text-[9px] font-mono shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border transition-colors ${isExpanded ? 'border-white/25 text-white/60' : 'border-white/10 text-white/25 hover:text-white/50'}`}
+                            >
+                              {topEmoji && <span className="text-[10px]">{topEmoji}</span>}
+                              {topCount > 0 && <span className="text-white/20">{topCount}</span>}
+                              {lineCommentCount > 0 && (
+                                <>
+                                  <MessageCircle size={9} className="ml-0.5" />
+                                  <span>{lineCommentCount}</span>
+                                </>
+                              )}
+                            </button>
+                          );
+                        })()}
                       </div>
 
                       {/* Expanded comment thread */}
