@@ -359,7 +359,7 @@ export function FitTab({
     // Skip first fire — player initializes from prefetchedData already containing these lines
     if (!transcriptInitRef.current) {
       transcriptInitRef.current = true;
-      console.log('[SYNC:A] first fire — skipping (init guard). lines:', lyricData.lines.length, 'publishedDanceId:', publishedDanceId, 'dancePlayerRef:', !!dancePlayerRef.current);
+      
       return;
     }
 
