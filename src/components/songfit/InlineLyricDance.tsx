@@ -175,23 +175,32 @@ function InlineLyricDanceInner(
         <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
           style={{ display: "none" }} />
 
-        {/* CrowdFit skeleton — uses album art for zero-jump transition */}
+        {/* CrowdFit skeleton — product-specific (not LyricFit style) */}
         {(loading || (!playerReady && !fetchError)) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
+          <div className="absolute inset-0 overflow-hidden bg-black">
             {albumArtUrl ? (
               <>
-                <img src={albumArtUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-black/50" />
+                <img src={albumArtUrl} alt="" className="absolute inset-0 w-full h-full object-cover scale-105" />
+                <div className="absolute inset-0 bg-black/65" />
               </>
-            ) : null}
-            <div className="relative z-10 flex flex-col items-center">
-              <div className="flex items-end gap-[3px] h-6 mb-3">
-                {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
-                  <div key={i} className="w-[3px] rounded-full bg-white/30"
-                    style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }} />
-                ))}
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950" />
+            )}
+
+            <div className="absolute inset-0 animate-pulse">
+              <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
+                <div className="h-4 w-28 rounded bg-white/10" />
+                <div className="h-7 w-14 rounded-full bg-white/10" />
               </div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/40">loading…</p>
+
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="h-16 w-16 rounded-full bg-white/10 ring-1 ring-white/15" />
+              </div>
+
+              <div className="absolute bottom-3 left-3 right-3 space-y-2">
+                <div className="h-3 w-2/3 rounded bg-white/12" />
+                <div className="h-2.5 w-1/2 rounded bg-white/10" />
+              </div>
             </div>
           </div>
         )}
