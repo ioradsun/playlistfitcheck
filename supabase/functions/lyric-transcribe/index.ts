@@ -723,7 +723,7 @@ serve(async (req) => {
       transcribePromise = runGeminiTranscribe(audioBase64!, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics!.trim() : undefined);
     } else {
       // Scribe: raw bytes, no base64 needed
-      console.log(`[Transcribe Debug] ${ms()} using raw bytes for Scribe (skipping base64)`);
+      
       transcribePromise = runScribe(audioRawBytes!, ext, mimeType, ELEVENLABS_API_KEY!);
     }
 
