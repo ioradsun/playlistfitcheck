@@ -330,9 +330,11 @@ export function SongFitFeed() {
   // Re-lock on post-created event (circular economy) — gate activates after first post
   useEffect(() => {
     const handler = () => {
-      setHasEverPosted(true); // now they've posted, future drops need 3 signals
-      setComposerUnlocked(false);
-      setUserVoteCount(0);
+      setHasEverPosted(true);
+      if (!isAdmin) {
+        setComposerUnlocked(false);
+        setUserVoteCount(0);
+      }
       setHasPosted(true);
     };
     window.addEventListener("crowdfit:post-created", handler);
