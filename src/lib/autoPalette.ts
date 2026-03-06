@@ -181,7 +181,7 @@ export async function computeAutoPalettesFromUrls(urls: string[]): Promise<strin
       // palette computed OK
       palettes.push(palette);
     } catch (err) {
-      console.warn(`[auto-palette] [${i}] image load failed, skipping:`, err);
+      // image load failed, skipping
       // Push a safe fallback palette so indices stay aligned with section indices
       palettes.push(['#0a0a0f', '#a855f7', '#f0f0f0', '#e879f9', '#555555']);
     }
