@@ -28,7 +28,11 @@ function getCssHsl(variable: string, alpha = 1): string {
   return `hsla(${val}, ${alpha})`;
 }
 
-function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], beats?: number[] | null, duration?: number) {
+function isDarkMode(): boolean {
+  return document.documentElement.classList.contains("dark");
+}
+
+function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], beats?: number[] | null, duration?: number, markerStart?: number, markerEnd?: number) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
   canvas.height = canvas.clientHeight * dpr;
@@ -38,12 +42,45 @@ function drawWaveform(canvas: HTMLCanvasElement, peaks: number[], beats?: number
   const ch = canvas.clientHeight;
   ctx.clearRect(0, 0, cw, ch);
 
-  const color = getCssHsl("--muted-foreground", 0.6);
+  const dark = isDarkMode();
+  const loopColor = getCssHsl("--primary", 0.08);
+  const loopBorderColor = getCssHsl("--primary", 0.5);
+  const unplayedColor = dark ? "rgba(150,150,150,0.6)" : "rgba(120,120,120,0.35)";
+
+  // Draw loop region shading behind bars
+  if (duration && duration > 0 && markerStart !== undefined && markerEnd !== undefined) {
+    const loopStartPct = Math.min(markerStart / duration, 1);
+    const loopEndPct = Math.min(markerEnd / duration, 1);
+    ctx.fillStyle = loopColor;
+    ctx.fillRect(loopStartPct * cw, 0, (loopEndPct - loopStartPct) * cw, ch);
+    ctx.strokeStyle = loopBorderColor;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(loopStartPct * cw, 0);
+    ctx.lineTo(loopStartPct * cw, ch);
+    ctx.moveTo(loopEndPct * cw, 0);
+    ctx.lineTo(loopEndPct * cw, ch);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   const barW = Math.max(cw / peaks.length, 1);
   const gap = 1;
   peaks.forEach((peak, i) => {
-    const barH = Math.max(peak * ch * 0.85, 1);
-    ctx.fillStyle = color;
+    const barH = Math.max(peak * ch * 0.85, 2);
+    const x = i * barW;
+    const barPct = duration && duration > 0 ? x / cw : 0;
+    const inLoop =
+      duration && duration > 0 && markerStart !== undefined && markerEnd !== undefined
+        ? barPct >= markerStart / duration && barPct <= markerEnd / duration
+        : false;
+
+    if (inLoop) {
+      ctx.fillStyle = getCssHsl("--primary", 0.3);
+    } else {
+      ctx.fillStyle = unplayedColor;
+    }
     ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
   });
 
@@ -75,13 +112,13 @@ export function GlobalTimeline({
 
   useEffect(() => {
     if (!canvasRef.current || !waveform) return;
-    drawWaveform(canvasRef.current, waveform.peaks, beats, duration);
+    drawWaveform(canvasRef.current, waveform.peaks, beats, duration, markerStart, markerEnd);
     const observer = new ResizeObserver(() => {
-      if (canvasRef.current && waveform) drawWaveform(canvasRef.current, waveform.peaks, beats, duration);
+      if (canvasRef.current && waveform) drawWaveform(canvasRef.current, waveform.peaks, beats, duration, markerStart, markerEnd);
     });
     observer.observe(canvasRef.current);
     return () => observer.disconnect();
-  }, [waveform, beats, duration]);
+  }, [waveform, beats, duration, markerStart, markerEnd]);
 
   const getTimeFromClientX = useCallback(
     (clientX: number) => {
