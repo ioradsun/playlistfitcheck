@@ -334,12 +334,10 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   };
 
   const handleToolClick = (tool: ToolItem) => {
-    const path = tool.path;
-    prefetchNavigationTarget(path, { userId: user?.id });
-    navigate(path);
-    startTransition(() => {
-      onTabChange?.(tool.value);
-    });
+    prefetchNavigationTarget(tool.path, { userId: user?.id });
+    // Let onTabChange handle navigation + state clearing (handleSidebarTabChange in Index)
+    // Do NOT call navigate() here — it races with state clears and can show stale projects.
+    onTabChange?.(tool.value);
     closeMobileIfNeeded();
   };
 
