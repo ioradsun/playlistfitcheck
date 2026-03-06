@@ -2,48 +2,55 @@ import React from "react";
 
 interface LyricDanceCoverProps {
   songName: string;
-  artistName: string;
+  artistName?: string | null;
   avatarUrl?: string | null;
   initial?: string;
   waiting: boolean;
   onListen?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  badge?: string | null;
+  onExpand?: () => void;
+  topReaction?: { symbol: string; count: number; lineText: string } | null;
 }
 
 export function LyricDanceCover({
   songName,
-  artistName,
-  avatarUrl,
-  initial,
   waiting,
   onListen,
+  badge,
+  onExpand,
+  topReaction,
 }: LyricDanceCoverProps) {
   return (
     <div
-      className="absolute inset-0 z-20 flex flex-col"
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center relative"
       style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(2px)" }}
     >
-      {/* Top-left: artist identity (small) */}
-      <div className="flex items-center gap-2 px-4 pt-4">
-        {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt={artistName || songName}
-            className="w-7 h-7 rounded-full object-cover border border-white/10"
-          />
-        ) : initial ? (
-          <div className="w-7 h-7 rounded-full border border-white/10 bg-white/10 flex items-center justify-center">
-            <span className="text-xs font-mono text-white/40">{initial}</span>
-          </div>
-        ) : null}
-        {artistName ? (
-          <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/40">{artistName}</span>
-        ) : (
-          <div className="h-3 w-20 rounded bg-white/[0.05] animate-pulse" />
-        )}
-      </div>
+      {/* Top row — badge + expand, pinned top */}
+      {(badge || onExpand) && (
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-3">
+          {badge ? (
+            <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 border border-white/10 rounded px-1.5 py-0.5">
+              {badge}
+            </span>
+          ) : <span />}
+          {onExpand && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onExpand(); }}
+              className="p-1.5 rounded-full bg-black/40 text-white/30 hover:text-white/60 transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="7,1 11,1 11,5" />
+                <line x1="11" y1="1" x2="6" y2="6" />
+                <polyline points="5,11 1,11 1,7" />
+                <line x1="1" y1="11" x2="6" y2="6" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Center: song title + Listen Now */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
+      <div className="flex flex-col items-center justify-center px-6">
         {songName ? (
           <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[85%] mb-6">{songName}</h2>
         ) : (
@@ -63,12 +70,25 @@ export function LyricDanceCover({
         ) : (
           <button
             onClick={onListen}
-            className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+            className="mb-6 px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
           >
             Listen Now
           </button>
         )}
       </div>
+
+      {/* Social proof bar — pinned bottom, only when reactions exist */}
+      {topReaction && !waiting && (
+        <div className="absolute bottom-0 left-0 right-0 flex items-center gap-2 px-3 py-2.5"
+          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+        >
+          <span className="text-base leading-none shrink-0">{topReaction.symbol}</span>
+          <span className="text-[10px] font-mono text-white/40 shrink-0">{topReaction.count}</span>
+          <span className="text-[10px] font-mono text-white/30 truncate min-w-0">
+            "{topReaction.lineText}"
+          </span>
+        </div>
+      )}
     </div>
   );
 }
