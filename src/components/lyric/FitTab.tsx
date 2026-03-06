@@ -589,9 +589,8 @@ export function FitTab({
           }
 
           window.dispatchEvent(new Event("songfit:dance-published"));
-          console.log("[FitTab] CrowdFit post created for lyric dance");
         } catch (e: any) {
-          console.warn("[FitTab] CrowdFit auto-post failed (non-blocking):", e?.message);
+          // CrowdFit auto-post failed (non-blocking)
         }
       })();
     } catch (e: any) {
