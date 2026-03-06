@@ -119,14 +119,6 @@ export function FitTab({
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const dancePlayerRef = useRef<InlineLyricDanceHandle>(null);
-  const [userProfile, setUserProfile] = useState<{ display_name: string | null; avatar_url: string | null } | null>(null);
-
-  // Fetch user profile for cover avatar
-  useEffect(() => {
-    if (!user) return;
-    supabase.from("profiles").select("display_name, avatar_url").eq("id", user.id).maybeSingle()
-      .then(({ data }) => { if (data) setUserProfile(data); });
-  }, [user]);
 
   // Prefetch dance data as soon as we know the ID — so the player is instant
 
@@ -823,10 +815,9 @@ export function FitTab({
               lyricDanceId={publishedDanceId}
               lyricDanceUrl={publishedUrl}
               songTitle={lyricData.title || "Untitled"}
-              artistName={userProfile?.display_name || ""}
+              artistName=""
               prefetchedData={prefetchedDanceData}
               bootMode="full"
-              avatarUrl={userProfile?.avatar_url}
             />
           </div>
           {/* Action toolbar — single row of icon buttons */}
