@@ -975,8 +975,18 @@ export function LyricFitTab({
     setActiveTab(nextView);
   }, [fitUnlocked, fitReadiness]);
 
+  const handleBackToLyrics = useCallback(() => handleViewChange("lyrics"), [handleViewChange]);
+
+  const handleImageGenerationStatusChange = useCallback((status: "idle" | "running" | "done" | "error") => {
+    setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
+  }, []);
+
   const fitDisabled = !transcriptionDone;
 
+  const handleRegenerateSectionsVisuals = useCallback(() => {
+    setSectionsDirty(false);
+    void startCinematicDirection(lines, true);
+  }, [lines, startCinematicDirection]);
 
 
   const sceneInputNode = !lyricData ? (
@@ -1100,18 +1110,13 @@ export function LyricFitTab({
           onSectionOverridesChange={handleSectionOverridesChange}
           mergedSections={mergedSections}
           sectionsDirty={sectionsDirty}
-          onRegenerateSectionsVisuals={() => {
-            setSectionsDirty(false);
-            void startCinematicDirection(lines, true);
-          }}
+          onRegenerateSectionsVisuals={handleRegenerateSectionsVisuals}
           onAddSection={handleAddSection}
           onRemoveSection={handleRemoveSection}
           onRetry={retryGeneration}
           onHeaderProject={onHeaderProject}
-          onBack={() => handleViewChange("lyrics")}
-          onImageGenerationStatusChange={(status) => {
-            setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
-          }}
+          onBack={handleBackToLyrics}
+          onImageGenerationStatusChange={handleImageGenerationStatusChange}
           cinematicSections={
             Array.isArray(cinematicDirection?.sections)
               ? cinematicDirection.sections
