@@ -1,4 +1,4 @@
-/* cache-bust: 2026-03-06-v1 */
+/* cache-bust: 2026-03-06-v2 */
 import { forwardRef, type HTMLAttributes } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -396,3 +396,53 @@ export const DreamFitSkeleton = ({ variant: _variant }: { variant: Variant }) =>
     ))}
   </div>
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PageSkeleton — universal registry-backed skeleton
+//
+// Usage:
+//   <PageSkeleton tool={screen.tool} mode={screen.mode} />
+//
+// Each wrapper div mirrors the padding/layout applied by renderTabContent in
+// Index.tsx so the skeleton geometry matches the real page exactly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type SkeletonEntry = React.ComponentType<{ variant: Variant }>;
+
+const Padded =
+  (Inner: SkeletonEntry): SkeletonEntry =>
+  ({ variant }) => (
+    <div className="px-4 py-6">
+      <Inner variant={variant} />
+    </div>
+  );
+
+const skeletonRegistry: Record<string, SkeletonEntry> = {
+  songfit:  Padded(CrowdFitSkeleton),
+  hookfit:  Padded(CrowdFitSkeleton),
+  lyric:    LyricFitSkeleton,          // manages its own padding internally
+  hitfit:   Padded(HitFitSkeleton),
+  mix:      Padded(MixFitSkeleton),
+  dreamfit: Padded(DreamFitSkeleton),
+  playlist: Padded(PlaylistFitSkeleton),
+};
+
+/**
+ * PageSkeleton
+ *
+ * Single entry-point for all loading skeletons.  Pass `tool` and `mode` from
+ * `useProjectScreen` and it renders the correct skeleton automatically.
+ *
+ * Falls back to PlaylistFitSkeleton (new) for unknown tools.
+ */
+export const PageSkeleton = ({
+  tool,
+  mode,
+}: {
+  tool: string;
+  mode: "new" | "existing";
+}) => {
+  const SkeletonComponent: SkeletonEntry =
+    skeletonRegistry[tool] ?? Padded(PlaylistFitSkeleton);
+  return <SkeletonComponent variant={mode} />;
+};
