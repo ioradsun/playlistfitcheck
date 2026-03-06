@@ -1382,7 +1382,7 @@ export class LyricDancePlayer {
         if ((beatGridData as any)._analysis) {
           this.conductor.setAnalysis((beatGridData as any)._analysis);
         }
-        console.info(`[V2] BeatConductor created: ${this.conductor.beatsPerMinute} BPM, ${this.conductor.totalBeats} beats, ${songDuration.toFixed(1)}s, hits: ${(beatGridData as any).hits?.length ?? 0}`);
+        
         // ═══ V4: Load song structure into CameraRig ═══
         // CameraRig pre-analyzes beatGrid + cinematic sections to build the song arc:
         // energy profile per section, drop detection, anticipation timing.
