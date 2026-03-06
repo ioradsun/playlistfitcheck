@@ -242,7 +242,7 @@ export function LyricsTab({
         }
 
         const data = await response.json();
-        console.log(`[Transcribe Debug] ${ms()} parsed JSON, lines=${data.lines?.length}, words=${data.words?.length}`);
+        
 
         if (data.error) throw new Error(data.error);
         if (!data.lines) throw new Error("Invalid response format");
