@@ -18,6 +18,8 @@ interface CommentRow {
 }
 
 interface ReactionPanelProps {
+  engagementMode: 'spectator' | 'freezing' | 'engaged';
+  frozenLineIndex: number | null;
   isOpen: boolean;
   onClose: () => void;
   danceId: string;
@@ -32,6 +34,7 @@ interface ReactionPanelProps {
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
   onReactionDataChange: (data: Record<string, { line: Record<number, number>; total: number }> | ((prev: Record<string, { line: Record<number, number>; total: number }>) => Record<string, { line: Record<number, number>; total: number }>)) => void;
   onReactionFired: (emoji: string) => void;
+  onEngagementStart: (targetLineIndex?: number) => void;
 }
 
 const EMOJIS = [
@@ -93,7 +96,7 @@ function isLineOutsideViewport(container: HTMLElement, row: HTMLElement, thresho
   return rowRect.top < containerRect.top + threshold || rowRect.bottom > containerRect.bottom - threshold;
 }
 
-function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, sections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange }: ReactionPanelProps) {
+function ReactionPanel({ isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, sections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart }: ReactionPanelProps) {
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
@@ -176,9 +179,11 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
     return counts;
   }, [comments]);
 
-  const displayLineIndex = (isManualSelectionLocked || !autoFollowEnabled)
+  const engagedDisplayLineIndex = engagementMode === 'engaged' ? frozenLineIndex : null;
+
+  const displayLineIndex = engagedDisplayLineIndex ?? ((isManualSelectionLocked || !autoFollowEnabled)
     ? (selectedLineIndex ?? manualPlaybackTargetIndex)
-    : (playheadLineIndex ?? activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null);
+    : (playheadLineIndex ?? activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null));
 
   const displayLine = displayLineIndex != null
     ? (lineByIndex.get(displayLineIndex) ?? activeLine)
@@ -373,7 +378,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
   }, []);
 
   const handleStartRepeat = () => {
-    if (!player || durationSec <= 0) return;
+    if (!player || durationSec <= 0 || engagementMode !== 'spectator') return;
     releaseManualSelectionLock();
     clearLoopTimeout();
     setRepeatMode(true);
@@ -390,17 +395,28 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
   };
 
   const handleLineTap = (line: LyricSectionLine) => {
+    onEngagementStart(line.lineIndex);
     setSelectedLineIndex(line.lineIndex);
     setPlayheadLineIndex(line.lineIndex);
+    setAutoFollowEnabled(false);
+
+    if (engagementMode === 'engaged') {
+      releaseManualSelectionLock();
+      return;
+    }
+
+    if (engagementMode === 'freezing') {
+      releaseManualSelectionLock();
+      return;
+    }
+
     isManualSelectionLockedRef.current = true;
     manualPlaybackTargetIndexRef.current = line.lineIndex;
     setIsManualSelectionLocked(true);
     setManualPlaybackTargetIndex(line.lineIndex);
     setManualPlaybackEndTimeSec(line.endSec);
-    setAutoFollowEnabled(false);
 
     clearLoopTimeout();
-    // defer seek/play side effects so selected highlight paints first
     requestAnimationFrame(() => {
       if (player) {
         player.setMuted(false);
@@ -420,6 +436,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
 
   const handleReact = async (emoji: EmojiKey, lineIndex?: number) => {
     if (!danceId) return;
+    onEngagementStart(lineIndex);
     const sessionId = getSessionId();
     const targetLineIndex = lineIndex ?? activeLine?.lineIndex ?? null;
     const reactionKey = `${emoji}-${targetLineIndex ?? 'song'}`;
@@ -472,6 +489,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
 
   const handleTextSubmit = async () => {
     if (!textInput.trim() || !danceId || hasSubmitted) return;
+    onEngagementStart(displayLineIndex ?? undefined);
     const text = textInput.trim().slice(0, 200);
     const sessionId = getSessionId();
 
@@ -560,7 +578,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                     }}
                   />
                   <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/25">
-                    {autoFollowEnabled ? 'live' : 'locked'}
+                    {engagementMode === 'freezing' ? 'finishing line…' : autoFollowEnabled ? 'live' : 'locked'}
                   </span>
                 </>
               )}
@@ -685,6 +703,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
                 <div className={`absolute inset-0 transition-opacity ${hasSubmitted ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                   <input
                     type="text"
+                    onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
                     value={textInput}
                     onChange={e => setTextInput(e.target.value)}
                     onKeyDown={e => {
@@ -707,7 +726,13 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
             </div>
           </div>
 
-          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+          <div
+            ref={scrollContainerRef}
+            className="flex-1 overflow-y-auto"
+            style={{ scrollbarWidth: 'none' }}
+            onScroll={() => onEngagementStart(displayLineIndex ?? undefined)}
+            onTouchStart={() => onEngagementStart(displayLineIndex ?? undefined)}
+          >
             <div className="pb-2">
               {sections.map((section, sectionIndex) => (
                 <div key={section.sectionIndex} className={sectionIndex === 0 ? 'mt-3 mb-1' : 'mt-5 mb-1'}>
