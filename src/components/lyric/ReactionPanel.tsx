@@ -454,15 +454,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     setPlayheadLineIndex(line.lineIndex);
     setAutoFollowEnabled(false);
 
-    if (engagementMode === 'engaged') {
-      releaseManualSelectionLock();
-      return;
-    }
-
-    if (engagementMode === 'freezing') {
-      releaseManualSelectionLock();
-      return;
-    }
+    // Always release any prior lock before starting a new one
+    releaseManualSelectionLock();
 
     isManualSelectionLockedRef.current = true;
     manualPlaybackTargetIndexRef.current = line.lineIndex;
