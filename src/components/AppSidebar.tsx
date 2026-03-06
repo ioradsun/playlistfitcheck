@@ -350,10 +350,8 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
       prefetchNavigationTarget(targetPath, { userId: user?.id, itemType: item.type, itemId: item.id });
       navigate(targetPath);
     }
-    // Important: do NOT call onTabChange here.
-    // Route-driven tab sync handles active tab updates; calling onTabChange from a recent click
-    // can trigger "fresh start" resets and briefly show New Project before hydration.
     startTransition(() => {
+      onTabChange?.(item.type);
       onLoadProject?.(item.type, item.rawData);
     });
     closeMobileIfNeeded();

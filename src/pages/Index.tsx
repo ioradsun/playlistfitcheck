@@ -225,21 +225,28 @@ const Index = () => {
     prevProjectIdRef.current = projectId;
   }, [activeTab, projectId]);
 
-  // If no user and not loading auth, just show the uploader
-  useEffect(() => {
-    if (activeTab !== "lyric" || !projectId) return;
-    if (!user && !authLoading) {
-      setLyricLoadingState("ready");
-    }
-  }, [activeTab, authLoading, projectId, user]);
 
   useEffect(() => {
-    if (activeTab !== "lyric" || !projectId || !user) return;
-    // Skip re-fetch if we already have this project loaded
-    if (projectLoadedRef.current === projectId) {
+    if (activeTab !== "lyric" || !projectId) return;
+
+    // Hold skeleton until auth settles so we never render New Project mid-hydration.
+    if (authLoading) return;
+
+    // Route points to a project but there is no authenticated user to load it.
+    if (!user) {
+      setLoadedLyric(null);
+      setLyricLoadingState("missing");
+      return;
+    }
+
+    // Only skip fetch when both ref + actual payload match.
+    if (projectLoadedRef.current === projectId && loadedLyric?.id === projectId) {
       setLyricLoadingState("ready");
       return;
     }
+
+    let cancelled = false;
+    setLyricLoadingState("loading");
 
     (async () => {
       const { data, error } = await supabase
@@ -249,19 +256,26 @@ const Index = () => {
         .eq("user_id", user.id)
         .maybeSingle();
 
+      if (cancelled) return;
+
       if (error || !data) {
         setLoadedLyric(null);
-        setLyricLoadingState("ready");
+        setLyricLoadingState("missing");
         return;
       }
+
       projectLoadedRef.current = projectId;
-      // Set both atomically — no intermediate render with null data + "ready" state
+      // Commit atomically to avoid intermediate "ready + null" frames.
       flushSync(() => {
         setLoadedLyric(data);
         setLyricLoadingState("ready");
       });
     })();
-  }, [activeTab, projectId, user?.id]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, projectId, authLoading, user?.id, loadedLyric?.id]);
 
   useEffect(() => {
     if (!projectId || projectLoadedRef.current === projectId || !user) return;
@@ -345,7 +359,7 @@ const Index = () => {
   
   const [deferSidebarReady, setDeferSidebarReady] = useState(false);
   const [optimisticSidebarItem, setOptimisticSidebarItem] = useState<{ id: string; label: string; meta: string; type: string; rawData?: any } | null>(null);
-  const [lyricLoadingState, setLyricLoadingState] = useState<"loading" | "ready">(
+  const [lyricLoadingState, setLyricLoadingState] = useState<"loading" | "ready" | "missing">(
     tabFromPath === "lyric" && projectId ? "loading" : "ready"
   );
   // Tracks when we're loading a project from URL/sidebar — shows skeleton instead of uploader
