@@ -248,7 +248,7 @@ export function LyricsTab({
         if (!data.lines) throw new Error("Invalid response format");
 
         if (user && projectId) {
-          console.log(`[Transcribe Debug] ${ms()} starting DB save`);
+          
           // Non-blocking — don't let DB persist block the UI
           void supabase.from("saved_lyrics").upsert({
             id: projectId,
