@@ -185,7 +185,7 @@ export function LyricsTab({
             return;
           }
         } else {
-          console.log(`[LyricUpload] SKIP compress (under 25MB)`);
+          
           uploadFile = file;
         }
 
