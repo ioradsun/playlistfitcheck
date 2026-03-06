@@ -928,7 +928,7 @@ export function LyricFitTab({
 
   const retryGeneration = useCallback(() => {
     if (!audioFile || !lines.length) return;
-    console.log("[Pipeline] Retry requested — clearing all state");
+    
     setRenderData(null);
     setCinematicDirection(null);
     setBeatGrid(null);
