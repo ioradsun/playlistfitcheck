@@ -652,7 +652,7 @@ serve(async (req) => {
     }
 
     const editorMode = typeof referenceLyrics === "string" && referenceLyrics.trim().length > 0;
-    if (editorMode) console.log(`[editor-mode] Reference lyrics provided (${referenceLyrics!.trim().split("\n").length} lines)`);
+    
     if (!audioBase64 && !audioRawBytes) throw new Error("No audio data provided");
 
     // Resolve transcription engine
