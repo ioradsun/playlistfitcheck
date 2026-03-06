@@ -219,10 +219,6 @@
     font-weight: 500;
     letter-spacing: 0.08em;
   }
-
-  .page-content {
-    min-height: calc(100vh - 3rem);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

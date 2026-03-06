@@ -65,13 +65,6 @@ const TabChunkFallback = () => (
   </div>
 );
 
-const ProjectLoadingFallback = () => (
-  <div className="flex-1 flex items-center justify-center py-8 text-muted-foreground">
-    <Loader2 size={18} className="animate-spin mr-2" />
-    <span className="text-sm">Loading project…</span>
-  </div>
-);
-
 const PATH_TO_TAB: Record<string, string> = {
   "/CrowdFit": "songfit",
   "/HookFit": "hookfit",
@@ -100,11 +93,6 @@ const Index = () => {
   const hookfitEnabled = siteCopy.features?.tools_enabled?.hookfit !== false;
   const location = useLocation();
   const navigate = useNavigate();
-  const transitionNavigate = useCallback((...args: Parameters<typeof navigate>) => {
-    startTransition(() => {
-      navigate(...args);
-    });
-  }, [navigate]);
   const autoRunRef = useRef(false);
   const profitAutoRef = useRef(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -503,9 +491,9 @@ const Index = () => {
     prevUserRef.current = user;
   }, [user, authLoading]);
 
-  const handleNewLyric = useCallback(() => { setLoadedLyric(null); transitionNavigate("/LyricFit", { replace: true }); }, [transitionNavigate]);
-  const handleNewMix = useCallback(() => { setLoadedMixProject(null); transitionNavigate("/MixFit", { replace: true }); }, [transitionNavigate]);
-  const handleNewHitFit = useCallback(() => { setLoadedHitFitAnalysis(null); transitionNavigate("/HitFit", { replace: true }); }, [transitionNavigate]);
+  const handleNewLyric = useCallback(() => { setLoadedLyric(null); navigate("/LyricFit", { replace: true }); }, [navigate]);
+  const handleNewMix = useCallback(() => { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }, [navigate]);
+  const handleNewHitFit = useCallback(() => { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }, [navigate]);
 
   const handleSidebarTabChange = useCallback((tab: string) => {
     setLoadingProjectType(null);
@@ -513,21 +501,21 @@ const Index = () => {
     // Only reset to "New Project" if the user is ALREADY on this tab (double-click)
     const isAlreadyOnTab = activeTab === tab;
     if (isAlreadyOnTab) {
-      if (tab === "lyric") { setLoadedLyric(null); transitionNavigate("/LyricFit", { replace: true }); }
-      else if (tab === "mix") { setLoadedMixProject(null); transitionNavigate("/MixFit", { replace: true }); }
-      else if (tab === "hitfit") { setLoadedHitFitAnalysis(null); transitionNavigate("/HitFit", { replace: true }); }
+      if (tab === "lyric") { setLoadedLyric(null); navigate("/LyricFit", { replace: true }); }
+      else if (tab === "mix") { setLoadedMixProject(null); navigate("/MixFit", { replace: true }); }
+      else if (tab === "hitfit") { setLoadedHitFitAnalysis(null); navigate("/HitFit", { replace: true }); }
     } else {
       // Switching tabs — navigate to the active project URL if one exists
-      if (tab === "lyric" && loadedLyric?.id) { transitionNavigate(`/LyricFit/${loadedLyric.id}`, { replace: true }); }
-      else if (tab === "mix" && loadedMixProject?.id) { transitionNavigate(`/MixFit/${loadedMixProject.id}`, { replace: true }); }
+      if (tab === "lyric" && loadedLyric?.id) { navigate(`/LyricFit/${loadedLyric.id}`, { replace: true }); }
+      else if (tab === "mix" && loadedMixProject?.id) { navigate(`/MixFit/${loadedMixProject.id}`, { replace: true }); }
       else if (tab === "hitfit" && loadedHitFitAnalysis) { /* keep current state */ }
       else {
         const pathMap: Record<string, string> = { songfit: "/CrowdFit", hookfit: "/HookFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
-        transitionNavigate(pathMap[tab] || "/CrowdFit", { replace: true });
+        navigate(pathMap[tab] || "/CrowdFit", { replace: true });
       }
     }
     setActiveTab(tab);
-  }, [activeTab, setActiveTab, transitionNavigate, loadedLyric, loadedMixProject, loadedHitFitAnalysis]);
+  }, [activeTab, setActiveTab, navigate, loadedLyric, loadedMixProject, loadedHitFitAnalysis]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
     // Use startTransition so heavy state updates don't block the sidebar
@@ -633,18 +621,15 @@ const Index = () => {
     const pathMap: Record<string, string> = { profit: "ProFit", playlist: "PlaylistFit", mix: "MixFit", lyric: "LyricFit", hitfit: "HitFit", vibefit: "VibeFit" };
     const prefix = pathMap[tool];
     if (prefix && id && location.pathname !== `/${prefix}/${id}`) {
-      transitionNavigate(`/${prefix}/${id}`, { replace: true });
+      navigate(`/${prefix}/${id}`, { replace: true });
     }
-  }, [transitionNavigate, location.pathname]);
+  }, [navigate, location.pathname]);
 
   const renderTabContent = () => {
     switch (activeTab) {
       case "profit":
-        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">{loadingProjectType === "profit" ? <ProjectLoadingFallback /> : <Suspense fallback={<TabChunkFallback />}><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></Suspense>}</div>;
+        return <div className="flex-1 flex flex-col min-h-0 overflow-y-auto"><Suspense fallback={<TabChunkFallback />}><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></Suspense></div>;
       case "playlist":
-        if (loadingProjectType === "playlist") {
-          return <ProjectLoadingFallback />;
-        }
         return result ? (
           <div className="flex-1 overflow-y-auto px-4 py-6">
             {!isFullyLoaded ? (
@@ -674,7 +659,7 @@ const Index = () => {
       case "dreamfit":
         return <div className="flex-1 overflow-y-auto px-4 py-6"><Suspense fallback={<TabChunkFallback />}><DreamFitTab /></Suspense></div>;
       case "vibefit":
-        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6">{loadingProjectType === "vibefit" ? <ProjectLoadingFallback /> : <Suspense fallback={<TabChunkFallback />}><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} /></Suspense>}</div>;
+        return <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6"><Suspense fallback={<TabChunkFallback />}><VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} /></Suspense></div>;
       default:
         return null;
     }
@@ -711,7 +696,7 @@ const Index = () => {
             )
           )}
         </header>
-        <div className="page-content flex-1 flex flex-col min-h-0">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* SongFitTab stays mounted to preserve feed state — hidden when not active */}
           {visitedTabs.has("songfit") && (
             <div
@@ -733,7 +718,10 @@ const Index = () => {
           {visitedTabs.has("lyric") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "lyric" ? "" : "hidden"}`}>
               {loadingProjectType === "lyric" ? (
-                <ProjectLoadingFallback />
+                <div className="flex-1 flex items-center justify-center py-8 text-muted-foreground">
+                  <Loader2 size={18} className="animate-spin mr-2" />
+                  <span className="text-sm">Loading project…</span>
+                </div>
               ) : (
                 <Suspense fallback={<TabChunkFallback />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
                   if (payload.projectId) {
@@ -754,15 +742,13 @@ const Index = () => {
           {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("mix") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${activeTab === "mix" ? "" : "hidden"}`}>
-              {loadingProjectType === "mix" ? <ProjectLoadingFallback /> : <Suspense fallback={<TabChunkFallback />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>}
+              <Suspense fallback={<TabChunkFallback />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>
             </div>
           )}
           {/* HitFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("hitfit") && (
             <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto px-4 py-6 ${activeTab === "hitfit" ? "" : "hidden"}`}>
-              {loadingProjectType === "hitfit"
-                ? <ProjectLoadingFallback />
-                : loadedHitFitAnalysis
+              {loadedHitFitAnalysis
                 ? <Suspense fallback={<TabChunkFallback />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
                 : <Suspense fallback={<TabChunkFallback />}><HitFitTab key="new" initialAnalysis={null} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
               }
