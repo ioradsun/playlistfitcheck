@@ -69,9 +69,7 @@ async function runScribe(
     throw new Error(`Scribe error ${res.status}: ${errText.slice(0, 300)}`);
   }
 
-  console.log(`[Transcribe Debug] [scribe] ${sms()} parsing JSON response`);
   const data = await res.json();
-  console.log(`[Transcribe Debug] [scribe] ${sms()} JSON parsed, ${(data.words||[]).length} raw words`);
 
   const words: WhisperWord[] = (data.words || [])
     .filter((w: any) => w.type === "word" || !w.type)
