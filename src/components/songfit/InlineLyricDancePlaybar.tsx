@@ -7,25 +7,42 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { ReactionPanel, type CanonicalAudioSection } from "@/components/lyric/ReactionPanel";
-import { supabase } from "@/integrations/supabase/client";
 import type { LyricDancePlayer, LyricDanceData } from "@/engine/LyricDancePlayer";
+
+
+const EMOJI_SYMBOLS: Record<string, string> = {
+  fire: '🔥', dead: '💀', mind_blown: '🤯',
+  emotional: '😭', respect: '🙏', accurate: '🎯',
+};
+
+function getTopEmojiForLine(
+  reactionData: Record<string, { line: Record<number, number>; total: number }>,
+  lineIndex: number
+): string | null {
+  let topKey: string | null = null;
+  let topCount = 0;
+  for (const [key, data] of Object.entries(reactionData)) {
+    const count = data.line[lineIndex] ?? 0;
+    if (count > topCount) { topCount = count; topKey = key; }
+  }
+  return topKey ? (EMOJI_SYMBOLS[topKey] ?? null) : null;
+}
 
 interface Props {
   player: LyricDancePlayer | null;
   playerReady: boolean;
   data: LyricDanceData | null;
+  reactionData: Record<string, { line: Record<number, number>; total: number }>;
+  onReactionDataChange: (updater: (prev: Record<string, { line: Record<number, number>; total: number }>) => Record<string, { line: Record<number, number>; total: number }>) => void;
 }
 
 export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(function InlineLyricDancePlaybar(
-  { player, playerReady, data }: Props,
+  { player, playerReady, data, reactionData, onReactionDataChange }: Props,
   _ref,
 ) {
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [reactionData, setReactionData] = useState<
-    Record<string, { line: Record<number, number>; total: number }>
-  >({});
   const [engagementMode, setEngagementMode] = useState<'spectator' | 'freezing' | 'engaged'>('spectator');
   const [frozenLineIndex, setFrozenLineIndex] = useState<number | null>(null);
 
@@ -199,57 +216,6 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
     }
   };
 
-  // Load reactions
-  useEffect(() => {
-    if (!data?.id) return;
-    supabase
-      .from("lyric_dance_reactions" as any)
-      .select("emoji, line_index")
-      .eq("dance_id", data.id)
-      .then(({ data: rows }) => {
-        if (!rows) return;
-        const agg: Record<string, { line: Record<number, number>; total: number }> = {};
-        for (const row of rows as any[]) {
-          const { emoji, line_index } = row;
-          if (!agg[emoji]) agg[emoji] = { line: {}, total: 0 };
-          agg[emoji].total++;
-          if (line_index != null) {
-            agg[emoji].line[line_index] = (agg[emoji].line[line_index] ?? 0) + 1;
-          }
-        }
-        setReactionData(agg);
-      });
-  }, [data?.id]);
-
-  // Realtime reactions
-  useEffect(() => {
-    if (!data?.id) return;
-    const channel = supabase
-      .channel(`inline-reactions-${data.id}`)
-      .on("postgres_changes", {
-        event: "INSERT", schema: "public",
-        table: "lyric_dance_reactions",
-        filter: `dance_id=eq.${data.id}`,
-      }, (payload: any) => {
-        const { emoji, line_index } = payload.new;
-        setReactionData(prev => {
-          const updated = { ...prev };
-          if (!updated[emoji]) updated[emoji] = { line: {}, total: 0 };
-          updated[emoji] = {
-            ...updated[emoji],
-            total: updated[emoji].total + 1,
-            line: {
-              ...updated[emoji].line,
-              ...(line_index != null ? { [line_index]: (updated[emoji].line[line_index] ?? 0) + 1 } : {}),
-            },
-          };
-          return updated;
-        });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [data?.id]);
-
   const palette = useMemo(
     () => Array.isArray(data?.palette) ? data!.palette as string[] : [],
     [data?.palette],
@@ -287,8 +253,15 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
             >
               {activeLine ? (
                 <>
-                  <div className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                    style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }} />
+                  {(() => {
+                    const topEmoji = getTopEmojiForLine(reactionData, activeLine.lineIndex);
+                    return topEmoji ? (
+                      <span className="text-sm leading-none shrink-0">{topEmoji}</span>
+                    ) : (
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                        style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }} />
+                    );
+                  })()}
                   <span className="text-[10px] font-mono text-white/45 truncate group-hover:text-white/65 transition-colors">
                     {activeLine.text}
                   </span>
@@ -323,7 +296,7 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
             player={player}
             durationSec={durationSec}
             reactionData={reactionData}
-            onReactionDataChange={setReactionData}
+            onReactionDataChange={onReactionDataChange}
             onReactionFired={(emoji) => player?.fireComment(emoji)}
             engagementMode={engagementMode}
             frozenLineIndex={frozenLineIndex}

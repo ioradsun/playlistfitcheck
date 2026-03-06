@@ -4,7 +4,7 @@
  * Player lifecycle is fully owned by useLyricDancePlayer.
  */
 
-import { useState, useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle, useMemo } from "react";
 import { Maximize2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +29,7 @@ interface Props {
   albumArtUrl?: string;
   isActive?: boolean;
   onPlay?: () => void;
+  reactionData?: Record<string, { line: Record<number, number>; total: number }>;
 }
 
 // Shared IntersectionObserver across all embedded players
@@ -48,7 +49,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal", albumArtUrl, isActive = false, onPlay }: Props,
+  { lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, onPlay, reactionData: reactionDataProp }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
@@ -57,6 +58,7 @@ function InlineLyricDanceInner(
   const [muted, setMuted] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
   const [showCover, setShowCover] = useState(true);
+  const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>(reactionDataProp ?? {});
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -99,6 +101,85 @@ function InlineLyricDanceInner(
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [lyricDanceId, !!prefetchedData]);
+
+
+  useEffect(() => {
+    if (reactionDataProp) setReactionData(reactionDataProp);
+  }, [reactionDataProp]);
+
+  // Fetch reactions when data is available
+  useEffect(() => {
+    if (reactionDataProp || !fetchedData?.id) return;
+    supabase
+      .from("lyric_dance_reactions" as any)
+      .select("emoji, line_index")
+      .eq("dance_id", fetchedData.id)
+      .then(({ data: rows }) => {
+        if (!rows) return;
+        const agg: Record<string, { line: Record<number, number>; total: number }> = {};
+        for (const row of rows as any[]) {
+          const { emoji, line_index } = row;
+          if (!agg[emoji]) agg[emoji] = { line: {}, total: 0 };
+          agg[emoji].total++;
+          if (line_index != null) {
+            agg[emoji].line[line_index] = (agg[emoji].line[line_index] ?? 0) + 1;
+          }
+        }
+        setReactionData(agg);
+      });
+  }, [fetchedData?.id, reactionDataProp]);
+
+  // Realtime reactions
+  useEffect(() => {
+    if (reactionDataProp || !fetchedData?.id) return;
+    const channel = supabase
+      .channel(`inline-reactions-${fetchedData.id}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public",
+        table: "lyric_dance_reactions",
+        filter: `dance_id=eq.${fetchedData.id}`,
+      }, (payload: any) => {
+        const { emoji, line_index } = payload.new;
+        setReactionData(prev => {
+          const updated = { ...prev };
+          if (!updated[emoji]) updated[emoji] = { line: {}, total: 0 };
+          updated[emoji] = {
+            ...updated[emoji],
+            total: updated[emoji].total + 1,
+            line: {
+              ...updated[emoji].line,
+              ...(line_index != null ? { [line_index]: (updated[emoji].line[line_index] ?? 0) + 1 } : {}),
+            },
+          };
+          return updated;
+        });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchedData?.id, reactionDataProp]);
+
+  const topReaction = useMemo(() => {
+    if (!reactionData || !fetchedData?.lyrics) return null;
+
+    const EMOJI_SYMBOLS: Record<string, string> = {
+      fire: '🔥', dead: '💀', mind_blown: '🤯',
+      emotional: '😭', respect: '🙏', accurate: '🎯',
+    };
+
+    let best: { symbol: string; count: number; lineIndex: number } | null = null;
+    for (const [key, data] of Object.entries(reactionData)) {
+      for (const [lineIdxStr, count] of Object.entries(data.line)) {
+        if (count > (best?.count ?? 0)) {
+          best = { symbol: EMOJI_SYMBOLS[key] ?? '🔥', count, lineIndex: Number(lineIdxStr) };
+        }
+      }
+    }
+    if (!best) return null;
+
+    const line = (fetchedData.lyrics as any[]).find((_: any, i: number) => i === best!.lineIndex);
+    const lineText = (line?.text ?? "").slice(0, 60);
+    return { symbol: best.symbol, count: best.count, lineText };
+  }, [reactionData, fetchedData?.lyrics]);
 
   // ── Player lifecycle ──────────────────────────────────────────────────
   const { player, playerReady, data } = useLyricDancePlayer(
@@ -212,10 +293,10 @@ function InlineLyricDanceInner(
             >
               <LyricDanceCover
                 songName={songTitle}
-                artistName={artistName || fetchedData?.artist_name || ""}
-                avatarUrl={albumArtUrl ?? null}
-                initial={(artistName || songTitle || "♪")[0]?.toUpperCase()}
                 waiting={isWaitingForPlayer}
+                badge="In Studio"
+                onExpand={() => window.open(lyricDanceUrl, "_blank")}
+                topReaction={!isWaitingForPlayer ? topReaction : null}
                 onListen={(e) => {
                   e.stopPropagation();
                   onPlay?.();
@@ -247,7 +328,13 @@ function InlineLyricDanceInner(
       </div>
 
       {/* Playbar — always visible */}
-      <InlineLyricDancePlaybar player={player} playerReady={playerReady} data={data} />
+      <InlineLyricDancePlaybar
+        player={player}
+        playerReady={playerReady}
+        data={data}
+        reactionData={reactionData}
+        onReactionDataChange={setReactionData}
+      />
     </div>
   );
 }
