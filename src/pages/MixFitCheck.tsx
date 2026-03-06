@@ -24,9 +24,10 @@ interface MixFitCheckProps {
   onNewProject?: () => void;
   onHeaderProject?: (project: { title: string; onBack: () => void; rightContent?: React.ReactNode } | null) => void;
   onSavedId?: (id: string) => void;
+  onOptimisticItem?: (item: RecentItem) => void;
 }
 
-export default function MixFitCheck({ initialProject, onProjectSaved, onNewProject, onHeaderProject, onSavedId }: MixFitCheckProps = {}) {
+export default function MixFitCheck({ initialProject, onProjectSaved, onNewProject, onHeaderProject, onSavedId, onOptimisticItem }: MixFitCheckProps = {}) {
   const { user } = useAuth();
   const mixQuota = useUsageQuota("mix");
   const { decodeFile, play, stop, playingId, getPlayheadPosition } = useAudioEngine();
