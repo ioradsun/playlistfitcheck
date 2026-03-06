@@ -705,7 +705,7 @@ serve(async (req) => {
     // ── Stage 1: Transcription ──
     // For Scribe: pass raw bytes directly (no base64 round-trip)
     // For Gemini: encode to base64 only when needed (data: URI format)
-    console.log(`[Transcribe Debug] ${ms()} starting transcription (engine=${transcriptionEngine})`);
+    
     let transcribePromise: Promise<{ words: WhisperWord[]; segments: Array<{ start: number; end: number; text: string }>; rawText: string; duration: number }>;
 
     if (useGeminiTranscription) {
