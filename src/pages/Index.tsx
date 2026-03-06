@@ -656,8 +656,10 @@ const Index = () => {
             setVibeLoading(false);
             setSongFitLoading(false);
             if (data.id) navTarget = `/PlaylistFit/${data.id}`;
+          } else if (data?.playlist_url) {
+            // No report_data yet — navigate now, re-fetch handled below
+            if (data.id) navTarget = `/PlaylistFit/${data.id}`;
           }
-          // NOTE: playlist_url re-fetch path handled below outside flushSync
           break;
         }
         case "mix": {
