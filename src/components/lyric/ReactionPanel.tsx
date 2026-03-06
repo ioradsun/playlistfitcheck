@@ -598,6 +598,188 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     setTimeout(() => setHasSubmitted(false), 2000);
   };
 
+  // ── Embedded compact layout ──────────────────────────────────────────
+  if (displayMode === 'embedded') {
+    return (
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ y: '100%', opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+            className={`${panelStyles} flex flex-col overflow-hidden`}
+            style={{ background: 'rgba(10,10,10,0.97)', backdropFilter: 'blur(12px)' }}
+          >
+            {/* ── Compact header: 28px ── */}
+            <div className="flex items-center justify-between px-3 h-7 shrink-0 border-b border-white/[0.05]">
+              <div className="flex items-center gap-1.5">
+                <div
+                  className="w-1 h-1 rounded-full shrink-0"
+                  style={{
+                    background: palette[1] ?? 'rgba(255,255,255,0.4)',
+                    opacity: engagementMode === 'engaged' ? 0 : 0.5,
+                    animation: engagementMode === 'engaged' ? 'none' : 'pulse 2s ease-in-out infinite',
+                  }}
+                />
+                <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/20">
+                  {engagementMode === 'freezing' ? 'finishing…' : engagementMode === 'engaged' ? 'paused' : 'live'}
+                </span>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-white/25 hover:text-white/60 transition-colors p-1 -mr-1 focus:outline-none"
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <line x1="2" y1="2" x2="8" y2="8" />
+                  <line x1="8" y1="2" x2="2" y2="8" />
+                </svg>
+              </button>
+            </div>
+
+            {/* ── Compact emoji strip: 32px ── */}
+            <div className="flex items-center justify-around px-2 h-8 shrink-0 border-b border-white/[0.04]">
+              {EMOJIS.map(({ key, symbol }) => {
+                const reacted = displayLine?.lineIndex != null
+                  ? sessionReacted.has(`${key}-${displayLine.lineIndex}`)
+                  : false;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      if (displayLine?.lineIndex != null) handleReact(key as EmojiKey, displayLine.lineIndex);
+                    }}
+                    className="text-base px-1.5 py-0.5 rounded-md transition-all active:scale-90 focus:outline-none"
+                    style={{
+                      background: reacted ? `${palette[1] ?? '#ffffff'}15` : 'transparent',
+                      opacity: reacted ? 1 : 0.7,
+                    }}
+                  >
+                    {symbol}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Lyrics scroll: fills remaining space ── */}
+            <div
+              ref={scrollContainerRef}
+              className="flex-1 overflow-y-auto min-h-0"
+              style={{ scrollbarWidth: 'none' }}
+              onScroll={() => onEngagementStart(displayLineIndex ?? undefined)}
+              onTouchStart={() => onEngagementStart(displayLineIndex ?? undefined)}
+            >
+              <div className="py-1">
+                {allLines.map((line, linePosition) => {
+                  const currentSection = sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
+                  const previousSection = linePosition > 0
+                    ? (sectionMeta.sectionForLine.get(allLines[linePosition - 1].lineIndex) ?? null)
+                    : null;
+                  const sectionLabel = sectionMeta.labelByLineIndex.get(line.lineIndex) ?? null;
+                  const shouldShowSectionHeader = !!currentSection
+                    && currentSection.sectionIndex !== previousSection?.sectionIndex
+                    && !!sectionLabel;
+                  const isSelected = selectedLineIndex === line.lineIndex;
+                  const isPlayhead = playheadLineIndex === line.lineIndex;
+                  const isRepeatActive = repeatMode && repeatActiveLineIndex === line.lineIndex;
+                  const isActive = (autoFollowEnabled && isPlayhead) || (!autoFollowEnabled && isSelected) || isRepeatActive;
+                  const lineCommentCount = commentCountByLine[line.lineIndex] ?? 0;
+                  const isCommentPulsing = submittedLineIndex === line.lineIndex;
+
+                  return (
+                    <div key={line.lineIndex}>
+                      {shouldShowSectionHeader && (
+                        <div className={linePosition === 0 ? 'mb-0.5' : 'mt-2 mb-0.5'}>
+                          <div className="flex items-center gap-2 px-3">
+                            <span className="text-[7px] font-mono uppercase tracking-[0.2em] text-white/15">{sectionLabel}</span>
+                            <div className="flex-1 h-px bg-white/[0.03]" />
+                          </div>
+                        </div>
+                      )}
+                      <div
+                        ref={node => { rowRefs.current[line.lineIndex] = node; }}
+                        onClick={() => handleLineTap(line)}
+                        className="flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors"
+                        style={{
+                          minHeight: 30,
+                          background: isActive ? 'rgba(255,255,255,0.03)' : 'transparent',
+                          boxShadow: isActive ? `inset 2px 0 0 0 ${palette[1] ?? '#ffffff'}` : 'inset 2px 0 0 0 transparent',
+                        }}
+                      >
+                        <span
+                          className="flex-1 text-[11px] font-light leading-snug transition-colors duration-100"
+                          style={{ color: isActive ? 'rgba(255,255,255,0.80)' : 'rgba(255,255,255,0.30)' }}
+                        >
+                          {line.text}
+                        </span>
+                        {lineCommentCount > 0 && (
+                          <span className="text-[9px] font-mono text-white/20 shrink-0 inline-flex items-center gap-0.5">
+                            <MessageCircle size={9} />
+                            {lineCommentCount}
+                          </span>
+                        )}
+                      </div>
+                      {isCommentPulsing && (
+                        <div className="h-[1px] mx-3">
+                          <div className="h-full rounded-full" style={{ background: palette[1] ?? 'rgba(255,255,255,0.4)', opacity: 0.5 }} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Compact comment input: 36px ── */}
+            <div className="shrink-0 border-t border-white/[0.06] px-2 py-1" style={{ background: 'rgba(10,10,10,0.95)' }}>
+              {liftingText && (
+                <div
+                  className="absolute left-3 right-3 pointer-events-none"
+                  style={{
+                    bottom: '100%',
+                    animation: 'liftFade 400ms ease-out forwards',
+                    fontSize: 11,
+                    color: 'rgba(255,255,255,0.5)',
+                    fontFamily: 'monospace',
+                    zIndex: 20,
+                  }}
+                />
+              )}
+              <div className="relative h-8">
+                <div className={`absolute inset-0 transition-opacity ${hasSubmitted ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                  <input
+                    type="text"
+                    onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
+                    value={textInput}
+                    onChange={e => setTextInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleTextSubmit();
+                      if (e.key === 'Escape') onClose();
+                    }}
+                    placeholder="drop your take…"
+                    maxLength={200}
+                    className="w-full h-8 bg-white/[0.04] border border-white/[0.07] rounded-md px-3 text-[11px] text-white placeholder:text-white/18 focus:outline-none focus:border-white/15 transition-colors"
+                  />
+                </div>
+                <div className={`absolute inset-0 flex items-center justify-center text-[10px] font-mono text-white/30 transition-opacity ${hasSubmitted ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                  ✓ sent
+                </div>
+              </div>
+            </div>
+
+            <style>{`
+              @keyframes liftFade {
+                0%   { transform: translateY(0);     opacity: 0.7; }
+                100% { transform: translateY(-36px); opacity: 0;   }
+              }
+            `}</style>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  }
+
+  // ── Fullscreen layout (unchanged) ──────────────────────────────────────
   return (
     <AnimatePresence>
       {isOpen && (
