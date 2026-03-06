@@ -118,6 +118,7 @@ export function SectionTimeline({
   const [activeUid, setActiveUid] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ uid: string; edge: "start" | "end" } | null>(null);
   const [addDropdownOpen, setAddDropdownOpen] = useState(false);
+  const [rolePickerForUid, setRolePickerForUid] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
 
   const activeSection = useMemo(() => {
@@ -142,6 +143,7 @@ export function SectionTimeline({
     if (!drag) return;
 
     const onMove = (e: MouseEvent) => {
+      e.preventDefault();
       if (!timelineRef.current) return;
       const rect = timelineRef.current.getBoundingClientRect();
       const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -190,7 +192,8 @@ export function SectionTimeline({
         </div>
         <div
           ref={timelineRef}
-          className="relative h-[72px] rounded-lg bg-white/[0.03] overflow-hidden cursor-pointer"
+          className="relative h-[88px] rounded-lg bg-white/[0.03] overflow-hidden cursor-pointer"
+          style={{ touchAction: "none" }}
           onClick={(e) => {
             if (!timelineRef.current) return;
             const rect = timelineRef.current.getBoundingClientRect();
@@ -239,30 +242,80 @@ export function SectionTimeline({
 
           {activeSection && (
             <>
-              <button
-                className="absolute top-0 bottom-0 w-1.5 -ml-[3px] cursor-ew-resize"
+              <div
+                className="absolute top-0 bottom-0 cursor-ew-resize z-20 flex items-center"
                 style={{
                   left: `${(activeSection.startSec / Math.max(durationSec, 0.001)) * 100}%`,
-                  backgroundColor: SECTION_COLORS[activeSection.role],
-                  boxShadow: `0 0 10px ${SECTION_COLORS[activeSection.role]}`,
+                  transform: "translateX(-50%)",
+                  touchAction: "none",
                 }}
                 onMouseDown={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   setDrag({ uid: sectionUid(activeSection), edge: "start" });
                 }}
-              />
-              <button
-                className="absolute top-0 bottom-0 w-1.5 -ml-[3px] cursor-ew-resize"
+              >
+                <div
+                  className="relative flex items-center justify-center"
+                  style={{
+                    width: 14,
+                    height: 36,
+                    borderRadius: "4px 0 0 4px",
+                    background: SECTION_COLORS[activeSection.role],
+                    boxShadow: `0 0 12px ${SECTION_COLORS[activeSection.role]}80`,
+                    opacity: drag?.edge === "start" ? 1 : 0.85,
+                  }}
+                >
+                  <div className="flex flex-col gap-[3px]">
+                    <div className="w-[3px] h-[3px] rounded-full bg-white/60" />
+                    <div className="w-[3px] h-[3px] rounded-full bg-white/60" />
+                    <div className="w-[3px] h-[3px] rounded-full bg-white/60" />
+                  </div>
+                </div>
+                <span
+                  className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] font-mono whitespace-nowrap"
+                  style={{ color: SECTION_COLORS[activeSection.role] }}
+                >
+                  {formatTime(activeSection.startSec)}
+                </span>
+              </div>
+              <div
+                className="absolute top-0 bottom-0 cursor-ew-resize z-20 flex items-center"
                 style={{
                   left: `${(activeSection.endSec / Math.max(durationSec, 0.001)) * 100}%`,
-                  backgroundColor: SECTION_COLORS[activeSection.role],
-                  boxShadow: `0 0 10px ${SECTION_COLORS[activeSection.role]}`,
+                  transform: "translateX(-50%)",
+                  touchAction: "none",
                 }}
                 onMouseDown={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   setDrag({ uid: sectionUid(activeSection), edge: "end" });
                 }}
-              />
+              >
+                <div
+                  className="relative flex items-center justify-center"
+                  style={{
+                    width: 14,
+                    height: 36,
+                    borderRadius: "0 4px 4px 0",
+                    background: SECTION_COLORS[activeSection.role],
+                    boxShadow: `0 0 12px ${SECTION_COLORS[activeSection.role]}80`,
+                    opacity: drag?.edge === "end" ? 1 : 0.85,
+                  }}
+                >
+                  <div className="flex flex-col gap-[3px]">
+                    <div className="w-[3px] h-[3px] rounded-full bg-white/60" />
+                    <div className="w-[3px] h-[3px] rounded-full bg-white/60" />
+                    <div className="w-[3px] h-[3px] rounded-full bg-white/60" />
+                  </div>
+                </div>
+                <span
+                  className="absolute -top-5 left-1/2 -translate-x-1/2 text-[8px] font-mono whitespace-nowrap"
+                  style={{ color: SECTION_COLORS[activeSection.role] }}
+                >
+                  {formatTime(activeSection.endSec)}
+                </span>
+              </div>
             </>
           )}
 
@@ -272,7 +325,7 @@ export function SectionTimeline({
       </div>
 
       <div>
-        {sections.map((section, idx) => {
+        {sections.map((section) => {
           const isActive = activeSection?.sectionIndex === section.sectionIndex;
           const preview = firstLineForSection(section, lyrics);
           const rowLyrics = lyrics.filter((line) => line.start < section.endSec && line.end >= section.startSec);
@@ -293,10 +346,55 @@ export function SectionTimeline({
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setActiveUid(sectionUid(section)); }}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex items-center gap-2">
+                  <div className="min-w-0 flex items-center gap-2 relative">
                     <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: SECTION_COLORS[section.role] }} />
-                    <span className="text-sm text-foreground">{instanceLabel(section, sections)}</span>
+                    <button
+                      className="text-sm text-foreground flex items-center gap-1 hover:text-primary transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRolePickerForUid(rolePickerForUid === sectionUid(section) ? null : sectionUid(section));
+                      }}
+                    >
+                      {instanceLabel(section, sections)}
+                      <span className="text-[9px] text-muted-foreground/50">▾</span>
+                    </button>
                     <span className="text-[10px] font-mono text-muted-foreground">{formatTime(section.startSec)}–{formatTime(section.endSec)}</span>
+
+                    {rolePickerForUid === sectionUid(section) && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRolePickerForUid(null);
+                          }}
+                        />
+                        <div className="absolute top-full left-0 mt-1 z-50 min-w-[160px] rounded-lg border border-border/40 bg-background/95 backdrop-blur-md shadow-xl py-1">
+                          {ROLES.map((role) => (
+                            <button
+                              key={role}
+                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-white/[0.05] transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const current = sectionOverrides ?? [];
+                                const existing = current.find((o) => o.sectionIndex === section.sectionIndex);
+                                const next = existing
+                                  ? current.map((o) => (o.sectionIndex === section.sectionIndex ? { ...o, role } : o))
+                                  : [...current, { sectionIndex: section.sectionIndex, role }];
+                                onSectionOverridesChange(next);
+                                setRolePickerForUid(null);
+                              }}
+                            >
+                              <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: SECTION_COLORS[role] }} />
+                              <span className={section.role === role ? "text-foreground font-medium" : "text-muted-foreground"}>
+                                {LABEL_MAP[role]}
+                              </span>
+                              {section.role === role && <span className="ml-auto text-muted-foreground/40">✓</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                   {isActive && onRemoveSection ? (
                     <button
@@ -311,24 +409,53 @@ export function SectionTimeline({
                     </button>
                   ) : null}
                 </div>
-                <p className="text-xs text-muted-foreground truncate mt-1">{preview?.text || "No lyric preview"}</p>
+                {!isActive && (
+                  <p className="text-xs text-muted-foreground truncate mt-1">{preview?.text || "Instrumental"}</p>
+                )}
               </div>
 
               {isActive && (
-                <div className="px-3 pb-2 space-y-1">
-                  {rowLyrics.map((line, li) => {
-                    const isCurrent = currentTimeSec >= line.start && currentTimeSec < line.end;
-                    return (
-                      <button
-                        key={`${idx}-${li}-${line.start}`}
-                        onClick={() => onSeek(line.start)}
-                        className={`w-full text-left rounded px-2 py-1 text-xs transition-all duration-200 ${isCurrent ? "bg-white/10 text-foreground" : "text-muted-foreground hover:bg-white/[0.03]"}`}
-                      >
-                        <span className="text-[10px] font-mono mr-2">{formatTime(line.start)}</span>
-                        {line.text}
-                      </button>
-                    );
-                  })}
+                <div className="px-3 pb-2 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <p className="text-[9px] text-muted-foreground/40 mb-1">Drag markers on the timeline to adjust boundaries</p>
+                  {rowLyrics.length === 0 ? (
+                    <p className="text-[10px] text-muted-foreground/30 italic py-2">Instrumental</p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto space-y-0.5">
+                      {rowLyrics.map((line, li) => {
+                        const isCurrent = currentTimeSec >= line.start && currentTimeSec < line.end;
+                        return (
+                          <button
+                            key={`${section.sectionIndex}-${li}-${line.start}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSeek(line.start);
+                            }}
+                            className={`w-full text-left rounded px-2 py-1 text-xs transition-all duration-150 ${
+                              isCurrent ? "text-foreground" : "text-muted-foreground hover:bg-white/[0.03]"
+                            }`}
+                            style={
+                              isCurrent
+                                ? {
+                                    backgroundColor: `${SECTION_COLORS[section.role]}15`,
+                                    borderLeft: `2px solid ${SECTION_COLORS[section.role]}`,
+                                  }
+                                : { borderLeft: "2px solid transparent" }
+                            }
+                          >
+                            <span
+                              className="text-[9px] font-mono mr-2"
+                              style={{
+                                color: isCurrent ? SECTION_COLORS[section.role] : undefined,
+                              }}
+                            >
+                              {formatTime(line.start)}
+                            </span>
+                            {line.text}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
