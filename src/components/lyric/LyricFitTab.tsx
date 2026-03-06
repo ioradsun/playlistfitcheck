@@ -466,7 +466,7 @@ export function LyricFitTab({
         return false;
       }
       if (!updated) {
-        console.warn("[persistRenderData] no row matched attempt", attempt, id);
+        
         if (attempt < 3) {
           await new Promise(r => setTimeout(r, 1000));
           return persistRenderData(id, payload, attempt + 1);
