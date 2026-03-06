@@ -982,20 +982,6 @@ export function LyricFitTab({
 
 
 
-  useEffect(() => {
-    console.log(`[FitTab Debug] ${fitPipelineMs()} sectionsReady changed to ${sectionsReady}`);
-  }, [sectionsReady, fitPipelineMs]);
-
-  useEffect(() => {
-    const directionReady = !!cinematicDirection;
-    console.log(`[FitTab Debug] ${fitPipelineMs()} directionReady changed to ${directionReady}`);
-  }, [cinematicDirection, fitPipelineMs]);
-
-  useEffect(() => {
-    const imagesReady = !!(cinematicDirection?.sections && cinematicDirection.sections.some((section: any) => section.imagePrompt || section.image));
-    console.log(`[FitTab Debug] ${fitPipelineMs()} imagesReady changed to ${imagesReady}`);
-  }, [cinematicDirection, fitPipelineMs]);
-
 
   const sceneInputNode = !lyricData ? (
     <div className="space-y-1.5">
