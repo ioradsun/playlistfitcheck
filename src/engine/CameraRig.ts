@@ -393,7 +393,7 @@ export class CameraRig {
     this._slowDriftY = clamp(this._slowDriftY + grammar.slowDriftY * dt * arcFree, -20, 20);
 
     // Continuous breath (always present — camera never fully still)
-    this._breathPhase += dt;
+    this._breathPhase = (this._breathPhase + dt) % (Math.PI * 200);
     const breathAmp = lerp(2, 7, energy) * (1 - this._anticipationFreeze * 0.8);
     const breathY = Math.sin(this._breathPhase * 0.8) * breathAmp;
     const breathX = Math.cos(this._breathPhase * 0.55) * breathAmp * 0.4;
@@ -595,6 +595,39 @@ export class CameraRig {
     this._springOffY=this._velOffY=0; this._springRot=this._velRot=0;
     this._zoom=1; this._offsetX=this._offsetY=this._rotation=this._shakeX=this._shakeY=0;
     this._cachedTransform=null;
+  }
+
+
+
+  /** Soft reset — clear accumulated drift and velocities, keep section context */
+  softReset(): void {
+    this._slowZoom = 1;
+    this._slowDriftY = 0;
+    this._breathPhase = 0;
+
+    this._velZoom = 0;
+    this._velOffX = 0;
+    this._velOffY = 0;
+    this._velRot = 0;
+
+    this._bassY = this._bassYV = this._bassZ = this._bassZV = 0;
+    this._transX = this._transXV = this._transR = this._transRV = 0;
+    this._tonalZ = this._tonalZV = this._tonalR = this._tonalRV = 0;
+    this._beatY = this._beatYV = this._beatX = this._beatXV = this._beatZ = this._beatZV = 0;
+
+    this._heroActive = false;
+    this._heroPunchZoom = this._heroPunchShakeX = this._heroPunchShakeY = 0;
+    this._heroPunchMsLeft = this._heroPunchMsTotal = 0;
+    this._heroFreezeAmt = 0;
+    this._heroStillTimer = 0;
+
+    this._springZoom = 1;
+    this._springOffX = this._springOffY = this._springRot = 0;
+    this._zoom = 1;
+    this._offsetX = this._offsetY = this._rotation = 0;
+    this._shakeX = this._shakeY = 0;
+
+    this._cachedTransform = null;
   }
 
   /** Expose current grammar name for debug HUD */

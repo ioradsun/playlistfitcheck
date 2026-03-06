@@ -1186,6 +1186,7 @@ export class LyricDancePlayer {
   private _firstPaintMarked = false;
   private _fontStabilized = false;
   private _fontLayoutReflowPending = false;
+  private _handleVisibilityChange: () => void;
 
   constructor(
     data: LyricDanceData,
@@ -1212,6 +1213,8 @@ export class LyricDancePlayer {
     this.audio.muted = true;
     this.audio.preload = "auto";
     this.bootMode = options?.bootMode ?? "minimal";
+    this._handleVisibilityChange = this._handleVisibilityChangeImpl.bind(this);
+    document.addEventListener("visibilitychange", this._handleVisibilityChange);
 
     
 
@@ -1915,6 +1918,7 @@ export class LyricDancePlayer {
     this.audio.pause();
     this.audio.src = "";
     this._timeInitialized = false;
+    document.removeEventListener("visibilitychange", this._handleVisibilityChange);
 
     if (this.audioContext) {
       void this.audioContext.close().catch(() => {});
@@ -2015,6 +2019,36 @@ export class LyricDancePlayer {
     }
   }
 
+  private _handleVisibilityChangeImpl(): void {
+    if (document.hidden) return;
+
+    this.lastTimestamp = 0;
+
+    this._qFrameCount = 0;
+    this._qWindowStart = 0;
+
+    this.frameBudget.dtAvgMs = 16.67;
+    this.frameBudget.fpsAvg = 60;
+    this.frameBudget.spikeFrames = 0;
+
+    this._timeInitialized = false;
+
+    this.cameraRig?.reset();
+    this.ambientParticleEngine?.clear();
+
+    if (this._qualityTier > 0) {
+      const prevBucket = this._qualityTier >= 2 ? 'low' : 'full';
+      this._qualityTier = 0;
+      this._qUpgradeStreak = 0;
+      console.info('[LyricEngine] quality tier reset to 0 after tab resume');
+      if (prevBucket === 'low') {
+        this._applyDprToCanvas();
+      }
+    }
+
+    console.info('[LyricEngine] tab resumed — reset transient state');
+  }
+
   private tick = (timestamp: number): void => {
     if (this.destroyed) return;
     if (!this.playing) {
@@ -2023,7 +2057,8 @@ export class LyricDancePlayer {
     }
 
     try {
-      const deltaMs = Math.min(timestamp - (this.lastTimestamp || timestamp), 100);
+      const rawDelta = timestamp - (this.lastTimestamp || timestamp);
+      const deltaMs = rawDelta > 200 ? 0 : Math.min(rawDelta, 50);
       this.lastTimestamp = timestamp;
       this.updateFrameBudget(deltaMs);
       if (this._fontLayoutReflowPending) {
@@ -2126,6 +2161,14 @@ export class LyricDancePlayer {
   };
 
   private updateFrameBudget(deltaMs: number): void {
+    if (deltaMs === 0 || deltaMs > 100) {
+      this._qFrameCount = 0;
+      this._qWindowStart = 0;
+      this.frameBudget.dtAvgMs = 16.67;
+      this.frameBudget.fpsAvg = 60;
+      return;
+    }
+
     const alpha = 0.12;
     this.frameBudget.dtAvgMs += (deltaMs - this.frameBudget.dtAvgMs) * alpha;
     this.frameBudget.fpsAvg = 1000 / Math.max(1, this.frameBudget.dtAvgMs);
@@ -2136,11 +2179,19 @@ export class LyricDancePlayer {
   }
 
   private smoothAudioTime(rawTime: number): number {
+    const jumped = Math.abs(rawTime - this._lastRawTime) > 0.5;
+    const looped = rawTime < this._lastRawTime - 1.0;
+
     // On first call or after seek, snap immediately
-    if (!this._timeInitialized || Math.abs(rawTime - this._lastRawTime) > 0.5) {
+    if (!this._timeInitialized || jumped) {
       this._smoothedTime = rawTime;
       this._timeInitialized = true;
       this._lastRawTime = rawTime;
+
+      if (looped) {
+        this.cameraRig?.softReset();
+      }
+
       return rawTime;
     }
 
