@@ -81,7 +81,7 @@ serve(async (req) => {
       for (const table of tables) {
         const { error: delErr } = await supabase.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
         if (delErr) {
-          console.warn(`[admin] Failed to delete from ${table}: ${delErr.message}`);
+          // Failed to delete from table
           errors.push(`${table}: ${delErr.message}`);
         }
       }
