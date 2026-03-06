@@ -505,20 +505,12 @@ export default function ShareableLyricDance() {
     setFrozenLineIndex(null);
 
     const player = playerRef.current;
-    const audio = player?.audio;
-    if (!audio || audio.ended) return;
+    if (!player || player.audio.ended) return;
 
     try {
-      if (audio.paused) {
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise.catch((err) => {
-            console.warn('ShareableLyricDance audio resume failed:', err);
-          });
-        }
-      }
+      player.play();
     } catch (err) {
-      console.warn('ShareableLyricDance audio play error:', err);
+      console.warn('ShareableLyricDance audio resume failed:', err);
     }
   }, []);
 

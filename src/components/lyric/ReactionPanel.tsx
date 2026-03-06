@@ -617,7 +617,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   }}
                 />
                 <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/20">
-                  {engagementMode === 'freezing' ? 'finishing…' : !autoFollowEnabled || engagementMode === 'engaged' ? 'locked' : 'live'}
+                  {engagementMode === 'freezing' ? 'Line Live' : engagementMode === 'engaged' ? 'Line Paused' : 'Live'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -875,19 +875,20 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-white/50 hover:text-white/80 transition-colors"
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-red-400/70 animate-pulse" />
-                  LIVE · stop
+                  ■ Stop
                 </button>
               ) : (
                 <>
                   <div
-                    className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
                     style={{
                       background: palette[1] ?? 'rgba(255,255,255,0.4)',
-                      opacity: autoFollowEnabled ? 0.45 : 0,
+                      opacity: 0.45,
+                      animation: engagementMode === 'engaged' ? 'none' : 'pulse 2s ease-in-out infinite',
                     }}
                   />
                   <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/25">
-                    {engagementMode === 'freezing' ? 'finishing line…' : autoFollowEnabled ? 'live' : 'locked'}
+                    {engagementMode === 'freezing' ? 'Line Live' : engagementMode === 'engaged' ? 'Line Paused' : 'Live'}
                   </span>
                 </>
               )}
@@ -900,7 +901,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 text-[10px] font-mono uppercase tracking-wider text-white/35 hover:text-white/65 hover:border-white/25 hover:bg-white/[0.04] transition-all"
                 >
                   <span>↺</span>
-                  <span>Repeat</span>
+                  <span>Replay</span>
                 </button>
               )}
               {!autoFollowEnabled && !repeatMode && (

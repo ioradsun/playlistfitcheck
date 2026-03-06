@@ -27,7 +27,8 @@ interface Props {
   prefetchedData?: LyricDanceData | null;
   bootMode?: "minimal" | "full";
   albumArtUrl?: string;
-  avatarUrl?: string | null;
+  isActive?: boolean;
+  onPlay?: () => void;
 }
 
 // Shared IntersectionObserver across all embedded players
@@ -47,7 +48,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal", albumArtUrl, avatarUrl }: Props,
+  { lyricDanceId, lyricDanceUrl, songTitle, artistName, prefetchedData, bootMode = "minimal", albumArtUrl, isActive = false, onPlay }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
@@ -145,19 +146,30 @@ function InlineLyricDanceInner(
   useEffect(() => {
     if (!player || !playerReady) return;
     if (isVisible) {
-      player.audio.muted = true;
       player.play();
     } else {
       player.pause();
     }
   }, [isVisible, playerReady, player]);
 
-  // Mute sync
-  useEffect(() => { if (player) player.audio.muted = muted; }, [muted, player]);
+
+  useEffect(() => {
+    if (!player) return;
+    if (!isActive) {
+      player.setMuted(true);
+      setMuted(true);
+    }
+  }, [isActive, player]);
 
   // ── Handlers ─────────────────────────────────────────────────────────
 
-  const toggleMute = useCallback((e: React.MouseEvent) => { e.stopPropagation(); setMuted(m => !m); }, []);
+  const toggleMute = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!player) return;
+    const next = !muted;
+    player.setMuted(next);
+    setMuted(next);
+  }, [muted, player]);
   const openFullPage = useCallback((e: React.MouseEvent) => { e.stopPropagation(); window.open(lyricDanceUrl, "_blank"); }, [lyricDanceUrl]);
 
   // ── Render ────────────────────────────────────────────────────────────
@@ -180,7 +192,9 @@ function InlineLyricDanceInner(
       <div ref={containerRef}
         className="relative w-full overflow-hidden cursor-pointer"
         style={{ minHeight: 310, height: 310 }}
-        onClick={() => { setMuted(m => !m); }}
+        onClick={(e) => {
+          if (!showCover && !isWaitingForPlayer) toggleMute(e);
+        }}
       >
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
           style={{ display: playerReady ? "block" : "none" }} />
@@ -199,11 +213,12 @@ function InlineLyricDanceInner(
               <LyricDanceCover
                 songName={songTitle}
                 artistName={artistName || fetchedData?.artist_name || ""}
-                avatarUrl={avatarUrl ?? null}
+                avatarUrl={albumArtUrl ?? null}
                 initial={(artistName || songTitle || "♪")[0]?.toUpperCase()}
                 waiting={isWaitingForPlayer}
                 onListen={(e) => {
                   e.stopPropagation();
+                  onPlay?.();
                   setShowCover(false);
                   if (player) {
                     player.setMuted(false);
