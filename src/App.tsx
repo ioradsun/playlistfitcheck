@@ -130,9 +130,7 @@ const App = () => (
                     <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
                   </Routes>
                 </SidebarProvider>
-                <Suspense fallback={null}>
-                  <FitWidget />
-                </Suspense>
+                <FitWidget />
                 </SiteCopyProvider>
               </AuthProvider>
             } />
