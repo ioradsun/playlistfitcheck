@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { motion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTrailblazer } from "@/hooks/useTrailblazer";
@@ -7,7 +8,7 @@ interface TrailblazerBadgeProps {
   compact?: boolean;
 }
 
-export function TrailblazerBadge({ userId, compact = false }: TrailblazerBadgeProps) {
+export const TrailblazerBadge = forwardRef<HTMLSpanElement, TrailblazerBadgeProps>(function TrailblazerBadge({ userId, compact = false }, ref) {
   const { number, total, isBlazer, loading } = useTrailblazer(userId);
 
   if (loading || !isBlazer) return null;
@@ -18,6 +19,7 @@ export function TrailblazerBadge({ userId, compact = false }: TrailblazerBadgePr
     <Tooltip>
       <TooltipTrigger asChild>
         <motion.span
+          ref={ref}
           className={`inline-flex items-center font-mono rounded-sm border-[0.5px] border-foreground/20 bg-transparent text-foreground/80 cursor-default tracking-tighter ${
             compact ? "px-1.5 py-0.5 text-[9px]" : "px-1.5 py-0.5 text-[10px]"
           }`}
@@ -33,4 +35,4 @@ export function TrailblazerBadge({ userId, compact = false }: TrailblazerBadgePr
       </TooltipContent>
     </Tooltip>
   );
-}
+});
