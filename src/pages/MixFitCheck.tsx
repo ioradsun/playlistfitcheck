@@ -13,6 +13,7 @@ import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProject
 
 import { toast } from "sonner";
 import { SignUpToSaveBanner } from "@/components/SignUpToSaveBanner";
+import type { RecentItem } from "@/components/AppSidebar";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 
 const MAX_MIXES = 6;
