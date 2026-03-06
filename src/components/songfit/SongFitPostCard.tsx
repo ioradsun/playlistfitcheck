@@ -4,7 +4,6 @@ import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink,
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { InlineLyricDance } from "./InlineLyricDance";
-import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { InlineBattleFeed } from "./InlineBattleFeed";
 import { SubmissionBadge } from "./SubmissionBadge";
 import { useAuth } from "@/hooks/useAuth";
@@ -303,47 +302,31 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           isScored && "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.25)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]"
         )}
       >
-        {tier === 1 ? (
-          hasLyricDancePost ? (
-            <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ minHeight: 310, height: 310 }}>
-              <LyricDanceCover
-                songName={post.track_title}
-                artistName={displayName}
-                avatarUrl={post.profiles?.avatar_url ?? null}
-                initial={(displayName || post.track_title || "♪")[0]?.toUpperCase()}
-                waiting={false}
-                onListen={(e) => {
-                  e.stopPropagation();
-                  handlePlayTap();
-                }}
+        {tier === 1 && !hasLyricDancePost ? (
+          <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ minHeight: 310, height: 310 }}>
+            {post.album_art_url ? (
+              <img
+                src={post.album_art_url}
+                alt={post.track_title}
+                className="w-full h-full object-cover"
+                loading="lazy"
               />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-zinc-800 via-zinc-900 to-black" />
+            )}
+            <div className="absolute inset-0 bg-black/35" />
+            <div className="absolute left-3 bottom-3 right-3">
+              <p className="text-white font-semibold text-sm truncate">{post.track_title}</p>
+              <p className="text-white/75 text-xs truncate">{(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || displayName}</p>
             </div>
-          ) : (
-            <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ minHeight: 310, height: 310 }}>
-              {post.album_art_url ? (
-                <img
-                  src={post.album_art_url}
-                  alt={post.track_title}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-zinc-800 via-zinc-900 to-black" />
-              )}
-              <div className="absolute inset-0 bg-black/35" />
-              <div className="absolute left-3 bottom-3 right-3">
-                <p className="text-white font-semibold text-sm truncate">{post.track_title}</p>
-                <p className="text-white/75 text-xs truncate">{(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || displayName}</p>
-              </div>
-              <button
-                onClick={handlePlayTap}
-                className="absolute inset-0 flex items-center justify-center"
-                aria-label={`Play ${post.track_title}`}
-              >
-                <span className="h-14 w-14 rounded-full bg-white/20 backdrop-blur-sm text-white flex items-center justify-center text-xl">▶</span>
-              </button>
-            </div>
-          )
+            <button
+              onClick={handlePlayTap}
+              className="absolute inset-0 flex items-center justify-center"
+              aria-label={`Play ${post.track_title}`}
+            >
+              <span className="h-14 w-14 rounded-full bg-white/20 backdrop-blur-sm text-white flex items-center justify-center text-xl">▶</span>
+            </button>
+          </div>
         ) : post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
           <InlineLyricDance
             lyricDanceId={post.lyric_dance_id}
