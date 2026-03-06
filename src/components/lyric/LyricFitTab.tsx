@@ -434,7 +434,7 @@ export function LyricFitTab({
           const file = new File([blob], filename, { type: blob.type || "audio/mpeg" });
           setAudioFile(file);
           setHasRealAudio(true);
-          if (initialLyric.id) sessionAudio.set("lyric", initialLyric.id, file);
+          if (initialLyric.id) sessionAudio.set("lyric", initialLyric.id, file, { ttlMs: 20 * 60 * 1000 });
         })
         .catch(() => {
           const dummyFile = new File([], filename, { type: "audio/mpeg" });

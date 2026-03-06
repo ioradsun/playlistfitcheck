@@ -1,47 +1,130 @@
 /**
- * SessionAudioCache — Module-level cache for in-memory audio File objects.
+ * SessionAudioCache — bounded in-memory cache for session-scoped audio File objects.
  *
- * Survives React component remounts (key changes, navigation) but is
- * lost on full page reload or tab close — which is exactly the desired
- * lifetime for ephemeral audio data that isn't persisted to a server.
+ * Lifetime:
+ * - Survives React remounts/navigation in a single browser tab.
+ * - Cleared on full page reload/tab close.
  *
- * Usage:
- *   sessionAudio.set("lyric", projectId, file)
- *   sessionAudio.get("lyric", projectId)  // File | undefined
- *   sessionAudio.clearTool("lyric")       // clear all for a tool
- *   sessionAudio.clearAll()               // logout
+ * Eviction:
+ * - LRU by last access.
+ * - Bounded by both max entry count and total estimated bytes.
+ * - Optional per-entry TTL for temporary project hydration.
  */
 
-const cache = new Map<string, File>();
-
-function makeKey(tool: string, id: string): string {
-  return `${tool}::${id}`;
+interface CacheEntry {
+  file: File;
+  estimatedBytes: number;
+  expiresAt: number | null;
+  lastAccessedAt: number;
 }
 
-export const sessionAudio = {
-  set(tool: string, id: string, file: File): void {
-    cache.set(makeKey(tool, id), file);
-  },
+interface SetOptions {
+  ttlMs?: number;
+  estimatedBytes?: number;
+}
+
+const DEFAULT_MAX_ENTRIES = 16;
+const DEFAULT_MAX_TOTAL_BYTES = 180 * 1024 * 1024; // ~180MB soft cap per tab session.
+
+class SessionAudioCache {
+  private readonly cache = new Map<string, CacheEntry>();
+
+  constructor(
+    private readonly maxEntries = DEFAULT_MAX_ENTRIES,
+    private readonly maxTotalBytes = DEFAULT_MAX_TOTAL_BYTES,
+  ) {}
+
+  private makeKey(tool: string, id: string): string {
+    return `${tool}::${id}`;
+  }
+
+  private now(): number {
+    return Date.now();
+  }
+
+  private isExpired(entry: CacheEntry, at = this.now()): boolean {
+    return entry.expiresAt !== null && entry.expiresAt <= at;
+  }
+
+  private getTotalEstimatedBytes(): number {
+    let total = 0;
+    for (const entry of this.cache.values()) total += entry.estimatedBytes;
+    return total;
+  }
+
+  private pruneExpired(at = this.now()): void {
+    for (const [key, entry] of this.cache.entries()) {
+      if (this.isExpired(entry, at)) this.cache.delete(key);
+    }
+  }
+
+  private evictToFit(): void {
+    this.pruneExpired();
+    while (
+      this.cache.size > this.maxEntries ||
+      this.getTotalEstimatedBytes() > this.maxTotalBytes
+    ) {
+      const lru = this.cache.entries().next().value as [string, CacheEntry] | undefined;
+      if (!lru) break;
+      this.cache.delete(lru[0]);
+    }
+  }
+
+  set(tool: string, id: string, file: File, options: SetOptions = {}): void {
+    const key = this.makeKey(tool, id);
+    const now = this.now();
+    const entry: CacheEntry = {
+      file,
+      estimatedBytes: Math.max(1, options.estimatedBytes ?? file.size ?? 1),
+      expiresAt: typeof options.ttlMs === "number" ? now + Math.max(0, options.ttlMs) : null,
+      lastAccessedAt: now,
+    };
+
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    this.evictToFit();
+  }
 
   get(tool: string, id: string): File | undefined {
-    return cache.get(makeKey(tool, id));
-  },
+    const key = this.makeKey(tool, id);
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+    if (this.isExpired(entry)) {
+      this.cache.delete(key);
+      return undefined;
+    }
+
+    entry.lastAccessedAt = this.now();
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.file;
+  }
 
   has(tool: string, id: string): boolean {
-    return cache.has(makeKey(tool, id));
-  },
+    return this.get(tool, id) !== undefined;
+  }
 
   remove(tool: string, id: string): void {
-    cache.delete(makeKey(tool, id));
-  },
+    this.cache.delete(this.makeKey(tool, id));
+  }
+
+  removeByPrefix(prefix: string): void {
+    for (const key of [...this.cache.keys()]) {
+      if (key.startsWith(prefix)) this.cache.delete(key);
+    }
+  }
 
   clearTool(tool: string): void {
-    for (const key of [...cache.keys()]) {
-      if (key.startsWith(`${tool}::`)) cache.delete(key);
-    }
-  },
+    this.removeByPrefix(`${tool}::`);
+  }
+
+  clearProject(tool: string, projectId: string): void {
+    this.removeByPrefix(`${tool}::${projectId}`);
+  }
 
   clearAll(): void {
-    cache.clear();
-  },
-};
+    this.cache.clear();
+  }
+}
+
+export const sessionAudio = new SessionAudioCache();

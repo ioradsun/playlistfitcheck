@@ -103,6 +103,9 @@ export default function ShareableHook() {
   const [muted, setMuted] = useState(true);
   const [showMuteIcon, setShowMuteIcon] = useState(false);
   const muteIconTimerRef = useRef<number | null>(null);
+  const fireCleanupTimerRef = useRef<number | null>(null);
+  const badgeTimerRef = useRef<number | null>(null);
+  const copiedTimerRef = useRef<number | null>(null);
 
   // Comment input
   const [inputText, setInputText] = useState("");
@@ -131,6 +134,7 @@ export default function ShareableHook() {
   useEffect(() => {
     if (!artistSlug || !songSlug || !hookSlug) return;
     setLoading(true);
+    let cancelled = false;
 
     // HOOK_COLUMNS imported from shared hook
 
@@ -142,13 +146,9 @@ export default function ShareableHook() {
       .eq("hook_slug", hookSlug)
       .maybeSingle()
       .then(async ({ data, error }) => {
+        if (cancelled) return;
         if (error || !data) { setNotFound(true); setLoading(false); return; }
         const hook = data as any as HookData;
-
-        // Preload audio immediately — browser starts fetching while we process
-        const audioPreload = new Audio();
-        audioPreload.preload = "auto";
-        audioPreload.src = hook.audio_url;
 
         setHookData(hook);
         setFireCount(hook.fire_count);
@@ -173,6 +173,7 @@ export default function ShareableHook() {
           }
 
           // Canvas can render now — stop blocking
+          if (cancelled) return;
           setLoading(false);
 
           // ── NON-CRITICAL: fire all remaining queries in parallel ──
@@ -211,11 +212,13 @@ export default function ShareableHook() {
               : Promise.resolve({ data: null }),
           ]);
 
+          if (cancelled) return;
           if (voteResult.data) setVotedHookId((voteResult.data as any).hook_id);
           if (commentsAResult.data) setComments(commentsAResult.data as any as Comment[]);
           if (commentsBResult.data) setCommentsB(commentsBResult.data as any as Comment[]);
         } else {
           // Single hook mode — set loading false immediately, load comments in background
+          if (cancelled) return;
           setLoading(false);
 
           const { data: commentsData } = await supabase
@@ -224,9 +227,12 @@ export default function ShareableHook() {
             .eq("hook_id", hook.id)
             .order("submitted_at", { ascending: true })
             .limit(100);
-          if (commentsData) setComments(commentsData as any as Comment[]);
+          if (!cancelled && commentsData) setComments(commentsData as any as Comment[]);
         }
       });
+    return () => {
+      cancelled = true;
+    };
   }, [artistSlug, songSlug, hookSlug]);
 
   // ── Build constellation from comments ─────────────────────────────────────
@@ -389,7 +395,10 @@ export default function ShareableHook() {
       scale: 0.6 + Math.random() * 0.6,
     }));
     setFireParticles(prev => [...prev, ...newParticles]);
-    setTimeout(() => setFireParticles(prev => prev.filter(p => !newParticles.includes(p))), 1200);
+    if (fireCleanupTimerRef.current) window.clearTimeout(fireCleanupTimerRef.current);
+    fireCleanupTimerRef.current = window.setTimeout(() => {
+      setFireParticles(prev => prev.filter(p => !newParticles.includes(p)));
+    }, 1200);
 
     // Persist vote
     if (votedHookId) {
@@ -417,7 +426,12 @@ export default function ShareableHook() {
   }, [hookData, rivalHook, votedHookId]);
 
   // ── Badge timer ───────────────────────────────────────────────────────────
-  useEffect(() => { setTimeout(() => setBadgeVisible(true), 1000); }, []);
+  useEffect(() => {
+    badgeTimerRef.current = window.setTimeout(() => setBadgeVisible(true), 1000);
+    return () => {
+      if (badgeTimerRef.current) window.clearTimeout(badgeTimerRef.current);
+    };
+  }, []);
 
   // Listen for pause messages from parent (embed mode scroll-out)
   useEffect(() => {
@@ -506,7 +520,8 @@ export default function ShareableHook() {
   const handleShare = useCallback(() => {
     navigator.clipboard.writeText(shareCaption);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = window.setTimeout(() => setCopied(false), 1500);
   }, [shareCaption]);
 
   // ── Fingerprint helpers ───────────────────────────────────────────────────
@@ -526,6 +541,16 @@ export default function ShareableHook() {
     style.textContent = `[data-lovable-badge], .lovable-badge, iframe[src*="lovable"] { display: none !important; }`;
     document.head.appendChild(style);
     return () => { style.remove(); };
+  }, []);
+
+
+  useEffect(() => {
+    return () => {
+      if (muteIconTimerRef.current) window.clearTimeout(muteIconTimerRef.current);
+      if (fireCleanupTimerRef.current) window.clearTimeout(fireCleanupTimerRef.current);
+      if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
+      if (badgeTimerRef.current) window.clearTimeout(badgeTimerRef.current);
+    };
   }, []);
 
   // ── Vote percentages ─────────────────────────────────────────────────────
