@@ -106,19 +106,40 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     setProjectId(newId);
     setTitle(t);
     setNotes(n);
-    // Decode uploaded files
-    const decodedMixes: AudioMix[] = [];
+    // Decode uploaded files and upload to storage
+    const decodedMixes: (AudioMix & { audio_url?: string })[] = [];
     for (const file of files) {
       try {
         const { buffer, waveform } = await decodeFile(file);
         const mixName = file.name.replace(/\.(mp3|wav|m4a)$/i, "");
-        const newMix: AudioMix = {
-          id: crypto.randomUUID(),
+        const mixId = crypto.randomUUID();
+        let audioUrl: string | undefined;
+
+        // Upload audio to storage for logged-in users
+        if (user) {
+          try {
+            const ext = file.name.split(".").pop() || "mp3";
+            const storagePath = `${user.id}/mix/${newId}/${mixId}.${ext}`;
+            const { error: uploadError } = await supabase.storage
+              .from("audio-clips")
+              .upload(storagePath, file, { upsert: true, contentType: file.type || undefined });
+            if (!uploadError) {
+              const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+              audioUrl = urlData.publicUrl;
+            }
+          } catch (e) {
+            console.error("Failed to upload mix audio:", e);
+          }
+        }
+
+        const newMix: AudioMix & { audio_url?: string } = {
+          id: mixId,
           name: mixName,
           buffer,
           waveform,
           rank: null,
           comments: "",
+          audio_url: audioUrl,
         };
         // Cache file for session persistence
         sessionAudio.set("mix", `${newId}::${mixName}`, file, { ttlMs: 30 * 60 * 1000 });
@@ -138,7 +159,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         id: newId,
         title: t,
         notes: n,
-        mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments })),
+        mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments, audio_url: m.audio_url })),
         markerStart: 0,
         markerEnd: decodedMixes[0]?.waveform?.duration ?? 10,
         createdAt: new Date().toISOString(),
@@ -151,13 +172,13 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         label: t || "Mix Project",
         meta: "just now",
         type: "mix",
-        rawData: { id: newId, title: t, notes: n, mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments })) },
+        rawData: { id: newId, title: t, notes: n, mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments, audio_url: m.audio_url })) },
       });
     } catch (e) {
       console.error("Failed initial save for MixFit project:", e);
     }
     await mixQuota.increment();
-  }, [decodeFile, mixQuota, save, onProjectSaved, onSavedId, onOptimisticItem]);
+  }, [decodeFile, mixQuota, save, onProjectSaved, onSavedId, onOptimisticItem, user]);
 
   const handleLoadProject = useCallback(async (project: MixProjectData) => {
     const loadSession = ++loadSessionRef.current;
