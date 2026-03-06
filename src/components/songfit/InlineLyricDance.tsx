@@ -50,7 +50,7 @@ function InlineLyricDanceInner(
   const [loading, setLoading] = useState(!prefetchedData);
   const [fetchError, setFetchError] = useState(false);
   const [muted, setMuted] = useState(true);
-  const [showCover, setShowCover] = useState(true);
+  const [showCover, setShowCover] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
