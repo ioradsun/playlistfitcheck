@@ -95,7 +95,7 @@ function deriveLines(words: WordTiming[]): LyricSectionLine[] {
   return lines;
 }
 
-function computeConfidence(section: AudioSection): number {
+export function computeConfidence(section: AudioSection): number {
   let c = 0;
   switch (section.role) {
     case "intro":

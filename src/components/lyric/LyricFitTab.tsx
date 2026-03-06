@@ -16,7 +16,7 @@ import { detectSections, type TimestampedLine } from "@/engine/sectionDetector";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
-import { useLyricSections } from "@/hooks/useLyricSections";
+import { computeConfidence, useLyricSections } from "@/hooks/useLyricSections";
 import { mergeSectionOverrides, type SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { SceneContextResult } from "@/lib/sceneContexts";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -538,6 +538,10 @@ export function LyricFitTab({
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
       const sceneContext = resolvedScene ?? null;
+      const enrichedAudioSections = audioSections.map((s) => ({
+        ...s,
+        confidence: computeConfidence(s),
+      }));
 
       const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
         body: {
@@ -560,7 +564,7 @@ export function LyricFitTab({
                 lyricDensity: songSignature.lyricDensity,
               }
             : undefined,
-          audioSections: audioSections.length ? audioSections : undefined,
+          audioSections: enrichedAudioSections.length ? enrichedAudioSections : undefined,
           lyricId: savedIdRef.current || undefined,
           scene_context: sceneContext,
           words: words ?? undefined,
@@ -1089,6 +1093,11 @@ export function LyricFitTab({
           onImageGenerationStatusChange={(status) => {
             setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
           }}
+          cinematicSections={
+            Array.isArray(cinematicDirection?.sections)
+              ? cinematicDirection.sections
+              : undefined
+          }
         />
         ) : null}
       </div>

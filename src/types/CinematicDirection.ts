@@ -63,6 +63,10 @@ export interface CinematicSection {
   /** Computed by enrichSections() — ratio 0–1 */
   endRatio?: number;
   structuralLabel?: string;
+  /** AI boundary suggestion — only present for low-confidence sections */
+  suggestedStartSec?: number;
+  /** AI boundary suggestion — only present for low-confidence sections */
+  suggestedEndSec?: number;
 }
 
 export interface StoryboardEntry {
