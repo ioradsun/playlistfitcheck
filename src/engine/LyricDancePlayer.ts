@@ -2132,16 +2132,6 @@ export class LyricDancePlayer {
     this.frameBudget.frames += 1;
     if (deltaMs > 24) {
       this.frameBudget.spikeFrames += 1;
-      if (this.perfDebugEnabled && this.frameBudget.spikeFrames % 30 === 0) {
-        console.warn('[LyricEngine] frame spike', {
-          dtMs: Number(deltaMs.toFixed(2)),
-          fpsAvg: Number(this.frameBudget.fpsAvg.toFixed(1)),
-          entities: this._boundsBuffer.length,
-          collisionPairsTested: this._pairsTestedLast,
-          collisionPairsHit: this._pairsCollidingLast,
-          drawCalls: this.debugState.drawCalls,
-        });
-      }
     }
   }
 
