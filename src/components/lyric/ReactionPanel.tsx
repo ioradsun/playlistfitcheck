@@ -102,6 +102,9 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
   const [loopingLineIndex, setLoopingLineIndex] = useState<number | null>(null);
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
   const [playheadLineIndex, setPlayheadLineIndex] = useState<number | null>(null);
+  const [isManualSelectionLocked, setIsManualSelectionLocked] = useState(false);
+  const [manualPlaybackTargetIndex, setManualPlaybackTargetIndex] = useState<number | null>(null);
+  const [manualPlaybackEndTimeSec, setManualPlaybackEndTimeSec] = useState<number | null>(null);
   const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(null);
   const [autoFollowEnabled, setAutoFollowEnabled] = useState(true);
   const [replyingTo, setReplyingTo] = useState<CommentRow | null>(null);
@@ -112,8 +115,43 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
 
   const repeatRafRef = useRef<number>(0);
   const loopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isManualSelectionLockedRef = useRef(false);
+  const manualPlaybackTargetIndexRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  const clearLoopTimeout = () => {
+    if (!loopTimeoutRef.current) return;
+    clearTimeout(loopTimeoutRef.current);
+    loopTimeoutRef.current = null;
+  };
+
+  const releaseManualSelectionLock = () => {
+    isManualSelectionLockedRef.current = false;
+    manualPlaybackTargetIndexRef.current = null;
+    setIsManualSelectionLocked(false);
+    setManualPlaybackTargetIndex(null);
+    setManualPlaybackEndTimeSec(null);
+  };
+
+  const stopManualSingleLinePlayback = (seekToSec?: number) => {
+    clearLoopTimeout();
+    player?.pause();
+
+    const targetIndex = manualPlaybackTargetIndexRef.current;
+    if (targetIndex != null) {
+      setSelectedLineIndex(targetIndex);
+      setPlayheadLineIndex(targetIndex);
+    }
+
+    if (seekToSec != null && player) {
+      player.seek(seekToSec);
+    }
+
+    setLoopingLineIndex(null);
+    setAutoFollowEnabled(false);
+    setManualPlaybackEndTimeSec(null);
+  };
 
   const lineByIndex = useMemo(() => {
     const map = new Map<number, LyricSectionLine>();
@@ -139,9 +177,9 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
     return counts;
   }, [comments]);
 
-  const displayLineIndex = autoFollowEnabled
-    ? (playheadLineIndex ?? activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null)
-    : selectedLineIndex;
+  const displayLineIndex = (isManualSelectionLocked || !autoFollowEnabled)
+    ? (selectedLineIndex ?? manualPlaybackTargetIndex)
+    : (playheadLineIndex ?? activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null);
 
   const displayLine = displayLineIndex != null
     ? (lineByIndex.get(displayLineIndex) ?? activeLine)
@@ -168,7 +206,11 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
   }, [repeatMode, repeatTimeSec, allLines]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      releaseManualSelectionLock();
+      return;
+    }
+
     const startingLineIndex = activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null;
     setHasSubmitted(false);
     setTextInput('');
@@ -177,7 +219,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
     setSelectedLineIndex(startingLineIndex);
     setPlayheadLineIndex(startingLineIndex);
     setAutoFollowEnabled(true);
-  }, [isOpen, activeLine?.lineIndex, allLines]);
+  }, [isOpen, allLines]);
 
   // playhead tracking is intentionally separate from manual selection/lock
   useEffect(() => {
@@ -196,6 +238,33 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
       setPlayheadLineIndex(prev => (prev === fallbackLine.lineIndex ? prev : fallbackLine.lineIndex));
     }
   }, [activeLine?.lineIndex, allLines, currentTimeSec, repeatMode]);
+
+  useEffect(() => {
+    if (!isManualSelectionLocked) return;
+    if (manualPlaybackTargetIndex == null) return;
+    if (selectedLineIndex === manualPlaybackTargetIndex) return;
+    setSelectedLineIndex(manualPlaybackTargetIndex);
+  }, [isManualSelectionLocked, manualPlaybackTargetIndex, selectedLineIndex]);
+
+  useEffect(() => {
+    if (!isManualSelectionLocked) return;
+    if (manualPlaybackEndTimeSec == null) return;
+    if (!player || player.audio.paused) return;
+    if (currentTimeSec < manualPlaybackEndTimeSec) return;
+
+    const manualTargetLine = lineByIndex.get(manualPlaybackTargetIndex ?? -1);
+    const safeStopSec = manualTargetLine
+      ? Math.max(manualTargetLine.startSec, manualTargetLine.endSec - 0.02)
+      : undefined;
+    stopManualSingleLinePlayback(safeStopSec);
+  }, [
+    currentTimeSec,
+    isManualSelectionLocked,
+    lineByIndex,
+    manualPlaybackEndTimeSec,
+    manualPlaybackTargetIndex,
+    player,
+  ]);
 
   // repeat loop only updates playhead state when line actually changes
   useEffect(() => {
@@ -290,7 +359,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
 
   useEffect(() => {
     if (!isOpen && repeatMode) {
-      if (loopTimeoutRef.current) clearTimeout(loopTimeoutRef.current);
+      clearLoopTimeout();
       player?.pause();
       setRepeatMode(false);
       setLoopingLineIndex(null);
@@ -300,13 +369,15 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
 
   useEffect(() => {
     return () => {
-      if (loopTimeoutRef.current) clearTimeout(loopTimeoutRef.current);
+      clearLoopTimeout();
       cancelAnimationFrame(repeatRafRef.current);
     };
   }, []);
 
   const handleStartRepeat = () => {
     if (!player || durationSec <= 0) return;
+    releaseManualSelectionLock();
+    clearLoopTimeout();
     setRepeatMode(true);
     setLoopingLineIndex(null);
     setAutoFollowEnabled(true);
@@ -315,7 +386,7 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
   };
 
   const handleStopRepeat = () => {
-    if (loopTimeoutRef.current) clearTimeout(loopTimeoutRef.current);
+    clearLoopTimeout();
     player?.pause();
     setRepeatMode(false);
     setLoopingLineIndex(null);
@@ -324,12 +395,15 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
 
   const handleLineTap = (line: LyricSectionLine) => {
     setSelectedLineIndex(line.lineIndex);
+    setPlayheadLineIndex(line.lineIndex);
+    isManualSelectionLockedRef.current = true;
+    manualPlaybackTargetIndexRef.current = line.lineIndex;
+    setIsManualSelectionLocked(true);
+    setManualPlaybackTargetIndex(line.lineIndex);
+    setManualPlaybackEndTimeSec(line.endSec);
     setAutoFollowEnabled(false);
 
-    if (loopTimeoutRef.current) {
-      clearTimeout(loopTimeoutRef.current);
-      loopTimeoutRef.current = null;
-    }
+    clearLoopTimeout();
     if (loopingLineIndex != null) setLoopingLineIndex(null);
 
     // defer seek/play side effects so selected highlight paints first
@@ -339,12 +413,10 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
         player.seek(line.startSec);
         player.play();
 
-        const lineDuration = line.endSec - line.startSec;
-        const stopAfterMs = Math.max(lineDuration + 0.3, 1.5) * 1000;
+        const safeStopSec = Math.max(line.startSec, line.endSec - 0.02);
+        const stopAfterMs = Math.max((safeStopSec - line.startSec) * 1000, 50);
         loopTimeoutRef.current = setTimeout(() => {
-          player.pause();
-          player.seek(line.startSec);
-          loopTimeoutRef.current = null;
+          stopManualSingleLinePlayback(safeStopSec);
         }, stopAfterMs);
       } else {
         onSeekTo(line.startSec);
@@ -355,8 +427,9 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
   const handleReplay = (line: LyricSectionLine, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!player) return;
+    releaseManualSelectionLock();
 
-    if (loopTimeoutRef.current) clearTimeout(loopTimeoutRef.current);
+    clearLoopTimeout();
 
     const lineDuration = line.endSec - line.startSec;
     const playDuration = Math.max(lineDuration + 0.3, 2.5) * 1000;
@@ -544,7 +617,10 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
               )}
               {!autoFollowEnabled && !repeatMode && (
                 <button
-                  onClick={() => setAutoFollowEnabled(true)}
+                  onClick={() => {
+                    releaseManualSelectionLock();
+                    setAutoFollowEnabled(true);
+                  }}
                   className="px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-wider text-white/35 border border-white/10 hover:text-white/60"
                 >
                   resume live
