@@ -103,7 +103,8 @@ function isLineOutsideViewport(container: HTMLElement, row: HTMLElement, thresho
   return rowRect.top < containerRect.top + threshold || rowRect.bottom > containerRect.bottom - threshold;
 }
 
-function ReactionPanel({ isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, sections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart }: ReactionPanelProps) {
+function ReactionPanel({ isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart }: ReactionPanelProps) {
+  const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
@@ -169,7 +170,7 @@ function ReactionPanel({ isOpen, onClose, engagementMode, frozenLineIndex, dance
   }, [allLines]);
 
   const sectionMeta = useMemo(() => {
-    const canonical = (audioSections ?? [])
+    const canonical = sections
       .filter((section) => Number.isFinite(section.startSec) && Number.isFinite(section.endSec) && section.endSec > section.startSec)
       .slice()
       .sort((a, b) => a.startSec - b.startSec);
@@ -215,7 +216,7 @@ function ReactionPanel({ isOpen, onClose, engagementMode, frozenLineIndex, dance
     });
 
     return { sectionForLine, labelByLineIndex };
-  }, [allLines, audioSections]);
+  }, [allLines, sections]);
 
   const commentCountByLine = useMemo(() => {
     const counts: Record<number, number> = {};
