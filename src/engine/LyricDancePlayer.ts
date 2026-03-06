@@ -2312,7 +2312,7 @@ export class LyricDancePlayer {
           link.rel = 'stylesheet';
           link.href = `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@400;500;600;700;800;900&display=swap`;
           document.head.appendChild(link);
-          console.log(`[fonts] injected Google Fonts link for "${fontName}"`);
+          
         }
         // Wait for font to actually load (with timeout)
         const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
