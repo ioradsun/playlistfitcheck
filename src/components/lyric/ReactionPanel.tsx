@@ -330,7 +330,8 @@ function ReactionPanel({ isOpen, onClose, danceId, activeLine, allLines, section
       const stopAfterMs = Math.max(lineDuration + 0.3, 1.5) * 1000;
       loopTimeoutRef.current = setTimeout(() => {
         player.pause();
-        setIsLineLocked(false);
+        player.seek(line.startSec); // hold position on this line
+        // stay locked — user chose this line, hold until they tap something else
         loopTimeoutRef.current = null;
       }, stopAfterMs);
     } else {
