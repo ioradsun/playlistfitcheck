@@ -225,13 +225,6 @@ const Index = () => {
     prevProjectIdRef.current = projectId;
   }, [activeTab, projectId]);
 
-  // If no user and not loading auth, just show the uploader
-  useEffect(() => {
-    if (activeTab !== "lyric" || !projectId) return;
-    if (!user && !authLoading) {
-      setLyricLoadingState("ready");
-    }
-  }, [activeTab, authLoading, projectId, user]);
 
   useEffect(() => {
     if (activeTab !== "lyric" || !projectId || !user) return;
