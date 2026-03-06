@@ -1396,7 +1396,7 @@ export class LyricDancePlayer {
         if (compiled.phraseGroups?.length > 0 && this.conductor) {
           this.timingBudgets = computeTimingBudgets(compiled.phraseGroups as any, this.conductor);
           this._buildWordBudgetMap();
-          console.info(`[V2] EffectBudgeter: ${this.timingBudgets.length} group budgets, ${this._wordBudgetMap.size} word budgets`);
+          
         }
 
         // Build chunk cache from compiled scene
