@@ -11,6 +11,7 @@ import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { InlineLyricDancePlaybar } from "./InlineLyricDancePlaybar";
+import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 
 export interface InlineLyricDanceHandle {
   getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;
@@ -175,34 +176,15 @@ function InlineLyricDanceInner(
         <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
           style={{ display: "none" }} />
 
-        {/* CrowdFit skeleton — product-specific (not LyricFit style) */}
+        {/* Shared cover — same as shareable page */}
         {(loading || (!playerReady && !fetchError)) && (
-          <div className="absolute inset-0 overflow-hidden bg-black">
-            {albumArtUrl ? (
-              <>
-                <img src={albumArtUrl} alt="" className="absolute inset-0 w-full h-full object-cover scale-105" />
-                <div className="absolute inset-0 bg-black/65" />
-              </>
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950" />
-            )}
-
-            <div className="absolute inset-0 animate-pulse">
-              <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-                <div className="h-4 w-28 rounded bg-white/10" />
-                <div className="h-7 w-14 rounded-full bg-white/10" />
-              </div>
-
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="h-16 w-16 rounded-full bg-white/10 ring-1 ring-white/15" />
-              </div>
-
-              <div className="absolute bottom-3 left-3 right-3 space-y-2">
-                <div className="h-3 w-2/3 rounded bg-white/12" />
-                <div className="h-2.5 w-1/2 rounded bg-white/10" />
-              </div>
-            </div>
-          </div>
+          <LyricDanceCover
+            songName={songTitle}
+            artistName={artistName || data?.artist_name || ""}
+            avatarUrl={null}
+            initial={(artistName || songTitle || "♪")[0]?.toUpperCase()}
+            waiting
+          />
         )}
 
         {playerReady && (
