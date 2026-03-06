@@ -142,9 +142,9 @@ export function LyricsTab({
       setHasRealAudio(true);
       setSavedId(projectId);
       if (projectId) {
-        sessionAudio.set("lyric", projectId, file);
+        sessionAudio.set("lyric", projectId, file, { ttlMs: 20 * 60 * 1000 });
       } else {
-        sessionAudio.set("lyric", "__unsaved__", file);
+        sessionAudio.set("lyric", "__unsaved__", file, { ttlMs: 5 * 60 * 1000 });
       }
       onUploadStarted?.({ file, projectId, title: draftTitle });
 
@@ -280,11 +280,11 @@ export function LyricsTab({
         setDebugData(data._debug ?? null);
 
         if (projectId) {
-          sessionAudio.set("lyric", projectId, file);
+          sessionAudio.set("lyric", projectId, file, { ttlMs: 20 * 60 * 1000 });
           onSavedId?.(projectId);
           onProjectSaved?.();
         } else {
-          sessionAudio.set("lyric", "__unsaved__", file);
+          sessionAudio.set("lyric", "__unsaved__", file, { ttlMs: 5 * 60 * 1000 });
         }
         await quota.increment();
       } catch (e) {
@@ -324,7 +324,7 @@ export function LyricsTab({
           onBack={handleBack}
           onSaved={(id) => {
             setSavedId(id);
-            if (audioFile && hasRealAudio) sessionAudio.set("lyric", id, audioFile);
+            if (audioFile && hasRealAudio) sessionAudio.set("lyric", id, audioFile, { ttlMs: 20 * 60 * 1000 });
             sessionAudio.remove("lyric", "__unsaved__");
             onProjectSaved?.();
             onSavedId?.(id);
@@ -333,7 +333,7 @@ export function LyricsTab({
             setAudioFile(file);
             setHasRealAudio(true);
             const cacheId = savedId || "__unsaved__";
-            sessionAudio.set("lyric", cacheId, file);
+            sessionAudio.set("lyric", cacheId, file, { ttlMs: cacheId === "__unsaved__" ? 5 * 60 * 1000 : 20 * 60 * 1000 });
           }}
           onLinesChange={(newLines) => {
             setLines(newLines);

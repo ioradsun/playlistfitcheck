@@ -4,13 +4,11 @@
  */
 
 import { useRef, useCallback, useEffect } from "react";
-import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout, ensureTypographyProfileReady, getSystemStyle } from "@/engine/SystemStyles";
 import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import type { PhysicsState, PhysicsSpec } from "@/engine/PhysicsIntegrator";
-import type { FrameRenderState } from "@/engine/presetDerivation";
-import { animationResolver, type WordAnimation } from "@/engine/AnimationResolver";
+import { animationResolver } from "@/engine/AnimationResolver";
 import { applyEntrance, applyExit, applyModEffect, applyWordMark, getWordMarkColor } from "@/engine/LyricAnimations";
 import { deriveFrameState } from "@/engine/presetDerivation";
 import { resolveEffectKey } from "@/engine/EffectRegistry";
@@ -58,11 +56,26 @@ function clearLyricShadow(ctx: CanvasRenderingContext2D): void {
 
 
 
-type AudioElementWithAnalyser = HTMLAudioElement & {
-  __analyserNode?: AnalyserNode;
-  __audioContext?: AudioContext;
-  __mediaElementSource?: MediaElementAudioSourceNode;
+type SharedAudioRuntime = {
+  ctx: AudioContext;
+  analyser: AnalyserNode;
 };
+
+let sharedAudioRuntime: SharedAudioRuntime | null = null;
+
+function getSharedAudioRuntime(): SharedAudioRuntime | null {
+  if (typeof window === "undefined") return null;
+  if (sharedAudioRuntime) return sharedAudioRuntime;
+  try {
+    const ctx = new AudioContext();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    sharedAudioRuntime = { ctx, analyser };
+    return sharedAudioRuntime;
+  } catch {
+    return null;
+  }
+}
 
 export const HOOK_CANVAS_COMPOSITING_HINTS = {
   maskUsesPaletteShadow: true,
@@ -258,12 +271,17 @@ export function useHookCanvas(
 
     // Pass 2: River rows
     if (!isHookFracture) {
-      const riverNodes = nodes.filter(n => n.phase === "river");
+      const rowBuckets: ConstellationNode[][] = Array.from({ length: RIVER_ROWS.length }, () => []);
+      for (const node of nodes) {
+        if (node.phase === "river" && node.riverRowIndex >= 0 && node.riverRowIndex < rowBuckets.length) {
+          rowBuckets[node.riverRowIndex].push(node);
+        }
+      }
       const offsets = riverOffsetsRef.current;
       for (let ri = 0; ri < RIVER_ROWS.length; ri++) {
         const row = RIVER_ROWS[ri];
         offsets[ri] += row.speed * row.direction;
-        const rowComments = riverNodes.filter(n => n.riverRowIndex === ri);
+        const rowComments = rowBuckets[ri];
         if (rowComments.length === 0) continue;
 
         ctx.font = "300 11px system-ui, -apple-system, sans-serif";
@@ -595,7 +613,7 @@ export function useHookCanvas(
     if (hookProgress >= 0.98 && !firedEndRef.current && onEndRef.current) {
       firedEndRef.current = true;
       // Defer to avoid calling setState during render frame
-      setTimeout(() => onEndRef.current?.(), 0);
+      queueMicrotask(() => onEndRef.current?.());
     }
     // Note: do NOT reset firedEndRef on loop — onEnd should only fire once per activation
 
@@ -606,35 +624,28 @@ export function useHookCanvas(
   useEffect(() => {
     if (!hookData) return;
 
-    const audio = new Audio() as AudioElementWithAnalyser;
+    const audio = new Audio();
     audio.muted = true;
-    audio.preload = "auto";
+    audio.preload = "metadata";
     audio.crossOrigin = "anonymous";
     audio.loop = true;
     audioRef.current = audio;
     audio.src = hookData.audio_url;
 
-    let beatCtx: AudioContext | null = null;
     let beatSource: MediaElementAudioSourceNode | null = null;
     if (!analyserNode) {
-      try {
-        if (audio.__analyserNode) {
-          localAnalyserRef.current = audio.__analyserNode;
-          beatCtx = audio.__audioContext ?? null;
-          beatSource = audio.__mediaElementSource ?? null;
-        } else {
-          beatCtx = new AudioContext();
-          const analyser = beatCtx.createAnalyser();
-          beatSource = beatCtx.createMediaElementSource(audio);
-          beatSource.connect(analyser);
-          analyser.connect(beatCtx.destination);
-          void beatCtx.resume().catch(() => {});
-          audio.__analyserNode = analyser;
-          audio.__audioContext = beatCtx;
-          audio.__mediaElementSource = beatSource;
-          localAnalyserRef.current = analyser;
+      const runtime = getSharedAudioRuntime();
+      if (runtime) {
+        try {
+          beatSource = runtime.ctx.createMediaElementSource(audio);
+          beatSource.connect(runtime.analyser);
+          beatSource.connect(runtime.ctx.destination);
+          localAnalyserRef.current = runtime.analyser;
+          void runtime.ctx.resume().catch(() => {});
+        } catch {
+          localAnalyserRef.current = null;
         }
-      } catch {
+      } else {
         localAnalyserRef.current = null;
       }
     }
@@ -682,18 +693,12 @@ export function useHookCanvas(
       cancelled = true;
       engineRef.current?.stop();
       audio.pause();
-      if (!analyserNode) {
-        if (beatSource) {
-          try { beatSource.disconnect(); } catch {}
-        }
-        if (beatCtx) {
-          beatCtx.close().catch(() => {});
-        }
-        delete audio.__analyserNode;
-        delete audio.__audioContext;
-        delete audio.__mediaElementSource;
+      if (!analyserNode && beatSource) {
+        try { beatSource.disconnect(); } catch {}
         localAnalyserRef.current = null;
       }
+      audio.removeAttribute("src");
+      audio.load();
     };
   }, [hookData, drawCanvas, analyserNode]);
 
@@ -718,10 +723,13 @@ export function useHookCanvas(
     }
     const engine = engineRef.current;
     if (!engine) return;
+    const audio = audioRef.current;
     if (!active) {
       engine.pause();
+      audio?.pause();
     } else {
       engine.resume();
+      void audio?.play().catch(() => {});
     }
   }, [active]);
 

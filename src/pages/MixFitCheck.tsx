@@ -113,7 +113,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
           comments: "",
         };
         // Cache file for session persistence
-        sessionAudio.set("mix", `${newId}::${mixName}`, file);
+        sessionAudio.set("mix", `${newId}::${mixName}`, file, { ttlMs: 30 * 60 * 1000 });
         decodedMixes.push(newMix);
       } catch {
         toast.error(`Failed to decode ${file.name}`);
@@ -225,7 +225,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
             comments: "",
           };
           // Cache file for session persistence
-          if (projectId) sessionAudio.set("mix", `${projectId}::${mixName}`, file);
+          if (projectId) sessionAudio.set("mix", `${projectId}::${mixName}`, file, { ttlMs: 30 * 60 * 1000 });
           setMixes((prev) => {
             const updated = [...prev, newMix];
             // Set marker end to duration of first mix if this is the first

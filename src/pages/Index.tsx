@@ -29,7 +29,7 @@ import {
 } from "@/lib/routePrefetch";
 
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { Music, ChevronRight, ArrowLeft } from "lucide-react";
+import { ChevronRight, ArrowLeft } from "lucide-react";
 
 const MixFitCheck = lazy(MixFitCheckImport);
 const LyricFitTab = lazy(() => LyricFitTabImport().then((module) => ({ default: module.LyricFitTab })));
@@ -171,7 +171,6 @@ const Index = () => {
   const rawTabFromPath = PATH_TO_TAB[basePath] || PATH_TO_TAB[location.pathname] || "songfit";
   const tabFromPath = !hookfitEnabled && rawTabFromPath === "hookfit" ? "songfit" : rawTabFromPath;
   const [activeTab, setActiveTabState] = useState(tabFromPath);
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([tabFromPath]));
   const playlistQuota = useUsageQuota("playlist", { enabled: activeTab === "playlist" });
   
   // Sync tab when path changes (e.g. browser back/forward)
@@ -199,15 +198,6 @@ const Index = () => {
   }, [location.pathname, hookfitEnabled]);
 
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
-
-  useEffect(() => {
-    setVisitedTabs(prev => {
-      if (prev.has(activeTab)) return prev;
-      const next = new Set(prev);
-      next.add(activeTab);
-      return next;
-    });
-  }, [activeTab]);
 
   // Auto-load project from URL param for any tool
   const projectLoadedRef = useRef<string | null>(null);
@@ -737,6 +727,31 @@ const Index = () => {
 
   const renderTabContent = () => {
     switch (activeTab) {
+      case "songfit":
+        return <div id="songfit-scroll-container" className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="songfit" />}><SongFitTab /></Suspense></div>;
+      case "hookfit":
+        return hookfitEnabled ? <div className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="hookfit" />}><HookFitTab /></Suspense></div> : null;
+      case "lyric":
+        return <div className="flex-1 flex flex-col min-h-0">{lyricLoadingState === "loading" && projectId ? <ToolSkeleton tab="lyric" /> : <Suspense fallback={<ToolSkeleton tab="lyric" />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
+          if (payload.projectId) {
+            projectLoadedRef.current = payload.projectId;
+            setOptimisticSidebarItem({
+              id: payload.projectId,
+              label: payload.title || "Untitled",
+              meta: "just now",
+              type: "lyric",
+              rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
+            });
+            navigate(`/LyricFit/${payload.projectId}`, { replace: true });
+          }
+        }} /></Suspense>}</div>;
+      case "mix":
+        return <div className="flex-1 flex flex-col min-h-0"><Suspense fallback={<ToolSkeleton tab="mix" />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense></div>;
+      case "hitfit":
+        return <div className="flex-1 flex flex-col min-h-0 px-4 py-6">{loadedHitFitAnalysis
+          ? <Suspense fallback={<ToolSkeleton tab="hitfit" />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
+          : <Suspense fallback={<ToolSkeleton tab="hitfit" />}><HitFitTab key="new" initialAnalysis={null} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
+        }</div>;
       case "profit":
         return <div className="flex-1 flex flex-col min-h-0"><Suspense fallback={<TabChunkFallback />}><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></Suspense></div>;
       case "playlist":
@@ -778,8 +793,6 @@ const Index = () => {
     }
   };
 
-  const persistedTabs = ["songfit", "lyric", "mix", "hitfit", ...(hookfitEnabled ? ["hookfit"] : [])];
-
   return (
     <>
       {deferSidebarReady && (
@@ -810,61 +823,7 @@ const Index = () => {
           )}
         </header>
         <main ref={contentScrollRef} className="flex-1 flex flex-col min-h-0 overflow-y-auto">
-          {/* SongFitTab stays mounted to preserve feed state — hidden when not active */}
-          {visitedTabs.has("songfit") && (
-            <div
-              id="songfit-scroll-container"
-              className={`flex-1 px-4 py-6 ${activeTab === "songfit" ? "" : "hidden"}`}
-            >
-              <Suspense fallback={<ToolSkeleton tab="songfit" />}><SongFitTab /></Suspense>
-            </div>
-          )}
-          {/* HookFitTab stays mounted to preserve feed state — hidden when not active */}
-          {hookfitEnabled && visitedTabs.has("hookfit") && (
-            <div
-              className={`flex-1 px-4 py-6 ${activeTab === "hookfit" ? "" : "hidden"}`}
-            >
-              <Suspense fallback={<ToolSkeleton tab="hookfit" />}><HookFitTab /></Suspense>
-            </div>
-          )}
-          {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
-          {visitedTabs.has("lyric") && (
-            <div className={`flex-1 flex flex-col min-h-0 ${activeTab === "lyric" ? "" : "hidden"}`}>
-              {lyricLoadingState === "loading" && projectId ? (
-                <ToolSkeleton tab="lyric" />
-              ) : (
-                <Suspense fallback={<ToolSkeleton tab="lyric" />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
-                  if (payload.projectId) {
-                    projectLoadedRef.current = payload.projectId;
-                    setOptimisticSidebarItem({
-                      id: payload.projectId,
-                      label: payload.title || "Untitled",
-                      meta: "just now",
-                      type: "lyric",
-                      rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
-                    });
-                    navigate(`/LyricFit/${payload.projectId}`, { replace: true });
-                  }
-                }} /></Suspense>
-              )}
-            </div>
-          )}
-          {/* MixFitTab stays mounted to preserve audio state — hidden when not active */}
-          {visitedTabs.has("mix") && (
-            <div className={`flex-1 flex flex-col min-h-0 ${activeTab === "mix" ? "" : "hidden"}`}>
-              <Suspense fallback={<ToolSkeleton tab="mix" />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense>
-            </div>
-          )}
-          {/* HitFitTab stays mounted to preserve audio state — hidden when not active */}
-          {visitedTabs.has("hitfit") && (
-            <div className={`flex-1 flex flex-col min-h-0 px-4 py-6 ${activeTab === "hitfit" ? "" : "hidden"}`}>
-              {loadedHitFitAnalysis
-                ? <Suspense fallback={<ToolSkeleton tab="hitfit" />}><HitFitTab key="loaded" initialAnalysis={loadedHitFitAnalysis} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
-                : <Suspense fallback={<ToolSkeleton tab="hitfit" />}><HitFitTab key="new" initialAnalysis={null} onNewProject={handleNewHitFit} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("hitfit", id)} /></Suspense>
-              }
-            </div>
-          )}
-          {!persistedTabs.includes(activeTab) && renderTabContent()}
+          {renderTabContent()}
         </main>
       </SidebarInset>
       

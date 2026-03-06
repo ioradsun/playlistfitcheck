@@ -31,9 +31,9 @@ export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHea
     setLoading(true);
     try {
       // Cache uploaded files for session persistence
-      sessionAudio.set("hitfit", "master1", master1);
-      if (master2) sessionAudio.set("hitfit", "master2", master2);
-      if (reference.type === "file") sessionAudio.set("hitfit", "reference", reference.file);
+      sessionAudio.set("hitfit", "master1", master1, { ttlMs: 20 * 60 * 1000 });
+      if (master2) sessionAudio.set("hitfit", "master2", master2, { ttlMs: 20 * 60 * 1000 });
+      if (reference.type === "file") sessionAudio.set("hitfit", "reference", reference.file, { ttlMs: 20 * 60 * 1000 });
 
       // Compress all uploaded audio files before sending
       const [compressedMaster1, compressedMaster2, compressedRef] = await Promise.all([
