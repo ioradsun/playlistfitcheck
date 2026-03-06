@@ -745,20 +745,48 @@ const Index = () => {
         return <div id="songfit-scroll-container" className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="songfit" />}><SongFitTab /></Suspense></div>;
       case "hookfit":
         return hookfitEnabled ? <div className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="hookfit" />}><HookFitTab /></Suspense></div> : null;
-      case "lyric":
-        return <div className="flex-1 flex flex-col min-h-0">{lyricLoadingState === "loading" && projectId ? <ToolSkeleton tab="lyric" /> : <Suspense fallback={<ToolSkeleton tab="lyric" />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
-          if (payload.projectId) {
-            projectLoadedRef.current = payload.projectId;
-            setOptimisticSidebarItem({
-              id: payload.projectId,
-              label: payload.title || "Untitled",
-              meta: "just now",
-              type: "lyric",
-              rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
-            });
-            navigate(`/LyricFit/${payload.projectId}`, { replace: true });
-          }
-        }} /></Suspense>}</div>;
+      case "lyric": {
+        const isHydratingExistingLyricProject = Boolean(
+          projectId &&
+            (authLoading ||
+              lyricLoadingState === "loading" ||
+              (lyricLoadingState !== "missing" && loadedLyric?.id !== projectId))
+        );
+
+        return (
+          <div className="flex-1 flex flex-col min-h-0">
+            {isHydratingExistingLyricProject ? (
+              <ToolSkeleton tab="lyric" />
+            ) : (
+              <Suspense fallback={<ToolSkeleton tab="lyric" />}>
+                <LyricFitTab
+                  key={loadedLyric?.id || "new"}
+                  initialLyric={loadedLyric}
+                  onNewProject={handleNewLyric}
+                  onHeaderProject={setHeaderProject}
+                  onSavedId={(id) => {
+                    projectLoadedRef.current = id;
+                    navigateToProject("lyric", id);
+                  }}
+                  onUploadStarted={(payload) => {
+                    if (payload.projectId) {
+                      projectLoadedRef.current = payload.projectId;
+                      setOptimisticSidebarItem({
+                        id: payload.projectId,
+                        label: payload.title || "Untitled",
+                        meta: "just now",
+                        type: "lyric",
+                        rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
+                      });
+                      navigate(`/LyricFit/${payload.projectId}`, { replace: true });
+                    }
+                  }}
+                />
+              </Suspense>
+            )}
+          </div>
+        );
+      }
       case "mix":
         return <div className="flex-1 flex flex-col min-h-0"><Suspense fallback={<ToolSkeleton tab="mix" />}><MixFitCheck key={loadedMixProject?.id || "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} /></Suspense></div>;
       case "hitfit":
