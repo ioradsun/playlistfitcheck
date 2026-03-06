@@ -369,7 +369,7 @@ export function FitTab({
     transcriptSyncTimerRef.current = setTimeout(() => {
       const handle = dancePlayerRef.current;
       if (!handle) {
-        console.log('[SYNC:C] FAIL — dancePlayerRef.current is null. publishedUrl:', publishedUrl, 'publishedDanceId:', publishedDanceId);
+        
         return;
       }
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
