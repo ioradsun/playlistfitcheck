@@ -6,7 +6,7 @@ import type { RecentItem } from "@/components/AppSidebar";
 
 export type AudioToolKey = "lyric" | "hitfit" | "mix" | "vibefit" | "crowdfit" | "dreamfit";
 
-const PRIMARY_BUCKET = "audio-files";
+const PRIMARY_BUCKET = "audio-clips";
 const FALLBACK_BUCKET = "audio-clips";
 
 export function getUnifiedStoragePath(userId: string, tool: AudioToolKey, projectId: string, fileName: string) {
