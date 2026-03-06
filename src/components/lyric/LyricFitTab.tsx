@@ -220,7 +220,7 @@ export function LyricFitTab({
 
   // Debounced scene resolution
   useEffect(() => {
-    if (!sceneDescription.trim() || sceneDescription.length < 10) return;
+    if (!sceneDescription.trim() || sceneDescription.trim().length < 10) return;
     const timer = setTimeout(async () => {
       setResolvingScene(true);
       try {
