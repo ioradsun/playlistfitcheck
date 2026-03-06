@@ -633,22 +633,27 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
             {/* ── Compact emoji strip: 32px ── */}
             <div className="flex items-center justify-around px-2 h-8 shrink-0 border-b border-white/[0.04]">
               {EMOJIS.map(({ key, symbol }) => {
-                const reacted = displayLine?.lineIndex != null
-                  ? sessionReacted.has(`${key}-${displayLine.lineIndex}`)
+                const targetIdx = displayLineIndex ?? activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null;
+                const reacted = targetIdx != null
+                  ? sessionReacted.has(`${key}-${targetIdx}`)
                   : false;
+                const count = targetIdx != null ? (reactionData[key]?.line[targetIdx] ?? 0) : 0;
                 return (
                   <button
                     key={key}
                     onClick={() => {
-                      if (displayLine?.lineIndex != null) handleReact(key as EmojiKey, displayLine.lineIndex);
+                      if (targetIdx != null) handleReact(key as EmojiKey, targetIdx);
                     }}
-                    className="text-base px-1.5 py-0.5 rounded-md transition-all active:scale-90 focus:outline-none"
+                    className="flex items-center gap-0.5 text-base px-1.5 py-0.5 rounded-md transition-all active:scale-90 focus:outline-none"
                     style={{
                       background: reacted ? `${palette[1] ?? '#ffffff'}15` : 'transparent',
                       opacity: reacted ? 1 : 0.7,
                     }}
                   >
-                    {symbol}
+                    <span>{symbol}</span>
+                    {count > 0 && (
+                      <span className="text-[8px] font-mono text-white/30">{count}</span>
+                    )}
                   </button>
                 );
               })}
