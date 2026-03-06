@@ -53,7 +53,7 @@ serve(async (req) => {
 
     // ── DELETE ALL DATA action ──
     if (body.action === "delete_all_data") {
-      console.log(`[admin] DELETE ALL DATA requested by ${user.email}`);
+      
       const tables = [
         "hook_comments", "hook_votes", "hookfit_posts",
         "lyric_dance_comments", "lyric_dance_signals",
