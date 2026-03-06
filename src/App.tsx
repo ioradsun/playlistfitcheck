@@ -133,7 +133,6 @@ const App = () => (
                 <Suspense fallback={null}>
                   <FitWidget />
                 </Suspense>
-                </WalletProvider>
                 </SiteCopyProvider>
               </AuthProvider>
             } />
