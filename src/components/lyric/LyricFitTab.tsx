@@ -981,11 +981,6 @@ export function LyricFitTab({
     setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
   }, []);
 
-  const handleRegenerateSectionsVisuals = useCallback(() => {
-    setSectionsDirty(false);
-    void startCinematicDirection(lines, true);
-  }, [lines]);
-
   const fitDisabled = !transcriptionDone;
 
 
