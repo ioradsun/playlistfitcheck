@@ -836,11 +836,7 @@ export function LyricFitTab({
         }
       }
 
-      console.log(`[FitTab Debug] ${fitPipelineMs()} deriving sections from signature`);
       const nextSections = detectSections(sig, beatGrid, timestampedLines, audioDurationSec);
-      console.log(`[Transcribe Debug] sections computed: ${nextSections.length} sections`);
-      console.log(`[FitTab Debug] ${fitPipelineMs()} sections detected: ${nextSections.length} sections`);
-      console.log(`[FitTab Debug] ${fitPipelineMs()} section types: ${nextSections.map((section: any) => section.type).join(", ")}`);
       setAudioSections(nextSections);
       sectionPipelineDoneRef.current = true;
     } catch (error) {
