@@ -168,91 +168,87 @@ function InlineLyricDanceInner(
   }
 
   return (
-    <div ref={containerRef}
-      className="relative w-full overflow-hidden bg-black cursor-pointer rounded-xl"
-      style={{ minHeight: 352, height: 352 }}
-      onClick={() => { if (!showCover) setMuted(m => !m); }}
-    >
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
-        style={{ display: playerReady ? "block" : "none" }} />
-      <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ display: "none" }} />
+    <div className="w-full overflow-hidden bg-black rounded-xl flex flex-col">
+      {/* Canvas area */}
+      <div ref={containerRef}
+        className="relative w-full overflow-hidden cursor-pointer"
+        style={{ minHeight: 310, height: 310 }}
+        onClick={() => { if (!showCover) setMuted(m => !m); }}
+      >
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
+          style={{ display: playerReady ? "block" : "none" }} />
+        <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
+          style={{ display: "none" }} />
 
-      {(loading || (!playerReady && !fetchError)) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
-          {/* Artist initial */}
-          <div className="w-12 h-12 rounded-full bg-white/[0.06] flex items-center justify-center mb-4">
-            <span className="text-base font-mono text-white/30">
-              {(artistName || songTitle || "?")[0].toUpperCase()}
-            </span>
-          </div>
-          {/* Song title */}
-          <p className="text-sm font-semibold text-white/80 mb-1 px-6 text-center truncate max-w-[80%]">{songTitle}</p>
-          {artistName && (
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 mb-5">{artistName}</p>
-          )}
-          {/* Waveform shimmer — 5 bars pulsing in sequence */}
-          <div className="flex items-end gap-[3px] h-6">
-            {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
-              <div
-                key={i}
-                className="w-[3px] rounded-full bg-white/20"
-                style={{
-                  height: `${h * 100}%`,
-                  animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite`,
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {playerReady && showCover && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
-          onClick={e => e.stopPropagation()}>
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
-              <span className="text-lg font-mono text-white/40">
-                {(artistName || data?.artist_name || songTitle || "?")[0].toUpperCase()}
+        {(loading || (!playerReady && !fetchError)) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
+            <div className="w-12 h-12 rounded-full bg-white/[0.06] flex items-center justify-center mb-4">
+              <span className="text-base font-mono text-white/30">
+                {(artistName || songTitle || "?")[0].toUpperCase()}
               </span>
             </div>
-            <div className="text-center px-6">
-              <h3 className="text-lg font-bold text-white leading-tight">{songTitle}</h3>
-              {(artistName || data?.artist_name) && (
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mt-1">
-                  {artistName || data?.artist_name}
-                </p>
-              )}
+            <p className="text-sm font-semibold text-white/80 mb-1 px-6 text-center truncate max-w-[80%]">{songTitle}</p>
+            {artistName && (
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/30 mb-5">{artistName}</p>
+            )}
+            <div className="flex items-end gap-[3px] h-6">
+              {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
+                <div key={i} className="w-[3px] rounded-full bg-white/20"
+                  style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }} />
+              ))}
             </div>
-            <button onClick={handleListenNow}
-              className="px-6 py-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors mt-2">
-              Listen Now
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {!showCover && playerReady && (
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
-          onClick={e => e.stopPropagation()}>
-          <span className="text-[10px] font-mono text-white/60 uppercase tracking-wider bg-black/40 backdrop-blur-sm rounded px-1.5 py-0.5">
-            {songTitle}
-          </span>
-          <button onClick={openFullPage}
-            className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors">
-            <Maximize2 size={14} />
-          </button>
-        </div>
-      )}
+        {playerReady && showCover && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
+                <span className="text-lg font-mono text-white/40">
+                  {(artistName || data?.artist_name || songTitle || "?")[0].toUpperCase()}
+                </span>
+              </div>
+              <div className="text-center px-6">
+                <h3 className="text-lg font-bold text-white leading-tight">{songTitle}</h3>
+                {(artistName || data?.artist_name) && (
+                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mt-1">
+                    {artistName || data?.artist_name}
+                  </p>
+                )}
+              </div>
+              <button onClick={handleListenNow}
+                className="px-6 py-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors mt-2">
+                Listen Now
+              </button>
+            </div>
+          </div>
+        )}
 
-      {!showCover && playerReady && (
-        <div className="absolute bottom-0 left-0 p-2 z-10" onClick={e => e.stopPropagation()}>
-          <button onClick={toggleMute}
-            className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors">
-            {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-          </button>
-        </div>
+        {!showCover && playerReady && (
+          <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
+            onClick={e => e.stopPropagation()}>
+            <span className="text-[10px] font-mono text-white/60 uppercase tracking-wider bg-black/40 backdrop-blur-sm rounded px-1.5 py-0.5">
+              {songTitle}
+            </span>
+            <div className="flex items-center gap-1">
+              <button onClick={toggleMute}
+                className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors">
+                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+              </button>
+              <button onClick={openFullPage}
+                className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors">
+                <Maximize2 size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Playbar — now-playing + react + progress */}
+      {!showCover && (
+        <InlineLyricDancePlaybar player={player} playerReady={playerReady} data={data} />
       )}
     </div>
   );
