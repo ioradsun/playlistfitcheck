@@ -422,7 +422,7 @@ export function LyricFitTab({
     // Hydrate section_images from saved_lyrics — survives tab switches
     const savedSectionImages = (initialLyric as any).section_images;
     if (Array.isArray(savedSectionImages) && savedSectionImages.length > 0 && savedSectionImages.some(Boolean)) {
-      console.log(`[Pipeline] Hydrated ${savedSectionImages.filter(Boolean).length} section images from saved_lyrics`);
+      
       setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
     }
 
