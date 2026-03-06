@@ -313,7 +313,7 @@ const Index = () => {
         handleLoadProject(tab, data);
       }
     })();
-  }, [projectId, activeTab, user?.id]);
+  }, [projectId, activeTab, user?.id, authLoading]);
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
