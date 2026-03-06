@@ -29,7 +29,7 @@ import {
 } from "@/lib/routePrefetch";
 
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { ChevronRight, ArrowLeft } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import {
   CrowdFitSkeleton,
   DreamFitSkeleton,
