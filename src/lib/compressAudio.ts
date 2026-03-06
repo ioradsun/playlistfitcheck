@@ -148,9 +148,6 @@ export async function compressAudioFile(
       const arrayBuffer = await file.arrayBuffer();
       const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-      console.log(
-        `[compressAudio] Decoded: ${audioBuffer.duration.toFixed(1)}s, ${audioBuffer.numberOfChannels}ch, ${audioBuffer.sampleRate}Hz`
-      );
 
       // Render to mono at target sample rate
       const length = Math.ceil(audioBuffer.duration * TARGET_SAMPLE_RATE);
