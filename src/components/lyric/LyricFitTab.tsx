@@ -668,7 +668,7 @@ export function LyricFitTab({
             
             setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done", sectionImages: "done" }));
           } else {
-            console.log(`[Pipeline] Auto-starting image generation for ${dirSections.length} sections`);
+            
             setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done", sectionImages: "running" }));
             setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
             setFitProgress(prev => Math.max(prev, 85));
