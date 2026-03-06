@@ -674,7 +674,7 @@ async function callWithRetry(
     };
   }
 
-  console.log(`[cinematic-direction] Retry: ${retryResult.errors.length} errors remaining, ${retryStoryboard} storyboard, ${retryDirectives} wordDirectives`);
+  
   return retryResult.value;
 }
 
