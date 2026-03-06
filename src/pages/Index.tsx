@@ -197,6 +197,8 @@ const Index = () => {
     }
   }, [location.pathname, hookfitEnabled]);
 
+  const [loadedLyric, setLoadedLyric] = useState<any>(null);
+
   useEffect(() => {
     setVisitedTabs(prev => {
       if (prev.has(activeTab)) return prev;
