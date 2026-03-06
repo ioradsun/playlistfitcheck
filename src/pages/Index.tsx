@@ -215,11 +215,34 @@ const Index = () => {
   }, [projectId]);
 
   useEffect(() => {
+    if (activeTab !== "lyric") return;
+
+    if (projectId) {
+      setLyricLoadingState("loading");
+      if (loadedLyric?.id !== projectId) {
+        setLoadedLyric(null);
+      }
+      return;
+    }
+
+    setLyricLoadingState("ready");
+    setLoadedLyric(null);
+  }, [activeTab, loadedLyric?.id, projectId]);
+
+  useEffect(() => {
+    if (activeTab !== "lyric" || !projectId) return;
+    if (user || authLoading) return;
+    setLyricLoadingState("ready");
+  }, [activeTab, authLoading, projectId, user]);
+
+  useEffect(() => {
     if (activeTab !== "lyric" || !projectId || !user) return;
     // Skip re-fetch if we already have this project loaded
-    if (projectLoadedRef.current === projectId) return;
+    if (projectLoadedRef.current === projectId) {
+      setLyricLoadingState("ready");
+      return;
+    }
 
-    setLoadingProjectType("lyric");
     (async () => {
       const { data, error } = await supabase
         .from("saved_lyrics")
@@ -228,12 +251,16 @@ const Index = () => {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (error || !data) { setLoadingProjectType(null); return; }
+      if (error || !data) {
+        setLoadedLyric(null);
+        setLyricLoadingState("ready");
+        return;
+      }
       projectLoadedRef.current = projectId;
       startTransition(() => {
         setLoadedLyric(data);
       });
-      setLoadingProjectType(null);
+      setLyricLoadingState("ready");
     })();
   }, [activeTab, projectId, user?.id]);
 
@@ -321,6 +348,9 @@ const Index = () => {
   
   const [deferSidebarReady, setDeferSidebarReady] = useState(false);
   const [optimisticSidebarItem, setOptimisticSidebarItem] = useState<{ id: string; label: string; meta: string; type: string; rawData?: any } | null>(null);
+  const [lyricLoadingState, setLyricLoadingState] = useState<"loading" | "ready">(
+    tabFromPath === "lyric" && projectId ? "loading" : "ready"
+  );
   // Tracks when we're loading a project from URL/sidebar — shows skeleton instead of uploader
   const [loadingProjectType, setLoadingProjectType] = useState<string | null>(null);
   const contentScrollRef = useRef<HTMLDivElement>(null);
@@ -793,7 +823,7 @@ const Index = () => {
           {/* LyricFitTab stays mounted to preserve audio state — hidden when not active */}
           {visitedTabs.has("lyric") && (
             <div className={`flex-1 flex flex-col min-h-0 ${activeTab === "lyric" ? "" : "hidden"}`}>
-              {loadingProjectType === "lyric" ? (
+              {lyricLoadingState === "loading" && projectId ? (
                 <ToolSkeleton tab="lyric" />
               ) : (
                 <Suspense fallback={<ToolSkeleton tab="lyric" />}><LyricFitTab key={loadedLyric?.id || "new"} initialLyric={loadedLyric} onNewProject={handleNewLyric} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("lyric", id); }} onUploadStarted={(payload) => {
