@@ -216,25 +216,30 @@ const Index = () => {
     }
   }, [projectId]);
 
+  // When projectId changes, mark lyric loading; when cleared, reset
+  const prevProjectIdRef = useRef<string | undefined>(projectId);
   useEffect(() => {
     if (activeTab !== "lyric") return;
 
     if (projectId) {
-      setLyricLoadingState("loading");
-      if (loadedLyric?.id !== projectId) {
+      // Only reset loadedLyric when the projectId actually changed
+      if (prevProjectIdRef.current !== projectId) {
         setLoadedLyric(null);
+        setLyricLoadingState("loading");
       }
-      return;
+    } else {
+      setLyricLoadingState("ready");
+      setLoadedLyric(null);
     }
+    prevProjectIdRef.current = projectId;
+  }, [activeTab, projectId]);
 
-    setLyricLoadingState("ready");
-    setLoadedLyric(null);
-  }, [activeTab, loadedLyric?.id, projectId]);
-
+  // If no user and not loading auth, just show the uploader
   useEffect(() => {
     if (activeTab !== "lyric" || !projectId) return;
-    if (user || authLoading) return;
-    setLyricLoadingState("ready");
+    if (!user && !authLoading) {
+      setLyricLoadingState("ready");
+    }
   }, [activeTab, authLoading, projectId, user]);
 
   useEffect(() => {
