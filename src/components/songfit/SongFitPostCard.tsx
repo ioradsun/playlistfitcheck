@@ -358,7 +358,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       </div>
 
       {/* Action Row — reactions mode only here */}
-      {crowdfitMode !== "hook_review" && (
+      {crowdfitMode !== "hook_review" && !hasLyricDancePost && (
         <div className="flex items-center justify-between px-1 py-0.5">
           {/* Left group: comment, share, like, bookmark */}
           <div className="flex items-center">
