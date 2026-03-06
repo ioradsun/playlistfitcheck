@@ -588,27 +588,20 @@ const Index = () => {
 
   const handleSidebarTabChange = useCallback((tab: string) => {
     setLoadingProjectType(null);
-    // If switching FROM a different tab TO this one, preserve any active project
-    // Only reset to "New Project" if the user is ALREADY on this tab (double-click)
-    const isAlreadyOnTab = activeTab === tab;
-    if (isAlreadyOnTab) {
-      if (tab === "lyric") { setLoadedLyric(null); transitionNavigate("/LyricFit", { replace: true }); }
-      else if (tab === "mix") { setLoadedMixProject(null); transitionNavigate("/MixFit", { replace: true }); }
-      else if (tab === "hitfit") { setLoadedHitFitAnalysis(null); transitionNavigate("/HitFit", { replace: true }); }
-    } else {
-      // Switching tabs — navigate to the active project URL if one exists
-      if (tab === "lyric" && loadedLyric?.id) { transitionNavigate(`/LyricFit/${loadedLyric.id}`, { replace: true }); }
-      else if (tab === "mix" && loadedMixProject?.id) { transitionNavigate(`/MixFit/${loadedMixProject.id}`, { replace: true }); }
-      else if (tab === "hitfit" && loadedHitFitAnalysis) { /* keep current state */ }
-      else {
-        const pathMap: Record<string, string> = { songfit: "/CrowdFit", hookfit: "/HookFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
-        transitionNavigate(pathMap[tab] || "/CrowdFit", { replace: true });
-      }
-    }
+    // Always reset to New Project for the target tool
+    if (tab === "lyric") setLoadedLyric(null);
+    else if (tab === "mix") setLoadedMixProject(null);
+    else if (tab === "hitfit") setLoadedHitFitAnalysis(null);
+    if (tab === "playlist") { setResult(null); savedSearchIdRef.current = null; }
+    if (tab === "profit") setProfitSavedReport(null);
+    if (tab === "vibefit") setLoadedVibeFitResult(null);
+
+    const pathMap: Record<string, string> = { songfit: "/CrowdFit", hookfit: "/HookFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
+    transitionNavigate(pathMap[tab] || "/CrowdFit", { replace: true });
     startTransition(() => {
       setActiveTab(tab);
     });
-  }, [activeTab, setActiveTab, navigate, loadedLyric, loadedMixProject, loadedHitFitAnalysis]);
+  }, [setActiveTab, transitionNavigate]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
     // Collect the navigate target so we can call it AFTER flushSync
