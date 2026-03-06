@@ -1,12 +1,10 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
 import { MixProjectForm } from "@/components/mix/MixProjectForm";
 import { MixCard } from "@/components/mix/MixCard";
 import { GlobalTimeline } from "@/components/mix/GlobalTimeline";
 
 import { useAudioEngine, type AudioMix } from "@/hooks/useAudioEngine";
-import { useBeatGrid } from "@/hooks/useBeatGrid";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { useMixProjectStorage, type MixProjectData } from "@/hooks/useMixProjectStorage";
@@ -55,9 +53,14 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   markerEndRef.current = markerEnd;
   const firstMix = mixes.find((m) => m.buffer);
   const firstWaveform = firstMix?.waveform || null;
-  const firstBuffer = firstMix?.buffer || null;
   const referenceDuration = firstWaveform?.duration || 1;
-  const { beatGrid, loading: beatGridLoading } = useBeatGrid(firstBuffer);
+  // Beat detection disabled in MixFit — Essentia WASM is heavyweight and not needed here.
+  // GlobalTimeline renders fine without beats (markers/playback still fully functional).
+  const beatGrid = null;
+  const beatGridLoading = false;
+  // Upload/decode progress
+  const [isCreating, setIsCreating] = useState(false);
+  const [processingFile, setProcessingFile] = useState<{ name: string; index: number; total: number } | null>(null);
 
   // Animate playhead
   useEffect(() => {
@@ -103,19 +106,30 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     // Cancel any stale async load before creating fresh project state
     loadSessionRef.current += 1;
     const newId = crypto.randomUUID();
-    setProjectId(newId);
-    setTitle(t);
-    setNotes(n);
-    // Decode uploaded files and upload to storage
+
+    // Show progress in the form while decoding/uploading — don't commit projectId yet
+    setIsCreating(true);
+    setProcessingFile({ name: files[0]?.name ?? "", index: 1, total: files.length });
+
+    // Optimistically add to sidebar immediately so it appears without waiting for save
+    onOptimisticItem?.({
+      id: newId,
+      label: t || "Mix Project",
+      meta: "just now",
+      type: "mix",
+      rawData: { id: newId, title: t, notes: n, mixes: [] },
+    });
+
     const decodedMixes: (AudioMix & { audio_url?: string })[] = [];
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setProcessingFile({ name: file.name, index: i + 1, total: files.length });
       try {
         const { buffer, waveform } = await decodeFile(file);
         const mixName = file.name.replace(/\.(mp3|wav|m4a)$/i, "");
         const mixId = crypto.randomUUID();
         let audioUrl: string | undefined;
 
-        // Upload audio to storage for logged-in users
         if (user) {
           try {
             const ext = file.name.split(".").pop() || "mp3";
@@ -132,7 +146,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
           }
         }
 
-        const newMix: AudioMix & { audio_url?: string } = {
+        decodedMixes.push({
           id: mixId,
           name: mixName,
           buffer,
@@ -140,20 +154,22 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
           rank: null,
           comments: "",
           audio_url: audioUrl,
-        };
-        // Cache file for session persistence
+        });
         sessionAudio.set("mix", `${newId}::${mixName}`, file, { ttlMs: 30 * 60 * 1000 });
-        decodedMixes.push(newMix);
       } catch {
         toast.error(`Failed to decode ${file.name}`);
       }
     }
-    // Update mixes state
+
+    // All files processed — now commit state and switch to project view
+    setIsCreating(false);
+    setProcessingFile(null);
+    setProjectId(newId);
+    setTitle(t);
+    setNotes(n);
     setMixes(decodedMixes);
-    if (decodedMixes.length > 0 && decodedMixes[0].waveform) {
-      setMarkerEnd(decodedMixes[0].waveform.duration);
-    }
-    // Immediately save to DB so sidebar picks it up
+    if (decodedMixes[0]?.waveform) setMarkerEnd(decodedMixes[0].waveform.duration);
+
     try {
       await save({
         id: newId,
@@ -167,13 +183,6 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       });
       onProjectSaved?.();
       onSavedId?.(newId);
-      onOptimisticItem?.({
-        id: newId,
-        label: t || "Mix Project",
-        meta: "just now",
-        type: "mix",
-        rawData: { id: newId, title: t, notes: n, mixes: decodedMixes.map((m) => ({ name: m.name, rank: m.rank, comments: m.comments, audio_url: m.audio_url })) },
-      });
     } catch (e) {
       console.error("Failed initial save for MixFit project:", e);
     }
@@ -417,11 +426,34 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
     }
   }, [projectId, title, resetProject, onHeaderProject, user, lastSavedAt]);
 
-  // If no project created yet, show form + saved projects
+  // If no project created yet, show form (with progress overlay while decoding)
   if (!projectId) {
     return (
       <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
-        <MixProjectForm onSubmit={handleCreate} />
+        {isCreating && processingFile ? (
+          <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
+            <div className="glass-card rounded-xl p-8 space-y-4">
+              <div className="flex items-center justify-center gap-3">
+                <svg className="animate-spin h-5 w-5 text-primary" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                <span className="text-sm font-medium">
+                  Processing {processingFile.index} of {processingFile.total}
+                </span>
+              </div>
+              <p className="text-xs font-mono text-muted-foreground truncate max-w-xs mx-auto">{processingFile.name}</p>
+              <div className="w-full bg-muted/30 rounded-full h-1.5">
+                <div
+                  className="bg-primary h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${(processingFile.index / processingFile.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <MixProjectForm onSubmit={handleCreate} />
+        )}
       </div>
     );
   }
