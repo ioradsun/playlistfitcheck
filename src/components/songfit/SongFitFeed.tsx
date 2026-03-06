@@ -84,6 +84,7 @@ function LazyFeedCard({
 export function SongFitFeed() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isAdmin = user?.email === "sunpatel@gmail.com" || user?.email === "spatel@iorad.com";
   const [posts, setPosts] = useState<SongFitPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
@@ -295,7 +296,7 @@ export function SongFitFeed() {
       .then(({ count }) => {
         const everPosted = (count ?? 0) > 0;
         setHasEverPosted(everPosted);
-        if (!everPosted) setComposerUnlocked(true); // first-timer: skip gate
+        if (!everPosted || isAdmin) setComposerUnlocked(true);
       });
   }, [user]);
 
@@ -329,9 +330,11 @@ export function SongFitFeed() {
   // Re-lock on post-created event (circular economy) — gate activates after first post
   useEffect(() => {
     const handler = () => {
-      setHasEverPosted(true); // now they've posted, future drops need 3 signals
-      setComposerUnlocked(false);
-      setUserVoteCount(0);
+      setHasEverPosted(true);
+      if (!isAdmin) {
+        setComposerUnlocked(false);
+        setUserVoteCount(0);
+      }
       setHasPosted(true);
     };
     window.addEventListener("crowdfit:post-created", handler);
