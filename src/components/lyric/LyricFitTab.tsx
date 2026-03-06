@@ -238,7 +238,7 @@ export function LyricFitTab({
 
   useEffect(() => {
     if (!detectedGrid || beatGrid) return;
-    console.log(`[Transcribe Debug] beatGridDone=true, bpm=${detectedGrid.bpm}`);
+    
     setBeatGrid(detectedGrid);
     setBeatGridDone(true);
     setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
