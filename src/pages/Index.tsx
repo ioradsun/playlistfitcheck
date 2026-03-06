@@ -242,17 +242,11 @@ const Index = () => {
   }, [activeTab, projectId, authLoading, user?.id, loadedLyric?.id]);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || projectLoadedRef.current === projectId || !user) return;
     const tab = activeTab;
     
     // Lyric projects are handled by the dedicated lyric loader effect
     if (tab === "lyric") return;
-    
-    // Wait for auth to settle before attempting fetch (mirrors lyric loader)
-    if (authLoading) return;
-    if (!user) return;
-    
-    if (projectLoadedRef.current === projectId) return;
     
     // If data was already committed by handleLoadProject (sidebar click), skip the fetch
     const alreadyLoaded =
@@ -313,7 +307,7 @@ const Index = () => {
         handleLoadProject(tab, data);
       }
     })();
-  }, [projectId, activeTab, user?.id, authLoading]);
+  }, [projectId, activeTab, user?.id]);
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
@@ -811,7 +805,7 @@ const Index = () => {
         return (
           <div className="flex-1 flex flex-col min-h-0">
             <Suspense fallback={<PageSkeleton tool="mix" mode={screen.mode} />}>
-              <MixFitCheck initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("mix", id); }} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+              <MixFitCheck key={loadedMixProject?.id ?? "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => { projectLoadedRef.current = id; navigateToProject("mix", id); }} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>
         );
