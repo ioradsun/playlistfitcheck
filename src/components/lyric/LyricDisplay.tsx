@@ -149,7 +149,7 @@ interface Props {
     explicit?: Partial<VersionMeta>;
     fmly?: Partial<VersionMeta>;
   } | null;
-  debugData?: any | null;
+  // debugData removed for production
   initialBeatGrid?: BeatGridData | null;
   initialWaveform?: WaveformData | null;
   initialRenderData?: any | null;
