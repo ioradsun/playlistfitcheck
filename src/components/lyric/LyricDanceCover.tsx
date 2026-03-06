@@ -22,7 +22,7 @@ export function LyricDanceCover({
 }: LyricDanceCoverProps) {
   return (
     <div
-      className="absolute inset-0 z-20 flex flex-col items-center justify-center relative"
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center"
       style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(2px)" }}
     >
       {/* Top row — badge + expand, pinned top */}
@@ -80,18 +80,27 @@ export function LyricDanceCover({
       {/* Social proof bar — pinned bottom, only when reactions exist */}
       {topReaction && !waiting && (
         <div
-          className="absolute bottom-0 left-0 right-0 px-3 py-2.5"
+          className="absolute bottom-0 left-0 right-0 flex items-center gap-2 px-3 py-2.5 overflow-hidden"
           style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
         >
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-sm leading-none">{topReaction.symbol}</span>
-            <span className="text-[10px] font-mono text-white/55 tracking-wide">
-              {topReaction.lineReactionCount} reaction{topReaction.lineReactionCount !== 1 ? 's' : ''} on this line
-            </span>
+          {/* Emoji — small, matches pill size */}
+          <span className="text-[11px] leading-none shrink-0 select-none">
+            {topReaction.symbol}
+          </span>
+
+          {/* Scrolling text container */}
+          <div className="overflow-hidden flex-1 min-w-0">
+            {/* Inner div duplicates content for seamless loop */}
+            <div className="flex animate-marquee whitespace-nowrap">
+              <span className="text-[10px] font-mono text-white/40 pr-16">
+                {topReaction.lineReactionCount} reactions on this line &nbsp;·&nbsp; &ldquo;{topReaction.lineText}&rdquo;
+              </span>
+              {/* Duplicate for seamless loop */}
+              <span className="text-[10px] font-mono text-white/40 pr-16" aria-hidden="true">
+                {topReaction.lineReactionCount} reactions on this line &nbsp;·&nbsp; &ldquo;{topReaction.lineText}&rdquo;
+              </span>
+            </div>
           </div>
-          <p className="text-[10px] font-mono text-white/30 truncate">
-            "{topReaction.lineText}"
-          </p>
         </div>
       )}
     </div>

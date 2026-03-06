@@ -256,7 +256,7 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
                   {(() => {
                     const topEmoji = getTopEmojiForLine(reactionData, activeLine.lineIndex);
                     return topEmoji ? (
-                      <span className="text-sm leading-none shrink-0">{topEmoji}</span>
+                      <span className="text-[11px] leading-none shrink-0 select-none">{topEmoji}</span>
                     ) : (
                       <div className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
                         style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }} />
