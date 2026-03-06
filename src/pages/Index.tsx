@@ -16,6 +16,7 @@ import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
 import { useScrollRestore } from "@/hooks/useScrollRestore";
+import { useProjectScreen } from "@/hooks/useProjectScreen";
 import {
   AppSidebarImport,
   DreamFitTabImport,
@@ -31,11 +32,7 @@ import {
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { ChevronRight } from "lucide-react";
 import {
-  CrowdFitSkeleton,
-  DreamFitSkeleton,
-  HitFitSkeleton,
-  LyricFitSkeleton,
-  MixFitSkeleton,
+  PageSkeleton,
   PlaylistFitSkeleton,
 } from "@/components/ui/PageSkeletons";
 
@@ -89,38 +86,19 @@ const TabChunkFallback = () => (
   </div>
 );
 
-const ToolSkeleton = ({ tab, variant = "new" }: { tab: string; variant?: "new" | "existing" }) => {
-  switch (tab) {
-    case "songfit":
-    case "hookfit":
-      return <div className="px-4 py-6"><CrowdFitSkeleton variant={variant} /></div>;
-    case "lyric":
-      return <LyricFitSkeleton variant={variant} />;
-    case "hitfit":
-      return <div className="px-4 py-6"><HitFitSkeleton variant={variant} /></div>;
-    case "mix":
-      return <div className="px-4 py-6"><MixFitSkeleton variant={variant} /></div>;
-    case "dreamfit":
-      return <div className="px-4 py-6"><DreamFitSkeleton variant={variant} /></div>;
-    default:
-      return <TabChunkFallback />;
-  }
-};
-
+// PATH_TO_TAB is kept for URL → tab syncing in useEffect
 const PATH_TO_TAB: Record<string, string> = {
-  "/CrowdFit": "songfit",
-  "/HookFit": "hookfit",
-  "/SongFit": "songfit", // legacy redirect support
-  "/ProFit": "profit",
+  "/CrowdFit":    "songfit",
+  "/HookFit":     "hookfit",
+  "/SongFit":     "songfit",
+  "/ProFit":      "profit",
   "/PlaylistFit": "playlist",
-  "/MixFit": "mix",
-  "/LyricFit": "lyric",
-  "/HitFit": "hitfit",
-  "/DreamFit": "dreamfit",
-  "/VibeFit": "vibefit",
+  "/MixFit":      "mix",
+  "/LyricFit":    "lyric",
+  "/HitFit":      "hitfit",
+  "/DreamFit":    "dreamfit",
+  "/VibeFit":     "vibefit",
 };
-
-// Labels and subtitles are now driven by useSiteCopy in the component below
 
 const Index = () => {
   const { user, loading: authLoading, profile } = useAuth();
@@ -177,54 +155,62 @@ const Index = () => {
 
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
 
-  // Auto-load project from URL param for any tool
+  // ── Unified project-fetch status (replaces lyricLoadingState + loadingProjectType) ──
+  // isFetchingProject: true while any tool's project data is being fetched from Supabase
+  // projectMissing:    true when the last fetch returned no data (404)
+  const [isFetchingProject, setIsFetchingProject] = useState(() =>
+    Boolean(projectId)
+  );
+  const [projectMissing, setProjectMissing] = useState(false);
+
+  // Tracks which projectId we've already fetched (de-duplicate loads)
   const projectLoadedRef = useRef<string | null>(null);
+
+  // Reset fetch status whenever projectId disappears
   useEffect(() => {
     if (!projectId) {
       projectLoadedRef.current = null;
+      setIsFetchingProject(false);
+      setProjectMissing(false);
     }
   }, [projectId]);
 
-  // When projectId changes, mark lyric loading; when cleared, reset
+  // When projectId changes for lyric, reset loaded data and mark as fetching
   const prevProjectIdRef = useRef<string | undefined>(projectId);
   useEffect(() => {
     if (activeTab !== "lyric") return;
-
-    if (projectId) {
-      // Only reset loadedLyric when the projectId actually changed
-      if (prevProjectIdRef.current !== projectId) {
-        setLoadedLyric(null);
-        setLyricLoadingState("loading");
-      }
-    } else {
-      setLyricLoadingState("ready");
+    if (projectId && prevProjectIdRef.current !== projectId) {
+      setLoadedLyric(null);
+      setIsFetchingProject(true);
+      setProjectMissing(false);
+    } else if (!projectId) {
+      setIsFetchingProject(false);
+      setProjectMissing(false);
       setLoadedLyric(null);
     }
     prevProjectIdRef.current = projectId;
   }, [activeTab, projectId]);
 
-
+  // Lyric project loader
   useEffect(() => {
     if (activeTab !== "lyric" || !projectId) return;
-
-    // Hold skeleton until auth settles so we never render New Project mid-hydration.
     if (authLoading) return;
 
-    // Route points to a project but there is no authenticated user to load it.
     if (!user) {
       setLoadedLyric(null);
-      setLyricLoadingState("missing");
+      setIsFetchingProject(false);
+      setProjectMissing(true);
       return;
     }
 
-    // Only skip fetch when both ref + actual payload match.
     if (projectLoadedRef.current === projectId && loadedLyric?.id === projectId) {
-      setLyricLoadingState("ready");
+      setIsFetchingProject(false);
       return;
     }
 
     let cancelled = false;
-    setLyricLoadingState("loading");
+    setIsFetchingProject(true);
+    setProjectMissing(false);
 
     (async () => {
       const { data, error } = await supabase
@@ -238,7 +224,8 @@ const Index = () => {
 
       if (error || !data) {
         setLoadedLyric(null);
-        setLyricLoadingState("missing");
+        setIsFetchingProject(false);
+        setProjectMissing(true);
         return;
       }
 
@@ -246,13 +233,12 @@ const Index = () => {
       // Commit atomically to avoid intermediate "ready + null" frames.
       flushSync(() => {
         setLoadedLyric(data);
-        setLyricLoadingState("ready");
+        setIsFetchingProject(false);
+        setProjectMissing(false);
       });
     })();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [activeTab, projectId, authLoading, user?.id, loadedLyric?.id]);
 
   useEffect(() => {
@@ -260,9 +246,7 @@ const Index = () => {
     const tab = activeTab;
     
     // Lyric projects are handled by the dedicated lyric loader effect
-    if (tab === "lyric") {
-      return;
-    }
+    if (tab === "lyric") return;
     
     // If already loaded via sidebar, just mark as loaded
     const alreadyLoaded = 
@@ -273,7 +257,8 @@ const Index = () => {
       return;
     }
     projectLoadedRef.current = projectId;
-    setLoadingProjectType(tab);
+    setIsFetchingProject(true);
+    setProjectMissing(false);
 
     const pathMap: Record<string, string> = { lyric: "/LyricFit", mix: "/MixFit", hitfit: "/HitFit", profit: "/ProFit", vibefit: "/VibeFit", playlist: "/PlaylistFit" };
 
@@ -297,12 +282,13 @@ const Index = () => {
         data = r.data; error = r.error;
       }
       if (error || !data) {
-        setLoadingProjectType(null);
+        setIsFetchingProject(false);
+        setProjectMissing(true);
         toast.error("Project not found");
         navigate(pathMap[tab] || "/CrowdFit", { replace: true });
         return;
       }
-      setLoadingProjectType(null);
+      setIsFetchingProject(false);
       // For profit, reshape data to match expected format
       if (tab === "profit" && data.blueprint_json) {
         const artist = (data as any).profit_artists;
@@ -337,11 +323,7 @@ const Index = () => {
   
   const [deferSidebarReady, setDeferSidebarReady] = useState(false);
   const [optimisticSidebarItem, setOptimisticSidebarItem] = useState<{ id: string; label: string; meta: string; type: string; rawData?: any } | null>(null);
-  const [lyricLoadingState, setLyricLoadingState] = useState<"loading" | "ready" | "missing">(
-    tabFromPath === "lyric" && projectId ? "loading" : "ready"
-  );
   // Tracks when we're loading a project from URL/sidebar — shows skeleton instead of uploader
-  const [loadingProjectType, setLoadingProjectType] = useState<string | null>(null);
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
   useScrollRestore(location.pathname, contentScrollRef);
@@ -558,6 +540,31 @@ const Index = () => {
   const [loadedVibeFitResult, setLoadedVibeFitResult] = useState<any>(null);
   const [vibeFitLoadKey, setVibeFitLoadKey] = useState(0);
 
+  // ── Universal screen descriptor ──────────────────────────────────────────
+  // Must live AFTER all per-tool state declarations it depends on.
+  const toolDataLoaded = useMemo(() => {
+    if (!projectId) return true;
+    if (isFetchingProject) return false;
+    switch (activeTab) {
+      case "lyric":    return loadedLyric?.id === projectId;
+      case "mix":      return loadedMixProject?.id === projectId;
+      case "hitfit":   return !!loadedHitFitAnalysis;
+      case "profit":   return !!profitSavedReport;
+      case "playlist": return !!result;
+      case "vibefit":  return !!loadedVibeFitResult;
+      default:         return true;
+    }
+  }, [projectId, isFetchingProject, activeTab, loadedLyric, loadedMixProject, loadedHitFitAnalysis, profitSavedReport, result, loadedVibeFitResult]);
+
+  const screen = useProjectScreen({
+    pathname: location.pathname,
+    projectId,
+    authLoading,
+    user,
+    dataLoaded: toolDataLoaded,
+    dataMissing: projectMissing,
+  });
+
   // Reset all tool state when user logs out
   const prevUserRef = useRef(user);
   useEffect(() => {
@@ -574,7 +581,8 @@ const Index = () => {
       setOptimisticSidebarItem(null);
       setProfitLoadKey(k => k + 1);
       setVibeFitLoadKey(k => k + 1);
-      
+      setIsFetchingProject(false);
+      setProjectMissing(false);
       setHeaderProject(null);
       // Clear all cached audio on logout
       sessionAudio.clearAll();
@@ -587,7 +595,8 @@ const Index = () => {
   const handleNewHitFit = useCallback(() => { setLoadedHitFitAnalysis(null); transitionNavigate("/HitFit", { replace: true }); }, [transitionNavigate]);
 
   const handleSidebarTabChange = useCallback((tab: string) => {
-    setLoadingProjectType(null);
+    setIsFetchingProject(false);
+    setProjectMissing(false);
     // Always reset to New Project for the target tool — synchronous, no startTransition
     if (tab === "lyric") setLoadedLyric(null);
     else if (tab === "mix") setLoadedMixProject(null);
@@ -674,7 +683,7 @@ const Index = () => {
         case "lyric": {
           if (data) {
             setLoadedLyric(data);
-            setLoadingProjectType(null);
+            setIsFetchingProject(false);
             if (data.id) navTarget = `/LyricFit/${data.id}`;
           }
           break;
@@ -741,102 +750,86 @@ const Index = () => {
   }, [transitionNavigate, location.pathname]);
 
   const renderTabContent = () => {
+    // ── Universal loading guard ────────────────────────────────────────────
+    // When screen.status === "loading", render the correct skeleton for this
+    // tool + mode BEFORE any lazy chunk is even attempted. This prevents both
+    // the "new project flashes before existing loads" bug and avoids per-tool
+    // isHydrating* booleans scattered through the switch below.
+    if (screen.status === "loading") {
+      return <PageSkeleton tool={screen.tool} mode={screen.mode} />;
+    }
+
     switch (activeTab) {
       case "songfit":
-        return <div id="songfit-scroll-container" className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="songfit" variant={projectId ? "existing" : "new"} />}><SongFitTab /></Suspense></div>;
+        return <div id="songfit-scroll-container" className="flex-1 px-4 py-6"><Suspense fallback={<PageSkeleton tool="songfit" mode="new" />}><SongFitTab /></Suspense></div>;
       case "hookfit":
-        return hookfitEnabled ? <div className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="hookfit" variant={projectId ? "existing" : "new"} />}><HookFitTab /></Suspense></div> : null;
-      case "lyric": {
-        const isHydratingExistingLyricProject = Boolean(
-          projectId &&
-            (authLoading ||
-              lyricLoadingState === "loading" ||
-              (lyricLoadingState !== "missing" && loadedLyric?.id !== projectId))
-        );
-
+        return hookfitEnabled ? <div className="flex-1 px-4 py-6"><Suspense fallback={<PageSkeleton tool="hookfit" mode="new" />}><HookFitTab /></Suspense></div> : null;
+      case "lyric":
         return (
           <div className="flex-1 flex flex-col min-h-0">
-            {isHydratingExistingLyricProject ? (
-              <ToolSkeleton tab="lyric" variant={projectId ? "existing" : "new"} />
-            ) : (
-              <Suspense fallback={<ToolSkeleton tab="lyric" variant={projectId ? "existing" : "new"} />}>
-                <LyricFitTab
-                  key={loadedLyric?.id || "new"}
-                  initialLyric={loadedLyric}
-                  onNewProject={handleNewLyric}
-                  onHeaderProject={setHeaderProject}
-                  onSavedId={(id) => {
-                    projectLoadedRef.current = id;
-                    navigateToProject("lyric", id);
-                  }}
-                  onUploadStarted={(payload) => {
-                    if (payload.projectId) {
-                      projectLoadedRef.current = payload.projectId;
-                      setOptimisticSidebarItem({
-                        id: payload.projectId,
-                        label: payload.title || "Untitled",
-                        meta: "just now",
-                        type: "lyric",
-                        rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
-                      });
-                      navigate(`/LyricFit/${payload.projectId}`, { replace: true });
-                    }
-                  }}
-                />
-              </Suspense>
-            )}
+            <Suspense fallback={<PageSkeleton tool="lyric" mode={screen.mode} />}>
+              <LyricFitTab
+                key={loadedLyric?.id || "new"}
+                initialLyric={loadedLyric}
+                onNewProject={handleNewLyric}
+                onHeaderProject={setHeaderProject}
+                onSavedId={(id) => {
+                  projectLoadedRef.current = id;
+                  navigateToProject("lyric", id);
+                }}
+                onUploadStarted={(payload) => {
+                  if (payload.projectId) {
+                    projectLoadedRef.current = payload.projectId;
+                    setOptimisticSidebarItem({
+                      id: payload.projectId,
+                      label: payload.title || "Untitled",
+                      meta: "just now",
+                      type: "lyric",
+                      rawData: { id: payload.projectId, title: payload.title, lines: [], filename: payload.file.name },
+                    });
+                    navigate(`/LyricFit/${payload.projectId}`, { replace: true });
+                  }
+                }}
+              />
+            </Suspense>
           </div>
         );
-      }
-      case "mix": {
-        const isHydratingMix = Boolean(projectId && (authLoading || loadingProjectType === "mix" || (loadedMixProject?.id !== projectId && projectLoadedRef.current !== projectId)));
+      case "mix":
         return (
           <div className="flex-1 flex flex-col min-h-0">
-             {isHydratingMix ? <ToolSkeleton tab="mix" variant={projectId ? "existing" : "new"} /> : (
-              <Suspense fallback={<ToolSkeleton tab="mix" variant={projectId ? "existing" : "new"} />}>
-                <MixFitCheck initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
-              </Suspense>
-            )}
+            <Suspense fallback={<PageSkeleton tool="mix" mode={screen.mode} />}>
+              <MixFitCheck initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("mix", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+            </Suspense>
           </div>
         );
-      }
-      case "hitfit": {
-        const isHydratingHitFit = Boolean(projectId && (authLoading || loadingProjectType === "hitfit") && !loadedHitFitAnalysis);
+      case "hitfit":
         return (
           <div className="flex-1 flex flex-col min-h-0 px-4 py-6">
-            {isHydratingHitFit ? <ToolSkeleton tab="hitfit" variant={projectId ? "existing" : "new"} /> : (
-              <Suspense fallback={<ToolSkeleton tab="hitfit" variant={projectId ? "existing" : "new"} />}>
-                <HitFitTab
-                  key={loadedHitFitAnalysis ? "loaded" : "new"}
-                  initialAnalysis={loadedHitFitAnalysis}
-                  onNewProject={handleNewHitFit}
-                  onHeaderProject={setHeaderProject}
-                  onSavedId={(id) => navigateToProject("hitfit", id)}
-                  onOptimisticItem={(item) => {
-                    projectLoadedRef.current = item.id;
-                    setOptimisticSidebarItem(item);
-                  }}
-                />
-              </Suspense>
-            )}
+            <Suspense fallback={<PageSkeleton tool="hitfit" mode={screen.mode} />}>
+              <HitFitTab
+                key={loadedHitFitAnalysis ? "loaded" : "new"}
+                initialAnalysis={loadedHitFitAnalysis}
+                onNewProject={handleNewHitFit}
+                onHeaderProject={setHeaderProject}
+                onSavedId={(id) => navigateToProject("hitfit", id)}
+                onOptimisticItem={(item) => {
+                  projectLoadedRef.current = item.id;
+                  setOptimisticSidebarItem(item);
+                }}
+              />
+            </Suspense>
           </div>
         );
-      }
       case "profit": {
-        const isHydratingProfit = Boolean(projectId && (authLoading || loadingProjectType === "profit") && !profitSavedReport);
         return (
           <div className="flex-1 flex flex-col min-h-0">
-            {isHydratingProfit ? <TabChunkFallback /> : (
-              <Suspense fallback={<TabChunkFallback />}>
-                <ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
-              </Suspense>
-            )}
+            <Suspense fallback={<TabChunkFallback />}>
+              <ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+            </Suspense>
           </div>
         );
       }
       case "playlist": {
-        const isHydratingPlaylist = Boolean(projectId && (authLoading || loadingProjectType === "playlist") && !result);
-        if (isHydratingPlaylist) return <div className="px-4 py-6"><PlaylistFitSkeleton variant="existing" /></div>;
         return result ? (
           <div className="flex-1 px-4 py-6">
             {!isFullyLoaded ? (
@@ -865,19 +858,15 @@ const Index = () => {
         );
       }
       case "dreamfit":
-        return <div className="flex-1 px-4 py-6"><Suspense fallback={<ToolSkeleton tab="dreamfit" variant={projectId ? "existing" : "new"} />}><DreamFitTab /></Suspense></div>;
-      case "vibefit": {
-        const isHydratingVibeFit = Boolean(projectId && (authLoading || loadingProjectType === "vibefit") && !loadedVibeFitResult);
+        return <div className="flex-1 px-4 py-6"><Suspense fallback={<PageSkeleton tool="dreamfit" mode="new" />}><DreamFitTab /></Suspense></div>;
+      case "vibefit":
         return (
           <div className="flex-1 flex flex-col px-4 py-6">
-            {isHydratingVibeFit ? <TabChunkFallback /> : (
-              <Suspense fallback={<TabChunkFallback />}>
-                <VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
-              </Suspense>
-            )}
+            <Suspense fallback={<TabChunkFallback />}>
+              <VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+            </Suspense>
           </div>
         );
-      }
       default:
         return null;
     }
