@@ -283,7 +283,7 @@ export function LyricFitTab({
       setWaveformData(extractPeaksFromBuffer(buf));
       ctx.close();
     } catch {
-      console.warn("[Pipeline] On-demand AudioBuffer decode failed");
+      
     }
   }, [audioFile, audioBuffer]);
 
