@@ -211,6 +211,11 @@ export default function ShareableLyricDance() {
     engagementModeRef.current = engagementMode;
   }, [engagementMode]);
 
+  // ── Audio sections — derived from cinematic direction ────────
+  const audioSections = useMemo(() => {
+    return extractAudioSectionsFromDirection(data?.cinematic_direction, data?.lyrics ?? []) ?? [];
+  }, [data?.cinematic_direction, data?.lyrics]);
+
   // ── Lyric sections — derived from words + cinematic direction ────────
   const durationSec = useMemo(() => {
     const lines = data?.lyrics ?? [];
