@@ -665,7 +665,7 @@ export function LyricFitTab({
           // Check if images already exist (hydrated from DB)
           const currentSavedImages = initialLyric?.section_images;
           if (Array.isArray(currentSavedImages) && currentSavedImages.length > 0 && currentSavedImages.some(Boolean)) {
-            console.log(`[Pipeline] Images already exist (${currentSavedImages.filter(Boolean).length}), skipping generation`);
+            
             setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done", sectionImages: "done" }));
           } else {
             console.log(`[Pipeline] Auto-starting image generation for ${dirSections.length} sections`);
