@@ -171,7 +171,7 @@ export async function computeAutoPalettesFromUrls(urls: string[]): Promise<strin
       continue;
     }
     if (!isValidHttpUrl(url)) {
-      console.warn(`[auto-palette] [${i}] skipping non-HTTP URL: ${String(url).slice(0, 80)}`);
+      // skipping non-HTTP URL
       continue;
     }
     try {
