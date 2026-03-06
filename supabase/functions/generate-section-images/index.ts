@@ -281,7 +281,7 @@ serve(async (req) => {
 
     const urls = uploadResults.map((url) => url ?? null);
     const successCount = urls.filter(Boolean).length;
-    console.log(`[section-images] Generated ${successCount}/${sections.length} images`);
+    
 
     if (successCount > 0) {
       const { error: updateError } = await supabase
