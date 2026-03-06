@@ -30,6 +30,10 @@ function getCssHsl(variable: string, alpha = 1): string {
   return `hsla(${val}, ${alpha})`;
 }
 
+function isDarkMode(): boolean {
+  return document.documentElement.classList.contains("dark");
+}
+
 function drawCardWaveform(canvas: HTMLCanvasElement, peaks: number[], isPlaying: boolean) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr;
@@ -40,14 +44,14 @@ function drawCardWaveform(canvas: HTMLCanvasElement, peaks: number[], isPlaying:
   const ch = canvas.clientHeight;
   ctx.clearRect(0, 0, cw, ch);
 
-  const color = isPlaying
-    ? getCssHsl("--primary", 0.7)
-    : getCssHsl("--muted-foreground", 0.6);
+  const dark = isDarkMode();
+  const playedColor = getCssHsl("--primary", 0.9);
+  const unplayedColor = dark ? "rgba(150,150,150,0.6)" : "rgba(120,120,120,0.35)";
   const barW = cw / peaks.length;
   const barGap = 1;
   peaks.forEach((peak, i) => {
-    const barH = Math.max(peak * ch * 0.85, 1);
-    ctx.fillStyle = color;
+    const barH = Math.max(peak * ch * 0.85, 2);
+    ctx.fillStyle = isPlaying ? playedColor : unplayedColor;
     ctx.fillRect(i * barW, (ch - barH) / 2, Math.max(barW - barGap, 1), barH);
   });
 }
