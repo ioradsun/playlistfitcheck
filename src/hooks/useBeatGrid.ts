@@ -46,7 +46,7 @@ async function loadEssentia(): Promise<any> {
     const w = window as any;
     const wasmModule = await w.EssentiaWASM();
     essentiaInstance = new w.Essentia(wasmModule);
-    console.log("[beat-grid] Essentia.js loaded, version:", essentiaInstance.version);
+    
     return essentiaInstance;
   })();
 
