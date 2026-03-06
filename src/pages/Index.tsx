@@ -633,7 +633,8 @@ const Index = () => {
         }
         case "hitfit": {
           if (data?.analysis) {
-            setLoadedHitFitAnalysis(data.analysis);
+            const analysisWithFilename = { ...data.analysis, _projectFilename: data.filename };
+            setLoadedHitFitAnalysis(analysisWithFilename);
             if (data.id) navTarget = `/HitFit/${data.id}`;
           }
           break;
