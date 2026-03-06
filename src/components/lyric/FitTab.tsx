@@ -415,7 +415,7 @@ export function FitTab({
       if (error) {
         console.error('[auto-save] lyrics save failed:', error.message);
       } else {
-        console.log('[auto-save] lyrics + reconciled words saved. lines:', mainLines.length, 'words:', reconciledWords?.length ?? 0);
+        
       }
     }, 1500); // 1.5s debounce — wait for user to stop typing
 
