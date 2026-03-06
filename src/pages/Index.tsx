@@ -38,7 +38,10 @@ const SongFitTab = lazy(() => SongFitTabImport().then((module) => ({ default: mo
 const HookFitTab = lazy(() => HookFitTabImport().then((module) => ({ default: module.HookFitTab })));
 const DreamFitTab = lazy(() => DreamFitTabImport().then((module) => ({ default: module.DreamFitTab })));
 const VibeFitTab = lazy(() => VibeFitTabImport().then((module) => ({ default: module.VibeFitTab })));
-const AppSidebar = lazy(() => AppSidebarImport().then((module) => ({ default: module.AppSidebar })));
+const AppSidebar = lazy(() => AppSidebarImport().then((module) => {
+  const Comp = module.AppSidebar;
+  return { default: (props: any) => <Comp {...props} /> };
+}));
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -701,7 +704,7 @@ const Index = () => {
         return <div className="flex-1 flex flex-col min-h-0"><Suspense fallback={<TabChunkFallback />}><ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} /></Suspense></div>;
       case "playlist":
         if (loadingProjectType === "playlist") {
-          return <ProjectLoadingFallback />;
+          return <TabChunkFallback />;
         }
         return result ? (
           <div className="flex-1 px-4 py-6">
