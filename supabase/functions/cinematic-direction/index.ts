@@ -197,6 +197,139 @@ Optional:
 Return JSON only.
 `;
 
+
+
+const SCENE_DIRECTION_PROMPT = `
+You are a film director designing the visual world for a lyric video.
+
+You will receive:
+1. Song lyrics organized into SECTIONS with timestamps and roles
+2. A listener scene — where the listener is when they hear this song
+
+Your job:
+- Design a visual world for each section
+- Pick presets from the menus below
+
+THE LISTENER SCENE IS YOUR ANCHOR.
+If no listener scene is provided, infer one from the lyrics.
+
+You may NOT invent values outside the menus below.
+Return ONLY valid JSON. No markdown. No explanation.
+
+═══════════════════════════════════════
+SONG DEFAULTS (6 picks)
+═══════════════════════════════════════
+
+Pick one value for each. These apply to every section unless overridden.
+
+SCENE TONE:
+  "dark", "light", "mixed-dawn", "mixed-dusk", "mixed-pulse"
+
+ATMOSPHERE:
+  "void", "cinematic", "haze", "split", "grain", "wash", "glass", "clean"
+
+MOTION:
+  "weighted", "fluid", "elastic", "drift", "glitch"
+
+TYPOGRAPHY (match to genre — do NOT default to clean-modern):
+  "bold-impact"      — hip-hop, trap, EDM, anthems
+  "clean-modern"     — pop, indie pop, mainstream
+  "elegant-serif"    — R&B, soul, jazz, ballads
+  "raw-condensed"    — punk, rock, grunge, drill
+  "whisper-soft"     — acoustic, folk, lullaby, ambient
+  "tech-mono"        — electronic, synthwave, cyberpunk
+  "display-heavy"    — arena rock, hype tracks, sports anthems
+  "editorial-light"  — singer-songwriter, poetry, classical
+
+TEXTURE:
+  "fire", "rain", "snow", "aurora", "smoke", "storm", "dust", "void", "stars", "petals"
+
+EMOTIONAL ARC:
+  "slow-burn", "surge", "collapse", "dawn", "flatline", "eruption"
+
+═══════════════════════════════════════
+SECTIONS
+═══════════════════════════════════════
+
+For EACH section, return:
+
+REQUIRED:
+- "sectionIndex": integer (must match the input section index)
+- "description": vivid 1-sentence scene for background image generation, rooted in the listener's scene
+- "visualMood": ONE word from: "intimate", "anthemic", "dreamy", "aggressive", "melancholy", "euphoric", "eerie", "vulnerable", "triumphant", "nostalgic", "defiant", "hopeful", "raw", "hypnotic"
+- "structuralLabel": human-readable section name (e.g. "Verse 1", "Chorus", "Bridge")
+
+OPTIONAL overrides:
+- "motion", "texture", "typography", "atmosphere" — override song defaults for this section
+
+Return JSON only.
+`;
+
+const WORD_DIRECTION_PROMPT = `
+You are a word choreographer for a cinematic lyric video.
+
+The visual world has already been designed. You will receive:
+1. The SCENE DIRECTION (song defaults + section visual moods)
+2. Song lyrics with timestamps
+3. HELD WORDS the artist emphasized vocally
+
+Your job: design how individual words appear, animate, and exit.
+Match animations to what words MEAN. Harmonize with the established visual mood.
+
+You may NOT invent values outside the menus below.
+Return ONLY valid JSON. No markdown. No explanation.
+
+═══════════════════════════════════════
+STORYBOARD (sparse)
+═══════════════════════════════════════
+
+For 15-25 emotionally significant lines, identify the hero moment.
+Each entry:
+- "lineIndex": integer (0-based into full lyrics array)
+- "heroWord": most significant word on that line (UPPERCASE)
+- "entryStyle": from entries list
+- "exitStyle": from exits list
+
+═══════════════════════════════════════
+WORD DIRECTIVES
+═══════════════════════════════════════
+
+For 15-25 emotionally significant words, design semantic animations.
+
+PRIORITY: If HELD_WORDS are provided, those are your primary candidates.
+The artist held these words for ≥500ms — that's deliberate emphasis.
+Start with held words, then add up to 5 additional short words if narratively critical.
+
+Match the animation to what the word MEANS:
+- Motion words (fly, spin, fall, drift) → movement-matching entry/exit
+- Impact words (hit, crash, slam) → slam-down, shatter
+- Element words (fire, ice, wave) → element-matching color + entry
+- Time words (wait, patience, forever) → breathe-in, linger
+
+Each directive:
+- "word": lowercase
+- "emphasisLevel": 1-5
+- "entry": from entries list
+- "behavior": from behaviors list
+- "exit": from exits list
+
+Optional (ONLY include when the value is meaningful — omit nulls):
+- "trail": particle trail
+- "ghostTrail": true
+- "ghostDirection": "up" | "down" | "left" | "right" | "radial"
+- "letterSequence": true
+- "visualMetaphor": freeform string
+- "elementalClass": "FIRE" | "WATER" | "FROST" | "SMOKE" | "ELECTRIC"
+- "heroPresentation": "inline-scale" | "delayed-reveal" | "isolation" | "vertical-lift" | "vertical-drop" | "tracking-expand" | "dim-surroundings"
+
+ENTRIES: slam-down, punch-in, explode-in, snap-in, rise, materialize, breathe-in, drift-in, drop, plant, stomp, cut-in, whisper, bloom, focus-in, spin-in, tumble-in
+EXITS: shatter, snap-out, burn-out, dissolve, drift-up, sink, cut-out, vanish, linger, evaporate, blur-out, spin-out, scatter-letters, peel-off, peel-reverse, cascade-down, cascade-up, gravity-fall, soar, launch, scatter-fly, melt, freeze-crack
+BEHAVIORS: pulse, vibrate, float, grow, contract, flicker, orbit, lean, none, freeze, tilt, pendulum, pulse-focus
+TRAILS: ember, frost, spark-burst, dust-impact, light-rays, gold-coins, dark-absorb, motion-trail, memory-orbs, none
+
+Return JSON only: { "storyboard": [...], "wordDirectives": [...] }
+`;
+
 interface LyricLine {
   text: string;
   start?: number;
@@ -234,6 +367,8 @@ interface RequestBody {
   audioSections?: AudioSectionInput[];
   /** Word-level timestamps from Whisper — used for held-word hero detection */
   words?: Array<{ word: string; start: number; end: number }>;
+  mode?: "scene" | "words";
+  sceneDirection?: Record<string, any>;
 }
 
 const ENUMS = {
@@ -403,6 +538,46 @@ function buildUserMessage(
   }
 
   msg += "Return cinematic_direction. JSON only.";
+  return msg;
+}
+
+
+
+function buildWordUserMessage(
+  title: string,
+  artist: string,
+  lines: LyricLine[],
+  sceneDirection: Record<string, any>,
+  words?: Array<{ word: string; start: number; end: number }>,
+): string {
+  let msg = "";
+
+  msg += `Song: ${artist} — ${title}\n\n`;
+
+  msg += `SCENE DIRECTION (already established — harmonize with this):\n`;
+  msg += `sceneTone: ${sceneDirection.sceneTone || "dark"}\n`;
+  msg += `atmosphere: ${sceneDirection.atmosphere || "cinematic"}\n`;
+  msg += `motion: ${sceneDirection.motion || "fluid"}\n`;
+  msg += `emotionalArc: ${sceneDirection.emotionalArc || "slow-burn"}\n`;
+  if (Array.isArray(sceneDirection.sections)) {
+    for (const s of sceneDirection.sections) {
+      msg += `  Section ${s.sectionIndex}: ${s.structuralLabel || "?"} — visualMood: ${s.visualMood || "?"}\n`;
+    }
+  }
+  msg += "\n";
+
+  msg += `Lyrics (${lines.length} lines):\n`;
+  for (let i = 0; i < lines.length; i++) {
+    msg += `[${i}] ${lines[i].text}\n`;
+  }
+  msg += "\n";
+
+  if (words && words.length > 0) {
+    const heldBlock = formatHeldWordsBlock(words, lines);
+    if (heldBlock) msg += heldBlock + "\n";
+  }
+
+  msg += "Return JSON only: { storyboard: [...], wordDirectives: [...] }";
   return msg;
 }
 
@@ -586,6 +761,196 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
   return { ok: errors.length === 0, errors, value: v };
 }
 
+
+
+function validateScene(raw: Record<string, any>, sectionCount: number): ValidationResult {
+  const errors: string[] = [];
+  const v = { ...raw };
+
+  for (const key of ["sceneTone", "atmosphere", "motion", "typography", "texture", "emotionalArc"] as const) {
+    const allowed = ENUMS[key] as readonly string[];
+    if (!allowed.includes(v[key])) {
+      errors.push(`Invalid ${key}: "${v[key]}"`);
+      v[key] = DEFAULTS[key];
+    }
+  }
+
+  if (!Array.isArray(v.sections)) {
+    errors.push("sections must be an array");
+    v.sections = [];
+  } else {
+    if (sectionCount > 0 && v.sections.length === 0) {
+      errors.push(`Expected ${sectionCount} sections, got 0`);
+    }
+    for (const s of v.sections) {
+      if (typeof s.description !== "string" || !s.description.trim()) {
+        errors.push(`Section ${s.sectionIndex}: missing description`);
+      }
+      if (!s.visualMood || !(ENUMS.visualMood as readonly string[]).includes(s.visualMood)) {
+        s.visualMood = "intimate";
+      }
+      if (!s.structuralLabel) {
+        s.structuralLabel = `Section ${Number.isInteger(s.sectionIndex) ? s.sectionIndex + 1 : 1}`;
+      }
+      for (const field of ["motion", "texture", "typography", "atmosphere"] as const) {
+        if (s[field] !== undefined && !(ENUMS[field] as readonly string[]).includes(s[field])) {
+          delete s[field];
+        }
+      }
+    }
+  }
+
+  delete v.storyboard;
+  delete v.wordDirectives;
+
+  const FORBIDDEN = [
+    "dominantColor", "colorHex", "physicsProfile", "cameraLanguage", "tensionCurve", "fontSize", "position",
+    "scaleX", "scaleY", "color", "glow", "kineticClass", "zoom", "driftIntensity", "startRatio", "endRatio",
+    "chapters", "visualWorld", "beatAlignment",
+  ];
+  for (const key of FORBIDDEN) delete v[key];
+
+  return { ok: errors.length === 0, errors, value: v };
+}
+
+function validateWords(raw: Record<string, any>): ValidationResult {
+  const errors: string[] = [];
+  const v = { ...raw };
+
+  if (!Array.isArray(v.storyboard)) {
+    errors.push("storyboard must be an array");
+    v.storyboard = [];
+  } else if (v.storyboard.length > 40) {
+    v.storyboard = v.storyboard.slice(0, 30);
+  }
+
+  if (!Array.isArray(v.wordDirectives)) {
+    if (v.wordDirectives && typeof v.wordDirectives === "object") {
+      v.wordDirectives = Object.values(v.wordDirectives);
+    } else {
+      errors.push("wordDirectives must be an array");
+      v.wordDirectives = [];
+    }
+  }
+  if (v.wordDirectives.length > 40) {
+    v.wordDirectives = v.wordDirectives.slice(0, 30);
+  }
+
+  for (const wd of v.wordDirectives) {
+    if (wd.entry && !(ENUMS.entries as readonly string[]).includes(wd.entry)) {
+      wd.entry = "materialize";
+    }
+    if (wd.exit && !(ENUMS.exits as readonly string[]).includes(wd.exit)) {
+      wd.exit = "dissolve";
+    }
+    if (wd.behavior && !(ENUMS.behaviors as readonly string[]).includes(wd.behavior)) {
+      wd.behavior = "none";
+    }
+    if (wd.trail && !(ENUMS.trails as readonly string[]).includes(wd.trail)) {
+      wd.trail = "none";
+    }
+    if (wd.elementalClass && !(ENUMS.elementalClass as readonly string[]).includes(wd.elementalClass)) {
+      wd.elementalClass = null;
+    }
+    if (wd.elementalClass === "none") wd.elementalClass = null;
+    if (typeof wd.emphasisLevel === "number") {
+      wd.emphasisLevel = Math.min(5, Math.max(1, Math.round(wd.emphasisLevel)));
+    } else {
+      wd.emphasisLevel = 3;
+    }
+  }
+
+  return { ok: errors.length === 0, errors, value: { storyboard: v.storyboard, wordDirectives: v.wordDirectives } };
+}
+
+async function callScene(
+  apiKey: string,
+  scenePrefix: string,
+  userMessage: string,
+  sectionCount: number,
+): Promise<Record<string, any>> {
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+      max_tokens: 2000,
+    }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    console.error("[cinematic-direction] scene AI error", resp.status, text);
+    throw { status: resp.status, message: resp.status === 429 ? "Rate limited" : "Scene direction AI request failed" };
+  }
+
+  const completion = await resp.json();
+  const raw = String(completion?.choices?.[0]?.message?.content ?? "");
+  const parsed = extractJson(raw);
+  if (!parsed) throw { status: 422, message: "Invalid JSON from scene direction AI" };
+
+  const result = validateScene(parsed, sectionCount);
+  return result.value;
+}
+
+async function callWords(
+  apiKey: string,
+  title: string,
+  artist: string,
+  lines: LyricLine[],
+  sceneDirection: Record<string, any>,
+  words?: Array<{ word: string; start: number; end: number }>,
+): Promise<Record<string, any>> {
+  const wordMessage = buildWordUserMessage(title, artist, lines, sceneDirection, words);
+
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: WORD_DIRECTION_PROMPT },
+        { role: "user", content: wordMessage },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+      max_tokens: 6000,
+    }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    console.error("[cinematic-direction] words AI error", resp.status, text);
+    throw { status: resp.status, message: resp.status === 429 ? "Rate limited" : "Word direction AI request failed" };
+  }
+
+  const completion = await resp.json();
+  const raw = String(completion?.choices?.[0]?.message?.content ?? "");
+  const parsed = extractJson(raw);
+  if (!parsed) throw { status: 422, message: "Invalid JSON from word direction AI" };
+
+  const result = validateWords(parsed);
+
+  if (!Array.isArray(result.value.storyboard) || result.value.storyboard.length === 0 ||
+      !Array.isArray(result.value.wordDirectives) || result.value.wordDirectives.length === 0) {
+    throw { status: 422, message: "Word direction returned empty storyboard or wordDirectives" };
+  }
+
+  return result.value;
+}
+
 async function callWithRetry(
   apiKey: string,
   systemPrompt: string,
@@ -763,13 +1128,34 @@ serve(async (req) => {
 
     const listenerScene = resolveListenerScene(body);
     const scenePrefix = buildScenePrefix(body.scene_context);
+
+    if (body.mode === "scene") {
+      const userMessage = buildUserMessage(title, artist, lines, listenerScene, body.audioSections, undefined);
+      const sceneResult = await callScene(apiKey, scenePrefix, userMessage, body.audioSections?.length ?? 0);
+
+      return new Response(JSON.stringify({ cinematicDirection: sceneResult }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (body.mode === "words") {
+      if (!body.sceneDirection) {
+        return new Response(JSON.stringify({ error: "sceneDirection required for mode=words" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const wordResult = await callWords(apiKey, title, artist, lines, body.sceneDirection, body.words);
+
+      return new Response(JSON.stringify({ cinematicDirection: wordResult }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const systemPrompt = scenePrefix + CINEMATIC_DIRECTION_PROMPT;
     const userMessage = buildUserMessage(title, artist, lines, listenerScene, body.audioSections, body.words);
     const sectionCount = body.audioSections?.length ?? 0;
-
-    const heldCount = body.words?.length ? extractHeldWords(body.words, lines[0]?.start ?? 0, lines[lines.length - 1]?.end ?? 1).heldWords.length : 0;
-    
-
     const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount, lines.length);
 
     if (lyricId) await persist(result, lyricId);

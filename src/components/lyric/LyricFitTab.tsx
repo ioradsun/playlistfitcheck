@@ -565,7 +565,6 @@ export function LyricFitTab({
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
       const sceneContext = resolvedScene ?? null;
-      // Use audioSections (real pipeline with energy curve) over mergedSections (dummy empty-energy fallback)
       const sectionSource = audioSections.length > 0 ? audioSections : mergedSectionsRef.current;
       const sectionsForAI = sectionSource.map((section: any, i: number) => ({
         index: i,
@@ -580,192 +579,194 @@ export function LyricFitTab({
           .map((line, lineIndex) => ({ text: line.text, lineIndex })),
       }));
 
-      const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
-        body: {
-          title: lyricData.title,
-          artist: artistNameRef.current,
-          lines: lyricsForDirection,
-          lyrics: lyricsForDirection.map((line: { text: string }) => line.text).join("\n"),
-          beatGrid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : undefined,
-          beatGridSummary: beatGrid
-            ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence, totalBeats: beatGrid.beats.length }
-            : undefined,
-          songSignature: songSignature
-            ? {
-                bpm: songSignature.bpm,
-                durationSec: songSignature.durationSec,
-                tempoStability: songSignature.tempoStability,
-                rmsMean: songSignature.rmsMean,
-                rmsVariance: songSignature.rmsVariance,
-                spectralCentroidHz: songSignature.spectralCentroidHz,
-                lyricDensity: songSignature.lyricDensity,
-              }
-            : undefined,
-          audioSections: sectionsForAI.length ? sectionsForAI : undefined,
-          lyricId: savedIdRef.current || undefined,
-          scene_context: sceneContext,
-          words: words ?? undefined,
-        },
+      const sharedBody = {
+        title: lyricData.title,
+        artist: artistNameRef.current,
+        lines: lyricsForDirection,
+        lyrics: lyricsForDirection.map((line: { text: string }) => line.text).join("\n"),
+        beatGrid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : undefined,
+        beatGridSummary: beatGrid
+          ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence, totalBeats: beatGrid.beats.length }
+          : undefined,
+        songSignature: songSignature
+          ? {
+              bpm: songSignature.bpm,
+              durationSec: songSignature.durationSec,
+              tempoStability: songSignature.tempoStability,
+              rmsMean: songSignature.rmsMean,
+              rmsVariance: songSignature.rmsVariance,
+              spectralCentroidHz: songSignature.spectralCentroidHz,
+              lyricDensity: songSignature.lyricDensity,
+            }
+          : undefined,
+        audioSections: sectionsForAI.length ? sectionsForAI : undefined,
+        lyricId: savedIdRef.current || undefined,
+        scene_context: sceneContext,
+      };
+
+      const { data: sceneResult } = await supabase.functions.invoke("cinematic-direction", {
+        body: { ...sharedBody, mode: "scene" },
       });
 
-      if (dirResult?.cinematicDirection) {
-        const enrichedDirection = beatGrid
-          ? { ...dirResult.cinematicDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
-          : dirResult.cinematicDirection;
-
-        // Merge audioSections time boundaries into direction sections
-        if (sectionsForAI.length > 0 && Array.isArray(enrichedDirection.sections)) {
-          enrichedDirection.sections = enrichedDirection.sections.map((s: any, i: number) => ({
-            ...s,
-            startSec: sectionsForAI[i]?.startSec ?? s.startSec,
-            endSec: sectionsForAI[i]?.endSec ?? s.endSec,
-          }));
-        }
-
-        setCinematicDirection(enrichedDirection);
-
-        // Derive FrameRenderState from cinematic direction presets
-        
-        const { deriveFrameState } = await import("@/engine/presetDerivation");
-        const { getTypography } = await import("@/engine/presetDerivation");
-
-        const typoPreset = enrichedDirection.typography || "clean-modern";
-        const typo = getTypography(typoPreset);
-
-        const bgSystemMap: Record<string, string> = {
-          void: "void", cinematic: "fracture", haze: "breath", split: "static",
-          grain: "static", wash: "breath", glass: "pressure", clean: "void",
-        };
-        const atmospherePreset = enrichedDirection.atmosphere || "cinematic";
-
-        deriveFrameState(enrichedDirection, 0, 0.5); // warm up cache
-        
-
-        // Persist cinematic direction back to render_data in DB
-        if (savedIdRef.current) {
-          const existingRenderData = renderData || {};
-          persistRenderData(savedIdRef.current, { ...existingRenderData, cinematicDirection: enrichedDirection });
-        }
-
-        // ── AUTO-TRIGGER: Start image generation immediately ──
-        // Runs in the pipeline — no need for FitTab to be mounted
-        const dirSections = enrichedDirection?.sections;
-        if (Array.isArray(dirSections) && dirSections.length > 0 && user) {
-          // Check if images already exist (hydrated from DB)
-          const currentSavedImages = initialLyric?.section_images;
-          if (Array.isArray(currentSavedImages) && currentSavedImages.length > 0 && currentSavedImages.some(Boolean)) {
-            
-            setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done", sectionImages: "done" }));
-          } else {
-            
-            setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done", sectionImages: "running" }));
-            setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
-            setFitProgress(prev => Math.max(prev, 85));
-
-            // Fire and forget — don't block the pipeline
-            void (async () => {
-              try {
-                // ensureDanceId inline
-                const songSlugVal = (await import("@/lib/slugify")).slugify(lyricData!.title || "untitled");
-                const artistSlugVal = (await import("@/lib/slugify")).slugify(artistNameRef.current || "artist");
-
-                // Find or create dance row
-                let resolvedDanceId: string | null = null;
-                const { data: existing }: any = await supabase
-                  .from("shareable_lyric_dances" as any)
-                  .select("id")
-                  .eq("user_id", user.id)
-                  .eq("song_slug", songSlugVal)
-                  .maybeSingle();
-                if (existing?.id) {
-                  resolvedDanceId = existing.id;
-                  // Update cinematic_direction on existing row
-                  await supabase
-                    .from("shareable_lyric_dances" as any)
-                    .update({ cinematic_direction: enrichedDirection } as any)
-                    .eq("id", resolvedDanceId);
-                } else {
-                  // Create draft row
-                  
-                  const mainLines = lyricData!.lines.filter((l: any) => l.tag !== "adlib");
-
-                  // Upload audio
-                  const audioFileName = audioFile?.name || "audio.webm";
-                  const storagePath = savedIdRef.current
-                    ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(user.id, savedIdRef.current, audioFileName)
-                    : `${user.id}/${artistSlugVal}/${songSlugVal}/lyric-dance.${audioFileName.split(".").pop() || "webm"}`;
-                  if (audioFile) {
-                    await supabase.storage
-                      .from("audio-clips")
-                      .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
-                  }
-                  const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
-
-                  await supabase
-                    .from("shareable_lyric_dances" as any)
-                    .upsert({
-                      user_id: user.id,
-                      artist_slug: artistSlugVal,
-                      song_slug: songSlugVal,
-                      artist_name: artistNameRef.current || "artist",
-                      song_name: lyricData!.title || "Untitled",
-                      audio_url: urlData.publicUrl,
-                      lyrics: mainLines,
-                      cinematic_direction: enrichedDirection,
-                      words: words ?? null,
-                      beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : { bpm: 0, beats: [], confidence: 0 },
-                      palette: enrichedDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
-                      section_images: null,
-                    } as any, { onConflict: "artist_slug,song_slug" });
-
-                  const { data: newRow }: any = await supabase
-                    .from("shareable_lyric_dances" as any)
-                    .select("id")
-                    .eq("user_id", user.id)
-                    .eq("song_slug", songSlugVal)
-                    .maybeSingle();
-                  resolvedDanceId = newRow?.id ?? null;
-                  
-                }
-
-                if (!resolvedDanceId) {
-                  console.error("[Pipeline] Could not create dance row for image generation");
-                  setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
-                  return;
-                }
-
-                // Call edge function
-                const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
-                  body: { lyric_dance_id: resolvedDanceId, force: true },
-                });
-                if (error) throw error;
-                const urls = result?.urls || result?.section_images || [];
-                
-
-                // Persist to saved_lyrics
-                if (savedIdRef.current && urls.length > 0) {
-                  void supabase
-                    .from("saved_lyrics")
-                    .update({ section_images: urls as any })
-                    .eq("id", savedIdRef.current);
-                  
-                }
-
-                setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
-              } catch (imgErr: any) {
-                console.error("[Pipeline] Image generation failed:", imgErr?.message || imgErr);
-                setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
-              }
-            })();
-            return; // skip the normal setGenerationStatus below — already set above
-          }
-        }
+      if (!sceneResult?.cinematicDirection) {
+        throw new Error("Scene direction returned no data");
       }
+
+      const sceneDirection = sceneResult.cinematicDirection;
+
+      const enrichedScene = beatGrid
+        ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
+        : { ...sceneDirection };
+
+      if (sectionsForAI.length > 0 && Array.isArray(enrichedScene.sections)) {
+        enrichedScene.sections = enrichedScene.sections.map((s: any, i: number) => ({
+          ...s,
+          startSec: sectionsForAI[i]?.startSec ?? s.startSec,
+          endSec: sectionsForAI[i]?.endSec ?? s.endSec,
+        }));
+      }
+
+      setCinematicDirection(enrichedScene);
+
+      const { deriveFrameState } = await import("@/engine/presetDerivation");
+      const { getTypography } = await import("@/engine/presetDerivation");
+      const typoPreset = enrichedScene.typography || "clean-modern";
+      getTypography(typoPreset);
+      deriveFrameState(enrichedScene, 0, 0.5);
+
+      const wordPromise = (async () => {
+        try {
+          const { data: wordResult } = await supabase.functions.invoke("cinematic-direction", {
+            body: {
+              ...sharedBody,
+              mode: "words",
+              sceneDirection: enrichedScene,
+              words: words ?? undefined,
+            },
+          });
+
+          if (wordResult?.cinematicDirection) {
+            const { storyboard, wordDirectives } = wordResult.cinematicDirection;
+            const merged = {
+              ...enrichedScene,
+              storyboard: storyboard || [],
+              wordDirectives: wordDirectives || [],
+            };
+            setCinematicDirection(merged);
+            cinematicDirectionRef.current = merged;
+
+            if (savedIdRef.current) {
+              const existingRenderData = renderData || {};
+              persistRenderData(savedIdRef.current, { ...existingRenderData, cinematicDirection: merged });
+            }
+          }
+        } catch (wordErr: any) {
+          console.warn("[Pipeline] Word choreography failed:", wordErr?.message || wordErr);
+        }
+      })();
+
+      const imagePromise = (async () => {
+        const dirSections = enrichedScene?.sections;
+        if (!Array.isArray(dirSections) || dirSections.length === 0 || !user) return;
+
+        const currentSavedImages = initialLyric?.section_images;
+        if (Array.isArray(currentSavedImages) && currentSavedImages.length > 0 && currentSavedImages.some(Boolean)) {
+          setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+          return;
+        }
+
+        setGenerationStatus(prev => ({ ...prev, sectionImages: "running" }));
+        setFitProgress(prev => Math.max(prev, 85));
+
+        try {
+          const songSlugVal = (await import("@/lib/slugify")).slugify(lyricData!.title || "untitled");
+          const artistSlugVal = (await import("@/lib/slugify")).slugify(artistNameRef.current || "artist");
+
+          let resolvedDanceId: string | null = null;
+          const { data: existing }: any = await supabase
+            .from("shareable_lyric_dances" as any)
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("song_slug", songSlugVal)
+            .maybeSingle();
+          if (existing?.id) {
+            resolvedDanceId = existing.id;
+            await supabase
+              .from("shareable_lyric_dances" as any)
+              .update({ cinematic_direction: enrichedScene } as any)
+              .eq("id", resolvedDanceId);
+          } else {
+            const mainLines = lyricData!.lines.filter((l: any) => l.tag !== "adlib");
+            const audioFileName = audioFile?.name || "audio.webm";
+            const storagePath = savedIdRef.current
+              ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(user.id, savedIdRef.current, audioFileName)
+              : `${user.id}/${artistSlugVal}/${songSlugVal}/lyric-dance.${audioFileName.split(".").pop() || "webm"}`;
+            if (audioFile) {
+              await supabase.storage
+                .from("audio-clips")
+                .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
+            }
+            const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+
+            await supabase
+              .from("shareable_lyric_dances" as any)
+              .upsert({
+                user_id: user.id,
+                artist_slug: artistSlugVal,
+                song_slug: songSlugVal,
+                artist_name: artistNameRef.current || "artist",
+                song_name: lyricData!.title || "Untitled",
+                audio_url: urlData.publicUrl,
+                lyrics: mainLines,
+                cinematic_direction: enrichedScene,
+                words: words ?? null,
+                beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : { bpm: 0, beats: [], confidence: 0 },
+                palette: enrichedScene?.palette || ["#ffffff", "#a855f7", "#ec4899"],
+                section_images: null,
+              } as any, { onConflict: "artist_slug,song_slug" });
+
+            const { data: newRow }: any = await supabase
+              .from("shareable_lyric_dances" as any)
+              .select("id")
+              .eq("user_id", user.id)
+              .eq("song_slug", songSlugVal)
+              .maybeSingle();
+            resolvedDanceId = newRow?.id ?? null;
+          }
+
+          if (!resolvedDanceId) {
+            console.error("[Pipeline] Could not create dance row for image generation");
+            setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
+            return;
+          }
+
+          const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
+            body: { lyric_dance_id: resolvedDanceId, force: true },
+          });
+          if (error) throw error;
+          const urls = result?.urls || result?.section_images || [];
+
+          if (savedIdRef.current && urls.length > 0) {
+            void supabase
+              .from("saved_lyrics")
+              .update({ section_images: urls as any })
+              .eq("id", savedIdRef.current);
+          }
+
+          setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+        } catch (imgErr: any) {
+          console.error("[Pipeline] Image generation failed:", imgErr?.message || imgErr);
+          setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
+        }
+      })();
+
+      await Promise.allSettled([wordPromise, imagePromise]);
 
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
       setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
       setFitProgress(prev => Math.max(prev, 85));
-    } catch {
+    } catch (err) {
+      console.error("[Pipeline] Cinematic direction failed:", err);
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error", sectionImages: "idle" }));
     }
   }, [lyricData, generationStatus.cinematicDirection, beatGrid, renderData, persistRenderData, songSignature, audioSections, fitPipelineMs, words, user, audioFile, initialLyric]);
