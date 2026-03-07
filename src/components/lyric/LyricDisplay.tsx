@@ -81,11 +81,11 @@ class HookDanceEngine {
   loadManifest(_manifest: any) {}
 }
 
-function HookDanceCanvas() {
+function HookDanceCanvas(_props: any) {
   return null;
 }
 
-function HookDanceExporter() {
+function HookDanceExporter(_props: any) {
   return null;
 }
 
