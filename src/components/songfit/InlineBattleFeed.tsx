@@ -127,7 +127,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
   }
 
   return (
-    <div ref={containerRef} className="relative w-full overflow-hidden bg-black rounded-xl" style={{ minHeight: 300, height: 300 }}>
+    <div ref={containerRef} className="relative w-full overflow-hidden bg-black rounded-xl" style={{ height: 320 }}>
       {(loading || !battleId) ? (
         <div className="absolute inset-0 flex items-center justify-center bg-black">
           <div className="text-center space-y-2">

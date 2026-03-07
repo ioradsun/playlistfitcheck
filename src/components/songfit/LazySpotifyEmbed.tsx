@@ -69,13 +69,13 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
     ? toSoundCloudEmbedUrl(trackUrl)
     : `https://open.spotify.com/embed/track/${trackId}?utm_source=generator&theme=1`;
 
-  const height = platform === "soundcloud" ? 166 : 352;
+  const height = platform === "soundcloud" ? 166 : 320;
 
   return (
     <div
       ref={ref}
       className="w-full rounded-xl overflow-hidden relative"
-      style={{ minHeight: height, backgroundColor: "#121212" }}
+      style={{ height: 320, backgroundColor: "#121212", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={handleClick}
     >
       {/* Album art backdrop while iframe loads */}
@@ -89,22 +89,24 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
 
       {/* Skeleton pulse when not yet in viewport */}
       {!visible && (
-        <div className="w-full rounded-xl animate-pulse" style={{ height, backgroundColor: "#1a1a1a" }} />
+        <div className="w-full rounded-xl animate-pulse" style={{ height: 320, backgroundColor: "#1a1a1a" }} />
       )}
 
       {visible && (
-        <iframe
-          src={embedSrc}
-          width="100%"
-          height={height}
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading={isEager ? "eager" : "lazy"}
-          className="border-0 block relative z-10 transition-opacity duration-300"
-          style={{ opacity: iframeLoaded ? 1 : 0 }}
-          title={`Play ${trackTitle}`}
-          scrolling={platform === "soundcloud" ? "no" : undefined}
-          onLoad={() => setIframeLoaded(true)}
-        />
+        <div className="w-full">
+          <iframe
+            src={embedSrc}
+            width="100%"
+            height={height}
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading={isEager ? "eager" : "lazy"}
+            className="border-0 block relative z-10 transition-opacity duration-300"
+            style={{ opacity: iframeLoaded ? 1 : 0 }}
+            title={`Play ${trackTitle}`}
+            scrolling={platform === "soundcloud" ? "no" : undefined}
+            onLoad={() => setIframeLoaded(true)}
+          />
+        </div>
       )}
 
       {/* Genre pill overlay */}
