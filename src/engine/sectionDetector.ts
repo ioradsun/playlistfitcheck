@@ -38,8 +38,8 @@ const BEAT_DENSITY_WINDOW_SEC = 4;
 const BEAT_DENSITY_STEP_SEC = 1;
 const BEAT_DENSITY_DELTA_THRESHOLD = 0.3;
 const LYRIC_GAP_THRESHOLD_SEC = 3;
-const SNAP_WINDOW_SEC = 2;
-const MIN_SECTION_LENGTH_SEC = 3;
+const SNAP_WINDOW_SEC = 4;
+const MIN_SECTION_LENGTH_SEC = 10;
 const MAX_SECTIONS = 8;
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
