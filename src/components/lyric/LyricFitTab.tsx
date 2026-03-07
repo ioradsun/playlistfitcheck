@@ -570,6 +570,7 @@ export function LyricFitTab({
     
     setGenerationStatus(prev => ({ ...prev, beatGrid: "running" }));
     setPipelineStages(prev => ({ ...prev, rhythm: "running" }));
+    markStageStart("rhythm");
   }, [beatGrid, generationStatus.beatGrid, audioBuffer]);
 
   // ── Hook Detection (parallel, non-blocking) ──
