@@ -30,7 +30,7 @@ import type { AudioSection, SectionRole } from "@/engine/sectionDetector";
 import type { LyricSection } from "@/hooks/useLyricSections";
 import type { SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { HeaderProjectSetter } from "./LyricsTab";
-import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
+import type { GenerationStatus, PipelineStages, PipelineStageTimes } from "./LyricFitTab";
 import type { CinematicSection } from "@/types/CinematicDirection";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 
