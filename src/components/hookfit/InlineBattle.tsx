@@ -26,9 +26,11 @@ export interface HookInfo {
   hook_end: number;
   hook_label: string | null;
   hook_phrase: string | null;
+  hook_slug: string;
   battle_position: number;
   artist_slug: string;
   song_slug: string;
+  vote_count: number;
   palette?: string[];
 }
 
