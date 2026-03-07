@@ -429,7 +429,15 @@ export function LyricFitTab({
     }
 
     const savedSignature = (initialLyric as any).song_signature;
-    if (savedSignature) setSongSignature(savedSignature as SongSignature);
+    if (savedSignature) {
+      const sig = { ...savedSignature } as SongSignature;
+      // JSONB serializes Float32Array as a plain object — reconstruct it
+      if (sig.energyCurve && !(sig.energyCurve instanceof Float32Array)) {
+        const values = Object.values(sig.energyCurve) as number[];
+        sig.energyCurve = new Float32Array(values);
+      }
+      setSongSignature(sig);
+    }
     const savedSections = (initialLyric as any).cinematic_direction?.sections;
     if (Array.isArray(savedSections)) setAudioSections(savedSections);
 
@@ -627,6 +635,17 @@ export function LyricFitTab({
       }
 
       setCinematicDirection(enrichedScene);
+
+      // Flow song metadata to renderData so FitTab can display it
+      if (enrichedScene.description || enrichedScene.mood || enrichedScene.meaning) {
+        const updatedRenderData = {
+          ...(renderData || {}),
+          description: enrichedScene.description,
+          mood: enrichedScene.mood,
+          meaning: enrichedScene.meaning,
+        };
+        setRenderData(updatedRenderData);
+      }
 
       const { deriveFrameState } = await import("@/engine/presetDerivation");
       const { getTypography } = await import("@/engine/presetDerivation");
