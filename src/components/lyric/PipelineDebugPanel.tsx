@@ -203,7 +203,7 @@ const GEN_LABELS: Record<keyof GenerationStatus, string> = {
   sectionImages: "Section Images",
 };
 
-export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipelineStages, onRetry }: Props) {
+export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipelineStages, pipelineStageTimes, onRetry }: Props) {
   const [logs, setLogs] = useState<PipelineLogEntry[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
