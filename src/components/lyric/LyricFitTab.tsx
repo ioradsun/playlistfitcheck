@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { useBeatGrid, preloadEssentia, type BeatGridData } from "@/hooks/useBeatGrid";
 import type { LyricData, LyricLine } from "./LyricDisplay";
-import { buildSongSignature, type SongSignature } from "@/lib/songSignatureAnalyzer";
+import { buildSongSignature, buildSongSignatureWithAudio, type SongSignature } from "@/lib/songSignatureAnalyzer";
 import { detectSections, type SectionRole, type TimestampedLine } from "@/engine/sectionDetector";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
@@ -868,6 +868,10 @@ export function LyricFitTab({
       return;
     }
 
+    // Wait for audioBuffer when _analysis is missing (reload from DB)
+    // audioBuffer is needed to compute energy curve from raw audio
+    if (!beatGrid._analysis && !audioBuffer) return;
+
     fitPipelineT0Ref.current = performance.now();
     setPipelineStages(prev => ({ ...prev, sections: "running" }));
     sectionPipelineRunningRef.current = true;
@@ -875,8 +879,13 @@ export function LyricFitTab({
       let sig = songSignature;
       if (!sig) {
         const lyricsText = timestampedLines.map((line) => line.text).join("\n");
-        // Build synchronously from AudioAnalysis data — no worker spawn needed
-        sig = buildSongSignature(beatGrid, beatGrid._analysis, lyricsText, audioDurationSec);
+        if (audioBuffer) {
+          // Primary path: compute energy curve from raw audio — sharp transitions for section detection
+          sig = buildSongSignatureWithAudio(audioBuffer, beatGrid, beatGrid._analysis, lyricsText, audioDurationSec);
+        } else {
+          // Fallback: use AudioAnalysis frames (reload from DB when audioBuffer not yet decoded)
+          sig = buildSongSignature(beatGrid, beatGrid._analysis, lyricsText, audioDurationSec);
+        }
         setSongSignature(sig);
         if (savedIdRef.current) {
           void supabase
@@ -895,7 +904,7 @@ export function LyricFitTab({
     } finally {
       sectionPipelineRunningRef.current = false;
     }
-  }, [transcriptionDone, beatGridDone, beatGrid, timestampedLines, audioDurationSec, songSignature, audioSections.length, fitPipelineMs]);
+  }, [transcriptionDone, beatGridDone, beatGrid, timestampedLines, audioDurationSec, songSignature, audioSections.length, audioBuffer, fitPipelineMs]);
 
   useEffect(() => {
     void maybeRunSectionPipeline();
