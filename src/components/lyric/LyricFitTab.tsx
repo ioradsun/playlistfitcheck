@@ -80,7 +80,7 @@ export interface PipelineStages {
   transcript: PipelineStageStatus;
 }
 
-export type PipelineStageTimes = Partial<Record<keyof PipelineStages, { start: number; end?: number }>>;
+export type PipelineStageTimes = Partial<Record<keyof PipelineStages, { startedAt?: number; durationMs?: number }>>;
 
 interface Props {
   initialLyric?: any;
