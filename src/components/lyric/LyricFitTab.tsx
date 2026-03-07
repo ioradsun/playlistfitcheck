@@ -554,6 +554,60 @@ export function LyricFitTab({
     setPipelineStages(prev => ({ ...prev, rhythm: "running" }));
   }, [beatGrid, generationStatus.beatGrid, audioBuffer]);
 
+  // ── Hook Detection (parallel, non-blocking) ──
+  const hookDetectionRunRef = useRef(false);
+  const startHookDetection = useCallback(async () => {
+    if (hookDetectionRunRef.current) return;
+    if (!words?.length || !lines?.length) return;
+    // Skip if hooks already loaded from DB
+    if (renderData?.hook) return;
+
+    hookDetectionRunRef.current = true;
+    try {
+      const linesForHook = lines
+        .filter((l: any) => l.tag !== "adlib")
+        .map((l: any) => ({ text: l.text, start: Number(l.start ?? 0), end: Number(l.end ?? 0) }));
+
+      const { data: hookResult, error } = await supabase.functions.invoke("detect-hooks", {
+        body: {
+          lyrics: linesForHook.map((l: { text: string }) => l.text).join("\n"),
+          lines: linesForHook,
+          words,
+          beatGrid: beatGrid
+            ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence }
+            : { bpm: 120, beats: [], confidence: 0 },
+          energyCurve: songSignature?.energyCurve
+            ? Array.from(songSignature.energyCurve)
+            : undefined,
+          beatEnergies: beatGrid?.beatEnergies ?? undefined,
+          durationSec: audioDurationSec,
+        },
+      });
+
+      if (error) throw error;
+      if (!hookResult?.hook) return;
+
+      // Merge hooks into renderData
+      setRenderData((prev: any) => {
+        const updated = {
+          ...(prev || {}),
+          hook: hookResult.hook,
+          secondHook: hookResult.secondHook || null,
+          hookLabel: hookResult.hookLabel || "Hook 1",
+          secondHookLabel: hookResult.secondHookLabel || "Hook 2",
+          hookJustification: hookResult.hookJustification || null,
+          secondHookJustification: hookResult.secondHookJustification || null,
+        };
+        if (savedIdRef.current) {
+          void persistRenderData(savedIdRef.current, updated);
+        }
+        return updated;
+      });
+    } catch (err: any) {
+      console.warn("[Pipeline] Hook detection failed (non-fatal):", err?.message || err);
+    }
+  }, [words, lines, beatGrid, songSignature, audioDurationSec, renderData?.hook, persistRenderData]);
+
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[], force = false) => {
     if (!lyricData || !sourceLines.length) return;
     // Data-existence guard: if we already have cinematicDirection (e.g. loaded from DB), skip
@@ -877,6 +931,13 @@ export function LyricFitTab({
     }
   }, [lines, pipelineRetryCount, renderData, beatGrid, persistRenderData]);
 
+  // ── Fork 3: Hook detection starts when transcription + beat grid ready ──
+  useEffect(() => {
+    if (!transcriptionDone || !beatGridDone) return;
+    if (!words?.length || !lines?.length) return;
+    void startHookDetection();
+  }, [transcriptionDone, beatGridDone, words, lines, startHookDetection]);
+
   useEffect(() => {
     const values = Object.values(generationStatus);
     const allDone = values.every(v => v === "done");
@@ -940,6 +1001,7 @@ export function LyricFitTab({
     cinematicTriggeredRef.current = false;
     sectionPipelineRunningRef.current = false;
     sectionPipelineDoneRef.current = false;
+    hookDetectionRunRef.current = false;
 
     if (savedIdRef.current) {
       persistRenderData(savedIdRef.current, { cinematicDirection: null });
@@ -1066,6 +1128,7 @@ export function LyricFitTab({
             pipelineTriggeredRef.current = false;
             sectionPipelineRunningRef.current = false;
             sectionPipelineDoneRef.current = false;
+            hookDetectionRunRef.current = false;
             onNewProject?.();
           }}
           onHeaderProject={onHeaderProject}
