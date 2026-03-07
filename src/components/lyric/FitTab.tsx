@@ -82,6 +82,7 @@ interface Props {
   onAddSection?: (role: SectionRole, startSec: number, endSec: number) => void;
   onRemoveSection?: (sectionIndex: number) => void;
   pipelineStages?: PipelineStages;
+  pipelineStageTimes?: PipelineStageTimes;
 }
 
 export function FitTab({
