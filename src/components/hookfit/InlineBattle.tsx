@@ -1,10 +1,10 @@
 /**
  * InlineBattle — Dual lyric-dance renderer for hook battles.
- * Uses two InlineLyricDance instances constrained to hook regions.
- * Same cinematic engine, just windowed to 10-second hook timestamps.
+ * Uses two InlineLyricDance instances constrained to hook time regions.
+ * Same cinematic engine as the full lyric dance, just windowed to 10-second hooks.
  */
 
-import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineLyricDance } from "@/components/songfit/InlineLyricDance";
@@ -25,17 +25,13 @@ export interface HookInfo {
   hook_end: number;
   hook_label: string | null;
   hook_phrase: string | null;
-  hook_slug?: string;
-  vote_count?: number;
   battle_position: number;
   artist_slug: string;
   song_slug: string;
   palette?: string[];
 }
 
-export interface InlineBattleHandle {
-  // Simplified — no more constellation/river refs
-}
+export interface InlineBattleHandle {}
 
 interface Props {
   battleId: string;
@@ -47,10 +43,10 @@ interface Props {
   activePlaying: "a" | "b" | null;
 }
 
-const HOOK_COLUMNS = "id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,vote_count,battle_position,artist_slug,song_slug,palette";
+const HOOK_SELECT = "id,hook_start,hook_end,hook_label,hook_phrase,battle_position,artist_slug,song_slug,palette";
 
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
-  battleId, mode, votedSide, onHooksLoaded,
+  battleId, mode, votedSide, onHookEnd, onHooksLoaded,
   onTileTap, activePlaying,
 }, ref) {
   const [hookA, setHookA] = useState<HookInfo | null>(null);
@@ -60,43 +56,45 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
   useImperativeHandle(ref, () => ({}), []);
 
+  // ── Fetch hooks + lyric dance data ──────────────────────────
   useEffect(() => {
     if (!battleId) return;
     setLoading(true);
 
     (async () => {
+      // 1. Fetch hook rows
       const { data: hooks } = await supabase
         .from("shareable_hooks" as any)
-        .select(HOOK_COLUMNS)
+        .select(HOOK_SELECT)
         .eq("battle_id", battleId)
         .order("battle_position", { ascending: true });
 
       if (!hooks || hooks.length === 0) { setLoading(false); return; }
 
-      const a = (hooks as any[]).find(h => h.battle_position === 1) || hooks[0];
-      const b = (hooks as any[]).find(h => h.id !== a.id) || null;
-      setHookA(a as HookInfo);
-      setHookB((b as HookInfo | null) ?? null);
-      onHooksLoaded?.(a as HookInfo, (b as HookInfo | null) ?? null);
+      const rawHooks = hooks as unknown as HookInfo[];
+      const a = rawHooks.find(h => h.battle_position === 1) || rawHooks[0];
+      const b = rawHooks.find(h => h.id !== a.id) || null;
+      setHookA(a);
+      setHookB(b);
+      onHooksLoaded?.(a, b);
 
+      // 2. Fetch the lyric dance for this song
       const { data: dances } = await supabase
         .from("shareable_lyric_dances" as any)
         .select(LYRIC_DANCE_COLUMNS)
-        .eq("artist_slug", (a as HookInfo).artist_slug)
-        .eq("song_slug", (a as HookInfo).song_slug)
+        .eq("artist_slug", a.artist_slug)
+        .eq("song_slug", a.song_slug)
         .limit(1);
 
       if (dances && dances.length > 0) {
         setDanceData(dances[0] as unknown as LyricDanceData);
       }
-
       setLoading(false);
     })();
-  }, [battleId, onHooksLoaded]);
+  }, [battleId]);
 
-  const isActive = mode !== "dark";
-
-  const getOpacity = (side: "a" | "b") => {
+  // ── Mode-based opacity ─────────────────────────────────────
+  const getOpacity = useCallback((side: "a" | "b") => {
     switch (mode) {
       case "dark": return 0.2;
       case "listen-a": return side === "a" ? 1 : 0.4;
@@ -108,23 +106,24 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
         return side === votedSide ? 1 : 0.4;
       default: return 1;
     }
-  };
+  }, [mode, votedSide]);
 
-  const getBorderStyle = (side: "a" | "b"): React.CSSProperties => {
+  const getBorderStyle = useCallback((side: "a" | "b"): React.CSSProperties => {
     if (votedSide === side) {
       return { boxShadow: "inset 0 0 0 3px rgba(34,197,94,0.8)" };
     }
     return {};
-  };
+  }, [votedSide]);
 
-  const getSeamColor = () => {
+  const getSeamColor = useCallback(() => {
     switch (mode) {
       case "listen-a": return hookA?.palette?.[0] || "#ffffff";
       case "listen-b": return hookB?.palette?.[0] || "#ffffff";
       default: return "rgba(255,255,255,0.1)";
     }
-  };
+  }, [mode, hookA, hookB]);
 
+  // ── Loading / no data ──────────────────────────────────────
   if (loading || !hookA || !danceData) {
     return (
       <div className="w-full bg-black/30 animate-pulse" style={{ height: "320px" }}>
@@ -137,11 +136,13 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   }
 
   const danceUrl = `/lyric-dance/${danceData.artist_slug}/${danceData.song_slug}`;
+  const isActive = mode !== "dark";
   const seamPulse = mode === "listen-a" || mode === "listen-b";
 
   return (
     <div className="w-full bg-black">
       <div className="relative flex flex-row" style={{ height: "320px" }}>
+        {/* Hook A */}
         <motion.div
           className="relative flex-1 overflow-hidden cursor-pointer"
           animate={{ opacity: getOpacity("a") }}
@@ -152,7 +153,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             lyricDanceId={danceData.id}
             lyricDanceUrl={danceUrl}
             songTitle={danceData.song_name}
-            artistName={danceData.artist_name}
+            artistName={danceData.artist_name || ""}
             prefetchedData={danceData}
             bootMode="full"
             isActive={isActive && activePlaying !== "b"}
@@ -164,6 +165,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           )}
         </motion.div>
 
+        {/* Seam */}
         <motion.div
           className="w-px shrink-0"
           animate={{
@@ -173,6 +175,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           transition={seamPulse ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }}
         />
 
+        {/* Hook B */}
         {hookB ? (
           <motion.div
             className="relative flex-1 overflow-hidden cursor-pointer"
@@ -184,7 +187,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
               lyricDanceId={danceData.id}
               lyricDanceUrl={danceUrl}
               songTitle={danceData.song_name}
-              artistName={danceData.artist_name}
+              artistName={danceData.artist_name || ""}
               prefetchedData={danceData}
               bootMode="full"
               isActive={isActive && activePlaying !== "a"}

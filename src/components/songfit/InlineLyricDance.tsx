@@ -28,9 +28,9 @@ interface Props {
   bootMode?: "minimal" | "full";
   albumArtUrl?: string;
   isActive?: boolean;
-  /** Constrain playback to start at this time (seconds). Used by hook battles. */
+  /** Constrain playback to start at this time in seconds. Used by hook battles. */
   regionStart?: number;
-  /** Constrain playback to end at this time (seconds). Used by hook battles. */
+  /** Constrain playback to end at this time in seconds. Used by hook battles. */
   regionEnd?: number;
   onPlay?: () => void;
   reactionData?: Record<string, { line: Record<number, number>; total: number }>;
