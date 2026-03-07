@@ -866,11 +866,7 @@ export function FitTab({
             >
               {crowdfitToggling ? (
                 <Loader2 size={14} className="animate-spin" />
-              ) : crowdfitPostId ? (
-                <Check size={14} />
-              ) : (
-                <Users size={14} />
-              )}
+              ) : null}
               {crowdfitPostId ? "Live" : "CrowdFit"}
             </button>
           </div>
