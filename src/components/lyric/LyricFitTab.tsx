@@ -16,6 +16,7 @@ import { detectSections, type SectionRole, type TimestampedLine } from "@/engine
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
+import { PipelineDebugPanel } from "./PipelineDebugPanel";
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { mergeSectionOverrides, type SectionOverride, type SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { SceneContextResult } from "@/lib/sceneContexts";
@@ -56,6 +57,13 @@ export interface PipelineStages {
   sections: PipelineStageStatus;
   cinematic: PipelineStageStatus;
   transcript: PipelineStageStatus;
+}
+
+export interface PipelineStageTimes {
+  rhythm?: { startedAt?: number; durationMs?: number };
+  sections?: { startedAt?: number; durationMs?: number };
+  cinematic?: { startedAt?: number; durationMs?: number };
+  transcript?: { startedAt?: number; durationMs?: number };
 }
 
 interface Props {
@@ -1114,6 +1122,7 @@ export function LyricFitTab({
           fitProgress={fitProgress}
           fitStageLabel={fitStageLabel}
           pipelineStages={pipelineStages}
+          showDebug
         />
       )}
 
@@ -1210,6 +1219,14 @@ export function LyricFitTab({
            }
         />
         ) : null}
+      </div>
+      <div style={{ display: activeTab === "debug" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <PipelineDebugPanel
+          generationStatus={generationStatus}
+          pipelineStages={pipelineStages}
+          pipelineStageTimes={undefined}
+          onRetry={retryGeneration}
+        />
       </div>
     </div>
   );
