@@ -920,6 +920,7 @@ export function LyricFitTab({
       const nextSections = detectSections(sig, beatGrid, timestampedLines, audioDurationSec);
       setAudioSections(nextSections);
       setPipelineStages(prev => ({ ...prev, sections: "done" }));
+      markStageDone("sections");
       sectionPipelineDoneRef.current = true;
     } catch (error) {
       console.warn("[section-pipeline] failed", error);
