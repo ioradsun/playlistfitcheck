@@ -1139,7 +1139,7 @@ export function LyricFitTab({
             hookDetectionRunRef.current = false;
             onNewProject?.();
           }}
-          onHeaderProject={onHeaderProject}
+          onHeaderProject={activeTab === "lyrics" ? onHeaderProject : undefined}
           onSavedId={onSavedId}
           analysisModel={analysisModel}
           transcriptionModel={transcriptionModel}
@@ -1178,7 +1178,7 @@ export function LyricFitTab({
           onAddSection={handleAddSection}
           onRemoveSection={handleRemoveSection}
           onRetry={retryGeneration}
-          onHeaderProject={onHeaderProject}
+          onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
           onBack={handleBackToLyrics}
           onImageGenerationStatusChange={handleImageGenerationStatusChange}
           cinematicSections={
