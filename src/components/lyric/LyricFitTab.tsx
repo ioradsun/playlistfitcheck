@@ -16,6 +16,7 @@ import { detectSections, type SectionRole, type TimestampedLine } from "@/engine
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
+import { PipelineDebugPanel } from "./PipelineDebugPanel";
 
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { mergeSectionOverrides, type SectionOverride, type SectionOverrides } from "@/lib/mergeSectionOverrides";
@@ -99,6 +100,12 @@ export function LyricFitTab({
   }, [initialLyric]);
 
   const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
+  const [showDebug, setShowDebug] = useState(() => localStorage.getItem("lyricfit-debug") === "true");
+  useEffect(() => {
+    const handler = () => setShowDebug(localStorage.getItem("lyricfit-debug") === "true");
+    window.addEventListener("lyricfit-debug-toggle", handler);
+    return () => window.removeEventListener("lyricfit-debug-toggle", handler);
+  }, []);
   const [sceneDescription, setSceneDescription] = useState('');
   const [resolvedScene, setResolvedScene] = useState<SceneContextResult | null>(null);
   const [resolvingScene, setResolvingScene] = useState(false);
@@ -1122,6 +1129,7 @@ export function LyricFitTab({
           fitProgress={fitProgress}
           fitStageLabel={fitStageLabel}
           pipelineStages={pipelineStages}
+          showDebug={showDebug}
         />
       )}
 
@@ -1219,6 +1227,67 @@ export function LyricFitTab({
         />
         ) : null}
       </div>
+      {showDebug && (
+        <div style={{ display: activeTab === "debug" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          <PipelineDebugPanel
+            generationStatus={generationStatus}
+            pipelineStages={pipelineStages}
+            pipelineStageTimes={undefined}
+            stageRestarters={{
+              fullReset: retryGeneration,
+              restartBeatGrid: () => {
+                if (!audioFile) return;
+                setBeatGrid(null);
+                setBeatGridDone(false);
+                setSongSignature(null);
+                setAudioBuffer(null);
+                setAudioBufferReady(false);
+                setGenerationStatus(prev => ({ ...prev, beatGrid: "idle" }));
+                startBeatAnalysis(audioFile);
+              },
+              restartSections: () => {
+                setSongSignature(null);
+                setAudioSections([]);
+                sectionPipelineRunningRef.current = false;
+                sectionPipelineDoneRef.current = false;
+                setPipelineStages(prev => ({ ...prev, sections: "pending" }));
+                setPipelineRetryCount(c => c + 1);
+              },
+              restartCinematic: () => {
+                setCinematicDirection(null);
+                cinematicDirectionRef.current = null;
+                cinematicTriggeredRef.current = false;
+                setGenerationStatus(prev => ({ ...prev, cinematicDirection: "idle", sectionImages: "idle" }));
+                setPipelineStages(prev => ({ ...prev, cinematic: "pending" }));
+                if (savedIdRef.current) {
+                  persistRenderData(savedIdRef.current, { cinematicDirection: null });
+                }
+                setPipelineRetryCount(c => c + 1);
+              },
+              restartHooks: () => {
+                hookDetectionRunRef.current = false;
+                setRenderData((prev: any) => {
+                  if (!prev) return prev;
+                  const { hook, secondHook, hookLabel, secondHookLabel, hookJustification, secondHookJustification, ...rest } = prev;
+                  return rest;
+                });
+                setPipelineRetryCount(c => c + 1);
+              },
+              restartImages: () => {
+                setGenerationStatus(prev => ({ ...prev, sectionImages: "idle" }));
+                if (savedIdRef.current) {
+                  void supabase.from("saved_lyrics").update({ section_images: null } as any).eq("id", savedIdRef.current);
+                }
+                setCinematicDirection(null);
+                cinematicDirectionRef.current = null;
+                cinematicTriggeredRef.current = false;
+                setGenerationStatus(prev => ({ ...prev, cinematicDirection: "idle", sectionImages: "idle" }));
+                setPipelineRetryCount(c => c + 1);
+              },
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
