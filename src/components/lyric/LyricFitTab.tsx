@@ -729,8 +729,12 @@ export function LyricFitTab({
             cinematicDirectionRef.current = merged;
 
             if (savedIdRef.current) {
-              const existingRenderData = renderData || {};
-              persistRenderData(savedIdRef.current, { ...existingRenderData, cinematicDirection: merged });
+              // Use functional setter to read latest renderData — avoids stale closure
+              setRenderData((prev: any) => {
+                const updated = { ...(prev || {}), cinematicDirection: merged };
+                void persistRenderData(savedIdRef.current!, updated);
+                return updated;
+              });
             }
           }
         } catch (wordErr: any) {
@@ -740,7 +744,11 @@ export function LyricFitTab({
 
       const imagePromise = (async () => {
         const dirSections = enrichedScene?.sections;
-        if (!Array.isArray(dirSections) || dirSections.length === 0 || !user) return;
+        if (!Array.isArray(dirSections) || dirSections.length === 0 || !user) {
+          // No images to generate — mark as done so readiness check completes
+          setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+          return;
+        }
 
         const currentSavedImages = initialLyric?.section_images;
         if (Array.isArray(currentSavedImages) && currentSavedImages.length > 0 && currentSavedImages.some(Boolean)) {
