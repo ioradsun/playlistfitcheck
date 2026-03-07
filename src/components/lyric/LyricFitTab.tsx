@@ -127,6 +127,22 @@ export function LyricFitTab({
   const [pipelineStages, setPipelineStages] = useState<PipelineStages>({
     rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending",
   });
+  const [pipelineStageTimes, setPipelineStageTimes] = useState<PipelineStageTimes>({
+    rhythm: {}, sections: {}, cinematic: {}, transcript: {},
+  });
+
+  const markStageStart = (stage: keyof PipelineStages) => {
+    setPipelineStageTimes(prev => ({ ...prev, [stage]: { startedAt: performance.now(), durationMs: undefined } }));
+  };
+  const markStageDone = (stage: keyof PipelineStages) => {
+    setPipelineStageTimes(prev => {
+      const s = prev[stage];
+      return { ...prev, [stage]: { ...s, durationMs: s.startedAt ? Math.round(performance.now() - s.startedAt) : undefined } };
+    });
+  };
+  const resetStageTimes = () => {
+    setPipelineStageTimes({ rhythm: {}, sections: {}, cinematic: {}, transcript: {} });
+  };
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>({
     beatGrid: "idle",
     renderData: "done",
