@@ -112,9 +112,12 @@ export function FitTab({
   onRegenerateSectionsVisuals,
   onAddSection,
   onRemoveSection,
+  pipelineStages: pipelineStagesProp,
 }: Props) {
-  const { user, roles } = useAuth();
-  const [publishing, setPublishing] = useState(false);
+  const { user } = useAuth();
+  const [debugOpen, setDebugOpen] = useState(false);
+  const defaultStages: PipelineStages = { rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" };
+  const pipelineStages = pipelineStagesProp ?? defaultStages;
   const [publishStatus, setPublishStatus] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [publishedDanceId, setPublishedDanceId] = useState<string | null>(null);
