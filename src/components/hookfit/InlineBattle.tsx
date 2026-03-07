@@ -57,6 +57,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const fetchRef = useRef(0);
+  const hookEndFiredA = useRef(false);
+  const hookEndFiredB = useRef(false);
 
   useImperativeHandle(ref, () => ({}), []);
 
@@ -68,6 +70,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     setHookB(null);
     setDanceData(null);
     setLoading(true);
+    hookEndFiredA.current = false;
+    hookEndFiredB.current = false;
 
     (async () => {
       // 1. Fetch hook rows
@@ -138,6 +142,27 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     }
     return {};
   }, [votedSide]);
+
+  // Fire onHookEnd once per side after the hook duration plays through
+  useEffect(() => {
+    if (!hookA || activePlaying !== "a" || hookEndFiredA.current) return;
+    const duration = (hookA.hook_end - hookA.hook_start) * 1000 + 500;
+    const timer = setTimeout(() => {
+      hookEndFiredA.current = true;
+      onHookEnd?.("a");
+    }, duration);
+    return () => clearTimeout(timer);
+  }, [activePlaying, hookA, onHookEnd]);
+
+  useEffect(() => {
+    if (!hookB || activePlaying !== "b" || hookEndFiredB.current) return;
+    const duration = (hookB.hook_end - hookB.hook_start) * 1000 + 500;
+    const timer = setTimeout(() => {
+      hookEndFiredB.current = true;
+      onHookEnd?.("b");
+    }, duration);
+    return () => clearTimeout(timer);
+  }, [activePlaying, hookB, onHookEnd]);
 
   // ── Loading / no data ──────────────────────────────────────
   if (loading || !hookA) {
