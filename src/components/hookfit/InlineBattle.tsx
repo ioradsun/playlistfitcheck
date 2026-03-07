@@ -26,9 +26,11 @@ export interface HookInfo {
   hook_end: number;
   hook_label: string | null;
   hook_phrase: string | null;
+  hook_slug: string;
   battle_position: number;
   artist_slug: string;
   song_slug: string;
+  vote_count: number;
   palette?: string[];
 }
 
@@ -44,7 +46,7 @@ interface Props {
   activePlaying: "a" | "b" | null;
 }
 
-const HOOK_SELECT = "id,user_id,hook_start,hook_end,hook_label,hook_phrase,battle_position,artist_slug,song_slug,palette";
+const HOOK_SELECT = "id,user_id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,battle_position,artist_slug,song_slug,vote_count,palette";
 
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
   battleId, mode, votedSide, onHookEnd, onHooksLoaded,
@@ -99,7 +101,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
       const { data: dances, error: danceErr } = await query;
 
-      console.log("[InlineBattle] dance query:", { found: dances?.length ?? 0, error: danceErr?.message, hasCinematic: !!dances?.[0]?.cinematic_direction });
+      console.log("[InlineBattle] dance query:", { found: dances?.length ?? 0, error: danceErr?.message, hasCinematic: !!(dances?.[0] as any)?.cinematic_direction });
 
       if (dances && dances.length > 0) {
         setDanceData(dances[0] as unknown as LyricDanceData);
