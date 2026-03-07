@@ -4,7 +4,7 @@
  * Same cinematic engine as the full lyric dance, just windowed to 10-second hooks.
  */
 
-import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineLyricDance } from "@/components/songfit/InlineLyricDance";
