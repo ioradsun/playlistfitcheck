@@ -1224,7 +1224,7 @@ export function LyricFitTab({
         <PipelineDebugPanel
           generationStatus={generationStatus}
           pipelineStages={pipelineStages}
-          pipelineStageTimes={pipelineStageTimes}
+          pipelineStageTimes={undefined}
           onRetry={retryGeneration}
         />
       </div>
