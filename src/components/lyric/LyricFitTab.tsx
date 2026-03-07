@@ -1112,8 +1112,8 @@ export function LyricFitTab({
           setCinematicDirection={setCinematicDirection}
           generationStatus={generationStatus}
           words={words}
-           onRetry={retryGeneration}
-           stageRestarters={stageRestarters}
+           onRetry={undefined}
+           stageRestarters={undefined}
            onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
            onBack={handleBackToLyrics}
            onImageGenerationStatusChange={handleImageGenerationStatusChange}
