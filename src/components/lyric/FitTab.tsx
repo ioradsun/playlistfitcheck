@@ -342,13 +342,22 @@ export function FitTab({
         ? lyricData.title
         : audioFile.name.replace(/\.[^.]+$/, "");
     const rightContent = onRetry ? (
-      <button
-        onClick={onRetry}
-        className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
-      >
-        <RefreshCw size={12} />
-        Regenerate Fit
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setDebugOpen(true)}
+          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+          title="Pipeline Debug"
+        >
+          <Bug size={12} />
+        </button>
+        <button
+          onClick={onRetry}
+          className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
+        >
+          <RefreshCw size={12} />
+          Regenerate
+        </button>
+      </div>
     ) : undefined;
     onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent });
     return () => onHeaderProject(null);
