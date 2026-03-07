@@ -204,9 +204,11 @@ You are a film director designing the visual world for a lyric video.
 
 You will receive:
 1. Song lyrics organized into SECTIONS with timestamps and roles
+   (computed from audio — boundaries are detector outputs and may be imperfect)
 2. A listener scene — where the listener is when they hear this song
 
 Your job:
+- Identify the song's emotional identity
 - Design a visual world for each section
 - Pick presets from the menus below
 
@@ -215,6 +217,24 @@ If no listener scene is provided, infer one from the lyrics.
 
 You may NOT invent values outside the menus below.
 Return ONLY valid JSON. No markdown. No explanation.
+
+═══════════════════════════════════════
+SONG IDENTITY
+═══════════════════════════════════════
+
+REQUIRED — return these at the top level of your JSON:
+- "description": Single evocative sentence (max 15 words) describing what this song
+  sounds and feels like. Combine sonic texture, lyrical theme, and emotional tone.
+  Be specific and vivid — avoid generic phrases like "a good song" or "nice beat."
+- "mood": Single dominant emotional descriptor (e.g., "melancholic", "hype", "anthemic",
+  "intimate", "defiant", "euphoric", "nostalgic", "aggressive", "vulnerable")
+
+OPTIONAL:
+- "meaning": {
+    "theme": core theme in 2-4 words,
+    "summary": 2-3 sentence plain-language explanation of what the song is about,
+    "imagery": [2-3 notable metaphors or images from the lyrics]
+  }
 
 ═══════════════════════════════════════
 SONG DEFAULTS (6 picks)
@@ -255,15 +275,39 @@ For EACH section, return:
 
 REQUIRED:
 - "sectionIndex": integer (must match the input section index)
-- "description": vivid 1-sentence scene for background image generation, rooted in the listener's scene
-- "visualMood": ONE word from: "intimate", "anthemic", "dreamy", "aggressive", "melancholy", "euphoric", "eerie", "vulnerable", "triumphant", "nostalgic", "defiant", "hopeful", "raw", "hypnotic"
-- "structuralLabel": human-readable section name (e.g. "Verse 1", "Chorus", "Bridge")
+- "description": vivid 1-sentence scene for background image generation,
+  rooted in the listener's scene
+- "visualMood": ONE word from: "intimate", "anthemic", "dreamy", "aggressive",
+  "melancholy", "euphoric", "eerie", "vulnerable", "triumphant", "nostalgic",
+  "defiant", "hopeful", "raw", "hypnotic"
+- "structuralLabel": human-readable section name. ALWAYS return this field.
+  Each section includes a heuristic role and a confidence percentage.
+  HIGH confidence (≥70%): trust the heuristic role unless lyrics clearly contradict.
+  LOW confidence (<70%): the detector is uncertain — analyze the lyrics to decide:
+    · Lyrics repeat verbatim from an earlier section → Chorus
+    · Energy builds, lyrics are transitional, next section is a chorus → Pre-Chorus
+    · Fresh lyrical content, narrative progression → Verse (number sequentially)
+    · Contrasting one-off section with different feel → Bridge
+    · High energy, sparse or no lyrics → Drop
+    · Energy dip, sparse texture → Breakdown
+  Standard values: "Intro", "Verse 1", "Verse 2", "Verse 3",
+  "Pre-Chorus", "Chorus", "Post-Chorus", "Bridge", "Hook",
+  "Breakdown", "Drop", "Outro".
+  Number repeated types sequentially: "Verse 1", "Verse 2".
+  Number Chorus only if lyrics differ significantly between occurrences.
 
-OPTIONAL overrides:
-- "motion", "texture", "typography", "atmosphere" — override song defaults for this section
+OPTIONAL — override song defaults for this section:
+- "motion", "texture", "typography", "atmosphere"
+
+OPTIONAL — boundary correction (LOW confidence sections only):
+- "suggestedStartSec": number — if lyrics clearly begin earlier/later than the given startSec
+- "suggestedEndSec": number — if lyrics clearly end earlier/later than the given endSec
+  Only include these when the timestamps of the first/last lyric in a section are
+  significantly misaligned with the given boundary (>2s gap).
 
 Return JSON only.
 `;
+
 
 const WORD_DIRECTION_PROMPT = `
 You are a word choreographer for a cinematic lyric video.
@@ -800,6 +844,21 @@ function validateScene(raw: Record<string, any>, sectionCount: number): Validati
     }
   }
 
+  // Validate and preserve song metadata
+  if (typeof v.description === "string") {
+    v.description = v.description.trim().slice(0, 200);
+  }
+  if (typeof v.mood === "string") {
+    v.mood = v.mood.trim().toLowerCase();
+  }
+  if (v.meaning && typeof v.meaning === "object") {
+    v.meaning = {
+      theme: typeof v.meaning.theme === "string" ? v.meaning.theme.trim() : undefined,
+      summary: typeof v.meaning.summary === "string" ? v.meaning.summary.trim() : undefined,
+      imagery: Array.isArray(v.meaning.imagery) ? v.meaning.imagery.map(String).slice(0, 5) : undefined,
+    };
+  }
+
   delete v.storyboard;
   delete v.wordDirectives;
 
@@ -883,7 +942,7 @@ async function callScene(
       ],
       response_format: { type: "json_object" },
       temperature: 0.7,
-      max_tokens: 2000,
+      max_tokens: 3000,
     }),
   });
 

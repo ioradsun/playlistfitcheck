@@ -128,6 +128,12 @@ export function buildSongSignature(
 
   const energyCurve = buildEnergyCurve(frames, durationSec, analysis.frameRate);
 
+  // Ensure energyCurve is Float32Array (survives JSON round-trip)
+  let finalCurve = energyCurve;
+  if (finalCurve && !(finalCurve instanceof Float32Array)) {
+    finalCurve = new Float32Array(Object.values(finalCurve) as number[]);
+  }
+
   return {
     bpm: beatGrid.bpm,
     durationSec,
@@ -138,7 +144,7 @@ export function buildSongSignature(
     zeroCrossingRate: 0, // Not available from AudioAnalysis; unused by sectionDetector
     spectralCentroidHz: avgCentroid,
     lyricDensity,
-    energyCurve,
+    energyCurve: finalCurve,
     analysisVersion: 1,
   };
 }
