@@ -101,7 +101,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
       const { data: dances, error: danceErr } = await query;
 
-      console.log("[InlineBattle] dance query:", { found: dances?.length ?? 0, error: danceErr?.message, hasCinematic: !!dances?.[0]?.cinematic_direction });
+      console.log("[InlineBattle] dance query:", { found: dances?.length ?? 0, error: danceErr?.message, hasCinematic: !!(dances?.[0] as any)?.cinematic_direction });
 
       if (dances && dances.length > 0) {
         setDanceData(dances[0] as unknown as LyricDanceData);
