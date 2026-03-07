@@ -347,14 +347,6 @@ export function FitTab({
       <div className="flex items-center gap-1">
         <button
           type="button"
-          onClick={() => setDebugOpen(true)}
-          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
-          title="Pipeline Debug"
-        >
-          <Bug size={12} />
-        </button>
-        <button
-          type="button"
           onClick={(event) => {
             event.preventDefault();
             onRetry();
