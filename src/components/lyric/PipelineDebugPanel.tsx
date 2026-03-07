@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight, Copy, Check, Trash2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
+import type { GenerationStatus, PipelineStages, PipelineStageTimes } from "./LyricFitTab";
 
 export interface PipelineLogEntry {
   id: string;
@@ -30,6 +30,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   generationStatus: GenerationStatus;
   pipelineStages: PipelineStages;
+  pipelineStageTimes?: PipelineStageTimes;
   onRetry: () => void;
 }
 
@@ -202,7 +203,7 @@ const GEN_LABELS: Record<keyof GenerationStatus, string> = {
   sectionImages: "Section Images",
 };
 
-export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipelineStages, onRetry }: Props) {
+export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipelineStages, pipelineStageTimes, onRetry }: Props) {
   const [logs, setLogs] = useState<PipelineLogEntry[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -266,6 +267,12 @@ export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipel
           <div className="grid grid-cols-2 gap-1">
             {(Object.keys(STAGE_LABELS) as (keyof PipelineStages)[]).map((key) => {
               const status = pipelineStages[key];
+              const timing = pipelineStageTimes?.[key];
+              const durationLabel = timing?.durationMs != null
+                ? `${(timing.durationMs / 1000).toFixed(1)}s`
+                : status === "running" && timing?.startedAt
+                  ? "…"
+                  : null;
               return (
                 <div key={key} className="flex items-center gap-1.5 text-[11px]">
                   <span className={cn(
@@ -275,6 +282,11 @@ export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipel
                   <span className={cn("font-mono", status === "done" ? "text-foreground" : "text-muted-foreground")}>
                     {STAGE_LABELS[key]}
                   </span>
+                  {durationLabel && (
+                    <span className="text-[9px] font-mono text-muted-foreground/70 ml-auto">
+                      {durationLabel}
+                    </span>
+                  )}
                 </div>
               );
             })}

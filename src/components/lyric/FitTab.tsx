@@ -30,7 +30,7 @@ import type { AudioSection, SectionRole } from "@/engine/sectionDetector";
 import type { LyricSection } from "@/hooks/useLyricSections";
 import type { SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { HeaderProjectSetter } from "./LyricsTab";
-import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
+import type { GenerationStatus, PipelineStages, PipelineStageTimes } from "./LyricFitTab";
 import type { CinematicSection } from "@/types/CinematicDirection";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 
@@ -82,6 +82,7 @@ interface Props {
   onAddSection?: (role: SectionRole, startSec: number, endSec: number) => void;
   onRemoveSection?: (sectionIndex: number) => void;
   pipelineStages?: PipelineStages;
+  pipelineStageTimes?: PipelineStageTimes;
 }
 
 export function FitTab({
@@ -113,6 +114,7 @@ export function FitTab({
   onAddSection,
   onRemoveSection,
   pipelineStages: pipelineStagesProp,
+  pipelineStageTimes,
 }: Props) {
   const { user } = useAuth();
   const [debugOpen, setDebugOpen] = useState(false);
@@ -836,6 +838,7 @@ export function FitTab({
       onOpenChange={setDebugOpen}
       generationStatus={generationStatus}
       pipelineStages={pipelineStages}
+      pipelineStageTimes={pipelineStageTimes}
       onRetry={onRetry ?? (() => {})}
     />
     <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
