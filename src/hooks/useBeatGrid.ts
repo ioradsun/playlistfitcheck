@@ -40,8 +40,7 @@ async function loadEssentia(): Promise<any> {
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    await loadScript(ESSENTIA_WASM_URL);
-    await loadScript(ESSENTIA_CORE_URL);
+    await Promise.all([loadScript(ESSENTIA_WASM_URL), loadScript(ESSENTIA_CORE_URL)]);
 
     const w = window as any;
     const wasmModule = await w.EssentiaWASM();
@@ -51,6 +50,11 @@ async function loadEssentia(): Promise<any> {
   })();
 
   return loadPromise;
+}
+
+/** Preload Essentia WASM + Core so beat detection starts instantly when audio arrives. */
+export function preloadEssentia(): void {
+  void loadEssentia();
 }
 
 function getMonoChannel(buffer: AudioBuffer): Float32Array {

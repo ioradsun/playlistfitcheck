@@ -19,7 +19,7 @@ interface Props {
 
 const STAGE_LABELS: Record<keyof PipelineStages, string> = {
   rhythm: "Rhythm analysis",
-  renderData: "Song DNA",
+  sections: "Section detection",
   cinematic: "Cinematic direction",
   transcript: "Final transcript sync",
 };
