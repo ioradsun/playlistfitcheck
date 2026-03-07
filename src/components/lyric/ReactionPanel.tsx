@@ -262,7 +262,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
   const panelStyles = displayMode === 'fullscreen'
     ? 'fixed bottom-0 left-0 right-0 z-[70] h-[88vh]'
-    : 'absolute inset-0 z-30';
+    : 'absolute left-0 right-0 bottom-0 z-30 h-[310px]';
 
   useEffect(() => {
     if (!isOpen) {
