@@ -895,6 +895,7 @@ export function LyricFitTab({
 
     fitPipelineT0Ref.current = performance.now();
     setPipelineStages(prev => ({ ...prev, sections: "running" }));
+    markStageStart("sections");
     sectionPipelineRunningRef.current = true;
     try {
       let sig = songSignature;
