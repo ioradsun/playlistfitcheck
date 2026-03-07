@@ -85,6 +85,16 @@ SECTIONS
 
 You receive N sections. For EACH section, return:
 
+If no pre-detected sections are provided, YOU must determine the song structure
+from the lyrics. Look for:
+- Repeated lyrics → Chorus
+- Fresh narrative content → Verse (number sequentially)
+- Short transitional passages → Pre-Chorus or Bridge
+- Opening/closing instrumental → Intro/Outro
+Create 4-8 sections with timestamps based on the lyric timestamps.
+Each section's startSec should align with the first lyric line in that section.
+Each section's endSec should align with the last lyric line + 1 second.
+
 REQUIRED:
 - "sectionIndex": integer (must match the input section index)
 - "description": vivid 1-sentence scene for background image generation,
@@ -272,6 +282,16 @@ SECTIONS
 ═══════════════════════════════════════
 
 For EACH section, return:
+
+If no pre-detected sections are provided, YOU must determine the song structure
+from the lyrics. Look for:
+- Repeated lyrics → Chorus
+- Fresh narrative content → Verse (number sequentially)
+- Short transitional passages → Pre-Chorus or Bridge
+- Opening/closing instrumental → Intro/Outro
+Create 4-8 sections with timestamps based on the lyric timestamps.
+Each section's startSec should align with the first lyric line in that section.
+Each section's endSec should align with the last lyric line + 1 second.
 
 REQUIRED:
 - "sectionIndex": integer (must match the input section index)
@@ -571,9 +591,11 @@ function buildUserMessage(
       msg += "\n";
     }
   } else {
-    msg += `Lyrics (${lines.length} lines):\n`;
-    msg += lines.map((l) => l.text).join("\n");
-    msg += "\n\n";
+    msg += `Lyrics (${lines.length} lines — no pre-detected sections, determine structure from lyrics):\n`;
+    for (const l of lines) {
+      msg += `[${fmt(l.start)}–${fmt(l.end)}] ${l.text}\n`;
+    }
+    msg += "\n";
   }
 
   if (words && words.length > 0) {
@@ -584,7 +606,6 @@ function buildUserMessage(
   msg += "Return cinematic_direction. JSON only.";
   return msg;
 }
-
 
 
 function buildWordUserMessage(

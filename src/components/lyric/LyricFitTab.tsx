@@ -11,13 +11,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { useBeatGrid, preloadEssentia, type BeatGridData } from "@/hooks/useBeatGrid";
 import type { LyricData, LyricLine } from "./LyricDisplay";
-import { buildSongSignature, buildSongSignatureWithAudio, type SongSignature } from "@/lib/songSignatureAnalyzer";
-import { detectSections, type SectionRole, type TimestampedLine } from "@/engine/sectionDetector";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
-import { useLyricSections } from "@/hooks/useLyricSections";
-import { mergeSectionOverrides, type SectionOverride, type SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { SceneContextResult } from "@/lib/sceneContexts";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
@@ -132,13 +128,9 @@ export function LyricFitTab({
   const [fmlyLines, setFmlyLines] = useState<any[] | null>(initialLyric?.fmly_lines ?? null);
   const [versionMeta, setVersionMeta] = useState<any | null>(initialLyric?.version_meta ?? null);
   const [words, setWords] = useState<Array<{ word: string; start: number; end: number }> | null>(initialLyric?.words ?? null);
-  const [sectionOverrides, setSectionOverrides] = useState<SectionOverrides | null>(initialLyric?.section_overrides ?? null);
-  const [sectionsDirty, setSectionsDirty] = useState(false);
 
   const [renderData, setRenderData] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
-  const [songSignature, setSongSignature] = useState<SongSignature | null>(null);
-  const [audioSections, setAudioSections] = useState<any[]>([]);
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
   const cinematicDirectionRef = useRef(cinematicDirection);
   cinematicDirectionRef.current = cinematicDirection;
@@ -167,7 +159,7 @@ export function LyricFitTab({
   const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
   const [transcriptionModel, setTranscriptionModel] = useState("scribe");
 
-  const timestampedLines = useMemo<TimestampedLine[]>(() => {
+  const timestampedLines = useMemo(() => {
     return lines
       .filter((line) => line.tag !== "adlib")
       .map((line, lineIndex) => ({
@@ -183,52 +175,6 @@ export function LyricFitTab({
     return Math.max(audioBuffer?.duration ?? 0, lastLineEnd);
   }, [audioBuffer, timestampedLines]);
 
-  const { sections: detectedSections } = useLyricSections(words, beatGrid, cinematicDirection, audioDurationSec, audioSections);
-  const mergedSections = useMemo(
-    () => mergeSectionOverrides(detectedSections, sectionOverrides),
-    [detectedSections, sectionOverrides],
-  );
-  const mergedSectionsRef = useRef(mergedSections);
-  mergedSectionsRef.current = mergedSections;
-
-  const handleSectionOverridesChange = useCallback((overrides: SectionOverrides) => {
-    const prev = sectionOverrides || [];
-    const rolesChanged = overrides.some((override) => {
-      const old = prev.find((item) => item.sectionIndex === override.sectionIndex);
-      return !!(override.role && (!old || old.role !== override.role));
-    });
-    const newSections = overrides.some((override) => override.isNew && !prev.some((item) => item.sectionIndex === override.sectionIndex));
-    if (rolesChanged || newSections) setSectionsDirty(true);
-    setSectionOverrides(overrides);
-  }, [sectionOverrides]);
-
-  const handleAddSection = useCallback((role: SectionRole, startSec: number, endSec: number) => {
-    const maxIndex = Math.max(0, ...(sectionOverrides || []).map((o) => o.sectionIndex), ...detectedSections.map((section) => section.sectionIndex));
-    const newOverride: SectionOverride = {
-      sectionIndex: maxIndex + 100,
-      role,
-      startSec,
-      endSec: Math.min(endSec, audioDurationSec),
-      isNew: true,
-    };
-    setSectionOverrides((prev) => [...(prev || []), newOverride]);
-    setSectionsDirty(true);
-  }, [sectionOverrides, detectedSections, audioDurationSec]);
-
-  const handleRemoveSection = useCallback((sectionIndex: number) => {
-    setSectionOverrides((prev) => {
-      const current = prev || [];
-      const existing = current.find((item) => item.sectionIndex === sectionIndex);
-      if (existing?.isNew) {
-        return current.filter((item) => item.sectionIndex !== sectionIndex);
-      }
-      const withoutExisting = current.filter((item) => item.sectionIndex !== sectionIndex);
-      return [...withoutExisting, { sectionIndex, removed: true }];
-    });
-    setSectionsDirty(true);
-  }, []);
-
-  const sectionsReady = audioSections.length > 0;
   const fitPipelineT0Ref = useRef<number | null>(null);
   const fitPipelineMs = useCallback(() => fitPipelineT0Ref.current === null
     ? "0ms"
@@ -291,9 +237,9 @@ export function LyricFitTab({
   }, [detectedGrid, beatGrid]);
 
   // Ensure audioBuffer is decoded when audioFile exists (e.g. loaded from DB)
-  // songSignature needs audioBuffer even if beatGrid was loaded from saved data
+  // Ensure audio is decoded when needed for playback/waveform
   // PERF: Skip eager decode when all analysis data is already loaded — decode on demand
-  const allAnalysisLoaded = !!(beatGrid && songSignature && cinematicDirection);
+  const allAnalysisLoaded = !!(beatGrid && cinematicDirection);
   useEffect(() => {
     if (audioBuffer || !audioFile || audioFile.size === 0) return;
     if (allAnalysisLoaded) { plog("AUDIO DECODE skipped — all analysis loaded from DB"); return; }
@@ -359,42 +305,6 @@ export function LyricFitTab({
   useEffect(() => {
     savedIdRef.current = savedId;
   }, [savedId]);
-
-  useEffect(() => {
-    if (!sectionOverrides?.length || !mergedSections.length) return;
-    const cd = cinematicDirectionRef.current;
-    if (!cd || !Array.isArray(cd.sections)) return;
-
-    const patchedSections = cd.sections.map((cs: any, i: number) => {
-      const merged = mergedSections[i];
-      if (!merged) return cs;
-      return {
-        ...cs,
-        startSec: merged.startSec,
-        endSec: merged.endSec,
-        structuralLabel: merged.label,
-      };
-    });
-
-    const same = cd.sections.every((sec: any, i: number) => {
-      const next = patchedSections[i];
-      return !!next && sec.startSec === next.startSec && sec.endSec === next.endSec && sec.structuralLabel === next.structuralLabel;
-    });
-    if (!same) {
-      setCinematicDirection({ ...cd, sections: patchedSections });
-    }
-  }, [sectionOverrides, mergedSections]);
-
-  useEffect(() => {
-    if (!savedId || !sectionOverrides) return;
-    const timer = setTimeout(() => {
-      void supabase
-        .from("saved_lyrics")
-        .update({ render_data: { section_overrides: sectionOverrides } as any })
-        .eq("id", savedId);
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [sectionOverrides, savedId]);
 
   // (persist effect moved below persistRenderData definition)
 
@@ -469,25 +379,6 @@ export function LyricFitTab({
         });
       });
     }
-
-    const savedSignature = (initialLyric as any).song_signature;
-    if (savedSignature) {
-      const sig = { ...savedSignature } as SongSignature;
-      if (sig.energyCurve && !(sig.energyCurve instanceof Float32Array)) {
-        const values = Object.values(sig.energyCurve) as number[];
-        sig.energyCurve = new Float32Array(values);
-      }
-      if (sig.energyCurve && sig.energyCurve.length > 0) {
-        plog("HYDRATE songSignature accepted", { energyCurveLength: sig.energyCurve.length, bpm: sig.bpm });
-        setSongSignature(sig);
-      } else {
-        plog("HYDRATE songSignature REJECTED — empty energyCurve, will recompute");
-      }
-    }
-    // NOTE: Do NOT hydrate audioSections from cinematic_direction.sections.
-    // Those are AI-labeled sections, not detectSections() output.
-    // audioSections must always come from detectSections() using the real energy curve.
-    // The pipeline will re-derive them via maybeRunSectionPipeline.
 
     // Hydrate section_images from saved_lyrics — survives tab switches
     const savedSectionImages = (initialLyric as any).section_images;
@@ -613,7 +504,7 @@ export function LyricFitTab({
     if (renderData?.hook) return;
 
     hookDetectionRunRef.current = true;
-    plog("HOOKS start", { linesCount: lines.length, wordsCount: words?.length, hasBeatGrid: !!beatGrid, hasEnergyCurve: !!songSignature?.energyCurve?.length });
+    plog("HOOKS start", { linesCount: lines.length, wordsCount: words?.length, hasBeatGrid: !!beatGrid });
     try {
       const linesForHook = lines
         .filter((l: any) => l.tag !== "adlib")
@@ -627,9 +518,6 @@ export function LyricFitTab({
           beatGrid: beatGrid
             ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence }
             : { bpm: 120, beats: [], confidence: 0 },
-          energyCurve: songSignature?.energyCurve
-            ? Array.from(songSignature.energyCurve)
-            : undefined,
           beatEnergies: beatGrid?.beatEnergies ?? undefined,
           durationSec: audioDurationSec,
         },
@@ -659,7 +547,7 @@ export function LyricFitTab({
     } catch (err: any) {
       plog("HOOKS FAILED", err?.message || err);
     }
-  }, [words, lines, beatGrid, songSignature, audioDurationSec, renderData?.hook, persistRenderData]);
+  }, [words, lines, beatGrid , audioDurationSec, renderData?.hook, persistRenderData]);
 
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[], force = false) => {
     if (!lyricData || !sourceLines.length) return;
@@ -680,7 +568,7 @@ export function LyricFitTab({
     setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running", sectionImages: "idle" }));
     setPipelineStages(prev => ({ ...prev, cinematic: "running" }));
 
-    plog("CINEMATIC start", { title: lyricData.title, force, sectionsCount: audioSections.length, hasWords: !!words?.length, hasScene: !!resolvedScene });
+    plog("CINEMATIC start", { title: lyricData.title, force, hasWords: !!words?.length, hasScene: !!resolvedScene });
 
 
     try {
@@ -689,20 +577,6 @@ export function LyricFitTab({
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
       const sceneContext = resolvedScene ?? null;
-      const sectionSource = audioSections.length > 0 ? audioSections : mergedSectionsRef.current;
-      const sectionsForAI = sectionSource.map((section: any, i: number) => ({
-        index: i,
-        startSec: section.startSec,
-        endSec: section.endSec,
-        role: section.role,
-        avgEnergy: section.avgEnergy ?? 0.5,
-        beatDensity: section.beatDensity ?? 1.5,
-        confidence: section.confidence ?? 0.5,
-        lyrics: sourceLines
-          .filter((line) => line.start >= section.startSec - 0.5 && line.end <= section.endSec + 0.5)
-          .map((line, lineIndex) => ({ text: line.text, lineIndex })),
-      }));
-
       const sharedBody = {
         title: lyricData.title,
         artist: artistNameRef.current,
@@ -712,18 +586,6 @@ export function LyricFitTab({
         beatGridSummary: beatGrid
           ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence, totalBeats: beatGrid.beats.length }
           : undefined,
-        songSignature: songSignature
-          ? {
-              bpm: songSignature.bpm,
-              durationSec: songSignature.durationSec,
-              tempoStability: songSignature.tempoStability,
-              rmsMean: songSignature.rmsMean,
-              rmsVariance: songSignature.rmsVariance,
-              spectralCentroidHz: songSignature.spectralCentroidHz,
-              lyricDensity: songSignature.lyricDensity,
-            }
-          : undefined,
-        audioSections: sectionsForAI.length ? sectionsForAI : undefined,
         lyricId: savedIdRef.current || undefined,
         scene_context: sceneContext,
       };
@@ -753,14 +615,6 @@ export function LyricFitTab({
       const enrichedScene = beatGrid
         ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
         : { ...sceneDirection };
-
-      if (sectionsForAI.length > 0 && Array.isArray(enrichedScene.sections)) {
-        enrichedScene.sections = enrichedScene.sections.map((s: any, i: number) => ({
-          ...s,
-          startSec: sectionsForAI[i]?.startSec ?? s.startSec,
-          endSec: sectionsForAI[i]?.endSec ?? s.endSec,
-        }));
-      }
 
       setCinematicDirection(enrichedScene);
 
@@ -937,106 +791,19 @@ export function LyricFitTab({
       console.error("[Pipeline] Cinematic direction failed:", err);
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error", sectionImages: "idle" }));
     }
-  }, [lyricData, generationStatus.cinematicDirection, beatGrid, renderData, persistRenderData, songSignature, audioSections, fitPipelineMs, words, user, audioFile, initialLyric]);
-
-  const sectionPipelineRunningRef = useRef(false);
-  const sectionPipelineDoneRef = useRef(false);
-
-  const maybeRunSectionPipeline = useCallback(async () => {
-    
-    if (!transcriptionDone || !beatGridDone) return;
-    if (!beatGrid) return;
-    if (sectionPipelineRunningRef.current || sectionPipelineDoneRef.current) return;
-
-    // If we already have both songSignature and audioSections from DB, skip entirely
-    if (songSignature && audioSections.length > 0) {
-      console.log("[section-pipeline] SKIPPED — cached:", { sigCurveLen: songSignature.energyCurve?.length ?? 0, audioSectionsCount: audioSections.length });
-      sectionPipelineDoneRef.current = true;
-      return;
-    }
-
-    // Wait for audioBuffer when _analysis is missing (reload from DB)
-    // audioBuffer is needed to compute energy curve from raw audio
-    if (!beatGrid._analysis && !audioBuffer) {
-      console.log("[section-pipeline] WAITING — no _analysis and no audioBuffer");
-      return;
-    }
-
-    fitPipelineT0Ref.current = performance.now();
-    setPipelineStages(prev => ({ ...prev, sections: "running" }));
-    sectionPipelineRunningRef.current = true;
-    try {
-      let sig = songSignature;
-      if (!sig) {
-        const lyricsText = timestampedLines.map((line) => line.text).join("\n");
-        const usedRawAudio = !!audioBuffer;
-        if (audioBuffer) {
-          sig = buildSongSignatureWithAudio(audioBuffer, beatGrid, beatGrid._analysis, lyricsText, audioDurationSec);
-        } else {
-          sig = buildSongSignature(beatGrid, beatGrid._analysis, lyricsText, audioDurationSec);
-        }
-
-        // ── Section pipeline diagnostics ──
-        const ec = sig.energyCurve;
-        let ecMin = 1, ecMax = 0, ecDeltas = 0;
-        for (let i = 0; i < ec.length; i++) {
-          if (ec[i] < ecMin) ecMin = ec[i];
-          if (ec[i] > ecMax) ecMax = ec[i];
-          if (i > 0 && Math.abs(ec[i] - ec[i - 1]) >= 0.2) ecDeltas++;
-        }
-        console.log("[section-pipeline] diagnostics:", {
-          path: usedRawAudio ? "raw-audio" : "analysis-frames",
-          hasAnalysis: !!beatGrid._analysis,
-          hasAudioBuffer: !!audioBuffer,
-          audioBufferDuration: audioBuffer?.duration ?? 0,
-          audioDurationSec,
-          energyCurveLength: ec.length,
-          energyCurveMin: ecMin.toFixed(3),
-          energyCurveMax: ecMax.toFixed(3),
-          energyCurveRange: (ecMax - ecMin).toFixed(3),
-          energyBoundaries: ecDeltas,
-          timestampedLinesCount: timestampedLines.length,
-          beatsCount: beatGrid.beats?.length ?? 0,
-          bpm: beatGrid.bpm,
-          spectralCentroidHz: sig.spectralCentroidHz?.toFixed(0),
-        });
-
-        setSongSignature(sig);
-        if (savedIdRef.current) {
-          void supabase
-            .from("saved_lyrics")
-            .update({ song_signature: sig as any, updated_at: new Date().toISOString() })
-            .eq("id", savedIdRef.current);
-        }
-      }
-
-      const nextSections = detectSections(sig, beatGrid, timestampedLines, audioDurationSec);
-      console.log("[section-pipeline] result:", nextSections.length, "sections", nextSections.map(s => `${s.role}@${s.startSec.toFixed(1)}-${s.endSec.toFixed(1)} energy=${s.avgEnergy.toFixed(2)}`));
-      setAudioSections(nextSections);
-      setPipelineStages(prev => ({ ...prev, sections: "done" }));
-      sectionPipelineDoneRef.current = true;
-    } catch (error) {
-      console.warn("[section-pipeline] failed", error);
-    } finally {
-      sectionPipelineRunningRef.current = false;
-    }
-  }, [transcriptionDone, beatGridDone, beatGrid, timestampedLines, audioDurationSec, songSignature, audioSections.length, audioBuffer, fitPipelineMs]);
-
-  useEffect(() => {
-    void maybeRunSectionPipeline();
-  }, [maybeRunSectionPipeline, fitPipelineMs]);
+  }, [lyricData, generationStatus.cinematicDirection, beatGrid, renderData, persistRenderData , fitPipelineMs, words, user, audioFile, initialLyric]);
 
   const pipelineTriggeredRef = useRef(false);
   const [pipelineRetryCount, setPipelineRetryCount] = useState(0);
   const cinematicTriggeredRef = useRef(false);
   useEffect(() => {
-    if (!sectionsReady || !lines?.length) return;
+    if (!transcriptionDone || !beatGridDone || !lines?.length) return;
     if (cinematicTriggeredRef.current) return;
     cinematicTriggeredRef.current = true;
     const force = pipelineRetryCount > 0;
-    plog("TRIGGER cinematic direction", { sectionsReady, linesCount: lines.length, force });
+    plog("TRIGGER cinematic direction", { linesCount: lines.length, force });
     void startCinematicDirection(lines, force);
-  }, [sectionsReady, lines, pipelineRetryCount, startCinematicDirection, fitPipelineMs]);
+  }, [transcriptionDone, beatGridDone, lines, pipelineRetryCount, startCinematicDirection, fitPipelineMs]);
 
   // ── Fork 1: Beat grid starts when audio file is submitted (parallel with transcription) ──
   // Called from onAudioSubmitted callback, not from an effect waiting on lines.
@@ -1126,11 +893,9 @@ export function LyricFitTab({
     if (!audioFile || !lines.length) return;
     plog("RETRY — recompute analysis (keeping beatGrid + audioBuffer)");
     // Keep: beatGrid (same audio = same BPM/beats), audioBuffer, transcriptionDone, lines, words
-    // Clear: songSignature, audioSections, cinematicDirection, renderData, images
+    // Clear cinematicDirection, renderData, images
     setRenderData(null);
     setCinematicDirection(null);
-    setSongSignature(null);
-    setAudioSections([]);
     setGenerationStatus(prev => ({
       beatGrid: prev.beatGrid === "done" ? "done" : "idle",
       renderData: "done",
@@ -1139,8 +904,6 @@ export function LyricFitTab({
     }));
     pipelineTriggeredRef.current = false;
     cinematicTriggeredRef.current = false;
-    sectionPipelineRunningRef.current = false;
-    sectionPipelineDoneRef.current = false;
     hookDetectionRunRef.current = false;
 
     if (savedIdRef.current) {
@@ -1159,13 +922,14 @@ export function LyricFitTab({
 
   // ── Per-stage restarters (for debug panel) ──
   const restartSections = useCallback(() => {
-    plog("RESTART sections only");
-    setSongSignature(null);
-    setAudioSections([]);
-    sectionPipelineRunningRef.current = false;
-    sectionPipelineDoneRef.current = false;
-    // maybeRunSectionPipeline will fire via the effect when deps change
-  }, []);
+    plog("RESTART sections (rerun cinematic)");
+    setCinematicDirection(null);
+    cinematicTriggeredRef.current = false;
+    setGenerationStatus(prev => ({ ...prev, cinematicDirection: "idle", sectionImages: "idle" }));
+    if (lines?.length) {
+      void startCinematicDirection(lines, true);
+    }
+  }, [lines, startCinematicDirection]);
 
   const restartCinematic = useCallback(() => {
     plog("RESTART cinematic (scene + words + images)");
@@ -1237,10 +1001,6 @@ export function LyricFitTab({
 
   const fitDisabled = !transcriptionDone;
 
-  const handleRegenerateSectionsVisuals = useCallback(() => {
-    setSectionsDirty(false);
-    void startCinematicDirection(lines, true);
-  }, [lines, startCinematicDirection]);
 
 
   const sceneInputNode = !lyricData ? (
@@ -1309,24 +1069,18 @@ export function LyricFitTab({
           onNewProject={() => {
             setRenderData(null);
             setBeatGrid(null);
-            setSongSignature(null);
-            setCinematicDirection(null);
+                    setCinematicDirection(null);
             setLines([]);
             setAudioBuffer(null);
             setWaveformData(null);
             setTranscriptionDone(false);
             setBeatGridDone(false);
             setAudioBufferReady(false);
-            setAudioSections([]);
-            setGenerationStatus({ beatGrid: "idle", renderData: "done", cinematicDirection: "idle", sectionImages: "idle" });
-            setSectionOverrides(null);
-            setSectionsDirty(false);
+                    setGenerationStatus({ beatGrid: "idle", renderData: "done", cinematicDirection: "idle", sectionImages: "idle" });
             setFitReadiness("not_started");
             setFitUnlocked(false);
             cinematicTriggeredRef.current = false;
             pipelineTriggeredRef.current = false;
-            sectionPipelineRunningRef.current = false;
-            sectionPipelineDoneRef.current = false;
             hookDetectionRunRef.current = false;
             onNewProject?.();
           }}
@@ -1354,31 +1108,16 @@ export function LyricFitTab({
           setRenderData={setRenderData}
           beatGrid={beatGrid}
           setBeatGrid={setBeatGrid}
-          songSignature={songSignature}
-          setSongSignature={setSongSignature}
           cinematicDirection={cinematicDirection}
           setCinematicDirection={setCinematicDirection}
           generationStatus={generationStatus}
-          audioSections={audioSections}
           words={words}
-          sectionOverrides={sectionOverrides}
-          onSectionOverridesChange={handleSectionOverridesChange}
-          mergedSections={mergedSections}
-          sectionsDirty={sectionsDirty}
-          onRegenerateSectionsVisuals={handleRegenerateSectionsVisuals}
-          onAddSection={handleAddSection}
-          onRemoveSection={handleRemoveSection}
            onRetry={retryGeneration}
            stageRestarters={stageRestarters}
            onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
            onBack={handleBackToLyrics}
            onImageGenerationStatusChange={handleImageGenerationStatusChange}
            pipelineStages={pipelineStages}
-           cinematicSections={
-             Array.isArray(cinematicDirection?.sections)
-               ? cinematicDirection.sections
-               : undefined
-           }
         />
         ) : null}
       </div>
