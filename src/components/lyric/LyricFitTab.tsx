@@ -1070,6 +1070,7 @@ export function LyricFitTab({
 
   const handleViewChange = useCallback((nextView: LyricFitView) => {
     if (nextView === "fit" && !fitUnlocked && fitReadiness !== "ready" && fitReadiness !== "not_started") return;
+    if (nextView === "debug") { setActiveTab("debug"); return; }
     setActiveTab(nextView);
   }, [fitUnlocked, fitReadiness]);
 
