@@ -9,9 +9,9 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { sessionAudio } from "@/lib/sessionAudioCache";
-import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
+import { useBeatGrid, preloadEssentia, type BeatGridData } from "@/hooks/useBeatGrid";
 import type { LyricData, LyricLine } from "./LyricDisplay";
-import { songSignatureAnalyzer, type SongSignature } from "@/lib/songSignatureAnalyzer";
+import { buildSongSignature, type SongSignature } from "@/lib/songSignatureAnalyzer";
 import { detectSections, type SectionRole, type TimestampedLine } from "@/engine/sectionDetector";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
@@ -53,7 +53,7 @@ export interface GenerationStatus {
 export type PipelineStageStatus = "pending" | "running" | "done";
 export interface PipelineStages {
   rhythm: PipelineStageStatus;
-  renderData: PipelineStageStatus;
+  sections: PipelineStageStatus;
   cinematic: PipelineStageStatus;
   transcript: PipelineStageStatus;
 }
@@ -76,6 +76,8 @@ export function LyricFitTab({
   onUploadStarted: onUploadStartedProp,
 }: Props) {
   const { user } = useAuth();
+
+  useEffect(() => { preloadEssentia(); }, []);
   const artistNameRef = useRef<string>("artist");
   // Compute initial values synchronously from initialLyric to avoid flash of uploader
   const initLyricData = useMemo<LyricData | null>(() => {
@@ -122,11 +124,11 @@ export function LyricFitTab({
   const [fitProgress, setFitProgress] = useState(0);
   const [fitStageLabel, setFitStageLabel] = useState("");
   const [pipelineStages, setPipelineStages] = useState<PipelineStages>({
-    rhythm: "pending", renderData: "pending", cinematic: "pending", transcript: "pending",
+    rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending",
   });
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>({
     beatGrid: "idle",
-    renderData: "idle",
+    renderData: "done",
     cinematicDirection: "idle",
     sectionImages: "idle",
   });
@@ -244,6 +246,19 @@ export function LyricFitTab({
     setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
     setPipelineStages(prev => ({ ...prev, rhythm: "done" }));
     setFitProgress(prev => Math.max(prev, 35));
+
+    // Persist beat_grid so we skip Essentia on next load
+    if (savedIdRef.current) {
+      void supabase.from("saved_lyrics")
+        .update({
+          beat_grid: {
+            bpm: detectedGrid.bpm,
+            beats: detectedGrid.beats,
+            confidence: detectedGrid.confidence,
+          } as any,
+        })
+        .eq("id", savedIdRef.current);
+    }
   }, [detectedGrid, beatGrid]);
 
   // Ensure audioBuffer is decoded when audioFile exists (e.g. loaded from DB)
@@ -531,31 +546,6 @@ export function LyricFitTab({
     setPipelineStages(prev => ({ ...prev, rhythm: "running" }));
   }, [beatGrid, generationStatus.beatGrid, audioBuffer]);
 
-  const startSongDefaultsDerivation = useCallback(async () => {
-    if (renderData) {
-      setGenerationStatus(prev => prev.renderData === "done" ? prev : ({ ...prev, renderData: "done" }));
-      return;
-    }
-    if (generationStatus.renderData === "running" || generationStatus.renderData === "done") return;
-
-    setGenerationStatus(prev => ({ ...prev, renderData: "running" }));
-    setPipelineStages(prev => ({ ...prev, renderData: "running" }));
-
-    const nextSongDefaults = {
-      source: "presetDerivation",
-      generatedAt: new Date().toISOString(),
-    };
-
-    setRenderData(nextSongDefaults);
-    setGenerationStatus(prev => ({ ...prev, renderData: "done" }));
-    setPipelineStages(prev => ({ ...prev, renderData: "done" }));
-    setFitProgress(prev => Math.max(prev, 70));
-
-    if (savedIdRef.current) {
-      await persistRenderData(savedIdRef.current, nextSongDefaults);
-    }
-  }, [generationStatus.renderData, persistRenderData, renderData, fitPipelineMs]);
-
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[], force = false) => {
     if (!lyricData || !sourceLines.length) return;
     // Data-existence guard: if we already have cinematicDirection (e.g. loaded from DB), skip
@@ -796,54 +786,34 @@ export function LyricFitTab({
       return;
     }
 
-    // songSignature analysis requires audioBuffer — wait for it only if we need to compute
-    if (!songSignature && (!audioBufferReady || !audioBuffer)) return;
-
     fitPipelineT0Ref.current = performance.now();
+    setPipelineStages(prev => ({ ...prev, sections: "running" }));
     sectionPipelineRunningRef.current = true;
     try {
       let sig = songSignature;
       if (!sig) {
-        
         const lyricsText = timestampedLines.map((line) => line.text).join("\n");
-        try {
-          sig = await songSignatureAnalyzer.analyze(audioBuffer!, beatGrid, lyricsText, audioDurationSec);
-          
-          setSongSignature(sig);
-          if (savedIdRef.current) {
-            await supabase
-              .from("saved_lyrics")
-              .update({ song_signature: sig as any, updated_at: new Date().toISOString() })
-              .eq("id", savedIdRef.current);
-          }
-        } catch (error) {
-          const err = error instanceof Error ? error : new Error(String(error));
-          console.warn("[Pipeline] Signature analysis failed, continuing:", err.message);
-          sig = {
-            bpm: beatGrid.bpm,
-            durationSec: audioDurationSec,
-            tempoStability: Math.max(0, Math.min(1, beatGrid.confidence)),
-            beatIntervalVariance: 0,
-            rmsMean: 0,
-            rmsVariance: 0,
-            zeroCrossingRate: 0,
-            spectralCentroidHz: 0,
-            lyricDensity: null,
-            energyCurve: new Float32Array(0),
-            analysisVersion: 1,
-          };
+        // Build synchronously from AudioAnalysis data — no worker spawn needed
+        sig = buildSongSignature(beatGrid, beatGrid._analysis, lyricsText, audioDurationSec);
+        setSongSignature(sig);
+        if (savedIdRef.current) {
+          void supabase
+            .from("saved_lyrics")
+            .update({ song_signature: sig as any, updated_at: new Date().toISOString() })
+            .eq("id", savedIdRef.current);
         }
       }
 
       const nextSections = detectSections(sig, beatGrid, timestampedLines, audioDurationSec);
       setAudioSections(nextSections);
+      setPipelineStages(prev => ({ ...prev, sections: "done" }));
       sectionPipelineDoneRef.current = true;
     } catch (error) {
       console.warn("[section-pipeline] failed", error);
     } finally {
       sectionPipelineRunningRef.current = false;
     }
-  }, [transcriptionDone, beatGridDone, audioBufferReady, audioBuffer, beatGrid, timestampedLines, audioDurationSec, songSignature, audioSections.length, fitPipelineMs]);
+  }, [transcriptionDone, beatGridDone, beatGrid, timestampedLines, audioDurationSec, songSignature, audioSections.length, fitPipelineMs]);
 
   useEffect(() => {
     void maybeRunSectionPipeline();
@@ -869,10 +839,9 @@ export function LyricFitTab({
     startBeatAnalysis(file);
   }, [startBeatAnalysis]);
 
-  // ── Fork 2: Song defaults derivation starts when lyrics arrive ──
+  // ── Fork 2: Initialize renderData when lyrics arrive ──
   useEffect(() => {
     if (!lines?.length) return;
-    // If all data already loaded from DB, skip pipeline entirely
     if (renderData && beatGrid && cinematicDirectionRef.current) {
       pipelineTriggeredRef.current = true;
       setGenerationStatus({ beatGrid: "done", renderData: "done", cinematicDirection: "done", sectionImages: "done" });
@@ -880,11 +849,13 @@ export function LyricFitTab({
     }
     if (!pipelineTriggeredRef.current || pipelineRetryCount > 0) {
       pipelineTriggeredRef.current = true;
-      
-      startSongDefaultsDerivation();
+      if (!renderData) {
+        const stub = { source: "presetDerivation", generatedAt: new Date().toISOString() };
+        setRenderData(stub);
+        if (savedIdRef.current) void persistRenderData(savedIdRef.current, stub);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, pipelineRetryCount, startSongDefaultsDerivation, renderData, beatGrid, fitPipelineMs]);
+  }, [lines, pipelineRetryCount, renderData, beatGrid, persistRenderData]);
 
   useEffect(() => {
     const values = Object.values(generationStatus);
@@ -928,7 +899,7 @@ export function LyricFitTab({
     setFitReadiness("not_started");
     setFitProgress(0);
     setFitStageLabel("");
-    setPipelineStages({ rhythm: "pending", renderData: "pending", cinematic: "pending", transcript: "pending" });
+    setPipelineStages({ rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" });
   }, [generationStatus, fitPipelineMs]);
 
   const retryGeneration = useCallback(() => {
@@ -944,7 +915,7 @@ export function LyricFitTab({
     setBeatGridDone(false);
     setAudioBufferReady(false);
     setAudioSections([]);
-    setGenerationStatus({ beatGrid: "idle", renderData: "idle", cinematicDirection: "idle", sectionImages: "idle" });
+    setGenerationStatus({ beatGrid: "idle", renderData: "done", cinematicDirection: "idle", sectionImages: "idle" });
     pipelineTriggeredRef.current = false;
     cinematicTriggeredRef.current = false;
     sectionPipelineRunningRef.current = false;
@@ -1066,7 +1037,7 @@ export function LyricFitTab({
             setBeatGridDone(false);
             setAudioBufferReady(false);
             setAudioSections([]);
-            setGenerationStatus({ beatGrid: "idle", renderData: "idle", cinematicDirection: "idle", sectionImages: "idle" });
+            setGenerationStatus({ beatGrid: "idle", renderData: "done", cinematicDirection: "idle", sectionImages: "idle" });
             setSectionOverrides(null);
             setSectionsDirty(false);
             setFitReadiness("not_started");

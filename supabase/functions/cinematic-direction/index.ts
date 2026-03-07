@@ -490,8 +490,8 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
     errors.push("sections must be an array");
     v.sections = [];
   } else {
-    if (v.sections.length !== sectionCount) {
-      errors.push(`Expected ${sectionCount} sections, got ${v.sections.length}`);
+    if (sectionCount > 0 && v.sections.length === 0) {
+      errors.push(`Expected ${sectionCount} sections, got 0`);
     }
     for (const s of v.sections) {
       if (typeof s.description !== "string" || !s.description.trim()) {
@@ -532,8 +532,8 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
   if (!Array.isArray(v.storyboard)) {
     errors.push("storyboard must be an array");
     v.storyboard = [];
-  } else if (v.storyboard.length > 30) {
-    errors.push(`storyboard has ${v.storyboard.length} entries (max 30)`);
+  } else if (v.storyboard.length > 40) {
+    v.storyboard = v.storyboard.slice(0, 30);
   }
 
   if (!Array.isArray(v.wordDirectives)) {
@@ -545,8 +545,8 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
     }
   }
 
-  if (v.wordDirectives.length > 30) {
-    errors.push(`wordDirectives has ${v.wordDirectives.length} entries (max 30)`);
+  if (v.wordDirectives.length > 40) {
+    v.wordDirectives = v.wordDirectives.slice(0, 30);
   }
 
   for (const wd of v.wordDirectives) {
@@ -635,21 +635,22 @@ async function callWithRetry(
 
   const result = validate(first, sectionCount);
 
-  // Check for empty creative data — this means the prompt failed
+  // Only retry if critical creative data is completely absent
   const missingCreative: string[] = [];
   const sbLen = Array.isArray(result.value.storyboard) ? result.value.storyboard.length : 0;
   const wdLen = Array.isArray(result.value.wordDirectives) ? result.value.wordDirectives.length : 0;
 
-  if (sbLen < hardMin) {
-    missingCreative.push(`storyboard has ${sbLen} entries (need at least ${hardMin})`);
+  if (!Array.isArray(result.value.storyboard) || result.value.storyboard.length === 0) {
+    missingCreative.push("storyboard has 0 entries");
   }
-  if (wdLen < hardMin) {
-    missingCreative.push(`wordDirectives has ${wdLen} entries (need at least ${hardMin})`);
+  if (!Array.isArray(result.value.wordDirectives) || result.value.wordDirectives.length === 0) {
+    missingCreative.push("wordDirectives has 0 entries");
   }
+
+  // Accept if we have at least some creative data — don't retry for count mismatches or enum fixes
+  if (missingCreative.length === 0) return result.value;
 
   const allErrors = [...result.errors, ...missingCreative];
-
-  if (result.ok && missingCreative.length === 0) return result.value;
 
   console.log(`[cinematic-direction] first attempt issues (lineCount=${lineCount}, idealMin=${idealMin}, hardMin=${hardMin}):`, allErrors);
 
