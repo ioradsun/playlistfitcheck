@@ -1023,6 +1023,7 @@ export function LyricFitTab({
     setFitProgress(0);
     setFitStageLabel("");
     setPipelineStages({ rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" });
+    resetStageTimes();
   }, [generationStatus, fitPipelineMs]);
 
   const retryGeneration = useCallback(() => {
