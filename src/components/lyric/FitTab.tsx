@@ -1137,6 +1137,7 @@ export function FitTab({
           )}
         </div>
     </div>
+    </>
   );
 }
 
