@@ -950,10 +950,10 @@ export function FitTab({
                     Meaning
                   </div>
                   {meaning.theme && <p className="text-sm font-semibold text-foreground">{meaning.theme}</p>}
-                  {meaning.narrative && <p className="text-xs text-muted-foreground leading-relaxed">{meaning.narrative}</p>}
-                  {meaning.emotions && Array.isArray(meaning.emotions) && (
+                  {(meaning.summary || meaning.narrative) && <p className="text-xs text-muted-foreground leading-relaxed">{meaning.summary || meaning.narrative}</p>}
+                  {Array.isArray(meaning.imagery || meaning.emotions) && (meaning.imagery || meaning.emotions).length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {meaning.emotions.map((e: string, i: number) => (
+                      {(meaning.imagery || meaning.emotions).map((e: string, i: number) => (
                         <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{e}</span>
                       ))}
                     </div>
