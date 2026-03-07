@@ -1216,7 +1216,8 @@ export function LyricFitTab({
            onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
            onBack={handleBackToLyrics}
            onImageGenerationStatusChange={handleImageGenerationStatusChange}
-           pipelineStages={pipelineStages}
+            pipelineStages={pipelineStages}
+            pipelineStageTimes={pipelineStageTimes}
            cinematicSections={
              Array.isArray(cinematicDirection?.sections)
                ? cinematicDirection.sections
