@@ -14,7 +14,6 @@ import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
-import { Button } from "@/components/ui/button";
 import { LyricWaveform } from "./LyricWaveform";
 import { SectionTimeline } from "./SectionTimeline";
 import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
@@ -111,7 +110,7 @@ export function FitTab({
   onAddSection,
   onRemoveSection,
 }: Props) {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -329,26 +328,24 @@ export function FitTab({
   }, []);
 
   // ── Header project ────────────────────────────────────────────────────
-  const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
-  const ADMIN_USER_IDS = ["a99c5697-c719-4c49-9aa8-a3b921755ce6"];
-  const normalizedEmail = user?.email?.toLowerCase() ?? "";
-  const isAdmin = ADMIN_EMAILS.includes(normalizedEmail) || (!!user?.id && ADMIN_USER_IDS.includes(user.id));
-
   useEffect(() => {
     if (!onHeaderProject) return;
     const title =
       lyricData.title && lyricData.title !== "Unknown" && lyricData.title !== "Untitled"
         ? lyricData.title
         : audioFile.name.replace(/\.[^.]+$/, "");
-    const rightContent = isAdmin && onRetry ? (
-      <Button variant="secondary" size="sm" onClick={onRetry} className="shrink-0">
+    const rightContent = onRetry ? (
+      <button
+        onClick={onRetry}
+        className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
+      >
         <RefreshCw size={12} />
         Regenerate Fit
-      </Button>
+      </button>
     ) : undefined;
     onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent });
     return () => onHeaderProject(null);
-  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, isAdmin, onRetry]);
+  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onRetry]);
 // CinematicDirectionCard extracted to top-level — see below FitTab
 
   // ── Live transcript sync ──────────────────────────────────────────────
