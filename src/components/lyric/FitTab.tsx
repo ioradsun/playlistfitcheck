@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
+import { Button } from "@/components/ui/button";
 import { LyricWaveform } from "./LyricWaveform";
 import { SectionTimeline } from "./SectionTimeline";
 import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
