@@ -921,6 +921,66 @@ export function FitTab({
         </div>
       ) : null}
 
+      {/* ── Hottest Hooks — prominent placement right after player ── */}
+      {(renderData?.hook || renderData?.secondHook) && (
+        <div className="glass-card rounded-xl p-4 space-y-3 border border-primary/20">
+          <div className="flex items-center gap-2 text-[11px] font-mono text-primary uppercase tracking-wider">
+            <Zap size={12} className="text-primary" />
+            Hottest Hooks
+          </div>
+          {renderData.hook && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/15 text-primary font-semibold">{renderData.hookLabel || "Hook 1"}</span>
+                <span className="text-[10px] text-muted-foreground">{renderData.hook.start?.toFixed(1)}s – {renderData.hook.end?.toFixed(1)}s</span>
+                {renderData.hook.score && <span className="text-[10px] font-mono font-semibold text-primary">{renderData.hook.score}%</span>}
+              </div>
+              {renderData.hookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{renderData.hookJustification}</p>}
+            </div>
+          )}
+          {renderData.secondHook && (
+            <div className="space-y-1 pt-2 border-t border-border/30">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent/50 text-accent-foreground font-semibold">{renderData.secondHookLabel || "Hook 2"}</span>
+                <span className="text-[10px] text-muted-foreground">{renderData.secondHook.start?.toFixed(1)}s – {renderData.secondHook.end?.toFixed(1)}s</span>
+              </div>
+              {renderData.secondHookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{renderData.secondHookJustification}</p>}
+            </div>
+          )}
+          {hasBattle && (
+            battlePublishedUrl ? (
+              <a
+                href={battlePublishedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40 mt-1"
+              >
+                <Zap size={10} />
+                VIEW BATTLE
+              </a>
+            ) : (
+              <button
+                onClick={handleStartBattle}
+                disabled={battleDisabled}
+                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 disabled:opacity-50 text-foreground hover:text-primary border-border/40 hover:border-primary/40 mt-1"
+              >
+                {battlePublishing ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 size={10} className="animate-spin" />
+                    PUBLISHING…
+                  </span>
+                ) : (
+                  <>
+                    <Zap size={10} />
+                    START CROWDFIT BATTLE
+                  </>
+                )}
+              </button>
+            )
+          )}
+        </div>
+      )}
+
       {/* Single-column report */}
       <div className="space-y-3">
         {!allReady && (
