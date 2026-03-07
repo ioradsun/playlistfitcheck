@@ -14,6 +14,8 @@ export default function ShareableHook() {
   const [hook, setHook] = useState<(HookInfo & { battle_id?: string }) | null>(null);
   const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hookA, setHookA] = useState<HookInfo | null>(null);
+  const [hookB, setHookB] = useState<HookInfo | null>(null);
 
   // Battle state
   const [battleMode, setBattleMode] = useState<BattleMode>("listen-a");
@@ -39,7 +41,6 @@ export default function ShareableHook() {
       const selectedHook = hookRow as unknown as (HookInfo & { battle_id?: string });
       setHook(selectedHook);
 
-      // Fetch lyric dance for single-hook view (non-battle fallback)
       if (!selectedHook.battle_id) {
         const { data: dances } = await supabase
           .from("shareable_lyric_dances" as any)
@@ -56,13 +57,24 @@ export default function ShareableHook() {
     })();
   }, [artistSlug, songSlug, hookSlug]);
 
+  // Prevent scroll bounce on iOS in battle mode
+  useEffect(() => {
+    if (!hook?.battle_id) return;
+    const style = document.createElement("style");
+    style.textContent = "html, body { overflow: hidden; height: 100%; }";
+    document.head.appendChild(style);
+    return () => {
+      style.remove();
+    };
+  }, [hook?.battle_id]);
+
   const danceUrl = useMemo(() => {
     if (!danceData) return "#";
     return `/lyric-dance/${danceData.artist_slug}/${danceData.song_slug}`;
   }, [danceData]);
 
   const handleTileTap = useCallback((side: "a" | "b") => {
-    setActivePlaying(prev => prev === side ? null : side);
+    setActivePlaying((prev) => (prev === side ? null : side));
     setBattleMode(side === "a" ? "listen-a" : "listen-b");
   }, []);
 
@@ -74,27 +86,21 @@ export default function ShareableHook() {
     return <div className="min-h-screen bg-black text-white grid place-items-center">Hook not found.</div>;
   }
 
-  // ── Battle mode: render dual split-screen ──
+  // ── Battle mode: fullscreen dual split-screen ──
   if (hook.battle_id) {
     return (
-      <div className="min-h-screen bg-black flex flex-col">
-        {/* Song title */}
-        <div className="px-4 py-3 text-center">
-          <p className="text-xs font-mono text-white/40 uppercase tracking-[0.15em]">Hook Battle</p>
-          <p className="text-sm font-semibold text-white/80 mt-0.5">
-            {hook.artist_slug?.replace(/-/g, " ")} — {hook.song_slug?.replace(/-/g, " ")}
-          </p>
-        </div>
-
-        {/* Battle area — full width, 60vh height */}
-        <div className="flex-1 min-h-0" style={{ maxHeight: "70vh" }}>
+      <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
+        <div className="flex-1 min-h-0 overflow-hidden">
           <InlineBattle
             battleId={hook.battle_id}
             mode={battleMode}
             activePlaying={activePlaying}
             onTileTap={handleTileTap}
+            onHooksLoaded={(a, b) => {
+              setHookA(a);
+              setHookB(b);
+            }}
             onHookEnd={(side) => {
-              // Auto-advance: A ends → play B, B ends → loop back to A
               if (side === "a") {
                 setActivePlaying("b");
                 setBattleMode("listen-b");
@@ -106,34 +112,67 @@ export default function ShareableHook() {
           />
         </div>
 
-        {/* Hook labels */}
-        <div className="flex px-4 py-3 gap-2">
-          <button
-            onClick={() => handleTileTap("a")}
-            className={`flex-1 text-center py-2 rounded-lg border text-xs font-mono uppercase tracking-wider transition-colors ${
-              activePlaying === "a"
-                ? "border-primary/60 text-primary bg-primary/5"
-                : "border-white/10 text-white/40"
-            }`}
-          >
-            Hook A
-          </button>
-          <button
-            onClick={() => handleTileTap("b")}
-            className={`flex-1 text-center py-2 rounded-lg border text-xs font-mono uppercase tracking-wider transition-colors ${
-              activePlaying === "b"
-                ? "border-primary/60 text-primary bg-primary/5"
-                : "border-white/10 text-white/40"
-            }`}
-          >
-            Hook B
-          </button>
+        {/* Bottom bar — matches ShareableLyricDance style */}
+        <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }}>
+          <div className="w-full max-w-2xl mx-auto px-4 py-3">
+            <div className="flex items-center gap-3">
+              <button
+                className={`flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left overflow-hidden min-w-0 group transition-all ${
+                  activePlaying === "a"
+                    ? "border-white/20 bg-white/[0.04]"
+                    : "border-white/[0.07] hover:border-white/15"
+                }`}
+                style={{ background: activePlaying === "a" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.02)" }}
+                onClick={() => handleTileTap("a")}
+              >
+                {activePlaying === "a" && (
+                  <div
+                    className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                    style={{ background: hookA?.palette?.[0] ?? "#a855f7", opacity: 0.6 }}
+                  />
+                )}
+                <span
+                  className={`text-[11px] font-mono truncate transition-colors ${
+                    activePlaying === "a" ? "text-white/65" : "text-white/30"
+                  }`}
+                >
+                  {hookA?.hook_label || hookA?.hook_phrase || "Hook A"}
+                </span>
+              </button>
+
+              <span className="text-[9px] font-mono text-white/20 uppercase tracking-widest shrink-0">vs</span>
+
+              <button
+                className={`flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left overflow-hidden min-w-0 group transition-all ${
+                  activePlaying === "b"
+                    ? "border-white/20 bg-white/[0.04]"
+                    : "border-white/[0.07] hover:border-white/15"
+                }`}
+                style={{ background: activePlaying === "b" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.02)" }}
+                onClick={() => handleTileTap("b")}
+              >
+                {activePlaying === "b" && (
+                  <div
+                    className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                    style={{ background: hookB?.palette?.[0] ?? "#a855f7", opacity: 0.6 }}
+                  />
+                )}
+                <span
+                  className={`text-[11px] font-mono truncate transition-colors ${
+                    activePlaying === "b" ? "text-white/65" : "text-white/30"
+                  }`}
+                >
+                  {hookB?.hook_label || hookB?.hook_phrase || "Hook B"}
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  // ── Single hook mode: render one player ──
+  // ── Single hook mode ──
   if (!danceData) {
     return <div className="min-h-screen bg-black text-white grid place-items-center">No lyric dance found.</div>;
   }

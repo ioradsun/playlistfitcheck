@@ -150,7 +150,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   // ── Loading / no data ──────────────────────────────────────
   if (loading || !hookA) {
     return (
-      <div className="w-full bg-black/30 animate-pulse" style={{ height: "320px" }}>
+      <div className="w-full h-full bg-black/30 animate-pulse">
         <div className="flex h-full gap-1 p-1">
           <div className="flex-1 rounded-lg bg-white/[0.03]" />
           <div className="flex-1 rounded-lg bg-white/[0.03]" />
@@ -161,7 +161,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
   if (!danceData) {
     return (
-      <div className="w-full bg-black/50 flex items-center justify-center text-muted-foreground text-xs font-mono" style={{ height: "320px" }}>
+      <div className="w-full h-full bg-black/50 flex items-center justify-center text-muted-foreground text-xs font-mono">
         No lyric dance found for this song
       </div>
     );
@@ -172,11 +172,12 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const seamPulse = mode === "listen-a" || mode === "listen-b";
 
   return (
-    <div className="w-full bg-black">
-      <div className="relative flex flex-row" style={{ height: "320px" }}>
+    <div className="w-full h-full bg-black">
+      <div className="relative flex flex-row h-full items-center justify-center gap-1 px-1">
         {/* Hook A */}
         <motion.div
-          className="relative flex-1 overflow-hidden cursor-pointer"
+          className="relative overflow-hidden cursor-pointer h-full"
+          style={{ aspectRatio: "9/16", maxWidth: "50%" }}
           animate={{ opacity: getOpacity("a") }}
           transition={{ duration: 0.4 }}
           onClick={() => onTileTap?.("a")}
@@ -211,7 +212,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
         {/* Hook B */}
         {hookB ? (
           <motion.div
-            className="relative flex-1 overflow-hidden cursor-pointer"
+            className="relative overflow-hidden cursor-pointer h-full"
+            style={{ aspectRatio: "9/16", maxWidth: "50%" }}
             animate={{ opacity: getOpacity("b") }}
             transition={{ duration: 0.4 }}
             onClick={() => onTileTap?.("b")}
@@ -233,7 +235,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             )}
           </motion.div>
         ) : (
-          <div className="flex-1 bg-black/50" />
+          <div className="h-full bg-black/50" style={{ aspectRatio: "9/16", maxWidth: "50%" }} />
         )}
       </div>
     </div>
