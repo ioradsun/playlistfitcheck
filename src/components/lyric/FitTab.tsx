@@ -81,6 +81,7 @@ interface Props {
   onRegenerateSectionsVisuals?: () => void;
   onAddSection?: (role: SectionRole, startSec: number, endSec: number) => void;
   onRemoveSection?: (sectionIndex: number) => void;
+  pipelineStages?: PipelineStages;
 }
 
 export function FitTab({
