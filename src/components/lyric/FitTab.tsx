@@ -111,7 +111,7 @@ export function FitTab({
   onAddSection,
   onRemoveSection,
 }: Props) {
-  const { user, roles } = useAuth();
+  const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
