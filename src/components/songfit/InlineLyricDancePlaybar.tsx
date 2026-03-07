@@ -224,7 +224,7 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
   const isReady = playerReady && !!data;
 
   return (
-    <div style={{ minHeight: 44 }}>
+    <div style={{ minHeight: 44 }} className="bg-black/80 backdrop-blur-sm">
       {isReady ? (
         <>
           {/* Progress bar */}
@@ -326,9 +326,7 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
             }}
           />
         </>
-      ) : (
-        <div style={{ height: 44, background: "rgba(0,0,0,0.85)" }} />
-      )}
+      ) : null}
     </div>
   );
 });

@@ -14,7 +14,7 @@ import { StagePresence } from "./StagePresence";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 
 const FEED_PAGE_SIZE = 20;
-const FEED_CARD_MIN_HEIGHT = 520;
+const FEED_CARD_MIN_HEIGHT = 530;
 
 function FeedCardPlaceholder() {
   return (
@@ -421,7 +421,7 @@ export function SongFitFeed() {
                 </div>
               </div>
               {/* Media skeleton — reuses shared lyric-dance cover */}
-              <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ height: 310 }}>
+              <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ height: 320 }}>
                 <LyricDanceCover
                   songName=""
                   artistName=""

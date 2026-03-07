@@ -239,7 +239,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   // ── Derived ────────────────────────────────────────────────────
   if (loading || !hookA) {
     return (
-      <div className="w-full bg-black/30 animate-pulse" style={{ height: "300px" }}>
+      <div className="w-full bg-black/30 animate-pulse" style={{ height: "320px" }}>
         <div className="flex h-full gap-1 p-1">
           <div className="flex-1 rounded-lg bg-white/[0.03]" />
           <div className="flex-1 rounded-lg bg-white/[0.03]" />
@@ -251,7 +251,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   if (!hookB) {
     return (
       <div className="w-full" style={{ background: hookA?.artist_dna?.palette?.background_base || "#0a0a0a" }}>
-        <div className="relative" style={{ height: "300px" }}>
+        <div className="relative" style={{ height: "320px" }}>
           <div ref={containerRefA} className="absolute inset-0">
             <canvas ref={canvasRefA} className="absolute inset-0 w-full h-full" />
           </div>
@@ -299,7 +299,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
   return (
     <div className="w-full" style={{ background: bgBase }}>
-      <div className="relative flex flex-row" style={{ height: "300px" }}>
+      <div className="relative flex flex-row" style={{ height: "320px" }}>
         {/* Hook A */}
         <motion.div
           className="relative flex-1 overflow-hidden cursor-pointer"

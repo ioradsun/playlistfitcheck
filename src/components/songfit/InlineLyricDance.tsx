@@ -288,11 +288,10 @@ function InlineLyricDanceInner(
     loading || !fetchedData || !fetchedData.cinematic_direction || Array.isArray(fetchedData.cinematic_direction);
 
   return (
-    <div className="w-full overflow-hidden bg-black rounded-xl flex flex-col relative" style={{ height: 354 }}>
+    <div className="w-full overflow-hidden bg-black rounded-xl relative" style={{ height: 320 }}>
       {/* Canvas area — matches tier 1 height exactly */}
       <div ref={containerRef}
-        className="relative w-full overflow-hidden cursor-pointer"
-        style={{ minHeight: 310, height: 310 }}
+        className="absolute inset-0 w-full overflow-hidden cursor-pointer"
         onClick={(e) => {
           if (!showCover && !isWaitingForPlayer) toggleMute(e);
         }}
@@ -347,14 +346,16 @@ function InlineLyricDanceInner(
         )}
       </div>
 
-      {/* Playbar — always visible */}
-      <InlineLyricDancePlaybar
+      {/* Playbar — overlaid at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 z-20">
+        <InlineLyricDancePlaybar
         player={player}
         playerReady={playerReady}
         data={data}
         reactionData={reactionData}
-        onReactionDataChange={setReactionData}
-      />
+          onReactionDataChange={setReactionData}
+        />
+      </div>
     </div>
   );
 }

@@ -303,7 +303,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         )}
       >
         {tier === 1 && !hasLyricDancePost ? (
-          <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ minHeight: 310, height: 310 }}>
+          <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ height: 320 }}>
             {post.album_art_url ? (
               <img
                 src={post.album_art_url}
