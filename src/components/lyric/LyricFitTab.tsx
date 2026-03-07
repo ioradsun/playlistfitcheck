@@ -1229,6 +1229,14 @@ export function LyricFitTab({
         />
         ) : null}
       </div>
+      <div style={{ display: activeTab === "debug" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <PipelineDebugPanel
+          generationStatus={generationStatus}
+          pipelineStages={pipelineStages}
+          pipelineStageTimes={pipelineStageTimes}
+          onRetry={retryGeneration}
+        />
+      </div>
     </div>
   );
 }
