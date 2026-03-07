@@ -207,9 +207,10 @@ function InlineLyricDanceInner(
 
   // When data is available, apply region constraints
   const playerData = useMemo(() => {
-    if (!fetchedData) return null;
-    if (regionStart == null && regionEnd == null) return fetchedData;
-    return { ...fetchedData, region_start: regionStart, region_end: regionEnd };
+    const base = fetchedData;
+    if (!base) return null;
+    if (regionStart == null && regionEnd == null) return base;
+    return { ...base, region_start: regionStart, region_end: regionEnd };
   }, [fetchedData, regionStart, regionEnd]);
 
   // ── Player lifecycle ──────────────────────────────────────────────────
