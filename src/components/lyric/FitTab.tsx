@@ -117,7 +117,7 @@ export function FitTab({
   pipelineStageTimes,
 }: Props) {
   const { user } = useAuth();
-  const [debugOpen, setDebugOpen] = useState(false);
+  
   const defaultStages: PipelineStages = { rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" };
   const pipelineStages = pipelineStagesProp ?? defaultStages;
   const [publishing, setPublishing] = useState(false);
