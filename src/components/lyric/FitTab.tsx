@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
+import { Button } from "@/components/ui/button";
 import { LyricWaveform } from "./LyricWaveform";
 import { SectionTimeline } from "./SectionTimeline";
 import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
@@ -110,7 +111,7 @@ export function FitTab({
   onAddSection,
   onRemoveSection,
 }: Props) {
-  const { user, roles } = useAuth();
+  const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -329,7 +330,10 @@ export function FitTab({
 
   // ── Header project ────────────────────────────────────────────────────
   const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
-  const isAdmin = !!(user?.email && ADMIN_EMAILS.includes(user.email));
+  const ADMIN_USER_IDS = ["a99c5697-c719-4c49-9aa8-a3b921755ce6"];
+  const normalizedEmail = user?.email?.toLowerCase() ?? "";
+  const isAdmin = ADMIN_EMAILS.includes(normalizedEmail) || (!!user?.id && ADMIN_USER_IDS.includes(user.id));
+
   useEffect(() => {
     if (!onHeaderProject) return;
     const title =
@@ -337,13 +341,10 @@ export function FitTab({
         ? lyricData.title
         : audioFile.name.replace(/\.[^.]+$/, "");
     const rightContent = isAdmin && onRetry ? (
-      <button
-        onClick={onRetry}
-        className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
-      >
+      <Button variant="secondary" size="sm" onClick={onRetry} className="shrink-0">
         <RefreshCw size={12} />
         Regenerate Fit
-      </button>
+      </Button>
     ) : undefined;
     onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent });
     return () => onHeaderProject(null);

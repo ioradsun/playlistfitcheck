@@ -91,50 +91,6 @@ function buildEnergyCurve(frames: AudioAnalysis["frames"], duration: number, fra
 }
 
 /**
- * Compute energy curve directly from raw audio samples.
- * This matches the original songSignature.worker.ts behavior and produces
- * sharp transitions needed by sectionDetector's ENERGY_BOUNDARY_THRESHOLD (0.2).
- *
- * The frame-based buildEnergyCurve() over-smooths because AudioAnalyzer
- * pre-normalizes frame.energy by peakEnergy, compressing dynamic range.
- */
-export function computeEnergyCurveFromAudio(audioBuffer: AudioBuffer, windowSec = 0.5): Float32Array {
-  const sampleRate = audioBuffer.sampleRate;
-  const channel = audioBuffer.getChannelData(0);
-  const totalSamples = channel.length;
-  const windowSize = Math.max(1, Math.floor(sampleRate * windowSec));
-  const windowCount = Math.max(1, Math.ceil(totalSamples / windowSize));
-  const rmsValues = new Float32Array(windowCount);
-
-  let minRms = Number.POSITIVE_INFINITY;
-  let maxRms = Number.NEGATIVE_INFINITY;
-
-  for (let w = 0; w < windowCount; w++) {
-    const start = w * windowSize;
-    const end = Math.min(totalSamples, start + windowSize);
-    let power = 0;
-    for (let i = start; i < end; i++) {
-      const sample = channel[i];
-      power += sample * sample;
-    }
-    const count = Math.max(1, end - start);
-    const rms = Math.sqrt(power / count);
-    rmsValues[w] = rms;
-    if (rms < minRms) minRms = rms;
-    if (rms > maxRms) maxRms = rms;
-  }
-
-  const range = maxRms - minRms;
-  if (range <= 1e-6) return new Float32Array(windowCount);
-
-  const normalized = new Float32Array(windowCount);
-  for (let i = 0; i < windowCount; i++) {
-    normalized[i] = clamp01((rmsValues[i] - minRms) / range);
-  }
-  return normalized;
-}
-
-/**
  * Build SongSignature synchronously from existing AudioAnalysis data.
  * No Web Worker needed — AudioAnalysis already has per-frame energy, centroid, etc.
  * Falls back to a minimal signature if no analysis is available.
@@ -189,51 +145,6 @@ export function buildSongSignature(
     spectralCentroidHz: avgCentroid,
     lyricDensity,
     energyCurve: finalCurve,
-    analysisVersion: 1,
-  };
-}
-
-/**
- * Build SongSignature with energy curve computed from raw audio.
- * Preferred over buildSongSignature() when audioBuffer is available,
- * because raw-audio RMS produces sharper energy transitions needed
- * by sectionDetector's boundary detection.
- */
-export function buildSongSignatureWithAudio(
-  audioBuffer: AudioBuffer,
-  beatGrid: BeatGrid | BeatGridData,
-  analysis: AudioAnalysis | undefined,
-  lyrics: string | undefined,
-  durationSec: number,
-): SongSignature {
-  let rmsMean = 0;
-  let rmsVar = 0;
-  let spectralCentroidHz = 0;
-
-  if (analysis?.frames?.length) {
-    const energies = analysis.frames.map((f: any) => f.energy as number);
-    const centroids = analysis.frames.map((f: any) => f.centroid as number);
-    rmsMean = energies.reduce((s: number, v: number) => s + v, 0) / energies.length;
-    rmsVar = variance(energies);
-    spectralCentroidHz = centroids.reduce((s: number, v: number) => s + v, 0) / centroids.length;
-  }
-
-  const energyCurve = computeEnergyCurveFromAudio(audioBuffer);
-
-  const lyricWordCount = (lyrics || "").trim().split(/\s+/).filter(Boolean).length;
-  const lyricDensity = lyricWordCount > 0 && durationSec > 0 ? lyricWordCount / durationSec : null;
-
-  return {
-    bpm: beatGrid.bpm,
-    durationSec,
-    tempoStability: clamp01(beatGrid.confidence),
-    beatIntervalVariance: computeBeatIntervalVariance(beatGrid.beats),
-    rmsMean,
-    rmsVariance: rmsVar,
-    zeroCrossingRate: 0,
-    spectralCentroidHz,
-    lyricDensity,
-    energyCurve,
     analysisVersion: 1,
   };
 }
