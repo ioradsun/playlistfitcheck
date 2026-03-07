@@ -19,7 +19,7 @@ import { LyricWaveform } from "./LyricWaveform";
 import { SectionTimeline } from "./SectionTimeline";
 import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
 import { FitExportModal } from "./FitExportModal";
-import { PipelineDebugPanel } from "./PipelineDebugPanel";
+
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
