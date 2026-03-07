@@ -63,7 +63,7 @@ export default function ShareableHook() {
 
   return (
     <div className="min-h-screen bg-black">
-      <div className="max-w-4xl mx-auto py-6 px-4">
+      <div className="max-w-4xl mx-auto py-6 px-4" style={{ height: "80vh" }}>
         <InlineLyricDance
           lyricDanceId={danceData.id}
           lyricDanceUrl={danceUrl}
