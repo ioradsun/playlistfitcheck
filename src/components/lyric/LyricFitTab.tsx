@@ -1121,18 +1121,19 @@ export function LyricFitTab({
 
   const retryGeneration = useCallback(() => {
     if (!audioFile || !lines.length) return;
-    plog("RETRY — full pipeline reset");
+    plog("RETRY — recompute analysis (keeping beatGrid + audioBuffer)");
+    // Keep: beatGrid (same audio = same BPM/beats), audioBuffer, transcriptionDone, lines, words
+    // Clear: songSignature, audioSections, cinematicDirection, renderData, images
     setRenderData(null);
     setCinematicDirection(null);
-    setBeatGrid(null);
     setSongSignature(null);
-    // frameState removed — V3 derives from cinematicDirection
-    setAudioBuffer(null);
-    setTranscriptionDone(false);
-    setBeatGridDone(false);
-    setAudioBufferReady(false);
     setAudioSections([]);
-    setGenerationStatus({ beatGrid: "idle", renderData: "done", cinematicDirection: "idle", sectionImages: "idle" });
+    setGenerationStatus(prev => ({
+      beatGrid: prev.beatGrid === "done" ? "done" : "idle",
+      renderData: "done",
+      cinematicDirection: "idle",
+      sectionImages: "idle",
+    }));
     pipelineTriggeredRef.current = false;
     cinematicTriggeredRef.current = false;
     sectionPipelineRunningRef.current = false;
@@ -1141,19 +1142,17 @@ export function LyricFitTab({
 
     if (savedIdRef.current) {
       persistRenderData(savedIdRef.current, { cinematicDirection: null });
-      // Clear section_images in DB — they no longer match
       void supabase
         .from("saved_lyrics")
         .update({ section_images: null } as any)
         .eq("id", savedIdRef.current);
     }
 
-    // Restart beat grid immediately, then bump retry counter for waterfall
-    startBeatAnalysis(audioFile);
+    // Bump retry counter → re-triggers Fork 2 + section pipeline + cinematic effects
     setTimeout(() => {
       setPipelineRetryCount(c => c + 1);
     }, 100);
-  }, [audioFile, lines, persistRenderData, startBeatAnalysis]);
+  }, [audioFile, lines, persistRenderData]);
 
   useEffect(() => {
     if (fitUnlocked || fitReadiness === "ready") {
