@@ -33,6 +33,7 @@ import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus, PipelineStages, PipelineStageTimes } from "./LyricFitTab";
 import type { CinematicSection } from "@/types/CinematicDirection";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import { PipelineDebugPanel } from "./PipelineDebugPanel";
 
 const PEAK_SAMPLES = 200;
 
@@ -82,6 +83,7 @@ interface Props {
   onAddSection?: (role: SectionRole, startSec: number, endSec: number) => void;
   onRemoveSection?: (sectionIndex: number) => void;
   pipelineStages?: PipelineStages;
+  stageRestarters?: import("./PipelineDebugPanel").StageRestarters;
   pipelineStageTimes?: PipelineStageTimes;
 }
 
@@ -115,6 +117,7 @@ export function FitTab({
   onRemoveSection,
   pipelineStages: pipelineStagesProp,
   pipelineStageTimes,
+  stageRestarters,
 }: Props) {
   const { user } = useAuth();
   
@@ -1129,6 +1132,14 @@ export function FitTab({
           )}
         </div>
     </div>
+    {stageRestarters && (
+      <PipelineDebugPanel
+        generationStatus={generationStatus}
+        pipelineStages={pipelineStages}
+        pipelineStageTimes={pipelineStageTimes}
+        stageRestarters={stageRestarters}
+      />
+    )}
     </>
   );
 }
