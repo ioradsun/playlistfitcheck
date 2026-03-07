@@ -7,17 +7,19 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download, Link, Users, Check } from "lucide-react";
+import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download, Link, Users, Check, Bug } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
+import { Button } from "@/components/ui/button";
 import { LyricWaveform } from "./LyricWaveform";
 import { SectionTimeline } from "./SectionTimeline";
 import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
 import { FitExportModal } from "./FitExportModal";
+import { PipelineDebugPanel } from "./PipelineDebugPanel";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
@@ -28,7 +30,7 @@ import type { AudioSection, SectionRole } from "@/engine/sectionDetector";
 import type { LyricSection } from "@/hooks/useLyricSections";
 import type { SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { HeaderProjectSetter } from "./LyricsTab";
-import type { GenerationStatus } from "./LyricFitTab";
+import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
 import type { CinematicSection } from "@/types/CinematicDirection";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 
@@ -79,6 +81,7 @@ interface Props {
   onRegenerateSectionsVisuals?: () => void;
   onAddSection?: (role: SectionRole, startSec: number, endSec: number) => void;
   onRemoveSection?: (sectionIndex: number) => void;
+  pipelineStages?: PipelineStages;
 }
 
 export function FitTab({
@@ -109,8 +112,12 @@ export function FitTab({
   onRegenerateSectionsVisuals,
   onAddSection,
   onRemoveSection,
+  pipelineStages: pipelineStagesProp,
 }: Props) {
-  const { user, roles } = useAuth();
+  const { user } = useAuth();
+  const [debugOpen, setDebugOpen] = useState(false);
+  const defaultStages: PipelineStages = { rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" };
+  const pipelineStages = pipelineStagesProp ?? defaultStages;
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -335,13 +342,22 @@ export function FitTab({
         ? lyricData.title
         : audioFile.name.replace(/\.[^.]+$/, "");
     const rightContent = onRetry ? (
-      <button
-        onClick={onRetry}
-        className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
-      >
-        <RefreshCw size={12} />
-        Regenerate Fit
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setDebugOpen(true)}
+          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+          title="Pipeline Debug"
+        >
+          <Bug size={12} />
+        </button>
+        <button
+          onClick={onRetry}
+          className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
+        >
+          <RefreshCw size={12} />
+          Regenerate
+        </button>
+      </div>
     ) : undefined;
     onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent });
     return () => onHeaderProject(null);
@@ -814,6 +830,14 @@ export function FitTab({
   };
 
   return (
+    <>
+    <PipelineDebugPanel
+      open={debugOpen}
+      onOpenChange={setDebugOpen}
+      generationStatus={generationStatus}
+      pipelineStages={pipelineStages}
+      onRetry={onRetry ?? (() => {})}
+    />
     <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
       {/* Dance preview or waveform fallback */}
       {publishedUrl && publishedDanceId ? (
@@ -1113,6 +1137,7 @@ export function FitTab({
           )}
         </div>
     </div>
+    </>
   );
 }
 

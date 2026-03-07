@@ -1186,15 +1186,16 @@ export function LyricFitTab({
           onRegenerateSectionsVisuals={handleRegenerateSectionsVisuals}
           onAddSection={handleAddSection}
           onRemoveSection={handleRemoveSection}
-          onRetry={retryGeneration}
-          onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
-          onBack={handleBackToLyrics}
-          onImageGenerationStatusChange={handleImageGenerationStatusChange}
-          cinematicSections={
-            Array.isArray(cinematicDirection?.sections)
-              ? cinematicDirection.sections
-              : undefined
-          }
+           onRetry={retryGeneration}
+           onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
+           onBack={handleBackToLyrics}
+           onImageGenerationStatusChange={handleImageGenerationStatusChange}
+           pipelineStages={pipelineStages}
+           cinematicSections={
+             Array.isArray(cinematicDirection?.sections)
+               ? cinematicDirection.sections
+               : undefined
+           }
         />
         ) : null}
       </div>
