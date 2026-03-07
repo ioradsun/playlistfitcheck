@@ -33,10 +33,7 @@ export default function ShareableHook() {
         .eq("hook_slug", hookSlug)
         .maybeSingle();
 
-      if (!hookRow) {
-        setLoading(false);
-        return;
-      }
+      if (!hookRow) { setLoading(false); return; }
 
       const selectedHook = hookRow as unknown as (HookInfo & { battle_id?: string });
       setHook(selectedHook);
@@ -48,7 +45,6 @@ export default function ShareableHook() {
           .eq("artist_slug", artistSlug)
           .eq("song_slug", songSlug)
           .limit(1);
-
         if (dances && dances.length > 0) {
           setDanceData(dances[0] as unknown as LyricDanceData);
         }
@@ -63,9 +59,7 @@ export default function ShareableHook() {
     const style = document.createElement("style");
     style.textContent = "html, body { overflow: hidden; height: 100%; }";
     document.head.appendChild(style);
-    return () => {
-      style.remove();
-    };
+    return () => { style.remove(); };
   }, [hook?.battle_id]);
 
   const danceUrl = useMemo(() => {
@@ -74,7 +68,7 @@ export default function ShareableHook() {
   }, [danceData]);
 
   const handleTileTap = useCallback((side: "a" | "b") => {
-    setActivePlaying((prev) => (prev === side ? null : side));
+    setActivePlaying(prev => prev === side ? null : side);
     setBattleMode(side === "a" ? "listen-a" : "listen-b");
   }, []);
 
@@ -90,52 +84,39 @@ export default function ShareableHook() {
   if (hook.battle_id) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
+        {/* Main battle area — two canvases side by side, full height */}
         <div className="flex-1 min-h-0 overflow-hidden">
           <InlineBattle
             battleId={hook.battle_id}
             mode={battleMode}
             activePlaying={activePlaying}
             onTileTap={handleTileTap}
-            onHooksLoaded={(a, b) => {
-              setHookA(a);
-              setHookB(b);
-            }}
+            onHooksLoaded={(a, b) => { setHookA(a); setHookB(b); }}
             onHookEnd={(side) => {
-              if (side === "a") {
-                setActivePlaying("b");
-                setBattleMode("listen-b");
-              } else {
-                setActivePlaying("a");
-                setBattleMode("listen-a");
-              }
+              if (side === "a") { setActivePlaying("b"); setBattleMode("listen-b"); }
+              else { setActivePlaying("a"); setBattleMode("listen-a"); }
             }}
           />
         </div>
 
-        {/* Bottom bar — matches ShareableLyricDance style */}
+        {/* Bottom bar — ShareableLyricDance style */}
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }}>
           <div className="w-full max-w-2xl mx-auto px-4 py-3">
             <div className="flex items-center gap-3">
               <button
                 className={`flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left overflow-hidden min-w-0 group transition-all ${
-                  activePlaying === "a"
-                    ? "border-white/20 bg-white/[0.04]"
-                    : "border-white/[0.07] hover:border-white/15"
+                  activePlaying === "a" ? "border-white/20 bg-white/[0.04]" : "border-white/[0.07] hover:border-white/15"
                 }`}
                 style={{ background: activePlaying === "a" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.02)" }}
                 onClick={() => handleTileTap("a")}
               >
                 {activePlaying === "a" && (
-                  <div
-                    className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                    style={{ background: hookA?.palette?.[0] ?? "#a855f7", opacity: 0.6 }}
-                  />
+                  <div className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                    style={{ background: hookA?.palette?.[0] ?? "#a855f7", opacity: 0.6 }} />
                 )}
-                <span
-                  className={`text-[11px] font-mono truncate transition-colors ${
-                    activePlaying === "a" ? "text-white/65" : "text-white/30"
-                  }`}
-                >
+                <span className={`text-[11px] font-mono truncate transition-colors ${
+                  activePlaying === "a" ? "text-white/65" : "text-white/30"
+                }`}>
                   {hookA?.hook_label || hookA?.hook_phrase || "Hook A"}
                 </span>
               </button>
@@ -144,24 +125,18 @@ export default function ShareableHook() {
 
               <button
                 className={`flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left overflow-hidden min-w-0 group transition-all ${
-                  activePlaying === "b"
-                    ? "border-white/20 bg-white/[0.04]"
-                    : "border-white/[0.07] hover:border-white/15"
+                  activePlaying === "b" ? "border-white/20 bg-white/[0.04]" : "border-white/[0.07] hover:border-white/15"
                 }`}
                 style={{ background: activePlaying === "b" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.02)" }}
                 onClick={() => handleTileTap("b")}
               >
                 {activePlaying === "b" && (
-                  <div
-                    className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                    style={{ background: hookB?.palette?.[0] ?? "#a855f7", opacity: 0.6 }}
-                  />
+                  <div className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                    style={{ background: hookB?.palette?.[0] ?? "#a855f7", opacity: 0.6 }} />
                 )}
-                <span
-                  className={`text-[11px] font-mono truncate transition-colors ${
-                    activePlaying === "b" ? "text-white/65" : "text-white/30"
-                  }`}
-                >
+                <span className={`text-[11px] font-mono truncate transition-colors ${
+                  activePlaying === "b" ? "text-white/65" : "text-white/30"
+                }`}>
                   {hookB?.hook_label || hookB?.hook_phrase || "Hook B"}
                 </span>
               </button>
