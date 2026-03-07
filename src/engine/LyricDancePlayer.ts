@@ -72,9 +72,9 @@ export interface LyricDanceData {
   section_images?: string[];
   auto_palettes?: string[][];
   scene_context?: SceneContext | null;
-  /** Optional: constrain playback to this time region (seconds). Used by hook battles. */
+  /** Optional: constrain playback to start at this time (seconds). Used by hook battles. */
   region_start?: number;
-  /** Optional: constrain playback to end at this time region (seconds). Used by hook battles. */
+  /** Optional: constrain playback to end at this time (seconds). Used by hook battles. */
   region_end?: number;
 }
 
@@ -1524,6 +1524,10 @@ export class LyricDancePlayer {
   play(): void {
     if (this.destroyed) return;
     this.playing = true;
+    const playStart = this.data.region_start ?? this.songStartSec;
+    if (this.audio.currentTime <= 0 || this.data.region_start != null) {
+      this.audio.currentTime = playStart;
+    }
     this.audio.play().catch(() => {});
     this.startHealthMonitor();
 
@@ -2088,7 +2092,7 @@ export class LyricDancePlayer {
 
       const rawTime = this.audio.currentTime;
 
-      // Region loop: when audio passes regionEnd, seek back to regionStart
+      // Region loop: when audio passes region_end, seek back to region_start
       if (this.data.region_end != null && this.data.region_start != null) {
         if (rawTime >= this.data.region_end || rawTime < this.data.region_start - 0.5) {
           this.audio.currentTime = this.data.region_start;
