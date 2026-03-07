@@ -2099,6 +2099,7 @@ export class LyricDancePlayer {
           this.conductor?.resetCursor();
           this._beatCursor = 0;
           this._lastBeatIndex = -1;
+          this.activeEvents = []; // Clear emotional events from previous loop
         }
       }
 
@@ -5309,7 +5310,8 @@ export class LyricDancePlayer {
   private drawEmotionalEvents(tSec: number): void {
     for (const ae of this.activeEvents) {
       const age = tSec - ae.startTime;
-      const progress = Math.min(1, age / ae.event.duration);
+      if (age < 0) continue; // Region loop: event scheduled in the future
+      const progress = Math.max(0, Math.min(1, age / ae.event.duration));
       const fadeAlpha = ae.event.intensity * (1 - progress);
 
       this.ctx.save();
