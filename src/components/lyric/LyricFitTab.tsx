@@ -1027,7 +1027,7 @@ export function LyricFitTab({
   }, [generationStatus, fitPipelineMs]);
 
   const retryGeneration = useCallback(() => {
-    if (!audioFile || !lines.length) return;
+    if (!audioFile) return;
     
     setRenderData(null);
     setCinematicDirection(null);
