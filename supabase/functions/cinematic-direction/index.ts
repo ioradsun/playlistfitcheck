@@ -593,7 +593,7 @@ function buildUserMessage(
   } else {
     msg += `Lyrics (${lines.length} lines — no pre-detected sections, determine structure from lyrics):\n`;
     for (const l of lines) {
-      msg += `[${fmt(l.start)}–${fmt(l.end)}] ${l.text}\n`;
+      msg += `[${fmt(l.start ?? 0)}–${fmt(l.end ?? 0)}] ${l.text}\n`;
     }
     msg += "\n";
   }
