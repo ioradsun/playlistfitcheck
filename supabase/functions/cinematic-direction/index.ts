@@ -532,8 +532,8 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
   if (!Array.isArray(v.storyboard)) {
     errors.push("storyboard must be an array");
     v.storyboard = [];
-  } else if (v.storyboard.length < 10 || v.storyboard.length > 30) {
-    errors.push(`storyboard has ${v.storyboard.length} entries (want 15-25)`);
+  } else if (v.storyboard.length > 30) {
+    errors.push(`storyboard has ${v.storyboard.length} entries (max 30)`);
   }
 
   if (!Array.isArray(v.wordDirectives)) {
