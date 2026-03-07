@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight, Copy, Check, Trash2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
+import type { GenerationStatus, PipelineStages, PipelineStageTimes } from "./LyricFitTab";
 
 export interface PipelineLogEntry {
   id: string;
