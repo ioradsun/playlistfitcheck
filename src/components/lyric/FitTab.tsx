@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download, Link, Users, Check, Bug } from "lucide-react";
+import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download, Link, Users, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -19,7 +19,7 @@ import { LyricWaveform } from "./LyricWaveform";
 import { SectionTimeline } from "./SectionTimeline";
 import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
 import { FitExportModal } from "./FitExportModal";
-import { PipelineDebugPanel } from "./PipelineDebugPanel";
+
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
@@ -117,7 +117,7 @@ export function FitTab({
   pipelineStageTimes,
 }: Props) {
   const { user } = useAuth();
-  const [debugOpen, setDebugOpen] = useState(false);
+  
   const defaultStages: PipelineStages = { rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" };
   const pipelineStages = pipelineStagesProp ?? defaultStages;
   const [publishing, setPublishing] = useState(false);
@@ -345,14 +345,6 @@ export function FitTab({
         : audioFile.name.replace(/\.[^.]+$/, "");
     const rightContent = onRetry ? (
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => setDebugOpen(true)}
-          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
-          title="Pipeline Debug"
-        >
-          <Bug size={12} />
-        </button>
         <button
           type="button"
           onClick={(event) => {
@@ -838,14 +830,6 @@ export function FitTab({
 
   return (
     <>
-    <PipelineDebugPanel
-      open={debugOpen}
-      onOpenChange={setDebugOpen}
-      generationStatus={generationStatus}
-      pipelineStages={pipelineStages}
-      pipelineStageTimes={pipelineStageTimes}
-      onRetry={onRetry ?? (() => {})}
-    />
     <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
       {/* Dance preview or waveform fallback */}
       {publishedUrl && publishedDanceId ? (

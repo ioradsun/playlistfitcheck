@@ -1,10 +1,9 @@
 /**
- * PipelineDebugPanel — Admin HUD that shows all pipeline calls, prompts, responses.
+ * PipelineDebugPanel — Inline debug panel that shows all pipeline calls, prompts, responses.
  * Uses a monkey-patched supabase.functions.invoke to intercept edge function traffic.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -26,8 +25,6 @@ export interface PipelineLogEntry {
 }
 
 interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   generationStatus: GenerationStatus;
   pipelineStages: PipelineStages;
   pipelineStageTimes?: PipelineStageTimes;
@@ -102,12 +99,6 @@ function LogEntryCard({ entry }: { entry: PipelineLogEntry }) {
       ? "text-red-400"
       : "text-yellow-400 animate-pulse";
 
-  const truncateBody = (body: any) => {
-    if (!body) return "null";
-    const str = JSON.stringify(body, null, 2);
-    return str;
-  };
-
   return (
     <div className="border border-border/40 rounded-md p-2.5 space-y-1.5 text-xs font-mono bg-muted/20">
       {/* Header row */}
@@ -156,7 +147,7 @@ function LogEntryCard({ entry }: { entry: PipelineLogEntry }) {
           </button>
           {expandRequest && (
             <pre className="mt-1 p-2 bg-background/80 rounded text-[10px] leading-relaxed overflow-x-auto max-h-[300px] overflow-y-auto whitespace-pre-wrap break-all">
-              {truncateBody(entry.requestBody)}
+              {JSON.stringify(entry.requestBody, null, 2)}
             </pre>
           )}
         </div>
@@ -180,7 +171,7 @@ function LogEntryCard({ entry }: { entry: PipelineLogEntry }) {
           </button>
           {expandResponse && (
             <pre className="mt-1 p-2 bg-background/80 rounded text-[10px] leading-relaxed overflow-x-auto max-h-[300px] overflow-y-auto whitespace-pre-wrap break-all">
-              {truncateBody(entry.responseBody)}
+              {JSON.stringify(entry.responseBody, null, 2)}
             </pre>
           )}
         </div>
@@ -203,7 +194,7 @@ const GEN_LABELS: Record<keyof GenerationStatus, string> = {
   sectionImages: "Section Images",
 };
 
-export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipelineStages, pipelineStageTimes, onRetry }: Props) {
+export function PipelineDebugPanel({ generationStatus, pipelineStages, pipelineStageTimes, onRetry }: Props) {
   const [logs, setLogs] = useState<PipelineLogEntry[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -213,7 +204,6 @@ export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipel
 
     globalLogPush = (entry) => {
       setLogs((prev) => {
-        // Update existing entry (same id) or append
         const idx = prev.findIndex((e) => e.id === entry.id);
         if (idx >= 0) {
           const next = [...prev];
@@ -244,109 +234,106 @@ export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipel
   }, [onRetry]);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
-        <SheetHeader className="px-4 pt-4 pb-2 border-b border-border/40">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="text-sm font-mono tracking-wider">Pipeline Debug</SheetTitle>
-            <div className="flex items-center gap-1.5">
-              <Button variant="ghost" size="icon" onClick={clearLogs} className="h-7 w-7">
-                <Trash2 size={12} />
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  handleRetry();
-                }}
-                className="h-7 text-[10px]"
-              >
-                <RefreshCw size={10} />
-                Re-run
-              </Button>
-            </div>
-          </div>
-        </SheetHeader>
+    <div className="flex-1 flex flex-col px-4 py-4 max-w-2xl mx-auto w-full min-h-0">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-mono tracking-wider text-foreground font-semibold">Pipeline Debug</h2>
+        <div className="flex items-center gap-1.5">
+          <Button variant="ghost" size="icon" onClick={clearLogs} className="h-7 w-7">
+            <Trash2 size={12} />
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleRetry();
+            }}
+            className="h-7 text-[10px]"
+          >
+            <RefreshCw size={10} />
+            Re-run Pipeline
+          </Button>
+        </div>
+      </div>
 
-        {/* Pipeline stages */}
-        <div className="px-4 py-2.5 border-b border-border/40 space-y-1.5">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Pipeline Stages</p>
-          <div className="grid grid-cols-2 gap-1">
-            {(Object.keys(STAGE_LABELS) as (keyof PipelineStages)[]).map((key) => {
-              const status = pipelineStages[key];
-              const timing = pipelineStageTimes?.[key];
-              const durationLabel = timing?.durationMs != null
-                ? `${(timing.durationMs / 1000).toFixed(1)}s`
-                : status === "running" && timing?.startedAt
-                  ? "…"
-                  : null;
-              return (
-                <div key={key} className="flex items-center gap-1.5 text-[11px]">
-                  <span className={cn(
-                    "w-1.5 h-1.5 rounded-full",
-                    status === "done" ? "bg-green-400" : status === "running" ? "bg-yellow-400 animate-pulse" : "bg-muted-foreground/30"
-                  )} />
-                  <span className={cn("font-mono", status === "done" ? "text-foreground" : "text-muted-foreground")}>
-                    {STAGE_LABELS[key]}
+      {/* Pipeline stages */}
+      <div className="py-2.5 border-b border-border/40 space-y-1.5 mb-3">
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Pipeline Stages</p>
+        <div className="grid grid-cols-2 gap-1">
+          {(Object.keys(STAGE_LABELS) as (keyof PipelineStages)[]).map((key) => {
+            const status = pipelineStages[key];
+            const timing = pipelineStageTimes?.[key];
+            const durationLabel = timing?.durationMs != null
+              ? `${(timing.durationMs / 1000).toFixed(1)}s`
+              : status === "running" && timing?.startedAt
+                ? "…"
+                : null;
+            return (
+              <div key={key} className="flex items-center gap-1.5 text-[11px]">
+                <span className={cn(
+                  "w-1.5 h-1.5 rounded-full",
+                  status === "done" ? "bg-green-400" : status === "running" ? "bg-yellow-400 animate-pulse" : "bg-muted-foreground/30"
+                )} />
+                <span className={cn("font-mono", status === "done" ? "text-foreground" : "text-muted-foreground")}>
+                  {STAGE_LABELS[key]}
+                </span>
+                {durationLabel && (
+                  <span className="text-[9px] font-mono text-muted-foreground/70 ml-auto">
+                    {durationLabel}
                   </span>
-                  {durationLabel && (
-                    <span className="text-[9px] font-mono text-muted-foreground/70 ml-auto">
-                      {durationLabel}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                )}
+              </div>
+            );
+          })}
         </div>
+      </div>
 
-        {/* Generation status */}
-        <div className="px-4 py-2.5 border-b border-border/40 space-y-1.5">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Generation Jobs</p>
-          <div className="grid grid-cols-2 gap-1">
-            {(Object.keys(GEN_LABELS) as (keyof GenerationStatus)[]).map((key) => {
-              const status = generationStatus[key];
-              return (
-                <div key={key} className="flex items-center gap-1.5 text-[11px]">
-                  <span className={cn(
-                    "w-1.5 h-1.5 rounded-full",
-                    status === "done" ? "bg-green-400" : status === "running" ? "bg-yellow-400 animate-pulse" : status === "error" ? "bg-red-400" : "bg-muted-foreground/30"
-                  )} />
-                  <span className={cn("font-mono", status === "done" ? "text-foreground" : status === "error" ? "text-red-400" : "text-muted-foreground")}>
-                    {GEN_LABELS[key]}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+      {/* Generation status */}
+      <div className="py-2.5 border-b border-border/40 space-y-1.5 mb-3">
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Generation Jobs</p>
+        <div className="grid grid-cols-2 gap-1">
+          {(Object.keys(GEN_LABELS) as (keyof GenerationStatus)[]).map((key) => {
+            const status = generationStatus[key];
+            return (
+              <div key={key} className="flex items-center gap-1.5 text-[11px]">
+                <span className={cn(
+                  "w-1.5 h-1.5 rounded-full",
+                  status === "done" ? "bg-green-400" : status === "running" ? "bg-yellow-400 animate-pulse" : status === "error" ? "bg-red-400" : "bg-muted-foreground/30"
+                )} />
+                <span className={cn("font-mono", status === "done" ? "text-foreground" : status === "error" ? "text-red-400" : "text-muted-foreground")}>
+                  {GEN_LABELS[key]}
+                </span>
+              </div>
+            );
+          })}
         </div>
+      </div>
 
-        {/* Log entries */}
-        <ScrollArea className="flex-1 min-h-0" ref={scrollRef}>
-          <div className="p-3 space-y-2">
-            {logs.length === 0 ? (
-              <p className="text-muted-foreground text-xs text-center py-8 font-mono">
-                No calls logged yet. Click "Re-run" to regenerate and watch the pipeline.
-              </p>
-            ) : (
-              logs.map((entry) => <LogEntryCard key={entry.id} entry={entry} />)
-            )}
-          </div>
-        </ScrollArea>
-
-        {/* Footer */}
-        <div className="px-4 py-2 border-t border-border/40 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground font-mono">
-            {logs.length} call{logs.length !== 1 ? "s" : ""} logged
-          </span>
-          <span className="text-[10px] text-muted-foreground font-mono">
-            {logs.filter(l => l.status === "error").length} errors
-          </span>
+      {/* Log entries */}
+      <ScrollArea className="flex-1 min-h-0" ref={scrollRef}>
+        <div className="space-y-2 pb-4">
+          {logs.length === 0 ? (
+            <p className="text-muted-foreground text-xs text-center py-8 font-mono">
+              No calls logged yet. Click "Re-run Pipeline" to regenerate and watch the pipeline.
+            </p>
+          ) : (
+            logs.map((entry) => <LogEntryCard key={entry.id} entry={entry} />)
+          )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </ScrollArea>
+
+      {/* Footer */}
+      <div className="py-2 border-t border-border/40 flex items-center justify-between mt-2">
+        <span className="text-[10px] text-muted-foreground font-mono">
+          {logs.length} call{logs.length !== 1 ? "s" : ""} logged
+        </span>
+        <span className="text-[10px] text-muted-foreground font-mono">
+          {logs.filter(l => l.status === "error").length} errors
+        </span>
+      </div>
+    </div>
   );
 }

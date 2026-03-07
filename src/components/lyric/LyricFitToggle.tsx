@@ -1,10 +1,10 @@
 import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
-import { Loader2, Lock, CheckCircle2, Circle } from "lucide-react";
+import { Loader2, Lock, CheckCircle2, Circle, Bug } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import type { FitReadiness, PipelineStages, PipelineStageStatus } from "./LyricFitTab";
 
-export type LyricFitView = "lyrics" | "fit";
+export type LyricFitView = "lyrics" | "fit" | "debug";
 
 interface Props {
   view: LyricFitView;
@@ -15,6 +15,7 @@ interface Props {
   fitProgress?: number;
   fitStageLabel?: string;
   pipelineStages?: PipelineStages;
+  showDebug?: boolean;
 }
 
 const STAGE_LABELS: Record<keyof PipelineStages, string> = {
@@ -53,7 +54,7 @@ const FitButton = forwardRef<HTMLButtonElement, { isLocked: boolean; isRunning: 
 );
 FitButton.displayName = "FitButton";
 
-export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = false, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages }: Props) {
+export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = false, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages, showDebug }: Props) {
   const isLocked = fitDisabled || (!fitUnlocked && fitReadiness !== "ready");
   const isRunning = fitReadiness === "running";
   const isError = fitReadiness === "error";
@@ -120,6 +121,22 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
             </span>
           )}
         </div>
+        {showDebug && (
+          <div className="flex-1 flex items-center justify-center">
+            <button
+              onClick={() => onViewChange("debug")}
+              className={cn(
+                "py-2.5 text-sm transition-all duration-150 flex items-center gap-1.5",
+                view === "debug"
+                  ? "font-medium text-foreground"
+                  : "font-normal text-muted-foreground"
+              )}
+            >
+              <Bug size={12} />
+              Debug
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
