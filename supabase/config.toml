@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.resolve-scene-context]
 verify_jwt = false
+
+[functions.detect-hooks]
+verify_jwt = false
