@@ -30,6 +30,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   generationStatus: GenerationStatus;
   pipelineStages: PipelineStages;
+  pipelineStageTimes?: PipelineStageTimes;
   onRetry: () => void;
 }
 
