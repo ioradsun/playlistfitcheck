@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download, Link, Users, Check } from "lucide-react";
+import { Loader2, RefreshCw, Music, Sparkles, Eye, Zap, Image, ExternalLink, Download, Link, Users, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -16,7 +16,6 @@ import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { Button } from "@/components/ui/button";
 import { LyricWaveform } from "./LyricWaveform";
-import { SectionTimeline } from "./SectionTimeline";
 import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
 import { FitExportModal } from "./FitExportModal";
 
@@ -24,14 +23,9 @@ import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
-import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 // FrameRenderState import removed — V3 derives from cinematicDirection
-import type { AudioSection, SectionRole } from "@/engine/sectionDetector";
-import type { LyricSection } from "@/hooks/useLyricSections";
-import type { SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus, PipelineStages, PipelineStageTimes } from "./LyricFitTab";
-import type { CinematicSection } from "@/types/CinematicDirection";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { PipelineDebugPanel } from "./PipelineDebugPanel";
 
@@ -63,25 +57,14 @@ interface Props {
   setRenderData: (d: any) => void;
   beatGrid: BeatGridData | null;
   setBeatGrid: (g: BeatGridData | null) => void;
-  songSignature: SongSignature | null;
-  setSongSignature: (s: SongSignature | null) => void;
   cinematicDirection: any | null;
   setCinematicDirection: (d: any) => void;
   generationStatus: GenerationStatus;
-  audioSections?: AudioSection[];
   words?: Array<{ word: string; start: number; end: number }> | null;
-  sectionOverrides: SectionOverrides | null;
-  onSectionOverridesChange: (overrides: SectionOverrides) => void;
-  mergedSections: LyricSection[];
   onRetry?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
   onImageGenerationStatusChange?: (status: "idle" | "running" | "done" | "error") => void;
-  cinematicSections?: CinematicSection[];
-  sectionsDirty?: boolean;
-  onRegenerateSectionsVisuals?: () => void;
-  onAddSection?: (role: SectionRole, startSec: number, endSec: number) => void;
-  onRemoveSection?: (sectionIndex: number) => void;
   pipelineStages?: PipelineStages;
   stageRestarters?: import("./PipelineDebugPanel").StageRestarters;
   pipelineStageTimes?: PipelineStageTimes;
@@ -96,25 +79,14 @@ export function FitTab({
   setRenderData,
   beatGrid,
   setBeatGrid,
-  songSignature,
-  setSongSignature,
   cinematicDirection,
   setCinematicDirection,
   generationStatus,
-  audioSections,
   words,
-  sectionOverrides,
-  onSectionOverridesChange,
-  mergedSections,
   onRetry,
   onHeaderProject,
   onBack,
   onImageGenerationStatusChange,
-  cinematicSections,
-  sectionsDirty,
-  onRegenerateSectionsVisuals,
-  onAddSection,
-  onRemoveSection,
   pipelineStages: pipelineStagesProp,
   pipelineStageTimes,
   stageRestarters,
@@ -131,6 +103,12 @@ export function FitTab({
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const dancePlayerRef = useRef<InlineLyricDanceHandle>(null);
+
+  const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
+  const [sectionImagesError, setSectionImagesError] = useState<string | null>(null);
+  const [sectionImagesGenerating, setSectionImagesGenerating] = useState(false);
+  const [sectionImagesProgress, setSectionImagesProgress] = useState<{ done: number; total: number } | null>(null);
+
 
   // Prefetch dance data as soon as we know the ID — so the player is instant
 
@@ -1051,37 +1029,81 @@ export function FitTab({
 
 
 
-              {sectionsDirty && onRegenerateSectionsVisuals && (
-                <button
-                  onClick={onRegenerateSectionsVisuals}
-                  className="text-[10px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1.5"
-                >
-                  <RefreshCw size={10} />
-                  Update visuals for new structure
-                </button>
-              )}
+              {cinematicDirection?.sections && Array.isArray(cinematicDirection.sections) && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                      <Eye size={10} />
+                      Scenes
+                    </div>
+                    {Array.isArray(cinematicDirection.sections) && cinematicDirection.sections.length > 0 && (
+                      <button
+                        onClick={() => void window.dispatchEvent(new Event("fittab:regenerate-images"))}
+                        disabled={sectionImagesGenerating}
+                        className="text-[9px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1 disabled:opacity-40"
+                      >
+                        {sectionImagesGenerating ? (
+                          <>
+                            <Loader2 size={9} className="animate-spin" />
+                            {sectionImagesProgress ? `${sectionImagesProgress.done}/${sectionImagesProgress.total}` : "Generating…"}
+                          </>
+                        ) : sectionImagesError ? (
+                          <>
+                            <RefreshCw size={9} />
+                            Retry Images
+                          </>
+                        ) : sectionImages.length > 0 ? (
+                          <>
+                            <Image size={9} />
+                            Regenerate Images
+                          </>
+                        ) : (
+                          <>
+                            <Image size={9} />
+                            Generate Images
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
 
-              {mergedSections.length > 0 && waveform && (
-                <SectionTimeline
-                  sections={mergedSections}
-                  lyrics={lyricData.lines}
-                  words={words ?? null}
-                  waveformPeaks={waveform.peaks}
-                  durationSec={waveform.duration || Math.max(lyricData.lines[lyricData.lines.length - 1]?.end ?? 0, 1)}
-                  currentTimeSec={currentTime}
-                  isPlaying={isPlaying}
-                  onSeek={handleSeek}
-                  onTogglePlay={handleTogglePlay}
-                  sectionOverrides={sectionOverrides}
-                  onSectionOverridesChange={onSectionOverridesChange}
-                  palette={Array.isArray(cinematicDirection?.palette) ? cinematicDirection.palette : []}
-                  cinematicSections={cinematicSections}
-                  onAddSection={onAddSection}
-                  onRemoveSection={onRemoveSection}
-                />
+                  {cinematicDirection.sections.map((section: any, i: number) => {
+                    const imageUrl = sectionImages[i] || null;
+                    return (
+                      <div key={section.sectionIndex ?? i} className="glass-card rounded-lg p-2.5 flex gap-3 items-start">
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={section.structuralLabel || `Section ${i + 1}`}
+                            className="w-16 h-16 rounded-md object-cover shrink-0"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-md bg-white/5 shrink-0 flex items-center justify-center">
+                            <Image size={14} className="text-muted-foreground/30" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-foreground">
+                              {section.structuralLabel || `Section ${i + 1}`}
+                            </span>
+                            {section.visualMood && (
+                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                                {section.visualMood}
+                              </span>
+                            )}
+                          </div>
+                          {section.description && (
+                            <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
+                              {section.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-
-              {/* Visual system info now shown via Cinematic Direction card below */}
 
               {cinematicDirection && (
                 <CinematicDirectionCard
@@ -1094,6 +1116,11 @@ export function FitTab({
                   beatGrid={beatGrid}
                   words={words ?? null}
                   lyricData={lyricData}
+                  sectionImages={sectionImages}
+                  setSectionImages={setSectionImages}
+                  setSectionImagesError={setSectionImagesError}
+                  setSectionImagesGenerating={setSectionImagesGenerating}
+                  setSectionImagesProgress={setSectionImagesProgress}
                 />
               )}
 
@@ -1157,6 +1184,11 @@ function CinematicDirectionCard({
   beatGrid,
   words,
   lyricData,
+  sectionImages,
+  setSectionImages,
+  setSectionImagesError,
+  setSectionImagesGenerating,
+  setSectionImagesProgress,
 }: {
   cinematicDirection: any;
   songTitle: string;
@@ -1167,8 +1199,12 @@ function CinematicDirectionCard({
   beatGrid: BeatGridData | null;
   words: Array<{ word: string; start: number; end: number }> | null;
   lyricData: LyricData;
+  sectionImages: (string | null)[];
+  setSectionImages: (images: (string | null)[]) => void;
+  setSectionImagesError: (error: string | null) => void;
+  setSectionImagesGenerating: (generating: boolean) => void;
+  setSectionImagesProgress: (progress: { done: number; total: number } | null) => void;
 }) {
-  const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
@@ -1181,6 +1217,18 @@ function CinematicDirectionCard({
   const fitTabImageMs = useCallback(() => fitTabImageT0Ref.current === null
     ? "0ms"
     : `${(performance.now() - fitTabImageT0Ref.current).toFixed(0)}ms`, []);
+
+  useEffect(() => {
+    setSectionImagesGenerating(generating);
+  }, [generating, setSectionImagesGenerating]);
+
+  useEffect(() => {
+    setSectionImagesError(generationError);
+  }, [generationError, setSectionImagesError]);
+
+  useEffect(() => {
+    setSectionImagesProgress(genProgress);
+  }, [genProgress, setSectionImagesProgress]);
 
   const sections: any[] = cinematicDirection.sections && Array.isArray(cinematicDirection.sections)
     ? cinematicDirection.sections
@@ -1419,63 +1467,16 @@ function CinematicDirectionCard({
     }
   }, [ensureDanceId, fitTabImageMs, formatImageTimestamp, generating, onImageGenerationStatusChange, projectId, sections]);
 
+  useEffect(() => {
+    const handler = () => {
+      void handleGenerateImages();
+    };
+    window.addEventListener("fittab:regenerate-images", handler);
+    return () => window.removeEventListener("fittab:regenerate-images", handler);
+  }, [handleGenerateImages]);
+
   // Image generation is now auto-triggered by the pipeline in LyricFitTab.
   // CinematicDirectionCard only provides the manual "Regenerate" button.
 
-  return (
-    <div className="glass-card rounded-xl p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-          <Eye size={10} />
-          Cinematic Direction
-        </div>
-        {sections.length > 0 && (
-          <button
-            onClick={handleGenerateImages}
-            disabled={generating}
-            className="text-[9px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1 disabled:opacity-40"
-          >
-            {generating ? (
-              <>
-                <Loader2 size={9} className="animate-spin" />
-                {genProgress ? `${genProgress.done}/${genProgress.total}` : "Generating…"}
-              </>
-            ) : generationError ? (
-              <>
-                <RefreshCw size={9} />
-                Retry Images
-              </>
-            ) : sectionImages.length > 0 ? (
-              <>
-                <Image size={9} />
-                Regenerate Images
-              </>
-            ) : (
-              <>
-                <Image size={9} />
-                Generate Images
-              </>
-            )}
-          </button>
-        )}
-      </div>
-
-      {generationError && (
-        <p className="text-[9px] text-destructive/80">{generationError}</p>
-      )}
-
-      {cinematicDirection.palette && (
-        <div className="flex items-center gap-1 mt-1">
-          <Palette size={9} className="text-muted-foreground/60" />
-          {(Array.isArray(cinematicDirection.palette) ? cinematicDirection.palette : []).map((c: string, i: number) => (
-            <div key={i} className="w-4 h-4 rounded-sm border border-white/10" style={{ backgroundColor: c }} title={c} />
-          ))}
-        </div>
-      )}
-
-      {cinematicDirection.storyboard && Array.isArray(cinematicDirection.storyboard) && (
-        <p className="text-[9px] text-muted-foreground/60">{cinematicDirection.storyboard.length} storyboard frames · {(cinematicDirection.wordDirectives?.length ?? 0)} word directives</p>
-      )}
-    </div>
-  );
+  return null;
 }

@@ -165,8 +165,6 @@ export function useLyricSections(
   beatGrid: { bpm: number; beats: number[]; confidence: number } | null | undefined,
   cinematicDirection: CinematicDirection | null | undefined,
   durationSec: number,
-  /** Pre-computed sections from real energy curve (maybeRunSectionPipeline). When provided, skips dummy detectSections. */
-  precomputedSections?: AudioSection[] | null,
 ): UseLyricSectionsResult {
   return useMemo((): UseLyricSectionsResult => {
     if (!words || words.length === 0) {
@@ -182,35 +180,28 @@ export function useLyricSections(
       lineIndex: line.lineIndex,
     }));
 
-    // Use precomputed sections (real energy curve) when available.
-    // Fall back to dummy detectSections only when no real sections exist yet.
-    let detected: AudioSection[];
-    if (precomputedSections && precomputedSections.length > 0) {
-      detected = precomputedSections;
-    } else {
-      const songSignature: SongSignature = {
-        bpm: beatGrid?.bpm ?? 120,
-        durationSec,
-        tempoStability: 0.5,
-        beatIntervalVariance: 0,
-        rmsMean: 0.5,
-        rmsVariance: 0,
-        zeroCrossingRate: 0,
-        spectralCentroidHz: 2000,
-        lyricDensity: null,
-        energyCurve: new Float32Array(0),
-        analysisVersion: 1,
-      };
+    const songSignature: SongSignature = {
+      bpm: beatGrid?.bpm ?? 120,
+      durationSec,
+      tempoStability: 0.5,
+      beatIntervalVariance: 0,
+      rmsMean: 0.5,
+      rmsVariance: 0,
+      zeroCrossingRate: 0,
+      spectralCentroidHz: 2000,
+      lyricDensity: null,
+      energyCurve: new Float32Array(0),
+      analysisVersion: 1,
+    };
 
-      const effectiveBeatGrid: BeatGrid = beatGrid ?? { bpm: 120, beats: [], confidence: 0 };
+    const effectiveBeatGrid: BeatGrid = beatGrid ?? { bpm: 120, beats: [], confidence: 0 };
 
-      detected = detectSections(
-        songSignature,
-        effectiveBeatGrid,
-        timestampedLines,
-        durationSec,
-      );
-    }
+    const detected = detectSections(
+      songSignature,
+      effectiveBeatGrid,
+      timestampedLines,
+      durationSec,
+    );
 
     if (!detected.length) {
       return { sections: [], allLines, isReady: false };
@@ -257,5 +248,5 @@ export function useLyricSections(
       allLines,
       isReady: sections.length > 0,
     };
-  }, [words, beatGrid, cinematicDirection, durationSec, precomputedSections]);
+  }, [words, beatGrid, cinematicDirection, durationSec]);
 }
