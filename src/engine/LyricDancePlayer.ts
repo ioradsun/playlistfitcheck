@@ -1213,7 +1213,8 @@ export class LyricDancePlayer {
     if (tctx) tctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
 
     this.audio = new Audio(data.audio_url);
-    this.audio.loop = true;
+    // Disable native loop for region-based players — tick() handles region looping manually
+    this.audio.loop = !(data.region_start != null && data.region_end != null);
     this.audio.muted = true;
     this.audio.preload = "auto";
     this.bootMode = options?.bootMode ?? "minimal";
@@ -5310,7 +5311,7 @@ export class LyricDancePlayer {
   private drawEmotionalEvents(tSec: number): void {
     for (const ae of this.activeEvents) {
       const age = tSec - ae.startTime;
-      if (age < 0) continue; // Region loop: event scheduled in the future
+      if (age < 0) continue; // Region loop: skip events scheduled in the future
       const progress = Math.max(0, Math.min(1, age / ae.event.duration));
       const fadeAlpha = ae.event.intensity * (1 - progress);
 

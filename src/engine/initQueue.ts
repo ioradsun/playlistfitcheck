@@ -1,5 +1,5 @@
 let active = 0;
-const MAX_CONCURRENT = 2;
+const MAX_CONCURRENT = 4;
 const waiting: Array<() => void> = [];
 
 export async function withInitLimit<T>(fn: () => Promise<T>): Promise<T> {
