@@ -1027,7 +1027,7 @@ export function LyricFitTab({
   }, [generationStatus, fitPipelineMs]);
 
   const retryGeneration = useCallback(() => {
-    if (!audioFile || !lines.length) return;
+    if (!audioFile) return;
     
     setRenderData(null);
     setCinematicDirection(null);
@@ -1060,7 +1060,7 @@ export function LyricFitTab({
     setTimeout(() => {
       setPipelineRetryCount(c => c + 1);
     }, 100);
-  }, [audioFile, lines, persistRenderData, startBeatAnalysis]);
+  }, [audioFile, persistRenderData, startBeatAnalysis]);
 
   useEffect(() => {
     if (fitUnlocked || fitReadiness === "ready") {
