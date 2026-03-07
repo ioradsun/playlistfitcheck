@@ -328,7 +328,8 @@ export function FitTab({
   }, []);
 
   // ── Header project ────────────────────────────────────────────────────
-  const isAdmin = roles.includes("admin");
+  const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
+  const isAdmin = !!(user?.email && ADMIN_EMAILS.includes(user.email));
   useEffect(() => {
     if (!onHeaderProject) return;
     const title =
