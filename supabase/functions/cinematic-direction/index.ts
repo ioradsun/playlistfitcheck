@@ -971,34 +971,70 @@ async function callWords(
 ): Promise<Record<string, any>> {
   const wordMessage = buildWordUserMessage(title, artist, lines, sceneDirection, words);
 
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: WORD_DIRECTION_PROMPT },
-        { role: "user", content: wordMessage },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: 6000,
-    }),
-  });
+  const callWordAI = async (messages: Array<{ role: string; content: string }>) => {
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages,
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_tokens: 6000,
+      }),
+    });
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    console.error("[cinematic-direction] words AI error", resp.status, text);
-    throw { status: resp.status, message: resp.status === 429 ? "Rate limited" : "Word direction AI request failed" };
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error("[cinematic-direction] words AI error", resp.status, text);
+      throw { status: resp.status, message: resp.status === 429 ? "Rate limited" : "Word direction AI request failed" };
+    }
+
+    const completion = await resp.json();
+    const finishReason = completion?.choices?.[0]?.finish_reason;
+    const raw = String(completion?.choices?.[0]?.message?.content ?? "");
+
+    if (finishReason === "length") {
+      console.warn("[cinematic-direction] words response truncated (finish_reason=length), raw length:", raw.length);
+    }
+
+    return { raw, finishReason };
+  };
+
+  const messages = [
+    { role: "system", content: WORD_DIRECTION_PROMPT },
+    { role: "user", content: wordMessage },
+  ];
+
+  // First attempt
+  const { raw, finishReason } = await callWordAI(messages);
+  let parsed = extractJson(raw);
+
+  // If parse failed or response was truncated, retry once
+  if (!parsed || finishReason === "length") {
+    console.warn("[cinematic-direction] words first attempt failed to parse or was truncated, retrying. Raw preview:", raw.slice(0, 300));
+
+    const retryMessages = [
+      ...messages,
+      {
+        role: "user",
+        content: "Your previous response was malformed or truncated. Return ONLY valid JSON: { \"storyboard\": [...], \"wordDirectives\": [...] }. No markdown. No explanation. Keep it concise — 15-20 entries each.",
+      },
+    ];
+
+    const { raw: retryRaw } = await callWordAI(retryMessages);
+    const retryParsed = extractJson(retryRaw);
+
+    if (retryParsed) {
+      parsed = retryParsed;
+    } else if (!parsed) {
+      console.error("[cinematic-direction] words retry also failed. Raw preview:", retryRaw.slice(0, 500));
+      throw { status: 422, message: "Invalid JSON from word direction AI after retry" };
+    }
   }
-
-  const completion = await resp.json();
-  const raw = String(completion?.choices?.[0]?.message?.content ?? "");
-  const parsed = extractJson(raw);
-  if (!parsed) throw { status: 422, message: "Invalid JSON from word direction AI" };
 
   const result = validateWords(parsed);
 
