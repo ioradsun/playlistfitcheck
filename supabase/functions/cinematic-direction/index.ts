@@ -769,7 +769,7 @@ serve(async (req) => {
     const heldCount = body.words?.length ? extractHeldWords(body.words, lines[0]?.start ?? 0, lines[lines.length - 1]?.end ?? 1).heldWords.length : 0;
     
 
-    const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount);
+    const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount, lines.length);
 
     if (lyricId) await persist(result, lyricId);
 
