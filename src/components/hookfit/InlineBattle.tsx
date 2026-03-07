@@ -80,6 +80,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       console.log("[InlineBattle] hooks query:", { battleId, hooks: hooks?.length ?? 0, error: hookErr?.message });
 
       if (!hooks || hooks.length === 0) { setLoading(false); return; }
+      if (fetchId !== fetchRef.current) return; // stale
 
       const rawHooks = hooks as unknown as (HookInfo & { user_id?: string })[];
       const a = rawHooks.find(h => h.battle_position === 1) || rawHooks[0];
@@ -108,6 +109,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
       console.log("[InlineBattle] dance query:", { found: dances?.length ?? 0, error: danceErr?.message, hasCinematic: !!(dances?.[0] as any)?.cinematic_direction });
 
+      if (fetchId !== fetchRef.current) return; // stale
       if (dances && dances.length > 0) {
         setDanceData(dances[0] as unknown as LyricDanceData);
       }
