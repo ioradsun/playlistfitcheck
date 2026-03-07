@@ -110,7 +110,7 @@ export function FitTab({
   onAddSection,
   onRemoveSection,
 }: Props) {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -328,15 +328,25 @@ export function FitTab({
   }, []);
 
   // ── Header project ────────────────────────────────────────────────────
+  const isAdmin = roles.includes("admin");
   useEffect(() => {
     if (!onHeaderProject) return;
     const title =
       lyricData.title && lyricData.title !== "Unknown" && lyricData.title !== "Untitled"
         ? lyricData.title
         : audioFile.name.replace(/\.[^.]+$/, "");
-    onHeaderProject({ title, onBack: onBack ?? (() => {}) });
+    const rightContent = isAdmin && onRetry ? (
+      <button
+        onClick={onRetry}
+        className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
+      >
+        <RefreshCw size={12} />
+        Regenerate Fit
+      </button>
+    ) : undefined;
+    onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent });
     return () => onHeaderProject(null);
-  }, [lyricData.title, audioFile.name, onHeaderProject, onBack]);
+  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, isAdmin, onRetry]);
 // CinematicDirectionCard extracted to top-level — see below FitTab
 
   // ── Live transcript sync ──────────────────────────────────────────────
