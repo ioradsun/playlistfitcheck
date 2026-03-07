@@ -100,6 +100,12 @@ export function LyricFitTab({
   }, [initialLyric]);
 
   const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
+  const [showDebug, setShowDebug] = useState(() => localStorage.getItem("lyricfit-debug") === "true");
+  useEffect(() => {
+    const handler = () => setShowDebug(localStorage.getItem("lyricfit-debug") === "true");
+    window.addEventListener("lyricfit-debug-toggle", handler);
+    return () => window.removeEventListener("lyricfit-debug-toggle", handler);
+  }, []);
   const [sceneDescription, setSceneDescription] = useState('');
   const [resolvedScene, setResolvedScene] = useState<SceneContextResult | null>(null);
   const [resolvingScene, setResolvingScene] = useState(false);
