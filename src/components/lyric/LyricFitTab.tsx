@@ -16,7 +16,6 @@ import { detectSections, type SectionRole, type TimestampedLine } from "@/engine
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
-import { PipelineDebugPanel } from "./PipelineDebugPanel";
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { mergeSectionOverrides, type SectionOverride, type SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { SceneContextResult } from "@/lib/sceneContexts";
@@ -58,7 +57,6 @@ export interface PipelineStages {
   cinematic: PipelineStageStatus;
   transcript: PipelineStageStatus;
 }
-export type PipelineStageTimes = Record<keyof PipelineStages, { startedAt?: number; durationMs?: number }>;
 
 interface Props {
   initialLyric?: any;
@@ -128,22 +126,6 @@ export function LyricFitTab({
   const [pipelineStages, setPipelineStages] = useState<PipelineStages>({
     rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending",
   });
-  const [pipelineStageTimes, setPipelineStageTimes] = useState<PipelineStageTimes>({
-    rhythm: {}, sections: {}, cinematic: {}, transcript: {},
-  });
-
-  const markStageStart = (stage: keyof PipelineStages) => {
-    setPipelineStageTimes(prev => ({ ...prev, [stage]: { startedAt: performance.now(), durationMs: undefined } }));
-  };
-  const markStageDone = (stage: keyof PipelineStages) => {
-    setPipelineStageTimes(prev => {
-      const s = prev[stage];
-      return { ...prev, [stage]: { ...s, durationMs: s.startedAt ? Math.round(performance.now() - s.startedAt) : undefined } };
-    });
-  };
-  const resetStageTimes = () => {
-    setPipelineStageTimes({ rhythm: {}, sections: {}, cinematic: {}, transcript: {} });
-  };
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>({
     beatGrid: "idle",
     renderData: "done",
@@ -263,7 +245,6 @@ export function LyricFitTab({
     setBeatGridDone(true);
     setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
     setPipelineStages(prev => ({ ...prev, rhythm: "done" }));
-    markStageDone("rhythm");
     setFitProgress(prev => Math.max(prev, 35));
 
     // Persist beat_grid so we skip Essentia on next load
@@ -455,10 +436,16 @@ export function LyricFitTab({
         const values = Object.values(sig.energyCurve) as number[];
         sig.energyCurve = new Float32Array(values);
       }
-      setSongSignature(sig);
+      // Only use cached signature if it has a real energy curve.
+      // Pre-fix data has energyCurve length 0 → force recompute from raw audio.
+      if (sig.energyCurve && sig.energyCurve.length > 0) {
+        setSongSignature(sig);
+      }
     }
-    const savedSections = (initialLyric as any).cinematic_direction?.sections;
-    if (Array.isArray(savedSections)) setAudioSections(savedSections);
+    // NOTE: Do NOT hydrate audioSections from cinematic_direction.sections.
+    // Those are AI-labeled sections, not detectSections() output.
+    // audioSections must always come from detectSections() using the real energy curve.
+    // The pipeline will re-derive them via maybeRunSectionPipeline.
 
     // Hydrate section_images from saved_lyrics — survives tab switches
     const savedSectionImages = (initialLyric as any).section_images;
@@ -571,7 +558,6 @@ export function LyricFitTab({
     
     setGenerationStatus(prev => ({ ...prev, beatGrid: "running" }));
     setPipelineStages(prev => ({ ...prev, rhythm: "running" }));
-    markStageStart("rhythm");
   }, [beatGrid, generationStatus.beatGrid, audioBuffer]);
 
   // ── Hook Detection (parallel, non-blocking) ──
@@ -632,14 +618,19 @@ export function LyricFitTab({
     if (!lyricData || !sourceLines.length) return;
     // Data-existence guard: if we already have cinematicDirection (e.g. loaded from DB), skip
     if (!force && cinematicDirectionRef.current) {
-      setGenerationStatus(prev => prev.cinematicDirection === "done" ? prev : ({ ...prev, cinematicDirection: "done" }));
+      setGenerationStatus(prev => {
+        const next = { ...prev };
+        if (next.cinematicDirection !== "done") next.cinematicDirection = "done";
+        // Also resolve sectionImages if still idle — no image pipeline will run on this path
+        if (next.sectionImages === "idle") next.sectionImages = "done";
+        return next;
+      });
       return;
     }
     if (!force && (generationStatus.cinematicDirection === "running" || generationStatus.cinematicDirection === "done")) return;
 
     setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running", sectionImages: "idle" }));
     setPipelineStages(prev => ({ ...prev, cinematic: "running" }));
-    markStageStart("cinematic");
 
 
     try {
@@ -866,7 +857,6 @@ export function LyricFitTab({
 
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
       setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
-      markStageDone("cinematic");
       setFitProgress(prev => Math.max(prev, 85));
     } catch (err) {
       console.error("[Pipeline] Cinematic direction failed:", err);
@@ -896,7 +886,6 @@ export function LyricFitTab({
 
     fitPipelineT0Ref.current = performance.now();
     setPipelineStages(prev => ({ ...prev, sections: "running" }));
-    markStageStart("sections");
     sectionPipelineRunningRef.current = true;
     try {
       let sig = songSignature;
@@ -921,7 +910,6 @@ export function LyricFitTab({
       const nextSections = detectSections(sig, beatGrid, timestampedLines, audioDurationSec);
       setAudioSections(nextSections);
       setPipelineStages(prev => ({ ...prev, sections: "done" }));
-      markStageDone("sections");
       sectionPipelineDoneRef.current = true;
     } catch (error) {
       console.warn("[section-pipeline] failed", error);
@@ -951,7 +939,6 @@ export function LyricFitTab({
     
     setActiveTab("lyrics");
     setPipelineStages(prev => ({ ...prev, transcript: "running" }));
-    markStageStart("transcript");
     startBeatAnalysis(file);
   }, [startBeatAnalysis]);
 
@@ -991,7 +978,6 @@ export function LyricFitTab({
       setFitProgress(100);
       setFitStageLabel("Ready");
       setPipelineStages(prev => ({ ...prev, transcript: "done" }));
-      markStageDone("transcript");
       return;
     }
     if (hasRunning) {
@@ -1024,11 +1010,10 @@ export function LyricFitTab({
     setFitProgress(0);
     setFitStageLabel("");
     setPipelineStages({ rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" });
-    resetStageTimes();
   }, [generationStatus, fitPipelineMs]);
 
   const retryGeneration = useCallback(() => {
-    if (!audioFile) return;
+    if (!audioFile || !lines.length) return;
     
     setRenderData(null);
     setCinematicDirection(null);
@@ -1061,7 +1046,7 @@ export function LyricFitTab({
     setTimeout(() => {
       setPipelineRetryCount(c => c + 1);
     }, 100);
-  }, [audioFile, persistRenderData, startBeatAnalysis]);
+  }, [audioFile, lines, persistRenderData, startBeatAnalysis]);
 
   useEffect(() => {
     if (fitUnlocked || fitReadiness === "ready") {
@@ -1071,7 +1056,6 @@ export function LyricFitTab({
 
   const handleViewChange = useCallback((nextView: LyricFitView) => {
     if (nextView === "fit" && !fitUnlocked && fitReadiness !== "ready" && fitReadiness !== "not_started") return;
-    if (nextView === "debug") { setActiveTab("debug"); return; }
     setActiveTab(nextView);
   }, [fitUnlocked, fitReadiness]);
 
@@ -1130,7 +1114,6 @@ export function LyricFitTab({
           fitProgress={fitProgress}
           fitStageLabel={fitStageLabel}
           pipelineStages={pipelineStages}
-          showDebug={!!lyricData && !!audioFile}
         />
       )}
 
@@ -1219,8 +1202,7 @@ export function LyricFitTab({
            onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
            onBack={handleBackToLyrics}
            onImageGenerationStatusChange={handleImageGenerationStatusChange}
-            pipelineStages={pipelineStages}
-            pipelineStageTimes={pipelineStageTimes}
+           pipelineStages={pipelineStages}
            cinematicSections={
              Array.isArray(cinematicDirection?.sections)
                ? cinematicDirection.sections
@@ -1228,14 +1210,6 @@ export function LyricFitTab({
            }
         />
         ) : null}
-      </div>
-      <div style={{ display: activeTab === "debug" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
-        <PipelineDebugPanel
-          generationStatus={generationStatus}
-          pipelineStages={pipelineStages}
-          pipelineStageTimes={pipelineStageTimes}
-          onRetry={retryGeneration}
-        />
       </div>
     </div>
   );
