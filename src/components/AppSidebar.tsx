@@ -36,6 +36,7 @@ import {
   Trash2,
   RotateCcw,
   Trash,
+  Bug,
 } from "lucide-react";
 import {
   DropdownMenu,
