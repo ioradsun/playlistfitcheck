@@ -532,8 +532,8 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
   if (!Array.isArray(v.storyboard)) {
     errors.push("storyboard must be an array");
     v.storyboard = [];
-  } else if (v.storyboard.length < 10 || v.storyboard.length > 30) {
-    errors.push(`storyboard has ${v.storyboard.length} entries (want 15-25)`);
+  } else if (v.storyboard.length > 30) {
+    errors.push(`storyboard has ${v.storyboard.length} entries (max 30)`);
   }
 
   if (!Array.isArray(v.wordDirectives)) {
@@ -545,8 +545,8 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
     }
   }
 
-  if (v.wordDirectives.length < 10 || v.wordDirectives.length > 30) {
-    errors.push(`wordDirectives has ${v.wordDirectives.length} entries (want 15-25)`);
+  if (v.wordDirectives.length > 30) {
+    errors.push(`wordDirectives has ${v.wordDirectives.length} entries (max 30)`);
   }
 
   for (const wd of v.wordDirectives) {
@@ -591,7 +591,13 @@ async function callWithRetry(
   systemPrompt: string,
   userMessage: string,
   sectionCount: number,
+  lineCount: number,
 ): Promise<Record<string, any>> {
+  // Scale expected counts to song length — short songs can't fill 15-25 entries
+  const idealMin = Math.max(3, Math.min(15, Math.floor(lineCount * 0.6)));
+  const idealMax = Math.max(idealMin + 5, Math.min(30, lineCount + 5));
+  const hardMin = Math.max(1, Math.floor(idealMin * 0.5)); // absolute floor for validation
+
   const callAI = async (messages: Array<{ role: string; content: string }>) => {
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -616,7 +622,6 @@ async function callWithRetry(
 
     const completion = await resp.json();
     const raw = String(completion?.choices?.[0]?.message?.content ?? "");
-    const finishReason = completion?.choices?.[0]?.finish_reason ?? "unknown";
     return extractJson(raw);
   };
 
@@ -632,48 +637,72 @@ async function callWithRetry(
 
   // Check for empty creative data — this means the prompt failed
   const missingCreative: string[] = [];
-  if (!Array.isArray(result.value.storyboard) || result.value.storyboard.length === 0) {
-    missingCreative.push("storyboard has 0 entries (need 15-25)");
+  const sbLen = Array.isArray(result.value.storyboard) ? result.value.storyboard.length : 0;
+  const wdLen = Array.isArray(result.value.wordDirectives) ? result.value.wordDirectives.length : 0;
+
+  if (sbLen < hardMin) {
+    missingCreative.push(`storyboard has ${sbLen} entries (need at least ${hardMin})`);
   }
-  if (!Array.isArray(result.value.wordDirectives) || result.value.wordDirectives.length === 0) {
-    missingCreative.push("wordDirectives has 0 entries (need 15-25)");
+  if (wdLen < hardMin) {
+    missingCreative.push(`wordDirectives has ${wdLen} entries (need at least ${hardMin})`);
   }
 
   const allErrors = [...result.errors, ...missingCreative];
 
   if (result.ok && missingCreative.length === 0) return result.value;
 
-  
+  console.log(`[cinematic-direction] first attempt issues (lineCount=${lineCount}, idealMin=${idealMin}, hardMin=${hardMin}):`, allErrors);
+
   const retryMessages = [
     ...messages,
     { role: "assistant", content: JSON.stringify(first) },
     {
       role: "user",
-      content: `Your response had these errors:\n${allErrors.join("\n")}\n\nFix them and return corrected JSON only. You MUST include 15-25 storyboard entries and 15-25 wordDirectives.`,
+      content: `Your response had these errors:\n${allErrors.join("\n")}\n\nFix them and return corrected JSON only. This song has ${lineCount} lines. You MUST include ${idealMin}-${idealMax} storyboard entries and ${idealMin}-${idealMax} wordDirectives. If the song is short, include entries for most lines.`,
     },
   ];
 
   const second = await callAI(retryMessages);
   if (!second) {
+    // If retry JSON parse fails but first attempt had SOME data, use it
+    if (sbLen > 0 && wdLen > 0) {
+      console.log("[cinematic-direction] retry parse failed, using first attempt with partial data");
+      return result.value;
+    }
     throw { status: 422, message: `Cinematic direction failed: ${allErrors.join("; ")}` };
   }
 
   const retryResult = validate(second, sectionCount);
 
-  // Check retry for empty creative data too
   const retryStoryboard = Array.isArray(retryResult.value.storyboard) ? retryResult.value.storyboard.length : 0;
   const retryDirectives = Array.isArray(retryResult.value.wordDirectives) ? retryResult.value.wordDirectives.length : 0;
 
-  if (retryStoryboard === 0 || retryDirectives === 0) {
-    
-    throw {
-      status: 422,
-      message: `Cinematic direction failed after retry: storyboard=${retryStoryboard}, wordDirectives=${retryDirectives}`,
-    };
+  // Accept if we have at least hardMin, or fall back to first attempt if it had data
+  if (retryStoryboard >= hardMin && retryDirectives >= hardMin) {
+    return retryResult.value;
   }
 
-  
-  return retryResult.value;
+  // If retry still empty but first attempt had some data, use first attempt
+  if (sbLen > 0 && wdLen > 0) {
+    console.log(`[cinematic-direction] retry still sparse (sb=${retryStoryboard}, wd=${retryDirectives}), using first attempt (sb=${sbLen}, wd=${wdLen})`);
+    return result.value;
+  }
+
+  // Pick whichever attempt has more data
+  if (retryStoryboard + retryDirectives > sbLen + wdLen) {
+    console.log(`[cinematic-direction] using retry attempt (sb=${retryStoryboard}, wd=${retryDirectives})`);
+    return retryResult.value;
+  }
+
+  if (sbLen + wdLen > 0) {
+    console.log(`[cinematic-direction] using first attempt as fallback (sb=${sbLen}, wd=${wdLen})`);
+    return result.value;
+  }
+
+  throw {
+    status: 422,
+    message: `Cinematic direction failed after retry: storyboard=${retryStoryboard}, wordDirectives=${retryDirectives}`,
+  };
 }
 
 async function persist(direction: Record<string, any>, lyricId: string): Promise<void> {
@@ -740,7 +769,7 @@ serve(async (req) => {
     const heldCount = body.words?.length ? extractHeldWords(body.words, lines[0]?.start ?? 0, lines[lines.length - 1]?.end ?? 1).heldWords.length : 0;
     
 
-    const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount);
+    const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount, lines.length);
 
     if (lyricId) await persist(result, lyricId);
 
