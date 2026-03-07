@@ -1234,9 +1234,6 @@ export function LyricFitTab({
 
   const handleBackToLyrics = useCallback(() => handleViewChange("lyrics"), [handleViewChange]);
 
-  const handleImageGenerationStatusChange = useCallback((status: "idle" | "running" | "done" | "error") => {
-    setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
-  }, []);
 
   const fitDisabled = !transcriptionDone;
 
