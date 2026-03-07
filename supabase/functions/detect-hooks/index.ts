@@ -222,35 +222,58 @@ serve(async (req) => {
 
     const userMessage = buildUserMessage(body);
 
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: HOOK_PROMPT },
-          { role: "user", content: userMessage },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.2,
-        max_tokens: 500,
-      }),
-    });
+    async function callHookDetection(systemPrompt: string, userMsg: string, maxTokens: number): Promise<any> {
+      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMsg },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+          max_tokens: maxTokens,
+        }),
+      });
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error(`Gemini error ${resp.status}: ${errText.slice(0, 200)}`);
+      if (!r.ok) {
+        const errText = await r.text();
+        throw new Error(`Gemini error ${r.status}: ${errText.slice(0, 300)}`);
+      }
+
+      const gwData = await r.json();
+      const finishReason = gwData.choices?.[0]?.finish_reason;
+      const rawContent = gwData.choices?.[0]?.message?.content || "";
+      console.log(`[detect-hooks] finish_reason=${finishReason}, content_length=${rawContent.length}`);
+      if (!rawContent) {
+        console.warn("[detect-hooks] Empty content from AI. Full response:", JSON.stringify(gwData).slice(0, 500));
+      }
+      return { rawContent, finishReason };
     }
 
-    const gwData = await resp.json();
-    const content = gwData.choices?.[0]?.message?.content || "";
-    const parsed = extractJson(content);
+    // Attempt 1
+    let { rawContent, finishReason } = await callHookDetection(HOOK_PROMPT, userMessage, 1024);
+    let parsed = extractJson(rawContent);
 
+    // Retry if empty/truncated
     if (!parsed?.hooks || !Array.isArray(parsed.hooks) || parsed.hooks.length === 0) {
-      throw new Error("Gemini returned no hooks");
+      console.warn(`[detect-hooks] Attempt 1 failed (finish=${finishReason}). Content preview: ${rawContent.slice(0, 200)}`);
+      console.log("[detect-hooks] Retrying with simplified prompt...");
+
+      const retryPrompt = `You are a hook detection AI. Find the two best 10-second hook segments in this song. Return ONLY this JSON: {"hooks":[{"start_sec":NUMBER,"confidence":NUMBER,"label":"STRING","justification":"STRING"},{"start_sec":NUMBER,"confidence":NUMBER,"label":"STRING","justification":"STRING"}]}`;
+
+      const retry = await callHookDetection(retryPrompt, userMessage, 1024);
+      parsed = extractJson(retry.rawContent);
+
+      if (!parsed?.hooks || !Array.isArray(parsed.hooks) || parsed.hooks.length === 0) {
+        console.error("[detect-hooks] Retry also failed. Content:", retry.rawContent.slice(0, 300));
+        throw new Error("Gemini returned no hooks after retry");
+      }
     }
 
     const sortedHooks = parsed.hooks
