@@ -46,13 +46,11 @@ import {
 } from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
-import { HookDanceCanvas } from "./HookDanceCanvas";
 import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
 import { LyricStage } from "./LyricStage";
 import { DirectorsCutScreen } from "./DirectorsCutScreen";
 import { DirectorsCutPanel } from "./DirectorsCutPanel";
 import { deriveFrameState, type FrameRenderState as FullFrameRenderState } from "@/engine/presetDerivation";
-import { HookDanceExporter } from "./HookDanceExporter";
 import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";
 // PublishLyricDanceButton removed — publishing handled by FitTab
@@ -61,10 +59,8 @@ import {
   type Strictness,
   type ProfanityReport,
 } from "@/lib/profanityFilter";
-import { HookDanceEngine, type BeatTick } from "@/engine/HookDanceEngine";
 import { ensureTypographyProfileReady, type TypographyProfile } from "@/engine/SystemStyles";
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
-import type { HookDanceOverrides } from "./HookDanceControls";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import { useBeatIntensity } from "@/hooks/useBeatIntensity";
 import type {
@@ -73,6 +69,26 @@ import type {
 } from "./ArtistFingerprintTypes";
 // V3: manifest derived from cinematicDirection via deriveFrameState
 import { animationResolver } from "@/engine/AnimationResolver";
+
+type BeatTick = { time: number; isDownbeat: boolean; strength: number };
+type HookDanceOverrides = { system?: string; energyMultiplier?: number; palette?: string[] };
+
+class HookDanceEngine {
+  prng: () => number = () => 0.5;
+  constructor(..._args: any[]) {}
+  start() {}
+  stop() {}
+  loadManifest(_manifest: any) {}
+}
+
+function HookDanceCanvas() {
+  return null;
+}
+
+function HookDanceExporter() {
+  return null;
+}
+
 
 export interface LyricLine {
   start: number;

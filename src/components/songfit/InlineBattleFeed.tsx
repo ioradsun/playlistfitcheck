@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineBattle } from "@/components/hookfit/InlineBattle";
-import type { HookData } from "@/hooks/useHookCanvas";
+import type { HookInfo } from "@/components/hookfit/InlineBattle";
 
 interface Props {
   /** Battle page URL like /:artistSlug/:songSlug/:hookSlug */
@@ -87,7 +87,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
     handleTileTap(side);
   }, [handleTileTap]);
 
-  const handleHooksLoaded = useCallback((a: HookData, b: HookData | null) => {
+  const handleHooksLoaded = useCallback((a: HookInfo, b: HookInfo | null) => {
     setHooksReady(true);
   }, []);
 

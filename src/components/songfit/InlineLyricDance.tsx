@@ -28,6 +28,10 @@ interface Props {
   bootMode?: "minimal" | "full";
   albumArtUrl?: string;
   isActive?: boolean;
+  /** Constrain playback to start at this time (seconds). Used by hook battles. */
+  regionStart?: number;
+  /** Constrain playback to end at this time (seconds). Used by hook battles. */
+  regionEnd?: number;
   onPlay?: () => void;
   reactionData?: Record<string, { line: Record<number, number>; total: number }>;
 }
@@ -49,7 +53,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, onPlay, reactionData: reactionDataProp }: Props,
+  { lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, regionStart, regionEnd, onPlay, reactionData: reactionDataProp }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
@@ -201,9 +205,16 @@ function InlineLyricDanceInner(
     };
   }, [reactionData, fetchedData?.lyrics]);
 
+  // When data is available, apply region constraints
+  const playerData = useMemo(() => {
+    if (!fetchedData) return null;
+    if (regionStart == null && regionEnd == null) return fetchedData;
+    return { ...fetchedData, region_start: regionStart, region_end: regionEnd };
+  }, [fetchedData, regionStart, regionEnd]);
+
   // ── Player lifecycle ──────────────────────────────────────────────────
   const { player, playerReady, data } = useLyricDancePlayer(
-    fetchedData, canvasRef, textCanvasRef, containerRef, { bootMode },
+    playerData, canvasRef, textCanvasRef, containerRef, { bootMode },
   );
 
   // Apply transcript buffered before player was ready
