@@ -16,6 +16,7 @@ import { detectSections, type SectionRole, type TimestampedLine } from "@/engine
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
+import { PipelineDebugPanel } from "./PipelineDebugPanel";
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { mergeSectionOverrides, type SectionOverride, type SectionOverrides } from "@/lib/mergeSectionOverrides";
 import type { SceneContextResult } from "@/lib/sceneContexts";
