@@ -56,12 +56,17 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const [hookB, setHookB] = useState<HookInfo | null>(null);
   const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const fetchRef = useRef(0);
 
   useImperativeHandle(ref, () => ({}), []);
 
-  // ── Fetch hooks + lyric dance data ──────────────────────────
+  // ── Fetch hooks + lyric dance data (always fresh) ──────────
   useEffect(() => {
     if (!battleId) return;
+    const fetchId = ++fetchRef.current;
+    setHookA(null);
+    setHookB(null);
+    setDanceData(null);
     setLoading(true);
 
     (async () => {
