@@ -21,6 +21,7 @@ export type BattleMode =
 
 export interface HookInfo {
   id: string;
+  user_id?: string;
   hook_start: number;
   hook_end: number;
   hook_label: string | null;
@@ -28,8 +29,6 @@ export interface HookInfo {
   battle_position: number;
   artist_slug: string;
   song_slug: string;
-  hook_slug: string;
-  vote_count: number;
   palette?: string[];
 }
 
@@ -45,7 +44,7 @@ interface Props {
   activePlaying: "a" | "b" | null;
 }
 
-const HOOK_SELECT = "id,hook_start,hook_end,hook_label,hook_phrase,battle_position,artist_slug,song_slug,hook_slug,vote_count,palette";
+const HOOK_SELECT = "id,user_id,hook_start,hook_end,hook_label,hook_phrase,battle_position,artist_slug,song_slug,palette";
 
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
   battleId, mode, votedSide, onHookEnd, onHooksLoaded,
@@ -65,28 +64,42 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
     (async () => {
       // 1. Fetch hook rows
-      const { data: hooks } = await supabase
+      const { data: hooks, error: hookErr } = await supabase
         .from("shareable_hooks" as any)
         .select(HOOK_SELECT)
         .eq("battle_id", battleId)
         .order("battle_position", { ascending: true });
 
+      console.log("[InlineBattle] hooks query:", { battleId, hooks: hooks?.length ?? 0, error: hookErr?.message });
+
       if (!hooks || hooks.length === 0) { setLoading(false); return; }
 
-      const rawHooks = hooks as unknown as HookInfo[];
+      const rawHooks = hooks as unknown as (HookInfo & { user_id?: string })[];
       const a = rawHooks.find(h => h.battle_position === 1) || rawHooks[0];
       const b = rawHooks.find(h => h.id !== a.id) || null;
       setHookA(a);
       setHookB(b);
       onHooksLoaded?.(a, b);
 
-      // 2. Fetch the lyric dance for this song
-      const { data: dances } = await supabase
+      console.log("[InlineBattle] hookA:", { id: a.id, start: a.hook_start, end: a.hook_end, artist: a.artist_slug, song: a.song_slug });
+
+      // 2. Fetch the lyric dance for this song (match by user + song slug)
+      let query = supabase
         .from("shareable_lyric_dances" as any)
         .select(LYRIC_DANCE_COLUMNS)
-        .eq("artist_slug", a.artist_slug)
         .eq("song_slug", a.song_slug)
         .limit(1);
+
+      // Prefer matching by user_id if available
+      if ((a as any).user_id) {
+        query = query.eq("user_id", (a as any).user_id);
+      } else {
+        query = query.eq("artist_slug", a.artist_slug);
+      }
+
+      const { data: dances, error: danceErr } = await query;
+
+      console.log("[InlineBattle] dance query:", { found: dances?.length ?? 0, error: danceErr?.message, hasCinematic: !!dances?.[0]?.cinematic_direction });
 
       if (dances && dances.length > 0) {
         setDanceData(dances[0] as unknown as LyricDanceData);
@@ -126,13 +139,21 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   }, [mode, hookA, hookB]);
 
   // ── Loading / no data ──────────────────────────────────────
-  if (loading || !hookA || !danceData) {
+  if (loading || !hookA) {
     return (
       <div className="w-full bg-black/30 animate-pulse" style={{ height: "320px" }}>
         <div className="flex h-full gap-1 p-1">
           <div className="flex-1 rounded-lg bg-white/[0.03]" />
           <div className="flex-1 rounded-lg bg-white/[0.03]" />
         </div>
+      </div>
+    );
+  }
+
+  if (!danceData) {
+    return (
+      <div className="w-full bg-black/50 flex items-center justify-center text-muted-foreground text-xs font-mono" style={{ height: "320px" }}>
+        No lyric dance found for this song
       </div>
     );
   }
@@ -152,13 +173,14 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           onClick={() => onTileTap?.("a")}
         >
           <InlineLyricDance
+            key={`battle-a-${hookA.id}`}
             lyricDanceId={danceData.id}
             lyricDanceUrl={danceUrl}
             songTitle={danceData.song_name}
             artistName={danceData.artist_name || ""}
             prefetchedData={danceData}
             bootMode="full"
-            isActive={isActive && activePlaying !== "b"}
+            isActive={isActive && activePlaying === "a"}
             regionStart={hookA.hook_start}
             regionEnd={hookA.hook_end}
           />
@@ -186,13 +208,14 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             onClick={() => onTileTap?.("b")}
           >
             <InlineLyricDance
+              key={`battle-b-${hookB.id}`}
               lyricDanceId={danceData.id}
               lyricDanceUrl={danceUrl}
               songTitle={danceData.song_name}
               artistName={danceData.artist_name || ""}
               prefetchedData={danceData}
               bootMode="full"
-              isActive={isActive && activePlaying !== "a"}
+              isActive={isActive && activePlaying === "b"}
               regionStart={hookB.hook_start}
               regionEnd={hookB.hook_end}
             />
