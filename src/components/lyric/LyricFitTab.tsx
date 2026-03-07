@@ -59,6 +59,13 @@ export interface PipelineStages {
   transcript: PipelineStageStatus;
 }
 
+export interface PipelineStageTimes {
+  rhythm?: { startedAt?: number; durationMs?: number };
+  sections?: { startedAt?: number; durationMs?: number };
+  cinematic?: { startedAt?: number; durationMs?: number };
+  transcript?: { startedAt?: number; durationMs?: number };
+}
+
 interface Props {
   initialLyric?: any;
   onProjectSaved?: () => void;
