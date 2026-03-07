@@ -950,6 +950,7 @@ export function LyricFitTab({
     
     setActiveTab("lyrics");
     setPipelineStages(prev => ({ ...prev, transcript: "running" }));
+    markStageStart("transcript");
     startBeatAnalysis(file);
   }, [startBeatAnalysis]);
 
