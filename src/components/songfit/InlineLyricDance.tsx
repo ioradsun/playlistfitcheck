@@ -308,8 +308,8 @@ function InlineLyricDanceInner(
   // ── Battle mode: bare canvas, no chrome ────────────────────────────────
   if (isBattleMode) {
     return (
-      <div className="w-full h-full overflow-hidden bg-black relative">
-        <div ref={containerRef} className="absolute inset-0 w-full h-full overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden bg-black">
+        <div ref={containerRef} className="absolute inset-0 overflow-hidden">
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
             style={{ display: playerReady ? "block" : "none" }} />
           <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
