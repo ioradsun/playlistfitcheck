@@ -267,6 +267,12 @@ export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipel
           <div className="grid grid-cols-2 gap-1">
             {(Object.keys(STAGE_LABELS) as (keyof PipelineStages)[]).map((key) => {
               const status = pipelineStages[key];
+              const timing = pipelineStageTimes?.[key];
+              const durationLabel = timing?.durationMs != null
+                ? `${(timing.durationMs / 1000).toFixed(1)}s`
+                : status === "running" && timing?.startedAt
+                  ? "…"
+                  : null;
               return (
                 <div key={key} className="flex items-center gap-1.5 text-[11px]">
                   <span className={cn(
@@ -276,6 +282,11 @@ export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipel
                   <span className={cn("font-mono", status === "done" ? "text-foreground" : "text-muted-foreground")}>
                     {STAGE_LABELS[key]}
                   </span>
+                  {durationLabel && (
+                    <span className="text-[9px] font-mono text-muted-foreground/70 ml-auto">
+                      {durationLabel}
+                    </span>
+                  )}
                 </div>
               );
             })}
