@@ -990,6 +990,7 @@ export function LyricFitTab({
       setFitProgress(100);
       setFitStageLabel("Ready");
       setPipelineStages(prev => ({ ...prev, transcript: "done" }));
+      markStageDone("transcript");
       return;
     }
     if (hasRunning) {
