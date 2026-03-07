@@ -1115,6 +1115,7 @@ export function LyricFitTab({
           fitProgress={fitProgress}
           fitStageLabel={fitStageLabel}
           pipelineStages={pipelineStages}
+          showDebug
         />
       )}
 
