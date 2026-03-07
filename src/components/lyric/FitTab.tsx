@@ -835,7 +835,6 @@ export function FitTab({
               className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
               title="Watch Dance"
             >
-              <ExternalLink size={14} />
               Watch
             </a>
             <button
