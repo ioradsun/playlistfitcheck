@@ -865,6 +865,7 @@ export function LyricFitTab({
 
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
       setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
+      markStageDone("cinematic");
       setFitProgress(prev => Math.max(prev, 85));
     } catch (err) {
       console.error("[Pipeline] Cinematic direction failed:", err);
