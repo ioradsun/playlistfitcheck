@@ -57,6 +57,7 @@ export interface PipelineStages {
   cinematic: PipelineStageStatus;
   transcript: PipelineStageStatus;
 }
+export type PipelineStageTimes = Record<keyof PipelineStages, { startedAt?: number; durationMs?: number }>;
 
 interface Props {
   initialLyric?: any;
