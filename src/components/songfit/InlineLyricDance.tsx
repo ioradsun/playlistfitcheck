@@ -305,6 +305,27 @@ function InlineLyricDanceInner(
   const isWaitingForPlayer =
     loading || !fetchedData || !fetchedData.cinematic_direction || Array.isArray(fetchedData.cinematic_direction);
 
+  // ── Battle mode: bare canvas, no chrome ────────────────────────────────
+  if (isBattleMode) {
+    return (
+      <div className="w-full h-full overflow-hidden bg-black relative">
+        <div ref={containerRef} className="absolute inset-0 w-full h-full overflow-hidden">
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
+            style={{ display: playerReady ? "block" : "none" }} />
+          <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ display: "none" }} />
+        </div>
+        {!playerReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Standard mode: full card with cover, playbar, title ────────────────
+
   return (
     <div className="w-full overflow-hidden bg-black rounded-xl relative" style={{ height: 320 }}>
       {/* Canvas area — matches tier 1 height exactly */}
