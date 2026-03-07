@@ -72,6 +72,10 @@ export interface LyricDanceData {
   section_images?: string[];
   auto_palettes?: string[][];
   scene_context?: SceneContext | null;
+  /** Optional: constrain playback to this time region (seconds). Used by hook battles. */
+  region_start?: number;
+  /** Optional: constrain playback to end at this time region (seconds). Used by hook battles. */
+  region_end?: number;
 }
 
 export interface LiveDebugState {
@@ -1432,8 +1436,9 @@ export class LyricDancePlayer {
     }
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    if (this.audio.currentTime <= 0) {
-      this.audio.currentTime = this.songStartSec;
+    const playStart = this.data.region_start ?? this.songStartSec;
+    if (this.audio.currentTime <= 0 || this.data.region_start != null) {
+      this.audio.currentTime = playStart;
     }
   }
 
@@ -2082,7 +2087,18 @@ export class LyricDancePlayer {
       this.ctx.clearRect(0, 0, this.width, this.height);
 
       const rawTime = this.audio.currentTime;
-      const smoothedTime = this.smoothAudioTime(rawTime);
+
+      // Region loop: when audio passes regionEnd, seek back to regionStart
+      if (this.data.region_end != null && this.data.region_start != null) {
+        if (rawTime >= this.data.region_end || rawTime < this.data.region_start - 0.5) {
+          this.audio.currentTime = this.data.region_start;
+          this.conductor?.resetCursor();
+          this._beatCursor = 0;
+          this._lastBeatIndex = -1;
+        }
+      }
+
+      const smoothedTime = this.smoothAudioTime(this.audio.currentTime);
 
       // ═══ V2: Get beat state ONCE from conductor ═══
       const beatState = this.conductor?.getState(smoothedTime) ?? null;
@@ -3631,8 +3647,11 @@ export class LyricDancePlayer {
 
   private buildScenePayload(): ScenePayload {
     const lines = this.data.lyrics ?? [];
-    const songStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
-    const songEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
+    const fullStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
+    const fullEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
+    // Region override: constrain to hook window if specified
+    const songStart = this.data.region_start != null ? this.data.region_start : fullStart;
+    const songEnd = this.data.region_end != null ? this.data.region_end : fullEnd;
 
     const payload = {
       lines,

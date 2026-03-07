@@ -11,7 +11,6 @@ import { getEffect, resolveEffectKey, type EffectState } from "@/engine/EffectRe
 import { drawSystemBackground } from "@/engine/SystemBackgrounds";
 import { computeFitFontSize, computeStackedLayout } from "@/engine/SystemStyles";
 import type { LyricLine } from "./LyricDisplay";
-import type { BeatTick } from "@/engine/HookDanceEngine";
 
 // ── System definitions ──────────────────────────────────────────────────────
 
@@ -48,6 +47,12 @@ function deriveSpec(baseSpec: PhysicsSpec, system: SystemKey): PhysicsSpec {
 }
 
 // ── Props ───────────────────────────────────────────────────────────────────
+
+interface BeatTick {
+  time: number;
+  isDownbeat: boolean;
+  strength: number;
+}
 
 interface Props {
   baseSpec: PhysicsSpec;

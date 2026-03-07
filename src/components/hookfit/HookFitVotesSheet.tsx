@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { User, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import type { HookData } from "@/hooks/useHookCanvas";
+import type { HookInfo } from "./InlineBattle";
 
 interface VoterRow {
   id: string;
@@ -14,8 +14,8 @@ interface VoterRow {
 
 interface Props {
   battleId: string | null;
-  hookA: HookData | null;
-  hookB: HookData | null;
+  hookA: HookInfo | null;
+  hookB: HookInfo | null;
   voteCountA: number;
   voteCountB: number;
   votedHookId: string | null;

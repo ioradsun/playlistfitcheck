@@ -7,10 +7,26 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
-import type { ConstellationNode } from "@/hooks/useHookCanvas";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 
 const RIVER_ROW_COUNT = 4;
+
+interface ConstellationNode {
+  id: string;
+  text: string;
+  submittedAt: number;
+  seedX: number;
+  seedY: number;
+  x: number;
+  y: number;
+  driftSpeed: number;
+  driftAngle: number;
+  phase: "river" | "constellation" | "center";
+  phaseStartTime: number;
+  riverRowIndex: number;
+  currentSize: number;
+  baseOpacity: number;
+}
 
 interface Props {
   danceId: string;

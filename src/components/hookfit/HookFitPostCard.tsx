@@ -21,10 +21,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { InlineBattle, type BattleMode, type InlineBattleHandle } from "./InlineBattle";
+import { InlineBattle, type BattleMode, type HookInfo } from "./InlineBattle";
 import type { HookFitPost } from "./types";
-import type { HookData, ConstellationNode } from "@/hooks/useHookCanvas";
-import { RIVER_ROWS } from "@/hooks/useHookCanvas";
 import { getSessionId } from "@/lib/sessionId";
 import { mulberry32, hashSeed } from "@/engine/PhysicsIntegrator";
 import { useGlobalAudio, audioKey } from "./useGlobalAudio";
@@ -57,8 +55,8 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
 
   // ── Card state machine ──────────────────────────────────────────
   const [cardState, setCardState] = useState<CardState>("challenge");
-  const [hookA, setHookA] = useState<HookData | null>(null);
-  const [hookB, setHookB] = useState<HookData | null>(null);
+  const [hookA, setHookA] = useState<HookInfo | null>(null);
+  const [hookB, setHookB] = useState<HookInfo | null>(null);
   const [playbackOrder, setPlaybackOrder] = useState<["a", "b"] | ["b", "a"]>(["a", "b"]);
   const [votedSide, setVotedSide] = useState<"a" | "b" | null>(null);
   const [voteCountA, setVoteCountA] = useState(0);
@@ -66,7 +64,6 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
   const [liveComments, setLiveComments] = useState<{ id: string; text: string; name: string }[]>([]);
   const passLoggedRef = useRef(false);
   const userIdRef = useRef<string | null | undefined>(undefined);
-  const battleRef = useRef<InlineBattleHandle>(null);
 
   // ── Derive activePlaying from global audio context ──────────────
   const myKeyA = audioKey(post.battle_id, "a");
@@ -86,7 +83,7 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
   }, [post.battle_id]);
 
   // ── Hooks loaded callback ───────────────────────────────────────
-  const handleHooksLoaded = useCallback((a: HookData, b: HookData | null) => {
+  const handleHooksLoaded = useCallback((a: HookInfo, b: HookInfo | null) => {
     setHookA(a);
     setHookB(b);
     setVoteCountA(a.vote_count || 0);
@@ -118,59 +115,7 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
     };
     checkVote();
 
-    // Load existing comments and seed constellation
-    const loadComments = async () => {
-      const hookIds = [a.id, b?.id].filter(Boolean);
-      const { data: commentsData } = await supabase
-        .from("hook_comments" as any)
-        .select("id, text, submitted_at")
-        .in("hook_id", hookIds)
-        .order("submitted_at", { ascending: true })
-        .limit(50);
-      if (!commentsData || commentsData.length === 0) return;
 
-      const comments = commentsData as any[];
-      // Show in text list
-      setLiveComments(comments.map((c: any) => ({ id: c.id, text: c.text, name: "FMLY" })));
-
-      // Build constellation nodes
-      const now = Date.now();
-      const nodes: ConstellationNode[] = comments.map((c: any) => {
-        const rng = mulberry32(hashSeed(c.id));
-        const seedX = 0.1 + rng() * 0.8;
-        const seedY = 0.1 + rng() * 0.8;
-        const driftSpeed = 0.008 + rng() * 0.012;
-        const driftAngle = rng() * Math.PI * 2;
-        const riverRowIndex = Math.floor(rng() * RIVER_ROWS.length);
-        const ts = new Date(c.submitted_at).getTime();
-        return {
-          id: c.id, text: c.text, submittedAt: ts,
-          seedX, seedY, x: seedX, y: seedY,
-          driftSpeed, driftAngle,
-          phase: "river" as ConstellationNode["phase"],
-          phaseStartTime: now,
-          riverRowIndex,
-          currentSize: 11,
-          baseOpacity: 0.05,
-        };
-      });
-
-      // Wait a tick for battleRef to be populated
-      setTimeout(() => {
-        const handle = battleRef.current;
-        if (handle) {
-          // Only populate the voted side; if no vote yet, skip
-          if (votedSide === "a") {
-            handle.constellationRefA.current = [...nodes];
-          } else if (votedSide === "b") {
-            handle.constellationRefB.current = nodes.map(n => ({ ...n }));
-          }
-          handle.riverOffsetsRefA.current = [0, 0, 0, 0];
-          handle.riverOffsetsRefB.current = [0, 0, 0, 0];
-        }
-      }, 100);
-    };
-    loadComments();
   }, [post.battle_id, votedSide]);
 
   // ── Derive battle mode for InlineBattle ─────────────────────────
@@ -403,7 +348,6 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
         }}
       >
         <InlineBattle
-          ref={battleRef}
           battleId={post.battle_id}
           mode={getBattleMode()}
           votedSide={votedSide}
@@ -639,39 +583,6 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
 
               // Add to local display
               setLiveComments((prev) => [...prev, { id: commentId, text, name }]);
-
-              // Push comment onto the canvas constellation
-              const handle = battleRef.current;
-              if (handle) {
-                const rng = mulberry32(hashSeed(commentId));
-                const seedX = 0.1 + rng() * 0.8;
-                const seedY = 0.1 + rng() * 0.8;
-                const driftSpeed = 0.008 + rng() * 0.012;
-                const driftAngle = rng() * Math.PI * 2;
-                const riverRowIndex = Math.floor(rng() * RIVER_ROWS.length);
-
-                const node: ConstellationNode = {
-                  id: commentId, text, submittedAt: Date.now(),
-                  seedX, seedY,
-                  x: seedX, y: seedY,
-                  driftSpeed, driftAngle,
-                  phase: "center",
-                  phaseStartTime: Date.now(),
-                  riverRowIndex,
-                  currentSize: 16,
-                  baseOpacity: 0.06,
-                };
-                // Push only to the voted side's canvas
-                if (votedSide === "a") {
-                  handle.constellationRefA.current.push(node);
-                } else if (votedSide === "b") {
-                  handle.constellationRefB.current.push(node);
-                } else {
-                  // No vote yet — push to both as fallback
-                  handle.constellationRefA.current.push(node);
-                  handle.constellationRefB.current.push({ ...node });
-                }
-              }
 
               // Persist to hook_comments
               const targetHookId = hookA?.id;
