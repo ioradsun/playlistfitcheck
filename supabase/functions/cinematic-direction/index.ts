@@ -545,8 +545,8 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
     }
   }
 
-  if (v.wordDirectives.length < 10 || v.wordDirectives.length > 30) {
-    errors.push(`wordDirectives has ${v.wordDirectives.length} entries (want 15-25)`);
+  if (v.wordDirectives.length > 30) {
+    errors.push(`wordDirectives has ${v.wordDirectives.length} entries (max 30)`);
   }
 
   for (const wd of v.wordDirectives) {
