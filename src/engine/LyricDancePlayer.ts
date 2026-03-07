@@ -4658,7 +4658,7 @@ export class LyricDancePlayer {
             if (wi < group.words.length - 1) {
               const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
               if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-              totalLineW += mCtx.measureText(' ').width * 1.15;
+              totalLineW += Math.max(mCtx.measureText(' ').width, fs * 0.25) * 1.15;
             }
           }
 
@@ -4723,7 +4723,7 @@ export class LyricDancePlayer {
                 if (i < line.words.length - 1) {
                   const spaceStr = `400 ${fs}px ${family}`;
                   if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-                  lineW += mCtx.measureText(' ').width * 1.15;
+                  lineW += Math.max(mCtx.measureText(' ').width, fs * 0.25) * 1.15;
                 }
               }
 
@@ -4741,7 +4741,7 @@ export class LyricDancePlayer {
                   const fs = Math.round(w.baseFontSize);
                   const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
                   if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-                  cursor += mCtx.measureText(' ').width * 1.15;
+                  cursor += Math.max(mCtx.measureText(' ').width, fs * 0.25) * 1.15;
                 }
               }
 

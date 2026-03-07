@@ -224,6 +224,7 @@ export function computeAllLineLayouts(
   const margin = 60;
   const lineY = Math.round(canvasH * 0.5);
   const SPACE_MULT = 1.15;
+  const MIN_SPACE_RATIO = 0.25; // minimum space = 25% of font size (prevents condensed fonts from merging)
   const result = new Map<string, GroupPosition[]>();
 
   // On portrait, use a narrower effective width to trigger wrapping.
@@ -238,7 +239,8 @@ export function computeAllLineLayouts(
   const getSpaceWidth = (fontSize: number) => {
     const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
     if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
-    return measureCtx.measureText(' ').width;
+    const measured = measureCtx.measureText(' ').width;
+    return Math.max(measured, fontSize * MIN_SPACE_RATIO);
   };
   const wordFontSize = (wm: WordMetaEntry, baseFontSize: number) => {
     const isFiller = isFillerWord(wm.word);
