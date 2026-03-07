@@ -45,7 +45,7 @@ interface Props {
   activePlaying: "a" | "b" | null;
 }
 
-const HOOK_SELECT = "id,hook_start,hook_end,hook_label,hook_phrase,battle_position,artist_slug,song_slug,palette";
+const HOOK_SELECT = "id,hook_start,hook_end,hook_label,hook_phrase,battle_position,artist_slug,song_slug,hook_slug,vote_count,palette";
 
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
   battleId, mode, votedSide, onHookEnd, onHooksLoaded,
