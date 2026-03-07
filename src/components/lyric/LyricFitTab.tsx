@@ -80,8 +80,6 @@ export interface PipelineStages {
   transcript: PipelineStageStatus;
 }
 
-export type PipelineStageTimes = Partial<Record<keyof PipelineStages, { startedAt?: number; durationMs?: number }>>;
-
 interface Props {
   initialLyric?: any;
   onProjectSaved?: () => void;
@@ -183,7 +181,7 @@ export function LyricFitTab({
     return Math.max(audioBuffer?.duration ?? 0, lastLineEnd);
   }, [audioBuffer, timestampedLines]);
 
-  const { sections: detectedSections } = useLyricSections(words, beatGrid, cinematicDirection, audioDurationSec);
+  const { sections: detectedSections } = useLyricSections(words, beatGrid, cinematicDirection, audioDurationSec, audioSections);
   const mergedSections = useMemo(
     () => mergeSectionOverrides(detectedSections, sectionOverrides),
     [detectedSections, sectionOverrides],
