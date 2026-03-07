@@ -953,8 +953,53 @@ async function callScene(
   }
 
   const completion = await resp.json();
+  const finishReason = completion?.choices?.[0]?.finish_reason;
   const raw = String(completion?.choices?.[0]?.message?.content ?? "");
-  const parsed = extractJson(raw);
+
+  if (finishReason === "length") {
+    console.warn("[cinematic-direction] scene response truncated (finish_reason=length), raw length:", raw.length);
+  }
+
+  let parsed = extractJson(raw);
+
+  // If parse failed or response was truncated, retry once
+  if (!parsed || finishReason === "length") {
+    console.warn("[cinematic-direction] scene first attempt failed to parse or was truncated, retrying. Raw preview:", raw.slice(0, 300));
+
+    const retryResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
+          { role: "user", content: userMessage },
+          { role: "user", content: "Your previous response was malformed or truncated. Return ONLY valid JSON with sceneTone, atmosphere, motion, typography, texture, emotionalArc, and sections array. No markdown. No explanation." },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.5,
+        max_tokens: 4000,
+      }),
+    });
+
+    if (retryResp.ok) {
+      const retryCompletion = await retryResp.json();
+      const retryRaw = String(retryCompletion?.choices?.[0]?.message?.content ?? "");
+      const retryParsed = extractJson(retryRaw);
+      if (retryParsed) {
+        parsed = retryParsed;
+      } else {
+        console.error("[cinematic-direction] scene retry also failed to parse. Raw preview:", retryRaw.slice(0, 500));
+      }
+    } else {
+      const retryText = await retryResp.text();
+      console.error("[cinematic-direction] scene retry request failed:", retryResp.status, retryText);
+    }
+  }
+
   if (!parsed) throw { status: 422, message: "Invalid JSON from scene direction AI" };
 
   const result = validateScene(parsed, sectionCount);
