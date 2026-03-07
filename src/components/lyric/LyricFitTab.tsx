@@ -1139,7 +1139,7 @@ export function LyricFitTab({
             hookDetectionRunRef.current = false;
             onNewProject?.();
           }}
-          onHeaderProject={onHeaderProject}
+          onHeaderProject={activeTab === "lyrics" ? onHeaderProject : undefined}
           onSavedId={onSavedId}
           analysisModel={analysisModel}
           transcriptionModel={transcriptionModel}
