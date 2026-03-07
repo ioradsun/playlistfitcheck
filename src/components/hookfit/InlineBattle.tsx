@@ -4,7 +4,7 @@
  * Same cinematic engine as the full lyric dance, just windowed to 10-second hooks.
  */
 
-import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineLyricDance } from "@/components/songfit/InlineLyricDance";
@@ -56,12 +56,17 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const [hookB, setHookB] = useState<HookInfo | null>(null);
   const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const fetchRef = useRef(0);
 
   useImperativeHandle(ref, () => ({}), []);
 
-  // ── Fetch hooks + lyric dance data ──────────────────────────
+  // ── Fetch hooks + lyric dance data (always fresh) ──────────
   useEffect(() => {
     if (!battleId) return;
+    const fetchId = ++fetchRef.current;
+    setHookA(null);
+    setHookB(null);
+    setDanceData(null);
     setLoading(true);
 
     (async () => {
@@ -75,6 +80,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       console.log("[InlineBattle] hooks query:", { battleId, hooks: hooks?.length ?? 0, error: hookErr?.message });
 
       if (!hooks || hooks.length === 0) { setLoading(false); return; }
+      if (fetchId !== fetchRef.current) return; // stale
 
       const rawHooks = hooks as unknown as (HookInfo & { user_id?: string })[];
       const a = rawHooks.find(h => h.battle_position === 1) || rawHooks[0];
@@ -103,6 +109,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
       console.log("[InlineBattle] dance query:", { found: dances?.length ?? 0, error: danceErr?.message, hasCinematic: !!(dances?.[0] as any)?.cinematic_direction });
 
+      if (fetchId !== fetchRef.current) return; // stale
       if (dances && dances.length > 0) {
         setDanceData(dances[0] as unknown as LyricDanceData);
       }
