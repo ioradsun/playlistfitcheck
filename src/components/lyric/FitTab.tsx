@@ -7,17 +7,19 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download, Link, Users, Check } from "lucide-react";
+import { Loader2, RefreshCw, Music, Sparkles, Eye, Palette, Zap, Image, ExternalLink, Download, Link, Users, Check, Bug } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
+import { Button } from "@/components/ui/button";
 import { LyricWaveform } from "./LyricWaveform";
 import { SectionTimeline } from "./SectionTimeline";
 import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
 import { FitExportModal } from "./FitExportModal";
+import { PipelineDebugPanel } from "./PipelineDebugPanel";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricLine, LyricData } from "./LyricDisplay";
