@@ -114,6 +114,7 @@ export function FitTab({
   onAddSection,
   onRemoveSection,
   pipelineStages: pipelineStagesProp,
+  pipelineStageTimes,
 }: Props) {
   const { user } = useAuth();
   const [debugOpen, setDebugOpen] = useState(false);
