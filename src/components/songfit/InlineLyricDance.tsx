@@ -61,7 +61,9 @@ function InlineLyricDanceInner(
   const [fetchError, setFetchError] = useState(false);
   const [muted, setMuted] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
-  const [showCover, setShowCover] = useState(true);
+  // In battle mode (region set), skip cover — player renders immediately
+  const isBattleMode = regionStart != null && regionEnd != null;
+  const [showCover, setShowCover] = useState(!isBattleMode);
   const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>(reactionDataProp ?? {});
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -258,12 +260,12 @@ function InlineLyricDanceInner(
 
   useEffect(() => {
     if (!player || !playerReady) return;
-    if (isVisible) {
+    if (isVisible || isBattleMode) {
       player.play();
     } else {
       player.pause();
     }
-  }, [isVisible, playerReady, player]);
+  }, [isVisible, isBattleMode, playerReady, player]);
 
 
   useEffect(() => {
@@ -271,8 +273,12 @@ function InlineLyricDanceInner(
     if (!isActive) {
       player.setMuted(true);
       setMuted(true);
+    } else if (isBattleMode) {
+      // In battle mode, isActive=true means this side is the active speaker
+      player.setMuted(false);
+      setMuted(false);
     }
-  }, [isActive, player]);
+  }, [isActive, isBattleMode, player]);
 
   // ── Handlers ─────────────────────────────────────────────────────────
 
@@ -334,7 +340,7 @@ function InlineLyricDanceInner(
                   setShowCover(false);
                   if (player) {
                     player.setMuted(false);
-                    player.seek(0);
+                    player.seek(regionStart ?? 0);
                     player.play();
                   }
                   setMuted(false);
