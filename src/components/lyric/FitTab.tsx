@@ -328,15 +328,13 @@ export function FitTab({
   }, []);
 
   // ── Header project ────────────────────────────────────────────────────
-  const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
-  const isAdmin = !!(user?.email && ADMIN_EMAILS.includes(user.email));
   useEffect(() => {
     if (!onHeaderProject) return;
     const title =
       lyricData.title && lyricData.title !== "Unknown" && lyricData.title !== "Untitled"
         ? lyricData.title
         : audioFile.name.replace(/\.[^.]+$/, "");
-    const rightContent = isAdmin && onRetry ? (
+    const rightContent = onRetry ? (
       <button
         onClick={onRetry}
         className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
@@ -347,7 +345,7 @@ export function FitTab({
     ) : undefined;
     onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent });
     return () => onHeaderProject(null);
-  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, isAdmin, onRetry]);
+  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onRetry]);
 // CinematicDirectionCard extracted to top-level — see below FitTab
 
   // ── Live transcript sync ──────────────────────────────────────────────
