@@ -485,6 +485,20 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                       onClick={() => handleToolClick(tool)}
                     >
                       <span>{sidebarCopy.toolLabels[tool.value] || tool.label}</span>
+                      {tool.value === "lyric" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const current = localStorage.getItem("lyricfit-debug") === "true";
+                            localStorage.setItem("lyricfit-debug", String(!current));
+                            window.dispatchEvent(new Event("lyricfit-debug-toggle"));
+                          }}
+                          className="ml-auto p-0.5 rounded hover:bg-sidebar-accent transition-colors"
+                          title="Toggle pipeline debug panel"
+                        >
+                          <Bug size={12} className="text-muted-foreground hover:text-foreground" />
+                        </button>
+                      )}
                     </SidebarMenuButton>
 
                     {isActive && recents.length > 0 && (
