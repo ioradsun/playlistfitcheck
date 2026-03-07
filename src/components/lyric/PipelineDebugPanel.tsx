@@ -253,7 +253,17 @@ export function PipelineDebugPanel({ open, onOpenChange, generationStatus, pipel
               <Button variant="ghost" size="icon" onClick={clearLogs} className="h-7 w-7">
                 <Trash2 size={12} />
               </Button>
-              <Button variant="secondary" size="sm" onClick={handleRetry} className="h-7 text-[10px]">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  handleRetry();
+                }}
+                className="h-7 text-[10px]"
+              >
                 <RefreshCw size={10} />
                 Re-run
               </Button>

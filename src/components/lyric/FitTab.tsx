@@ -346,6 +346,7 @@ export function FitTab({
     const rightContent = onRetry ? (
       <div className="flex items-center gap-1">
         <button
+          type="button"
           onClick={() => setDebugOpen(true)}
           className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
           title="Pipeline Debug"
@@ -353,7 +354,11 @@ export function FitTab({
           <Bug size={12} />
         </button>
         <button
-          onClick={onRetry}
+          type="button"
+          onClick={(event) => {
+            event.preventDefault();
+            onRetry();
+          }}
           className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
         >
           <RefreshCw size={12} />
