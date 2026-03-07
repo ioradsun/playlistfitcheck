@@ -638,6 +638,7 @@ export function LyricFitTab({
 
     setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running", sectionImages: "idle" }));
     setPipelineStages(prev => ({ ...prev, cinematic: "running" }));
+    markStageStart("cinematic");
 
 
     try {
