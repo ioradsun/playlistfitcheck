@@ -262,6 +262,7 @@ export function LyricFitTab({
     setBeatGridDone(true);
     setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
     setPipelineStages(prev => ({ ...prev, rhythm: "done" }));
+    markStageDone("rhythm");
     setFitProgress(prev => Math.max(prev, 35));
 
     // Persist beat_grid so we skip Essentia on next load
