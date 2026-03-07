@@ -575,14 +575,16 @@ export function LyricFitTab({
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
       const sceneContext = resolvedScene ?? null;
-      const sectionsForAI = mergedSectionsRef.current.map((section, i) => ({
+      // Use audioSections (real pipeline with energy curve) over mergedSections (dummy empty-energy fallback)
+      const sectionSource = audioSections.length > 0 ? audioSections : mergedSectionsRef.current;
+      const sectionsForAI = sectionSource.map((section: any, i: number) => ({
         index: i,
         startSec: section.startSec,
         endSec: section.endSec,
         role: section.role,
-        avgEnergy: 0.5,
-        beatDensity: 1.5,
-        confidence: section.confidence,
+        avgEnergy: section.avgEnergy ?? 0.5,
+        beatDensity: section.beatDensity ?? 1.5,
+        confidence: section.confidence ?? 0.5,
         lyrics: sourceLines
           .filter((line) => line.start >= section.startSec - 0.5 && line.end <= section.endSec + 0.5)
           .map((line, lineIndex) => ({ text: line.text, lineIndex })),
