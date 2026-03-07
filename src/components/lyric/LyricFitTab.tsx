@@ -1178,7 +1178,7 @@ export function LyricFitTab({
           onAddSection={handleAddSection}
           onRemoveSection={handleRemoveSection}
           onRetry={retryGeneration}
-          onHeaderProject={onHeaderProject}
+          onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
           onBack={handleBackToLyrics}
           onImageGenerationStatusChange={handleImageGenerationStatusChange}
           cinematicSections={
