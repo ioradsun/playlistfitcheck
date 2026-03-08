@@ -13,6 +13,7 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { InlineLyricDancePlaybar } from "./InlineLyricDancePlaybar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
+import { type DanceUpdatePayload, type ReactionInsertPayload, useRealtimeFeedHub } from "./RealtimeFeedHub";
 
 export interface InlineLyricDanceHandle {
   getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;
@@ -70,6 +71,7 @@ function InlineLyricDanceInner(
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const pendingRef = useRef<{ lines: any[]; words?: any[] | null } | null>(null);
+  const realtimeHub = useRealtimeFeedHub();
 
   // ── Fetch (skipped when prefetchedData provided) ──────────────────────
   useEffect(() => {
@@ -91,6 +93,18 @@ function InlineLyricDanceInner(
   // Realtime — only when we own the fetch (no prefetchedData)
   useEffect(() => {
     if (prefetchedData || !lyricDanceId) return;
+    if (realtimeHub) {
+      return realtimeHub.subscribeDance(lyricDanceId, (payload: DanceUpdatePayload) => {
+        const next = payload.new;
+        if (!next) return;
+        setFetchedData(prev => prev ? {
+          ...prev,
+          ...(next.lyrics && { lyrics: next.lyrics }),
+          ...(next.words !== undefined && { words: next.words }),
+        } : prev);
+      });
+    }
+
     const ch = supabase
       .channel(`inline-dance-${lyricDanceId}`)
       .on("postgres_changes", {
@@ -105,8 +119,8 @@ function InlineLyricDanceInner(
         } : prev);
       })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [lyricDanceId, !!prefetchedData]);
+    return () => { void supabase.removeChannel(ch); };
+  }, [lyricDanceId, prefetchedData, realtimeHub]);
 
 
   useEffect(() => {
@@ -138,6 +152,30 @@ function InlineLyricDanceInner(
   // Realtime reactions
   useEffect(() => {
     if (reactionDataProp || !fetchedData?.id) return;
+
+    const applyReactionPayload = (payload: ReactionInsertPayload) => {
+      const emoji = payload.new?.emoji;
+      const line_index = payload.new?.line_index;
+      if (!emoji) return;
+      setReactionData(prev => {
+        const updated = { ...prev };
+        if (!updated[emoji]) updated[emoji] = { line: {}, total: 0 };
+        updated[emoji] = {
+          ...updated[emoji],
+          total: updated[emoji].total + 1,
+          line: {
+            ...updated[emoji].line,
+            ...(line_index != null ? { [line_index]: (updated[emoji].line[line_index] ?? 0) + 1 } : {}),
+          },
+        };
+        return updated;
+      });
+    };
+
+    if (realtimeHub && !prefetchedData) {
+      return realtimeHub.subscribeReactions(fetchedData.id, applyReactionPayload);
+    }
+
     const channel = supabase
       .channel(`inline-reactions-${fetchedData.id}`)
       .on("postgres_changes", {
@@ -145,24 +183,11 @@ function InlineLyricDanceInner(
         table: "lyric_dance_reactions",
         filter: `dance_id=eq.${fetchedData.id}`,
       }, (payload: any) => {
-        const { emoji, line_index } = payload.new;
-        setReactionData(prev => {
-          const updated = { ...prev };
-          if (!updated[emoji]) updated[emoji] = { line: {}, total: 0 };
-          updated[emoji] = {
-            ...updated[emoji],
-            total: updated[emoji].total + 1,
-            line: {
-              ...updated[emoji].line,
-              ...(line_index != null ? { [line_index]: (updated[emoji].line[line_index] ?? 0) + 1 } : {}),
-            },
-          };
-          return updated;
-        });
+        applyReactionPayload(payload as ReactionInsertPayload);
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchedData?.id, reactionDataProp]);
+    return () => { void supabase.removeChannel(channel); };
+  }, [fetchedData?.id, prefetchedData, reactionDataProp, realtimeHub]);
 
   const topReaction = useMemo(() => {
     if (!reactionData || !fetchedData?.lyrics) return null;
