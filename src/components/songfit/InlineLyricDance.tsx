@@ -38,14 +38,22 @@ interface Props {
 }
 
 // Shared IntersectionObserver across all embedded players
-type VisibilityListener = (visible: boolean) => void;
+type VisibilityState = "visible" | "near" | "far";
+type VisibilityListener = (visibility: VisibilityState) => void;
 const visibilityListeners = new Map<Element, VisibilityListener>();
 let sharedIO: IntersectionObserver | null = null;
 function getSharedIO() {
   if (!sharedIO) {
     sharedIO = new IntersectionObserver(
       (entries) => {
-        for (const e of entries) visibilityListeners.get(e.target)?.(e.isIntersecting && e.intersectionRatio > 0.2);
+        for (const e of entries) {
+          const visibility: VisibilityState = !e.isIntersecting
+            ? "far"
+            : e.intersectionRatio > 0.2
+              ? "visible"
+              : "near";
+          visibilityListeners.get(e.target)?.(visibility);
+        }
       },
       { threshold: [0, 0.2, 0.6], rootMargin: "180px" },
     );
@@ -61,7 +69,8 @@ function InlineLyricDanceInner(
   const [loading, setLoading] = useState(!prefetchedData);
   const [fetchError, setFetchError] = useState(false);
   const [muted, setMuted] = useState(true);
-  const [isVisible, setIsVisible] = useState(false);
+  const [visibility, setVisibility] = useState<VisibilityState>("far");
+  const [playerEvicted, setPlayerEvicted] = useState(false);
   // In battle mode (region set), skip cover — player renders immediately
   const isBattleMode = regionStart != null && regionEnd != null;
   const [showCover, setShowCover] = useState(!isBattleMode);
@@ -70,6 +79,7 @@ function InlineLyricDanceInner(
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
+  const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<{ lines: any[]; words?: any[] | null } | null>(null);
   const realtimeHub = useRealtimeFeedHub();
 
@@ -234,11 +244,12 @@ function InlineLyricDanceInner(
 
   // When data is available, apply region constraints
   const playerData = useMemo(() => {
+    if (playerEvicted) return null;
     const base = fetchedData;
     if (!base) return null;
     if (regionStart == null && regionEnd == null) return base;
     return { ...base, region_start: regionStart, region_end: regionEnd };
-  }, [fetchedData, regionStart, regionEnd]);
+  }, [fetchedData, regionStart, regionEnd, playerEvicted]);
 
   // ── Player lifecycle ──────────────────────────────────────────────────
   const { player, playerReady, data } = useLyricDancePlayer(
@@ -278,10 +289,37 @@ function InlineLyricDanceInner(
     const el = containerRef.current;
     if (!el) return;
     const io = getSharedIO();
-    visibilityListeners.set(el, setIsVisible);
+    visibilityListeners.set(el, setVisibility);
     io.observe(el);
     return () => { visibilityListeners.delete(el); io.unobserve(el); };
   }, [data]);
+
+  useEffect(() => {
+    if (visibility === "far") {
+      if (farTimerRef.current) return;
+      farTimerRef.current = setTimeout(() => {
+        farTimerRef.current = null;
+        setPlayerEvicted(true);
+        setShowCover(true);
+      }, 3000);
+      return;
+    }
+
+    if (farTimerRef.current) {
+      clearTimeout(farTimerRef.current);
+      farTimerRef.current = null;
+    }
+
+    setPlayerEvicted((prev) => (prev ? false : prev));
+  }, [visibility]);
+
+  useEffect(() => {
+    return () => {
+      if (!farTimerRef.current) return;
+      clearTimeout(farTimerRef.current);
+      farTimerRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!player || !playerReady) return;
@@ -296,12 +334,12 @@ function InlineLyricDanceInner(
         player.setMuted(true);
         setMuted(true);
       }
-    } else if (isVisible) {
+    } else if (visibility === "visible") {
       player.play();
     } else {
       player.pause();
     }
-  }, [isVisible, isBattleMode, isActive, playerReady, player]);
+  }, [visibility, isBattleMode, isActive, playerReady, player]);
 
 
   useEffect(() => {
