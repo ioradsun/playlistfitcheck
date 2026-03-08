@@ -149,6 +149,26 @@ async function generateImage(prompt: string, apiKey: string): Promise<string | n
   return imageUrl;
 }
 
+async function triggerPreviewPrecompute(sbUrl: string, sbKey: string, lyricDanceId: string): Promise<void> {
+  try {
+    const resp = await fetch(`${sbUrl}/functions/v1/precompute-dance-preview`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sbKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ dance_id: lyricDanceId }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error(`[section-images] preview precompute failed ${resp.status}: ${text}`);
+    }
+  } catch (error) {
+    console.error("[section-images] preview precompute invocation failed", error);
+  }
+}
+
 async function uploadBase64ToStorage(
   supabase: any,
   base64DataUri: string,
@@ -220,7 +240,7 @@ serve(async (req) => {
 
     const existingImages = danceRow?.section_images;
     if (!force && Array.isArray(existingImages) && existingImages.length > 0 && existingImages.every((url: string) => !!url)) {
-      
+      await triggerPreviewPrecompute(sbUrl, sbKey, lyric_dance_id);
       return new Response(
         JSON.stringify({ success: true, cached: true, section_images: existingImages, urls: existingImages }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -291,6 +311,8 @@ serve(async (req) => {
 
       if (updateError) {
         // DB update error
+      } else {
+        await triggerPreviewPrecompute(sbUrl, sbKey, lyric_dance_id);
       }
     }
 

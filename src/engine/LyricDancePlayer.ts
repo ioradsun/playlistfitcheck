@@ -72,6 +72,9 @@ export interface LyricDanceData {
   section_images?: string[];
   auto_palettes?: string[][];
   scene_context?: SceneContext | null;
+  cover_image_url?: string | null;
+  top_reaction?: { emoji: string; count: number; line_text: string } | null;
+  preview_ready?: boolean;
   /** Optional: constrain playback to start at this time (seconds). Used by hook battles. */
   region_start?: number;
   /** Optional: constrain playback to end at this time (seconds). Used by hook battles. */
