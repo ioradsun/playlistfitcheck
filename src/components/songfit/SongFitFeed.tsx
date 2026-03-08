@@ -15,6 +15,7 @@ import { CardLifecycleProvider, CardLifecycleContext, useCardState } from "./use
 import { useFeedWindow } from "./useFeedWindow";
 import { logImpression } from "@/lib/engagementTracking";
 import { RealtimeFeedHubProvider } from "./RealtimeFeedHub";
+import { consumeFeedPrefetch } from "@/lib/prefetch";
 
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
@@ -199,12 +200,16 @@ export function SongFitFeed() {
 
     if (feedView !== "billboard") {
       setSignalMap({});
-      const { data: allPosts } = await supabase
-        .from("songfit_posts")
-        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
-        .eq("status", "live")
-        .limit(FEED_PAGE_SIZE)
-        .order("created_at", { ascending: false });
+      // Use prefetched data on first mount (one-shot)
+      const prefetched = consumeFeedPrefetch();
+      const { data: allPosts } = prefetched
+        ? await prefetched
+        : await supabase
+            .from("songfit_posts")
+            .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
+            .eq("status", "live")
+            .limit(FEED_PAGE_SIZE)
+            .order("created_at", { ascending: false });
 
       let enriched = (allPosts || []) as unknown as SongFitPost[];
       if (feedView === "now_streaming") enriched = enriched.filter((p) => !!p.spotify_track_id);

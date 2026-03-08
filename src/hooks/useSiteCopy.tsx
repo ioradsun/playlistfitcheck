@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { consumeSiteCopyPrefetch } from "@/lib/prefetch";
 
 // Default copy (fallback if DB not loaded yet)
 const DEFAULT_COPY: SiteCopy = {
@@ -110,11 +111,14 @@ export function SiteCopyProvider({ children }: { children: ReactNode }) {
   const [copy, setCopy] = useState<SiteCopy>(DEFAULT_COPY);
 
   const fetchCopy = async () => {
-    const { data } = await supabase
-      .from("site_copy")
-      .select("copy_json")
-      .limit(1)
-      .single();
+    const prefetched = consumeSiteCopyPrefetch();
+    const { data } = prefetched
+      ? await prefetched
+      : await supabase
+          .from("site_copy")
+          .select("copy_json")
+          .limit(1)
+          .single();
     if (data?.copy_json) {
       const merged = deepMerge(DEFAULT_COPY, data.copy_json as any);
       // When hook_review mode is active, override songfit label/pill dynamically
