@@ -55,7 +55,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!isRecentActive) {
-                    onViewChange("recent");
+                    onViewChange("all");
                   } else if (isLoggedIn) {
                     setRecentDropdownOpen((prev) => !prev);
                   }
