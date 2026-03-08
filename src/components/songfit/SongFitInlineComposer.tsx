@@ -286,7 +286,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     return (
       <div className="border-b border-border/40 px-4 py-5 flex items-center justify-center">
         <p className="text-sm font-medium text-primary animate-pulse">
-          Your hook is live. Let's see if it lands.
+          Your song is live. FMLY notified
         </p>
       </div>
     );
