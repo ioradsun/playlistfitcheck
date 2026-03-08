@@ -40,6 +40,8 @@ interface Props {
   battleId: string;
   mode: BattleMode;
   votedSide?: "a" | "b" | null;
+  voteCount?: number;
+  votePct?: number;
   onHookEnd?: (side: "a" | "b") => void;
   onHooksLoaded?: (hookA: HookInfo, hookB: HookInfo | null) => void;
   onTileTap?: (side: "a" | "b") => void;
@@ -49,7 +51,7 @@ interface Props {
 const HOOK_SELECT = "id,user_id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,battle_position,artist_slug,song_slug,vote_count,palette";
 
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
-  battleId, mode, votedSide, onHookEnd, onHooksLoaded,
+  battleId, mode, votedSide, voteCount, votePct, onHookEnd, onHooksLoaded,
   onTileTap, activePlaying,
 }, ref) {
   const [hookA, setHookA] = useState<HookInfo | null>(null);
@@ -211,6 +213,13 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           {getBorderStyle("a").boxShadow && (
             <div className="absolute inset-0 z-10 pointer-events-none rounded-sm" style={getBorderStyle("a")} />
           )}
+          {votedSide === "a" && voteCount != null && (
+            <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
+              <span className="text-[9px] font-mono text-green-400/90 bg-black/60 backdrop-blur-sm border border-green-500/30 rounded-full px-2 py-0.5">
+                ✓ You + {Math.max(0, (voteCount ?? 1) - 1)} FMLY ({votePct ?? 0}%)
+              </span>
+            </div>
+          )}
         </motion.div>
 
         {/* Hook B */}
@@ -235,6 +244,13 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             />
             {getBorderStyle("b").boxShadow && (
               <div className="absolute inset-0 z-10 pointer-events-none rounded-sm" style={getBorderStyle("b")} />
+            )}
+            {votedSide === "b" && voteCount != null && (
+              <div className="absolute bottom-2 left-2 z-10 pointer-events-none">
+                <span className="text-[9px] font-mono text-green-400/90 bg-black/60 backdrop-blur-sm border border-green-500/30 rounded-full px-2 py-0.5">
+                  ✓ You + {Math.max(0, (voteCount ?? 1) - 1)} FMLY ({votePct ?? 0}%)
+                </span>
+              </div>
             )}
           </motion.div>
         ) : (

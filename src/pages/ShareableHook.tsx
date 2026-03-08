@@ -28,25 +28,33 @@ export default function ShareableHook() {
   const [votedSide, setVotedSide] = useState<"a" | "b" | null>(null);
   const [voteCountA, setVoteCountA] = useState(0);
   const [voteCountB, setVoteCountB] = useState(0);
-  const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [replayingSide, setReplayingSide] = useState<"a" | "b" | null>(null);
   const [lineReactions, setLineReactions] = useState<Record<string, string>>({});
+
+  // Comments
+  const [comments, setComments] = useState<Array<{ id: string; text: string; voted_side: string; user_id?: string; created_at: string }>>([]);
+  const [commentInput, setCommentInput] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  // Per-line emoji — which line is expanded for emoji picking
+  const [activeEmojiLine, setActiveEmojiLine] = useState<string | null>(null); // "a-0", "b-2", etc.
+
   const userIdRef = useRef<string | null | undefined>(undefined);
 
-  const toggleLineReaction = useCallback((side: "a" | "b", lineIndex: number) => {
+  const toggleLineReaction = useCallback((side: "a" | "b", lineIndex: number, emoji: string) => {
     const key = `${side}-${lineIndex}`;
     setLineReactions((prev) => {
-      if (!selectedEmoji) return prev;
       const next = { ...prev };
-      if (next[key] === selectedEmoji) {
+      if (next[key] === emoji) {
         delete next[key];
       } else {
-        next[key] = selectedEmoji;
+        next[key] = emoji;
       }
       return next;
     });
-  }, [selectedEmoji]);
+    setActiveEmojiLine(null); // Close picker after selection
+  }, []);
 
   // Progress tracking
   const [roundProgress, setRoundProgress] = useState(0);
@@ -216,6 +224,46 @@ export default function ShareableHook() {
     return () => clearInterval(interval);
   }, [battleState, hookA, hookB, hook?.battle_id]);
 
+
+  // ── Fetch + poll comments ──────────────────────────────────
+  useEffect(() => {
+    if (battleState !== "results" || !hook?.battle_id) return;
+    const fetchComments = async () => {
+      const { data } = await supabase
+        .from("battle_comments" as any)
+        .select("id, text, voted_side, user_id, created_at")
+        .eq("battle_id", hook.battle_id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (data) setComments(data as any[]);
+    };
+    fetchComments();
+    const interval = setInterval(fetchComments, 8000);
+    return () => clearInterval(interval);
+  }, [battleState, hook?.battle_id]);
+
+  const submitComment = useCallback(async () => {
+    if (!commentInput.trim() || !hook?.battle_id || !votedSide) return;
+    setSubmittingComment(true);
+    const sessionId = getSessionId();
+
+    const newComment = {
+      battle_id: hook.battle_id,
+      user_id: userIdRef.current || null,
+      session_id: sessionId,
+      voted_side: votedSide,
+      text: commentInput.trim(),
+    };
+
+    // Optimistic add
+    const optimistic = { ...newComment, id: crypto.randomUUID(), created_at: new Date().toISOString() };
+    setComments((prev) => [optimistic, ...prev]);
+    setCommentInput("");
+
+    await supabase.from("battle_comments" as any).insert(newComment);
+    setSubmittingComment(false);
+  }, [commentInput, hook?.battle_id, votedSide]);
+
   // ── iOS scroll prevention ──────────────────────────────────
   useEffect(() => {
     if (!hook?.battle_id) return;
@@ -307,6 +355,8 @@ export default function ShareableHook() {
             mode={battleMode}
             activePlaying={activePlaying}
             votedSide={votedSide}
+            voteCount={votedSide === "a" ? voteCountA : votedSide === "b" ? voteCountB : undefined}
+            votePct={votedSide === "a" ? pctA : votedSide === "b" ? pctB : undefined}
             onTileTap={handleTileTap}
             onHooksLoaded={handleHooksLoaded}
           />
@@ -496,7 +546,7 @@ export default function ShareableHook() {
                 </motion.div>
               )}
 
-              {/* ── RESULTS: clean badge + drop your take ── */}
+              {/* ── RESULTS: comment input + React button ── */}
               {battleState === "results" && votedSide && (
                 <motion.div
                   key="results-bar"
@@ -505,22 +555,35 @@ export default function ShareableHook() {
                   exit={{ opacity: 0 }}
                   className="flex items-center gap-3"
                 >
-                  {/* Vote badge */}
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-500/30 bg-green-500/[0.06] min-w-0 flex-1">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
-                      <path d="M2 6.5L4.5 9L10 3" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    <span className="text-[11px] font-mono text-green-400/80 truncate">
-                      You + {(votedSide === "a" ? voteCountA : voteCountB) - 1} FMLY ({votedSide === "a" ? pctA : pctB}%)
-                    </span>
+                  {/* Comment input */}
+                  <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-white/[0.07] min-w-0"
+                    style={{ background: "rgba(255,255,255,0.02)" }}>
+                    <input
+                      type="text"
+                      value={commentInput}
+                      onChange={(e) => setCommentInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") submitComment(); }}
+                      placeholder="Drop your take..."
+                      className="flex-1 bg-transparent text-[11px] font-mono text-white/60 placeholder:text-white/20 outline-none min-w-0"
+                      disabled={submittingComment}
+                    />
+                    {commentInput.trim() && (
+                      <button
+                        onClick={submitComment}
+                        disabled={submittingComment}
+                        className="text-[10px] font-mono text-primary/70 hover:text-primary uppercase tracking-wider shrink-0"
+                      >
+                        Send
+                      </button>
+                    )}
                   </div>
 
-                  {/* Drop your take button */}
+                  {/* React button */}
                   <button
                     className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
                     onClick={() => setPanelOpen(true)}
                   >
-                    <span className="text-[11px] font-mono uppercase tracking-wider">Drop your take</span>
+                    <span className="text-[11px] font-mono uppercase tracking-wider">React</span>
                     <span className="text-[10px] opacity-60">↑</span>
                   </button>
                 </motion.div>
@@ -540,7 +603,7 @@ export default function ShareableHook() {
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl overflow-hidden"
-              style={{ background: "#111", maxHeight: "70vh" }}
+              style={{ background: "#111", maxHeight: "75vh" }}
             >
               {/* Drag handle */}
               <button
@@ -550,7 +613,7 @@ export default function ShareableHook() {
                 <div className="w-10 h-1 rounded-full bg-white/20" />
               </button>
 
-              <div className="px-4 pb-6 space-y-5 overflow-y-auto" style={{ maxHeight: "calc(70vh - 40px)" }}>
+              <div className="px-4 pb-6 space-y-5 overflow-y-auto" style={{ maxHeight: "calc(75vh - 40px)" }}>
 
                 {/* Vote confirmation */}
                 <div className="flex items-center justify-center gap-2">
@@ -562,30 +625,8 @@ export default function ShareableHook() {
                   </span>
                 </div>
 
-                {/* Emoji bar — select an emoji then tap a line */}
-                <div className="flex items-center justify-center gap-2">
-                  {EMOJI_OPTIONS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      onClick={() => setSelectedEmoji((prev) => prev === emoji ? null : emoji)}
-                      className={`w-9 h-9 rounded-full flex items-center justify-center text-lg transition-all ${
-                        selectedEmoji === emoji
-                          ? "bg-white/15 scale-110 ring-2 ring-white/25"
-                          : "bg-white/[0.04] hover:bg-white/[0.08]"
-                      }`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-                {selectedEmoji && (
-                  <p className="text-center text-[9px] font-mono text-white/25">
-                    Tap a line to react with {selectedEmoji}
-                  </p>
-                )}
-
-                {/* LEFT HOOK lines */}
-                <div className="space-y-1">
+                {/* ── LEFT HOOK lines ──────────────────────── */}
+                <div className="space-y-0.5">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="h-px flex-1 bg-white/[0.06]" />
                     <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${
@@ -596,32 +637,57 @@ export default function ShareableHook() {
                     <div className="h-px flex-1 bg-white/[0.06]" />
                   </div>
                   {hookALines.map((line: any, i: number) => {
-                    const reactionKey = `a-${i}`;
-                    const reaction = lineReactions[reactionKey];
+                    const key = `a-${i}`;
+                    const reaction = lineReactions[key];
+                    const isActive = activeEmojiLine === key;
                     return (
-                      <button
-                        key={reactionKey}
-                        onClick={() => toggleLineReaction("a", i)}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${
-                          reaction ? "bg-white/[0.04] border border-white/[0.08]" : "hover:bg-white/[0.03]"
-                        }`}
-                      >
-                        <span className="text-[11px] text-white/50 leading-relaxed flex-1 min-w-0 truncate">
-                          {line.text}
-                        </span>
-                        {reaction && (
-                          <span className="text-sm ml-2 shrink-0">{reaction}</span>
-                        )}
-                      </button>
+                      <div key={key}>
+                        <button
+                          onClick={() => setActiveEmojiLine(isActive ? null : key)}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${
+                            isActive ? "bg-white/[0.06] border border-white/[0.1]"
+                            : reaction ? "bg-white/[0.03]" : "hover:bg-white/[0.03]"
+                          }`}
+                        >
+                          <span className="text-[11px] text-white/50 leading-relaxed flex-1 min-w-0">
+                            {line.text}
+                          </span>
+                          {reaction && (
+                            <span className="text-sm ml-2 shrink-0">{reaction}</span>
+                          )}
+                        </button>
+                        {/* Inline emoji picker — appears under the tapped line */}
+                        <AnimatePresence>
+                          {isActive && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="flex items-center justify-center gap-2 py-2">
+                                {EMOJI_OPTIONS.map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    onClick={() => toggleLineReaction("a", i, emoji)}
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all ${
+                                      reaction === emoji ? "bg-white/15 ring-1 ring-white/25 scale-110" : "bg-white/[0.04] hover:bg-white/[0.08]"
+                                    }`}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     );
                   })}
-                  {hookALines.length === 0 && (
-                    <p className="text-[10px] font-mono text-white/15 text-center py-2">No lyrics in this hook region</p>
-                  )}
                 </div>
 
-                {/* RIGHT HOOK lines */}
-                <div className="space-y-1">
+                {/* ── RIGHT HOOK lines ─────────────────────── */}
+                <div className="space-y-0.5">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="h-px flex-1 bg-white/[0.06]" />
                     <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${
@@ -632,27 +698,94 @@ export default function ShareableHook() {
                     <div className="h-px flex-1 bg-white/[0.06]" />
                   </div>
                   {hookBLines.map((line: any, i: number) => {
-                    const reactionKey = `b-${i}`;
-                    const reaction = lineReactions[reactionKey];
+                    const key = `b-${i}`;
+                    const reaction = lineReactions[key];
+                    const isActive = activeEmojiLine === key;
                     return (
-                      <button
-                        key={reactionKey}
-                        onClick={() => toggleLineReaction("b", i)}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${
-                          reaction ? "bg-white/[0.04] border border-white/[0.08]" : "hover:bg-white/[0.03]"
-                        }`}
-                      >
-                        <span className="text-[11px] text-white/50 leading-relaxed flex-1 min-w-0 truncate">
-                          {line.text}
-                        </span>
-                        {reaction && (
-                          <span className="text-sm ml-2 shrink-0">{reaction}</span>
-                        )}
-                      </button>
+                      <div key={key}>
+                        <button
+                          onClick={() => setActiveEmojiLine(isActive ? null : key)}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${
+                            isActive ? "bg-white/[0.06] border border-white/[0.1]"
+                            : reaction ? "bg-white/[0.03]" : "hover:bg-white/[0.03]"
+                          }`}
+                        >
+                          <span className="text-[11px] text-white/50 leading-relaxed flex-1 min-w-0">
+                            {line.text}
+                          </span>
+                          {reaction && (
+                            <span className="text-sm ml-2 shrink-0">{reaction}</span>
+                          )}
+                        </button>
+                        <AnimatePresence>
+                          {isActive && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="flex items-center justify-center gap-2 py-2">
+                                {EMOJI_OPTIONS.map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    onClick={() => toggleLineReaction("b", i, emoji)}
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all ${
+                                      reaction === emoji ? "bg-white/15 ring-1 ring-white/25 scale-110" : "bg-white/[0.04] hover:bg-white/[0.08]"
+                                    }`}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     );
                   })}
-                  {hookBLines.length === 0 && (
-                    <p className="text-[10px] font-mono text-white/15 text-center py-2">No lyrics in this hook region</p>
+                </div>
+
+                {/* ── TAKES (comments) ─────────────────────── */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-px flex-1 bg-white/[0.06]" />
+                    <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-white/25">
+                      Takes ({comments.length})
+                    </span>
+                    <div className="h-px flex-1 bg-white/[0.06]" />
+                  </div>
+
+                  {comments.length === 0 ? (
+                    <p className="text-[10px] font-mono text-white/15 text-center py-3">
+                      No takes yet — be first
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {comments.map((c) => (
+                        <div key={c.id} className="flex items-start gap-2 px-2">
+                          {/* Side badge */}
+                          <span className={`text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 mt-0.5 ${
+                            c.voted_side === "a"
+                              ? "text-white/40 bg-white/[0.04] border border-white/[0.06]"
+                              : "text-white/40 bg-white/[0.04] border border-white/[0.06]"
+                          }`}>
+                            {c.voted_side === "a" ? "LEFT HOOK" : "RIGHT HOOK"}
+                          </span>
+                          <p className="text-[11px] text-white/45 leading-relaxed flex-1">
+                            {c.text}
+                          </p>
+                          <span className="text-[9px] font-mono text-white/15 shrink-0">
+                            {(() => {
+                              const mins = Math.floor((Date.now() - new Date(c.created_at).getTime()) / 60000);
+                              if (mins < 1) return "now";
+                              if (mins < 60) return `${mins}m`;
+                              return `${Math.floor(mins / 60)}h`;
+                            })()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
 
