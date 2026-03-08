@@ -1,6 +1,6 @@
 import { LogIn, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useTrailblazer } from "@/hooks/useTrailblazer";
+import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 
 interface AuthNudgeProps {
   onDismiss: () => void;
@@ -8,7 +8,7 @@ interface AuthNudgeProps {
 
 export function AuthNudge({ onDismiss }: AuthNudgeProps) {
   const navigate = useNavigate();
-  const { nextNumber, spotsRemaining } = useTrailblazer();
+  const { nextNumber, spotsRemaining } = useFmlyNumber();
 
   return (
     <div className="flex items-center gap-2 text-xs bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg px-3 py-2">
@@ -16,7 +16,7 @@ export function AuthNudge({ onDismiss }: AuthNudgeProps) {
       <span className="flex-1">
         {nextNumber ? (
           <>
-            You're Trailblazer{" "}
+            You're FMLY{" "}
             <span className="font-mono font-semibold text-amber-300">
               #{String(nextNumber).padStart(4, "0")}
             </span>

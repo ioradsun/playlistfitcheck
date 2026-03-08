@@ -13,7 +13,7 @@ import {
   ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy,
   Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle, BarChart2, Sparkles, Zap,
 } from "lucide-react";
-import { TrailblazerBadge } from "@/components/TrailblazerBadge";
+import { FmlyBadge } from "@/components/FmlyBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
@@ -326,7 +326,7 @@ const PublicProfile = () => {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground capitalize">{roles[0] ?? "user"}</p>
-              <TrailblazerBadge userId={userId} />
+              <FmlyBadge userId={userId} />
             </div>
             {profile.bio && !editing && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
             {hasMusic && !editing && (

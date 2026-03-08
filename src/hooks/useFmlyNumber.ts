@@ -1,25 +1,25 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-interface TrailblazerInfo {
-  /** User's trailblazer number (null if not a trailblazer) */
+interface FmlyNumberInfo {
+  /** User's FMLY number (null if not a FMLY member) */
   number: number | null;
-  /** Total trailblazers so far */
+  /** Total FMLY members so far */
   total: number;
   /** Whether the user has the badge */
   isBlazer: boolean;
   loading: boolean;
-  /** The next available badge number. Null if all 1000 are claimed. */
+  /** The next available FMLY number. Null if all 1000 are claimed. */
   nextNumber: number | null;
-  /** Whether any trailblazer spots remain */
+  /** Whether any FMLY spots remain */
   spotsRemaining: number;
 }
 
 /**
- * Fetch trailblazer status for a given user id.
+ * Fetch FMLY member status for a given user id.
  * If no userId provided, just fetches the global count.
  */
-export function useTrailblazer(userId?: string | null): TrailblazerInfo {
+export function useFmlyNumber(userId?: string | null): FmlyNumberInfo {
   const [number, setNumber] = useState<number | null>(null);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -28,7 +28,7 @@ export function useTrailblazer(userId?: string | null): TrailblazerInfo {
     let cancelled = false;
 
     async function load() {
-      // Get total trailblazers
+      // Get total FMLY members
       const { count } = await supabase
         .from("profiles")
         .select("id", { count: "exact", head: true })
