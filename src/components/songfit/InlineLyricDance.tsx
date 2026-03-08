@@ -355,9 +355,9 @@ function InlineLyricDanceInner(
       >
         {!playerReady && (
           <>
-            {((fetchedData as any)?.cover_image_url || fetchedData?.section_images?.[0]) ? (
+            {(fetchedData?.section_images?.[0]) ? (
               <img
-                src={((fetchedData as any)?.cover_image_url || fetchedData?.section_images?.[0]) as string}
+                src={(fetchedData?.section_images?.[0]) as string}
                 alt={songTitle}
                 className="absolute inset-0 w-full h-full object-cover"
                 loading="lazy"
