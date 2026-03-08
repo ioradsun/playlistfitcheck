@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useTrailblazer } from "@/hooks/useTrailblazer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,6 +50,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const { user } = useAuth();
+  const { nextNumber, spotsRemaining, loading: blazerLoading } = useTrailblazer();
   const navigate = useNavigate();
   const location = useLocation();
   const returnTab = (location.state as any)?.returnTab;
@@ -255,7 +257,23 @@ const Auth = () => {
 
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-8">
-      <Card className="w-full max-w-md glass-card border-border">
+      <div className="w-full max-w-md flex flex-col items-center">
+        {!checkEmail && !isForgot && activeTab === "signup" && nextNumber && !blazerLoading && (
+          <div className="text-center mb-4 space-y-1.5">
+            <div className="inline-flex items-center gap-2 bg-primary/[0.07] border border-primary/20 rounded-full px-4 py-2">
+              <span className="font-mono text-sm font-semibold text-primary tracking-tight">
+                {String(nextNumber).padStart(4, "0")}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                is your Trailblazer badge
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground/60">
+              {spotsRemaining.toLocaleString()} of 1,000 spots left · yours forever once you sign up
+            </p>
+          </div>
+        )}
+      <Card className="w-full glass-card border-border">
         {!checkEmail && (
           <CardHeader className="text-center pb-2">
             <div className="mx-auto mb-2 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -351,6 +369,7 @@ const Auth = () => {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };
