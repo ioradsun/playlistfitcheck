@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock, Flame, Film } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
@@ -17,7 +17,7 @@ import { ProfileHoverCard } from "./ProfileHoverCard";
 import { FmlyBadge } from "@/components/FmlyBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
-import { logEngagementEvent, logImpression } from "@/lib/engagementTracking";
+import { logEngagementEvent } from "@/lib/engagementTracking";
 import { HookReview } from "./HookReview";
 import { HookReviewsSheet } from "./HookReviewsSheet";
 import { useCardState, type CardState } from "./useCardLifecycle";
@@ -58,8 +58,6 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
   const [isScored, setIsScored] = useState(false);
   const [votedBattleSide, setVotedBattleSide] = useState<"a" | "b" | null>(null);
-  const impressionRef = useRef<HTMLDivElement>(null);
-  const impressionLogged = useRef(false);
   const [reviewsSheetPostId, setReviewsSheetPostId] = useState<string | null>(null);
   const [hookReviewKey, setHookReviewKey] = useState(0);
 
@@ -68,38 +66,6 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const isBattlePost = !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
   const CAPTION_MAX = 300;
   const tier: 1 | 3 = cardState === "active" ? 3 : 1;
-  const [isNearViewport, setIsNearViewport] = useState(false);
-  const viewportRef = useRef<HTMLDivElement>(null);
-
-
-  // Impression tracking via IntersectionObserver
-  useEffect(() => {
-    const el = impressionRef.current;
-    if (!el || impressionLogged.current) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !impressionLogged.current) {
-          impressionLogged.current = true;
-          logImpression(post.id);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.5 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [post.id]);
-
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsNearViewport(entry.isIntersecting),
-      { rootMargin: "200px" },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   const { activate } = useCardState(post.id);
 
@@ -214,7 +180,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const timeAgo = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
 
   return (
-    <div ref={impressionRef} className="border-b border-border/40">
+    <div className="border-b border-border/40">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -293,7 +259,6 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
 
       {/* Tiered media rendering */}
       <div
-        ref={viewportRef}
         className={cn(
           "transition-all duration-500",
           isScored && "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.25)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]"
