@@ -28,6 +28,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
   const [error, setError] = useState(false);
   const [activePlaying, setActivePlaying] = useState<"a" | "b" | null>(null);
   const [hooksReady, setHooksReady] = useState(false);
+  const [showCover, setShowCover] = useState(true);
 
   // Parse slugs from URL and look up battle_id
   useEffect(() => {
