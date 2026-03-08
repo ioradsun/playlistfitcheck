@@ -167,6 +167,26 @@ export function FitTab({
       });
   }, [user, lyricData, computeLyricsHash]);
 
+  // Check for existing battle when we know user + song
+  useEffect(() => {
+    if (!user || !lyricData) return;
+    const songSlug = slugify(lyricData.title || "untitled");
+    if (!songSlug) return;
+
+    supabase
+      .from("shareable_hooks" as any)
+      .select("artist_slug, song_slug, hook_slug, battle_id")
+      .eq("user_id", user.id)
+      .eq("song_slug", songSlug)
+      .eq("battle_position", 1)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data?.battle_id && data.hook_slug) {
+          setBattlePublishedUrl(`/${data.artist_slug}/${data.song_slug}/${data.hook_slug}`);
+        }
+      });
+  }, [user, lyricData]);
+
   // Check for existing CrowdFit post when we know the dance ID
   useEffect(() => {
     if (!publishedDanceId || !user) { setCrowdfitPostId(null); return; }
@@ -644,10 +664,10 @@ export function FitTab({
         return;
       }
 
-      // Check for existing hook to reuse audio_url
+      // Check for existing hook to reuse audio_url and battle_id
       const { data: existingHook }: any = await supabase
         .from("shareable_hooks" as any)
-        .select("audio_url")
+        .select("audio_url, battle_id")
         .eq("artist_slug", artistSlug)
         .eq("song_slug", songSlug)
         .eq("hook_slug", hookSlug)
@@ -668,7 +688,8 @@ export function FitTab({
         audioUrl = urlData.publicUrl;
       }
 
-      const battleId = crypto.randomUUID();
+      // Reuse existing battle_id if hooks were previously published (prevents orphaned hookfit_posts)
+      const battleId = existingHook?.battle_id || crypto.randomUUID();
       const pSpec = renderData?.motionProfileSpec || {};
       const bg = beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {};
       const palette = pSpec.palette || ["#ffffff", "#a855f7", "#ec4899"];
