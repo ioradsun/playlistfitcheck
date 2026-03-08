@@ -1,33 +1,31 @@
 
-## Update Recent Dropdown to Filter by Content Type
 
-**Goal**: Replace the "Recent/Pending/Resolved" dropdown with "All/Now Streaming/In Studio/In Battle" to filter posts by content type (Spotify, Lyric Dance, Battle).
+# Download Export Modal — Implementation Complete
 
-**Files to update** (3 locations):
+## Summary
 
-1. **`src/components/songfit/types.ts`**
-   - Change `FeedView` type from `'recent' | 'pending' | 'resolved' | 'billboard'` to `'all' | 'now_streaming' | 'in_studio' | 'in_battle' | 'billboard'`
+Replaced the "Republish" button in the FIT tab with a "Download" button that opens a full export modal (`FitExportModal`). Removed the download popover from the `ShareableLyricDance` page.
 
-2. **`src/components/songfit/BillboardToggle.tsx`**
-   - Update `recentSubViews` array to:
-     ```
-     [
-       { key: "all", label: "All", desc: "All live submissions" },
-       { key: "now_streaming", label: "Now Streaming", desc: "Spotify posts" },
-       { key: "in_studio", label: "In Studio", desc: "Lyric dances" },
-       { key: "in_battle", label: "In Battle", desc: "Battle submissions" }
-     ]
-     ```
-   - Update the button display logic to show correct label based on view
+## Files Changed
 
-3. **`src/components/songfit/SongFitFeed.tsx`**
-   - Update `fetchPosts` to filter posts by content type:
-     - **all**: all live posts (current "recent" logic)
-     - **now_streaming**: `post.spotify_track_id` exists, no `lyric_dance_url`
-     - **in_studio**: `post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id`
-     - **in_battle**: `post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id`
-   - Remove "pending" and "resolved" filter logic since those views no longer exist
-   - Keep billboard logic unchanged
+| File | Action |
+|------|--------|
+| `src/components/lyric/FitExportModal.tsx` | **Created** — Export modal with format/quality selection, progress states, download |
+| `src/components/songfit/InlineLyricDance.tsx` | **Edited** — Added `forwardRef` + `useImperativeHandle` to expose player |
+| `src/components/lyric/FitTab.tsx` | **Edited** — Replaced Republish with Download button + FitExportModal |
+| `src/pages/ShareableLyricDance.tsx` | **Edited** — Removed download popover, export state, and handleExport |
 
-**Logic**: Posts are identified by the same criteria used in SongFitPostCard (hasLyricDancePost and isBattlePost).
+## Architecture
 
+- `InlineLyricDance` exposes `InlineLyricDanceHandle.getPlayer()` via `forwardRef`
+- `FitTab` holds a ref to `InlineLyricDance` and passes `getPlayer` to `FitExportModal`
+- `FitExportModal` uses `exportVideoAsMP4` from `src/engine/exportVideo.ts` (WebCodecs + mp4-muxer)
+- Export is video-only; audio notice is displayed in the modal
+
+## Export Options
+
+| Quality | 9:16 | 16:9 | 1:1 |
+|---------|------|------|-----|
+| 1080p | 1080×1920 | 1920×1080 | 1080×1080 |
+| 720p | 720×1280 | 1280×720 | 720×720 |
+| 480p | 480×854 | 854×480 | 480×480 |

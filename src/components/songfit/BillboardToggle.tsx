@@ -16,9 +16,10 @@ const billboardModes: { key: BillboardMode; label: string }[] = [
 ];
 
 const recentSubViews: { key: FeedView; label: string; desc: string }[] = [
-  { key: "recent", label: "Recent", desc: "All live submissions" },
-  { key: "pending", label: "Pending", desc: "No signals yet" },
-  { key: "resolved", label: "Resolved", desc: "Signaled submissions" },
+  { key: "all", label: "All", desc: "All live submissions" },
+  { key: "now_streaming", label: "Now Streaming", desc: "Spotify posts" },
+  { key: "in_studio", label: "In Studio", desc: "Lyric dances" },
+  { key: "in_battle", label: "In Battle", desc: "Battle submissions" },
 ];
 
 interface Props {
@@ -33,7 +34,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
   const [recentDropdownOpen, setRecentDropdownOpen] = useState(false);
   const [billboardDropdownOpen, setBillboardDropdownOpen] = useState(false);
 
-  const isRecentActive = view === "recent" || view === "pending" || view === "resolved";
+  const isRecentActive = view === "all" || view === "now_streaming" || view === "in_studio" || view === "in_battle";
   const isBillboardActive = view === "billboard";
   const showRecentChevron = isLoggedIn && isRecentActive;
 
@@ -54,7 +55,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!isRecentActive) {
-                    onViewChange("recent");
+                    onViewChange("all");
                   } else if (isLoggedIn) {
                     setRecentDropdownOpen((prev) => !prev);
                   }
@@ -66,7 +67,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                     : "font-normal text-muted-foreground"
                 )}
               >
-                {view === "pending" ? "Pending" : view === "resolved" ? "Resolved" : "Recent"}
+                {recentSubViews.find(s => s.key === view)?.label ?? "All"}
                 <ChevronDown
                   size={12}
                   className={cn(
