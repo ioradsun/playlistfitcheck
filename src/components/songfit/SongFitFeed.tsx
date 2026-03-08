@@ -5,7 +5,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import type { SongFitPost, FeedView, BillboardMode } from "./types";
 import { SongFitPostCard } from "./SongFitPostCard";
-import { EagerEmbedProvider } from "./LazySpotifyEmbed";
 import { SongFitComments } from "./SongFitComments";
 import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
@@ -447,8 +446,7 @@ export function SongFitFeed() {
         <div className="text-center py-16 space-y-3"><p className="text-muted-foreground text-sm">No live submissions yet. Be the first!</p></div>
       ) : (
         <CardLifecycleProvider>
-          <EagerEmbedProvider>
-            <RealtimeFeedHubProvider>
+          <RealtimeFeedHubProvider>
               <WindowedFeedList
                 posts={posts}
                 feedView={feedView}
@@ -464,7 +462,6 @@ export function SongFitFeed() {
                 onCenterChange={(idx) => { centerIndexRef.current = idx; }}
               />
             </RealtimeFeedHubProvider>
-          </EagerEmbedProvider>
         </CardLifecycleProvider>
       )}
 
