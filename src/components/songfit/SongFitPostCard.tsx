@@ -181,9 +181,18 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
 
   return (
     <div className="px-2 pb-3">
-      <div className="rounded-2xl overflow-hidden" style={{ background: "#0a0a0a" }}>
+      <div className="relative rounded-2xl overflow-hidden" style={{ background: "#121212" }}>
+      {post.album_art_url && (
+        <img
+          src={post.album_art_url}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-20 pointer-events-none"
+          loading="lazy"
+        />
+      )}
+      <div className="absolute inset-0 bg-black/60 pointer-events-none" />
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5">
+      <div className="relative flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0 flex-1">
 
           <ProfileHoverCard userId={post.user_id}>
@@ -259,7 +268,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       {/* Tiered media rendering */}
       <div
         className={cn(
-          "transition-all duration-500",
+          "relative transition-all duration-500",
           isScored && "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.25)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]"
         )}
       >
@@ -329,9 +338,54 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         )}
       </div>
 
+      {/* Caption - Instagram style */}
+      {editing ? (
+        <div className="relative px-3 pt-2 pb-1 space-y-2">
+          <textarea
+            value={editCaption}
+            onChange={e => setEditCaption(e.target.value.slice(0, CAPTION_MAX))}
+            rows={3}
+            className="w-full bg-white/5 text-sm text-white/90 placeholder:text-white/20 outline-none resize-none rounded-lg p-2 border border-white/10 focus:border-white/20"
+            autoFocus
+          />
+          <div className="flex items-center justify-between">
+            <span className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-red-400" : "text-white/20"}`}>
+              {editCaption.length}/{CAPTION_MAX}
+            </span>
+            <div className="flex gap-1.5">
+              <button onClick={() => setEditing(false)} className="p-1.5 rounded-full hover:bg-white/5 text-white/40">
+                <X size={14} />
+              </button>
+              <button onClick={handleSaveEdit} disabled={saving} className="p-1.5 rounded-full hover:bg-white/5 text-green-400">
+                <Check size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : localCaption && localCaption.trim() ? (
+        <div className="relative px-3 pt-2 pb-1">
+          {localCaption.length <= 125 || captionExpanded ? (
+            <p className="text-sm leading-snug text-white/70">
+              {localCaption}
+            </p>
+          ) : (
+            <p className="text-sm leading-snug text-white/70">
+              {localCaption.slice(0, 125).trimEnd()}
+              <span className="text-white/30">… </span>
+              <button
+                onClick={() => setCaptionExpanded(true)}
+                className="text-white/30 hover:text-white/50 text-sm"
+              >
+                more
+              </button>
+            </p>
+          )}
+        </div>
+      ) : null}
+
       {/* Action Row — reactions mode only here */}
       {crowdfitMode !== "hook_review" && !hasLyricDancePost && !isBattlePost && (
-        <div className="flex items-center justify-between px-1 py-0.5">
+        <div className="relative flex items-center justify-between px-1 py-1">
           {/* Left group: comment, share, like, bookmark */}
           <div className="flex items-center">
             <button
@@ -435,53 +489,6 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         </div>
       )}
 
-      {/* Caption - Instagram style */}
-      {editing ? (
-        <div className="px-3 pt-2.5 pb-1 space-y-2">
-          <textarea
-            value={editCaption}
-            onChange={e => setEditCaption(e.target.value.slice(0, CAPTION_MAX))}
-            rows={3}
-            className="w-full bg-white/5 text-sm text-white/90 placeholder:text-white/20 outline-none resize-none rounded-lg p-2 border border-white/10 focus:border-white/20"
-            autoFocus
-          />
-          <div className="flex items-center justify-between">
-            <span className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-red-400" : "text-white/20"}`}>
-              {editCaption.length}/{CAPTION_MAX}
-            </span>
-            <div className="flex gap-1.5">
-              <button onClick={() => setEditing(false)} className="p-1.5 rounded-full hover:bg-white/5 text-white/40">
-                <X size={14} />
-              </button>
-              <button onClick={handleSaveEdit} disabled={saving} className="p-1.5 rounded-full hover:bg-white/5 text-green-400">
-                <Check size={14} />
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : localCaption && localCaption.trim() ? (
-        <div className="px-3 pt-2.5 pb-1">
-          {localCaption.length <= 125 || captionExpanded ? (
-            <p className="text-sm leading-snug text-white/70">
-              <span className="font-semibold mr-1.5 text-white/90">{displayName}</span>
-              {localCaption}
-            </p>
-          ) : (
-            <p className="text-sm leading-snug text-white/70">
-              <span className="font-semibold mr-1.5 text-white/90">{displayName}</span>
-              {localCaption.slice(0, 125).trimEnd()}
-              <span className="text-white/30">… </span>
-              <button
-                onClick={() => setCaptionExpanded(true)}
-                className="text-white/30 hover:text-white/50 text-sm"
-              >
-                more
-              </button>
-            </p>
-          )}
-        </div>
-      ) : null}
-
       {/* Hook Review — after caption */}
       {crowdfitMode === "hook_review" && (
         <>
@@ -507,7 +514,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           />
         </>
       )}
-      <div className="h-1.5" />
+      <div className="h-1" />
       </div>
     </div>
   );
