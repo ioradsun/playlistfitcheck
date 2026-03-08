@@ -314,9 +314,9 @@ function InlineLyricDanceInner(
   if (fetchError) {
     return (
       <a href={lyricDanceUrl} target="_blank" rel="noopener noreferrer"
-        className="block mx-3 my-2 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors p-4 text-center">
-        <p className="text-sm font-semibold">{songTitle}</p>
-        <p className="text-xs text-muted-foreground mt-1">Tap to watch lyric dance →</p>
+        className="block mx-3 my-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors p-4 text-center">
+        <p className="text-sm font-semibold text-white/80">{songTitle}</p>
+        <p className="text-xs text-white/40 mt-1">Tap to watch lyric dance →</p>
       </a>
     );
   }
@@ -346,7 +346,7 @@ function InlineLyricDanceInner(
   // ── Standard mode: full card with cover, playbar, title ────────────────
 
   return (
-    <div className="w-full overflow-hidden bg-black rounded-xl relative" style={{ height: 320 }}>
+    <div className="w-full overflow-hidden bg-black relative" style={{ height: 320 }}>
       {/* Canvas area — matches tier 1 height exactly */}
       <div ref={containerRef}
         className="absolute inset-0 w-full overflow-hidden cursor-pointer"

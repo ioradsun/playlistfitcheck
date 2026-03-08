@@ -269,15 +269,15 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
   if (error) {
     return (
       <a href={battleUrl} target="_blank" rel="noopener noreferrer"
-        className="block mx-3 my-2 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors p-4 text-center">
-        <p className="text-sm font-semibold">{songTitle}</p>
-        <p className="text-xs text-muted-foreground mt-1">Tap to watch hook battle →</p>
+        className="block mx-3 my-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors p-4 text-center">
+        <p className="text-sm font-semibold text-white/80">{songTitle}</p>
+        <p className="text-xs text-white/40 mt-1">Tap to watch hook battle →</p>
       </a>
     );
   }
 
   return (
-    <div ref={containerRef} className="relative w-full overflow-hidden bg-black rounded-xl flex flex-col">
+    <div ref={containerRef} className="relative w-full overflow-hidden bg-black flex flex-col">
       {/* ── Canvas area ─────────────────────────────────────── */}
       <div className="relative w-full overflow-hidden" style={{ height: 320 }}>
         {(loading || !battleId) ? (
