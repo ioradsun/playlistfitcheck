@@ -531,8 +531,10 @@ const Index = () => {
 
   const [profitArtistUrl, setProfitArtistUrl] = useState<string | null>(null);
   const [profitSavedReport, setProfitSavedReport] = useState<any>(null);
+  const [profitLoadKey, setProfitLoadKey] = useState(0);
   const [loadedHitFitAnalysis, setLoadedHitFitAnalysis] = useState<any>(null);
   const [loadedVibeFitResult, setLoadedVibeFitResult] = useState<any>(null);
+  const [vibeFitLoadKey, setVibeFitLoadKey] = useState(0);
 
   // ── Universal screen descriptor ──────────────────────────────────────────
   // Must live AFTER all per-tool state declarations it depends on.
@@ -575,6 +577,8 @@ const Index = () => {
       setLoadedHitFitAnalysis(null);
       setLoadedVibeFitResult(null);
       setOptimisticSidebarItem(null);
+      setProfitLoadKey((k) => k + 1);
+      setVibeFitLoadKey((k) => k + 1);
       setIsFetchingProject(false);
       setProjectMissing(false);
       setHeaderProject(null);
@@ -589,30 +593,32 @@ const Index = () => {
   const handleNewHitFit = useCallback(() => { setLoadedHitFitAnalysis(null); transitionNavigate("/HitFit", { replace: true }); }, [transitionNavigate]);
 
   const handleSidebarTabChange = useCallback((tab: string) => {
-    setIsFetchingProject(false);
-    setProjectMissing(false);
-    // Always reset to New Project for the target tool — synchronous, no startTransition
-    if (tab === "lyric") setLoadedLyric(null);
-    else if (tab === "mix") { setLoadedMixProject(null); projectLoadedRef.current = null; }
-    else if (tab === "hitfit") setLoadedHitFitAnalysis(null);
-    if (tab === "playlist") { setResult(null); savedSearchIdRef.current = null; }
-    if (tab === "profit") setProfitSavedReport(null);
-    if (tab === "vibefit") setLoadedVibeFitResult(null);
+    startTransition(() => {
+      setIsFetchingProject(false);
+      setProjectMissing(false);
+      if (tab === "lyric") setLoadedLyric(null);
+      else if (tab === "mix") { setLoadedMixProject(null); projectLoadedRef.current = null; }
+      else if (tab === "hitfit") setLoadedHitFitAnalysis(null);
+      if (tab === "playlist") { setResult(null); savedSearchIdRef.current = null; }
+      if (tab === "profit") {
+        setProfitSavedReport(null);
+        setProfitLoadKey((k) => k + 1);
+      }
+      if (tab === "vibefit") {
+        setLoadedVibeFitResult(null);
+        setVibeFitLoadKey((k) => k + 1);
+      }
+      setActiveTab(tab);
+    });
 
-    setActiveTab(tab);
     const pathMap: Record<string, string> = { songfit: "/CrowdFit", hookfit: "/HookFit", profit: "/ProFit", playlist: "/PlaylistFit", mix: "/MixFit", lyric: "/LyricFit", hitfit: "/HitFit", dreamfit: "/DreamFit", vibefit: "/VibeFit" };
     navigate(pathMap[tab] || "/CrowdFit", { replace: true });
   }, [setActiveTab, navigate]);
 
   const handleLoadProject = useCallback((type: string, data: any) => {
-    // Collect the navigate target so we can call it AFTER flushSync
     let navTarget: string | null = null;
 
-    // flushSync commits state synchronously before navigate() runs.
-    // This ensures toolDataLoaded is already true when the new URL renders,
-    // so screen.status resolves to "ready" immediately — no skeleton flash
-    // on sidebar project clicks. This is intentional, not a workaround.
-    flushSync(() => {
+    startTransition(() => {
       setResult(null);
       setVibeAnalysis(null);
       setSongFitAnalysis(null);
@@ -625,13 +631,15 @@ const Index = () => {
         case "profit": {
           if (data?.reportId && data?.blueprint && data?.artist) {
             setProfitSavedReport(data);
+            setProfitLoadKey((k) => k + 1);
             navTarget = `/ProFit/${data.reportId}`;
             projectLoadedRef.current = data.reportId;
           } else {
             const artistId = data?.spotify_artist_id;
             if (artistId) {
               setProfitArtistUrl(`https://open.spotify.com/artist/${artistId}`);
-              }
+              setProfitLoadKey((k) => k + 1);
+            }
           }
           break;
         }
@@ -691,6 +699,7 @@ const Index = () => {
         case "vibefit": {
           if (data) {
             setLoadedVibeFitResult(data);
+            setVibeFitLoadKey((k) => k + 1);
             if (data.id) { navTarget = `/VibeFit/${data.id}`; projectLoadedRef.current = data.id; }
           }
           break;
@@ -698,10 +707,10 @@ const Index = () => {
       }
     });
 
-    // Navigate AFTER flushSync so state is already committed
+    // Keep router navigation outside startTransition.
     if (navTarget) navigate(navTarget, { replace: true });
 
-    // Handle async playlist re-fetch outside flushSync (existing project — do NOT re-save)
+    // Handle async playlist re-fetch outside startTransition (existing project — do NOT re-save)
     if (type === "playlist" && !data?.report_data && data?.playlist_url) {
       (async () => {
         setVibeLoading(true);
@@ -769,6 +778,7 @@ const Index = () => {
           <div className="flex-1 flex flex-col min-h-0">
             <Suspense fallback={<PageSkeleton tool="lyric" mode={screen.mode} />}>
               <LyricFitTab
+                key={loadedLyric?.id || "new"}
                 initialLyric={loadedLyric}
                 onNewProject={handleNewLyric}
                 onHeaderProject={setHeaderProject}
@@ -798,7 +808,7 @@ const Index = () => {
         return (
           <div className="flex-1 flex flex-col min-h-0">
             <Suspense fallback={<PageSkeleton tool="mix" mode={screen.mode} />}>
-              <MixFitCheck initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id, projectData) => { if (projectData) { setLoadedMixProject(projectData); projectLoadedRef.current = id; } navigateToProject("mix", id); }} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+              <MixFitCheck key={loadedMixProject?.id ?? "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id, projectData) => { if (projectData) { setLoadedMixProject(projectData); projectLoadedRef.current = id; } navigateToProject("mix", id); }} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>
         );
@@ -807,6 +817,7 @@ const Index = () => {
           <div className="flex-1 flex flex-col min-h-0 px-4 py-6">
             <Suspense fallback={<PageSkeleton tool="hitfit" mode={screen.mode} />}>
               <HitFitTab
+                key={loadedHitFitAnalysis ? "loaded" : "new"}
                 initialAnalysis={loadedHitFitAnalysis}
                 onNewProject={handleNewHitFit}
                 onHeaderProject={setHeaderProject}
@@ -823,7 +834,7 @@ const Index = () => {
         return (
           <div className="flex-1 flex flex-col min-h-0">
             <Suspense fallback={<PageSkeleton tool="profit" mode={screen.mode} />}>
-              <ProFitTab initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+              <ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>
         );
@@ -836,6 +847,7 @@ const Index = () => {
             ) : (
               <div className="w-full">
                 <ResultsDashboard
+                  key={result.key}
                   result={result.output}
                   inputData={result.input}
                   playlistName={result.name}
@@ -861,7 +873,7 @@ const Index = () => {
         return (
           <div className="flex-1 flex flex-col px-4 py-6">
             <Suspense fallback={<PageSkeleton tool="vibefit" mode={screen.mode} />}>
-              <VibeFitTab initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+              <VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>
         );
