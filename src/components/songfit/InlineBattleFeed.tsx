@@ -395,8 +395,20 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
 
         <div className="w-full px-4 py-2.5">
           <AnimatePresence mode="wait">
-            {/* Cover: empty spacer */}
-            {battleState === "cover" && <motion.div key="cover-bar" className="h-5" />}
+            {/* Cover: disabled vote buttons preview */}
+            {battleState === "cover" && (
+              <motion.div key="cover-bar" className="flex items-center gap-3 opacity-30 pointer-events-none">
+                <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/10">
+                  <span className="text-sm">👊</span>
+                  <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-white/50 font-semibold">Left Hook</span>
+                </div>
+                <span className="text-[9px] font-mono text-white/10 shrink-0">vs</span>
+                <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/10">
+                  <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-white/50 font-semibold">Right Hook</span>
+                  <span className="text-sm">👊</span>
+                </div>
+              </motion.div>
+            )}
 
             {/* Round labels */}
             {(battleState === "round-1" || battleState === "round-2") && (
