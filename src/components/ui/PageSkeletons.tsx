@@ -68,7 +68,8 @@ export const CrowdFitSkeleton = ({ variant }: { variant: Variant }) => (
 export const LyricFitSkeleton = ({ variant }: { variant: Variant }) => {
   if (variant === "new") {
     return (
-      <div className="flex-1 flex flex-col px-4 py-4 min-h-0">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 min-h-0">
+        <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
         <div className="self-start flex items-center gap-2">
           <S className="h-8 w-20 rounded-full" />
           <S className="h-8 w-20 rounded-full" />
@@ -85,6 +86,7 @@ export const LyricFitSkeleton = ({ variant }: { variant: Variant }) => {
         </div>
 
         <S className="h-10 w-full rounded-lg mt-4" />
+        </div>
       </div>
     );
   }
@@ -92,7 +94,7 @@ export const LyricFitSkeleton = ({ variant }: { variant: Variant }) => {
   const lyricWidths = ["65%", "80%", "55%", "75%", "90%", "60%", "70%", "85%", "50%", "78%", "63%", "88%", "45%", "72%"];
 
   return (
-    <div className="flex-1 flex flex-col px-4 py-4 min-h-0">
+    <div className="flex-1 flex flex-col px-4 py-6 min-h-0">
       <div className="self-start flex items-center gap-2">
         <S className="h-8 w-20 rounded-full" />
         <S className="h-8 w-20 rounded-full" />
@@ -135,7 +137,8 @@ const UploadZoneSkeleton = ({ showBadge = false }: { showBadge?: boolean }) => (
 export const HitFitSkeleton = ({ variant }: { variant: Variant }) => {
   if (variant === "new") {
     return (
-      <div className="w-full max-w-2xl mx-auto space-y-4">
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="w-full max-w-2xl mx-auto space-y-4">
         <div className="space-y-2">
           <S className="h-6 w-72 rounded mx-auto" />
           <S className="h-4 w-52 rounded mx-auto" />
@@ -158,12 +161,13 @@ export const HitFitSkeleton = ({ variant }: { variant: Variant }) => {
         </div>
 
         <S className="h-10 w-full rounded-lg" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-4">
+    <div className="w-full max-w-2xl mx-auto space-y-6 pb-24">
       <div className="space-y-2">
         <S className="h-5 w-64 rounded" />
         <S className="h-4 w-44 rounded" />
@@ -208,7 +212,8 @@ export const HitFitSkeleton = ({ variant }: { variant: Variant }) => {
 export const PlaylistFitSkeleton = ({ variant }: { variant: Variant }) => {
   if (variant === "new") {
     return (
-      <div className="w-full max-w-2xl mx-auto space-y-4">
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-2xl mx-auto space-y-4">
         <div className="space-y-2">
           <S className="h-6 w-80 rounded mx-auto" />
           <S className="h-4 w-56 rounded mx-auto" />
@@ -227,15 +232,17 @@ export const PlaylistFitSkeleton = ({ variant }: { variant: Variant }) => {
         </div>
 
         <S className="h-11 w-full rounded-lg" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-4">
-      <S className="h-3.5 w-48 rounded" />
+    <div className="px-4 py-6">
+      <div className="w-full max-w-2xl mx-auto space-y-4">
+        <S className="h-3.5 w-48 rounded" />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col items-center gap-4 py-4">
           <S className="h-32 w-32 rounded-full" />
           <S className="h-6 w-24 rounded-sm" />
@@ -251,17 +258,17 @@ export const PlaylistFitSkeleton = ({ variant }: { variant: Variant }) => {
             </div>
           ))}
         </div>
-      </div>
+        </div>
 
-      <div className="space-y-3">
+        <div className="space-y-3">
         <S className="h-4 w-44 rounded" />
         <S className="h-3.5 w-5/6 rounded" />
         <S className="h-3.5 w-3/4 rounded" />
         <S className="h-3.5 w-4/5 rounded" />
         <S className="h-3.5 w-2/3 rounded" />
-      </div>
+        </div>
 
-      <div className="space-y-3">
+        <div className="space-y-3">
         {Array.from({ length: 3 }).map((_, index) => (
           <div key={index} className="rounded-xl border border-border bg-muted/10 p-4 space-y-2">
             <S className="h-4 w-40 rounded" />
@@ -269,6 +276,7 @@ export const PlaylistFitSkeleton = ({ variant }: { variant: Variant }) => {
             <S className="h-3.5 w-2/3 rounded" />
           </div>
         ))}
+        </div>
       </div>
     </div>
   );
@@ -290,7 +298,8 @@ const MixCardSkeleton = () => (
 export const MixFitSkeleton = ({ variant }: { variant: Variant }) => {
   if (variant === "new") {
     return (
-      <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
         <div className="space-y-2">
           <S className="h-5 w-72 rounded mx-auto" />
           <S className="h-4 w-48 rounded mx-auto" />
@@ -310,6 +319,7 @@ export const MixFitSkeleton = ({ variant }: { variant: Variant }) => {
         </div>
 
         <S className="h-11 w-full rounded-lg" />
+        </div>
       </div>
     );
   }
@@ -354,37 +364,62 @@ export const MixFitSkeleton = ({ variant }: { variant: Variant }) => {
   );
 };
 
-export const ProFitSkeleton = ({ variant }: { variant: Variant }) => (
-  <div className="w-full max-w-2xl mx-auto px-4 py-6 space-y-4">
-    <div className="rounded-xl border border-border/50 bg-muted/10 p-4 flex items-center gap-3">
-      <S className="h-9 flex-1 rounded-xl" />
-      <S className="h-9 w-24 rounded-xl" />
-    </div>
-    {variant === "existing" && (
+export const ProFitSkeleton = ({ variant }: { variant: Variant }) => {
+  if (variant === "new") {
+    return (
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-2xl mx-auto space-y-4">
+          <div className="rounded-xl border border-border/50 bg-muted/10 p-4 flex items-center gap-3">
+            <S className="h-9 flex-1 rounded-xl" />
+            <S className="h-9 w-24 rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-2xl mx-auto px-4 py-6 space-y-4">
+      <div className="rounded-xl border border-border/50 bg-muted/10 p-4 flex items-center gap-3">
+        <S className="h-9 flex-1 rounded-xl" />
+        <S className="h-9 w-24 rounded-xl" />
+      </div>
       <div className="space-y-3">
         <S className="h-5 w-48" />
         <S className="h-[200px] w-full rounded-xl" />
         <S className="h-[160px] w-full rounded-xl" />
       </div>
-    )}
-  </div>
-);
-
-export const VibeFitSkeleton = ({ variant }: { variant: Variant }) => (
-  <div className="w-full max-w-2xl mx-auto px-4 py-6 space-y-4">
-    <div className="rounded-xl border-2 border-dashed border-border/50 p-8 flex flex-col items-center gap-3">
-      <S className="h-10 w-10 rounded-xl" />
-      <S className="h-4 w-40" />
-      <S className="h-3 w-28" />
     </div>
-    {variant === "existing" && (
+  );
+};
+
+export const VibeFitSkeleton = ({ variant }: { variant: Variant }) => {
+  if (variant === "new") {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 gap-6">
+        <div className="w-full max-w-2xl mx-auto rounded-xl border-2 border-dashed border-border/50 p-8 flex flex-col items-center gap-3">
+          <S className="h-10 w-10 rounded-xl" />
+          <S className="h-4 w-40" />
+          <S className="h-3 w-28" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-2xl mx-auto px-4 py-6 space-y-8 pb-24">
+      <div className="rounded-xl border-2 border-dashed border-border/50 p-8 flex flex-col items-center gap-3">
+        <S className="h-10 w-10 rounded-xl" />
+        <S className="h-4 w-40" />
+        <S className="h-3 w-28" />
+      </div>
       <div className="space-y-3">
         <S className="h-[180px] w-full rounded-xl" />
         <S className="h-[140px] w-full rounded-xl" />
       </div>
-    )}
-  </div>
-);
+    </div>
+  );
+};
 
 const DreamCardSkeleton = () => (
   <div className="rounded-xl border border-border bg-muted/10 mx-4 my-3 p-4 space-y-3">
@@ -454,11 +489,11 @@ const skeletonRegistry: Record<string, SkeletonEntry> = {
   hookfit:  Padded(CrowdFitSkeleton),
   lyric:    LyricFitSkeleton,          // manages its own padding internally
   hitfit:   Padded(HitFitSkeleton),
-  mix:      Padded(MixFitSkeleton),
+  mix:      MixFitSkeleton,
   profit:   ProFitSkeleton,
   vibefit:  VibeFitSkeleton,
   dreamfit: Padded(DreamFitSkeleton),
-  playlist: Padded(PlaylistFitSkeleton),
+  playlist: PlaylistFitSkeleton,
 };
 
 /**
