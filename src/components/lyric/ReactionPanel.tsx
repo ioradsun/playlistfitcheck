@@ -1228,7 +1228,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
       )}
     </AnimatePresence>
   );
-});
+}
 
 export { ReactionPanel };
 export default ReactionPanel;
