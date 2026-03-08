@@ -107,11 +107,15 @@ function InlineLyricDanceInner(
       return realtimeHub.subscribeDance(lyricDanceId, (payload: DanceUpdatePayload) => {
         const next = payload.new;
         if (!next) return;
-        setFetchedData(prev => prev ? {
-          ...prev,
-          ...(next.lyrics && { lyrics: next.lyrics }),
-          ...(next.words !== undefined && { words: next.words }),
-        } : prev);
+        setFetchedData(prev => {
+          if (!prev) return prev;
+          const n = next as Record<string, unknown>;
+          return {
+            ...prev,
+            ...(Array.isArray(n.lyrics) && { lyrics: n.lyrics as LyricDanceData["lyrics"] }),
+            ...(n.words !== undefined && { words: n.words as LyricDanceData["words"] }),
+          };
+        });
       });
     }
 
