@@ -1,22 +1,21 @@
 import * as React from "react";
 
 const MOBILE_BREAKPOINT = 768;
-const MOBILE_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
 
-const getMobileSnapshot = () => {
+function getIsMobile(): boolean {
   if (typeof window === "undefined") return false;
-  return window.matchMedia(MOBILE_QUERY).matches;
-};
+  return window.innerWidth < MOBILE_BREAKPOINT;
+}
 
 export function useIsMobile() {
-  return React.useSyncExternalStore(
-    (onStoreChange) => {
-      if (typeof window === "undefined") return () => {};
-      const mediaQuery = window.matchMedia(MOBILE_QUERY);
-      mediaQuery.addEventListener("change", onStoreChange);
-      return () => mediaQuery.removeEventListener("change", onStoreChange);
-    },
-    getMobileSnapshot,
-    () => false,
-  );
+  const [isMobile, setIsMobile] = React.useState(getIsMobile);
+
+  React.useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    const onChange = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  return isMobile;
 }

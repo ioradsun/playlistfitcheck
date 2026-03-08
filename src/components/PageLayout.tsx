@@ -13,7 +13,7 @@ export function PageLayout({ children, title, subtitle, headerRight }: PageLayou
   return (
     <>
       <AppSidebar />
-      <SidebarInset className="flex flex-col h-app overflow-hidden">
+      <SidebarInset className="flex flex-col h-svh overflow-hidden">
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
           <SidebarTrigger className="md:hidden" />
           {subtitle && (
