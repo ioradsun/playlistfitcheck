@@ -104,7 +104,7 @@ function InlineLyricDanceInner(
       .maybeSingle()
       .then(({ data: row, error }) => {
         if (error || !row) { setFetchError(true); setLoading(false); return; }
-        setFetchedData((prev) => ({ ...(prev ?? {}), ...(row as Record<string, unknown>) } as LyricDanceData));
+        setFetchedData((prev) => ({ ...(prev ?? {}), ...(row as unknown as Record<string, unknown>) } as LyricDanceData));
         setLoading(false);
       });
   }, [lyricDanceId, prefetchedData, fullDataRequested, isBattleMode]);

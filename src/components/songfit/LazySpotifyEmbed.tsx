@@ -55,15 +55,15 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
         <div className="absolute inset-0 w-full rounded-xl animate-pulse" style={{ backgroundColor: "#1a1a1a" }} />
       )}
 
-      <div className="w-full">
+      <div className="w-full h-full flex flex-col">
         <iframe
           src={embedSrc}
           width="100%"
-          height={height}
+          height={platform === "soundcloud" ? 166 : "100%"}
           allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
           loading="lazy"
-          className="border-0 block relative z-10 transition-opacity duration-300"
-          style={{ opacity: iframeLoaded ? 1 : 0 }}
+          className="border-0 block relative z-10 transition-opacity duration-300 flex-1"
+          style={{ opacity: iframeLoaded ? 1 : 0, minHeight: platform === "soundcloud" ? 166 : 0 }}
           title={`Play ${trackTitle}`}
           scrolling={platform === "soundcloud" ? "no" : undefined}
           onLoad={() => setIframeLoaded(true)}
