@@ -10,6 +10,28 @@ import type { SiteCopy, AboutProduct } from "@/hooks/useSiteCopy";
 
 const TOOL_KEYS = ["songfit", "profit", "playlist", "mix", "lyric", "hitfit", "dreamfit"] as const;
 
+// Minimal defaults so the editor never crashes on missing keys
+const EDITOR_DEFAULTS: SiteCopy = {
+  tools: Object.fromEntries(TOOL_KEYS.map(k => [k, { label: k, pill: "" }])) as any,
+  about: { origin_intro: "", origin_body: "", origin_tagline: "", listen_label: "", tools_intro: "", products: [] },
+  sidebar: { brand: "", story_link: "" },
+  pages: { about_title: "", about_subtitle: "", auth_title: "" },
+  features: { crypto_tipping: false, growth_flow: false },
+  signals: { resolving_label: "", resolving_summary: "", detected_label: "", detected_summary: "", consensus_label: "", consensus_summary: "" },
+};
+
+function deepMergeEditor(target: any, source: any): any {
+  const result = { ...target };
+  for (const key of Object.keys(source)) {
+    if (source[key] && typeof source[key] === "object" && !Array.isArray(source[key]) && target[key] && typeof target[key] === "object" && !Array.isArray(target[key])) {
+      result[key] = deepMergeEditor(target[key], source[key]);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result;
+}
+
 export function CopyEditor() {
   const [copy, setCopy] = useState<SiteCopy | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,7 +46,11 @@ export function CopyEditor() {
         .select("copy_json")
         .limit(1)
         .single();
-      if (data?.copy_json) setCopy(data.copy_json as any);
+      if (data?.copy_json) {
+        setCopy(deepMergeEditor(EDITOR_DEFAULTS, data.copy_json as any));
+      } else {
+        setCopy(EDITOR_DEFAULTS);
+      }
       setLoading(false);
     })();
   }, []);
