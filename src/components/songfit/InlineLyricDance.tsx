@@ -14,7 +14,7 @@ import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { InlineLyricDancePlaybar } from "./InlineLyricDancePlaybar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { type DanceUpdatePayload, type ReactionInsertPayload, useRealtimeFeedHub } from "./RealtimeFeedHub";
-import type { CardState } from "./useCardLifecycle";
+import { CROWDFIT_MEDIA_DEACTIVATE_EVENT, type CardState } from "./useCardLifecycle";
 
 export interface InlineLyricDanceHandle {
   getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;
@@ -366,8 +366,8 @@ function InlineLyricDanceInner(
       setShowCover(true);
     };
 
-    window.addEventListener("crowdfit:media-deactivate", handleDeactivate);
-    return () => window.removeEventListener("crowdfit:media-deactivate", handleDeactivate);
+    window.addEventListener(CROWDFIT_MEDIA_DEACTIVATE_EVENT, handleDeactivate);
+    return () => window.removeEventListener(CROWDFIT_MEDIA_DEACTIVATE_EVENT, handleDeactivate);
   }, [isBattleMode, lyricDanceId, cardId, player]);
 
   // ── Handlers ─────────────────────────────────────────────────────────

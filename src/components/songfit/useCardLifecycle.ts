@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 export type CardState = "cold" | "warm" | "active";
 
+export const CROWDFIT_MEDIA_DEACTIVATE_EVENT = "crowdfit:media-deactivate";
+
 type LifecycleStore = {
   cardStates: Record<string, CardState>;
   activeCardId: string | null;
@@ -63,9 +65,9 @@ export function CardLifecycleProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const previousActiveId = previousActiveIdRef.current;
-    if (previousActiveId && previousActiveId !== store.activeCardId) {
+    if (typeof window !== "undefined" && previousActiveId && previousActiveId !== store.activeCardId) {
       window.dispatchEvent(
-        new CustomEvent("crowdfit:media-deactivate", {
+        new CustomEvent(CROWDFIT_MEDIA_DEACTIVATE_EVENT, {
           detail: { cardId: previousActiveId },
         }),
       );
