@@ -29,7 +29,7 @@ export function LyricDanceCover({
       {(badge || onExpand) && (
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-3">
           {badge ? (
-            <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 border border-white/10 rounded px-1.5 py-0.5">
+            <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
               {badge}
             </span>
           ) : <span />}

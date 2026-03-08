@@ -112,7 +112,7 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
       {/* "Now Streaming" badge — top left */}
       {iframeLoaded && (
         <div className="absolute top-3 left-3 z-20 pointer-events-none">
-          <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 border border-white/10 rounded px-1.5 py-0.5 bg-black/40 backdrop-blur-sm">
+          <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
             Now Streaming
           </span>
         </div>
