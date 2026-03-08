@@ -7,8 +7,10 @@
 
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineBattle } from "@/components/hookfit/InlineBattle";
+import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import type { HookInfo } from "@/components/hookfit/InlineBattle";
 
 interface Props {
@@ -26,6 +28,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
   const [error, setError] = useState(false);
   const [activePlaying, setActivePlaying] = useState<"a" | "b" | null>(null);
   const [hooksReady, setHooksReady] = useState(false);
+  const [showCover, setShowCover] = useState(true);
 
   // Parse slugs from URL and look up battle_id
   useEffect(() => {
@@ -147,8 +150,32 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
         />
       )}
 
-      {/* Title overlay top-left */}
-      {hooksReady && (
+      {/* Cover overlay — same pattern as InlineLyricDance */}
+      <AnimatePresence>
+        {(showCover || loading || !battleId) && !loading && battleId && hooksReady && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="absolute inset-0 z-20"
+          >
+            <LyricDanceCover
+              songName={songTitle}
+              waiting={false}
+              badge="Hook Battle"
+              onExpand={() => window.open(battleUrl, "_blank")}
+              onListen={(e) => {
+                e.stopPropagation();
+                setShowCover(false);
+                setActivePlaying("a");
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Title overlay top-left — only after cover dismissed */}
+      {hooksReady && !showCover && (
         <div
           className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10 pointer-events-none"
         >
@@ -164,8 +191,8 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
         </div>
       )}
 
-      {/* Bottom controls — one mute button per side */}
-      {hooksReady && (
+      {/* Bottom controls — only after cover dismissed */}
+      {hooksReady && !showCover && (
         <div className="absolute bottom-0 left-0 right-0 flex justify-between p-2 z-30 pointer-events-none">
           <button
             onClick={(e) => {
