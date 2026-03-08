@@ -32,7 +32,6 @@ import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { ChevronRight } from "lucide-react";
 import {
   PageSkeleton,
-  PlaylistFitSkeleton,
 } from "@/components/ui/PageSkeletons";
 
 const MixFitCheck = lazy(MixFitCheckImport);
@@ -72,12 +71,6 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
           : "Evaluating playlist health and generating vibe analysis"}
       </p>
     </div>
-  </div>
-);
-
-const TabChunkFallback = () => (
-  <div className="w-full px-4 py-6">
-    <PlaylistFitSkeleton variant="new" />
   </div>
 );
 
@@ -769,7 +762,8 @@ const Index = () => {
       case "songfit":
         return <div id="songfit-scroll-container" className="flex-1 px-4 py-6"><Suspense fallback={<PageSkeleton tool="songfit" mode="new" />}><SongFitTab /></Suspense></div>;
       case "hookfit":
-        return hookfitEnabled ? <div className="flex-1 px-4 py-6"><Suspense fallback={<PageSkeleton tool="hookfit" mode="new" />}><HookFitTab /></Suspense></div> : null;
+        if (!hookfitEnabled) return <PageSkeleton tool="songfit" mode="new" />;
+        return <div className="flex-1 px-4 py-6"><Suspense fallback={<PageSkeleton tool="hookfit" mode="new" />}><HookFitTab /></Suspense></div>;
       case "lyric":
         return (
           <div className="flex-1 flex flex-col min-h-0">
@@ -828,7 +822,7 @@ const Index = () => {
       case "profit": {
         return (
           <div className="flex-1 flex flex-col min-h-0">
-            <Suspense fallback={<TabChunkFallback />}>
+            <Suspense fallback={<PageSkeleton tool="profit" mode={screen.mode} />}>
               <ProFitTab initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>
@@ -866,7 +860,7 @@ const Index = () => {
       case "vibefit":
         return (
           <div className="flex-1 flex flex-col px-4 py-6">
-            <Suspense fallback={<TabChunkFallback />}>
+            <Suspense fallback={<PageSkeleton tool="vibefit" mode={screen.mode} />}>
               <VibeFitTab initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>

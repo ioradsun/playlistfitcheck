@@ -354,6 +354,38 @@ export const MixFitSkeleton = ({ variant }: { variant: Variant }) => {
   );
 };
 
+export const ProFitSkeleton = ({ variant }: { variant: Variant }) => (
+  <div className="w-full max-w-2xl mx-auto px-4 py-6 space-y-4">
+    <div className="rounded-xl border border-border/50 bg-muted/10 p-4 flex items-center gap-3">
+      <S className="h-9 flex-1 rounded-xl" />
+      <S className="h-9 w-24 rounded-xl" />
+    </div>
+    {variant === "existing" && (
+      <div className="space-y-3">
+        <S className="h-5 w-48" />
+        <S className="h-[200px] w-full rounded-xl" />
+        <S className="h-[160px] w-full rounded-xl" />
+      </div>
+    )}
+  </div>
+);
+
+export const VibeFitSkeleton = ({ variant }: { variant: Variant }) => (
+  <div className="w-full max-w-2xl mx-auto px-4 py-6 space-y-4">
+    <div className="rounded-xl border-2 border-dashed border-border/50 p-8 flex flex-col items-center gap-3">
+      <S className="h-10 w-10 rounded-xl" />
+      <S className="h-4 w-40" />
+      <S className="h-3 w-28" />
+    </div>
+    {variant === "existing" && (
+      <div className="space-y-3">
+        <S className="h-[180px] w-full rounded-xl" />
+        <S className="h-[140px] w-full rounded-xl" />
+      </div>
+    )}
+  </div>
+);
+
 const DreamCardSkeleton = () => (
   <div className="rounded-xl border border-border bg-muted/10 mx-4 my-3 p-4 space-y-3">
     <div className="flex items-center gap-3">
@@ -423,6 +455,8 @@ const skeletonRegistry: Record<string, SkeletonEntry> = {
   lyric:    LyricFitSkeleton,          // manages its own padding internally
   hitfit:   Padded(HitFitSkeleton),
   mix:      Padded(MixFitSkeleton),
+  profit:   ProFitSkeleton,
+  vibefit:  VibeFitSkeleton,
   dreamfit: Padded(DreamFitSkeleton),
   playlist: Padded(PlaylistFitSkeleton),
 };

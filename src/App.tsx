@@ -116,7 +116,7 @@ const App = () => (
                     <Route
                       path="/admin"
                       element={
-                        <Suspense fallback={<PageLayout subtitle="Admin"><div className="px-4 py-6" /></PageLayout>}>
+                        <Suspense fallback={<PageLayout subtitle="Admin"><div className="p-6 space-y-4"><div className="h-5 w-48 rounded bg-muted animate-pulse" /><div className="h-[400px] w-full rounded-xl bg-muted/50 animate-pulse" /></div></PageLayout>}>
                           <Admin />
                         </Suspense>
                       }
