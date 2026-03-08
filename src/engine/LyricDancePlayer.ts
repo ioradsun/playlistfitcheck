@@ -1218,6 +1218,11 @@ export class LyricDancePlayer {
     this.audio.muted = true;
     this.audio.preload = "auto";
     this.bootMode = options?.bootMode ?? "minimal";
+    // Battle mode (region players): start at quality tier 2 to halve GPU fill rate
+    // Two players running simultaneously = double the render cost
+    if (data.region_start != null && data.region_end != null) {
+      this._qualityTier = 2;
+    }
     this._handleVisibilityChange = this._handleVisibilityChangeImpl.bind(this);
     document.addEventListener("visibilitychange", this._handleVisibilityChange);
 
@@ -1527,7 +1532,16 @@ export class LyricDancePlayer {
     this.playing = true;
     const playStart = this.data.region_start ?? this.songStartSec;
     if (this.audio.currentTime <= 0 || this.data.region_start != null) {
-      this.audio.currentTime = playStart;
+      // Only seek if audio is ready; otherwise wait for canplay
+      if (this.audio.readyState >= 2) {
+        this.audio.currentTime = playStart;
+      } else if (this.data.region_start != null) {
+        const onReady = () => {
+          this.audio.removeEventListener("canplay", onReady);
+          if (!this.destroyed) this.audio.currentTime = playStart;
+        };
+        this.audio.addEventListener("canplay", onReady);
+      }
     }
     this.audio.play().catch(() => {});
     this.startHealthMonitor();
@@ -1999,7 +2013,9 @@ export class LyricDancePlayer {
       const prevDprBucket = tier >= 2 ? 'low' : 'full';
       this._qUpgradeStreak++;
       if (this._qUpgradeStreak >= 3) {
-        this._qualityTier = Math.max(0, tier - 1) as 0 | 1 | 2 | 3;
+        // Battle mode: never upgrade above tier 2 — two players share GPU
+        const minTier = (this.data.region_start != null && this.data.region_end != null) ? 2 : 0;
+        this._qualityTier = Math.max(minTier, tier - 1) as 0 | 1 | 2 | 3;
         this._qUpgradeStreak = 0;
         
         // Crossing back out of tier 2: restore full-DPR backing store
@@ -2048,10 +2064,12 @@ export class LyricDancePlayer {
 
     if (this._qualityTier > 0) {
       const prevBucket = this._qualityTier >= 2 ? 'low' : 'full';
-      this._qualityTier = 0;
+      // Battle mode: don't drop below tier 2 — two players need reduced GPU load
+      const minTier = (this.data.region_start != null && this.data.region_end != null) ? 2 : 0;
+      this._qualityTier = minTier as 0 | 1 | 2 | 3;
       this._qUpgradeStreak = 0;
-      console.info('[LyricEngine] quality tier reset to 0 after tab resume');
-      if (prevBucket === 'low') {
+      console.info(`[LyricEngine] quality tier reset to ${minTier} after tab resume`);
+      if (prevBucket === 'low' && this._qualityTier < 2) {
         this._applyDprToCanvas();
       }
     }
@@ -2095,12 +2113,15 @@ export class LyricDancePlayer {
 
       // Region loop: when audio passes region_end, seek back to region_start
       if (this.data.region_end != null && this.data.region_start != null) {
-        if (rawTime >= this.data.region_end || rawTime < this.data.region_start - 0.5) {
-          this.audio.currentTime = this.data.region_start;
-          this.conductor?.resetCursor();
-          this._beatCursor = 0;
-          this._lastBeatIndex = -1;
-          this.activeEvents = []; // Clear emotional events from previous loop
+        // Only seek when audio has buffered enough (readyState >= 2 = HAVE_CURRENT_DATA)
+        if (this.audio.readyState >= 2) {
+          if (rawTime >= this.data.region_end || rawTime < this.data.region_start - 0.5) {
+            this.audio.currentTime = this.data.region_start;
+            this.conductor?.resetCursor();
+            this._beatCursor = 0;
+            this._lastBeatIndex = -1;
+            this.activeEvents = [];
+          }
         }
       }
 
