@@ -260,23 +260,30 @@ function InlineLyricDanceInner(
 
   useEffect(() => {
     if (!player || !playerReady) return;
-    if (isVisible || isBattleMode) {
+    if (isBattleMode) {
+      // Battle mode: only the active side runs. Inactive side fully pauses (stops RAF + audio)
+      if (isActive) {
+        player.play();
+        player.setMuted(false);
+        setMuted(false);
+      } else {
+        player.pause();
+        player.setMuted(true);
+        setMuted(true);
+      }
+    } else if (isVisible) {
       player.play();
     } else {
       player.pause();
     }
-  }, [isVisible, isBattleMode, playerReady, player]);
+  }, [isVisible, isBattleMode, isActive, playerReady, player]);
 
 
   useEffect(() => {
-    if (!player) return;
+    if (!player || isBattleMode) return; // Battle mode handled above
     if (!isActive) {
       player.setMuted(true);
       setMuted(true);
-    } else if (isBattleMode) {
-      // In battle mode, isActive=true means this side is the active speaker
-      player.setMuted(false);
-      setMuted(false);
     }
   }, [isActive, isBattleMode, player]);
 
