@@ -10,14 +10,38 @@ import type { SiteCopy, AboutProduct } from "@/hooks/useSiteCopy";
 
 const TOOL_KEYS = ["songfit", "profit", "playlist", "mix", "lyric", "hitfit", "dreamfit"] as const;
 
-// Minimal defaults so the editor never crashes on missing keys
+// Mirror the DEFAULT_COPY from useSiteCopy so fields are pre-populated
 const EDITOR_DEFAULTS: SiteCopy = {
-  tools: Object.fromEntries(TOOL_KEYS.map(k => [k, { label: k, pill: "" }])) as any,
-  about: { origin_intro: "", origin_body: "", origin_tagline: "", listen_label: "", tools_intro: "", products: [] },
-  sidebar: { brand: "", story_link: "" },
-  pages: { about_title: "", about_subtitle: "", auth_title: "" },
-  features: { crypto_tipping: false, growth_flow: false },
-  signals: { resolving_label: "", resolving_summary: "", detected_label: "", detected_summary: "", consensus_label: "", consensus_summary: "" },
+  tools: {
+    songfit: { label: "CrowdFit", pill: "See how your song fits listeners." },
+    vibefit: { label: "VibeFit", pill: "Art & captions that fit your song.", heading: "Art & Captions That Fit Your Song", cta: "Fit My Vibe" },
+    profit: { label: "ProFit", pill: "See how you can profit from your Spotify", heading: "Turn Your Spotify Data Into A Revenue Strategy", cta: "Generate My Plan" },
+    playlist: { label: "PlaylistFit", pill: "See if your song fits playlists.", heading: "Check Playlist Health And Match Your Song", cta: "Analyze Playlist" },
+    mix: { label: "MixFit", pill: "See which mix fits best.", heading: "Compare Mix Versions And Choose The Best Fit", cta: "Start Comparing" },
+    lyric: { label: "LyricFit", pill: "Where your lyrics fit timing.", heading: "Get Perfectly Timed Lyrics For Every Drop", cta: "Sync Lyrics" },
+    hitfit: { label: "HitFit", pill: "See if your song fits the Top 10.", heading: "Compare Your Track to Your Target Sound", cta: "Analyze" },
+    dreamfit: { label: "DreamFit", pill: "Let's build the next Fit together." },
+    hookfit: { label: "HookFit", pill: "Get the hook that fits social." },
+  },
+  about: {
+    origin_intro: "",
+    origin_body: "",
+    origin_tagline: "toolsFM: experiments to find answers. let's agree to keep building.",
+    listen_label: "Listen to what started it all.",
+    tools_intro: "",
+    products: [],
+  },
+  sidebar: { brand: "toolsFM", story_link: "toolsFM story" },
+  pages: { about_title: "toolsFM story", about_subtitle: "What we built and why.", auth_title: "Join the FMly" },
+  features: { crypto_tipping: false, growth_flow: false, growth_quotas: { guest: 5, limited: 10 } },
+  signals: {
+    resolving_label: "STATUS: RESOLVING... ({n}/50 SIGNALS)",
+    resolving_summary: "ACQUIRING INITIAL SIGNAL FROM THE FMLY.",
+    detected_label: "STATUS: {n}/50 SIGNALS",
+    detected_summary: "COLLECTING DATA TO REACH UNIT CONSENSUS.",
+    consensus_label: "STATUS: CONSENSUS REACHED",
+    consensus_summary: "{pct}% OF THE FMLY RESONATE WITH THIS.",
+  },
 };
 
 function deepMergeEditor(target: any, source: any): any {
