@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
 import { Loader2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,6 +12,7 @@ import { SongFitInlineComposer } from "./SongFitInlineComposer";
 import { BillboardToggle } from "./BillboardToggle";
 import { StagePresence } from "./StagePresence";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
+import { CardLifecycleProvider, CardLifecycleContext, useCardState } from "./useCardLifecycle";
 
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
@@ -30,8 +31,6 @@ function LazyFeedCard({
   onRefresh,
   isBillboard,
   signalData,
-  isActive,
-  onPlay,
 }: {
   post: SongFitPost;
   rank?: number;
@@ -40,17 +39,19 @@ function LazyFeedCard({
   onRefresh: () => void;
   isBillboard?: boolean;
   signalData?: { total: number; replay_yes: number; saves_count?: number; signal_velocity?: number };
-  isActive: boolean;
-  onPlay: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [shouldMount, setShouldMount] = useState(false);
+  const lifecycle = useContext(CardLifecycleContext);
+  const { state } = useCardState(post.id);
+  const shouldMount = state !== "cold";
 
   useEffect(() => {
+    if (!lifecycle || shouldMount) return;
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setShouldMount(true);
+          lifecycle.setCardState(post.id, "warm");
           observer.disconnect();
         }
       },
@@ -58,7 +59,7 @@ function LazyFeedCard({
     );
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
-  }, []);
+  }, [lifecycle, post.id, shouldMount]);
 
   return (
     <div ref={ref} style={{ minHeight: FEED_CARD_MIN_HEIGHT }}>
@@ -71,8 +72,7 @@ function LazyFeedCard({
           onRefresh={onRefresh}
           isBillboard={isBillboard}
           signalData={signalData}
-          isActive={isActive}
-          onPlay={onPlay}
+          cardState={state}
         />
       ) : (
         <FeedCardPlaceholder />
@@ -100,7 +100,6 @@ export function SongFitFeed() {
   const [signalMap, setSignalMap] = useState<Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }>>({});
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const fetchPosts = useCallback(async () => {
@@ -442,30 +441,30 @@ export function SongFitFeed() {
           </p>
         </div>
       ) : (
-        <EagerEmbedProvider>
-          <div className="pb-24">
-            {posts.map((post, idx) => (
-              <LazyFeedCard
-                key={post.id}
-                post={post}
-                rank={feedView === "billboard" ? idx + 1 : undefined}
-                onOpenComments={setCommentPostId}
-                onOpenLikes={setLikesPostId}
-                onRefresh={fetchPosts}
-                isBillboard={feedView === "billboard"}
-                signalData={feedView === "billboard" ? signalMap[post.id] : undefined}
-                isActive={activeCardId === post.id}
-                onPlay={() => setActiveCardId(post.id)}
-              />
-            ))}
-            {feedView !== "billboard" && <div ref={loadMoreRef} className="h-1" />}
-            {isLoadingMore && (
-              <div className="flex justify-center py-5">
-                <Loader2 size={18} className="animate-spin text-muted-foreground" />
-              </div>
-            )}
-          </div>
-        </EagerEmbedProvider>
+        <CardLifecycleProvider>
+          <EagerEmbedProvider>
+            <div className="pb-24">
+              {posts.map((post, idx) => (
+                <LazyFeedCard
+                  key={post.id}
+                  post={post}
+                  rank={feedView === "billboard" ? idx + 1 : undefined}
+                  onOpenComments={setCommentPostId}
+                  onOpenLikes={setLikesPostId}
+                  onRefresh={fetchPosts}
+                  isBillboard={feedView === "billboard"}
+                  signalData={feedView === "billboard" ? signalMap[post.id] : undefined}
+                />
+              ))}
+              {feedView !== "billboard" && <div ref={loadMoreRef} className="h-1" />}
+              {isLoadingMore && (
+                <div className="flex justify-center py-5">
+                  <Loader2 size={18} className="animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+          </EagerEmbedProvider>
+        </CardLifecycleProvider>
       )}
 
       <SongFitComments
