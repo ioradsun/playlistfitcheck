@@ -1,15 +1,15 @@
 import { forwardRef } from "react";
 import { motion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useTrailblazer } from "@/hooks/useTrailblazer";
+import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 
-interface TrailblazerBadgeProps {
+interface FmlyBadgeProps {
   userId?: string | null;
   compact?: boolean;
 }
 
-export const TrailblazerBadge = forwardRef<HTMLSpanElement, TrailblazerBadgeProps>(function TrailblazerBadge({ userId, compact = false }, ref) {
-  const { number, total, isBlazer, loading } = useTrailblazer(userId);
+export const FmlyBadge = forwardRef<HTMLSpanElement, FmlyBadgeProps>(function FmlyBadge({ userId, compact = false }, ref) {
+  const { number, total, isBlazer, loading } = useFmlyNumber(userId);
 
   if (loading || !isBlazer) return null;
 
@@ -31,7 +31,7 @@ export const TrailblazerBadge = forwardRef<HTMLSpanElement, TrailblazerBadgeProp
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs max-w-[240px] space-y-1">
         <p className="font-semibold font-mono">FMLY · UNIT {serial}</p>
-        <p>One of the first artists shaping the future of toolsFM.</p>
+        <p>One of the first 1,000 artists in the toolsFM family.</p>
       </TooltipContent>
     </Tooltip>
   );

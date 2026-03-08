@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import type { SongFitPost } from "./types";
 import { formatDistanceToNow } from "date-fns";
 import { ProfileHoverCard } from "./ProfileHoverCard";
-import { TrailblazerBadge } from "@/components/TrailblazerBadge";
+import { FmlyBadge } from "@/components/FmlyBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent, logImpression } from "@/lib/engagementTracking";
@@ -249,7 +249,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
               </div>
             </div>
           </ProfileHoverCard>
-          <TrailblazerBadge userId={post.user_id} compact />
+          <FmlyBadge userId={post.user_id} compact />
           
         </div>
 

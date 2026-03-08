@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
 import { Music, X } from "lucide-react";
-import { TrailblazerBadge } from "./TrailblazerBadge";
+import { FmlyBadge } from "./FmlyBadge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -11,7 +11,7 @@ import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { FitWidgetInviteModal } from "./FitWidgetInviteModal";
-import { useTrailblazer } from "@/hooks/useTrailblazer";
+import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { useNavigate } from "react-router-dom";
 
 const TOOLS = ["hitfit", "vibefit", "profit", "playlist", "mix", "lyric"] as const;
@@ -60,7 +60,7 @@ export function FitWidget() {
   const tier = !user ? "anonymous" : isUnlimited ? "unlimited" : "limited";
   const inviteCode = (profile as any)?.invite_code ?? null;
   const navigate = useNavigate();
-  const { total: pioneerTotal } = useTrailblazer();
+  const { total: pioneerTotal } = useFmlyNumber();
 
   // Listen for social share unlock
   useEffect(() => {
@@ -137,7 +137,7 @@ export function FitWidget() {
               <Music size={14} className="text-primary" />
             </div>
             {user ? (
-              <TrailblazerBadge userId={user.id} compact />
+              <FmlyBadge userId={user.id} compact />
             ) : tier !== "unlimited" ? (
               <Badge variant="default" className="text-[10px] h-5 bg-muted-foreground/80 text-white">Guest</Badge>
             ) : null}

@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { ProfileHoverCard } from "@/components/songfit/ProfileHoverCard";
-import { TrailblazerBadge } from "@/components/TrailblazerBadge";
+import { FmlyBadge } from "@/components/FmlyBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import {
   DropdownMenu,
@@ -316,7 +316,7 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
               </div>
             </div>
           </ProfileHoverCard>
-          <TrailblazerBadge userId={post.user_id} compact />
+          <FmlyBadge userId={post.user_id} compact />
         </div>
 
         <DropdownMenu>

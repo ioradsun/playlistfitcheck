@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Dream } from "./types";
 import { DreamSignal } from "./DreamSignal";
 import { formatDistanceToNow } from "date-fns";
-import { TrailblazerBadge } from "@/components/TrailblazerBadge";
+import { FmlyBadge } from "@/components/FmlyBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { ProfileHoverCard } from "@/components/songfit/ProfileHoverCard";
 import {
@@ -84,7 +84,7 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
               </div>
             </div>
           </ProfileHoverCard>
-          <TrailblazerBadge userId={dream.user_id} compact />
+          <FmlyBadge userId={dream.user_id} compact />
         </div>
 
         {showMenu && (

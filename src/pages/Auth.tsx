@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useTrailblazer } from "@/hooks/useTrailblazer";
+import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,7 +50,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const { user } = useAuth();
-  const { nextNumber, spotsRemaining, loading: blazerLoading } = useTrailblazer();
+  const { nextNumber, spotsRemaining, loading: blazerLoading } = useFmlyNumber();
   const navigate = useNavigate();
   const location = useLocation();
   const returnTab = (location.state as any)?.returnTab;
@@ -265,7 +265,7 @@ const Auth = () => {
                 {String(nextNumber).padStart(4, "0")}
               </span>
               <span className="text-xs text-muted-foreground">
-                is your Trailblazer badge
+                is your FMLY number
               </span>
             </div>
             <p className="text-[11px] text-muted-foreground/60">
