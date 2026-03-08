@@ -20,7 +20,7 @@ export function AuthNudge({ onDismiss }: AuthNudgeProps) {
             <span className="font-mono font-semibold text-amber-300">
               #{String(nextNumber).padStart(4, "0")}
             </span>
-            {" "}— {spotsRemaining.toLocaleString()} spots left.{" "}
+            {" "}— — {spotsRemaining.toLocaleString()} badges left.{" "}
             <button
               className="underline font-medium hover:text-amber-300 transition-colors"
               onClick={() => navigate("/auth?mode=signup")}

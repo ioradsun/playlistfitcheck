@@ -269,7 +269,7 @@ const Auth = () => {
               </span>
             </div>
             <p className="text-[11px] text-muted-foreground/60">
-              {spotsRemaining.toLocaleString()} of 1,000 spots left · yours forever once you sign up
+              {spotsRemaining.toLocaleString()} badges left. Yours locked in forever once you sign up
             </p>
           </div>
         )}
