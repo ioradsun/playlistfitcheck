@@ -249,15 +249,12 @@ export function SongFitFeed() {
       .limit(FEED_PAGE_SIZE);
 
     let nextPosts = (data || []) as unknown as SongFitPost[];
-    if (feedView === "pending" || feedView === "resolved") {
-      const postIds = nextPosts.map(p => p.id);
-      const { data: reviews } = postIds.length > 0
-        ? await supabase.from("songfit_hook_reviews").select("post_id").in("post_id", postIds)
-        : { data: [] };
-      const signaled = new Set((reviews || []).map(r => r.post_id));
-      nextPosts = feedView === "pending"
-        ? nextPosts.filter(p => !signaled.has(p.id))
-        : nextPosts.filter(p => signaled.has(p.id));
+    if (feedView === "now_streaming") {
+      nextPosts = nextPosts.filter(p => !!p.spotify_track_id);
+    } else if (feedView === "in_studio") {
+      nextPosts = nextPosts.filter(p => !!p.lyric_dance_url && !!p.lyric_dance_id);
+    } else if (feedView === "in_battle") {
+      nextPosts = nextPosts.filter(p => !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id);
     }
 
     if (nextPosts.length > 0) {

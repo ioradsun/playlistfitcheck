@@ -67,7 +67,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                     : "font-normal text-muted-foreground"
                 )}
               >
-                {view === "pending" ? "Pending" : view === "resolved" ? "Resolved" : "Recent"}
+                {recentSubViews.find(s => s.key === view)?.label ?? "All"}
                 <ChevronDown
                   size={12}
                   className={cn(
