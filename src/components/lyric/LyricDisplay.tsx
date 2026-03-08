@@ -53,6 +53,7 @@ import { DirectorsCutPanel } from "./DirectorsCutPanel";
 import { deriveFrameState, type FrameRenderState as FullFrameRenderState } from "@/engine/presetDerivation";
 import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";
+import { CustomHookSelector } from "./CustomHookSelector";
 // PublishLyricDanceButton removed — publishing handled by FitTab
 import {
   applyProfanityFilter,
@@ -109,6 +110,10 @@ export interface LyricHook {
   reasonCodes: string[];
   previewText: string;
   status?: "confirmed" | "candidate"; // v2.2: candidate = confidence < 0.75
+}
+
+export interface SavedCustomHook extends LyricHook {
+  color: string;
 }
 
 export interface LyricMetadata {
@@ -368,9 +373,12 @@ export function LyricDisplay({
 
   // Clip loop state
   const [activeHookIndex, setActiveHookIndex] = useState<number | null>(null);
+  const [activeCustomHookIndex, setActiveCustomHookIndex] = useState<number | null>(null);
   const [clipProgress, setClipProgress] = useState(0); // 0-1 for the progress ring
   const clipProgressRafRef = useRef<number | null>(null);
   const loopRegionRef = useRef<{ start: number; end: number } | null>(null);
+  const [hookViewMode, setHookViewMode] = useState<"ai" | "custom">("ai");
+  const [savedCustomHooks, setSavedCustomHooks] = useState<SavedCustomHook[]>([]);
 
   // Version state
   const [activeVersion, setActiveVersion] = useState<ActiveVersion>("explicit");
@@ -792,6 +800,7 @@ export function LyricDisplay({
       setIsPlaying(false);
       loopRegionRef.current = null;
       setActiveHookIndex(null);
+      setActiveCustomHookIndex(null);
       if (clipProgressRafRef.current)
         cancelAnimationFrame(clipProgressRafRef.current);
     } else {
@@ -807,6 +816,7 @@ export function LyricDisplay({
       const wasPlaying = !audio.paused;
       loopRegionRef.current = null;
       setActiveHookIndex(null);
+      setActiveCustomHookIndex(null);
       if (clipProgressRafRef.current)
         cancelAnimationFrame(clipProgressRafRef.current);
       audio.currentTime = time;
@@ -831,6 +841,7 @@ export function LyricDisplay({
       if (activeHookIndex === hookIdx) {
         loopRegionRef.current = null;
         setActiveHookIndex(null);
+        setActiveCustomHookIndex(null);
         if (clipProgressRafRef.current)
           cancelAnimationFrame(clipProgressRafRef.current);
         setClipProgress(0);
@@ -840,6 +851,7 @@ export function LyricDisplay({
       }
       loopRegionRef.current = { start: hook.start, end: hook.end };
       setActiveHookIndex(hookIdx);
+      setActiveCustomHookIndex(null);
       audio.currentTime = hook.start;
       audio.play();
       setIsPlaying(true);
@@ -861,6 +873,28 @@ export function LyricDisplay({
     },
     [activeHookIndex],
   );
+
+  const handleSaveCustomHook = useCallback((hook: LyricHook) => {
+    const colors = ["#f59e0b", "#8b5cf6", "#ec4899"];
+    setSavedCustomHooks((prev) => {
+      if (prev.length >= 3) return prev;
+      return [...prev, { ...hook, color: colors[prev.length % colors.length] }];
+    });
+  }, []);
+
+  const handleRemoveCustomHook = useCallback((idx: number) => {
+    setSavedCustomHooks((prev) => prev.filter((_, i) => i !== idx));
+    setActiveCustomHookIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === idx) {
+        setActiveHookIndex(null);
+        loopRegionRef.current = null;
+        setIsPlaying(false);
+        return null;
+      }
+      return prev > idx ? prev - 1 : prev;
+    });
+  }, []);
 
   // ── Copy Clip Info ────────────────────────────────────────────────────────
   const copyClipInfo = useCallback((hook: LyricHook) => {
@@ -1942,121 +1976,180 @@ export function LyricDisplay({
                   <div className="flex items-center gap-1.5">
                     <Zap size={11} className="text-primary" />
                     <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                      {hasBattle ? "Hook Battle" : "Hottest Hook"}
+                      HOTTEST HOOKS
                     </span>
                   </div>
 
-                  {hooks2.map((hook, idx) => {
-                    const isLooping = activeHookIndex === idx;
-                    const clipDuration = hook.end - hook.start;
-                    return (
-                      <div
-                        key={idx}
-                        className={`space-y-1.5 ${idx > 0 ? "pt-2 border-t border-border/20" : ""}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          {hasBattle && (
-                            <span className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">
-                              {labels[idx] || `Hook ${idx + 1}`}
-                            </span>
-                          )}
-                          {hook.score > 0 && (
-                            <span
-                              className={`text-[10px] font-mono tabular-nums ${hookScoreColor(hook.score)}`}
+                  <div className="rounded-xl border border-border/30 bg-background/30 p-1 grid grid-cols-2 gap-1">
+                    <button
+                      onClick={() => setHookViewMode("ai")}
+                      className={`rounded-lg px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
+                        hookViewMode === "ai"
+                          ? "bg-primary/20 text-primary"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      AI Detect
+                    </button>
+                    <button
+                      onClick={() => setHookViewMode("custom")}
+                      className={`rounded-lg px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
+                        hookViewMode === "custom"
+                          ? "bg-primary/20 text-primary"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Your Hooks
+                    </button>
+                  </div>
+
+                  {hookViewMode === "ai" ? (
+                    hooks2.map((hook, idx) => {
+                      const isLooping = activeHookIndex === idx;
+                      const clipDuration = hook.end - hook.start;
+                      return (
+                        <div
+                          key={idx}
+                          className={`space-y-1.5 ${idx > 0 ? "pt-2 border-t border-border/20" : ""}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            {hasBattle && (
+                              <span className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">
+                                {labels[idx] || `Hook ${idx + 1}`}
+                              </span>
+                            )}
+                            {hook.score > 0 && (
+                              <span
+                                className={`text-[10px] font-mono tabular-nums ${hookScoreColor(hook.score)}`}
+                              >
+                                {Math.round(hook.score)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            {hook.previewText && (
+                              <p className="text-sm font-medium text-foreground leading-snug flex-1">
+                                "{hook.previewText}"
+                              </p>
+                            )}
+                            <button
+                              onClick={() => playClip(hook, idx)}
+                              className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300 flex-shrink-0 ml-2 ${
+                                isLooping
+                                  ? "text-primary bg-primary/10"
+                                  : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              }`}
+                              title={isLooping ? "Stop clip" : "Play clip"}
                             >
-                              {Math.round(hook.score)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          {hook.previewText && (
-                            <p className="text-sm font-medium text-foreground leading-snug flex-1">
-                              "{hook.previewText}"
-                            </p>
-                          )}
-                          <button
-                            onClick={() => playClip(hook, idx)}
-                            className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300 flex-shrink-0 ml-2 ${
-                              isLooping
-                                ? "text-primary bg-primary/10"
-                                : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                            }`}
-                            title={isLooping ? "Stop clip" : "Play clip"}
-                          >
-                            <svg
-                              width="28"
-                              height="28"
-                              viewBox="0 0 28 28"
-                              className="absolute inset-0"
-                              style={{ transform: "rotate(-90deg)" }}
-                            >
-                              <circle
-                                cx="14"
-                                cy="14"
-                                r={10}
-                                fill="none"
-                                stroke="currentColor"
-                                strokeOpacity={0.12}
-                                strokeWidth="2"
-                              />
-                              {isLooping && (
+                              <svg
+                                width="28"
+                                height="28"
+                                viewBox="0 0 28 28"
+                                className="absolute inset-0"
+                                style={{ transform: "rotate(-90deg)" }}
+                              >
                                 <circle
                                   cx="14"
                                   cy="14"
                                   r={10}
                                   fill="none"
                                   stroke="currentColor"
-                                  strokeOpacity={0.9}
+                                  strokeOpacity={0.12}
                                   strokeWidth="2"
-                                  strokeDasharray={Math.PI * 2 * 10}
-                                  strokeDashoffset={
-                                    Math.PI * 2 * 10 * (1 - clipProgress)
-                                  }
-                                  strokeLinecap="round"
-                                  style={{
-                                    transition: "stroke-dashoffset 0.1s linear",
-                                  }}
                                 />
+                                {isLooping && (
+                                  <circle
+                                    cx="14"
+                                    cy="14"
+                                    r={10}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeOpacity={0.9}
+                                    strokeWidth="2"
+                                    strokeDasharray={Math.PI * 2 * 10}
+                                    strokeDashoffset={
+                                      Math.PI * 2 * 10 * (1 - clipProgress)
+                                    }
+                                    strokeLinecap="round"
+                                    style={{
+                                      transition: "stroke-dashoffset 0.1s linear",
+                                    }}
+                                  />
+                                )}
+                              </svg>
+                              {isLooping ? (
+                                <Pause size={10} />
+                              ) : (
+                                <Play size={10} />
                               )}
-                            </svg>
-                            {isLooping ? (
-                              <Pause size={10} />
-                            ) : (
-                              <Play size={10} />
-                            )}
-                          </button>
-                        </div>
-                        <p
-                          className="text-[10px] font-mono text-muted-foreground"
-                          title={justifications[idx] || undefined}
-                        >
-                          {formatTimeShort(hook.start)} –{" "}
-                          {formatTimeShort(hook.end)}
-                          <span className="ml-1 text-muted-foreground/40">
-                            ({Math.round(clipDuration)}s)
-                          </span>
-                        </p>
-                        {renderData?.motionProfileSpec && (
-                          <button
-                            onClick={() => {
-                              if (hookDanceRunning) {
-                                hookDanceRef.current?.stop();
-                                return;
-                              }
-                              setShowDirectorsCut(true);
-                            }}
-                            className={`w-full text-[10px] font-mono transition-colors py-1 ${
-                              hookDanceRunning
-                                ? "text-primary"
-                                : "text-muted-foreground/60 hover:text-muted-foreground"
-                            }`}
+                            </button>
+                          </div>
+                          <p
+                            className="text-[10px] font-mono text-muted-foreground"
+                            title={justifications[idx] || undefined}
                           >
-                            {hookDanceRunning ? "Stop Dance" : "See Hook Dance"}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
+                            {formatTimeShort(hook.start)} –{" "}
+                            {formatTimeShort(hook.end)}
+                            <span className="ml-1 text-muted-foreground/40">
+                              ({Math.round(clipDuration)}s)
+                            </span>
+                          </p>
+                          {renderData?.motionProfileSpec && (
+                            <button
+                              onClick={() => {
+                                if (hookDanceRunning) {
+                                  hookDanceRef.current?.stop();
+                                  return;
+                                }
+                                setShowDirectorsCut(true);
+                              }}
+                              className={`w-full text-[10px] font-mono transition-colors py-1 ${
+                                hookDanceRunning
+                                  ? "text-primary"
+                                  : "text-muted-foreground/60 hover:text-muted-foreground"
+                              }`}
+                            >
+                              {hookDanceRunning ? "Stop Dance" : "See Hook Dance"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <CustomHookSelector
+                      lines={data.lines}
+                      aiHooks={hooks2}
+                      audioRef={audioRef}
+                      loopRegionRef={loopRegionRef}
+                      activeHookIndex={
+                        activeCustomHookIndex !== null ? activeCustomHookIndex + 100 : null
+                      }
+                      setActiveHookIndex={(idx) => {
+                        setActiveHookIndex(null);
+                        if (idx === null) {
+                          setActiveCustomHookIndex(null);
+                          return;
+                        }
+                        setActiveCustomHookIndex(idx - 100);
+                      }}
+                      clipProgress={clipProgress}
+                      setClipProgress={setClipProgress}
+                      clipProgressRafRef={clipProgressRafRef}
+                      setIsPlaying={setIsPlaying}
+                      onSaveHook={handleSaveCustomHook}
+                      savedCustomHooks={savedCustomHooks}
+                      onRemoveHook={handleRemoveCustomHook}
+                    />
+                  )}
+
+                  {hookViewMode === "custom" && savedCustomHooks.length > 0 && (
+                    <button
+                      onClick={() => setBattlePopupUrl("/fit")}
+                      className="w-full rounded-lg border border-primary/40 bg-primary/10 py-1.5 text-[10px] font-mono uppercase tracking-wider text-primary hover:bg-primary/15"
+                    >
+                      ⚡ Start CrowdFit Battle
+                    </button>
+                  )}
 
                   {/* Publish Hook Battle / Hook Page — below both hooks */}
                   {renderData?.motionProfileSpec && beatGrid && (
@@ -2073,7 +2166,7 @@ export function LyricDisplay({
                         confidence: beatGrid.confidence,
                       }}
                       audioFile={audioFile}
-                       songTitle={data.title}
+                      songTitle={data.title}
                       system={
                         hookDanceOverrides.system || renderData.motionProfileSpec.system
                       }
