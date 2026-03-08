@@ -314,6 +314,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             songTitle={post.track_title}
             artistName={displayName}
             votedSide={votedBattleSide}
+            onPlay={activate}
           />
         ) : (
           <LazySpotifyEmbed
