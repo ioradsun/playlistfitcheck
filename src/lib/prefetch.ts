@@ -38,12 +38,13 @@ export function consumeFeedPrefetch() {
 
 // Site copy — consumed by SiteCopyProvider
 export let siteCopyPrefetch: Promise<{ data: any; error: any }> | null =
-  supabase
-    .from("site_copy")
-    .select("copy_json")
-    .limit(1)
-    .single()
-    .then((result) => result);
+  Promise.resolve(
+    supabase
+      .from("site_copy")
+      .select("copy_json")
+      .limit(1)
+      .single()
+  ).then((result) => result);
 
 export function consumeSiteCopyPrefetch() {
   const p = siteCopyPrefetch;

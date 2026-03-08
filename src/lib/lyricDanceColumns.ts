@@ -9,9 +9,9 @@
 
 export const LYRIC_DANCE_COLUMNS =
   "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
-  "motion_profile_spec,cinematic_direction,section_images,scene_context,frame_state," +
+  "cinematic_direction,section_images,scene_context,scene_manifest," +
   "auto_palettes,beat_grid,palette,system_type,seed,artist_dna,physics_spec";
 
 export const LYRIC_DANCE_FEED_COLUMNS =
   "id,artist_slug,song_slug,artist_name,song_name,audio_url," +
-  "cover_image_url,top_reaction,auto_palettes,palette,section_images";
+  "auto_palettes,palette,section_images";
