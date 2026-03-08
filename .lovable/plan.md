@@ -1,31 +1,22 @@
 
 
-# Download Export Modal — Implementation Complete
+## Make content-type badges more visible with green pill styling
 
-## Summary
+**What changes**: Update all "Now Streaming", "In Studio", and "In Battle" badges from the current ghosted white/30 style to a green pill that pops against the dark media backgrounds.
 
-Replaced the "Republish" button in the FIT tab with a "Download" button that opens a full export modal (`FitExportModal`). Removed the download popover from the `ShareableLyricDance` page.
+**Files to update** (5 locations across 4 files):
 
-## Files Changed
+1. **`src/components/songfit/SongFitPostCard.tsx`** (line 320) — "Now Streaming" on Tier 1 cover
+2. **`src/components/songfit/LazySpotifyEmbed.tsx`** (line 115) — "Now Streaming" on Spotify embed
+3. **`src/components/songfit/InlineBattleFeed.tsx`** (line 295) — "In Battle"
+4. **`src/components/lyric/LyricDanceCover.tsx`** (line 32) — "In Studio" badge
+5. **`src/pages/ShareableHook.tsx`** (line 366) — "In Battle" on shareable page
 
-| File | Action |
-|------|--------|
-| `src/components/lyric/FitExportModal.tsx` | **Created** — Export modal with format/quality selection, progress states, download |
-| `src/components/songfit/InlineLyricDance.tsx` | **Edited** — Added `forwardRef` + `useImperativeHandle` to expose player |
-| `src/components/lyric/FitTab.tsx` | **Edited** — Replaced Republish with Download button + FitExportModal |
-| `src/pages/ShareableLyricDance.tsx` | **Edited** — Removed download popover, export state, and handleExport |
+**New shared badge classes** (replacing `text-white/30 border border-white/10 bg-black/40 backdrop-blur-sm`):
 
-## Architecture
+```
+text-green-400 border border-green-400/30 bg-green-500/15 backdrop-blur-sm
+```
 
-- `InlineLyricDance` exposes `InlineLyricDanceHandle.getPlayer()` via `forwardRef`
-- `FitTab` holds a ref to `InlineLyricDance` and passes `getPlayer` to `FitExportModal`
-- `FitExportModal` uses `exportVideoAsMP4` from `src/engine/exportVideo.ts` (WebCodecs + mp4-muxer)
-- Export is video-only; audio notice is displayed in the modal
+This gives a soft green glow pill — visible but not garish. The mono uppercase tracking stays the same for brand consistency.
 
-## Export Options
-
-| Quality | 9:16 | 16:9 | 1:1 |
-|---------|------|------|-----|
-| 1080p | 1080×1920 | 1920×1080 | 1080×1080 |
-| 720p | 720×1280 | 1280×720 | 720×720 |
-| 480p | 480×854 | 854×480 | 480×480 |
