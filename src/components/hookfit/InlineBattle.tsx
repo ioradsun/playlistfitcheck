@@ -58,9 +58,11 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const [hookB, setHookB] = useState<HookInfo | null>(null);
   const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sharedImagesReady, setSharedImagesReady] = useState(false);
   const fetchRef = useRef(0);
   const hookEndFiredA = useRef(false);
   const hookEndFiredB = useRef(false);
+  const sharedImagesRef = useRef<HTMLImageElement[]>([]);
 
   useImperativeHandle(ref, () => ({}), []);
 
@@ -72,6 +74,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     setHookB(null);
     setDanceData(null);
     setLoading(true);
+    setSharedImagesReady(false);
     hookEndFiredA.current = false;
     hookEndFiredB.current = false;
 
@@ -166,6 +169,36 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     return () => clearTimeout(timer);
   }, [activePlaying, hookB, onHookEnd]);
 
+  useEffect(() => {
+    if (!danceData) return;
+    const urls = danceData.section_images?.filter((url): url is string => Boolean(url)) ?? [];
+    if (urls.length === 0) {
+      sharedImagesRef.current = [];
+      setSharedImagesReady(true);
+      return;
+    }
+
+    setSharedImagesReady(false);
+    let cancelled = false;
+    Promise.all(
+      urls.map((url) => new Promise<HTMLImageElement>((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(new Image());
+        img.src = url;
+      })),
+    ).then((images) => {
+      if (cancelled) return;
+      sharedImagesRef.current = images;
+      setSharedImagesReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [danceData?.id, danceData?.section_images]);
+
   // ── Loading / no data ──────────────────────────────────────
   if (loading || !hookA) {
     return (
@@ -182,6 +215,17 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     return (
       <div className="w-full h-full bg-black/50 flex items-center justify-center text-muted-foreground text-xs font-mono">
         No lyric dance found for this song
+      </div>
+    );
+  }
+
+  if (!sharedImagesReady) {
+    return (
+      <div className="w-full h-full bg-black/30 animate-pulse">
+        <div className="flex h-full gap-1 p-1">
+          <div className="flex-1 rounded-lg bg-white/[0.03]" />
+          <div className="flex-1 rounded-lg bg-white/[0.03]" />
+        </div>
       </div>
     );
   }
@@ -205,7 +249,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             songTitle={danceData.song_name}
             artistName={danceData.artist_name || ""}
             prefetchedData={danceData}
-            bootMode="full"
+            bootMode="minimal"
+            preloadedImages={sharedImagesRef.current}
             isActive={isActive && activePlaying === "a"}
             regionStart={hookA.hook_start}
             regionEnd={hookA.hook_end}
@@ -237,7 +282,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
               songTitle={danceData.song_name}
               artistName={danceData.artist_name || ""}
               prefetchedData={danceData}
-              bootMode="full"
+              bootMode="minimal"
+              preloadedImages={sharedImagesRef.current}
               isActive={isActive && activePlaying === "b"}
               regionStart={hookB.hook_start}
               regionEnd={hookB.hook_end}

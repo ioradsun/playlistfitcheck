@@ -38,6 +38,7 @@ interface Props {
   regionEnd?: number;
   onPlay?: () => void;
   reactionData?: Record<string, { line: Record<number, number>; total: number }>;
+  preloadedImages?: HTMLImageElement[];
 }
 
 // Shared IntersectionObserver across all embedded players
@@ -65,7 +66,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { postId, lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, cardState = "warm", regionStart, regionEnd, onPlay, reactionData: reactionDataProp }: Props,
+  { postId, lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, cardState = "warm", regionStart, regionEnd, onPlay, reactionData: reactionDataProp, preloadedImages }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
@@ -261,7 +262,7 @@ function InlineLyricDanceInner(
 
   // ── Player lifecycle ──────────────────────────────────────────────────
   const { player, playerReady, data } = useLyricDancePlayer(
-    playerData, canvasRef, textCanvasRef, containerRef, { bootMode },
+    playerData, canvasRef, textCanvasRef, containerRef, { bootMode, preloadedImages },
   );
 
   // Apply transcript buffered before player was ready

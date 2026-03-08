@@ -17,6 +17,7 @@ import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 interface Options {
   bootMode?: "minimal" | "full";
   onReady?: (player: LyricDancePlayer) => void;
+  preloadedImages?: HTMLImageElement[];
 }
 
 export interface UseLyricDancePlayerReturn {
@@ -34,7 +35,7 @@ export function useLyricDancePlayer(
   containerRef: React.RefObject<HTMLDivElement>,
   options: Options = {},
 ): UseLyricDancePlayerReturn {
-  const { bootMode = "minimal", onReady } = options;
+  const { bootMode = "minimal", onReady, preloadedImages } = options;
 
   const [data, setData] = useState<LyricDanceData | null>(initialData);
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
@@ -76,7 +77,7 @@ export function useLyricDancePlayer(
         canvasRef.current!,
         textCanvasRef.current!,
         containerRef.current as HTMLDivElement,
-        { bootMode },
+        { bootMode, preloadedImages },
       );
       playerRef.current = p;
       setPlayer(p);
