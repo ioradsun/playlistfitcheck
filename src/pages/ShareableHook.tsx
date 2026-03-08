@@ -29,9 +29,24 @@ export default function ShareableHook() {
   const [voteCountA, setVoteCountA] = useState(0);
   const [voteCountB, setVoteCountB] = useState(0);
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [replayingSide, setReplayingSide] = useState<"a" | "b" | null>(null);
-  const [resultsExpanded, setResultsExpanded] = useState(false);
+  const [lineReactions, setLineReactions] = useState<Record<string, string>>({});
   const userIdRef = useRef<string | null | undefined>(undefined);
+
+  const toggleLineReaction = useCallback((side: "a" | "b", lineIndex: number) => {
+    const key = `${side}-${lineIndex}`;
+    setLineReactions((prev) => {
+      if (!selectedEmoji) return prev;
+      const next = { ...prev };
+      if (next[key] === selectedEmoji) {
+        delete next[key];
+      } else {
+        next[key] = selectedEmoji;
+      }
+      return next;
+    });
+  }, [selectedEmoji]);
 
   // Progress tracking
   const [roundProgress, setRoundProgress] = useState(0);
@@ -56,16 +71,15 @@ export default function ShareableHook() {
       const selectedHook = hookRow as unknown as (HookInfo & { battle_id?: string });
       setHook(selectedHook);
 
-      if (!selectedHook.battle_id) {
-        const { data: dances } = await supabase
-          .from("shareable_lyric_dances" as any)
-          .select(LYRIC_DANCE_COLUMNS)
-          .eq("artist_slug", artistSlug)
-          .eq("song_slug", songSlug)
-          .limit(1);
-        if (dances && dances.length > 0) {
-          setDanceData(dances[0] as unknown as LyricDanceData);
-        }
+      // Always fetch dance data — needed for lyrics in the results panel
+      const { data: dances } = await supabase
+        .from("shareable_lyric_dances" as any)
+        .select(LYRIC_DANCE_COLUMNS)
+        .eq("artist_slug", artistSlug)
+        .eq("song_slug", songSlug)
+        .limit(1);
+      if (dances && dances.length > 0) {
+        setDanceData(dances[0] as unknown as LyricDanceData);
       }
       setLoading(false);
     })();
@@ -251,6 +265,20 @@ export default function ShareableHook() {
   }, [hookA, hook]);
 
   const hookPhrase = hookA?.hook_phrase || hookB?.hook_phrase || null;
+
+  const hookALines = useMemo(() => {
+    if (!danceData?.lyrics || !hookA) return [];
+    return danceData.lyrics.filter(
+      (l: any) => l.start >= hookA.hook_start - 0.3 && l.end <= hookA.hook_end + 0.3,
+    );
+  }, [danceData?.lyrics, hookA]);
+
+  const hookBLines = useMemo(() => {
+    if (!danceData?.lyrics || !hookB) return [];
+    return danceData.lyrics.filter(
+      (l: any) => l.start >= hookB.hook_start - 0.3 && l.end <= hookB.hook_end + 0.3,
+    );
+  }, [danceData?.lyrics, hookB]);
 
   const danceUrl = useMemo(() => {
     if (!danceData) return "#";
@@ -468,74 +496,32 @@ export default function ShareableHook() {
                 </motion.div>
               )}
 
-              {/* ── RESULTS: peeked score + emoji, expandable ── */}
+              {/* ── RESULTS: clean badge + drop your take ── */}
               {battleState === "results" && votedSide && (
                 <motion.div
                   key="results-bar"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className="space-y-2.5"
+                  className="flex items-center gap-3"
                 >
-                  {/* Percentage bar — compact single line */}
-                  <div className="flex items-center gap-2">
-                    <span className={`font-mono text-[10px] uppercase tracking-wider shrink-0 ${
-                      votedSide === "a" ? "text-white/70 font-semibold" : "text-white/35"
-                    }`}>L</span>
-                    <div className="flex-1 h-2 bg-white/[0.06] rounded-full overflow-hidden flex">
-                      <motion.div
-                        className="h-full rounded-l-full"
-                        style={{ background: hookA?.palette?.[0] || "#a855f7" }}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pctA}%` }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                      />
-                    </div>
-                    <span className="font-mono text-[9px] text-white/50 w-16 text-center">
-                      {pctA}% · {pctB}%
+                  {/* Vote badge */}
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-500/30 bg-green-500/[0.06] min-w-0 flex-1">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
+                      <path d="M2 6.5L4.5 9L10 3" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span className="text-[11px] font-mono text-green-400/80 truncate">
+                      You + {(votedSide === "a" ? voteCountA : voteCountB) - 1} FMLY ({votedSide === "a" ? pctA : pctB}%)
                     </span>
-                    <div className="flex-1 h-2 bg-white/[0.06] rounded-full overflow-hidden flex justify-end">
-                      <motion.div
-                        className="h-full rounded-r-full"
-                        style={{ background: hookB?.palette?.[0] || "#a855f7" }}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pctB}%` }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                      />
-                    </div>
-                    <span className={`font-mono text-[10px] uppercase tracking-wider shrink-0 ${
-                      votedSide === "b" ? "text-white/70 font-semibold" : "text-white/35"
-                    }`}>R</span>
                   </div>
 
-                  {/* Vote count + emoji row */}
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[9px] text-white/20 uppercase tracking-wider">
-                      {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      {EMOJI_OPTIONS.map((emoji) => (
-                        <button
-                          key={emoji}
-                          onClick={() => setSelectedEmoji(prev => prev === emoji ? null : emoji)}
-                          className={`w-7 h-7 rounded-full flex items-center justify-center text-sm transition-all ${
-                            selectedEmoji === emoji
-                              ? "bg-white/10 scale-110 ring-1 ring-white/20"
-                              : "bg-white/[0.03] hover:bg-white/[0.06]"
-                          }`}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Pull-up handle */}
+                  {/* Drop your take button */}
                   <button
-                    onClick={() => setResultsExpanded(!resultsExpanded)}
-                    className="w-full flex justify-center py-1"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
+                    onClick={() => setPanelOpen(true)}
                   >
-                    <div className="w-8 h-1 rounded-full bg-white/15" />
+                    <span className="text-[11px] font-mono uppercase tracking-wider">Drop your take</span>
+                    <span className="text-[10px] opacity-60">↑</span>
                   </button>
                 </motion.div>
               )}
@@ -544,64 +530,47 @@ export default function ShareableHook() {
           </div>
         </div>
 
-        {/* ── Expanded results panel ────────────────────────── */}
+        {/* ── Slide-up panel ────────────────────────────────── */}
         <AnimatePresence>
-          {resultsExpanded && battleState === "results" && (
+          {panelOpen && battleState === "results" && (
             <motion.div
-              key="expanded-panel"
+              key="take-panel"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl overflow-hidden"
-              style={{ background: "#111", maxHeight: "60vh" }}
+              style={{ background: "#111", maxHeight: "70vh" }}
             >
               {/* Drag handle */}
               <button
-                onClick={() => setResultsExpanded(false)}
+                onClick={() => setPanelOpen(false)}
                 className="w-full flex justify-center py-3"
               >
                 <div className="w-10 h-1 rounded-full bg-white/20" />
               </button>
 
-              <div className="px-4 pb-6 space-y-4 overflow-y-auto" style={{ maxHeight: "calc(60vh - 40px)" }}>
-                {/* Full score bars */}
-                <div className="space-y-2">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/40 text-center">
-                    Battle Results
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] text-white/50 w-20 truncate">
-                      {hookA?.hook_label || "Left Hook"}
-                    </span>
-                    <div className="flex-1 h-3 bg-white/[0.06] rounded-sm overflow-hidden">
-                      <div className="h-full rounded-sm" style={{ width: `${pctA}%`, background: hookA?.palette?.[0] || "#a855f7" }} />
-                    </div>
-                    <span className="font-mono text-[10px] text-white/70 w-16 text-right">{voteCountA} votes</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] text-white/50 w-20 truncate">
-                      {hookB?.hook_label || "Right Hook"}
-                    </span>
-                    <div className="flex-1 h-3 bg-white/[0.06] rounded-sm overflow-hidden">
-                      <div className="h-full rounded-sm" style={{ width: `${pctB}%`, background: hookB?.palette?.[0] || "#a855f7" }} />
-                    </div>
-                    <span className="font-mono text-[10px] text-white/70 w-16 text-right">{voteCountB} votes</span>
-                  </div>
-                  <p className="text-center font-mono text-[9px] text-white/25">
-                    {totalVotes} total votes
-                  </p>
+              <div className="px-4 pb-6 space-y-5 overflow-y-auto" style={{ maxHeight: "calc(70vh - 40px)" }}>
+
+                {/* Vote confirmation */}
+                <div className="flex items-center justify-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6.5L4.5 9L10 3" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span className="text-[11px] font-mono text-green-400/70 uppercase tracking-wider">
+                    You picked {votedSide === "a" ? "Left" : "Right"} Hook · {votedSide === "a" ? voteCountA : voteCountB} FMLY ({votedSide === "a" ? pctA : pctB}%)
+                  </span>
                 </div>
 
-                {/* Emoji reactions — larger in expanded view */}
-                <div className="flex items-center justify-center gap-3">
+                {/* Emoji bar — select an emoji then tap a line */}
+                <div className="flex items-center justify-center gap-2">
                   {EMOJI_OPTIONS.map((emoji) => (
                     <button
                       key={emoji}
-                      onClick={() => setSelectedEmoji(prev => prev === emoji ? null : emoji)}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center text-xl transition-all ${
+                      onClick={() => setSelectedEmoji((prev) => prev === emoji ? null : emoji)}
+                      className={`w-9 h-9 rounded-full flex items-center justify-center text-lg transition-all ${
                         selectedEmoji === emoji
-                          ? "bg-white/10 scale-110 ring-1 ring-white/20"
+                          ? "bg-white/15 scale-110 ring-2 ring-white/25"
                           : "bg-white/[0.04] hover:bg-white/[0.08]"
                       }`}
                     >
@@ -609,28 +578,99 @@ export default function ShareableHook() {
                     </button>
                   ))}
                 </div>
-
-                {/* Comments placeholder */}
-                <div className="border-t border-white/[0.06] pt-3">
-                  <p className="font-mono text-[10px] text-white/25 uppercase tracking-wider text-center">
-                    Comments coming soon
+                {selectedEmoji && (
+                  <p className="text-center text-[9px] font-mono text-white/25">
+                    Tap a line to react with {selectedEmoji}
                   </p>
+                )}
+
+                {/* LEFT HOOK lines */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-px flex-1 bg-white/[0.06]" />
+                    <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${
+                      votedSide === "a" ? "text-green-400/50" : "text-white/25"
+                    }`}>
+                      Left Hook {votedSide === "a" ? "✓" : ""}
+                    </span>
+                    <div className="h-px flex-1 bg-white/[0.06]" />
+                  </div>
+                  {hookALines.map((line: any, i: number) => {
+                    const reactionKey = `a-${i}`;
+                    const reaction = lineReactions[reactionKey];
+                    return (
+                      <button
+                        key={reactionKey}
+                        onClick={() => toggleLineReaction("a", i)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${
+                          reaction ? "bg-white/[0.04] border border-white/[0.08]" : "hover:bg-white/[0.03]"
+                        }`}
+                      >
+                        <span className="text-[11px] text-white/50 leading-relaxed flex-1 min-w-0 truncate">
+                          {line.text}
+                        </span>
+                        {reaction && (
+                          <span className="text-sm ml-2 shrink-0">{reaction}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {hookALines.length === 0 && (
+                    <p className="text-[10px] font-mono text-white/15 text-center py-2">No lyrics in this hook region</p>
+                  )}
                 </div>
+
+                {/* RIGHT HOOK lines */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-px flex-1 bg-white/[0.06]" />
+                    <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${
+                      votedSide === "b" ? "text-green-400/50" : "text-white/25"
+                    }`}>
+                      Right Hook {votedSide === "b" ? "✓" : ""}
+                    </span>
+                    <div className="h-px flex-1 bg-white/[0.06]" />
+                  </div>
+                  {hookBLines.map((line: any, i: number) => {
+                    const reactionKey = `b-${i}`;
+                    const reaction = lineReactions[reactionKey];
+                    return (
+                      <button
+                        key={reactionKey}
+                        onClick={() => toggleLineReaction("b", i)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${
+                          reaction ? "bg-white/[0.04] border border-white/[0.08]" : "hover:bg-white/[0.03]"
+                        }`}
+                      >
+                        <span className="text-[11px] text-white/50 leading-relaxed flex-1 min-w-0 truncate">
+                          {line.text}
+                        </span>
+                        {reaction && (
+                          <span className="text-sm ml-2 shrink-0">{reaction}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {hookBLines.length === 0 && (
+                    <p className="text-[10px] font-mono text-white/15 text-center py-2">No lyrics in this hook region</p>
+                  )}
+                </div>
+
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Backdrop for expanded panel */}
+        {/* Backdrop */}
         <AnimatePresence>
-          {resultsExpanded && (
+          {panelOpen && (
             <motion.div
               key="backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-[55] bg-black/50"
-              onClick={() => setResultsExpanded(false)}
+              onClick={() => setPanelOpen(false)}
             />
           )}
         </AnimatePresence>
