@@ -11,22 +11,21 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 // import { WalletProvider } from "@/components/crypto/WalletProvider";
 import { PageLayout } from "@/components/PageLayout";
 import { lazy, Suspense } from "react";
-import { Loader2 } from "lucide-react";
 import Index from "./pages/Index";
 
-import { AdminPageImport, ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
+import About from "./pages/About";
 
-const About = lazy(() => import("./pages/About"));
-const Auth = lazy(() => import("./pages/Auth"));
-const Profile = lazy(() => import("./pages/Profile"));
-const PublicProfile = lazy(() => import("./pages/PublicProfile"));
-const SongDetail = lazy(() => import("./pages/SongDetail"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const Terms = lazy(() => import("./pages/Terms"));
-const ArtistStage = lazy(() => import("./pages/ArtistStage"));
-const SeoPages = lazy(() => import("./pages/SeoPages"));
-const FitWidget = lazy(() => import("@/components/FitWidget").then((module) => ({ default: module.FitWidget })));
+import { FitWidget } from "@/components/FitWidget";
+import Auth from "./pages/Auth";
+import Profile from "./pages/Profile";
+import PublicProfile from "./pages/PublicProfile";
+import SongDetail from "./pages/SongDetail";
+import ResetPassword from "./pages/ResetPassword";
+import NotFound from "./pages/NotFound";
+import Terms from "./pages/Terms";
+import ArtistStage from "./pages/ArtistStage";
+import SeoPages from "./pages/SeoPages";
+import { AdminPageImport, ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
 
 const Admin = lazy(AdminPageImport);
 // Lazy-load ShareableHook — standalone page, no need in main bundle
@@ -61,24 +60,6 @@ const HookEmbedFallback = () => (
       <div className="h-10 w-64 rounded-lg bg-white/[0.05] animate-pulse" />
     </div>
   </div>
-);
-
-const PageFallback = () => (
-  <div className="flex-1 flex items-center justify-center py-20">
-    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-  </div>
-);
-
-const ArtistStageFallback = () => (
-  <div className="min-h-screen bg-black flex items-center justify-center">
-    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-  </div>
-);
-
-const PageLayoutFallback = ({ title, subtitle }: { title?: string; subtitle?: string }) => (
-  <PageLayout title={title} subtitle={subtitle}>
-    <PageFallback />
-  </PageLayout>
 );
 
 const App = () => (
@@ -122,16 +103,16 @@ const App = () => (
                     <Route path="/DreamFit" element={<Index />} />
                     <Route path="/VibeFit" element={<Index />} />
                     <Route path="/VibeFit/:projectId" element={<Index />} />
-                    <Route path="/crowdfit" element={<Suspense fallback={<PageFallback />}><SeoPages /></Suspense>} />
-                    <Route path="/lyricfit" element={<Suspense fallback={<PageFallback />}><SeoPages /></Suspense>} />
-                    <Route path="/hookfit" element={<Suspense fallback={<PageFallback />}><SeoPages /></Suspense>} />
-                    <Route path="/mixfit" element={<Suspense fallback={<PageFallback />}><SeoPages /></Suspense>} />
-                    <Route path="/hitfit" element={<Suspense fallback={<PageFallback />}><SeoPages /></Suspense>} />
-                    <Route path="/playlistfit" element={<Suspense fallback={<PageFallback />}><SeoPages /></Suspense>} />
-                    <Route path="/dreamfit" element={<Suspense fallback={<PageFallback />}><SeoPages /></Suspense>} />
-                    <Route path="/answers/:slug" element={<Suspense fallback={<PageFallback />}><SeoPages /></Suspense>} />
-                    <Route path="/blog/:slug" element={<Suspense fallback={<PageFallback />}><SeoPages /></Suspense>} />
-                    <Route path="/about" element={<Suspense fallback={<PageLayoutFallback title="toolsFM story" subtitle="What we built and why." />}><PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout></Suspense>} />
+                    <Route path="/crowdfit" element={<SeoPages />} />
+                    <Route path="/lyricfit" element={<SeoPages />} />
+                    <Route path="/hookfit" element={<SeoPages />} />
+                    <Route path="/mixfit" element={<SeoPages />} />
+                    <Route path="/hitfit" element={<SeoPages />} />
+                    <Route path="/playlistfit" element={<SeoPages />} />
+                    <Route path="/dreamfit" element={<SeoPages />} />
+                    <Route path="/answers/:slug" element={<SeoPages />} />
+                    <Route path="/blog/:slug" element={<SeoPages />} />
+                    <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
                     <Route
                       path="/admin"
                       element={
@@ -140,15 +121,15 @@ const App = () => (
                         </Suspense>
                       }
                     />
-                    <Route path="/auth" element={<Suspense fallback={<PageLayoutFallback title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY." />}><PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout></Suspense>} />
-                    <Route path="/terms" element={<Suspense fallback={<PageLayoutFallback title="Let's agree" subtitle="Play nice, make music, have fun" />}><PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout></Suspense>} />
-                    <Route path="/profile" element={<Suspense fallback={<PageLayoutFallback title="Profile" />}><PageLayout title="Profile"><Profile /></PageLayout></Suspense>} />
-                    <Route path="/reset-password" element={<Suspense fallback={<PageLayoutFallback title="Reset Password" />}><PageLayout title="Reset Password"><ResetPassword /></PageLayout></Suspense>} />
-                    <Route path="/u/:userId" element={<Suspense fallback={<PageLayoutFallback title="Artist Profile" subtitle="Fit for the spotlight" />}><PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout></Suspense>} />
-                    <Route path="/song/:postId" element={<Suspense fallback={<PageLayoutFallback title="Song Details" subtitle="Submission stats" />}><PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout></Suspense>} />
-                    <Route path="/artist/:username" element={<Suspense fallback={<ArtistStageFallback />}><ArtistStage /></Suspense>} />
+                    <Route path="/auth" element={<PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout>} />
+                    <Route path="/terms" element={<PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout>} />
+                    <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
+                    <Route path="/reset-password" element={<PageLayout title="Reset Password"><ResetPassword /></PageLayout>} />
+                    <Route path="/u/:userId" element={<PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout>} />
+                    <Route path="/song/:postId" element={<PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout>} />
+                    <Route path="/artist/:username" element={<ArtistStage />} />
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                    <Route path="*" element={<Suspense fallback={<PageLayout><PageFallback /></PageLayout>}><PageLayout><NotFound /></PageLayout></Suspense>} />
+                    <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
                   </Routes>
                 </SidebarProvider>
                 <Suspense fallback={<div aria-hidden className="pointer-events-none fixed bottom-0 right-0 h-12 w-12 opacity-0" />}>
