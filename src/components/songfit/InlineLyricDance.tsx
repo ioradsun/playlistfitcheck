@@ -142,8 +142,7 @@ function InlineLyricDanceInner(
           ...(next.lyrics && { lyrics: next.lyrics }),
           ...(next.words !== undefined && { words: next.words }),
           ...(next.auto_palettes !== undefined && { auto_palettes: next.auto_palettes }),
-          ...(next.cover_image_url !== undefined && { cover_image_url: next.cover_image_url }),
-          ...(next.top_reaction !== undefined && { top_reaction: next.top_reaction }),
+          ...(next.section_images !== undefined && { section_images: next.section_images }),
         } : prev);
       })
       .subscribe();
