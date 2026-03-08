@@ -16,9 +16,10 @@ const billboardModes: { key: BillboardMode; label: string }[] = [
 ];
 
 const recentSubViews: { key: FeedView; label: string; desc: string }[] = [
-  { key: "recent", label: "Recent", desc: "All live submissions" },
-  { key: "pending", label: "Pending", desc: "No signals yet" },
-  { key: "resolved", label: "Resolved", desc: "Signaled submissions" },
+  { key: "all", label: "All", desc: "All live submissions" },
+  { key: "now_streaming", label: "Now Streaming", desc: "Spotify posts" },
+  { key: "in_studio", label: "In Studio", desc: "Lyric dances" },
+  { key: "in_battle", label: "In Battle", desc: "Battle submissions" },
 ];
 
 interface Props {
