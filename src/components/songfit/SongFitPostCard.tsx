@@ -303,6 +303,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             artistName={displayName}
             albumArtUrl={post.album_art_url ?? undefined}
             isActive={cardState === "active"}
+            cardState={cardState}
+            cardId={post.id}
             onPlay={activate}
           />
         ) : post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id ? (
@@ -311,6 +313,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             songTitle={post.track_title}
             artistName={displayName}
             votedSide={votedBattleSide}
+            cardState={cardState}
           />
         ) : (
           <LazySpotifyEmbed
@@ -321,6 +324,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             albumArtUrl={post.album_art_url}
             artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
             genre={((post.tags_json as any[]) || [])[0] || null}
+            cardState={cardState}
           />
         )}
       </div>

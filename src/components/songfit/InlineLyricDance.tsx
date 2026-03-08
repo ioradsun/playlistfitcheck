@@ -14,6 +14,7 @@ import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { InlineLyricDancePlaybar } from "./InlineLyricDancePlaybar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { type DanceUpdatePayload, type ReactionInsertPayload, useRealtimeFeedHub } from "./RealtimeFeedHub";
+import type { CardState } from "./useCardLifecycle";
 
 export interface InlineLyricDanceHandle {
   getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;
@@ -29,6 +30,8 @@ interface Props {
   bootMode?: "minimal" | "full";
   albumArtUrl?: string;
   isActive?: boolean;
+  cardState?: CardState;
+  cardId?: string;
   /** Constrain playback to start at this time in seconds. Used by hook battles. */
   regionStart?: number;
   /** Constrain playback to end at this time in seconds. Used by hook battles. */
@@ -62,7 +65,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, regionStart, regionEnd, onPlay, reactionData: reactionDataProp }: Props,
+  { lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, cardState, cardId, regionStart, regionEnd, onPlay, reactionData: reactionDataProp }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
@@ -73,6 +76,7 @@ function InlineLyricDanceInner(
   const [playerEvicted, setPlayerEvicted] = useState(false);
   // In battle mode (region set), skip cover — player renders immediately
   const isBattleMode = regionStart != null && regionEnd != null;
+  const effectiveCardState: CardState = cardState ?? (isActive ? "active" : "warm");
   const [showCover, setShowCover] = useState(!isBattleMode);
   const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>(reactionDataProp ?? {});
 
@@ -334,21 +338,37 @@ function InlineLyricDanceInner(
         player.setMuted(true);
         setMuted(true);
       }
-    } else if (visibility === "visible") {
-      player.play();
-    } else {
-      player.pause();
+      return;
     }
-  }, [visibility, isBattleMode, isActive, playerReady, player]);
 
+    const shouldRun = effectiveCardState === "active" && visibility === "visible";
+    if (shouldRun) {
+      player.play();
+      player.setMuted(false);
+      setMuted(false);
+      return;
+    }
+
+    player.pause();
+    player.setMuted(true);
+    setMuted(true);
+  }, [visibility, isBattleMode, isActive, effectiveCardState, playerReady, player]);
 
   useEffect(() => {
-    if (!player || isBattleMode) return; // Battle mode handled above
-    if (!isActive) {
+    if (isBattleMode) return;
+
+    const handleDeactivate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ cardId?: string }>;
+      if (customEvent.detail?.cardId !== (cardId ?? lyricDanceId) || !player) return;
+      player.pause();
       player.setMuted(true);
       setMuted(true);
-    }
-  }, [isActive, isBattleMode, player]);
+      setShowCover(true);
+    };
+
+    window.addEventListener("crowdfit:media-deactivate", handleDeactivate);
+    return () => window.removeEventListener("crowdfit:media-deactivate", handleDeactivate);
+  }, [isBattleMode, lyricDanceId, cardId, player]);
 
   // ── Handlers ─────────────────────────────────────────────────────────
 

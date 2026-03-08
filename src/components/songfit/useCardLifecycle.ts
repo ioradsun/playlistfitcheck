@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 export type CardState = "cold" | "warm" | "active";
+
 
 type LifecycleStore = {
   cardStates: Record<string, CardState>;
@@ -18,6 +19,7 @@ export const CardLifecycleContext = createContext<CardLifecycleContextValue | nu
 
 export function CardLifecycleProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<LifecycleStore>({ cardStates: {}, activeCardId: null });
+  const previousActiveIdRef = useRef<string | null>(null);
 
   const getCardState = useCallback(
     (postId: string): CardState => store.cardStates[postId] ?? "cold",
@@ -59,6 +61,19 @@ export function CardLifecycleProvider({ children }: { children: ReactNode }) {
     () => ({ getCardState, setCardState, activeCardId: store.activeCardId }),
     [getCardState, setCardState, store.activeCardId],
   );
+
+  useEffect(() => {
+    const previousActiveId = previousActiveIdRef.current;
+    if (typeof window !== "undefined" && previousActiveId && previousActiveId !== store.activeCardId) {
+      window.dispatchEvent(
+        new CustomEvent("crowdfit:media-deactivate", {
+          detail: { cardId: previousActiveId },
+        }),
+      );
+    }
+
+    previousActiveIdRef.current = store.activeCardId;
+  }, [store.activeCardId]);
 
   return <CardLifecycleContext.Provider value={value}>{children}</CardLifecycleContext.Provider>;
 }
