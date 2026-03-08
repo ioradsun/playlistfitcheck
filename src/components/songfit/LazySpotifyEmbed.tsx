@@ -40,7 +40,7 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
   return (
     <div
       className="w-full overflow-hidden relative"
-      style={{ height: 320, backgroundColor: "#121212", display: "flex", alignItems: "center", justifyContent: "center" }}
+      style={{ height: 320, backgroundColor: "rgba(18,18,18,0.9)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={handleClick}
     >
       {!iframeLoaded && albumArtUrl && (
@@ -52,7 +52,7 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
       )}
 
       {!iframeLoaded && (
-        <div className="absolute inset-0 w-full animate-pulse" style={{ backgroundColor: "#1a1a1a" }} />
+        <div className="absolute inset-0 w-full animate-pulse" style={{ backgroundColor: "rgba(26,26,26,0.85)" }} />
       )}
 
       <div className="w-full h-full flex flex-col">

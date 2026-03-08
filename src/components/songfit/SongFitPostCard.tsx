@@ -186,11 +186,11 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         <img
           src={post.album_art_url}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-20 pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 pointer-events-none"
           loading="lazy"
         />
       )}
-      <div className="absolute inset-0 bg-black/60 pointer-events-none" />
+      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
       {/* Header */}
       <div className="relative flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0 flex-1">
