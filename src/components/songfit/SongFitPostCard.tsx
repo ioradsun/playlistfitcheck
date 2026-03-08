@@ -315,6 +315,12 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
               <div className="w-full h-full bg-gradient-to-br from-zinc-800 via-zinc-900 to-black" />
             )}
             <div className="absolute inset-0 bg-black/35" />
+            {/* "Now Streaming" badge — top left */}
+            <div className="absolute top-3 left-3 z-30 pointer-events-none">
+              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 border border-white/10 rounded px-1.5 py-0.5 bg-black/40 backdrop-blur-sm">
+                Now Streaming
+              </span>
+            </div>
             <div className="absolute left-3 bottom-3 right-3">
               <p className="text-white font-semibold text-sm truncate">{post.track_title}</p>
               <p className="text-white/75 text-xs truncate">{(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || displayName}</p>
