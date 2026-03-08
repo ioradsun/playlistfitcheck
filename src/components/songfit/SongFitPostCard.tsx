@@ -302,7 +302,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           isScored && "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.25)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]"
         )}
       >
-        {tier === 1 && !hasLyricDancePost ? (
+        {tier === 1 && !hasLyricDancePost && !isBattlePost ? (
           <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ height: 320 }}>
             {post.album_art_url ? (
               <img
@@ -358,7 +358,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       </div>
 
       {/* Action Row — reactions mode only here */}
-      {crowdfitMode !== "hook_review" && !hasLyricDancePost && (
+      {crowdfitMode !== "hook_review" && !hasLyricDancePost && !isBattlePost && (
         <div className="flex items-center justify-between px-1 py-0.5">
           {/* Left group: comment, share, like, bookmark */}
           <div className="flex items-center">
