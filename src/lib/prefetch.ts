@@ -21,13 +21,14 @@ const FEED_COLUMNS =
   "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)";
 
 export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
-  supabase
-    .from("songfit_posts")
-    .select(FEED_COLUMNS)
-    .eq("status", "live")
-    .limit(FEED_PAGE_SIZE)
-    .order("created_at", { ascending: false })
-    .then((result) => result);
+  Promise.resolve(
+    supabase
+      .from("songfit_posts")
+      .select(FEED_COLUMNS)
+      .eq("status", "live")
+      .limit(FEED_PAGE_SIZE)
+      .order("created_at", { ascending: false })
+  ).then((result) => result);
 
 export function consumeFeedPrefetch() {
   const p = feedPrefetch;
@@ -37,12 +38,13 @@ export function consumeFeedPrefetch() {
 
 // Site copy — consumed by SiteCopyProvider
 export let siteCopyPrefetch: Promise<{ data: any; error: any }> | null =
-  supabase
-    .from("site_copy")
-    .select("copy_json")
-    .limit(1)
-    .single()
-    .then((result) => result);
+  Promise.resolve(
+    supabase
+      .from("site_copy")
+      .select("copy_json")
+      .limit(1)
+      .single()
+  ).then((result) => result);
 
 export function consumeSiteCopyPrefetch() {
   const p = siteCopyPrefetch;

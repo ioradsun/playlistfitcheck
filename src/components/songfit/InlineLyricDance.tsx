@@ -124,8 +124,7 @@ function InlineLyricDanceInner(
             ...(Array.isArray(n.lyrics) && { lyrics: n.lyrics as LyricDanceData["lyrics"] }),
             ...(n.words !== undefined && { words: n.words as LyricDanceData["words"] }),
             ...(n.auto_palettes !== undefined && { auto_palettes: n.auto_palettes as LyricDanceData["auto_palettes"] }),
-            ...(n.cover_image_url !== undefined && { cover_image_url: n.cover_image_url as string | null }),
-            ...(n.top_reaction !== undefined && { top_reaction: n.top_reaction as any }),
+            ...(n.section_images !== undefined && { section_images: n.section_images as LyricDanceData["section_images"] }),
           } as LyricDanceData;
         });
       });
@@ -143,8 +142,7 @@ function InlineLyricDanceInner(
           ...(next.lyrics && { lyrics: next.lyrics }),
           ...(next.words !== undefined && { words: next.words }),
           ...(next.auto_palettes !== undefined && { auto_palettes: next.auto_palettes }),
-          ...(next.cover_image_url !== undefined && { cover_image_url: next.cover_image_url }),
-          ...(next.top_reaction !== undefined && { top_reaction: next.top_reaction }),
+          ...(next.section_images !== undefined && { section_images: next.section_images }),
         } : prev);
       })
       .subscribe();
@@ -357,9 +355,9 @@ function InlineLyricDanceInner(
       >
         {!playerReady && (
           <>
-            {((fetchedData as any)?.cover_image_url || fetchedData?.section_images?.[0]) ? (
+            {(fetchedData?.section_images?.[0]) ? (
               <img
-                src={((fetchedData as any)?.cover_image_url || fetchedData?.section_images?.[0]) as string}
+                src={(fetchedData?.section_images?.[0]) as string}
                 alt={songTitle}
                 className="absolute inset-0 w-full h-full object-cover"
                 loading="lazy"
