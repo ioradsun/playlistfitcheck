@@ -180,47 +180,46 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const timeAgo = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
 
   return (
-    <div className="border-b border-border/40">
+    <div className="px-2 pb-3">
+      <div className="rounded-2xl overflow-hidden" style={{ background: "#0a0a0a" }}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0 flex-1">
 
           <ProfileHoverCard userId={post.user_id}>
-            <div className="flex items-center gap-3 cursor-pointer min-w-0"
+            <div className="flex items-center gap-2.5 cursor-pointer min-w-0"
               onClick={handleProfileClick}
             >
               <div className="relative shrink-0">
-                {/* h-10 avatar, ring-primary/20 */}
-                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
+                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
                   {post.profiles?.avatar_url ? (
                     <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <User size={16} className="text-muted-foreground" />
+                    <User size={13} className="text-white/40" />
                   )}
                 </div>
                 {(post.profiles as any)?.is_verified && (
                   <span className="absolute -bottom-0.5 -right-0.5">
-                    <VerifiedBadge size={14} />
+                    <VerifiedBadge size={12} />
                   </span>
                 )}
               </div>
               <div className="min-w-0">
-                {/* Content Tier: text-sm, font-semibold, text-muted-foreground */}
-                <p className="text-sm font-semibold leading-tight truncate text-muted-foreground">{displayName}</p>
-                {/* Metadata Tier: 11px mono */}
-                <p className="font-mono text-[11px] text-muted-foreground leading-tight">{timeAgo}</p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-xs font-medium leading-tight truncate text-white/70">{displayName}</p>
+                  <FmlyBadge userId={post.user_id} compact />
+                </div>
+                <p className="font-mono text-[10px] text-white/30 leading-tight">{timeAgo}</p>
               </div>
             </div>
           </ProfileHoverCard>
-          <FmlyBadge userId={post.user_id} compact />
-          
         </div>
 
         {/* 3-dot menu */}
         <DropdownMenu onOpenChange={(open) => { if (open) checkFollow(); }}>
           <DropdownMenuTrigger asChild>
-            <button className="p-1.5 rounded-full hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors shrink-0">
-              <MoreHorizontal size={18} />
+            <button className="p-1.5 rounded-full hover:bg-white/5 text-white/20 hover:text-white/50 transition-colors shrink-0">
+              <MoreHorizontal size={16} />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
@@ -265,7 +264,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         )}
       >
         {tier === 1 && !hasLyricDancePost && !isBattlePost && !post.spotify_track_id ? (
-          <div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ height: 320 }}>
+          <div className="relative overflow-hidden" style={{ height: 320 }}>
             {post.album_art_url ? (
               <img
                 src={post.album_art_url}
@@ -340,37 +339,37 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
                 onOpenComments(post.id);
                 if (user) logEngagementEvent(post.id, user.id, "comment");
               }}
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group"
             >
-              <MessageCircle size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <MessageCircle size={17} className="text-white/35 group-hover:text-white/80 transition-colors" />
               {post.comments_count > 0 && (
-                <span className="text-xs text-muted-foreground group-hover:text-primary">{post.comments_count}</span>
+                <span className="text-[11px] text-white/35 font-mono group-hover:text-white/80">{post.comments_count}</span>
               )}
             </button>
 
             <button
               onClick={handleShare}
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group"
             >
-              <Share2 size={18} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <Share2 size={17} className="text-white/35 group-hover:text-white/80 transition-colors" />
             </button>
 
             <button
               onClick={toggleLike}
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group"
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group"
             >
-              <Flame size={18} className={liked ? "fill-primary text-primary" : "text-muted-foreground group-hover:text-primary transition-colors"} />
+              <Flame size={17} className={liked ? "fill-green-400 text-green-400" : "text-white/35 group-hover:text-white/80 transition-colors"} />
               {likesCount > 0 && (
-                <button onClick={(e) => { e.stopPropagation(); onOpenLikes(post.id); }} className="text-xs text-muted-foreground group-hover:text-primary">
+                <button onClick={(e) => { e.stopPropagation(); onOpenLikes(post.id); }} className="text-[11px] text-white/35 font-mono group-hover:text-white/80">
                   {likesCount}
                 </button>
               )}
             </button>
 
-            <button onClick={toggleSave} className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-primary/10 transition-colors group">
-              <Bookmark size={18} className={saved ? "fill-primary text-primary" : "text-muted-foreground group-hover:text-primary transition-colors"} />
+            <button onClick={toggleSave} className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group">
+              <Bookmark size={17} className={saved ? "fill-green-400 text-green-400" : "text-white/35 group-hover:text-white/80 transition-colors"} />
               {(post as any).saves_count > 0 && (
-                <span className="text-xs text-muted-foreground group-hover:text-primary">{(post as any).saves_count}</span>
+                <span className="text-[11px] text-white/35 font-mono group-hover:text-white/80">{(post as any).saves_count}</span>
               )}
             </button>
 
@@ -384,7 +383,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
                   onTipLogged={(amount) => setTipsTotal(t => t + amount)}
                 />
                 {tipsTotal > 0 && (
-                  <span className="text-xs text-muted-foreground font-mono -ml-1">
+                  <span className="text-[11px] text-white/35 font-mono -ml-1">
                     {tipsTotal.toLocaleString()}
                   </span>
                 )}
@@ -394,13 +393,13 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
 
           {/* Right: game mechanics */}
           <TooltipProvider delayDuration={350}>
-            <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="flex items-center gap-2 text-white/30">
               {post.engagement_score > 0 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button type="button" className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-muted/60 transition-colors cursor-help">
-                      <Trophy size={14} />
-                      <span className="text-xs font-mono">{Math.round(post.engagement_score)}</span>
+                    <button type="button" className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help">
+                      <Trophy size={13} />
+                      <span className="text-[11px] font-mono">{Math.round(post.engagement_score)}</span>
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs max-w-48">
@@ -411,9 +410,9 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
               {post.status === "live" && post.expires_at && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button type="button" className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-muted/60 transition-colors cursor-help">
-                      <Clock size={14} />
-                      <span className="text-xs font-mono">
+                    <button type="button" className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help">
+                      <Clock size={13} />
+                      <span className="text-[11px] font-mono">
                         {Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d
                       </span>
                     </button>
@@ -426,7 +425,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
               {rank && rank <= 50 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button type="button" className="text-xs font-bold text-primary font-mono px-2 py-1.5 rounded-full hover:bg-primary/10 transition-colors cursor-help">#{rank}</button>
+                    <button type="button" className="text-[11px] font-bold text-green-400 font-mono px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help">#{rank}</button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs">Billboard rank</TooltipContent>
                 </Tooltip>
@@ -437,46 +436,44 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
       )}
 
       {/* Caption - Instagram style */}
-      {/* Spacer between embed and caption/review — Instagram-style breathing room */}
-      <div className="h-2" />
       {editing ? (
-        <div className="px-3 pb-2.5 space-y-2">
+        <div className="px-3 pt-2.5 pb-1 space-y-2">
           <textarea
             value={editCaption}
             onChange={e => setEditCaption(e.target.value.slice(0, CAPTION_MAX))}
             rows={3}
-            className="w-full bg-muted/60 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none resize-none rounded-lg p-2 border border-border/50"
+            className="w-full bg-white/5 text-sm text-white/90 placeholder:text-white/20 outline-none resize-none rounded-lg p-2 border border-white/10 focus:border-white/20"
             autoFocus
           />
           <div className="flex items-center justify-between">
-            <span className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-destructive" : "text-muted-foreground/50"}`}>
+            <span className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-red-400" : "text-white/20"}`}>
               {editCaption.length}/{CAPTION_MAX}
             </span>
             <div className="flex gap-1.5">
-              <button onClick={() => setEditing(false)} className="p-1.5 rounded-full hover:bg-accent/50 text-muted-foreground">
+              <button onClick={() => setEditing(false)} className="p-1.5 rounded-full hover:bg-white/5 text-white/40">
                 <X size={14} />
               </button>
-              <button onClick={handleSaveEdit} disabled={saving} className="p-1.5 rounded-full hover:bg-accent/50 text-primary">
+              <button onClick={handleSaveEdit} disabled={saving} className="p-1.5 rounded-full hover:bg-white/5 text-green-400">
                 <Check size={14} />
               </button>
             </div>
           </div>
         </div>
       ) : localCaption && localCaption.trim() ? (
-        <div className="px-3 pb-2.5">
+        <div className="px-3 pt-2.5 pb-1">
           {localCaption.length <= 125 || captionExpanded ? (
-            <p className="text-sm leading-snug">
-              <span className="font-semibold mr-1.5">{displayName}</span>
+            <p className="text-sm leading-snug text-white/70">
+              <span className="font-semibold mr-1.5 text-white/90">{displayName}</span>
               {localCaption}
             </p>
           ) : (
-            <p className="text-sm leading-snug">
-              <span className="font-semibold mr-1.5">{displayName}</span>
+            <p className="text-sm leading-snug text-white/70">
+              <span className="font-semibold mr-1.5 text-white/90">{displayName}</span>
               {localCaption.slice(0, 125).trimEnd()}
-              <span className="text-muted-foreground">… </span>
+              <span className="text-white/30">… </span>
               <button
                 onClick={() => setCaptionExpanded(true)}
-                className="text-muted-foreground hover:text-foreground text-sm"
+                className="text-white/30 hover:text-white/50 text-sm"
               >
                 more
               </button>
@@ -510,6 +507,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           />
         </>
       )}
+      <div className="h-1.5" />
+      </div>
     </div>
   );
 }

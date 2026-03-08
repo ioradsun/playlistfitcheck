@@ -446,7 +446,30 @@ export function SongFitFeed() {
       <BillboardToggle view={feedView} onViewChange={setFeedView} billboardMode={billboardMode} onModeChange={setBillboardMode} isLoggedIn={!!user} />
 
       {loading ? (
-        <div className="space-y-0">{[0, 1, 2].map((i) => <div key={i} className="border-b border-border/40 animate-pulse"><div className="flex items-center gap-3 px-3 py-2.5"><div className="h-10 w-10 rounded-full bg-muted" /><div className="space-y-1.5 flex-1"><div className="h-3 w-24 rounded bg-muted" /><div className="h-2.5 w-16 rounded bg-muted" /></div></div><div className="relative overflow-hidden bg-black rounded-xl mx-0" style={{ height: 320 }}><LyricDanceCover songName="" artistName="" avatarUrl={null} initial="" waiting /></div><div className="flex items-center gap-3 px-3 py-2">{[0, 1, 2, 3].map((j) => <div key={j} className="h-5 w-5 rounded-full bg-muted" />)}</div><div className="px-3 pb-3 space-y-1"><div className="h-2.5 w-3/4 rounded bg-muted" /></div></div>)}</div>
+        <div className="space-y-3 px-2 pt-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="rounded-2xl overflow-hidden animate-pulse" style={{ background: "#0a0a0a" }}>
+              <div className="flex items-center gap-2.5 px-3 py-2.5">
+                <div className="h-8 w-8 rounded-full bg-white/10" />
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-3 w-24 rounded bg-white/10" />
+                  <div className="h-2.5 w-16 rounded bg-white/5" />
+                </div>
+              </div>
+              <div className="relative overflow-hidden" style={{ height: 320 }}>
+                <LyricDanceCover songName="" artistName="" avatarUrl={null} initial="" waiting />
+              </div>
+              <div className="flex items-center gap-3 px-3 py-2">
+                {[0, 1, 2, 3].map((j) => (
+                  <div key={j} className="h-4 w-4 rounded-full bg-white/10" />
+                ))}
+              </div>
+              <div className="px-3 pb-3 space-y-1">
+                <div className="h-2.5 w-3/4 rounded bg-white/10" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : posts.length === 0 ? (
         <div className="text-center py-16 space-y-3"><p className="text-muted-foreground text-sm">No live submissions yet. Be the first!</p></div>
       ) : (
