@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { InlineBattle, type BattleMode } from "@/components/hookfit/InlineBattle";
 import type { HookInfo } from "@/components/hookfit/InlineBattle";
 import { getSessionId } from "@/lib/sessionId";
+import type { CardState } from "./useCardLifecycle";
 
 type BattleState = "cover" | "round-1" | "round-2" | "vote" | "results";
 
@@ -21,9 +22,10 @@ interface Props {
   songTitle: string;
   artistName: string;
   votedSide?: "a" | "b" | null;
+  cardState: CardState;
 }
 
-function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: initialVotedSide }: Props) {
+function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: initialVotedSide, cardState }: Props) {
   const [battleId, setBattleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -51,6 +53,14 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
   const hookEndFiredA = useRef(false);
   const hookEndFiredB = useRef(false);
   const userIdRef = useRef<string | null | undefined>(undefined);
+  const isActiveCard = cardState === "active";
+
+  useEffect(() => {
+    if (isActiveCard) return;
+    setBattleState("cover");
+    setReplayingSide(null);
+    setPanelOpen(false);
+  }, [isActiveCard]);
 
   // ── Fetch battle_id from URL slugs ──────────────────────────
   useEffect(() => {
@@ -94,14 +104,16 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
       const { data: vote } = await query.maybeSingle();
       if (vote) {
         setVotedSide((vote as any).hook_id === a.id ? "a" : "b");
-        setBattleState("results");
+        if (isActiveCard) {
+          setBattleState("results");
+        }
       }
     })();
-  }, [battleId]);
+  }, [battleId, isActiveCard]);
 
   // ── Progress bar timer ──────────────────────────────────────
   useEffect(() => {
-    if (battleState !== "round-1" && battleState !== "round-2") {
+    if (!isActiveCard || (battleState !== "round-1" && battleState !== "round-2")) {
       setRoundProgress(0);
       if (progressTimerRef.current) cancelAnimationFrame(progressTimerRef.current);
       return;
@@ -118,22 +130,22 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
     };
     progressTimerRef.current = requestAnimationFrame(tick);
     return () => { if (progressTimerRef.current) cancelAnimationFrame(progressTimerRef.current); };
-  }, [battleState, hookA, hookB]);
+  }, [battleState, hookA, hookB, isActiveCard]);
 
   // ── Auto-advance after hook ends ────────────────────────────
   useEffect(() => {
-    if (battleState !== "round-1" || !hookA || hookEndFiredA.current) return;
+    if (!isActiveCard || battleState !== "round-1" || !hookA || hookEndFiredA.current) return;
     const duration = (hookA.hook_end - hookA.hook_start) * 1000 + 300;
     const timer = setTimeout(() => { hookEndFiredA.current = true; setBattleState("round-2"); }, duration);
     return () => clearTimeout(timer);
-  }, [battleState, hookA]);
+  }, [battleState, hookA, isActiveCard]);
 
   useEffect(() => {
-    if (battleState !== "round-2" || !hookB || hookEndFiredB.current) return;
+    if (!isActiveCard || battleState !== "round-2" || !hookB || hookEndFiredB.current) return;
     const duration = (hookB.hook_end - hookB.hook_start) * 1000 + 300;
     const timer = setTimeout(() => { hookEndFiredB.current = true; setBattleState("vote"); }, duration);
     return () => clearTimeout(timer);
-  }, [battleState, hookB]);
+  }, [battleState, hookB, isActiveCard]);
 
   // ── Vote handler ────────────────────────────────────────────
   const handleVote = useCallback(async (side: "a" | "b") => {
@@ -237,7 +249,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
       case "vote": return "judgment";
       case "results": return "scorecard";
     }
-  }, [battleState]);
+  }, [battleState, isActiveCard]);
 
   const activePlaying: "a" | "b" | null = useMemo(() => {
     switch (battleState) {
@@ -250,9 +262,9 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
   }, [battleState, votedSide, replayingSide]);
 
   const handleTileTap = useCallback((side: "a" | "b") => {
-    if (battleState !== "results") return;
+    if (!isActiveCard || battleState !== "results") return;
     setReplayingSide(prev => prev === side ? null : side);
-  }, [battleState]);
+  }, [battleState, isActiveCard]);
 
   // ── Error fallback ──────────────────────────────────────────
   if (error) {
@@ -323,7 +335,11 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
                   </p>
                 )}
                 <button
-                  onClick={(e) => { e.stopPropagation(); setBattleState("round-1"); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isActiveCard) return;
+                    setBattleState("round-1");
+                  }}
                   className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   Judge Now
@@ -365,7 +381,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
         </AnimatePresence>
 
         {/* Expand button — after cover */}
-        {battleState !== "cover" && hookA && (
+        {isActiveCard && battleState !== "cover" && hookA && (
           <button
             onClick={(e) => { e.stopPropagation(); window.open(battleUrl, "_blank"); }}
             className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
@@ -481,7 +497,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
                 </div>
                 <button
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
-                  onClick={() => setPanelOpen(true)}
+                  onClick={() => { if (isActiveCard) setPanelOpen(true); }}
                 >
                   <span className="text-[11px] font-mono uppercase tracking-wider">React</span>
                   <span className="text-[10px] opacity-60">↑</span>

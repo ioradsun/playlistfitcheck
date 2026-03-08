@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, memo, createContext, useContext } from "re
 import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { logEngagementEvent } from "@/lib/engagementTracking";
+import type { CardState } from "./useCardLifecycle";
 
 // Feed-level counter: first N embeds load eagerly
 const EagerCountContext = createContext<{ claim: () => number }>({
@@ -30,34 +31,23 @@ interface Props {
   albumArtUrl?: string | null;
   artistName?: string;
   genre?: string | null;
+  cardState: CardState;
 }
 
-function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArtUrl, genre }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
+function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArtUrl, genre, cardState }: Props) {
   const { user } = useAuth();
   const { claim } = useContext(EagerCountContext);
   const [isEager] = useState(() => claim() <= EAGER_LIMIT);
-  const [visible, setVisible] = useState(isEager);
   const [iframeLoaded, setIframeLoaded] = useState(false);
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
+  const allowMountedIframe = cardState === "active" || (isEager && cardState === "warm");
 
   useEffect(() => {
-    if (isEager) return;
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "400px" }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [isEager]);
+    if (!allowMountedIframe && iframeLoaded) {
+      setIframeLoaded(false);
+    }
+  }, [allowMountedIframe, iframeLoaded]);
 
   const handleClick = () => {
     if (user && postId) {
@@ -73,13 +63,11 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
 
   return (
     <div
-      ref={ref}
       className="w-full rounded-xl overflow-hidden relative"
       style={{ height: 320, backgroundColor: "#121212", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={handleClick}
     >
-      {/* Album art backdrop while iframe loads */}
-      {visible && !iframeLoaded && albumArtUrl && (
+      {allowMountedIframe && !iframeLoaded && albumArtUrl && (
         <img
           src={albumArtUrl}
           alt=""
@@ -87,12 +75,11 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
         />
       )}
 
-      {/* Skeleton pulse when not yet in viewport */}
-      {!visible && (
+      {!allowMountedIframe && (
         <div className="w-full rounded-xl animate-pulse" style={{ height: 320, backgroundColor: "#1a1a1a" }} />
       )}
 
-      {visible && (
+      {allowMountedIframe && (
         <div className="w-full">
           <iframe
             src={embedSrc}
@@ -109,7 +96,6 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
         </div>
       )}
 
-      {/* "Now Streaming" badge — top left */}
       {iframeLoaded && (
         <div className="absolute top-3 left-3 z-20 pointer-events-none">
           <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
