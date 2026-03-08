@@ -1,3 +1,4 @@
+/* cache-bust: 2026-03-08-V1 */
 import { useState, useCallback, useEffect } from "react";
 import { Loader2, User, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
