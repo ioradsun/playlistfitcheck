@@ -34,7 +34,7 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
   const [recentDropdownOpen, setRecentDropdownOpen] = useState(false);
   const [billboardDropdownOpen, setBillboardDropdownOpen] = useState(false);
 
-  const isRecentActive = view === "recent" || view === "pending" || view === "resolved";
+  const isRecentActive = view === "all" || view === "now_streaming" || view === "in_studio" || view === "in_battle";
   const isBillboardActive = view === "billboard";
   const showRecentChevron = isLoggedIn && isRecentActive;
 
