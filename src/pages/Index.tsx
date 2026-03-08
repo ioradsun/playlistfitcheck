@@ -2,9 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense, star
 import { flushSync } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
-import { PlaylistInputSection } from "@/components/PlaylistInput";
-import { ResultsDashboard } from "@/components/ResultsDashboard";
-import { computePlaylistHealth, type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
+import { type PlaylistInput, type HealthOutput } from "@/lib/playlistHealthEngine";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { VibeAnalysis } from "@/components/VibeCard";
@@ -46,6 +44,8 @@ const AppSidebar = lazy(() => AppSidebarImport().then((module) => {
   const Comp = module.AppSidebar;
   return { default: (props: any) => <Comp {...props} /> };
 }));
+const PlaylistInputSection = lazy(() => import("@/components/PlaylistInput").then((module) => ({ default: module.PlaylistInputSection })));
+const ResultsDashboard = lazy(() => import("@/components/ResultsDashboard").then((module) => ({ default: module.ResultsDashboard })));
 
 interface AnalysisResult {
   output: HealthOutput;
@@ -423,13 +423,14 @@ const Index = () => {
     }
   }, [user, navigate]);
 
-  const handleAnalyze = useCallback((data: PlaylistInput & { _trackList?: { name: string; artists: string }[]; _songUrl?: string }) => {
+  const handleAnalyze = useCallback(async (data: PlaylistInput & { _trackList?: { name: string; artists: string }[]; _songUrl?: string }) => {
     if (!playlistQuota.canUse) {
       toast.error(playlistQuota.tier === "anonymous" ? "Sign up for more uses" : "Invite an artist to unlock unlimited");
       return;
     }
     const trackList = data._trackList;
     const songUrl = data._songUrl;
+    const { computePlaylistHealth } = await import("@/lib/playlistHealthEngine");
     const output = computePlaylistHealth(data);
     setVibeAnalysis(null);
     setSongFitAnalysis(null);
@@ -508,7 +509,7 @@ const Index = () => {
           });
           if (error) throw new Error(error.message);
           if (data?.error) throw new Error(data.error);
-          handleAnalyze({ ...(data as PlaylistInput), _songUrl: songUrl || undefined });
+          await handleAnalyze({ ...(data as PlaylistInput), _songUrl: songUrl || undefined });
         } catch (e) {
           console.error("Auto-run error:", e);
           toast.error("Failed to load report. Try running PlaylistFit again.");
@@ -722,6 +723,7 @@ const Index = () => {
           if (error) throw new Error(error.message);
           if (plData?.error) throw new Error(plData.error);
           const plInput = plData as PlaylistInput;
+          const { computePlaylistHealth } = await import("@/lib/playlistHealthEngine");
           const output = computePlaylistHealth(plInput);
           const trackList = (plData as any)._trackList;
           const songUrl = data.song_url || undefined;
@@ -846,24 +848,28 @@ const Index = () => {
               <div className="flex-1 flex items-center justify-center"><AnalysisLoadingScreen hasSong={!!result?.songUrl} /></div>
             ) : (
               <div className="w-full">
-                <ResultsDashboard
-                  key={result.key}
-                  result={result.output}
-                  inputData={result.input}
-                  playlistName={result.name}
-                  vibeAnalysis={vibeAnalysis}
-                  vibeLoading={false}
-                  songFitAnalysis={songFitAnalysis}
-                  songFitLoading={false}
-                  onBack={handleBack}
-                  onHeaderProject={setHeaderProject}
-                />
+                <Suspense fallback={<AnalysisLoadingScreen hasSong={!!result?.songUrl} />}>
+                  <ResultsDashboard
+                    key={result.key}
+                    result={result.output}
+                    inputData={result.input}
+                    playlistName={result.name}
+                    vibeAnalysis={vibeAnalysis}
+                    vibeLoading={false}
+                    songFitAnalysis={songFitAnalysis}
+                    songFitLoading={false}
+                    onBack={handleBack}
+                    onHeaderProject={setHeaderProject}
+                  />
+                </Suspense>
               </div>
             )}
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center px-4 py-8 overflow-hidden">
-            <PlaylistInputSection onAnalyze={handleAnalyze} />
+            <Suspense fallback={<AnalysisLoadingScreen hasSong={false} />}>
+              <PlaylistInputSection onAnalyze={handleAnalyze} />
+            </Suspense>
           </div>
         );
       }
