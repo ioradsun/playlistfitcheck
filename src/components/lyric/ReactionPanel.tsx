@@ -1228,7 +1228,7 @@ const ReactionPanel = forwardRef<HTMLDivElement, ReactionPanelProps>(function Re
       )}
     </AnimatePresence>
   );
-}
+});
 
 export { ReactionPanel };
 export default ReactionPanel;
