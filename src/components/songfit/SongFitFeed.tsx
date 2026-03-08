@@ -15,6 +15,7 @@ import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { CardLifecycleProvider, CardLifecycleContext, useCardState } from "./useCardLifecycle";
 import { useFeedWindow } from "./useFeedWindow";
 import { logImpression } from "@/lib/engagementTracking";
+import { RealtimeFeedHubProvider } from "./RealtimeFeedHub";
 
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
@@ -447,20 +448,22 @@ export function SongFitFeed() {
       ) : (
         <CardLifecycleProvider>
           <EagerEmbedProvider>
-            <WindowedFeedList
-              posts={posts}
-              feedView={feedView}
-              fetchPosts={fetchPosts}
-              setCommentPostId={setCommentPostId}
-              setLikesPostId={setLikesPostId}
-              signalMap={signalMap}
-              isLoadingMore={isLoadingMore}
-              hasMore={hasMore}
-              hasTrimmedNewer={hasTrimmedNewer}
-              loadMore={loadMore}
-              loadPrevious={loadPrevious}
-              onCenterChange={(idx) => { centerIndexRef.current = idx; }}
-            />
+            <RealtimeFeedHubProvider>
+              <WindowedFeedList
+                posts={posts}
+                feedView={feedView}
+                fetchPosts={fetchPosts}
+                setCommentPostId={setCommentPostId}
+                setLikesPostId={setLikesPostId}
+                signalMap={signalMap}
+                isLoadingMore={isLoadingMore}
+                hasMore={hasMore}
+                hasTrimmedNewer={hasTrimmedNewer}
+                loadMore={loadMore}
+                loadPrevious={loadPrevious}
+                onCenterChange={(idx) => { centerIndexRef.current = idx; }}
+              />
+            </RealtimeFeedHubProvider>
           </EagerEmbedProvider>
         </CardLifecycleProvider>
       )}
