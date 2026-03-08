@@ -10,7 +10,6 @@ import { Loader2, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineBattle } from "@/components/hookfit/InlineBattle";
-import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import type { HookInfo } from "@/components/hookfit/InlineBattle";
 
 interface Props {
@@ -29,6 +28,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
   const [activePlaying, setActivePlaying] = useState<"a" | "b" | null>(null);
   const [hooksReady, setHooksReady] = useState(false);
   const [showCover, setShowCover] = useState(true);
+  const [hookPhrase, setHookPhrase] = useState<string | null>(null);
 
   // Parse slugs from URL and look up battle_id
   useEffect(() => {
@@ -42,7 +42,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
 
     supabase
       .from("shareable_hooks" as any)
-      .select("battle_id")
+      .select("battle_id, hook_phrase")
       .eq("artist_slug", artistSlug)
       .eq("song_slug", songSlug)
       .eq("hook_slug", hookSlug)
@@ -54,6 +54,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
           return;
         }
         setBattleId((data as any).battle_id);
+        setHookPhrase((data as any).hook_phrase || null);
         setLoading(false);
       });
   }, [battleUrl]);
@@ -150,26 +151,64 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
         />
       )}
 
-      {/* Cover overlay — same pattern as InlineLyricDance */}
+      {/* "In Battle" badge — always visible, top center */}
+      {hooksReady && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+          <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 border border-white/10 rounded px-1.5 py-0.5 bg-black/40 backdrop-blur-sm">
+            In Battle
+          </span>
+        </div>
+      )}
+
+      {/* Cover overlay — matches ShareableHook battle cover */}
       <AnimatePresence>
-        {(showCover || loading || !battleId) && !loading && battleId && hooksReady && (
+        {showCover && !loading && battleId && hooksReady && (
           <motion.div
+            key="battle-cover"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            className="absolute inset-0 z-20"
+            transition={{ duration: 0.4 }}
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(2px)" }}
           >
-            <LyricDanceCover
-              songName={songTitle}
-              waiting={false}
-              badge="Hook Battle"
-              onExpand={() => window.open(battleUrl, "_blank")}
-              onListen={(e) => {
-                e.stopPropagation();
-                setShowCover(false);
-                setActivePlaying("a");
-              }}
-            />
+            {/* Expand button top-right */}
+            <button
+              onClick={(e) => { e.stopPropagation(); window.open(battleUrl, "_blank"); }}
+              className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-white/30 hover:text-white/60 transition-colors"
+            >
+              <Maximize2 size={12} />
+            </button>
+
+            <div className="flex flex-col items-center justify-center px-6 text-center">
+              {/* Song info */}
+              <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">
+                {songTitle}
+              </p>
+
+              {/* Hook phrase */}
+              {hookPhrase && (
+                <p className="text-lg sm:text-xl font-semibold text-white/80 max-w-[85%] leading-snug mb-8 italic">
+                  &ldquo;{hookPhrase}&rdquo;
+                </p>
+              )}
+
+              {/* CTA */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCover(false);
+                  setActivePlaying("a");
+                }}
+                className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+              >
+                Judge Now
+              </button>
+
+              {/* Subtext */}
+              <p className="text-[9px] font-mono text-white/20 uppercase tracking-wider mt-3">
+                2 rounds · 10 seconds each
+              </p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
