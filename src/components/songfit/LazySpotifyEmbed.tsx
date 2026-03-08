@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, memo, useRef } from "react";
 import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { logEngagementEvent } from "@/lib/engagementTracking";
@@ -15,15 +15,45 @@ interface Props {
   cardState: CardState;
 }
 
+/**
+ * Spotify embeds render their internal layout based on the iframe `height` attribute:
+ *   • 152px → compact (no artwork)
+ *   • 352px → full (with artwork + tracklist)
+ *
+ * We use 352 (Spotify's native full-track height) and let the container match.
+ * The embed is preconnected to Spotify's CDN for faster cold starts.
+ */
+const SPOTIFY_FULL_HEIGHT = 352;
+const SOUNDCLOUD_HEIGHT = 166;
+
 function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArtUrl, cardState: _cardState }: Props) {
   const { user } = useAuth();
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const preconnected = useRef(false);
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
+  const isSpotify = platform === "spotify";
 
-  const embedSrc = platform === "soundcloud" && trackUrl
+  const embedSrc = !isSpotify && trackUrl
     ? toSoundCloudEmbedUrl(trackUrl)
     : `https://open.spotify.com/embed/track/${trackId}?utm_source=generator&theme=1`;
+
+  const nativeHeight = isSpotify ? SPOTIFY_FULL_HEIGHT : SOUNDCLOUD_HEIGHT;
+
+  // Preconnect to Spotify CDN on first mount for faster iframe load
+  useEffect(() => {
+    if (preconnected.current || !isSpotify) return;
+    preconnected.current = true;
+    const origins = ["https://open.spotify.com", "https://i.scdn.co"];
+    origins.forEach((origin) => {
+      if (document.querySelector(`link[rel="preconnect"][href="${origin}"]`)) return;
+      const link = document.createElement("link");
+      link.rel = "preconnect";
+      link.href = origin;
+      link.crossOrigin = "anonymous";
+      document.head.appendChild(link);
+    });
+  }, [isSpotify]);
 
   useEffect(() => {
     setIframeLoaded(false);
@@ -35,14 +65,13 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
     }
   };
 
-  const height = platform === "soundcloud" ? 166 : 320;
-
   return (
     <div
       className="w-full rounded-xl overflow-hidden relative"
-      style={{ height: 320, backgroundColor: "#121212" }}
+      style={{ height: nativeHeight, backgroundColor: "#121212" }}
       onClick={handleClick}
     >
+      {/* Blurred album art placeholder while iframe loads */}
       {!iframeLoaded && albumArtUrl && (
         <img
           src={albumArtUrl}
@@ -55,24 +84,19 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
         <div className="absolute inset-0 w-full rounded-xl animate-pulse" style={{ backgroundColor: "#1a1a1a" }} />
       )}
 
-      <div className="w-full h-full">
-        <iframe
-          src={embedSrc}
-          width="100%"
-          height={platform === "soundcloud" ? 166 : undefined}
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading="lazy"
-          className="border-0 block relative z-10 transition-opacity duration-300 w-full h-full"
-          style={{
-            opacity: iframeLoaded ? 1 : 0,
-            height: platform === "soundcloud" ? 166 : "100%",
-            minHeight: platform === "soundcloud" ? 166 : 0,
-          }}
-          title={`Play ${trackTitle}`}
-          scrolling={platform === "soundcloud" ? "no" : undefined}
-          onLoad={() => setIframeLoaded(true)}
-        />
-      </div>
+      {/* iframe uses the native height as an HTML attribute so Spotify renders the correct layout */}
+      <iframe
+        src={embedSrc}
+        width="100%"
+        height={nativeHeight}
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"
+        className="border-0 block relative z-10 transition-opacity duration-300"
+        style={{ opacity: iframeLoaded ? 1 : 0, borderRadius: 12 }}
+        title={`Play ${trackTitle}`}
+        scrolling={isSpotify ? undefined : "no"}
+        onLoad={() => setIframeLoaded(true)}
+      />
 
       {iframeLoaded && (
         <div className="absolute top-3 left-3 z-20 pointer-events-none">
