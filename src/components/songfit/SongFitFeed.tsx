@@ -106,7 +106,7 @@ export function SongFitFeed() {
   const fetchPosts = useCallback(async () => {
     setLoading(true);
 
-    if (feedView === "recent" || feedView === "pending" || feedView === "resolved") {
+    if (feedView !== "billboard") {
       setSignalMap({});
       const { data: allPosts } = await supabase
         .from("songfit_posts")
@@ -117,18 +117,13 @@ export function SongFitFeed() {
 
       let enriched = (allPosts || []) as unknown as SongFitPost[];
 
-      if (feedView === "pending" || feedView === "resolved") {
-        // Fetch signal counts for all posts
-        const postIds = enriched.map(p => p.id);
-        const { data: reviews } = postIds.length > 0
-          ? await supabase.from("songfit_hook_reviews").select("post_id").in("post_id", postIds)
-          : { data: [] };
-        const signaled = new Set((reviews || []).map(r => r.post_id));
-        if (feedView === "pending") {
-          enriched = enriched.filter(p => !signaled.has(p.id));
-        } else {
-          enriched = enriched.filter(p => signaled.has(p.id));
-        }
+      // Content-type filtering
+      if (feedView === "now_streaming") {
+        enriched = enriched.filter(p => !!p.spotify_track_id);
+      } else if (feedView === "in_studio") {
+        enriched = enriched.filter(p => !!p.lyric_dance_url && !!p.lyric_dance_id);
+      } else if (feedView === "in_battle") {
+        enriched = enriched.filter(p => !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id);
       }
 
       setPosts(enriched.map((p) => ({ ...p, user_has_liked: false, user_has_saved: false, saves_count: 0 })));
