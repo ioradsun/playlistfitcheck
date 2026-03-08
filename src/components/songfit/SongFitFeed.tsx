@@ -89,7 +89,7 @@ export function SongFitFeed() {
   const [loading, setLoading] = useState(true);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [likesPostId, setLikesPostId] = useState<string | null>(null);
-  const [feedView, setFeedView] = useState<FeedView>("recent");
+  const [feedView, setFeedView] = useState<FeedView>("all");
 
   const [billboardMode, setBillboardMode] = useState<BillboardMode>("this_week");
   const [userVoteCount, setUserVoteCount] = useState<number | null>(null);
