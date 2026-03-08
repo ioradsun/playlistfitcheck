@@ -336,9 +336,14 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
 
   const handleToolClick = (tool: ToolItem) => {
     prefetchNavigationTarget(tool.path, { userId: user?.id });
-    // Let onTabChange handle navigation + state clearing (handleSidebarTabChange in Index)
-    // Do NOT call navigate() here — it races with state clears and can show stale projects.
-    onTabChange?.(tool.value);
+    // If we're on Index (/ or a tool path), let onTabChange handle navigation + state clearing.
+    // Otherwise navigate directly since onTabChange won't do anything outside Index.
+    const isOnIndex = location.pathname === "/" || TOOLS.some(t => location.pathname.startsWith(t.path));
+    if (isOnIndex && onTabChange) {
+      onTabChange(tool.value);
+    } else {
+      navigate(tool.path);
+    }
     closeMobileIfNeeded();
   };
 
