@@ -227,6 +227,10 @@ function InlineLyricDanceInner(
   }, [data]);
 
   useEffect(() => {
+    // Battle mode players are managed by activePlaying, not scroll visibility.
+    // Evicting the inactive side breaks round 2 handoff.
+    if (isBattleMode) return;
+
     if (visibility === "far") {
       if (farTimerRef.current) return;
       farTimerRef.current = setTimeout(() => {
@@ -243,7 +247,7 @@ function InlineLyricDanceInner(
     }
 
     setPlayerEvicted((prev) => (prev ? false : prev));
-  }, [visibility]);
+  }, [visibility, isBattleMode]);
 
   useEffect(() => {
     return () => {
