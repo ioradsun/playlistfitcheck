@@ -52,9 +52,9 @@ export function LyricDanceCover({
       {/* Center: song title + CTA + social proof */}
       <div className="flex flex-col items-center justify-center px-6 text-center">
         {songName ? (
-          <h2 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight max-w-[85%] mb-6">
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4 max-w-[85%]">
             {songName}
-          </h2>
+          </p>
         ) : (
           <div className="h-8 w-48 rounded bg-white/[0.07] animate-pulse mb-6" />
         )}
