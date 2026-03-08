@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { InlineBattle, type BattleMode } from "@/components/hookfit/InlineBattle";
 import type { HookInfo } from "@/components/hookfit/InlineBattle";
 import { getSessionId } from "@/lib/sessionId";
+import type { CardState } from "./useCardLifecycle";
 
 type BattleState = "cover" | "round-1" | "round-2" | "vote" | "results";
 
@@ -21,9 +22,10 @@ interface Props {
   songTitle: string;
   artistName: string;
   votedSide?: "a" | "b" | null;
+  cardState: CardState;
 }
 
-function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: initialVotedSide }: Props) {
+function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: initialVotedSide, cardState }: Props) {
   const [battleId, setBattleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -51,6 +53,13 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
   const hookEndFiredA = useRef(false);
   const hookEndFiredB = useRef(false);
   const userIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (cardState === "active") return;
+    setBattleState("cover");
+    setReplayingSide(null);
+    setPanelOpen(false);
+  }, [cardState]);
 
   // ── Fetch battle_id from URL slugs ──────────────────────────
   useEffect(() => {
@@ -240,6 +249,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
   }, [battleState]);
 
   const activePlaying: "a" | "b" | null = useMemo(() => {
+    if (cardState !== "active") return null;
     switch (battleState) {
       case "cover": return null;
       case "round-1": return "a";
@@ -247,7 +257,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
       case "vote": return null;
       case "results": return replayingSide ?? votedSide;
     }
-  }, [battleState, votedSide, replayingSide]);
+  }, [cardState, battleState, votedSide, replayingSide]);
 
   const handleTileTap = useCallback((side: "a" | "b") => {
     if (battleState !== "results") return;
@@ -323,8 +333,9 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
                   </p>
                 )}
                 <button
-                  onClick={(e) => { e.stopPropagation(); setBattleState("round-1"); }}
-                  className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+                  onClick={(e) => { e.stopPropagation(); if (cardState === "active") setBattleState("round-1"); }}
+                  disabled={cardState !== "active"}
+                  className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Judge Now
                 </button>

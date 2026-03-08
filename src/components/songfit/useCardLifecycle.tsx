@@ -1,5 +1,5 @@
 /* cache-bust: 2026-03-08-v1 */
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 export type CardState = "cold" | "warm" | "active";
@@ -19,6 +19,16 @@ export const CardLifecycleContext = createContext<CardLifecycleContextValue | nu
 
 export function CardLifecycleProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<LifecycleStore>({ cardStates: {}, activeCardId: null });
+
+  const previousActiveRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const previousActiveCardId = previousActiveRef.current;
+    if (previousActiveCardId && previousActiveCardId !== store.activeCardId) {
+      window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", { detail: { cardId: previousActiveCardId } }));
+    }
+    previousActiveRef.current = store.activeCardId;
+  }, [store.activeCardId]);
 
   const getCardState = useCallback(
     (postId: string): CardState => store.cardStates[postId] ?? "cold",

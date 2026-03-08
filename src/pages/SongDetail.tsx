@@ -83,6 +83,7 @@ const SongDetail = () => {
           trackTitle={post.track_title}
           trackUrl={post.spotify_track_url}
           postId={post.id}
+          cardState="active"
         />
 
         {/* Stats Grid */}
