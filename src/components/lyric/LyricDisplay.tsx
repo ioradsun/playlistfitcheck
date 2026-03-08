@@ -1960,15 +1960,15 @@ export function LyricDisplay({
 
           {/* ── Hottest Hooks — appears after Song DNA is revealed ── */}
           {hottestHooksEnabled &&
-            renderData?.hook &&
             (() => {
-              const hooks2 = [renderData.hook, renderData.secondHook].filter(
+              const hooks2 = [renderData?.hook, renderData?.secondHook].filter(
                 Boolean,
               ) as LyricHook[];
-              const labels = [renderData.hookLabel, renderData.secondHookLabel];
+              const hasAiHooks = hooks2.length > 0;
+              const labels = [renderData?.hookLabel, renderData?.secondHookLabel];
               const justifications = [
-                renderData.hookJustification,
-                renderData.secondHookJustification,
+                renderData?.hookJustification,
+                renderData?.secondHookJustification,
               ];
               const hasBattle = hooks2.length === 2;
               return (
@@ -1976,34 +1976,36 @@ export function LyricDisplay({
                   <div className="flex items-center gap-1.5">
                     <Zap size={11} className="text-primary" />
                     <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                      HOTTEST HOOKS
+                      {hasAiHooks ? "HOTTEST HOOKS" : "YOUR HOOKS"}
                     </span>
                   </div>
 
-                  <div className="rounded-xl border border-border/30 bg-background/30 p-1 grid grid-cols-2 gap-1">
-                    <button
-                      onClick={() => setHookViewMode("ai")}
-                      className={`rounded-lg px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                        hookViewMode === "ai"
-                          ? "bg-primary/20 text-primary"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      AI Detect
-                    </button>
-                    <button
-                      onClick={() => setHookViewMode("custom")}
-                      className={`rounded-lg px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                        hookViewMode === "custom"
-                          ? "bg-primary/20 text-primary"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Your Hooks
-                    </button>
-                  </div>
+                  {hasAiHooks && (
+                    <div className="rounded-xl border border-border/30 bg-background/30 p-1 grid grid-cols-2 gap-1">
+                      <button
+                        onClick={() => setHookViewMode("ai")}
+                        className={`rounded-lg px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
+                          hookViewMode === "ai"
+                            ? "bg-primary/20 text-primary"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        AI Detect
+                      </button>
+                      <button
+                        onClick={() => setHookViewMode("custom")}
+                        className={`rounded-lg px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
+                          hookViewMode === "custom"
+                            ? "bg-primary/20 text-primary"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Your Hooks
+                      </button>
+                    </div>
+                  )}
 
-                  {hookViewMode === "ai" ? (
+                  {hasAiHooks && hookViewMode === "ai" ? (
                     hooks2.map((hook, idx) => {
                       const isLooping = activeHookIndex === idx;
                       const clipDuration = hook.end - hook.start;
@@ -2152,7 +2154,7 @@ export function LyricDisplay({
                   )}
 
                   {/* Publish Hook Battle / Hook Page — below both hooks */}
-                  {renderData?.motionProfileSpec && beatGrid && (
+                  {hasAiHooks && renderData?.motionProfileSpec && beatGrid && (
                     <PublishHookButton
                       hook={hooks2[0]}
                       secondHook={hooks2[1] || null}
