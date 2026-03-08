@@ -42,7 +42,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
 
     supabase
       .from("shareable_hooks" as any)
-      .select("battle_id")
+      .select("battle_id, hook_phrase")
       .eq("artist_slug", artistSlug)
       .eq("song_slug", songSlug)
       .eq("hook_slug", hookSlug)
@@ -54,6 +54,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide }: 
           return;
         }
         setBattleId((data as any).battle_id);
+        setHookPhrase((data as any).hook_phrase || null);
         setLoading(false);
       });
   }, [battleUrl]);
