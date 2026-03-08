@@ -20,6 +20,7 @@ import { useNavigate } from "react-router-dom";
 import { logEngagementEvent, logImpression } from "@/lib/engagementTracking";
 import { HookReview } from "./HookReview";
 import { HookReviewsSheet } from "./HookReviewsSheet";
+import { useCardState, type CardState } from "./useCardLifecycle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,11 +36,10 @@ interface Props {
   onRefresh: () => void;
   isBillboard?: boolean;
   signalData?: { total: number; replay_yes: number; saves_count?: number; signal_velocity?: number };
-  isActive?: boolean;
-  onPlay?: () => void;
+  cardState: CardState;
 }
 
-export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRefresh, isBillboard, signalData, isActive = false, onPlay }: Props) {
+export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRefresh, isBillboard, signalData, cardState }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
   const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
@@ -67,7 +67,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const hasLyricDancePost = !!(post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id);
   const isBattlePost = !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
   const CAPTION_MAX = 300;
-  const [tier, setTier] = useState<1 | 3>(1);
+  const tier: 1 | 3 = cardState === "active" ? 3 : 1;
   const [isNearViewport, setIsNearViewport] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
 
@@ -101,13 +101,10 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!isActive && tier === 3) setTier(1);
-  }, [isActive, tier]);
+  const { activate } = useCardState(post.id);
 
   const handlePlayTap = () => {
-    onPlay?.();
-    setTier(3);
+    activate();
   };
 
   const handleSaveEdit = async () => {
@@ -340,8 +337,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             songTitle={post.track_title}
             artistName={displayName}
             albumArtUrl={post.album_art_url ?? undefined}
-            isActive={isActive}
-            onPlay={onPlay}
+            isActive={cardState === "active"}
+            onPlay={activate}
           />
         ) : post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id ? (
           <InlineBattleFeed
