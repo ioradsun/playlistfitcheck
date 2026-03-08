@@ -14,6 +14,7 @@ import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { InlineLyricDancePlaybar } from "./InlineLyricDancePlaybar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { type DanceUpdatePayload, type ReactionInsertPayload, useRealtimeFeedHub } from "./RealtimeFeedHub";
+import type { CardState } from "./useCardLifecycle";
 
 export interface InlineLyricDanceHandle {
   getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;
@@ -21,6 +22,7 @@ export interface InlineLyricDanceHandle {
 }
 
 interface Props {
+  postId?: string;
   lyricDanceId: string;
   lyricDanceUrl: string;
   songTitle: string;
@@ -29,6 +31,7 @@ interface Props {
   bootMode?: "minimal" | "full";
   albumArtUrl?: string;
   isActive?: boolean;
+  cardState?: CardState;
   /** Constrain playback to start at this time in seconds. Used by hook battles. */
   regionStart?: number;
   /** Constrain playback to end at this time in seconds. Used by hook battles. */
@@ -62,7 +65,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, regionStart, regionEnd, onPlay, reactionData: reactionDataProp }: Props,
+  { postId, lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, cardState = "warm", regionStart, regionEnd, onPlay, reactionData: reactionDataProp }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
@@ -75,6 +78,7 @@ function InlineLyricDanceInner(
   const isBattleMode = regionStart != null && regionEnd != null;
   const [showCover, setShowCover] = useState(!isBattleMode);
   const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>(reactionDataProp ?? {});
+  const [forceDemoted, setForceDemoted] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -326,6 +330,21 @@ function InlineLyricDanceInner(
   }, []);
 
   useEffect(() => {
+    const handleMediaDeactivate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ cardId?: string }>;
+      if (!postId || customEvent.detail?.cardId !== postId) return;
+      setForceDemoted(true);
+    };
+
+    window.addEventListener("crowdfit:media-deactivate", handleMediaDeactivate);
+    return () => window.removeEventListener("crowdfit:media-deactivate", handleMediaDeactivate);
+  }, [postId]);
+
+  useEffect(() => {
+    if (cardState === "active") setForceDemoted(false);
+  }, [cardState]);
+
+  useEffect(() => {
     if (!player || !playerReady) return;
     if (isBattleMode) {
       // Battle mode: only the active side runs. Inactive side fully pauses (stops RAF + audio)
@@ -338,21 +357,20 @@ function InlineLyricDanceInner(
         player.setMuted(true);
         setMuted(true);
       }
-    } else if (visibility === "visible") {
+      return;
+    }
+
+    const shouldRun = cardState === "active" && visibility === "visible" && !forceDemoted;
+    if (shouldRun) {
       player.play();
+      player.setMuted(false);
+      setMuted(false);
     } else {
       player.pause();
-    }
-  }, [visibility, isBattleMode, isActive, playerReady, player]);
-
-
-  useEffect(() => {
-    if (!player || isBattleMode) return; // Battle mode handled above
-    if (!isActive) {
       player.setMuted(true);
       setMuted(true);
     }
-  }, [isActive, isBattleMode, player]);
+  }, [visibility, isBattleMode, isActive, cardState, forceDemoted, playerReady, player]);
 
   // ── Handlers ─────────────────────────────────────────────────────────
 

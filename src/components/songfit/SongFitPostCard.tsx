@@ -297,17 +297,20 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           </div>
         ) : post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
           <InlineLyricDance
+            postId={post.id}
             lyricDanceId={post.lyric_dance_id}
             lyricDanceUrl={post.lyric_dance_url}
             songTitle={post.track_title}
             artistName={displayName}
             albumArtUrl={post.album_art_url ?? undefined}
             isActive={cardState === "active"}
+            cardState={cardState}
             onPlay={activate}
           />
         ) : post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id ? (
           <InlineBattleFeed
             battleUrl={post.lyric_dance_url}
+            cardState={cardState}
             songTitle={post.track_title}
             artistName={displayName}
             votedSide={votedBattleSide}
@@ -321,6 +324,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             albumArtUrl={post.album_art_url}
             artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
             genre={((post.tags_json as any[]) || [])[0] || null}
+            cardState={cardState}
           />
         )}
       </div>
