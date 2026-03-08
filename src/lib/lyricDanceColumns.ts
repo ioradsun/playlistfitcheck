@@ -1,17 +1,17 @@
-/* cache-bust: 2026-03-04-V4 */
 /**
- * Canonical column list for `shareable_lyric_dances` queries.
+ * Canonical column lists for `shareable_lyric_dances` queries.
  *
- * Import this in every file that reads from the table — never hardcode the
- * string. Missing columns cause silent visual regressions:
+ * LYRIC_DANCE_COLUMNS includes authoring/runtime heavy fields needed to fully
+ * instantiate a player.
  *
- *   beat_grid     → BeatConductor → beat visualizer + timing budgets
- *   auto_palettes → hero word accent colors + section background tints
- *   palette       → base gradient fallback
- *   physics_spec  → motion profile (weighted/fluid/elastic/drift/glitch)
- *   system_type / seed → deterministic particle system selection
+ * LYRIC_DANCE_FEED_COLUMNS is intentionally lightweight for feed-card previews.
  */
+
 export const LYRIC_DANCE_COLUMNS =
-  "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url," +
-  "lyrics,words,section_images,cinematic_direction," +
+  "id,user_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
+  "motion_profile_spec,cinematic_direction,section_images,scene_context,frame_state," +
   "auto_palettes,beat_grid,palette,system_type,seed,artist_dna,physics_spec";
+
+export const LYRIC_DANCE_FEED_COLUMNS =
+  "id,artist_slug,song_slug,artist_name,song_name,audio_url," +
+  "cover_image_url,top_reaction,auto_palettes,palette,section_images";

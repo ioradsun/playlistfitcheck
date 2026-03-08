@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.detect-hooks]
 verify_jwt = false
+
+[functions.precompute-dance-preview]
+verify_jwt = false

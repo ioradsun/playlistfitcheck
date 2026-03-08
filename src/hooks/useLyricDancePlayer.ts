@@ -12,7 +12,6 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withInitLimit } from "@/engine/initQueue";
-import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 
 interface Options {
   bootMode?: "minimal" | "full";
@@ -116,39 +115,6 @@ export function useLyricDancePlayer(
     if (!playerRef.current || !data?.section_images?.length) return;
     playerRef.current.updateSectionImages(data.section_images);
   }, [data?.section_images]);
-
-  // ── Auto-palette: compute from section images, write to DB ───────────
-  useEffect(() => {
-    if (!data?.id) return;
-
-    // Skip if palettes already exist and are not stale
-    if (Array.isArray(data.auto_palettes) && data.auto_palettes.length > 0) {
-      const textColor = data.auto_palettes[0]?.[2] ?? "#ffffff";
-      const isStale = /^#f[0-9a-f]{5}$/i.test(textColor) || textColor === "#ffffff";
-      if (!isStale) return;
-    }
-
-    const urls = (data.section_images ?? []).filter((u): u is string => Boolean(u));
-    if (urls.length === 0) return;
-
-    let cancelled = false;
-    computeAutoPalettesFromUrls(urls)
-      .then((palettes) => {
-        if (cancelled || palettes.length === 0) return;
-        setData((prev) => (prev ? { ...prev, auto_palettes: palettes } : prev));
-        playerRef.current?.updateAutoPalettes(palettes);
-        supabase
-          .from("shareable_lyric_dances" as any)
-          .update({ auto_palettes: palettes, updated_at: new Date().toISOString() } as any)
-          .eq("id", data.id)
-          .then(({ error }) => {
-            // auto-palette DB write failed
-          });
-      })
-      .catch(() => { /* auto-palette failed */ });
-
-    return () => { cancelled = true; };
-  }, [data?.id, data?.section_images, data?.auto_palettes]);
 
   // ── Scene context hot-patch ───────────────────────────────────────────
   useEffect(() => {

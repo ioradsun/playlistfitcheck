@@ -9,11 +9,11 @@ import { Maximize2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
-import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import { LYRIC_DANCE_COLUMNS, LYRIC_DANCE_FEED_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { InlineLyricDancePlaybar } from "./InlineLyricDancePlaybar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
-import { type DanceUpdatePayload, type ReactionInsertPayload, useRealtimeFeedHub } from "./RealtimeFeedHub";
+import { type DanceUpdatePayload, useRealtimeFeedHub } from "./RealtimeFeedHub";
 import type { CardState } from "./useCardLifecycle";
 
 export interface InlineLyricDanceHandle {
@@ -37,7 +37,6 @@ interface Props {
   /** Constrain playback to end at this time in seconds. Used by hook battles. */
   regionEnd?: number;
   onPlay?: () => void;
-  reactionData?: Record<string, { line: Record<number, number>; total: number }>;
   preloadedImages?: HTMLImageElement[];
 }
 
@@ -66,7 +65,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { postId, lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, cardState = "warm", regionStart, regionEnd, onPlay, reactionData: reactionDataProp, preloadedImages }: Props,
+  { postId, lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, cardState = "warm", regionStart, regionEnd, onPlay, preloadedImages }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
@@ -78,8 +77,9 @@ function InlineLyricDanceInner(
   // In battle mode (region set), skip cover — player renders immediately
   const isBattleMode = regionStart != null && regionEnd != null;
   const [showCover, setShowCover] = useState(!isBattleMode);
-  const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>(reactionDataProp ?? {});
+  const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
   const [forceDemoted, setForceDemoted] = useState(false);
+  const [fullDataRequested, setFullDataRequested] = useState(bootMode === "full" || isBattleMode);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -92,18 +92,22 @@ function InlineLyricDanceInner(
   useEffect(() => {
     if (prefetchedData) { setFetchedData(prefetchedData); setLoading(false); return; }
     if (!lyricDanceId) return;
+
+    const needsFull = fullDataRequested || isBattleMode;
     setLoading(true);
+    setFetchError(false);
+
     supabase
       .from("shareable_lyric_dances" as any)
-      .select(LYRIC_DANCE_COLUMNS)
+      .select(needsFull ? LYRIC_DANCE_COLUMNS : LYRIC_DANCE_FEED_COLUMNS)
       .eq("id", lyricDanceId)
       .maybeSingle()
       .then(({ data: row, error }) => {
         if (error || !row) { setFetchError(true); setLoading(false); return; }
-        setFetchedData(row as any as LyricDanceData);
+        setFetchedData((prev) => ({ ...(prev ?? {}), ...(row as Record<string, unknown>) } as LyricDanceData));
         setLoading(false);
       });
-  }, [lyricDanceId, prefetchedData]);
+  }, [lyricDanceId, prefetchedData, fullDataRequested, isBattleMode]);
 
   // Realtime — only when we own the fetch (no prefetchedData)
   useEffect(() => {
@@ -119,7 +123,10 @@ function InlineLyricDanceInner(
             ...prev,
             ...(Array.isArray(n.lyrics) && { lyrics: n.lyrics as LyricDanceData["lyrics"] }),
             ...(n.words !== undefined && { words: n.words as LyricDanceData["words"] }),
-          };
+            ...(n.auto_palettes !== undefined && { auto_palettes: n.auto_palettes as LyricDanceData["auto_palettes"] }),
+            ...(n.cover_image_url !== undefined && { cover_image_url: n.cover_image_url as string | null }),
+            ...(n.top_reaction !== undefined && { top_reaction: n.top_reaction as any }),
+          } as LyricDanceData;
         });
       });
     }
@@ -135,121 +142,37 @@ function InlineLyricDanceInner(
           ...prev,
           ...(next.lyrics && { lyrics: next.lyrics }),
           ...(next.words !== undefined && { words: next.words }),
+          ...(next.auto_palettes !== undefined && { auto_palettes: next.auto_palettes }),
+          ...(next.cover_image_url !== undefined && { cover_image_url: next.cover_image_url }),
+          ...(next.top_reaction !== undefined && { top_reaction: next.top_reaction }),
         } : prev);
       })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
   }, [lyricDanceId, prefetchedData, realtimeHub]);
 
-
-  useEffect(() => {
-    if (reactionDataProp) setReactionData(reactionDataProp);
-  }, [reactionDataProp]);
-
-  // Fetch reactions when data is available
-  useEffect(() => {
-    if (reactionDataProp || !fetchedData?.id) return;
-    supabase
-      .from("lyric_dance_reactions" as any)
-      .select("emoji, line_index")
-      .eq("dance_id", fetchedData.id)
-      .then(({ data: rows }) => {
-        if (!rows) return;
-        const agg: Record<string, { line: Record<number, number>; total: number }> = {};
-        for (const row of rows as any[]) {
-          const { emoji, line_index } = row;
-          if (!agg[emoji]) agg[emoji] = { line: {}, total: 0 };
-          agg[emoji].total++;
-          if (line_index != null) {
-            agg[emoji].line[line_index] = (agg[emoji].line[line_index] ?? 0) + 1;
-          }
-        }
-        setReactionData(agg);
-      });
-  }, [fetchedData?.id, reactionDataProp]);
-
-  // Realtime reactions
-  useEffect(() => {
-    if (reactionDataProp || !fetchedData?.id) return;
-
-    const applyReactionPayload = (payload: ReactionInsertPayload) => {
-      const emoji = payload.new?.emoji;
-      const line_index = payload.new?.line_index;
-      if (!emoji) return;
-      setReactionData(prev => {
-        const updated = { ...prev };
-        if (!updated[emoji]) updated[emoji] = { line: {}, total: 0 };
-        updated[emoji] = {
-          ...updated[emoji],
-          total: updated[emoji].total + 1,
-          line: {
-            ...updated[emoji].line,
-            ...(line_index != null ? { [line_index]: (updated[emoji].line[line_index] ?? 0) + 1 } : {}),
-          },
-        };
-        return updated;
-      });
-    };
-
-    if (realtimeHub && !prefetchedData) {
-      return realtimeHub.subscribeReactions(fetchedData.id, applyReactionPayload);
-    }
-
-    const channel = supabase
-      .channel(`inline-reactions-${fetchedData.id}`)
-      .on("postgres_changes", {
-        event: "INSERT", schema: "public",
-        table: "lyric_dance_reactions",
-        filter: `dance_id=eq.${fetchedData.id}`,
-      }, (payload: any) => {
-        applyReactionPayload(payload as ReactionInsertPayload);
-      })
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [fetchedData?.id, prefetchedData, reactionDataProp, realtimeHub]);
-
   const topReaction = useMemo(() => {
-    if (!reactionData || !fetchedData?.lyrics) return null;
+    const precomputed = (fetchedData as any)?.top_reaction;
+    if (!precomputed || typeof precomputed !== "object") return null;
 
     const EMOJI_SYMBOLS: Record<string, string> = {
-      fire: '🔥', dead: '💀', mind_blown: '🤯',
-      emotional: '😭', respect: '🙏', accurate: '🎯',
+      fire: "🔥", dead: "💀", mind_blown: "🤯",
+      emotional: "😭", respect: "🙏", accurate: "🎯",
     };
 
-    const lineTotals = new Map<number, number>();
-    for (const data of Object.values(reactionData)) {
-      for (const [lineIdxStr, count] of Object.entries(data.line)) {
-        const idx = Number(lineIdxStr);
-        lineTotals.set(idx, (lineTotals.get(idx) ?? 0) + count);
-      }
-    }
+    const emoji = typeof precomputed.emoji === "string" ? precomputed.emoji : "fire";
+    const count = Number(precomputed.count ?? 0);
+    const lineText = typeof precomputed.line_text === "string" ? precomputed.line_text : "";
 
-    if (lineTotals.size === 0) return null;
-
-    let bestLineIndex = -1;
-    let bestLineTotal = 0;
-    for (const [idx, total] of lineTotals.entries()) {
-      if (total > bestLineTotal) { bestLineTotal = total; bestLineIndex = idx; }
-    }
-
-    let topEmojiKey: string | null = null;
-    let topEmojiCount = 0;
-    for (const [key, data] of Object.entries(reactionData)) {
-      const count = data.line[bestLineIndex] ?? 0;
-      if (count > topEmojiCount) { topEmojiCount = count; topEmojiKey = key; }
-    }
-
-    const symbol = topEmojiKey ? (EMOJI_SYMBOLS[topEmojiKey] ?? '🔥') : '🔥';
-    const line = (fetchedData.lyrics as any[])[bestLineIndex];
-    const lineText = (line?.text ?? '').slice(0, 60);
+    if (!lineText || !Number.isFinite(count) || count <= 0) return null;
 
     return {
-      symbol,
-      count: topEmojiCount,
-      lineText,
-      lineReactionCount: bestLineTotal,
+      symbol: EMOJI_SYMBOLS[emoji] ?? emoji,
+      count,
+      lineText: lineText.slice(0, 60),
+      lineReactionCount: count,
     };
-  }, [reactionData, fetchedData?.lyrics]);
+  }, [fetchedData]);
 
   // When data is available, apply region constraints
   const playerData = useMemo(() => {
@@ -395,8 +318,8 @@ function InlineLyricDanceInner(
     );
   }
 
-  const isWaitingForPlayer =
-    loading || !fetchedData || !fetchedData.cinematic_direction || Array.isArray(fetchedData.cinematic_direction);
+  const hasFullPlayerData = !!(fetchedData?.cinematic_direction && !Array.isArray(fetchedData.cinematic_direction));
+  const isWaitingForPlayer = loading || (fullDataRequested && !hasFullPlayerData);
 
   // ── Battle mode: bare canvas, no chrome ────────────────────────────────
   if (isBattleMode) {
@@ -428,6 +351,20 @@ function InlineLyricDanceInner(
           if (!showCover && !isWaitingForPlayer) toggleMute(e);
         }}
       >
+        {!playerReady && (
+          <>
+            {((fetchedData as any)?.cover_image_url || fetchedData?.section_images?.[0]) ? (
+              <img
+                src={((fetchedData as any)?.cover_image_url || fetchedData?.section_images?.[0]) as string}
+                alt={songTitle}
+                className="absolute inset-0 w-full h-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black" />
+            )}
+          </>
+        )}
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
           style={{ display: playerReady ? "block" : "none" }} />
         <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
@@ -452,6 +389,7 @@ function InlineLyricDanceInner(
                   e.stopPropagation();
                   onPlay?.();
                   setShowCover(false);
+                  setFullDataRequested(true);
                   if (player) {
                     player.setMuted(false);
                     player.seek(regionStart ?? 0);
