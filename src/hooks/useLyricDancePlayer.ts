@@ -47,7 +47,13 @@ export function useLyricDancePlayer(
 
   // Keep local data in sync when parent passes new initialData
   useEffect(() => {
-    if (initialData) setData(initialData);
+    if (initialData) {
+      setData(initialData);
+      return;
+    }
+
+    setData(null);
+    initRef.current = false;
   }, [initialData]);
 
   // ── Init / destroy ────────────────────────────────────────────────────
