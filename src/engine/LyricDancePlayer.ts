@@ -1191,18 +1191,20 @@ export class LyricDancePlayer {
   private _fontStabilized = false;
   private _fontLayoutReflowPending = false;
   private _handleVisibilityChange: () => void;
+  private options?: { bootMode?: "minimal" | "full"; preloadedImages?: HTMLImageElement[] };
 
   constructor(
     data: LyricDanceData,
     bgCanvas: HTMLCanvasElement,
     textCanvas: HTMLCanvasElement,
     container: HTMLDivElement,
-    options?: { bootMode?: "minimal" | "full" },
+    options?: { bootMode?: "minimal" | "full"; preloadedImages?: HTMLImageElement[] },
   ) {
     this.data = data;
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
     this.container = container;
+    this.options = options;
 
     // Engine owns ONE canvas; we draw everything on bgCanvas.
     this.canvas = bgCanvas;
@@ -3878,6 +3880,32 @@ export class LyricDancePlayer {
 
   private async loadSectionImages(): Promise<void> {
     const urls = this.data.section_images ?? [];
+    if (this.options?.preloadedImages?.length) {
+      this.chapterImages = this.options.preloadedImages;
+      const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+      const cdSections = (cd?.sections as any[]) ?? [];
+      const songGrade = this._songGrade ?? getMoodGrade(cdSections[0]?.visualMood as string | undefined);
+      const blurRadius = Math.min(3, songGrade.blur.radius);
+      this._preBlurredImages = this.chapterImages.map((img) => {
+        const off = document.createElement('canvas');
+        off.width = this.width || 960;
+        off.height = this.height || 540;
+        const ctx = off.getContext('2d');
+        if (!ctx || !img.complete || img.naturalWidth === 0) return off;
+        if (blurRadius > 0.2) {
+          ctx.filter = `blur(${blurRadius.toFixed(1)}px)`;
+        }
+        const OVERSCAN = 1.25;
+        const ow = off.width * OVERSCAN;
+        const oh = off.height * OVERSCAN;
+        const ox = (off.width - ow) / 2;
+        const oy = (off.height - oh) / 2;
+        ctx.drawImage(img, ox, oy, ow, oh);
+        ctx.filter = 'none';
+        return off;
+      });
+      return;
+    }
     if (urls.length === 0) return;
     const duration = this.audio?.duration || 1;
     const totalChapters = urls.length || 1;
