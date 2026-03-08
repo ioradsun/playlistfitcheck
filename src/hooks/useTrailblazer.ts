@@ -9,6 +9,10 @@ interface TrailblazerInfo {
   /** Whether the user has the badge */
   isBlazer: boolean;
   loading: boolean;
+  /** The next available badge number. Null if all 1000 are claimed. */
+  nextNumber: number | null;
+  /** Whether any trailblazer spots remain */
+  spotsRemaining: number;
 }
 
 /**
@@ -53,5 +57,8 @@ export function useTrailblazer(userId?: string | null): TrailblazerInfo {
     return () => { cancelled = true; };
   }, [userId]);
 
-  return { number, total, isBlazer: number !== null, loading };
+  const nextNumber = total < 1000 ? total + 1 : null;
+  const spotsRemaining = Math.max(0, 1000 - total);
+
+  return { number, total, isBlazer: number !== null, loading, nextNumber, spotsRemaining };
 }
