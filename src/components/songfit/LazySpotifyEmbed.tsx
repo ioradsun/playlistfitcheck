@@ -109,11 +109,13 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
         </div>
       )}
 
-      {/* Genre pill overlay */}
-      {genre && iframeLoaded && (
-        <span className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-[10px] font-semibold text-white capitalize leading-tight">
-          {genre}
-        </span>
+      {/* "Now Streaming" badge — top left */}
+      {iframeLoaded && (
+        <div className="absolute top-3 left-3 z-20 pointer-events-none">
+          <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 border border-white/10 rounded px-1.5 py-0.5 bg-black/40 backdrop-blur-sm">
+            Now Streaming
+          </span>
+        </div>
       )}
     </div>
   );
