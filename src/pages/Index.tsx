@@ -81,6 +81,14 @@ const TabChunkFallback = () => (
   </div>
 );
 
+/** Reserves sidebar width during Suspense — prevents layout shift */
+const SidebarShell = () => (
+  <div
+    className="hidden md:block flex-shrink-0"
+    style={{ width: "var(--sidebar-width, 11rem)" }}
+  />
+);
+
 // PATH_TO_TAB is kept for URL → tab syncing in useEffect
 const PATH_TO_TAB: Record<string, string> = {
   "/CrowdFit":    "songfit",
@@ -870,10 +878,10 @@ const Index = () => {
 
   return (
     <>
-      <Suspense fallback={<div aria-hidden className="hidden md:block w-[11rem] shrink-0" />}>
+      <Suspense fallback={<SidebarShell />}>
         <AppSidebar activeTab={activeTab} onTabChange={handleSidebarTabChange} onLoadProject={handleLoadProject} optimisticItem={optimisticSidebarItem} />
       </Suspense>
-      <SidebarInset className="h-app !min-h-0 overflow-hidden">
+      <SidebarInset className="h-svh !min-h-0 overflow-hidden">
         {/* Minimal top header with pill badge */}
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
           <SidebarTrigger data-sidebar="trigger" className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground md:hidden">

@@ -26,7 +26,7 @@ type SidebarContext = {
   openMobile: boolean;
   setOpenMobile: (open: boolean) => void;
   isMobile: boolean;
-  transitionsReady: boolean;
+  mounted: boolean;
   toggleSidebar: () => void;
 };
 
@@ -51,18 +51,16 @@ const SidebarProvider = React.forwardRef<
 >(({ defaultOpen = true, open: openProp, onOpenChange: setOpenProp, className, style, children, ...props }, ref) => {
   const isMobile = useIsMobile();
   const [openMobile, setOpenMobile] = React.useState(false);
-  const [transitionsReady, setTransitionsReady] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(() => {
     if (typeof document === "undefined") return defaultOpen;
-    const persisted = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith(`${SIDEBAR_COOKIE_NAME}=`))
-      ?.split("=")[1];
-    if (persisted === "true") return true;
-    if (persisted === "false") return false;
+    const match = document.cookie.match(
+      new RegExp(`(?:^|; )${SIDEBAR_COOKIE_NAME}=([^;]*)`)
+    );
+    if (match) return match[1] === "true";
     return defaultOpen;
   });
   const open = openProp ?? _open;
@@ -87,13 +85,7 @@ const SidebarProvider = React.forwardRef<
   }, [isMobile, setOpen, setOpenMobile]);
 
   // Adds a keyboard shortcut to toggle the sidebar.
-  React.useEffect(() => {
-    setTransitionsReady(false);
-    const frame = window.requestAnimationFrame(() => {
-      setTransitionsReady(true);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [isMobile]);
+  React.useEffect(() => setMounted(true), []);
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -119,10 +111,10 @@ const SidebarProvider = React.forwardRef<
       isMobile,
       openMobile,
       setOpenMobile,
-      transitionsReady,
+      mounted,
       toggleSidebar,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, transitionsReady, toggleSidebar],
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, mounted, toggleSidebar],
   );
 
   return (
@@ -137,7 +129,6 @@ const SidebarProvider = React.forwardRef<
             } as React.CSSProperties
           }
           className={cn("group/sidebar-wrapper flex min-h-app w-full has-[[data-variant=inset]]:bg-sidebar", className)}
-          data-transition-ready={transitionsReady ? "true" : "false"}
           ref={ref}
           {...props}
         >
@@ -157,7 +148,7 @@ const Sidebar = React.forwardRef<
     collapsible?: "offcanvas" | "icon" | "none";
   }
 >(({ side = "left", variant = "sidebar", collapsible = "offcanvas", className, children, ...props }, ref) => {
-  const { isMobile, state, openMobile, setOpenMobile, transitionsReady } = useSidebar();
+  const { isMobile, state, openMobile, setOpenMobile, mounted } = useSidebar();
 
   if (collapsible === "none") {
     return (
@@ -203,8 +194,8 @@ const Sidebar = React.forwardRef<
       {/* This is what handles the sidebar gap on desktop */}
       <div
         className={cn(
-          "relative h-app w-[--sidebar-width] bg-transparent transition-[width] duration-200 ease-linear",
-          !transitionsReady && "transition-none",
+          "relative h-svh w-[--sidebar-width] bg-transparent",
+          mounted && "transition-[width] duration-200 ease-linear",
           "group-data-[collapsible=offcanvas]:w-0",
           "group-data-[side=right]:rotate-180",
           variant === "floating" || variant === "inset"
@@ -214,8 +205,8 @@ const Sidebar = React.forwardRef<
       />
       <div
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-app w-[--sidebar-width] transition-[left,right,width] duration-200 ease-linear md:flex",
-          !transitionsReady && "transition-none",
+          "fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] md:flex",
+          mounted && "transition-[left,right,width] duration-200 ease-linear",
           side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
