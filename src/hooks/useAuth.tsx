@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, createContext, useContext, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { consumeAuthPrefetch } from "@/lib/prefetch";
 import { toast } from "sonner";
 import type { User, Session } from "@supabase/supabase-js";
 
@@ -79,7 +80,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // THEN do initial session check
     const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const prefetched = consumeAuthPrefetch();
+        const { data: { session } } = prefetched
+          ? await prefetched
+          : await supabase.auth.getSession();
         if (!isMounted) return;
         setSession(session);
         setUser(session?.user ?? null);
