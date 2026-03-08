@@ -16,15 +16,17 @@ export const useScrollRestore = (pathname: string, containerRef: RefObject<HTMLE
     }
 
     const savedPosition = positionsRef.current.get(pathname);
-    if (savedPosition !== undefined) {
-      container.scrollTop = savedPosition;
-    } else if (!visitedRef.current.has(pathname)) {
-      container.scrollTop = 0;
-    }
+    const targetScrollTop = savedPosition !== undefined ? savedPosition : visitedRef.current.has(pathname) ? container.scrollTop : 0;
 
-    visitedRef.current.add(pathname);
+    const raf = window.requestAnimationFrame(() => {
+      const current = containerRef.current;
+      if (!current) return;
+      current.scrollTop = targetScrollTop;
+      visitedRef.current.add(pathname);
+    });
 
     return () => {
+      window.cancelAnimationFrame(raf);
       const current = containerRef.current;
       if (!current) return;
       positionsRef.current.set(pathname, current.scrollTop);

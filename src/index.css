@@ -7,6 +7,7 @@
 
 @layer base {
   :root {
+    --app-height: 100dvh;
     --background: 0 0% 98%;
     --foreground: 240 10% 10%;
 
@@ -221,7 +222,15 @@
   }
 
   .page-content {
-    min-height: calc(100vh - 3rem);
+    min-height: calc(var(--app-height) - 3rem);
+  }
+
+  .h-app {
+    height: var(--app-height);
+  }
+
+  .min-h-app {
+    min-height: var(--app-height);
   }
 }
 

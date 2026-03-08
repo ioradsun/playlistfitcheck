@@ -9,7 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { VibeAnalysis } from "@/components/VibeCard";
 import type { SongFitAnalysis } from "@/components/SongFitCard";
-import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
@@ -59,11 +58,7 @@ interface AnalysisResult {
 }
 
 const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
-  <motion.div
-    className="flex-1 w-full max-w-md mx-auto flex flex-col items-center justify-center gap-6"
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-  >
+  <div className="flex-1 w-full max-w-md mx-auto flex flex-col items-center justify-center gap-6">
     <div className="relative">
       <div className="w-20 h-20 rounded-full border-2 border-primary/30 flex items-center justify-center">
         <Loader2 size={32} className="text-primary animate-spin" />
@@ -77,7 +72,7 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
           : "Evaluating playlist health and generating vibe analysis"}
       </p>
     </div>
-  </motion.div>
+  </div>
 );
 
 const TabChunkFallback = () => (
@@ -135,23 +130,10 @@ const Index = () => {
     const tRaw = PATH_TO_TAB[bp] || PATH_TO_TAB[location.pathname];
     const t = !hookfitEnabled && tRaw === "hookfit" ? "songfit" : tRaw;
     if (t && t !== activeTab) setActiveTabState(t);
-    // Redirect bare "/" to "/CrowdFit" — but NOT if there's a code/token in the URL (auth callback)
-    // If there's a ref param, redirect to signup
-    const refParam = new URLSearchParams(location.search).get("ref");
-    if (location.pathname === "/" && refParam) {
-      navigate(`/auth?mode=signup&ref=${refParam}`, { replace: true });
-      return;
-    }
-    if (location.pathname === "/" && !location.state && !location.search && !window.location.hash) {
-      navigate("/CrowdFit", { replace: true });
-    }
-    if (location.pathname === "/SongFit") {
-      navigate("/CrowdFit", { replace: true });
-    }
     if (!hookfitEnabled && (bp === "/HookFit" || location.pathname === "/HookFit")) {
       navigate("/CrowdFit", { replace: true });
     }
-  }, [location.pathname, hookfitEnabled]);
+  }, [location.pathname, hookfitEnabled, activeTab, navigate]);
 
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
 
@@ -340,7 +322,6 @@ const Index = () => {
   const [songFitLoading, setSongFitLoading] = useState(false);
   const savedSearchIdRef = useRef<string | null>(null);
   
-  const [deferSidebarReady, setDeferSidebarReady] = useState(false);
   const [optimisticSidebarItem, setOptimisticSidebarItem] = useState<{ id: string; label: string; meta: string; type: string; rawData?: any } | null>(null);
   // Tracks when we're loading a project from URL/sidebar — shows skeleton instead of uploader
   const contentScrollRef = useRef<HTMLDivElement>(null);
@@ -352,11 +333,6 @@ const Index = () => {
   useEffect(() => {
     setHeaderProject(null);
   }, [location.pathname]);
-
-  useEffect(() => {
-    const idle = window.setTimeout(() => setDeferSidebarReady(true), 250);
-    return () => window.clearTimeout(idle);
-  }, []);
 
   const isFullyLoaded = useMemo(() => {
     if (!result) return false;
@@ -554,10 +530,8 @@ const Index = () => {
 
   const [profitArtistUrl, setProfitArtistUrl] = useState<string | null>(null);
   const [profitSavedReport, setProfitSavedReport] = useState<any>(null);
-  const [profitLoadKey, setProfitLoadKey] = useState(0);
   const [loadedHitFitAnalysis, setLoadedHitFitAnalysis] = useState<any>(null);
   const [loadedVibeFitResult, setLoadedVibeFitResult] = useState<any>(null);
-  const [vibeFitLoadKey, setVibeFitLoadKey] = useState(0);
 
   // ── Universal screen descriptor ──────────────────────────────────────────
   // Must live AFTER all per-tool state declarations it depends on.
@@ -600,8 +574,6 @@ const Index = () => {
       setLoadedHitFitAnalysis(null);
       setLoadedVibeFitResult(null);
       setOptimisticSidebarItem(null);
-      setProfitLoadKey(k => k + 1);
-      setVibeFitLoadKey(k => k + 1);
       setIsFetchingProject(false);
       setProjectMissing(false);
       setHeaderProject(null);
@@ -652,15 +624,13 @@ const Index = () => {
         case "profit": {
           if (data?.reportId && data?.blueprint && data?.artist) {
             setProfitSavedReport(data);
-            setProfitLoadKey(k => k + 1);
             navTarget = `/ProFit/${data.reportId}`;
             projectLoadedRef.current = data.reportId;
           } else {
             const artistId = data?.spotify_artist_id;
             if (artistId) {
               setProfitArtistUrl(`https://open.spotify.com/artist/${artistId}`);
-              setProfitLoadKey(k => k + 1);
-            }
+              }
           }
           break;
         }
@@ -720,7 +690,6 @@ const Index = () => {
         case "vibefit": {
           if (data) {
             setLoadedVibeFitResult(data);
-            setVibeFitLoadKey((k) => k + 1);
             if (data.id) { navTarget = `/VibeFit/${data.id}`; projectLoadedRef.current = data.id; }
           }
           break;
@@ -798,7 +767,6 @@ const Index = () => {
           <div className="flex-1 flex flex-col min-h-0">
             <Suspense fallback={<PageSkeleton tool="lyric" mode={screen.mode} />}>
               <LyricFitTab
-                key={loadedLyric?.id || "new"}
                 initialLyric={loadedLyric}
                 onNewProject={handleNewLyric}
                 onHeaderProject={setHeaderProject}
@@ -828,7 +796,7 @@ const Index = () => {
         return (
           <div className="flex-1 flex flex-col min-h-0">
             <Suspense fallback={<PageSkeleton tool="mix" mode={screen.mode} />}>
-              <MixFitCheck key={loadedMixProject?.id ?? "new"} initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id, projectData) => { if (projectData) { setLoadedMixProject(projectData); projectLoadedRef.current = id; } navigateToProject("mix", id); }} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+              <MixFitCheck initialProject={loadedMixProject} onNewProject={handleNewMix} onHeaderProject={setHeaderProject} onSavedId={(id, projectData) => { if (projectData) { setLoadedMixProject(projectData); projectLoadedRef.current = id; } navigateToProject("mix", id); }} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>
         );
@@ -837,7 +805,6 @@ const Index = () => {
           <div className="flex-1 flex flex-col min-h-0 px-4 py-6">
             <Suspense fallback={<PageSkeleton tool="hitfit" mode={screen.mode} />}>
               <HitFitTab
-                key={loadedHitFitAnalysis ? "loaded" : "new"}
                 initialAnalysis={loadedHitFitAnalysis}
                 onNewProject={handleNewHitFit}
                 onHeaderProject={setHeaderProject}
@@ -854,7 +821,7 @@ const Index = () => {
         return (
           <div className="flex-1 flex flex-col min-h-0">
             <Suspense fallback={<TabChunkFallback />}>
-              <ProFitTab key={profitLoadKey} initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+              <ProFitTab initialArtistUrl={profitArtistUrl} initialSavedReport={profitSavedReport} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("profit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>
         );
@@ -867,7 +834,6 @@ const Index = () => {
             ) : (
               <div className="w-full">
                 <ResultsDashboard
-                  key={result.key}
                   result={result.output}
                   inputData={result.input}
                   playlistName={result.name}
@@ -893,7 +859,7 @@ const Index = () => {
         return (
           <div className="flex-1 flex flex-col px-4 py-6">
             <Suspense fallback={<TabChunkFallback />}>
-              <VibeFitTab key={`vibefit-${vibeFitLoadKey}`} initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
+              <VibeFitTab initialResult={loadedVibeFitResult} onHeaderProject={setHeaderProject} onSavedId={(id) => navigateToProject("vibefit", id)} onOptimisticItem={(item) => { projectLoadedRef.current = item.id; setOptimisticSidebarItem(item); }} />
             </Suspense>
           </div>
         );
@@ -904,12 +870,10 @@ const Index = () => {
 
   return (
     <>
-      {deferSidebarReady && (
-        <Suspense fallback={null}>
-          <AppSidebar activeTab={activeTab} onTabChange={handleSidebarTabChange} onLoadProject={handleLoadProject} optimisticItem={optimisticSidebarItem} />
-        </Suspense>
-      )}
-      <SidebarInset className="h-svh !min-h-0 overflow-hidden">
+      <Suspense fallback={<div aria-hidden className="hidden md:block w-[11rem] shrink-0" />}>
+        <AppSidebar activeTab={activeTab} onTabChange={handleSidebarTabChange} onLoadProject={handleLoadProject} optimisticItem={optimisticSidebarItem} />
+      </Suspense>
+      <SidebarInset className="h-app !min-h-0 overflow-hidden">
         {/* Minimal top header with pill badge */}
         <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3">
           <SidebarTrigger data-sidebar="trigger" className="p-1 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground md:hidden">

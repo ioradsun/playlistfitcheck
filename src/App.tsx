@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SiteCopyProvider } from "@/hooks/useSiteCopy";
@@ -86,10 +86,10 @@ const App = () => (
                 
                 <SidebarProvider defaultOpen={true}>
                   <Routes>
-                    <Route path="/" element={<Index />} />
+                    <Route path="/" element={<Navigate to="/CrowdFit" replace />} />
                     <Route path="/CrowdFit" element={<Index />} />
                     <Route path="/HookFit" element={<Index />} />
-                    <Route path="/SongFit" element={<Index />} />
+                    <Route path="/SongFit" element={<Navigate to="/CrowdFit" replace />} />
                     <Route path="/ProFit" element={<Index />} />
                     <Route path="/ProFit/:projectId" element={<Index />} />
                     <Route path="/PlaylistFit" element={<Index />} />
@@ -116,7 +116,7 @@ const App = () => (
                     <Route
                       path="/admin"
                       element={
-                        <Suspense fallback={<PageLayout subtitle="Admin"><div /></PageLayout>}>
+                        <Suspense fallback={<PageLayout subtitle="Admin"><div className="px-4 py-6" /></PageLayout>}>
                           <Admin />
                         </Suspense>
                       }
@@ -132,7 +132,7 @@ const App = () => (
                     <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
                   </Routes>
                 </SidebarProvider>
-                <Suspense fallback={null}>
+                <Suspense fallback={<div aria-hidden className="pointer-events-none fixed bottom-0 right-0 h-12 w-12 opacity-0" />}>
                   <FitWidget />
                 </Suspense>
                 </SiteCopyProvider>
