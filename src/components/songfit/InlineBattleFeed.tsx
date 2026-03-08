@@ -23,9 +23,10 @@ interface Props {
   artistName: string;
   votedSide?: "a" | "b" | null;
   cardState: CardState;
+  onPlay?: () => void;
 }
 
-function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: initialVotedSide, cardState }: Props) {
+function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: initialVotedSide, cardState, onPlay }: Props) {
   const [battleId, setBattleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -333,9 +334,12 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
                   </p>
                 )}
                 <button
-                  onClick={(e) => { e.stopPropagation(); if (cardState === "active") setBattleState("round-1"); }}
-                  disabled={cardState !== "active"}
-                  className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlay?.();
+                    setBattleState("round-1");
+                  }}
+                  className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
                 >
                   Judge Now
                 </button>
