@@ -349,7 +349,7 @@ function InlineLyricDanceInner(
             style={{ display: "none" }} />
         </div>
 
-        {/* Poster overlay — covers opaque canvas until real frames are rendering */}
+        {/* Poster overlay — sits ON TOP of opaque canvas, fades out when real frames render */}
         <div
           className="absolute inset-0 pointer-events-none transition-opacity duration-500"
           style={{ opacity: battleContentReady ? 0 : 1 }}
