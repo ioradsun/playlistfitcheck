@@ -353,7 +353,32 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
             );
           })()}
 
-        </div>
+          {/* Follow / Save links */}
+          {(artistsJson?.[0]?.spotifyUrl || spotifyTrackUrl) && (
+            <div className="flex gap-2 flex-wrap">
+              {artistsJson?.[0]?.spotifyUrl && (
+                <a
+                  href={artistsJson[0].spotifyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                >
+                  Follow {artistsJson[0].name}
+                </a>
+              )}
+              {spotifyTrackUrl && (
+                <a
+                  href={spotifyTrackUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                >
+                  Save track
+                </a>
+              )}
+            </div>
+          )}
+
 
         {/* ── Reviews list ── */}
         <div className="flex-1 overflow-y-auto">
