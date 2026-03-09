@@ -869,7 +869,6 @@ export function FitTab({
               songTitle={lyricData.title || "Untitled"}
               artistName=""
               prefetchedData={prefetchedDanceData}
-              cardState="active"
             />
           </div>
           {/* Action toolbar — single row of icon buttons */}
