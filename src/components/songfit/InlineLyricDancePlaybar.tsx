@@ -225,108 +225,140 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
 
   return (
     <div style={{ minHeight: 44 }} className="bg-black/40 backdrop-blur-md">
-      {isReady ? (
-        <>
-          {/* Progress bar */}
-          <div className="w-full h-1 cursor-pointer group relative" style={{ background: "rgba(255,255,255,0.05)" }}
-            onClick={(e) => {
-              if (!player || !data) return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-              const lines = data.lyrics;
-              const songStart = lines.length > 0 ? Math.max(0, (lines[0] as any).start - 0.5) : 0;
-              const songEnd = lines.length > 0 ? (lines[lines.length - 1] as any).end + 1 : 0;
-              player.seek(songStart + ratio * (songEnd - songStart));
-            }}
-          >
-            <div className="absolute left-0 top-0 h-full transition-none"
-              style={{ width: `${progress * 100}%`, background: palette[1] ?? "#a855f7", opacity: 0.6 }} />
-          </div>
+      {/* Progress bar */}
+      <div
+        className="w-full h-1 cursor-pointer group relative"
+        style={{ background: "rgba(255,255,255,0.05)" }}
+        onClick={(e) => {
+          if (!isReady || !player || !data) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+          const lines = data.lyrics;
+          const songStart = lines.length > 0 ? Math.max(0, (lines[0] as any).start - 0.5) : 0;
+          const songEnd = lines.length > 0 ? (lines[lines.length - 1] as any).end + 1 : 0;
+          player.seek(songStart + ratio * (songEnd - songStart));
+        }}
+      >
+        <div
+          className="absolute left-0 top-0 h-full transition-none"
+          style={{
+            width: `${progress * 100}%`,
+            background: palette[1] ?? "#a855f7",
+            opacity: isReady ? 0.6 : 0.25,
+          }}
+        />
+      </div>
 
-          {/* Now-playing row */}
-          <div className="flex items-center gap-2 px-3 py-2" style={{ background: "rgba(0,0,0,0.3)" }}
-            onClick={(e) => e.stopPropagation()}>
-            <button
-              className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border text-left overflow-hidden min-w-0 transition-all duration-300 ${
-                reactionPanelOpen ? 'border-white/15' : 'border-white/[0.05]'
-              }`}
-              style={{ background: "rgba(255,255,255,0.02)" }}
-              onClick={() => setReactionPanelOpen(true)}
-            >
-              {activeLine ? (
-                <>
-                  {(() => {
-                    const topEmoji = getTopEmojiForLine(reactionData, activeLine.lineIndex);
-                    return topEmoji ? (
-                      <span
-                        className="text-[11px] leading-none shrink-0 select-none transition-all duration-300"
-                        style={{ filter: reactionPanelOpen ? 'none' : 'grayscale(1)', opacity: reactionPanelOpen ? 1 : 0.5 }}
-                      >
-                        {topEmoji}
-                      </span>
-                    ) : (
-                      <div
-                        className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse transition-all duration-300"
-                        style={{
-                          background: reactionPanelOpen ? (palette[1] ?? "#ffffff") : "#ffffff",
-                          opacity: reactionPanelOpen ? 0.6 : 0.25,
-                        }}
-                      />
-                    );
-                  })()}
-                  <span className={`text-[10px] font-mono truncate transition-colors duration-300 ${
-                    reactionPanelOpen ? 'text-white/65' : 'text-white/30'
-                  }`}>
-                    {activeLine.text}
-                  </span>
-                </>
-              ) : (
-                <span className="text-[10px] font-mono text-white/20 truncate">
-                  {lyricSections.isReady ? "listening..." : "..."}
+      {/* Now-playing row */}
+      <div
+        className="flex items-center gap-2 px-3 py-2"
+        style={{ background: "rgba(0,0,0,0.3)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          disabled={!isReady}
+          className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border text-left overflow-hidden min-w-0 transition-all duration-300 ${
+            reactionPanelOpen ? "border-white/15" : "border-white/[0.05]"
+          } ${!isReady ? "opacity-60 cursor-not-allowed" : ""}`}
+          style={{ background: "rgba(255,255,255,0.02)" }}
+          onClick={() => {
+            if (!isReady) return;
+            setReactionPanelOpen(true);
+          }}
+        >
+          {isReady ? (
+            activeLine ? (
+              <>
+                {(() => {
+                  const topEmoji = getTopEmojiForLine(reactionData, activeLine.lineIndex);
+                  return topEmoji ? (
+                    <span
+                      className="text-[11px] leading-none shrink-0 select-none transition-all duration-300"
+                      style={{
+                        filter: reactionPanelOpen ? "none" : "grayscale(1)",
+                        opacity: reactionPanelOpen ? 1 : 0.5,
+                      }}
+                    >
+                      {topEmoji}
+                    </span>
+                  ) : (
+                    <div
+                      className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse transition-all duration-300"
+                      style={{
+                        background: reactionPanelOpen ? (palette[1] ?? "#ffffff") : "#ffffff",
+                        opacity: reactionPanelOpen ? 0.6 : 0.25,
+                      }}
+                    />
+                  );
+                })()}
+                <span
+                  className={`text-[10px] font-mono truncate transition-colors duration-300 ${
+                    reactionPanelOpen ? "text-white/65" : "text-white/30"
+                  }`}
+                >
+                  {activeLine.text}
                 </span>
-              )}
-            </button>
+              </>
+            ) : (
+              <span className="text-[10px] font-mono text-white/20 truncate">
+                {lyricSections.isReady ? "listening..." : "..."}
+              </span>
+            )
+          ) : (
+            <span className="text-[10px] font-mono text-white/20 truncate">Loading…</span>
+          )}
+        </button>
 
-            <button
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-md border transition-all duration-300 shrink-0 ${
-                reactionPanelOpen
-                  ? 'border-white/25 text-white/80 bg-white/[0.06]'
-                  : 'border-white/[0.08] text-white/25 hover:text-white/50 hover:border-white/15'
-              }`}
-              onClick={() => setReactionPanelOpen(true)}
-            >
-              <span className="text-[10px] font-mono uppercase tracking-wider">React</span>
-              <span className={`text-[9px] transition-opacity duration-300 ${reactionPanelOpen ? 'opacity-80' : 'opacity-30'}`}>↑</span>
-            </button>
-          </div>
+        <button
+          disabled={!isReady}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded-md border transition-all duration-300 shrink-0 ${
+            reactionPanelOpen
+              ? "border-white/25 text-white/80 bg-white/[0.06]"
+              : "border-white/[0.08] text-white/25 hover:text-white/50 hover:border-white/15"
+          } ${!isReady ? "opacity-60 cursor-not-allowed" : ""}`}
+          onClick={() => {
+            if (!isReady) return;
+            setReactionPanelOpen(true);
+          }}
+        >
+          <span className="text-[10px] font-mono uppercase tracking-wider">React</span>
+          <span
+            className={`text-[9px] transition-opacity duration-300 ${
+              reactionPanelOpen ? "opacity-80" : "opacity-30"
+            }`}
+          >
+            ↑
+          </span>
+        </button>
+      </div>
 
-          <ReactionPanel
-            displayMode="embedded"
-            isOpen={reactionPanelOpen}
-            onClose={handlePanelClose}
-            danceId={data.id}
-            activeLine={activeLine}
-            allLines={lyricSections.allLines}
-            audioSections={audioSections}
-            currentTimeSec={currentTimeSec}
-            palette={palette}
-            onSeekTo={(sec) => player?.seek(sec)}
-            player={player}
-            durationSec={durationSec}
-            reactionData={reactionData}
-            onReactionDataChange={onReactionDataChange}
-            onReactionFired={(emoji) => player?.fireComment(emoji)}
-            engagementMode={engagementMode}
-            frozenLineIndex={frozenLineIndex}
-            onEngagementStart={handleEngagementStart}
-            onResetEngagement={() => {
-              setEngagementMode('spectator');
-              setFrozenLineIndex(null);
-              freezeAtSecRef.current = null;
-            }}
-          />
-        </>
-      ) : null}
+      {isReady && (
+        <ReactionPanel
+          displayMode="embedded"
+          isOpen={reactionPanelOpen}
+          onClose={handlePanelClose}
+          danceId={data.id}
+          activeLine={activeLine}
+          allLines={lyricSections.allLines}
+          audioSections={audioSections}
+          currentTimeSec={currentTimeSec}
+          palette={palette}
+          onSeekTo={(sec) => player?.seek(sec)}
+          player={player}
+          durationSec={durationSec}
+          reactionData={reactionData}
+          onReactionDataChange={onReactionDataChange}
+          onReactionFired={(emoji) => player?.fireComment(emoji)}
+          engagementMode={engagementMode}
+          frozenLineIndex={frozenLineIndex}
+          onEngagementStart={handleEngagementStart}
+          onResetEngagement={() => {
+            setEngagementMode("spectator");
+            setFrozenLineIndex(null);
+            freezeAtSecRef.current = null;
+          }}
+        />
+      )}
     </div>
   );
 });

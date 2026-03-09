@@ -37,7 +37,8 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
 
   return (
     <div
-      className="w-full h-full relative flex items-center justify-center"
+      className="w-full relative flex items-center justify-center"
+      style={{ height: 320 }}
       onClick={handleClick}
     >
       <div className="w-full rounded-xl overflow-hidden relative mx-3" style={{ height: platform === "soundcloud" ? 166 : 152 }}>
