@@ -15,7 +15,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
-import { ReactionPanel, type CanonicalAudioSection } from "@/components/lyric/ReactionPanel";
+import {
+  ReactionPanel,
+  type CanonicalAudioSection,
+} from "@/components/lyric/ReactionPanel";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
@@ -46,8 +49,12 @@ function getSharedIO() {
 
 // ── topReaction — derived from live reactionData ────────────────────
 const EMOJI_SYMBOLS: Record<string, string> = {
-  fire: "🔥", dead: "💀", mind_blown: "🤯",
-  emotional: "😭", respect: "🙏", accurate: "🎯",
+  fire: "🔥",
+  dead: "💀",
+  mind_blown: "🤯",
+  emotional: "😭",
+  respect: "🙏",
+  accurate: "🎯",
 };
 
 function computeTopReaction(
@@ -63,15 +70,23 @@ function computeTopReaction(
   }
   if (lineTotals.size === 0) return null;
 
-  let bestIdx = -1, bestTotal = 0;
+  let bestIdx = -1,
+    bestTotal = 0;
   for (const [idx, total] of lineTotals.entries()) {
-    if (total > bestTotal) { bestTotal = total; bestIdx = idx; }
+    if (total > bestTotal) {
+      bestTotal = total;
+      bestIdx = idx;
+    }
   }
 
-  let topKey: string | null = null, topCount = 0;
+  let topKey: string | null = null,
+    topCount = 0;
   for (const [key, d] of Object.entries(reactionData)) {
     const count = d.line[bestIdx] ?? 0;
-    if (count > topCount) { topCount = count; topKey = key; }
+    if (count > topCount) {
+      topCount = count;
+      topKey = key;
+    }
   }
 
   const symbol = topKey ? (EMOJI_SYMBOLS[topKey] ?? "🔥") : "🔥";
@@ -91,8 +106,8 @@ interface LyricDanceEmbedProps {
   prefetchedData?: LyricDanceData | null;
 
   // Feed lifecycle — omit for fullscreen/shareable usage
-  cardState?: CardState;     // warm | active | cold
-  onPlay?: () => void;        // called when user taps Listen Now
+  cardState?: CardState; // warm | active | cold
+  onPlay?: () => void; // called when user taps Listen Now
 
   // Battle clip windowing — omit for full song
   regionStart?: number;
@@ -106,6 +121,9 @@ interface LyricDanceEmbedProps {
   onExternalPanelOpenChange?: (open: boolean) => void;
   /** Skip cover overlay and start playing immediately (muted). */
   autoPlay?: boolean;
+  onVoteYes?: () => void;
+  onVoteNo?: () => void;
+  votedSide?: "a" | "b" | null;
 }
 
 // ── Component ────────────────────────────────────────────────────────
@@ -126,6 +144,9 @@ export function LyricDanceEmbed({
   externalPanelOpen,
   onExternalPanelOpenChange,
   autoPlay = false,
+  onVoteYes,
+  onVoteNo,
+  votedSide,
 }: LyricDanceEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
@@ -136,16 +157,22 @@ export function LyricDanceEmbed({
   const [showCover, setShowCover] = useState(!isBattleMode && !autoPlay);
   const effectiveShowCover = showCover;
 
-  const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
+  const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(
+    prefetchedData ?? null,
+  );
   const [loading, setLoading] = useState(!prefetchedData);
   const [muted, setMuted] = useState(true);
-  const [visibility, setVisibility] = useState<VisibilityState>(isFeedEmbed ? "far" : "visible");
+  const [visibility, setVisibility] = useState<VisibilityState>(
+    isFeedEmbed ? "far" : "visible",
+  );
   const [playerEvicted, setPlayerEvicted] = useState(false);
   const [reactionData, setReactionData] = useState<
     Record<string, { line: Record<number, number>; total: number }>
   >({});
   const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
-  const [engagementMode, setEngagementMode] = useState<"spectator" | "freezing" | "engaged">("spectator");
+  const [engagementMode, setEngagementMode] = useState<
+    "spectator" | "freezing" | "engaged"
+  >("spectator");
   const [frozenLineIndex, setFrozenLineIndex] = useState<number | null>(null);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [forceDemoted, setForceDemoted] = useState(false);
@@ -155,7 +182,9 @@ export function LyricDanceEmbed({
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const freezeAtSecRef = useRef<number | null>(null);
-  const engagementModeRef = useRef<"spectator" | "freezing" | "engaged">("spectator");
+  const engagementModeRef = useRef<"spectator" | "freezing" | "engaged">(
+    "spectator",
+  );
   const currentTimeSecRef = useRef(0);
 
   // Sync external open control
@@ -190,12 +219,14 @@ export function LyricDanceEmbed({
       .eq("id", lyricDanceId)
       .maybeSingle()
       .then(({ data: row, error }) => {
-        if (error || !row) { setLoading(false); return; }
+        if (error || !row) {
+          setLoading(false);
+          return;
+        }
         setFetchedData(row as unknown as LyricDanceData);
         setLoading(false);
       });
   }, [lyricDanceId, prefetchedData]);
-
 
   // ── Player data (apply region constraints) ─────────────────────────
   const playerData = useMemo(() => {
@@ -207,7 +238,11 @@ export function LyricDanceEmbed({
 
   // ── Player lifecycle ───────────────────────────────────────────────
   const { player, playerReady, data } = useLyricDancePlayer(
-    playerData, canvasRef, textCanvasRef, containerRef, { bootMode: "full" },
+    playerData,
+    canvasRef,
+    textCanvasRef,
+    containerRef,
+    { bootMode: "full" },
   );
 
   // ── Text vertical bias — shift canvas text above the bottom bar ────
@@ -224,7 +259,10 @@ export function LyricDanceEmbed({
     if (!el) return;
     visibilityListeners.set(el, setVisibility);
     getSharedIO().observe(el);
-    return () => { visibilityListeners.delete(el); sharedIO?.unobserve(el); };
+    return () => {
+      visibilityListeners.delete(el);
+      sharedIO?.unobserve(el);
+    };
   }, [isFeedEmbed, data]);
 
   // ── Eviction when scrolled far away (feed only) ────────────────────
@@ -240,8 +278,11 @@ export function LyricDanceEmbed({
       }, 3000);
       return;
     }
-    if (farTimerRef.current) { clearTimeout(farTimerRef.current); farTimerRef.current = null; }
-    setPlayerEvicted(prev => prev ? false : prev);
+    if (farTimerRef.current) {
+      clearTimeout(farTimerRef.current);
+      farTimerRef.current = null;
+    }
+    setPlayerEvicted((prev) => (prev ? false : prev));
   }, [visibility, isFeedEmbed, isBattleMode, player, playerReady]);
 
   // ── Media deactivate event (feed only) ────────────────────────────
@@ -253,7 +294,8 @@ export function LyricDanceEmbed({
       setForceDemoted(true);
     };
     window.addEventListener("crowdfit:media-deactivate", handler);
-    return () => window.removeEventListener("crowdfit:media-deactivate", handler);
+    return () =>
+      window.removeEventListener("crowdfit:media-deactivate", handler);
   }, [isFeedEmbed, lyricDanceId]);
 
   useEffect(() => {
@@ -269,7 +311,11 @@ export function LyricDanceEmbed({
     if (visibility === "far") {
       setShowCover(true);
       if (lyricDanceId) {
-        window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", { detail: { cardId: lyricDanceId } }));
+        window.dispatchEvent(
+          new CustomEvent("crowdfit:media-deactivate", {
+            detail: { cardId: lyricDanceId },
+          }),
+        );
       }
     }
   }, [visibility, isFeedEmbed, isBattleMode, lyricDanceId]);
@@ -302,8 +348,15 @@ export function LyricDanceEmbed({
     // Only fully pause when "far" (off-screen entirely).
     // When cover is showing, always mute — audio only starts after "Listen Now".
     const coverUp = showCover;
-    const shouldUnmuted = !coverUp && cardState === "active" && visibility === "visible" && !forceDemoted;
-    const shouldMuted = !coverUp && cardState !== "active" && (visibility === "visible" || visibility === "near");
+    const shouldUnmuted =
+      !coverUp &&
+      cardState === "active" &&
+      visibility === "visible" &&
+      !forceDemoted;
+    const shouldMuted =
+      !coverUp &&
+      cardState !== "active" &&
+      (visibility === "visible" || visibility === "near");
 
     if (shouldUnmuted) {
       player.play();
@@ -319,7 +372,15 @@ export function LyricDanceEmbed({
       player.setMuted(true);
       setMuted(true);
     }
-  }, [player, playerReady, cardState, visibility, forceDemoted, isFeedEmbed, isBattleMode]);
+  }, [
+    player,
+    playerReady,
+    cardState,
+    visibility,
+    forceDemoted,
+    isFeedEmbed,
+    isBattleMode,
+  ]);
 
   // ── Reactions fetch ────────────────────────────────────────────────
   useEffect(() => {
@@ -330,12 +391,17 @@ export function LyricDanceEmbed({
       .eq("dance_id", data.id)
       .then(({ data: rows }) => {
         if (!rows) return;
-        const agg: Record<string, { line: Record<number, number>; total: number }> = {};
+        const agg: Record<
+          string,
+          { line: Record<number, number>; total: number }
+        > = {};
         for (const row of rows as any[]) {
           const { emoji, line_index } = row;
           if (!agg[emoji]) agg[emoji] = { line: {}, total: 0 };
           agg[emoji].total++;
-          if (line_index != null) agg[emoji].line[line_index] = (agg[emoji].line[line_index] ?? 0) + 1;
+          if (line_index != null)
+            agg[emoji].line[line_index] =
+              (agg[emoji].line[line_index] ?? 0) + 1;
         }
         setReactionData(agg);
       });
@@ -346,25 +412,37 @@ export function LyricDanceEmbed({
     if (!data?.id) return;
     const channel = supabase
       .channel(`reactions-embed-${data.id}`)
-      .on("postgres_changes", {
-        event: "INSERT", schema: "public",
-        table: "lyric_dance_reactions",
-        filter: `dance_id=eq.${data.id}`,
-      }, (payload: any) => {
-        const { emoji, line_index } = payload.new;
-        setReactionData(prev => {
-          const next = { ...prev };
-          if (!next[emoji]) next[emoji] = { line: {}, total: 0 };
-          next[emoji] = {
-            ...next[emoji],
-            total: next[emoji].total + 1,
-            line: { ...next[emoji].line, ...(line_index != null ? { [line_index]: (next[emoji].line[line_index] ?? 0) + 1 } : {}) },
-          };
-          return next;
-        });
-      })
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "lyric_dance_reactions",
+          filter: `dance_id=eq.${data.id}`,
+        },
+        (payload: any) => {
+          const { emoji, line_index } = payload.new;
+          setReactionData((prev) => {
+            const next = { ...prev };
+            if (!next[emoji]) next[emoji] = { line: {}, total: 0 };
+            next[emoji] = {
+              ...next[emoji],
+              total: next[emoji].total + 1,
+              line: {
+                ...next[emoji].line,
+                ...(line_index != null
+                  ? { [line_index]: (next[emoji].line[line_index] ?? 0) + 1 }
+                  : {}),
+              },
+            };
+            return next;
+          });
+        },
+      )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [data?.id]);
 
   // ── Current time tracking ─────────────────────────────────────────
@@ -390,18 +468,33 @@ export function LyricDanceEmbed({
         currentTimeSecRef.current = t;
         setCurrentTimeSec(t);
       }
-      if (engagementModeRef.current === "engaged") { rafId = 0; return; }
-      if (!audio.paused && !document.hidden) rafId = requestAnimationFrame(tick);
+      if (engagementModeRef.current === "engaged") {
+        rafId = 0;
+        return;
+      }
+      if (!audio.paused && !document.hidden)
+        rafId = requestAnimationFrame(tick);
     };
-    const onPlay = () => { if (!rafId) rafId = requestAnimationFrame(tick); };
-    const onPause = () => { cancelAnimationFrame(rafId); rafId = 0; };
+    const onPlay = () => {
+      if (!rafId) rafId = requestAnimationFrame(tick);
+    };
+    const onPause = () => {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    };
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
     if (!audio.paused) onPlay();
-    return () => { cancelAnimationFrame(rafId); audio.removeEventListener("play", onPlay); audio.removeEventListener("pause", onPause); };
+    return () => {
+      cancelAnimationFrame(rafId);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+    };
   }, [player]);
 
-  useEffect(() => { engagementModeRef.current = engagementMode; }, [engagementMode]);
+  useEffect(() => {
+    engagementModeRef.current = engagementMode;
+  }, [engagementMode]);
 
   // ── Song ended → open reaction panel ─────────────────────────────
   useEffect(() => {
@@ -427,12 +520,25 @@ export function LyricDanceEmbed({
 
   const activeLine = useMemo(() => {
     if (!lyricSections.isReady) return null;
-    const line = engagementMode === "engaged" && frozenLineIndex != null
-      ? lyricSections.allLines.find(l => l.lineIndex === frozenLineIndex) ?? null
-      : lyricSections.allLines.find(l => currentTimeSec >= l.startSec && currentTimeSec < l.endSec + 0.1) ?? null;
+    const line =
+      engagementMode === "engaged" && frozenLineIndex != null
+        ? (lyricSections.allLines.find(
+            (l) => l.lineIndex === frozenLineIndex,
+          ) ?? null)
+        : (lyricSections.allLines.find(
+            (l) =>
+              currentTimeSec >= l.startSec && currentTimeSec < l.endSec + 0.1,
+          ) ?? null);
     if (!line) return null;
-    const section = lyricSections.sections.find(s => s.lines.some(sl => sl.lineIndex === line.lineIndex)) ?? null;
-    return { text: line.text, lineIndex: line.lineIndex, sectionLabel: section?.label ?? null };
+    const section =
+      lyricSections.sections.find((s) =>
+        s.lines.some((sl) => sl.lineIndex === line.lineIndex),
+      ) ?? null;
+    return {
+      text: line.text,
+      lineIndex: line.lineIndex,
+      sectionLabel: section?.label ?? null,
+    };
   }, [lyricSections, currentTimeSec, engagementMode, frozenLineIndex]);
 
   const audioSections = useMemo<CanonicalAudioSection[]>(() => {
@@ -443,13 +549,20 @@ export function LyricDanceEmbed({
         const start = Number(s?.startRatio);
         const end = Number(s?.endRatio);
         if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-        return { sectionIndex: Number.isFinite(Number(s?.sectionIndex)) ? Number(s.sectionIndex) : i, startSec: start * durationSec, endSec: end * durationSec, role: s?.mood ?? null };
+        return {
+          sectionIndex: Number.isFinite(Number(s?.sectionIndex))
+            ? Number(s.sectionIndex)
+            : i,
+          startSec: start * durationSec,
+          endSec: end * durationSec,
+          role: s?.mood ?? null,
+        };
       })
       .filter((s): s is CanonicalAudioSection => s != null);
   }, [data?.cinematic_direction?.sections, durationSec]);
 
   const palette = useMemo(
-    () => Array.isArray(data?.palette) ? data!.palette as string[] : [],
+    () => (Array.isArray(data?.palette) ? (data!.palette as string[]) : []),
     [data?.palette],
   );
 
@@ -461,19 +574,24 @@ export function LyricDanceEmbed({
   const isWaiting = loading || !fetchedData;
 
   // ── Engagement handlers ────────────────────────────────────────────
-  const handleEngagementStart = useCallback((targetLineIndex?: number) => {
-    if (!player) return;
-    if (engagementModeRef.current === "engaged") {
+  const handleEngagementStart = useCallback(
+    (targetLineIndex?: number) => {
+      if (!player) return;
+      if (engagementModeRef.current === "engaged") {
+        if (targetLineIndex != null) setFrozenLineIndex(targetLineIndex);
+        return;
+      }
+      const t = player.audio.currentTime;
+      const liveLine = lyricSections.allLines.find(
+        (l) => t >= l.startSec && t < l.endSec + 0.1,
+      );
       if (targetLineIndex != null) setFrozenLineIndex(targetLineIndex);
-      return;
-    }
-    const t = player.audio.currentTime;
-    const liveLine = lyricSections.allLines.find(l => t >= l.startSec && t < l.endSec + 0.1);
-    if (targetLineIndex != null) setFrozenLineIndex(targetLineIndex);
-    else if (liveLine) setFrozenLineIndex(liveLine.lineIndex);
-    freezeAtSecRef.current = liveLine?.endSec ?? t;
-    setEngagementMode("freezing");
-  }, [player, lyricSections.allLines]);
+      else if (liveLine) setFrozenLineIndex(liveLine.lineIndex);
+      freezeAtSecRef.current = liveLine?.endSec ?? t;
+      setEngagementMode("freezing");
+    },
+    [player, lyricSections.allLines],
+  );
 
   const handlePanelClose = useCallback(() => {
     closePanel();
@@ -481,16 +599,21 @@ export function LyricDanceEmbed({
     setEngagementMode("spectator");
     setFrozenLineIndex(null);
     if (!player || player.audio.ended) return;
-    try { player.play(); } catch {}
+    try {
+      player.play();
+    } catch {}
   }, [player, closePanel]);
 
-  const toggleMute = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!player) return;
-    const next = !muted;
-    player.setMuted(next);
-    setMuted(next);
-  }, [muted, player]);
+  const toggleMute = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!player) return;
+      const next = !muted;
+      player.setMuted(next);
+      setMuted(next);
+    },
+    [muted, player],
+  );
 
   // ── Progress tracking for playbar ─────────────────────────────────
   const [progress, setProgress] = useState(0);
@@ -505,15 +628,27 @@ export function LyricDanceEmbed({
     let lastP = 0;
     const tick = () => {
       const p = Math.max(0, Math.min(1, (audio.currentTime - songStart) / dur));
-      if (Math.abs(p - lastP) > 0.005) { lastP = p; setProgress(p); }
+      if (Math.abs(p - lastP) > 0.005) {
+        lastP = p;
+        setProgress(p);
+      }
       if (!audio.paused) rafId = requestAnimationFrame(tick);
     };
-    const onPlay = () => { if (!rafId) rafId = requestAnimationFrame(tick); };
-    const onPause = () => { cancelAnimationFrame(rafId); rafId = 0; };
+    const onPlay = () => {
+      if (!rafId) rafId = requestAnimationFrame(tick);
+    };
+    const onPause = () => {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    };
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
     if (!audio.paused) onPlay();
-    return () => { cancelAnimationFrame(rafId); audio.removeEventListener("play", onPlay); audio.removeEventListener("pause", onPause); };
+    return () => {
+      cancelAnimationFrame(rafId);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+    };
   }, [player, playerReady, data?.lyrics]);
 
   // ── Render ────────────────────────────────────────────────────────
@@ -522,11 +657,16 @@ export function LyricDanceEmbed({
       ref={containerRef}
       className="relative w-full h-full overflow-hidden"
       style={{ background: "#0a0a0a" }}
-      onClick={(e) => { if (!effectiveShowCover && !isWaiting) toggleMute(e); }}
+      onClick={(e) => {
+        if (!effectiveShowCover && !isWaiting) toggleMute(e);
+      }}
     >
       {/* Canvas — always rendered, player controls content */}
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-      <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+      <canvas
+        ref={textCanvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+      />
 
       {/* Cover overlay */}
       <AnimatePresence>
@@ -542,7 +682,11 @@ export function LyricDanceEmbed({
               songName={songTitle}
               waiting={isWaiting}
               badge="In Studio"
-              onExpand={showExpandButton ? () => window.open(lyricDanceUrl, "_blank") : undefined}
+              onExpand={
+                showExpandButton
+                  ? () => window.open(lyricDanceUrl, "_blank")
+                  : undefined
+              }
               topReaction={null}
               onListen={(e) => {
                 e.stopPropagation();
@@ -562,14 +706,19 @@ export function LyricDanceEmbed({
 
       {/* Top bar — song title + expand (when playing) */}
       {playerReady && !effectiveShowCover && (
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
-          onClick={e => e.stopPropagation()}>
+        <div
+          className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
+          onClick={(e) => e.stopPropagation()}
+        >
           <span className="text-[10px] font-mono text-white/60 uppercase tracking-wider bg-black/40 backdrop-blur-sm rounded px-1.5 py-0.5">
             {songTitle}
           </span>
           {showExpandButton && (
             <button
-              onClick={(e) => { e.stopPropagation(); window.open(lyricDanceUrl, "_blank"); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(lyricDanceUrl, "_blank");
+              }}
               className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
             >
               <Maximize2 size={14} />
@@ -582,8 +731,11 @@ export function LyricDanceEmbed({
       {!reactionPanelOpen && (
         <div
           className="absolute bottom-0 left-0 right-0 z-[100]"
-          style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(12px)" }}
-          onClick={e => e.stopPropagation()}
+          style={{
+            background: "rgba(0,0,0,0.4)",
+            backdropFilter: "blur(12px)",
+          }}
+          onClick={(e) => e.stopPropagation()}
         >
           {/* Progress bar */}
           <div
@@ -592,7 +744,10 @@ export function LyricDanceEmbed({
             onClick={(e) => {
               if (!player || !data?.lyrics) return;
               const rect = e.currentTarget.getBoundingClientRect();
-              const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              const ratio = Math.max(
+                0,
+                Math.min(1, (e.clientX - rect.left) / rect.width),
+              );
               const lines = data.lyrics;
               const start = Math.max(0, (lines[0] as any).start - 0.5);
               const end = (lines[lines.length - 1] as any).end + 1;
@@ -601,7 +756,11 @@ export function LyricDanceEmbed({
           >
             <div
               className="h-full transition-none"
-              style={{ width: `${progress * 100}%`, background: palette[1] ?? "#a855f7", opacity: 0.6 }}
+              style={{
+                width: `${progress * 100}%`,
+                background: palette[1] ?? "#a855f7",
+                opacity: 0.6,
+              }}
             />
           </div>
 
@@ -615,8 +774,12 @@ export function LyricDanceEmbed({
               >
                 {topReaction ? (
                   <>
-                    <span className="text-[11px] leading-none shrink-0">{topReaction.symbol}</span>
-                    <span className="text-[10px] font-mono text-white/50 shrink-0">{topReaction.count}</span>
+                    <span className="text-[11px] leading-none shrink-0">
+                      {topReaction.symbol}
+                    </span>
+                    <span className="text-[10px] font-mono text-white/50 shrink-0">
+                      {topReaction.count}
+                    </span>
                     <span className="text-[10px] font-mono text-white/30 truncate">
                       &ldquo;{topReaction.lineText}&rdquo;
                     </span>
@@ -630,16 +793,49 @@ export function LyricDanceEmbed({
                   </>
                 )}
               </div>
-{!hideReactButton && (
-              <div className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/[0.06] shrink-0 pointer-events-none">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-white/25">React</span>
-                <span className="text-[9px] text-white/20">↑</span>
-              </div>
+              {hideReactButton && (
+                <div className="flex items-stretch shrink-0">
+                  <button
+                    onClick={onVoteYes}
+                    className="flex items-center justify-center px-4 py-1.5 hover:bg-white/[0.04] transition-colors group"
+                  >
+                    <span
+                      className={`text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${
+                        votedSide === "a"
+                          ? "text-white/90"
+                          : "text-white/30 group-hover:text-white/60"
+                      }`}
+                    >
+                      {votedSide === "a" ? "✓ Run it back" : "Run it back"}
+                    </span>
+                  </button>
+                  <div
+                    style={{ width: "0.5px" }}
+                    className="bg-white/10 self-stretch my-1.5"
+                  />
+                  <button
+                    onClick={onVoteNo}
+                    className="flex items-center justify-center px-4 py-1.5 hover:bg-white/[0.04] transition-colors group"
+                  >
+                    <span
+                      className={`text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${
+                        votedSide === "b"
+                          ? "text-white/90"
+                          : "text-white/30 group-hover:text-white/60"
+                      }`}
+                    >
+                      {votedSide === "b" ? "✓ Skip" : "Skip"}
+                    </span>
+                  </button>
+                </div>
               )}
             </div>
           ) : (
             /* Active: live now-playing chip */
-            <div className="flex items-center gap-2 px-3 py-2" style={{ background: "rgba(0,0,0,0.3)" }}>
+            <div
+              className="flex items-center gap-2 px-3 py-2"
+              style={{ background: "rgba(0,0,0,0.3)" }}
+            >
               <button
                 className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border text-left overflow-hidden min-w-0 transition-all duration-300 ${
                   reactionPanelOpen ? "border-white/15" : "border-white/[0.05]"
@@ -651,9 +847,14 @@ export function LyricDanceEmbed({
                   <>
                     <div
                       className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                      style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }}
+                      style={{
+                        background: palette[1] ?? "#ffffff",
+                        opacity: 0.6,
+                      }}
                     />
-                    <span className="text-[10px] font-mono text-white/30 truncate">{activeLine.text}</span>
+                    <span className="text-[10px] font-mono text-white/30 truncate">
+                      {activeLine.text}
+                    </span>
                   </>
                 ) : (
                   <span className="text-[10px] font-mono text-white/20 truncate">
@@ -661,18 +862,41 @@ export function LyricDanceEmbed({
                   </span>
                 )}
               </button>
-{!hideReactButton && (
-              <button
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-md border transition-all duration-300 shrink-0 ${
-                  reactionPanelOpen
-                    ? "border-white/25 text-white/80 bg-white/[0.06]"
-                    : "border-white/[0.08] text-white/25 hover:text-white/50 hover:border-white/15"
-                }`}
-                onClick={openPanel}
-              >
-                <span className="text-[10px] font-mono uppercase tracking-wider">React</span>
-                <span className={`text-[9px] ${reactionPanelOpen ? "opacity-80" : "opacity-30"}`}>↑</span>
-              </button>
+              {hideReactButton && (
+                <div className="flex items-stretch shrink-0">
+                  <button
+                    onClick={onVoteYes}
+                    className="flex items-center justify-center px-4 py-1.5 hover:bg-white/[0.04] transition-colors group"
+                  >
+                    <span
+                      className={`text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${
+                        votedSide === "a"
+                          ? "text-white/90"
+                          : "text-white/30 group-hover:text-white/60"
+                      }`}
+                    >
+                      {votedSide === "a" ? "✓ Run it back" : "Run it back"}
+                    </span>
+                  </button>
+                  <div
+                    style={{ width: "0.5px" }}
+                    className="bg-white/10 self-stretch my-1.5"
+                  />
+                  <button
+                    onClick={onVoteNo}
+                    className="flex items-center justify-center px-4 py-1.5 hover:bg-white/[0.04] transition-colors group"
+                  >
+                    <span
+                      className={`text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${
+                        votedSide === "b"
+                          ? "text-white/90"
+                          : "text-white/30 group-hover:text-white/60"
+                      }`}
+                    >
+                      {votedSide === "b" ? "✓ Skip" : "Skip"}
+                    </span>
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -680,31 +904,33 @@ export function LyricDanceEmbed({
       )}
 
       {/* Reaction panel */}
-      {!disableReactionPanel && <ReactionPanel
-        displayMode="embedded"
-        isOpen={reactionPanelOpen}
-        onClose={handlePanelClose}
-        danceId={data?.id ?? ""}
-        activeLine={activeLine}
-        allLines={lyricSections.allLines}
-        audioSections={audioSections}
-        currentTimeSec={currentTimeSec}
-        palette={palette}
-        onSeekTo={(sec) => player?.seek(sec)}
-        player={player}
-        durationSec={durationSec}
-        reactionData={reactionData}
-        onReactionDataChange={setReactionData}
-        onReactionFired={(emoji) => player?.fireComment(emoji)}
-        engagementMode={engagementMode}
-        frozenLineIndex={frozenLineIndex}
-        onEngagementStart={handleEngagementStart}
-        onResetEngagement={() => {
-          setEngagementMode("spectator");
-          setFrozenLineIndex(null);
-          freezeAtSecRef.current = null;
-        }}
-      />}
+      {!disableReactionPanel && (
+        <ReactionPanel
+          displayMode="embedded"
+          isOpen={reactionPanelOpen}
+          onClose={handlePanelClose}
+          danceId={data?.id ?? ""}
+          activeLine={activeLine}
+          allLines={lyricSections.allLines}
+          audioSections={audioSections}
+          currentTimeSec={currentTimeSec}
+          palette={palette}
+          onSeekTo={(sec) => player?.seek(sec)}
+          player={player}
+          durationSec={durationSec}
+          reactionData={reactionData}
+          onReactionDataChange={setReactionData}
+          onReactionFired={(emoji) => player?.fireComment(emoji)}
+          engagementMode={engagementMode}
+          frozenLineIndex={frozenLineIndex}
+          onEngagementStart={handleEngagementStart}
+          onResetEngagement={() => {
+            setEngagementMode("spectator");
+            setFrozenLineIndex(null);
+            freezeAtSecRef.current = null;
+          }}
+        />
+      )}
     </div>
   );
 }

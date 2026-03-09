@@ -23,6 +23,8 @@ interface Props {
   showPreResolved?: boolean;
   preResolved?: { total: number; replay_yes: number; saves_count?: number };
   rank?: number;
+  onRegisterVoteHandler?: (fn: (replay: boolean) => void) => void;
+  votedSide?: "a" | "b" | null;
 }
 
 interface Results {
@@ -50,7 +52,19 @@ function incrementSessionReviewCount(): number {
   return next;
 }
 
-export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, showPreResolved, preResolved, rank }: Props) {
+export function HookReview({
+  postId,
+  onScored,
+  onUnscored,
+  onVotedSide,
+  isBattle,
+  onOpenReactions,
+  showPreResolved,
+  preResolved,
+  rank,
+  onRegisterVoteHandler,
+  votedSide,
+}: Props) {
   const leftLabel = isBattle ? "LEFT HOOK" : "Run it back";
   const rightLabel = isBattle ? "RIGHT HOOK" : "Skip";
   const fitLabel = isBattle ? "LEFT HOOK" : "REPLAY FIT";
@@ -66,9 +80,12 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
   const [showIdentity, setShowIdentity] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const commentPrompt = wouldReplay === false
-    ? "The missing piece... (Optional but helpful)"
-    : COMMENT_PROMPTS[parseInt(postId.slice(-1), 16) % COMMENT_PROMPTS.length];
+  const commentPrompt =
+    wouldReplay === false
+      ? "The missing piece... (Optional but helpful)"
+      : COMMENT_PROMPTS[
+          parseInt(postId.slice(-1), 16) % COMMENT_PROMPTS.length
+        ];
 
   useEffect(() => {
     if (step === "cta") setTimeout(() => textareaRef.current?.focus(), 50);
@@ -76,7 +93,10 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
 
   useEffect(() => {
     const checkExisting = async () => {
-      let query = supabase.from("songfit_hook_reviews").select("id, would_replay").eq("post_id", postId);
+      let query = supabase
+        .from("songfit_hook_reviews")
+        .select("id, would_replay")
+        .eq("post_id", postId);
       if (user) {
         query = query.eq("user_id", user.id);
       } else {
@@ -87,13 +107,25 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
         const voted = (data as any).would_replay;
         setWouldReplay(voted);
         onVotedSide?.(voted === true ? "a" : voted === false ? "b" : null);
-        fetchResults().then(r => { setResults(r); setStep("done"); });
+        fetchResults().then((r) => {
+          setResults(r);
+          setStep("done");
+        });
         onScored?.();
       }
       setAlreadyChecked(true);
     };
     checkExisting();
   }, [postId, user, sessionId]);
+
+  useEffect(() => {
+    onRegisterVoteHandler?.(handleVoteClick);
+  }, []);
+
+  useEffect(() => {
+    if (votedSide === "a") setWouldReplay(true);
+    else if (votedSide === "b") setWouldReplay(false);
+  }, [votedSide]);
 
   const fetchResults = async (): Promise<Results> => {
     const { data } = await supabase
@@ -102,8 +134,14 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
       .eq("post_id", postId);
 
     const rows = data || [];
-    const hook: Record<HookRating, number> = { missed: 0, almost: 0, solid: 0, hit: 0 };
-    let replay_yes = 0, replay_no = 0;
+    const hook: Record<HookRating, number> = {
+      missed: 0,
+      almost: 0,
+      solid: 0,
+      hit: 0,
+    };
+    let replay_yes = 0,
+      replay_no = 0;
 
     for (const row of rows) {
       if (row.hook_rating in hook) hook[row.hook_rating as HookRating]++;
@@ -124,7 +162,10 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
   };
 
   const handleRemoveSignal = async () => {
-    let query = supabase.from("songfit_hook_reviews").delete().eq("post_id", postId);
+    let query = supabase
+      .from("songfit_hook_reviews")
+      .delete()
+      .eq("post_id", postId);
     if (user) query = query.eq("user_id", user.id);
     else query = (query as any).eq("session_id", sessionId).is("user_id", null);
     await query;
@@ -138,7 +179,8 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
   };
 
   const handleSubmit = async (note: string, overrideReplay?: boolean) => {
-    const replayValue = overrideReplay !== undefined ? overrideReplay : wouldReplay;
+    const replayValue =
+      overrideReplay !== undefined ? overrideReplay : wouldReplay;
     try {
       const payload: any = {
         post_id: postId,
@@ -149,7 +191,9 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
       if (user) payload.user_id = user.id;
       else payload.session_id = sessionId;
       await supabase.from("songfit_hook_reviews").insert(payload);
-    } catch { /* ignore unique constraint */ }
+    } catch {
+      /* ignore unique constraint */
+    }
 
     incrementSessionReviewCount();
     window.dispatchEvent(new CustomEvent("crowdfit:vote"));
@@ -161,7 +205,9 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
     setTimeout(() => setShowIdentity(true), 400);
   };
 
-  const handleContextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleContextKeyDown = (
+    e: React.KeyboardEvent<HTMLTextAreaElement>,
+  ) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(contextNote);
@@ -185,7 +231,8 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
           <span className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
             {rankStr && <>RANK: {rankStr} · </>}
             SIGNAL: {strength !== null ? `${strength}%` : "—"}
-            {" · "}{savesCount} SAVES
+            {" · "}
+            {savesCount} SAVES
           </span>
         </div>
         {/* Action Row */}
@@ -194,13 +241,17 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
             onClick={() => handleVoteClick(true)}
             className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">{leftLabel}</span>
+            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">
+              {leftLabel}
+            </span>
           </button>
           <button
             onClick={() => handleVoteClick(false)}
             className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
           >
-            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">{rightLabel}</span>
+            <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">
+              {rightLabel}
+            </span>
           </button>
         </div>
       </div>
@@ -209,104 +260,87 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
 
   return (
     <div>
-
       {/* ── DONE ── */}
-      {step === "done" && results && (() => {
-        const total = results.total;
-        const signals = results.replay_yes;
-        const hasSignals = signals > 0;
-        const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
+      {step === "done" &&
+        results &&
+        (() => {
+          const total = results.total;
+          const signals = results.replay_yes;
+          const hasSignals = signals > 0;
+          const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
 
-        return (
-          <div className="animate-fade-in">
-            <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-            <div className="px-3 py-2 space-y-0.5">
-              {/* Turn Off Signal */}
-              <div className="flex items-center justify-end">
-                <button
-                  onClick={handleRemoveSignal}
-                  className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
-                >
-                  Turn Off Signal
-                </button>
-              </div>
-              {/* Result row */}
-              <div className="flex items-center justify-between gap-3">
-                <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
-                  {hasSignals ? `${pct}% ${fitLabel}` : "CALIBRATING"}
-                </p>
-                <div className="flex items-center gap-2">
-                  {hasSignals && onOpenReactions ? (
-                    <button
-                      onClick={onOpenReactions}
-                      className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                    >
-                      {signals} of {total} FMLY signals in
-                    </button>
-                  ) : !hasSignals && (
-                    <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/40">
-                      Waiting for input
-                    </span>
-                  )}
-                  {/* Rank */}
-                  <div className="flex items-center gap-1.5 text-muted-foreground/30 text-[11px] font-mono">
-                    {rank && rank <= 50 && <span>#{rank}</span>}
+          return (
+            <div className="animate-fade-in">
+              <div
+                style={{ borderTopWidth: "0.5px" }}
+                className="border-border/30"
+              />
+              <div className="px-3 py-2 space-y-0.5">
+                {/* Turn Off Signal */}
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={handleRemoveSignal}
+                    className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors"
+                  >
+                    Turn Off Signal
+                  </button>
+                </div>
+                {/* Result row */}
+                <div className="flex items-center justify-between gap-3">
+                  <p
+                    className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}
+                  >
+                    {hasSignals ? `${pct}% ${fitLabel}` : "CALIBRATING"}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {hasSignals && onOpenReactions ? (
+                      <button
+                        onClick={onOpenReactions}
+                        className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                      >
+                        {signals} of {total} FMLY signals in
+                      </button>
+                    ) : (
+                      !hasSignals && (
+                        <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/40">
+                          Waiting for input
+                        </span>
+                      )
+                    )}
+                    {/* Rank */}
+                    <div className="flex items-center gap-1.5 text-muted-foreground/30 text-[11px] font-mono">
+                      {rank && rank <= 50 && <span>#{rank}</span>}
+                    </div>
                   </div>
                 </div>
+
+                {/* Identity line — fades in 400ms after signal */}
+                {showIdentity && (
+                  <p
+                    className="text-[10px] font-mono text-muted-foreground/30 text-center mt-1 transition-opacity duration-700"
+                    style={{ opacity: showIdentity ? 1 : 0 }}
+                  >
+                    {wouldReplay
+                      ? "You called it early."
+                      : "Your read is logged."}
+                  </p>
+                )}
               </div>
-
-              {/* Identity line — fades in 400ms after signal */}
-              {showIdentity && (
-                <p
-                  className="text-[10px] font-mono text-muted-foreground/30 text-center mt-1 transition-opacity duration-700"
-                  style={{ opacity: showIdentity ? 1 : 0 }}
-                >
-                  {wouldReplay ? "You called it early." : "Your read is logged."}
-                </p>
-              )}
+              <div
+                style={{ borderTopWidth: "0.5px" }}
+                className="border-border/30"
+              />
             </div>
-            <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-          </div>
-        );
-      })()}
-
-      {/* ── STATE 1: DECISION ── */}
-      {step === 2 && (
-        <div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-          <div className="flex gap-2 px-3 py-2.5">
-            <button
-              onClick={() => handleVoteClick(true)}
-              className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
-            >
-              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">
-                {leftLabel}
-              </span>
-            </button>
-            <button
-              onClick={() => handleVoteClick(false)}
-              className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
-            >
-              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">
-                {rightLabel}
-              </span>
-            </button>
-            {/* React button */}
-            <button
-              onClick={onOpenReactions}
-              className="flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
-              aria-label="React"
-            >
-              <span className="text-[15px] leading-none">🔥</span>
-            </button>
-          </div>
-        </div>
-      )}
+          );
+        })()}
 
       {/* ── STATE 2: RESPONSE (unified) ── */}
       {step === "cta" && (
         <div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+          <div
+            style={{ borderTopWidth: "0.5px" }}
+            className="border-border/30"
+          />
           <div className="px-3 py-2.5 space-y-2.5">
             {/* Cancel */}
             <div className="flex items-center justify-end">
@@ -327,7 +361,7 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
               <textarea
                 ref={textareaRef}
                 value={contextNote}
-                onChange={e => setContextNote(e.target.value)}
+                onChange={(e) => setContextNote(e.target.value)}
                 onKeyDown={handleContextKeyDown}
                 placeholder={commentPrompt}
                 rows={2}
@@ -349,10 +383,12 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
               </button>
             </div>
           </div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+          <div
+            style={{ borderTopWidth: "0.5px" }}
+            className="border-border/30"
+          />
         </div>
       )}
-
     </div>
   );
 }
