@@ -203,7 +203,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   // ── Loading / no data ──────────────────────────────────────
   if (loading || !hookA) {
     return (
-      <div className="w-full h-full bg-black/30 animate-pulse">
+      <div className="w-full h-full animate-pulse">
         <div className="flex h-full gap-1 p-1">
           <div className="flex-1 rounded-lg bg-white/[0.03]" />
           <div className="flex-1 rounded-lg bg-white/[0.03]" />
@@ -214,7 +214,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
   if (!danceData) {
     return (
-      <div className="w-full h-full bg-black/50 flex items-center justify-center text-muted-foreground text-xs font-mono">
+      <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/40 text-xs font-mono">
         No lyric dance found for this song
       </div>
     );
@@ -222,7 +222,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
   if (!sharedImagesReady) {
     return (
-      <div className="w-full h-full bg-black/30 animate-pulse">
+      <div className="w-full h-full animate-pulse">
         <div className="flex h-full gap-1 p-1">
           <div className="flex-1 rounded-lg bg-white/[0.03]" />
           <div className="flex-1 rounded-lg bg-white/[0.03]" />
@@ -234,7 +234,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const danceUrl = `/lyric-dance/${danceData.artist_slug}/${danceData.song_slug}`;
   const isActive = mode !== "dark";
   return (
-    <div className="w-full h-full bg-black">
+    <div className="w-full h-full">
       <div className="relative flex flex-row h-full">
         {/* Hook A */}
         <motion.div
