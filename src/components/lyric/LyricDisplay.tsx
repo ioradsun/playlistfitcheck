@@ -1929,52 +1929,51 @@ export function LyricDisplay({
                 ))}
               </div>
             </div>
-          )}
+           )}
 
-                  {/* Publish Hook Battle / Hook Page — below both hooks */}
-                  {(renderData?.hook || renderData?.secondHook) && renderData?.motionProfileSpec && beatGrid && (
-                    <PublishHookButton
-                      hook={renderData.hook}
-                      secondHook={renderData.secondHook || null}
-                      hookLabel={renderData.hookLabel}
-                      secondHookLabel={renderData.secondHookLabel}
-                      motionProfileSpec={renderData.motionProfileSpec as PhysicsSpec}
-                      lines={data.lines}
-                      beatGrid={{
-                        bpm: beatGrid.bpm,
-                        beats: beatGrid.beats,
-                        confidence: beatGrid.confidence,
-                      }}
-                      audioFile={audioFile}
-                      songTitle={data.title}
-                      system={
-                        hookDanceOverrides.system || renderData.motionProfileSpec.system
-                      }
-                      palette={
-                        renderData.motionProfileSpec.palette || [
-                          "#ffffff",
-                          "#a855f7",
-                          "#ec4899",
-                        ]
-                      }
-                      fingerprint={artistFingerprint}
-                      onViewBattle={(url) => setBattlePopupUrl(url)}
-                    />
-                  )}
-                   {features?.lyric_video && (
-                     <button
-                       onClick={() => setVideoComposerOpen(true)}
-                       className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
-                     >
-                       <Video size={10} />
-                       <span>Create Lyric Video</span>
-                     </button>
-                   )}
-                 </div>
-               );
-             })}
+           {/* Publish Hook Battle / Hook Page — below both hooks */}
+           {(renderData?.hook || renderData?.secondHook) && renderData?.motionProfileSpec && beatGrid && (
+             <PublishHookButton
+               hook={renderData.hook}
+               secondHook={renderData.secondHook || null}
+               hookLabel={renderData.hookLabel}
+               secondHookLabel={renderData.secondHookLabel}
+               motionProfileSpec={renderData.motionProfileSpec as PhysicsSpec}
+               lines={data.lines}
+               beatGrid={{
+                 bpm: beatGrid.bpm,
+                 beats: beatGrid.beats,
+                 confidence: beatGrid.confidence,
+               }}
+               audioFile={audioFile}
+               songTitle={data.title}
+               system={
+                 hookDanceOverrides.system || renderData.motionProfileSpec.system
+               }
+               palette={
+                 renderData.motionProfileSpec.palette || [
+                   "#ffffff",
+                   "#a855f7",
+                   "#ec4899",
+                 ]
+               }
+               fingerprint={artistFingerprint}
+               onViewBattle={(url) => setBattlePopupUrl(url)}
+             />
+           )}
+           {features?.lyric_video && (
+             <button
+               onClick={() => setVideoComposerOpen(true)}
+               className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
+             >
+               <Video size={10} />
+               <span>Create Lyric Video</span>
+             </button>
+           )}
+         </div>
+       </div>
 
-           {/* ── Export Video — Full Song Video ── */}
+       {/* ── Export Video — Full Song Video ── */}
           {features?.export_video && renderData?.motionProfileSpec && beatGrid && (
             <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
               <div className="flex items-center gap-1.5">
