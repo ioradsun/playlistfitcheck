@@ -82,8 +82,8 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
       />
 
       {/* Mask overlays to hide Spotify's light strips */}
-      <div className="absolute top-0 left-0 right-0 bg-card pointer-events-none z-20 dark:opacity-100 opacity-50" style={{ height: 10 }} />
-      <div className="absolute bottom-0 left-0 right-0 bg-card pointer-events-none z-20 dark:opacity-100 opacity-50" style={{ height: 10 }} />
+      <div className="absolute top-0 left-0 right-0 bg-muted dark:bg-card pointer-events-none z-20" style={{ height: 10 }} />
+      <div className="absolute bottom-0 left-0 right-0 bg-muted dark:bg-card pointer-events-none z-20" style={{ height: 10 }} />
       {iframeLoaded && (
         <div className="absolute top-3 left-3 z-30 pointer-events-none">
           <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
