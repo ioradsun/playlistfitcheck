@@ -495,7 +495,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
           <AnimatePresence mode="wait">
             {/* Cover: disabled vote buttons preview */}
             {battleState === "cover" && (
-              <motion.div key="cover-bar" className="flex flex-col gap-2 pointer-events-none">
+              <motion.div key="cover-bar" className="flex flex-col gap-1.5 pointer-events-none">
                 <div className="flex items-center gap-3 opacity-30">
                   <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/10">
                     <span className="text-sm">👊</span>
@@ -508,14 +508,14 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
                   </div>
                 </div>
                 {(voteCountA + voteCountB > 0 || comments.length > 0) && (
-                  <div className="flex items-center justify-center gap-3">
+                  <div className="flex items-center justify-center gap-3 pb-0.5">
                     {voteCountA + voteCountB > 0 && (
-                      <span className="text-[10px] font-mono text-white/40">
+                      <span className="text-[10px] font-mono text-white/50">
                         🔥 {voteCountA + voteCountB} voted
                       </span>
                     )}
                     {comments.length > 0 && (
-                      <span className="text-[10px] font-mono text-white/30">
+                      <span className="text-[10px] font-mono text-white/35">
                         {comments.length} take{comments.length !== 1 ? "s" : ""}
                       </span>
                     )}
