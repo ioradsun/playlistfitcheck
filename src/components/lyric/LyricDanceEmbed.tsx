@@ -184,7 +184,7 @@ export function LyricDanceEmbed({
 
   // ── Player lifecycle ───────────────────────────────────────────────
   const { player, playerReady, data } = useLyricDancePlayer(
-    playerData, canvasRef, textCanvasRef, containerRef, { bootMode: needsFull ? "full" : "minimal" },
+    playerData, canvasRef, textCanvasRef, containerRef, { bootMode: "full" },
   );
 
   // ── Scroll visibility (feed only) ─────────────────────────────────
