@@ -651,7 +651,7 @@ export function LyricDanceEmbed({
           setFrozenLineIndex(null);
           freezeAtSecRef.current = null;
         }}
-      />
+      />}
     </div>
   );
 }
