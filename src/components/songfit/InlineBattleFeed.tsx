@@ -439,7 +439,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
           </div>
         )}
 
-        <div className="w-full px-4 py-2.5">
+        <div className="w-full px-4 pt-2.5 pb-4">
           <AnimatePresence mode="wait">
             {/* Cover: disabled vote buttons preview */}
             {battleState === "cover" && (

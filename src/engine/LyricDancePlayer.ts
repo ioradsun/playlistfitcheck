@@ -1128,6 +1128,9 @@ export class LyricDancePlayer {
   // ═══ PERF: sort-skip when visible set is unchanged
   private _lastSortHash = 0;
 
+  /** Pixel offset to shift text UP — compensates for bottom overlay (playbar, battle bar) */
+  private _textVerticalBias = 0;
+
   // Comment comets
   private activeComments: CommentChunk[] = [];
   private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
@@ -1819,6 +1822,11 @@ export class LyricDancePlayer {
   setMuted(muted: boolean): void {
     this.audio.muted = muted;
     if (!muted) this.audio.play().catch(() => {});
+  }
+
+  /** Set vertical text bias in canvas pixels — shifts text up to account for bottom overlays (playbar, battle bar). */
+  setTextVerticalBias(px: number): void {
+    this._textVerticalBias = px;
   }
 
   updateCinematicDirection(direction: CinematicDirection): void {
@@ -2875,7 +2883,7 @@ export class LyricDancePlayer {
       if (!obj) continue;
       const text = chunk.text ?? obj.text;
       const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
-      const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
+      const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y - this._textVerticalBias : 0;
       const cx = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
       const cy = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
       const baseFontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
@@ -3051,7 +3059,7 @@ export class LyricDancePlayer {
       if (!obj) continue;
 
       const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
-      const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y : 0;
+      const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y - this._textVerticalBias : 0;
       const rawDrawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
       const rawDrawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
 

@@ -336,6 +336,14 @@ function InlineLyricDanceInner(
     }
   }, [visibility, isBattleMode, isActive, cardState, forceDemoted, playerReady, player, forceMuted]);
 
+  // Shift text up to compensate for playbar/bottom bar overlay
+  useEffect(() => {
+    if (!player || !playerReady) return;
+    // Playbar is ~44px, shift text up by half so it centers in the visible area
+    // Battle mode has a similar ~50px bottom bar
+    player.setTextVerticalBias(isBattleMode ? 25 : 22);
+  }, [player, playerReady, isBattleMode]);
+
   // Battle mode: fade out poster once player has been active long enough to render real frames
   useEffect(() => {
     if (!isBattleMode) return;
