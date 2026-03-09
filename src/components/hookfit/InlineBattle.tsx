@@ -46,13 +46,14 @@ interface Props {
   onHooksLoaded?: (hookA: HookInfo, hookB: HookInfo | null) => void;
   onTileTap?: (side: "a" | "b") => void;
   activePlaying: "a" | "b" | null;
+  forceMuted?: boolean;
 }
 
 const HOOK_SELECT = "id,user_id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,battle_position,artist_slug,song_slug,vote_count,palette";
 
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
   battleId, mode, votedSide, voteCount, votePct, onHookEnd, onHooksLoaded,
-  onTileTap, activePlaying,
+  onTileTap, activePlaying, forceMuted,
 }, ref) {
   const [hookA, setHookA] = useState<HookInfo | null>(null);
   const [hookB, setHookB] = useState<HookInfo | null>(null);
@@ -254,6 +255,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             isActive={isActive && activePlaying === "a"}
             regionStart={hookA.hook_start}
             regionEnd={hookA.hook_end}
+            forceMuted={forceMuted}
           />
           {getBorderStyle("a").boxShadow && (
             <div className="absolute inset-0 z-10 pointer-events-none rounded-sm" style={getBorderStyle("a")} />
@@ -287,6 +289,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
               isActive={isActive && activePlaying === "b"}
               regionStart={hookB.hook_start}
               regionEnd={hookB.hook_end}
+              forceMuted={forceMuted}
             />
             {getBorderStyle("b").boxShadow && (
               <div className="absolute inset-0 z-10 pointer-events-none rounded-sm" style={getBorderStyle("b")} />

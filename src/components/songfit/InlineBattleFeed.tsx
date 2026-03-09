@@ -44,6 +44,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
   const [roundProgress, setRoundProgress] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [lineReactions, setLineReactions] = useState<Record<string, string>>({});
+  const [muted, setMuted] = useState(true);
   const [activeEmojiLine, setActiveEmojiLine] = useState<string | null>(null);
   const [commentInput, setCommentInput] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
@@ -266,6 +267,10 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
     setReplayingSide(prev => prev === side ? null : side);
   }, [battleState]);
 
+  const toggleMute = useCallback(() => {
+    setMuted(prev => !prev);
+  }, []);
+
   // ── Error fallback ──────────────────────────────────────────
   if (error) {
     return (
@@ -280,7 +285,15 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
   return (
     <div ref={containerRef} className="relative w-full overflow-hidden flex flex-col">
       {/* ── Canvas area ─────────────────────────────────────── */}
-      <div className="relative w-full overflow-hidden" style={{ height: 320 }}>
+      <div
+        className="relative w-full overflow-hidden"
+        style={{ height: 320 }}
+        onClick={() => {
+          if (battleState === "round-1" || battleState === "round-2" || battleState === "results") {
+            toggleMute();
+          }
+        }}
+      >
         {albumArtUrl && (
           <img
             src={albumArtUrl}
@@ -311,6 +324,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
               votePct={votedSide === "a" ? pctA : votedSide === "b" ? pctB : undefined}
               onTileTap={handleTileTap}
               onHooksLoaded={handleHooksLoaded}
+              forceMuted={muted}
             />
           </div>
         )}
@@ -353,6 +367,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
                     e.stopPropagation();
                     onPlay?.();
                     setBattleState("round-1");
+                    setMuted(false);
                   }}
                   className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
                 >

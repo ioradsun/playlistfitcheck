@@ -38,6 +38,8 @@ interface Props {
   regionEnd?: number;
   onPlay?: () => void;
   preloadedImages?: HTMLImageElement[];
+  /** External mute override — when true, audio stays muted regardless of isActive. */
+  forceMuted?: boolean;
 }
 
 // Shared IntersectionObserver across all embedded players
@@ -65,7 +67,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { postId, lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, cardState = "warm", regionStart, regionEnd, onPlay, preloadedImages }: Props,
+  { postId, lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, cardState = "warm", regionStart, regionEnd, onPlay, preloadedImages, forceMuted = false }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
@@ -277,8 +279,8 @@ function InlineLyricDanceInner(
       // Battle mode: only the active side runs. Inactive side fully pauses (stops RAF + audio)
       if (isActive) {
         player.play();
-        player.setMuted(false);
-        setMuted(false);
+        player.setMuted(forceMuted);
+        setMuted(forceMuted);
       } else {
         player.pause();
         player.setMuted(true);
@@ -297,7 +299,7 @@ function InlineLyricDanceInner(
       player.setMuted(true);
       setMuted(true);
     }
-  }, [visibility, isBattleMode, isActive, cardState, forceDemoted, playerReady, player]);
+  }, [visibility, isBattleMode, isActive, cardState, forceDemoted, playerReady, player, forceMuted]);
 
   // ── Handlers ─────────────────────────────────────────────────────────
 
