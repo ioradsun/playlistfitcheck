@@ -41,9 +41,9 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
       style={{ height: platform === "soundcloud" ? 166 : 232 }}
       onClick={handleClick}
     >
-      {/* Full-bleed album art poster */}
+      {/* Full-bleed album art poster — sits behind iframe */}
       <div
-        className="absolute inset-0 w-full h-full transition-opacity duration-500"
+        className="absolute inset-0 w-full h-full transition-opacity duration-500 z-[1]"
         style={{ opacity: iframeLoaded ? 0 : 1, pointerEvents: iframeLoaded ? "none" : "auto" }}
       >
         {albumArtUrl ? (
@@ -74,8 +74,7 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
         width="100%"
         height={platform === "soundcloud" ? 166 : 260}
         allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-        loading="lazy"
-        className="absolute inset-0 border-0 block w-full transition-opacity duration-500 z-10"
+        className="absolute inset-0 border-0 block w-full transition-opacity duration-700 z-[5]"
         style={{ opacity: iframeLoaded ? 1 : 0 }}
         title={`Play ${trackTitle}`}
         scrolling={platform === "soundcloud" ? "no" : undefined}
