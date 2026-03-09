@@ -101,6 +101,8 @@ interface LyricDanceEmbedProps {
   // Display
   showExpandButton?: boolean;
   disableReactionPanel?: boolean;
+  /** Skip cover overlay and start playing immediately (muted). */
+  autoPlay?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────
