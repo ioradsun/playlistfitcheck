@@ -49,6 +49,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
   const [commentInput, setCommentInput] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [comments, setComments] = useState<Array<{ id: string; text: string; voted_side: string; created_at: string }>>([]);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const progressTimerRef = useRef<number>(0);
@@ -293,9 +294,9 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
           }
         }}
       >
-        {albumArtUrl && (
+        {(albumArtUrl || coverImageUrl) && (
           <img
-            src={albumArtUrl}
+            src={(albumArtUrl || coverImageUrl)!}
             alt=""
             className="absolute inset-0 w-full h-full object-cover opacity-60 pointer-events-none"
             loading="lazy"
@@ -324,6 +325,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
               onTileTap={handleTileTap}
               onHooksLoaded={handleHooksLoaded}
               forceMuted={muted}
+              onCoverImage={setCoverImageUrl}
             />
           </div>
         )}
