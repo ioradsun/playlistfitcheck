@@ -16,7 +16,7 @@ import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel, type CanonicalAudioSection } from "@/components/lyric/ReactionPanel";
-import { LYRIC_DANCE_COLUMNS, LYRIC_DANCE_FEED_COLUMNS } from "@/lib/lyricDanceColumns";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 
