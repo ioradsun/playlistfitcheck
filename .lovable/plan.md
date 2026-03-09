@@ -1,33 +1,31 @@
 
 
-## Plan: Rename hook labels + show lyrics instead of justifications
+# Download Export Modal — Implementation Complete
 
-### Problem
-1. **Labels**: "Main Chorus" and "Outro Hook" are already persisted in the database for existing songs. The edge function fix only applies to *new* detections. Need client-side remapping too.
-2. **Description**: Currently shows AI justification text (e.g., "This section contains the most direct lyrical repetition..."). User wants the actual lyrics (`previewText`) from those timestamps instead.
+## Summary
 
-### Changes
+Replaced the "Republish" button in the FIT tab with a "Download" button that opens a full export modal (`FitExportModal`). Removed the download popover from the `ShareableLyricDance` page.
 
-**`src/components/lyric/FitTab.tsx`** (lines 946-989):
+## Files Changed
 
-1. **Remap labels client-side** (after line 946): Add a mapping step so `"Main Chorus"` → `"Left Hook"` and `"Outro Hook"` → `"Right Hook"` before rendering.
+| File | Action |
+|------|--------|
+| `src/components/lyric/FitExportModal.tsx` | **Created** — Export modal with format/quality selection, progress states, download |
+| `src/components/songfit/InlineLyricDance.tsx` | **Edited** — Added `forwardRef` + `useImperativeHandle` to expose player |
+| `src/components/lyric/FitTab.tsx` | **Edited** — Replaced Republish with Download button + FitExportModal |
+| `src/pages/ShareableLyricDance.tsx` | **Edited** — Removed download popover, export state, and handleExport |
 
-2. **Replace justification with lyrics** (lines 985-989): Instead of rendering `justifications[idx]`, render `aiHook.previewText` (the actual lyrics from the hook's time range). The `previewText` field is already populated by the `snapToWordAndBeat` function in detect-hooks.
+## Architecture
 
-```text
-Before:
-  {!isUserHook && justifications[idx] && (
-    <p className="...">{justifications[idx]}</p>
-  )}
+- `InlineLyricDance` exposes `InlineLyricDanceHandle.getPlayer()` via `forwardRef`
+- `FitTab` holds a ref to `InlineLyricDance` and passes `getPlayer` to `FitExportModal`
+- `FitExportModal` uses `exportVideoAsMP4` from `src/engine/exportVideo.ts` (WebCodecs + mp4-muxer)
+- Export is video-only; audio notice is displayed in the modal
 
-After:
-  {!isUserHook && activeHook.previewText && (
-    <p className="...">&ldquo;{activeHook.previewText}&rdquo;</p>
-  )}
-```
+## Export Options
 
-**`supabase/functions/detect-hooks/index.ts`**: Already has the label remapping — no further changes needed there.
-
-### No other files affected
-The edge function is already deployed with the label mapping. This is purely a client-side display fix in `FitTab.tsx`.
-
+| Quality | 9:16 | 16:9 | 1:1 |
+|---------|------|------|-----|
+| 1080p | 1080×1920 | 1920×1080 | 1080×1080 |
+| 720p | 720×1280 | 1280×720 | 720×720 |
+| 480p | 480×854 | 854×480 | 480×480 |

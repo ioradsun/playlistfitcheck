@@ -943,8 +943,9 @@ export function FitTab({
         const aiHooks = [renderData?.hook, renderData?.secondHook].filter(Boolean) as LyricHook[];
         if (aiHooks.length === 0) return null;
 
-        const labels = [renderData?.hookLabel, renderData?.secondHookLabel];
-        const justifications = [renderData?.hookJustification, renderData?.secondHookJustification];
+        const rawLabels = [renderData?.hookLabel, renderData?.secondHookLabel];
+        const labelMap: Record<string, string> = { "Main Chorus": "Left Hook", "Outro Hook": "Right Hook" };
+        const labels = rawLabels.map(l => (l && labelMap[l]) ? labelMap[l] : l);
 
         return (
           <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
@@ -982,9 +983,9 @@ export function FitTab({
                     </button>
                   </div>
 
-                  {!isUserHook && justifications[idx] && (
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {justifications[idx]}
+                  {!isUserHook && activeHook.previewText && (
+                    <p className="text-xs text-muted-foreground leading-relaxed italic">
+                      &ldquo;{activeHook.previewText}&rdquo;
                     </p>
                   )}
 
