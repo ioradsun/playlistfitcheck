@@ -220,6 +220,7 @@ export function computeAllLineLayouts(
   fontFamily: string,
   measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   isPortrait: boolean = false,
+  textTransform: 'none' | 'uppercase' = 'none',
 ): Map<string, GroupPosition[]> {
   const margin = 60;
   const lineY = Math.round(canvasH * 0.5);
@@ -232,9 +233,10 @@ export function computeAllLineLayouts(
   const effectiveMaxWidth = isPortrait ? canvasW * 0.75 : canvasW - margin * 2;
 
   const getWordWidth = (word: string, fontSize: number) => {
+    const measured = textTransform === 'uppercase' ? word.toUpperCase() : word;
     const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
     if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
-    return measureCtx.measureText(word).width;
+    return measureCtx.measureText(measured).width;
   };
   const getSpaceWidth = (fontSize: number) => {
     const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
@@ -656,7 +658,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const vw = options?.viewportWidth ?? 960;
   const vh = options?.viewportHeight ?? 540;
   const isPortrait = vh > vw;
-  const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx, isPortrait);
+  const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx, isPortrait, baseTypography.textTransform);
 
   // DIAGNOSTIC: log first 3 lines of layout positions
   let diagCount = 0;
