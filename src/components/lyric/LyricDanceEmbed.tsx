@@ -236,12 +236,16 @@ export function LyricDanceEmbed({
   // ── Reset cover when card scrolls out of view ─────────────────────
   // When the card goes "far" (fully off-screen), restore the cover so it's
   // always fresh on scroll-back — animation runs behind it immediately.
+  // Also fire media-deactivate so the parent resets cardState → audio mutes.
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) return;
-    if (visibility === "far" && cardState !== "active") {
+    if (visibility === "far") {
       setShowCover(true);
+      if (lyricDanceId) {
+        window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", { detail: { cardId: lyricDanceId } }));
+      }
     }
-  }, [visibility, isFeedEmbed, isBattleMode, cardState]);
+  }, [visibility, isFeedEmbed, isBattleMode, lyricDanceId]);
 
   // ── Play/pause/mute logic ──────────────────────────────────────────
   useEffect(() => {
