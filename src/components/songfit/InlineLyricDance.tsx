@@ -455,7 +455,7 @@ function InlineLyricDanceInner(
       </div>
 
       {/* Playbar — overlaid at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 z-20">
+      <div className="absolute bottom-0 left-0 right-0 z-[100]">
         <InlineLyricDancePlaybar
         player={player}
         playerReady={playerReady}
