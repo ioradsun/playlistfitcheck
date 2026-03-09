@@ -591,6 +591,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             postId={post.id}
             isOwner={isOwnPost}
             onOpenReviews={() => setReviewsSheetPostId(post.id)}
+            onOpenReactions={() => setReviewsSheetPostId(post.id)}
             spotifyTrackUrl={post.spotify_track_url}
             artistsJson={post.track_artists_json as any[]}
             isBattle={isBattlePost}
@@ -605,6 +606,8 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             postId={reviewsSheetPostId}
             onClose={() => setReviewsSheetPostId(null)}
             onRemoved={() => setHookReviewKey(k => k + 1)}
+            spotifyTrackUrl={post.spotify_track_url ?? undefined}
+            artistsJson={post.track_artists_json as any[]}
           />
         </>
       )}

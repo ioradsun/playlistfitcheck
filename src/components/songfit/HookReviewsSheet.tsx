@@ -47,6 +47,8 @@ interface Props {
   postId: string | null;
   onClose: () => void;
   onRemoved?: () => void;
+  spotifyTrackUrl?: string;
+  artistsJson?: any[];
 }
 
 function AvatarBubble({ avatar, name, size = 8 }: { avatar?: string | null; name: string; size?: number }) {
