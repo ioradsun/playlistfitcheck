@@ -16,12 +16,13 @@ import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { Button } from "@/components/ui/button";
 import { LyricWaveform } from "./LyricWaveform";
+import { CustomHookSelector } from "./CustomHookSelector";
 import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
 import { FitExportModal } from "./FitExportModal";
 
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
-import type { LyricLine, LyricData } from "./LyricDisplay";
+import type { LyricLine, LyricData, LyricHook, SavedCustomHook } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 // FrameRenderState import removed — V3 derives from cinematicDirection
 import type { HeaderProjectSetter } from "./LyricsTab";
@@ -133,6 +134,26 @@ export function FitTab({
   // ── Battle publish state ──────────────────────────────────────────────
   const [battlePublishing, setBattlePublishing] = useState(false);
   const [battlePublishedUrl, setBattlePublishedUrl] = useState<string | null>(null);
+  // Which hook slot is in "editing" mode: null | 0 | 1
+  const [editingSlot, setEditingSlot] = useState<number | null>(null);
+  // User overrides per slot — null means "use AI hook"
+  const [customHooks, setCustomHooks] = useState<[SavedCustomHook | null, SavedCustomHook | null]>([null, null]);
+  const [hookClipProgress, setHookClipProgress] = useState(0);
+  const hookClipProgressRafRef = useRef<number | null>(null);
+  const hookLoopRegionRef = useRef<{ start: number; end: number } | null>(null);
+  const [activeCustomHookIndex, setActiveCustomHookIndex] = useState<number | null>(null);
+
+  const hookAudioRef = useRef<HTMLAudioElement>(null);
+  const hookAudioUrl = useMemo(
+    () => (audioFile ? URL.createObjectURL(audioFile) : ""),
+    [audioFile],
+  );
+  useEffect(() => {
+    return () => {
+      if (hookAudioUrl) URL.revokeObjectURL(hookAudioUrl);
+    };
+  }, [hookAudioUrl]);
+
   // Simple hash of lyrics to detect transcript changes
   const computeLyricsHash = useCallback((lns: LyricLine[]) => {
     const text = lns.filter(l => l.tag !== "adlib").map(l => `${l.text}|${l.start}|${l.end}`).join("\n");
@@ -636,7 +657,9 @@ export function FitTab({
   // ── Battle publish handler ──────────────────────────────────────────
   const handleStartBattle = useCallback(async () => {
     if (!user || battlePublishing) return;
-    if (!renderData?.hook || !renderData?.secondHook || !audioFile || !lyricData) return;
+    const activeHook0 = customHooks[0] ?? renderData?.hook;
+    const activeHook1 = customHooks[1] ?? renderData?.secondHook;
+    if (!activeHook0 || !activeHook1 || !audioFile || !lyricData) return;
     setBattlePublishing(true);
 
     const slowWarningId2 = setTimeout(() => {
@@ -661,7 +684,7 @@ export function FitTab({
         return slugify(hookPhrase);
       };
 
-      const hookSlug = deriveHookSlug(renderData.hook);
+      const hookSlug = deriveHookSlug(activeHook0);
 
       if (!artistSlug || !songSlug || !hookSlug) {
         toast.error("Couldn't generate a valid URL — check song/artist name");
@@ -732,14 +755,14 @@ export function FitTab({
       // Upsert hook 1
       const { error: e1 } = await supabase
         .from("shareable_hooks" as any)
-        .upsert(buildHookPayload(renderData.hook, hookSlug, 1, renderData.hookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
+        .upsert(buildHookPayload(activeHook0, hookSlug, 1, renderData.hookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
       if (e1) throw e1;
 
       // Upsert hook 2
-      const secondHookSlug = deriveHookSlug(renderData.secondHook);
+      const secondHookSlug = deriveHookSlug(activeHook1);
       const { error: e2 } = await supabase
         .from("shareable_hooks" as any)
-        .upsert(buildHookPayload(renderData.secondHook, secondHookSlug || `${hookSlug}-2`, 2, renderData.secondHookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
+        .upsert(buildHookPayload(activeHook1, secondHookSlug || `${hookSlug}-2`, 2, renderData.secondHookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
       if (e2) throw e2;
 
       // Upsert hookfit_posts
@@ -811,7 +834,7 @@ export function FitTab({
       clearTimeout(slowWarningId2);
       setBattlePublishing(false);
     }
-  }, [user, battlePublishing, renderData, audioFile, lyricData, beatGrid]);
+  }, [user, battlePublishing, customHooks, renderData, audioFile, lyricData, beatGrid]);
 
   const allReady =
     generationStatus.beatGrid === "done" &&
@@ -821,10 +844,6 @@ export function FitTab({
   const danceDisabled = !cinematicDirection || publishing || !allReady;
   // Republish only needs auth + not currently publishing (data already exists on server)
   const republishDisabled = publishing;
-  const hasBattle = !!(renderData?.hook && renderData?.secondHook);
-  const battleDisabled = !allReady || battlePublishing || !hasBattle;
-
-  
 
   // ── Sections derived from renderData ─────────────────────────────────────
   const meaning = renderData?.meaning;
@@ -837,7 +856,8 @@ export function FitTab({
 
   return (
     <>
-    <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
+      <audio ref={hookAudioRef} src={hookAudioUrl} style={{ display: "none" }} />
+      <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
       {/* Dance preview or waveform fallback */}
       {publishedUrl && publishedDanceId ? (
         <div className="space-y-3">
@@ -918,65 +938,127 @@ export function FitTab({
         </div>
       ) : null}
 
-      {/* ── Hottest Hooks — prominent placement right after player ── */}
-      {(renderData?.hook || renderData?.secondHook) && (
-        <div className="glass-card rounded-xl p-4 space-y-3 border border-primary/20">
-          <div className="flex items-center gap-2 text-[11px] font-mono text-primary uppercase tracking-wider">
-            <Zap size={12} className="text-primary" />
-            Hottest Hooks
-          </div>
-          {renderData.hook && (
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/15 text-primary font-semibold">{renderData.hookLabel || "Hook 1"}</span>
-                <span className="text-[10px] text-muted-foreground">{renderData.hook.start?.toFixed(1)}s – {renderData.hook.end?.toFixed(1)}s</span>
-                {renderData.hook.score && <span className="text-[10px] font-mono font-semibold text-primary">{renderData.hook.score}%</span>}
-              </div>
-              {renderData.hookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{renderData.hookJustification}</p>}
+      {/* ── Hottest Hooks ── */}
+      {(() => {
+        const aiHooks = [renderData?.hook, renderData?.secondHook].filter(Boolean) as LyricHook[];
+        if (aiHooks.length === 0) return null;
+
+        const labels = [renderData?.hookLabel, renderData?.secondHookLabel];
+        const justifications = [renderData?.hookJustification, renderData?.secondHookJustification];
+
+        return (
+          <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
+            <div className="flex items-center gap-1.5">
+              <Zap size={11} className="text-primary" />
+              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                HOTTEST HOOKS
+              </span>
             </div>
-          )}
-          {renderData.secondHook && (
-            <div className="space-y-1 pt-2 border-t border-border/30">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent/50 text-accent-foreground font-semibold">{renderData.secondHookLabel || "Hook 2"}</span>
-                <span className="text-[10px] text-muted-foreground">{renderData.secondHook.start?.toFixed(1)}s – {renderData.secondHook.end?.toFixed(1)}s</span>
-              </div>
-              {renderData.secondHookJustification && <p className="text-xs text-muted-foreground leading-relaxed">{renderData.secondHookJustification}</p>}
-            </div>
-          )}
-          {hasBattle && (
-            battlePublishedUrl ? (
-              <a
-                href={battlePublishedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40 mt-1"
-              >
-                <Zap size={10} />
-                VIEW BATTLE
-              </a>
-            ) : (
-              <button
-                onClick={handleStartBattle}
-                disabled={battleDisabled}
-                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 disabled:opacity-50 text-foreground hover:text-primary border-border/40 hover:border-primary/40 mt-1"
-              >
-                {battlePublishing ? (
-                  <span className="flex items-center gap-1.5">
-                    <Loader2 size={10} className="animate-spin" />
-                    PUBLISHING…
-                  </span>
+
+            {aiHooks.map((aiHook, idx) => {
+              const activeHook = customHooks[idx] ?? aiHook;
+              const isUserHook = customHooks[idx] !== null;
+              const isEditing = editingSlot === idx;
+
+              return (
+                <div
+                  key={idx}
+                  className={idx > 0 ? "pt-3 border-t border-border/20 space-y-2" : "space-y-2"}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/15 text-primary font-semibold">
+                        {isUserHook ? "Your Hook" : labels[idx] || `Hook ${idx + 1}`}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {activeHook.start?.toFixed(1)}s – {activeHook.end?.toFixed(1)}s
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setEditingSlot(isEditing ? null : idx)}
+                      className="text-[10px] font-mono text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
+                    >
+                      {isEditing ? "Cancel" : "Change"}
+                    </button>
+                  </div>
+
+                  {!isUserHook && justifications[idx] && (
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {justifications[idx]}
+                    </p>
+                  )}
+
+                  {isUserHook && customHooks[idx]?.previewText && (
+                    <p className="text-xs text-muted-foreground leading-relaxed italic">
+                      "{customHooks[idx]!.previewText}"
+                    </p>
+                  )}
+
+                  {isEditing && (
+                    <div className="mt-2 rounded-lg border border-border/40 bg-background/20 p-2">
+                      <CustomHookSelector
+                        lines={lyricData.lines}
+                        aiHooks={aiHooks}
+                        audioRef={hookAudioRef}
+                        loopRegionRef={hookLoopRegionRef}
+                        activeHookIndex={
+                          activeCustomHookIndex !== null ? activeCustomHookIndex + 100 : null
+                        }
+                        setActiveHookIndex={(i) => {
+                          setActiveCustomHookIndex(i === null ? null : i - 100);
+                        }}
+                        clipProgress={hookClipProgress}
+                        setClipProgress={setHookClipProgress}
+                        clipProgressRafRef={hookClipProgressRafRef}
+                        setIsPlaying={() => {}}
+                        onSaveHook={(hook) => {
+                          const colors = ["#f59e0b", "#10b981", "#8b5cf6"];
+                          const saved: SavedCustomHook = {
+                            ...hook,
+                            color: colors[idx] ?? "#f59e0b",
+                          };
+                          setCustomHooks((prev) => {
+                            const next: [SavedCustomHook | null, SavedCustomHook | null] = [...prev] as [SavedCustomHook | null, SavedCustomHook | null];
+                            next[idx] = saved;
+                            return next;
+                          });
+                          setEditingSlot(null);
+                        }}
+                        savedCustomHooks={customHooks.filter(Boolean) as SavedCustomHook[]}
+                        onRemoveHook={() => {}}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {aiHooks.length === 2 && (
+              <div className="pt-1">
+                {battlePublishedUrl ? (
+                  <a
+                    href={battlePublishedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+                  >
+                    <Zap size={10} /> VIEW BATTLE
+                  </a>
                 ) : (
-                  <>
+                  <button
+                    onClick={handleStartBattle}
+                    disabled={!allReady || battlePublishing || aiHooks.length !== 2}
+                    className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40 disabled:opacity-50"
+                  >
                     <Zap size={10} />
-                    START CROWDFIT BATTLE
-                  </>
+                    {battlePublishing ? "Publishing..." : "START HOOK BATTLE"}
+                  </button>
                 )}
-              </button>
-            )
-          )}
-        </div>
-      )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Single-column report */}
       <div className="space-y-3">
