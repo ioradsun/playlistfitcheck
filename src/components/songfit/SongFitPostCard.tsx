@@ -327,7 +327,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             onPlay={activate}
           />
         ) : (
-          <div className="relative" style={{ height: 320 }}>
+          <div className="relative flex items-center justify-center" style={{ height: 320 }}>
             <LazySpotifyEmbed
               trackId={post.spotify_track_id}
               trackTitle={post.track_title}
