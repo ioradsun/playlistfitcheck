@@ -810,7 +810,6 @@ export function LyricDisplay({
       const wasPlaying = !audio.paused;
       loopRegionRef.current = null;
       setActiveHookIndex(null);
-      setActiveCustomHookIndex(null);
       if (clipProgressRafRef.current)
         cancelAnimationFrame(clipProgressRafRef.current);
       audio.currentTime = time;
