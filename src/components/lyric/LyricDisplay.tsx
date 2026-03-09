@@ -2007,17 +2007,17 @@ export function LyricDisplay({
        <SignUpToSaveBanner />
 
        {/* Director's Cut overlay — system selection */}
-      <AnimatePresence>
-        {showDirectorsCut &&
-          renderData?.motionProfileSpec &&
-          renderData.hook &&
-          beatGrid?.beats && (
-            <DirectorsCutScreen
-              baseSpec={renderData.motionProfileSpec as PhysicsSpec}
-              beats={beatGrid.beats.map((t, i) => ({
-                time: t,
-                isDownbeat: i % 4 === 0,
-                strength: i % 4 === 0 ? 1 : 0.6,
+       <AnimatePresence>
+         {showDirectorsCut &&
+           renderData?.motionProfileSpec &&
+           renderData.hook &&
+           beatGrid?.beats && (
+             <DirectorsCutScreen
+               baseSpec={renderData.motionProfileSpec as PhysicsSpec}
+               beats={beatGrid.beats.map((t, i) => ({
+                 time: t,
+                 isDownbeat: i % 4 === 0,
+                 strength: i % 4 === 0 ? 1 : 0.6,
               }))}
               lines={data.lines.filter(
                 (l) =>
