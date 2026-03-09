@@ -97,6 +97,8 @@ export function LyricFitTab({
   onUploadStarted: onUploadStartedProp,
 }: Props) {
   const { user } = useAuth();
+  const siteCopy = useSiteCopy();
+  const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
 
   const artistNameRef = useRef<string>("artist");
   // Compute initial values synchronously from initialLyric to avoid flash of uploader
