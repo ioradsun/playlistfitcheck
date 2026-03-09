@@ -354,7 +354,6 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             <BattleEmbed
               battleUrl={post.lyric_dance_url}
               songTitle={post.track_title}
-              albumArtUrl={post.album_art_url ?? undefined}
               showSplitCover={true}
               cardState={cardState}
               onPlay={activate}

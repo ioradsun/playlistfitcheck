@@ -489,25 +489,9 @@ export function LyricDanceEmbed({
       className="relative w-full h-full overflow-hidden"
       onClick={(e) => { if (!effectiveShowCover && !isWaiting) toggleMute(e); }}
     >
-      {/* Canvas */}
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
-        style={{ display: playerReady ? "block" : "none" }} />
-      <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ display: "none" }} />
-
-      {/* Album art — while player loading and cover is gone */}
-      {!playerReady && !effectiveShowCover && (
-        fetchedData?.section_images?.[0] ? (
-          <img
-            src={(fetchedData.section_images as string[])[0]}
-            alt={songTitle}
-            className="absolute inset-0 w-full h-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-zinc-800/60 via-zinc-900/60 to-black/60" />
-        )
-      )}
+      {/* Canvas — always rendered, player controls content */}
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+      <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
       {/* Cover overlay */}
       <AnimatePresence>
