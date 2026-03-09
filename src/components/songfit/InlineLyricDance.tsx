@@ -268,6 +268,7 @@ function InlineLyricDanceInner(
       farTimerRef.current = setTimeout(() => {
         farTimerRef.current = null;
         setPlayerEvicted(true);
+        if (cardState !== "active") setShowCover(true);
       }, 3000);
       return;
     }
@@ -278,7 +279,7 @@ function InlineLyricDanceInner(
     }
 
     setPlayerEvicted((prev) => (prev ? false : prev));
-  }, [visibility, isBattleMode, player, playerReady]);
+  }, [visibility, isBattleMode, player, playerReady, cardState]);
 
   useEffect(() => {
     return () => {
