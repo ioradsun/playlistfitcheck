@@ -940,6 +940,7 @@ export function FitTab({
 
       {/* ── Hottest Hooks ── */}
       {(() => {
+        if (!hottestHooksEnabled) return null;
         const aiHooks = [renderData?.hook, renderData?.secondHook].filter(Boolean) as LyricHook[];
         if (aiHooks.length === 0) return null;
 
