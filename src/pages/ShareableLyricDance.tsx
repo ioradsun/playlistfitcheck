@@ -729,7 +729,7 @@ export default function ShareableLyricDance() {
                 waiting={isWaitingForPlayer}
                 badge="In Studio"
                 onExpand={undefined}
-                topReaction={!isWaitingForPlayer ? topReaction : null}
+                topReaction={null}
                 onListen={(e) => {
                   e.stopPropagation();
                   setShowCover(false);
