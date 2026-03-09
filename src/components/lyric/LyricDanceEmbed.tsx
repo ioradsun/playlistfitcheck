@@ -101,6 +101,8 @@ interface LyricDanceEmbedProps {
   // Display
   showExpandButton?: boolean;
   disableReactionPanel?: boolean;
+  /** Skip cover overlay and start playing immediately (muted). */
+  autoPlay?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────
@@ -117,13 +119,15 @@ export function LyricDanceEmbed({
   regionEnd,
   showExpandButton = true,
   disableReactionPanel = false,
+  autoPlay = false,
 }: LyricDanceEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
 
   // Single cover state — identical to ShareableLyricDance.
   // Battle tiles never show a cover (sub-regions of a full song).
-  const [showCover, setShowCover] = useState(!isBattleMode);
+  // autoPlay skips the cover entirely for workspace/review embeds.
+  const [showCover, setShowCover] = useState(!isBattleMode && !autoPlay);
   const effectiveShowCover = showCover;
 
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
