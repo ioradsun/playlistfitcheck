@@ -1071,6 +1071,7 @@ export class LyricDancePlayer {
   private backgroundSystem = 'default';
   private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim; beatVis?: BeatVisSim }> = [];
   private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
+  private _beatVisLogOnce = false;
   private _barVisStyles: BarVisStyle[] = []; // per-chapter bar style from AI mood
   private lastSimFrame = -1;
   private currentSimCanvases: HTMLCanvasElement[] = [];
@@ -1396,6 +1397,14 @@ export class LyricDancePlayer {
         const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
         const beatGridData = this.data.beat_grid ?? { bpm: 120, beats: [], confidence: 0 };
         this.conductor = new BeatConductor(beatGridData, songDuration);
+        console.log('[LyricEngine] CONDUCTOR created', {
+          bpm: beatGridData.bpm,
+          beatsCount: beatGridData.beats?.length ?? 0,
+          confidence: beatGridData.confidence,
+          songDuration,
+          hasBeatGrid: !!this.data.beat_grid,
+          beatGridSource: this.data.beat_grid ? 'DB' : 'FALLBACK',
+        });
         // Attach runtime analysis if available (has energy/brightness curves not stored in DB)
         if ((beatGridData as any)._analysis) {
           this.conductor.setAnalysis((beatGridData as any)._analysis);
@@ -1455,6 +1464,7 @@ export class LyricDancePlayer {
 
   private enableFullVisualMode(): void {
     if (this.destroyed || this.fullModeEnabled) return;
+    console.log('[LyricEngine] FULL VISUAL MODE enabling', { bootMode: this.bootMode });
     this.buildBgCache();
     this.deriveVisualSystems();
     this.buildChapterSims();
@@ -4331,6 +4341,7 @@ export class LyricDancePlayer {
       if (!this._globalBeatVis) {
         this._globalBeatVis = new BeatVisSim(accentColor);
       }
+      console.log('[LyricEngine] BEAT VIS created', { hasVis: !!this._globalBeatVis, accentColor });
 
       this.chapterSims = chapters.map((chapter: any, ci: number) => {
         const dominant = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#111111';
@@ -4433,6 +4444,18 @@ export class LyricDancePlayer {
 
     // ═══ Beat visualizer strip — bottom ~25% of canvas, synced to actual beatmap ═══
     // Skip at tier 2+ (full-width drawImage with alpha composite)
+    if (this._globalBeatVis && !this._beatVisLogOnce) {
+      this._beatVisLogOnce = true;
+      const bs = this._lastBeatState;
+      console.log('[LyricEngine] BEAT VIS first draw attempt', {
+        qualityTier: this._qualityTier,
+        energy: bs?.energy ?? 0,
+        pulse: bs?.pulse ?? 0,
+        hitStrength: bs?.hitStrength ?? 0,
+        beatIndex: bs?.beatIndex ?? -1,
+        willDraw: this._qualityTier < 2,
+      });
+    }
     if (this._globalBeatVis && this._qualityTier < 2) {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
