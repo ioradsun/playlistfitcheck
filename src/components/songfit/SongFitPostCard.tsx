@@ -254,10 +254,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
                   <p className="text-xs font-medium leading-tight truncate text-white/70">{displayName}</p>
                   <FmlyBadge userId={post.user_id} compact />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <p className="font-mono text-[10px] text-white/30 leading-tight">{timeAgo}</p>
-                  <SubmissionBadge status={post.status} expiresAt={post.expires_at} cooldownUntil={post.cooldown_until} compact />
-                </div>
+                <p className="font-mono text-[10px] text-white/30 leading-tight">{timeAgo}</p>
               </div>
             </div>
           </ProfileHoverCard>
