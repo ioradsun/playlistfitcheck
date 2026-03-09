@@ -35,10 +35,11 @@ interface Props {
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
   onReactionDataChange: (updater: (prev: Record<string, { line: Record<number, number>; total: number }>) => Record<string, { line: Record<number, number>; total: number }>) => void;
   showCover?: boolean;
+  topReaction?: { symbol: string; count: number; lineText: string } | null;
 }
 
 export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(function InlineLyricDancePlaybar(
-  { player, playerReady, data, reactionData, onReactionDataChange, showCover }: Props,
+  { player, playerReady, data, reactionData, onReactionDataChange, showCover, topReaction }: Props,
   _ref,
 ) {
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
@@ -235,10 +236,22 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
               className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.05] overflow-hidden min-w-0"
               style={{ background: "rgba(255,255,255,0.02)" }}
             >
-              <div className="w-1.5 h-1.5 rounded-full bg-white/20 shrink-0" />
-              <span className="text-[10px] font-mono text-white/30 truncate">
-                {data?.id ? "ready to play" : "..."}
-              </span>
+              {topReaction ? (
+                <>
+                  <span className="text-[11px] leading-none shrink-0">{topReaction.symbol}</span>
+                  <span className="text-[10px] font-mono text-white/40 shrink-0">{topReaction.count}</span>
+                  <span className="text-[10px] font-mono text-white/25 truncate">
+                    &ldquo;{topReaction.lineText}&rdquo;
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/20 shrink-0" />
+                  <span className="text-[10px] font-mono text-white/30 truncate">
+                    {data?.id ? "ready to play" : "..."}
+                  </span>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/[0.04] shrink-0">
               <span className="text-[10px] font-mono uppercase tracking-wider text-white/20">React</span>
