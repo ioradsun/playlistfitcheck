@@ -34,10 +34,11 @@ interface Props {
   data: LyricDanceData | null;
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
   onReactionDataChange: (updater: (prev: Record<string, { line: Record<number, number>; total: number }>) => Record<string, { line: Record<number, number>; total: number }>) => void;
+  showCover?: boolean;
 }
 
 export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(function InlineLyricDancePlaybar(
-  { player, playerReady, data, reactionData, onReactionDataChange }: Props,
+  { player, playerReady, data, reactionData, onReactionDataChange, showCover }: Props,
   _ref,
 ) {
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
@@ -222,6 +223,32 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
   );
 
   const isReady = playerReady && !!data;
+
+  if (showCover) {
+    return (
+      <div style={{ minHeight: 44 }} className="bg-black/40 backdrop-blur-md">
+        {/* Static pre-active bar — always visible, dimmed */}
+        <div className="opacity-30 pointer-events-none">
+          <div className="w-full h-1" style={{ background: "rgba(255,255,255,0.05)" }} />
+          <div className="flex items-center gap-2 px-3 py-2" style={{ background: "rgba(0,0,0,0.3)" }}>
+            <div
+              className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.05] overflow-hidden min-w-0"
+              style={{ background: "rgba(255,255,255,0.02)" }}
+            >
+              <div className="w-1.5 h-1.5 rounded-full bg-white/20 shrink-0" />
+              <span className="text-[10px] font-mono text-white/30 truncate">
+                {data?.id ? "ready to play" : "..."}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/[0.04] shrink-0">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-white/20">React</span>
+              <span className="text-[9px] text-white/15">↑</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: 44 }} className="bg-black/40 backdrop-blur-md">

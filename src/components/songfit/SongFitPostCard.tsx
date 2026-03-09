@@ -5,7 +5,6 @@ import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { InlineLyricDance } from "./InlineLyricDance";
 import { InlineBattleFeed } from "./InlineBattleFeed";
-import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { SubmissionBadge } from "./SubmissionBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -340,43 +339,17 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             </button>
           </div>
         ) : post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
-          <div className="relative overflow-hidden" style={{ height: 320 }}>
-            {(post.album_art_url || coverImageUrl) ? (
-              <img
-                src={(post.album_art_url || coverImageUrl)!}
-                alt={post.track_title}
-                className="absolute inset-0 h-full w-full object-cover"
-                loading="lazy"
-              />
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-zinc-800/60 via-zinc-900/60 to-black/60" />
-            )}
-
-            {cardState === "active" ? (
-              <InlineLyricDance
-                postId={post.id}
-                lyricDanceId={post.lyric_dance_id}
-                lyricDanceUrl={post.lyric_dance_url}
-                songTitle={post.track_title}
-                artistName={displayName}
-                albumArtUrl={post.album_art_url ?? undefined}
-                isActive={true}
-                cardState={cardState}
-                onPlay={activate}
-              />
-            ) : (
-              <LyricDanceCover
-                songName={post.track_title}
-                waiting={false}
-                badge="In Studio"
-                onExpand={() => window.open(post.lyric_dance_url!, "_blank")}
-                onListen={(e) => {
-                  e.stopPropagation();
-                  activate();
-                }}
-              />
-            )}
-          </div>
+          <InlineLyricDance
+            postId={post.id}
+            lyricDanceId={post.lyric_dance_id}
+            lyricDanceUrl={post.lyric_dance_url}
+            songTitle={post.track_title}
+            artistName={displayName}
+            albumArtUrl={post.album_art_url ?? undefined}
+            isActive={cardState === "active"}
+            cardState={cardState}
+            onPlay={activate}
+          />
         ) : post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id ? (
           <InlineBattleFeed
             battleUrl={post.lyric_dance_url}
