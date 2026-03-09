@@ -1,13 +1,13 @@
 /**
  * InlineBattle — Dual lyric-dance renderer for hook battles.
- * Uses two InlineLyricDance instances constrained to hook time regions.
+ * Uses two LyricDanceEmbed instances constrained to hook time regions.
  * Same cinematic engine as the full lyric dance, just windowed to 10-second hooks.
  */
 
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
-import { InlineLyricDance } from "@/components/songfit/InlineLyricDance";
+import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
@@ -247,19 +247,16 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           transition={{ duration: 0.4 }}
           onClick={() => onTileTap?.("a")}
         >
-          <InlineLyricDance
+          <LyricDanceEmbed
             key={`battle-a-${hookA.id}`}
             lyricDanceId={danceData.id}
             lyricDanceUrl={danceUrl}
             songTitle={danceData.song_name}
             artistName={danceData.artist_name || ""}
             prefetchedData={danceData}
-            bootMode="minimal"
-            preloadedImages={sharedImagesRef.current}
-            isActive={isActive && activePlaying === "a"}
+            cardState={isActive && activePlaying === "a" ? "active" : "warm"}
             regionStart={hookA.hook_start}
             regionEnd={hookA.hook_end}
-            forceMuted={forceMuted}
           />
           {getBorderStyle("a").boxShadow && (
             <div
@@ -284,19 +281,16 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             transition={{ duration: 0.4 }}
             onClick={() => onTileTap?.("b")}
           >
-            <InlineLyricDance
+            <LyricDanceEmbed
               key={`battle-b-${hookB.id}`}
               lyricDanceId={danceData.id}
               lyricDanceUrl={danceUrl}
               songTitle={danceData.song_name}
               artistName={danceData.artist_name || ""}
               prefetchedData={danceData}
-              bootMode="minimal"
-              preloadedImages={sharedImagesRef.current}
-              isActive={isActive && activePlaying === "b"}
+              cardState={isActive && activePlaying === "b" ? "active" : "warm"}
               regionStart={hookB.hook_start}
               regionEnd={hookB.hook_end}
-              forceMuted={forceMuted}
             />
             {getBorderStyle("b").boxShadow && (
               <div

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
-import { InlineLyricDance } from "@/components/songfit/InlineLyricDance";
+import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { InlineBattle, type BattleMode } from "@/components/hookfit/InlineBattle";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -822,14 +822,13 @@ export default function ShareableHook() {
   return (
     <div className="fixed inset-0 bg-black">
       <div className="max-w-4xl mx-auto py-6 px-4" style={{ height: "80vh" }}>
-        <InlineLyricDance
+        <LyricDanceEmbed
           lyricDanceId={danceData.id}
           lyricDanceUrl={danceUrl}
           songTitle={danceData.song_name}
           artistName={danceData.artist_name}
           prefetchedData={danceData}
-          bootMode="full"
-          isActive
+          cardState="active"
           regionStart={hook.hook_start}
           regionEnd={hook.hook_end}
         />

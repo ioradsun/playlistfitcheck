@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock, Flame, Film } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
-import { InlineLyricDance } from "./InlineLyricDance";
+import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { InlineBattleFeed } from "./InlineBattleFeed";
 import { SubmissionBadge } from "./SubmissionBadge";
 import { useAuth } from "@/hooks/useAuth";
@@ -339,17 +339,16 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             </button>
           </div>
         ) : post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
-          <InlineLyricDance
-            postId={post.id}
-            lyricDanceId={post.lyric_dance_id}
-            lyricDanceUrl={post.lyric_dance_url}
-            songTitle={post.track_title}
-            artistName={displayName}
-            albumArtUrl={post.album_art_url ?? undefined}
-            isActive={cardState === "active"}
-            cardState={cardState}
-            onPlay={activate}
-          />
+          <div className="relative overflow-hidden" style={{ height: 320 }}>
+            <LyricDanceEmbed
+              lyricDanceId={post.lyric_dance_id}
+              lyricDanceUrl={post.lyric_dance_url}
+              songTitle={post.track_title}
+              artistName={displayName}
+              cardState={cardState}
+              onPlay={activate}
+            />
+          </div>
         ) : post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id ? (
           <InlineBattleFeed
             battleUrl={post.lyric_dance_url}

@@ -17,7 +17,7 @@ import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { Button } from "@/components/ui/button";
 import { LyricWaveform } from "./LyricWaveform";
 import { CustomHookSelector } from "./CustomHookSelector";
-import { InlineLyricDance, type InlineLyricDanceHandle } from "@/components/songfit/InlineLyricDance";
+import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { FitExportModal } from "./FitExportModal";
 
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -105,7 +105,7 @@ export function FitTab({
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
-  const dancePlayerRef = useRef<InlineLyricDanceHandle>(null);
+  const dancePlayerRef = useRef<any>(null);
 
   const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
   const [sectionImagesError, setSectionImagesError] = useState<string | null>(null);
@@ -420,12 +420,10 @@ export function FitTab({
     transcriptSyncTimerRef.current = setTimeout(() => {
       const handle = dancePlayerRef.current;
       if (!handle) {
-        
         return;
       }
-      const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
-      
-      void handle.reloadTranscript(mainLines, wordsRef.current ?? undefined);
+      const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== "adlib");
+      void handle.reloadTranscript?.(mainLines, wordsRef.current ?? undefined);
     }, 300);
 
     return () => { if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current); };
@@ -457,7 +455,7 @@ export function FitTab({
       // edited line text back onto word timestamp slots. Those reconciled words
       // are what compileScene actually renders on the shareable page.
       // Fall back to raw Whisper words if player isn't ready yet.
-      const reconciledWords = dancePlayerRef.current?.getPlayer()?.currentData?.words ?? wordsRef.current ?? null;
+      const reconciledWords = wordsRef.current ?? null;
 
       const { error } = await supabase
         .from('shareable_lyric_dances' as any)
@@ -862,14 +860,13 @@ export function FitTab({
       {publishedUrl && publishedDanceId ? (
         <div className="space-y-3">
           <div className="rounded-xl overflow-hidden">
-            <InlineLyricDance
-              ref={dancePlayerRef}
+            <LyricDanceEmbed
               lyricDanceId={publishedDanceId}
               lyricDanceUrl={publishedUrl}
               songTitle={lyricData.title || "Untitled"}
               artistName=""
               prefetchedData={prefetchedDanceData}
-              bootMode="full"
+              cardState="active"
             />
           </div>
           {/* Action toolbar — single row of icon buttons */}
