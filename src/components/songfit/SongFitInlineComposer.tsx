@@ -433,4 +433,4 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
       </div>
     </div>
   );
-});
+}
