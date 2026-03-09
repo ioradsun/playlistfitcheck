@@ -310,7 +310,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
               <p className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">Loading battle…</p>
             </div>
           </div>
-        ) : (
+        ) : cardState === "active" ? (
           <div
             className="absolute inset-0"
             style={{ opacity: battleState === "cover" ? 0 : 1, transition: "opacity 0.4s ease" }}
@@ -328,7 +328,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
               onCoverImage={setCoverImageUrl}
             />
           </div>
-        )}
+        ) : null}
 
         {/* "In Battle" badge — top left */}
         {hookA && (
@@ -341,7 +341,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
 
         {/* Cover overlay */}
         <AnimatePresence>
-          {battleState === "cover" && hookA && (
+          {battleState === "cover" && (hookA || battleId) && (
             <motion.div
               key="battle-cover"
               initial={{ opacity: 1 }}
