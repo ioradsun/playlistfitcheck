@@ -121,16 +121,10 @@ export function LyricDanceEmbed({
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
 
-  // cover shows unless: fullscreen mode, OR feed card is active, OR battle mode
-  const showCover = isBattleMode
-    ? false
-    : isFeedEmbed
-      ? cardState !== "active"
-      : false; // fullscreen: showCover managed internally below
-
-  // For fullscreen use, we need internal cover state
-  const [fullscreenShowCover, setFullscreenShowCover] = useState(!isFeedEmbed);
-  const effectiveShowCover = isFeedEmbed ? showCover : fullscreenShowCover;
+  // Single cover state — identical to ShareableLyricDance.
+  // Battle tiles never show a cover (sub-regions of a full song).
+  const [showCover, setShowCover] = useState(!isBattleMode);
+  const effectiveShowCover = showCover;
 
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
   const [loading, setLoading] = useState(!prefetchedData);
