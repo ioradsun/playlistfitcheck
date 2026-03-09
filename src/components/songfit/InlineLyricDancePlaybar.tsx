@@ -224,7 +224,7 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
   const isReady = playerReady && !!data;
 
   return (
-    <div style={{ minHeight: 44 }} className="bg-black/80 backdrop-blur-sm">
+    <div style={{ minHeight: 44 }} className="bg-black/40 backdrop-blur-sm">
       {isReady ? (
         <>
           {/* Progress bar */}
@@ -244,7 +244,7 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
           </div>
 
           {/* Now-playing row */}
-          <div className="flex items-center gap-2 px-3 py-2" style={{ background: "rgba(0,0,0,0.85)" }}
+          <div className="flex items-center gap-2 px-3 py-2" style={{ background: "rgba(0,0,0,0.4)" }}
             onClick={(e) => e.stopPropagation()}>
             <button
               className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border text-left overflow-hidden min-w-0 transition-all duration-300 ${
