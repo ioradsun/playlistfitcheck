@@ -481,7 +481,8 @@ export function LyricDanceEmbed({
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="absolute inset-0"
+            className="absolute inset-x-0 top-0"
+            style={{ bottom: 60 }}
           >
             <LyricDanceCover
               songName={songTitle}
