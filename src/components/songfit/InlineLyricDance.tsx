@@ -78,7 +78,7 @@ function InlineLyricDanceInner(
   const [playerEvicted, setPlayerEvicted] = useState(false);
   // In battle mode (region set), skip cover — player renders immediately
   const isBattleMode = regionStart != null && regionEnd != null;
-  const [showCover, setShowCover] = useState(false);
+  const showCover = !isBattleMode && cardState !== "active";
   const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
   const [forceDemoted, setForceDemoted] = useState(false);
   const [battleContentReady, setBattleContentReady] = useState(false);
@@ -268,7 +268,6 @@ function InlineLyricDanceInner(
       farTimerRef.current = setTimeout(() => {
         farTimerRef.current = null;
         setPlayerEvicted(true);
-        if (cardState !== "active") setShowCover(true);
       }, 3000);
       return;
     }
@@ -279,7 +278,7 @@ function InlineLyricDanceInner(
     }
 
     setPlayerEvicted((prev) => (prev ? false : prev));
-  }, [visibility, isBattleMode, player, playerReady, cardState]);
+  }, [visibility, isBattleMode, player, playerReady]);
 
   useEffect(() => {
     return () => {
@@ -325,7 +324,7 @@ function InlineLyricDanceInner(
     }
 
     const shouldPlayUnmuted = cardState === "active" && visibility === "visible" && !forceDemoted;
-    const shouldPlayMuted = !shouldPlayUnmuted && cardState !== "cold" && visibility === "visible" && !forceDemoted;
+    const shouldPlayMuted = cardState !== "active" && visibility === "visible";
 
     if (shouldPlayUnmuted) {
       player.play();
@@ -436,7 +435,7 @@ function InlineLyricDanceInner(
           if (!showCover && !isWaitingForPlayer) toggleMute(e);
         }}
       >
-        {!playerReady && (
+        {!playerReady && !showCover && (
           <>
             {(fetchedData?.section_images?.[0]) ? (
               <img
@@ -473,7 +472,6 @@ function InlineLyricDanceInner(
                 onListen={(e) => {
                   e.stopPropagation();
                   onPlay?.();
-                  setShowCover(false);
                   setFullDataRequested(true);
                   setPlayerEvicted(false);
                   if (player) {

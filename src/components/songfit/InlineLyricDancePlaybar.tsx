@@ -228,35 +228,32 @@ export const InlineLyricDancePlaybar = forwardRef<HTMLDivElement, Props>(functio
   if (showCover) {
     return (
       <div style={{ minHeight: 44 }} className="bg-black/40 backdrop-blur-md">
-        {/* Static pre-active bar — always visible, dimmed */}
-        <div className="opacity-30 pointer-events-none">
-          <div className="w-full h-1" style={{ background: "rgba(255,255,255,0.05)" }} />
-          <div className="flex items-center gap-2 px-3 py-2" style={{ background: "rgba(0,0,0,0.3)" }}>
-            <div
-              className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.05] overflow-hidden min-w-0"
-              style={{ background: "rgba(255,255,255,0.02)" }}
-            >
-              {topReaction ? (
-                <>
-                  <span className="text-[11px] leading-none shrink-0">{topReaction.symbol}</span>
-                  <span className="text-[10px] font-mono text-white/40 shrink-0">{topReaction.count}</span>
-                  <span className="text-[10px] font-mono text-white/25 truncate">
-                    &ldquo;{topReaction.lineText}&rdquo;
-                  </span>
-                </>
-              ) : (
-                <>
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/20 shrink-0" />
-                  <span className="text-[10px] font-mono text-white/30 truncate">
-                    {data?.id ? "ready to play" : "..."}
-                  </span>
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/[0.04] shrink-0">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-white/20">React</span>
-              <span className="text-[9px] text-white/15">↑</span>
-            </div>
+        <div className="w-full h-1" style={{ background: "rgba(255,255,255,0.05)" }} />
+        <div className="flex items-center gap-2 px-3 py-2 opacity-80" style={{ background: "rgba(0,0,0,0.3)" }}>
+          <div
+            className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.07] overflow-hidden min-w-0"
+            style={{ background: "rgba(255,255,255,0.02)" }}
+          >
+            {topReaction ? (
+              <>
+                <span className="text-[11px] leading-none shrink-0 select-none">{topReaction.symbol}</span>
+                <span className="text-[10px] font-mono text-white/50 shrink-0">{topReaction.count}</span>
+                <span className="text-[10px] font-mono text-white/30 truncate">
+                  &ldquo;{topReaction.lineText}&rdquo;
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="w-1.5 h-1.5 rounded-full bg-white/20 shrink-0 animate-pulse" />
+                <span className="text-[10px] font-mono text-white/25 truncate">
+                  {data ? "ready" : "loading..."}
+                </span>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/[0.06] shrink-0 pointer-events-none">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-white/25">React</span>
+            <span className="text-[9px] text-white/20">↑</span>
           </div>
         </div>
       </div>
