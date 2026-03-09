@@ -2000,13 +2000,12 @@ export function LyricDisplay({
             </div>
           )}
 
-          {/* Spacer so floating widget doesn't block last card */}
-          <div className="h-20" />
-        </div>
-      </div>
-      </div>
+           {/* Spacer so floating widget doesn't block last card */}
+           <div className="h-20" />
+         </div>
+       </div>
 
-      <SignUpToSaveBanner />
+       <SignUpToSaveBanner />
 
       {/* Director's Cut overlay — system selection */}
       <AnimatePresence>

@@ -291,11 +291,18 @@ serve(async (req) => {
       ? snapToWordAndBeat(body.words, beats, sortedHooks[1].start_sec, sortedHooks[1].confidence || 0.5)
       : null;
 
+    // Hardcode label mappings
+    let hookLabel = sortedHooks[0].label || "Hook 1";
+    let secondHookLabel = sortedHooks[1]?.label || "Hook 2";
+    
+    if (hookLabel === "Main Chorus") hookLabel = "Left Hook";
+    if (secondHookLabel === "Outro Hook") secondHookLabel = "Right Hook";
+
     const result = {
       hook: hook1,
       secondHook: hook2,
-      hookLabel: sortedHooks[0].label || "Hook 1",
-      secondHookLabel: sortedHooks[1]?.label || "Hook 2",
+      hookLabel,
+      secondHookLabel,
       hookJustification: sortedHooks[0].justification || null,
       secondHookJustification: sortedHooks[1]?.justification || null,
     };
