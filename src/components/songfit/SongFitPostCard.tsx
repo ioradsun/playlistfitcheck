@@ -65,7 +65,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
 
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDancePost = !!(post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id);
-  const isBattlePost = !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
+  const isBattlePost = hottestHooksEnabled && !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
   const isSpotifyEmbed = !hasLyricDancePost && !isBattlePost && !!post.spotify_track_id;
   const CAPTION_MAX = 300;
   const tier: 1 | 3 = cardState === "active" ? 3 : 1;

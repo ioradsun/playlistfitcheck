@@ -1930,7 +1930,7 @@ export function LyricDisplay({
            )}
 
            {/* Publish Hook Battle / Hook Page — below both hooks */}
-           {(renderData?.hook || renderData?.secondHook) && renderData?.motionProfileSpec && beatGrid && (
+           {hottestHooksEnabled && (renderData?.hook || renderData?.secondHook) && renderData?.motionProfileSpec && beatGrid && (
              <PublishHookButton
                hook={renderData.hook}
                secondHook={renderData.secondHook || null}

@@ -550,7 +550,7 @@ export function LyricFitTab({
     } catch (err: any) {
       plog("HOOKS FAILED", err?.message || err);
     }
-  }, [words, lines, beatGrid , audioDurationSec, renderData?.hook, persistRenderData]);
+  }, [words, lines, beatGrid , audioDurationSec, renderData?.hook, persistRenderData, hottestHooksEnabled]);
 
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[], force = false) => {
     if (!lyricData || !sourceLines.length) return;
