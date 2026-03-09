@@ -658,7 +658,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const vw = options?.viewportWidth ?? 960;
   const vh = options?.viewportHeight ?? 540;
   const isPortrait = vh > vw;
-  const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx, isPortrait);
+  const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx, isPortrait, baseTypography.textTransform);
 
   // DIAGNOSTIC: log first 3 lines of layout positions
   let diagCount = 0;
