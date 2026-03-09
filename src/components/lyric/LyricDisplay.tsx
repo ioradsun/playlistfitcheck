@@ -1926,9 +1926,9 @@ export function LyricDisplay({
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+                 ))}
+               </div>
+             </div>
            )}
 
            {/* Publish Hook Battle / Hook Page — below both hooks */}
