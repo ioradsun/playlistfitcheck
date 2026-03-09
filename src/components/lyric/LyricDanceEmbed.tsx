@@ -100,6 +100,7 @@ interface LyricDanceEmbedProps {
 
   // Display
   showExpandButton?: boolean;
+  disableReactionPanel?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────
