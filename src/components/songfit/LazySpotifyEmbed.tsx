@@ -75,7 +75,7 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
         height={platform === "soundcloud" ? 166 : 260}
         allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
         loading="lazy"
-        className="border-0 block w-full transition-opacity duration-500 relative z-10"
+        className="absolute inset-0 border-0 block w-full transition-opacity duration-500 z-10"
         style={{ opacity: iframeLoaded ? 1 : 0 }}
         title={`Play ${trackTitle}`}
         scrolling={platform === "soundcloud" ? "no" : undefined}
