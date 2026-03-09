@@ -21,12 +21,13 @@ interface Props {
   battleUrl: string;
   songTitle: string;
   artistName: string;
+  albumArtUrl?: string | null;
   votedSide?: "a" | "b" | null;
   cardState: CardState;
   onPlay?: () => void;
 }
 
-function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: initialVotedSide, cardState, onPlay }: Props) {
+function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, votedSide: initialVotedSide, cardState, onPlay }: Props) {
   const [battleId, setBattleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -277,11 +278,20 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, votedSide: in
   }
 
   return (
-    <div ref={containerRef} className="relative w-full overflow-hidden bg-black/90 flex flex-col">
+    <div ref={containerRef} className="relative w-full overflow-hidden flex flex-col">
       {/* ── Canvas area ─────────────────────────────────────── */}
       <div className="relative w-full overflow-hidden" style={{ height: 320 }}>
+        {albumArtUrl && (
+          <img
+            src={albumArtUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
+            loading="lazy"
+          />
+        )}
+
         {(loading || !battleId) ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
             <div className="text-center space-y-2">
               <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto" />
               <p className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">Loading battle…</p>

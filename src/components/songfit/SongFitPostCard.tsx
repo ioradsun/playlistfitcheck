@@ -321,6 +321,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             cardState={cardState}
             songTitle={post.track_title}
             artistName={displayName}
+            albumArtUrl={post.album_art_url}
             votedSide={votedBattleSide}
             onPlay={activate}
           />

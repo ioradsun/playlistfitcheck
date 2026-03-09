@@ -40,19 +40,11 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
   return (
     <div
       className="w-full overflow-hidden relative"
-      style={{ height: 320, backgroundColor: "rgba(18,18,18,0.9)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      style={{ height: 320, backgroundColor: "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={handleClick}
     >
-      {!iframeLoaded && albumArtUrl && (
-        <img
-          src={albumArtUrl}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-25 blur-sm"
-        />
-      )}
-
       {!iframeLoaded && (
-        <div className="absolute inset-0 w-full animate-pulse" style={{ backgroundColor: "rgba(26,26,26,0.85)" }} />
+        <div className="absolute inset-0 w-full animate-pulse" style={{ backgroundColor: "rgba(26,26,26,0.5)" }} />
       )}
 
       <div className="w-full h-full flex flex-col">
