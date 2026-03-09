@@ -128,9 +128,9 @@ function BattleEmbedInner({
       .eq("artist_slug", a.artist_slug)
       .eq("song_slug", a.song_slug)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data }: { data: any }) => {
         if (!data?.lyrics) return;
-        const lyrics = (data as any).lyrics as any[];
+        const lyrics = data.lyrics as any[];
         setHookALines(lyrics.filter((l: any) => l.start >= a.hook_start - 0.3 && l.end <= a.hook_end + 0.3));
         if (b) setHookBLines(lyrics.filter((l: any) => l.start >= b.hook_start - 0.3 && l.end <= b.hook_end + 0.3));
       });

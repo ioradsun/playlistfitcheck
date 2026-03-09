@@ -357,7 +357,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
               showSplitCover={true}
               cardState={cardState}
               onPlay={activate}
-              initialVotedSide={post.voted_side ?? null}
+              initialVotedSide={(post as any).voted_side ?? null}
             />
           </div>
         ) : (
