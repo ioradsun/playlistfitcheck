@@ -983,9 +983,9 @@ export function FitTab({
                     </button>
                   </div>
 
-                  {!isUserHook && justifications[idx] && (
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {justifications[idx]}
+                  {!isUserHook && activeHook.previewText && (
+                    <p className="text-xs text-muted-foreground leading-relaxed italic">
+                      &ldquo;{activeHook.previewText}&rdquo;
                     </p>
                   )}
 
