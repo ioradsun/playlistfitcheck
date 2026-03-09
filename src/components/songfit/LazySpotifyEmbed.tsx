@@ -23,7 +23,7 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
 
   const embedSrc = platform === "soundcloud" && trackUrl
     ? toSoundCloudEmbedUrl(trackUrl)
-    : `https://open.spotify.com/embed/track/${trackId}?utm_source=generator&theme=0`;
+    : `https://open.spotify.com/embed/track/${trackId}?utm_source=generator`;
 
   useEffect(() => {
     setIframeLoaded(false);
@@ -37,33 +37,32 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
 
   return (
     <div
-      className="w-full h-full relative flex items-center justify-center"
+      className="w-full overflow-hidden relative"
+      style={{ height: platform === "soundcloud" ? 166 : 260 }}
       onClick={handleClick}
     >
-      <div className="w-full rounded-xl overflow-hidden relative mx-3" style={{ height: platform === "soundcloud" ? 166 : 152 }}>
-        {!iframeLoaded && (
-          <div className="absolute inset-0 w-full animate-pulse rounded-xl" style={{ backgroundColor: "rgba(26,26,26,0.5)" }} />
-        )}
-        <iframe
-          src={embedSrc}
-          width="100%"
-          height="100%"
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          loading="lazy"
-          className="border-0 block w-full h-full transition-opacity duration-300"
-          style={{ opacity: iframeLoaded ? 1 : 0 }}
-          title={`Play ${trackTitle}`}
-          scrolling={platform === "soundcloud" ? "no" : undefined}
-          onLoad={() => setIframeLoaded(true)}
-        />
-        {iframeLoaded && (
-          <div className="absolute top-3 left-3 z-20 pointer-events-none">
-            <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
-              Now Streaming
-            </span>
-          </div>
-        )}
-      </div>
+      {!iframeLoaded && (
+        <div className="absolute inset-0 w-full animate-pulse" style={{ backgroundColor: "rgba(26,26,26,0.5)" }} />
+      )}
+      <iframe
+        src={embedSrc}
+        width="100%"
+        height={platform === "soundcloud" ? 166 : 260}
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"
+        className="border-0 block w-full transition-opacity duration-300"
+        style={{ borderRadius: 12, opacity: iframeLoaded ? 1 : 0 }}
+        title={`Play ${trackTitle}`}
+        scrolling={platform === "soundcloud" ? "no" : undefined}
+        onLoad={() => setIframeLoaded(true)}
+      />
+      {iframeLoaded && (
+        <div className="absolute top-3 left-3 z-20 pointer-events-none">
+          <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
+            Now Streaming
+          </span>
+        </div>
+      )}
     </div>
   );
 }
