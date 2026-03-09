@@ -294,7 +294,59 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
           }
         }}
       >
-        {(albumArtUrl || coverImageUrl) && (
+        {/* Split-screen cover — visible while battleState === "cover" */}
+        {battleState === "cover" && (
+          <div className="absolute inset-0 flex pointer-events-none">
+            {/* Left side */}
+            <div className="relative flex-1 overflow-hidden">
+              {(albumArtUrl || coverImageUrl) ? (
+                <img
+                  src={(albumArtUrl || coverImageUrl)!}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover opacity-50"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950" />
+              )}
+              <div className="absolute inset-0 bg-black/40" />
+              {hookA && (
+                <div className="absolute bottom-16 left-0 right-0 flex justify-center">
+                  <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">
+                    👊 Left Hook
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Center divider */}
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-white/15 z-10" />
+
+            {/* Right side */}
+            <div className="relative flex-1 overflow-hidden">
+              {(albumArtUrl || coverImageUrl) ? (
+                <img
+                  src={(albumArtUrl || coverImageUrl)!}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover opacity-50"
+                  style={{ transform: "scaleX(-1)" }}
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-bl from-zinc-800 to-zinc-950" />
+              )}
+              <div className="absolute inset-0 bg-black/40" />
+              {hookB && (
+                <div className="absolute bottom-16 left-0 right-0 flex justify-center">
+                  <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">
+                    Right Hook 👊
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Full-width scrim for active states (rounds, vote, results) */}
+        {battleState !== "cover" && (albumArtUrl || coverImageUrl) && (
           <img
             src={(albumArtUrl || coverImageUrl)!}
             alt=""
