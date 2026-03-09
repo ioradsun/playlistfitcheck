@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Loader2, RefreshCw, Music, Sparkles, Eye, Zap, Image, ExternalLink, Download, Link, Users, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
