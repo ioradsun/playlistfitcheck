@@ -491,8 +491,8 @@ export function LyricDanceEmbed({
               topReaction={!isWaiting ? topReaction : null}
               onListen={(e) => {
                 e.stopPropagation();
+                setShowCover(false);
                 onPlay?.();
-                if (!isFeedEmbed) setFullscreenShowCover(false);
                 if (player) {
                   player.setMuted(false);
                   player.seek(regionStart ?? 0);
