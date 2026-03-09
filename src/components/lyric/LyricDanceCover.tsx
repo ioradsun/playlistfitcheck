@@ -23,7 +23,7 @@ export function LyricDanceCover({
   return (
     <div
       className="absolute inset-0 z-20 flex flex-col items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(2px)" }}
+      style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)" }}
     >
       {/* Top row — badge + expand, pinned top */}
       {(badge || onExpand) && (

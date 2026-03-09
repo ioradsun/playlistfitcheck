@@ -186,7 +186,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
         <img
           src={post.album_art_url}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-50 pointer-events-none"
           loading="lazy"
         />
       )}
@@ -284,7 +284,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-zinc-800 via-zinc-900 to-black" />
             )}
-            <div className="absolute inset-0 bg-black/35" />
+            <div className="absolute inset-0 bg-black/45" />
             {/* "Now Streaming" badge — top left */}
             <div className="absolute top-3 left-3 z-30 pointer-events-none">
               <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
