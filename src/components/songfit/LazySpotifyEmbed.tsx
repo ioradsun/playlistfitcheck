@@ -47,7 +47,7 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
       <iframe
         src={embedSrc}
         width="100%"
-        height={platform === "soundcloud" ? 166 : 232}
+        height={platform === "soundcloud" ? 166 : 260}
         allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
         loading="lazy"
         className="border-0 block w-full transition-opacity duration-300"
