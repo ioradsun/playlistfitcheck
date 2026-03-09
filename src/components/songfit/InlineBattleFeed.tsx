@@ -495,16 +495,32 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
           <AnimatePresence mode="wait">
             {/* Cover: disabled vote buttons preview */}
             {battleState === "cover" && (
-              <motion.div key="cover-bar" className="flex items-center gap-3 opacity-30 pointer-events-none">
-                <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/10">
-                  <span className="text-sm">👊</span>
-                  <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-white/50 font-semibold">Left Hook</span>
+              <motion.div key="cover-bar" className="flex flex-col gap-2 pointer-events-none">
+                <div className="flex items-center gap-3 opacity-30">
+                  <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/10">
+                    <span className="text-sm">👊</span>
+                    <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-white/50 font-semibold">Left Hook</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-white/10 shrink-0">vs</span>
+                  <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/10">
+                    <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-white/50 font-semibold">Right Hook</span>
+                    <span className="text-sm">👊</span>
+                  </div>
                 </div>
-                <span className="text-[9px] font-mono text-white/10 shrink-0">vs</span>
-                <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/10">
-                  <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-white/50 font-semibold">Right Hook</span>
-                  <span className="text-sm">👊</span>
-                </div>
+                {(voteCountA + voteCountB > 0 || comments.length > 0) && (
+                  <div className="flex items-center justify-center gap-3">
+                    {voteCountA + voteCountB > 0 && (
+                      <span className="text-[10px] font-mono text-white/40">
+                        🔥 {voteCountA + voteCountB} voted
+                      </span>
+                    )}
+                    {comments.length > 0 && (
+                      <span className="text-[10px] font-mono text-white/30">
+                        {comments.length} take{comments.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                )}
               </motion.div>
             )}
 

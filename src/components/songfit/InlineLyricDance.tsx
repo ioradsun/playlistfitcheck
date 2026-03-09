@@ -510,6 +510,7 @@ function InlineLyricDanceInner(
           reactionData={reactionData}
           onReactionDataChange={setReactionData}
           showCover={showCover || isWaitingForPlayer}
+          topReaction={topReaction}
         />
       </div>
     </div>
