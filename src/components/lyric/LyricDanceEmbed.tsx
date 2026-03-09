@@ -16,7 +16,7 @@ import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel, type CanonicalAudioSection } from "@/components/lyric/ReactionPanel";
-import { LYRIC_DANCE_COLUMNS, LYRIC_DANCE_FEED_COLUMNS } from "@/lib/lyricDanceColumns";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 
@@ -153,8 +153,6 @@ export function LyricDanceEmbed({
   const currentTimeSecRef = useRef(0);
 
   // ── Data fetch ─────────────────────────────────────────────────────
-  const needsFull = !isFeedEmbed || (isFeedEmbed && cardState === "active") || isBattleMode;
-
   useEffect(() => {
     if (!lyricDanceId) return;
     if (prefetchedData) {
@@ -165,7 +163,7 @@ export function LyricDanceEmbed({
     setLoading(true);
     supabase
       .from("shareable_lyric_dances" as any)
-      .select(needsFull ? LYRIC_DANCE_COLUMNS : LYRIC_DANCE_FEED_COLUMNS)
+      .select(LYRIC_DANCE_COLUMNS)
       .eq("id", lyricDanceId)
       .maybeSingle()
       .then(({ data: row, error }) => {
@@ -173,21 +171,8 @@ export function LyricDanceEmbed({
         setFetchedData(row as unknown as LyricDanceData);
         setLoading(false);
       });
-  }, [lyricDanceId, prefetchedData, needsFull]);
+  }, [lyricDanceId, prefetchedData]);
 
-  // ── Upgrade to full columns when card becomes active ───────────────
-  useEffect(() => {
-    if (cardState !== "active" || !lyricDanceId) return;
-    if ((fetchedData as any)?.cinematic_direction) return; // already full
-    supabase
-      .from("shareable_lyric_dances" as any)
-      .select(LYRIC_DANCE_COLUMNS)
-      .eq("id", lyricDanceId)
-      .maybeSingle()
-      .then(({ data: row }) => {
-        if (row) setFetchedData(row as unknown as LyricDanceData);
-      });
-  }, [cardState, lyricDanceId, fetchedData]);
 
   // ── Player data (apply region constraints) ─────────────────────────
   const playerData = useMemo(() => {
@@ -199,7 +184,7 @@ export function LyricDanceEmbed({
 
   // ── Player lifecycle ───────────────────────────────────────────────
   const { player, playerReady, data } = useLyricDancePlayer(
-    playerData, canvasRef, textCanvasRef, containerRef, { bootMode: needsFull ? "full" : "minimal" },
+    playerData, canvasRef, textCanvasRef, containerRef, { bootMode: "full" },
   );
 
   // ── Scroll visibility (feed only) ─────────────────────────────────
