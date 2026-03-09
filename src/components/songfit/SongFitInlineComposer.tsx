@@ -33,7 +33,7 @@ interface Props {
 
 const CAPTION_MAX = 500;
 
-export const SongFitInlineComposer = forwardRef<HTMLDivElement, Props>(function SongFitInlineComposerInner({ onPostCreated }, ref) {
+export function SongFitInlineComposer({ onPostCreated }: Props) {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
