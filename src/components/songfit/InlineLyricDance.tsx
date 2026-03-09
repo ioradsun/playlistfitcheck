@@ -124,7 +124,20 @@ function InlineLyricDanceInner(
       .maybeSingle()
       .then(({ data: row, error }) => {
         if (error || !row) { setFetchError(true); setLoading(false); return; }
-        setFetchedData((prev) => ({ ...(prev ?? {}), ...(row as unknown as Record<string, unknown>) } as LyricDanceData));
+        setFetchedData((prev) => {
+          const merged = { ...(prev ?? {}), ...(row as unknown as Record<string, unknown>) } as LyricDanceData;
+          console.log('[InlineLyricDance] DATA FETCHED', {
+            id: (merged as any).id,
+            hasCinematicDirection: !!(merged as any).cinematic_direction,
+            hasBeatGrid: !!(merged as any).beat_grid,
+            beatGridBeats: (merged as any).beat_grid?.beats?.length ?? 0,
+            beatGridBpm: (merged as any).beat_grid?.bpm ?? 'null',
+            hasLyrics: !!(merged as any).lyrics?.length,
+            hasSectionImages: !!(merged as any).section_images?.length,
+            columns: needsFull ? 'FULL' : 'FEED',
+          });
+          return merged;
+        });
         setLoading(false);
       });
   }, [lyricDanceId, prefetchedData, fullDataRequested, isBattleMode]);
