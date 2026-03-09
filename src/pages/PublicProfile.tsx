@@ -20,7 +20,7 @@ import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import type { SongFitPost } from "@/components/songfit/types";
-import { HookReviewsSheet } from "@/components/songfit/HookReviewsSheet";
+import { PostCommentPanel } from "@/components/songfit/PostCommentPanel";
 
 interface HookReviewSummary {
   total: number;
@@ -577,10 +577,13 @@ const PublicProfile = () => {
         )}
       </div>
 
-      <HookReviewsSheet
-        postId={reviewSheetPostId}
-        onClose={() => setReviewSheetPostId(null)}
-      />
+      {reviewSheetPostId && (
+        <PostCommentPanel
+          postId={reviewSheetPostId}
+          isOpen={true}
+          onClose={() => setReviewSheetPostId(null)}
+        />
+      )}
     </div>
   );
 };
