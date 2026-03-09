@@ -67,7 +67,7 @@ function AvatarBubble({ avatar, name, size = 8 }: { avatar?: string | null; name
   );
 }
 
-export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
+export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, artistsJson }: Props) {
   const { user, profile } = useAuth();
   
   const [rows, setRows] = useState<ReviewRow[]>([]);
