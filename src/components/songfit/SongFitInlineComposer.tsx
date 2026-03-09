@@ -433,4 +433,4 @@ export const SongFitInlineComposer = forwardRef<HTMLDivElement, Props>(function 
       </div>
     </div>
   );
-}
+});
