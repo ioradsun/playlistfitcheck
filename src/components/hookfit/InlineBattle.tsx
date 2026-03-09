@@ -258,7 +258,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             forceMuted={forceMuted}
           />
           {getBorderStyle("a").boxShadow && (
-            <div className="absolute inset-0 z-20 pointer-events-none rounded-sm" style={getBorderStyle("a")} />
+            <div className="absolute inset-0 z-30 pointer-events-none rounded-sm" style={getBorderStyle("a")} />
           )}
           {votedSide === "a" && voteCount != null && (
             <div className="absolute bottom-14 right-2 z-10 pointer-events-none">
