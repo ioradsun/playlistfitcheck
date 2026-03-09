@@ -153,8 +153,6 @@ export function LyricDanceEmbed({
   const currentTimeSecRef = useRef(0);
 
   // ── Data fetch ─────────────────────────────────────────────────────
-  const needsFull = !isFeedEmbed || (isFeedEmbed && cardState === "active") || isBattleMode;
-
   useEffect(() => {
     if (!lyricDanceId) return;
     if (prefetchedData) {
@@ -165,7 +163,7 @@ export function LyricDanceEmbed({
     setLoading(true);
     supabase
       .from("shareable_lyric_dances" as any)
-      .select(needsFull ? LYRIC_DANCE_COLUMNS : LYRIC_DANCE_FEED_COLUMNS)
+      .select(LYRIC_DANCE_COLUMNS)
       .eq("id", lyricDanceId)
       .maybeSingle()
       .then(({ data: row, error }) => {
@@ -173,7 +171,7 @@ export function LyricDanceEmbed({
         setFetchedData(row as unknown as LyricDanceData);
         setLoading(false);
       });
-  }, [lyricDanceId, prefetchedData, needsFull]);
+  }, [lyricDanceId, prefetchedData]);
 
   // ── Upgrade to full columns when card becomes active ───────────────
   useEffect(() => {
