@@ -107,6 +107,8 @@ export function FitTab({
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const dancePlayerRef = useRef<any>(null);
+  const siteCopy = useSiteCopy();
+  const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
 
   const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
   const [sectionImagesError, setSectionImagesError] = useState<string | null>(null);
