@@ -843,7 +843,6 @@ export function LyricDisplay({
       }
       loopRegionRef.current = { start: hook.start, end: hook.end };
       setActiveHookIndex(hookIdx);
-      setActiveCustomHookIndex(null);
       audio.currentTime = hook.start;
       audio.play();
       setIsPlaying(true);
