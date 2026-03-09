@@ -780,44 +780,67 @@ export default function ShareableLyricDance() {
           />
         )}
 
-        <div className="w-full max-w-2xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-3">
-
-
-
-            {/* Now-playing chip — current lyric line, tappable to open reaction engine */}
-            <button
-              className="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg border border-white/[0.07] text-left overflow-hidden min-w-0 group hover:border-white/15 transition-all"
-              style={{ background: "rgba(255,255,255,0.02)" }}
-              onClick={() => setReactionPanelOpen(true)}
-            >
-              {activeLine && !showCover ? (
-                <>
-                  <div
-                    className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                    style={{ background: Array.isArray(data?.palette) ? data.palette[1] ?? '#ffffff' : '#ffffff', opacity: 0.6 }}
-                  />
-                  <span className="text-[11px] font-mono text-white/45 truncate group-hover:text-white/65 transition-colors">
-                    {activeLine.text}
+        <div className="w-full max-w-2xl mx-auto">
+          {showCover || isWaitingForPlayer ? (
+            /* Pre-active: FOMO chip — mirrors embed bottom bar */
+            <div className="flex items-center gap-2 px-3 py-2">
+              <div
+                className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.07] overflow-hidden min-w-0 opacity-80"
+                style={{ background: "rgba(255,255,255,0.02)" }}
+              >
+                {topReaction ? (
+                  <>
+                    <span className="text-[11px] leading-none shrink-0">{topReaction.symbol}</span>
+                    <span className="text-[10px] font-mono text-white/50 shrink-0">{topReaction.count}</span>
+                    <span className="text-[10px] font-mono text-white/30 truncate">
+                      &ldquo;{topReaction.lineText}&rdquo;
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/20 shrink-0 animate-pulse" />
+                    <span className="text-[10px] font-mono text-white/25 truncate">
+                      {data ? "ready" : "loading..."}
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/[0.06] shrink-0 pointer-events-none">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-white/25">React</span>
+                <span className="text-[9px] text-white/20">↑</span>
+              </div>
+            </div>
+          ) : (
+            /* Active: live now-playing chip */
+            <div className="flex items-center gap-2 px-3 py-2">
+              <button
+                className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.05] text-left overflow-hidden min-w-0 transition-all hover:border-white/15"
+                style={{ background: "rgba(255,255,255,0.02)" }}
+                onClick={() => setReactionPanelOpen(true)}
+              >
+                {activeLine ? (
+                  <>
+                    <div
+                      className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                      style={{ background: Array.isArray(data?.palette) ? data.palette[1] ?? '#ffffff' : '#ffffff', opacity: 0.6 }}
+                    />
+                    <span className="text-[10px] font-mono text-white/30 truncate">{activeLine.text}</span>
+                  </>
+                ) : (
+                  <span className="text-[10px] font-mono text-white/20 truncate">
+                    {lyricSections.isReady ? 'listening...' : '...'}
                   </span>
-                </>
-              ) : (
-                <span className="text-[11px] font-mono text-white/20 truncate">
-                  {lyricSections.isReady ? 'listening...' : '...'}
-                </span>
-              )}
-            </button>
-
-            {/* React button */}
-            <button
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
-              onClick={() => setReactionPanelOpen(true)}
-            >
-              <span className="text-[11px] font-mono uppercase tracking-wider">React</span>
-              <span className="text-[10px] opacity-60">↑</span>
-            </button>
-
-          </div>
+                )}
+              </button>
+              <button
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-white/[0.08] text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
+                onClick={() => setReactionPanelOpen(true)}
+              >
+                <span className="text-[11px] font-mono uppercase tracking-wider">React</span>
+                <span className="text-[10px] opacity-60">↑</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
       )}
