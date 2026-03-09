@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock, Flame, Film } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
@@ -61,6 +61,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const [votedBattleSide, setVotedBattleSide] = useState<"a" | "b" | null>(null);
   const [reviewsSheetPostId, setReviewsSheetPostId] = useState<string | null>(null);
   const [hookReviewKey, setHookReviewKey] = useState(0);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
 
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDancePost = !!(post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id);
@@ -70,6 +71,39 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const tier: 1 | 3 = cardState === "active" ? 3 : 1;
 
   const { activate } = useCardState(post.id);
+
+  useEffect(() => {
+    if (post.album_art_url) return;
+
+    if (hasLyricDancePost && post.lyric_dance_id) {
+      supabase
+        .from("shareable_lyric_dances" as any)
+        .select("section_images")
+        .eq("id", post.lyric_dance_id)
+        .maybeSingle()
+        .then(({ data }) => {
+          const images = (data as any)?.section_images;
+          const firstImage = Array.isArray(images) ? images.find(Boolean) : null;
+          if (firstImage) setCoverImageUrl(firstImage);
+        });
+    } else if (isBattlePost && post.lyric_dance_url) {
+      const segments = post.lyric_dance_url.replace(/^\//, "").split("/").filter(Boolean);
+      if (segments.length >= 2) {
+        const [artistSlug, songSlug] = segments;
+        supabase
+          .from("shareable_lyric_dances" as any)
+          .select("section_images")
+          .eq("artist_slug", artistSlug)
+          .eq("song_slug", songSlug)
+          .maybeSingle()
+          .then(({ data }) => {
+            const images = (data as any)?.section_images;
+            const firstImage = Array.isArray(images) ? images.find(Boolean) : null;
+            if (firstImage) setCoverImageUrl(firstImage);
+          });
+      }
+    }
+  }, [post.album_art_url, post.lyric_dance_id, post.lyric_dance_url, hasLyricDancePost, isBattlePost]);
 
   const handlePlayTap = () => {
     activate();
@@ -184,9 +218,9 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   return (
     <div className="px-2 pb-3">
       <div className="relative rounded-2xl overflow-hidden" style={{ background: "#121212" }}>
-      {post.album_art_url && (
+      {(post.album_art_url || coverImageUrl) && (
         <img
-          src={post.album_art_url}
+          src={(post.album_art_url || coverImageUrl)!}
           alt=""
           className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-50 pointer-events-none"
           loading="lazy"
@@ -307,9 +341,9 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           </div>
         ) : post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
           <div className="relative overflow-hidden" style={{ height: 320 }}>
-            {post.album_art_url ? (
+            {(post.album_art_url || coverImageUrl) ? (
               <img
-                src={post.album_art_url}
+                src={(post.album_art_url || coverImageUrl)!}
                 alt={post.track_title}
                 className="absolute inset-0 h-full w-full object-cover"
                 loading="lazy"
@@ -349,7 +383,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             cardState={cardState}
             songTitle={post.track_title}
             artistName={displayName}
-            albumArtUrl={post.album_art_url}
+            albumArtUrl={post.album_art_url || coverImageUrl}
             votedSide={votedBattleSide}
             onPlay={activate}
           />
