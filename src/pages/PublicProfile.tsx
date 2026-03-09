@@ -577,10 +577,13 @@ const PublicProfile = () => {
         )}
       </div>
 
-      <HookReviewsSheet
-        postId={reviewSheetPostId}
-        onClose={() => setReviewSheetPostId(null)}
-      />
+      {reviewSheetPostId && (
+        <PostCommentPanel
+          postId={reviewSheetPostId}
+          isOpen={true}
+          onClose={() => setReviewSheetPostId(null)}
+        />
+      )}
     </div>
   );
 };
