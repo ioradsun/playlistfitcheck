@@ -101,6 +101,9 @@ interface LyricDanceEmbedProps {
   // Display
   showExpandButton?: boolean;
   disableReactionPanel?: boolean;
+  hideReactButton?: boolean;
+  externalPanelOpen?: boolean;
+  onExternalPanelOpenChange?: (open: boolean) => void;
   /** Skip cover overlay and start playing immediately (muted). */
   autoPlay?: boolean;
 }
@@ -119,6 +122,9 @@ export function LyricDanceEmbed({
   regionEnd,
   showExpandButton = true,
   disableReactionPanel = false,
+  hideReactButton = false,
+  externalPanelOpen,
+  onExternalPanelOpenChange,
   autoPlay = false,
 }: LyricDanceEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
@@ -151,6 +157,23 @@ export function LyricDanceEmbed({
   const freezeAtSecRef = useRef<number | null>(null);
   const engagementModeRef = useRef<"spectator" | "freezing" | "engaged">("spectator");
   const currentTimeSecRef = useRef(0);
+
+  // Sync external open control
+  useEffect(() => {
+    if (externalPanelOpen !== undefined) {
+      setReactionPanelOpen(externalPanelOpen);
+    }
+  }, [externalPanelOpen]);
+
+  const openPanel = useCallback(() => {
+    setReactionPanelOpen(true);
+    onExternalPanelOpenChange?.(true);
+  }, [onExternalPanelOpenChange]);
+
+  const closePanel = useCallback(() => {
+    setReactionPanelOpen(false);
+    onExternalPanelOpenChange?.(false);
+  }, [onExternalPanelOpenChange]);
 
   // ── Data fetch ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -383,10 +406,10 @@ export function LyricDanceEmbed({
   // ── Song ended → open reaction panel ─────────────────────────────
   useEffect(() => {
     if (!player) return;
-    const onEnded = () => setTimeout(() => setReactionPanelOpen(true), 800);
+    const onEnded = () => setTimeout(() => openPanel(), 800);
     player.audio.addEventListener("ended", onEnded);
     return () => player.audio.removeEventListener("ended", onEnded);
-  }, [player]);
+  }, [player, openPanel]);
 
   // ── Derived values ────────────────────────────────────────────────
   const durationSec = useMemo(() => {
@@ -453,13 +476,13 @@ export function LyricDanceEmbed({
   }, [player, lyricSections.allLines]);
 
   const handlePanelClose = useCallback(() => {
-    setReactionPanelOpen(false);
+    closePanel();
     freezeAtSecRef.current = null;
     setEngagementMode("spectator");
     setFrozenLineIndex(null);
     if (!player || player.audio.ended) return;
     try { player.play(); } catch {}
-  }, [player]);
+  }, [player, closePanel]);
 
   const toggleMute = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -607,10 +630,12 @@ export function LyricDanceEmbed({
                   </>
                 )}
               </div>
+{!hideReactButton && (
               <div className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/[0.06] shrink-0 pointer-events-none">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-white/25">React</span>
                 <span className="text-[9px] text-white/20">↑</span>
               </div>
+              )}
             </div>
           ) : (
             /* Active: live now-playing chip */
@@ -620,7 +645,7 @@ export function LyricDanceEmbed({
                   reactionPanelOpen ? "border-white/15" : "border-white/[0.05]"
                 }`}
                 style={{ background: "rgba(255,255,255,0.02)" }}
-                onClick={() => setReactionPanelOpen(true)}
+                onClick={openPanel}
               >
                 {activeLine ? (
                   <>
@@ -636,17 +661,19 @@ export function LyricDanceEmbed({
                   </span>
                 )}
               </button>
+{!hideReactButton && (
               <button
                 className={`flex items-center gap-1 px-3 py-1.5 rounded-md border transition-all duration-300 shrink-0 ${
                   reactionPanelOpen
                     ? "border-white/25 text-white/80 bg-white/[0.06]"
                     : "border-white/[0.08] text-white/25 hover:text-white/50 hover:border-white/15"
                 }`}
-                onClick={() => setReactionPanelOpen(true)}
+                onClick={openPanel}
               >
                 <span className="text-[10px] font-mono uppercase tracking-wider">React</span>
                 <span className={`text-[9px] ${reactionPanelOpen ? "opacity-80" : "opacity-30"}`}>↑</span>
               </button>
+              )}
             </div>
           )}
         </div>

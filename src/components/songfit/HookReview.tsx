@@ -11,7 +11,6 @@ type Step = 2 | "cta" | "done";
 interface Props {
   postId: string;
   isOwner?: boolean;
-  onOpenReviews?: () => void;
   onReviewRemoved?: () => void;
   spotifyTrackUrl?: string;
   artistsJson?: any[];
@@ -51,7 +50,7 @@ function incrementSessionReviewCount(): number {
   return next;
 }
 
-export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, showPreResolved, preResolved, rank }: Props) {
+export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, showPreResolved, preResolved, rank }: Props) {
   const leftLabel = isBattle ? "LEFT HOOK" : "Run it back";
   const rightLabel = isBattle ? "RIGHT HOOK" : "Skip";
   const fitLabel = isBattle ? "LEFT HOOK" : "REPLAY FIT";
@@ -237,9 +236,9 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   {hasSignals ? `${pct}% ${fitLabel}` : "CALIBRATING"}
                 </p>
                 <div className="flex items-center gap-2">
-                  {hasSignals && onOpenReviews ? (
+                  {hasSignals && onOpenReactions ? (
                     <button
-                      onClick={onOpenReviews}
+                      onClick={onOpenReactions}
                       className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
                     >
                       {signals} of {total} FMLY signals in
