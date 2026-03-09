@@ -67,7 +67,7 @@ function getSharedIO() {
 }
 
 function InlineLyricDanceInner(
-  { postId, lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "minimal", isActive = false, cardState = "warm", regionStart, regionEnd, onPlay, preloadedImages, forceMuted = false }: Props,
+  { postId, lyricDanceId, lyricDanceUrl, songTitle, prefetchedData, bootMode = "full", isActive = false, cardState = "warm", regionStart, regionEnd, onPlay, preloadedImages, forceMuted = false }: Props,
   ref: React.Ref<InlineLyricDanceHandle>,
 ) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
