@@ -1573,6 +1573,18 @@ export class LyricDancePlayer {
     this.audio.pause();
   }
 
+  /** Stop the visual render loop without pausing audio. Used by battle mode
+   *  to keep the inactive side's audio buffering while saving CPU on rendering. */
+  stopRendering(): void {
+    this.playing = false;
+    if (this.rafHandle) {
+      cancelAnimationFrame(this.rafHandle);
+      this.rafHandle = 0;
+    }
+    this.stopHealthMonitor();
+    // Note: audio is NOT paused — it continues loading/buffering silently
+  }
+
   seek(timeSec: number): void {
     this.audio.currentTime = timeSec;
     const t = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));

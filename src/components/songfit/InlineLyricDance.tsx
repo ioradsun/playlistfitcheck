@@ -277,13 +277,17 @@ function InlineLyricDanceInner(
   useEffect(() => {
     if (!player || !playerReady) return;
     if (isBattleMode) {
-      // Battle mode: only the active side runs. Inactive side fully pauses (stops RAF + audio)
       if (isActive) {
+        // Active side: play video + audio, respect mute toggle
         player.play();
         player.setMuted(forceMuted);
         setMuted(forceMuted);
       } else {
-        player.pause();
+        // Inactive side: stop RAF loop but keep audio loading/buffered.
+        // Using stopRendering() instead of pause() so the Audio element
+        // continues buffering — prevents the stale audio bug where hook B
+        // never plays because its audio was paused before finishing load.
+        player.stopRendering();
         player.setMuted(true);
         setMuted(true);
       }
