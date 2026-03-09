@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { analyzeAudioAsync } from "@/engine/audioAnalyzerWorker";
+import { detectBeatsAsync } from "@/engine/essentiaWorker";
 import type { AudioAnalysis } from "@/engine/audioAnalyzer";
 
 export interface BeatGridData {
@@ -14,47 +15,9 @@ export interface BeatGridData {
   _analysis?: AudioAnalysis;
 }
 
-// CDN URLs for essentia.js
-const ESSENTIA_WASM_URL = "https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia-wasm.web.js";
-const ESSENTIA_CORE_URL = "https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js";
-
-let essentiaInstance: any = null;
-let loadPromise: Promise<any> | null = null;
-
-function loadScript(url: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${url}"]`)) {
-      resolve();
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = url;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`Failed to load ${url}`));
-    document.head.appendChild(s);
-  });
-}
-
-async function loadEssentia(): Promise<any> {
-  if (essentiaInstance) return essentiaInstance;
-  if (loadPromise) return loadPromise;
-
-  loadPromise = (async () => {
-    await Promise.all([loadScript(ESSENTIA_WASM_URL), loadScript(ESSENTIA_CORE_URL)]);
-
-    const w = window as any;
-    const wasmModule = await w.EssentiaWASM();
-    essentiaInstance = new w.Essentia(wasmModule);
-    
-    return essentiaInstance;
-  })();
-
-  return loadPromise;
-}
-
-/** Preload Essentia WASM + Core so beat detection starts instantly when audio arrives. */
+/** @deprecated Essentia now loads inside a Web Worker — preloading on main thread is unnecessary */
 export function preloadEssentia(): void {
-  void loadEssentia();
+  // No-op — Essentia loads inside the Web Worker when needed
 }
 
 function getMonoChannel(buffer: AudioBuffer): Float32Array {
@@ -95,45 +58,12 @@ export function useBeatGrid(buffer: AudioBuffer | null): {
 
     (async () => {
       try {
-        const essentia = await loadEssentia();
-        
-        // Yield to event loop so React can paint the new component if user navigated away
-        await new Promise<void>((r) => setTimeout(r, 0));
-        if (cancelled) return;
-        
         const monoData = getMonoChannel(buffer);
+        if (cancelled) return;
 
-        // Resample to 44100 if needed
-        let signal: Float32Array;
-        if (buffer.sampleRate !== 44100) {
-          const offlineCtx = new OfflineAudioContext(1, Math.ceil(buffer.duration * 44100), 44100);
-          const src = offlineCtx.createBufferSource();
-          src.buffer = buffer;
-          src.connect(offlineCtx.destination);
-          src.start();
-          const resampled = await offlineCtx.startRendering();
-          signal = resampled.getChannelData(0);
-        } else {
-          signal = monoData;
-        }
-
-        // ═══ Step 1: Essentia beat detection ═══
-        const vectorSignal = essentia.arrayToVector(signal);
-        const result = essentia.RhythmExtractor2013(vectorSignal, 208, "multifeature", 40);
-
-        const beatsVector = result.ticks;
-        const beats: number[] = [];
-        for (let i = 0; i < beatsVector.size(); i++) {
-          beats.push(beatsVector.get(i));
-        }
-
-        const bpm = result.bpm;
-        const confidence = result.confidence;
-
-        vectorSignal.delete();
-        beatsVector.delete();
-
-        
+        // ═══ Step 1: Essentia beat detection (Web Worker — does NOT block main thread) ═══
+        const { bpm, beats, confidence } = await detectBeatsAsync(monoData, buffer.sampleRate);
+        if (cancelled) return;
 
         // ═══ Step 2: Audio analysis (onsets, energy, brightness) ═══
         let analysis: AudioAnalysis | undefined;
