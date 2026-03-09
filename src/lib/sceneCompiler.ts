@@ -220,6 +220,7 @@ export function computeAllLineLayouts(
   fontFamily: string,
   measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   isPortrait: boolean = false,
+  textTransform: 'none' | 'uppercase' = 'none',
 ): Map<string, GroupPosition[]> {
   const margin = 60;
   const lineY = Math.round(canvasH * 0.5);
