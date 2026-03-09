@@ -233,6 +233,16 @@ export function LyricDanceEmbed({
     if (cardState === "active") setForceDemoted(false);
   }, [cardState]);
 
+  // ── Reset cover when card scrolls out of view ─────────────────────
+  // When the card goes "far" (fully off-screen), restore the cover so it's
+  // always fresh on scroll-back — animation runs behind it immediately.
+  useEffect(() => {
+    if (!isFeedEmbed || isBattleMode) return;
+    if (visibility === "far" && cardState !== "active") {
+      setShowCover(true);
+    }
+  }, [visibility, isFeedEmbed, isBattleMode, cardState]);
+
   // ── Play/pause/mute logic ──────────────────────────────────────────
   useEffect(() => {
     if (!player || !playerReady) return;
