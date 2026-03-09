@@ -1995,9 +1995,9 @@ export function LyricDisplay({
                 <Film size={10} />
                 Export Video
               </button>
-              {/* PublishLyricDanceButton removed — publishing handled by FitTab */}
-            </div>
-          )}
+               {/* PublishLyricDanceButton removed — publishing handled by FitTab */}
+             </div>
+           )}
 
            {/* Spacer so floating widget doesn't block last card */}
            <div className="h-20" />
@@ -2006,7 +2006,7 @@ export function LyricDisplay({
 
        <SignUpToSaveBanner />
 
-      {/* Director's Cut overlay — system selection */}
+       {/* Director's Cut overlay — system selection */}
       <AnimatePresence>
         {showDirectorsCut &&
           renderData?.motionProfileSpec &&
