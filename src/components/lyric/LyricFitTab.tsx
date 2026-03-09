@@ -119,11 +119,7 @@ export function LyricFitTab({
     if (!initialLyric?.id) return null;
     return sessionAudio.get("lyric", initialLyric.id) ?? null;
   });
-  useEffect(() => {
-    if (!audioFile) return;
-    plog("ESSENTIA preload started");
-    preloadEssentia();
-  }, [audioFile]);
+  useEffect(() => { plog("ESSENTIA preload started"); preloadEssentia(); }, []);
 
   const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(initialLyric?.id ?? null);
