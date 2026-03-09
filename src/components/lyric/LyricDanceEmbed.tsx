@@ -475,6 +475,7 @@ export function LyricDanceEmbed({
     <div
       ref={containerRef}
       className="relative w-full h-full overflow-hidden"
+      style={{ background: "#0a0a0a" }}
       onClick={(e) => { if (!effectiveShowCover && !isWaiting) toggleMute(e); }}
     >
       {/* Canvas — always rendered, player controls content */}
