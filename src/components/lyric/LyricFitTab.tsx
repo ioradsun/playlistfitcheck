@@ -97,7 +97,6 @@ export function LyricFitTab({
 }: Props) {
   const { user } = useAuth();
 
-  useEffect(() => { plog("ESSENTIA preload started"); preloadEssentia(); }, []);
   const artistNameRef = useRef<string>("artist");
   // Compute initial values synchronously from initialLyric to avoid flash of uploader
   const initLyricData = useMemo<LyricData | null>(() => {
@@ -120,6 +119,12 @@ export function LyricFitTab({
     if (!initialLyric?.id) return null;
     return sessionAudio.get("lyric", initialLyric.id) ?? null;
   });
+  useEffect(() => {
+    if (!audioFile) return;
+    plog("ESSENTIA preload started");
+    preloadEssentia();
+  }, [audioFile]);
+
   const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(initialLyric?.id ?? null);
   const savedIdRef = useRef<string | null>(initialLyric?.id ?? null);
@@ -1097,30 +1102,31 @@ export function LyricFitTab({
           }}
         />
       </div>
-      <div style={{ display: activeTab === "fit" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
-        {lyricData && audioFile ? (
-        <FitTab
-          lyricData={lyricData}
-          audioFile={audioFile}
-          hasRealAudio={hasRealAudio}
-          savedId={savedId}
-          renderData={renderData}
-          setRenderData={setRenderData}
-          beatGrid={beatGrid}
-          setBeatGrid={setBeatGrid}
-          cinematicDirection={cinematicDirection}
-          setCinematicDirection={setCinematicDirection}
-          generationStatus={generationStatus}
-          words={words}
-           onRetry={undefined}
-           stageRestarters={undefined}
-           onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
-           onBack={handleBackToLyrics}
-           onImageGenerationStatusChange={handleImageGenerationStatusChange}
-           pipelineStages={pipelineStages}
-        />
-        ) : null}
-      </div>
+      {activeTab === "fit" && lyricData && audioFile && (
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          <FitTab
+            lyricData={lyricData}
+            audioFile={audioFile}
+            hasRealAudio={hasRealAudio}
+            savedId={savedId}
+            renderData={renderData}
+            setRenderData={setRenderData}
+            beatGrid={beatGrid}
+            setBeatGrid={setBeatGrid}
+            cinematicDirection={cinematicDirection}
+            setCinematicDirection={setCinematicDirection}
+            generationStatus={generationStatus}
+            words={words}
+            onRetry={undefined}
+            stageRestarters={undefined}
+            onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
+            onBack={handleBackToLyrics}
+            onImageGenerationStatusChange={handleImageGenerationStatusChange}
+            pipelineStages={pipelineStages}
+            parentWaveform={waveformData}
+          />
+        </div>
+      )}
     </div>
   );
 }

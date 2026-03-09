@@ -51,6 +51,7 @@ function extractPeaks(buffer: AudioBuffer, samples: number): number[] {
 interface Props {
   lyricData: LyricData;
   audioFile: File;
+  parentWaveform?: WaveformData | null;
   hasRealAudio: boolean;
   savedId: string | null;
   renderData: any | null;
@@ -73,6 +74,7 @@ interface Props {
 export function FitTab({
   lyricData,
   audioFile,
+  parentWaveform,
   hasRealAudio,
   savedId,
   renderData,
@@ -292,13 +294,16 @@ export function FitTab({
     audio.addEventListener("pause", onPause);
     audio.addEventListener("ended", onEnded);
 
-    const ctx = new AudioContext();
-    audioFile.arrayBuffer().then((ab) => {
-      ctx.decodeAudioData(ab).then((buf) => {
-        setWaveform({ peaks: extractPeaks(buf, PEAK_SAMPLES), duration: buf.duration });
-        ctx.close();
-      });
-    }).catch(() => {});
+    // Only decode locally if parent didn't provide waveform
+    if (!parentWaveform) {
+      const ctx = new AudioContext();
+      audioFile.arrayBuffer().then((ab) => {
+        ctx.decodeAudioData(ab).then((buf) => {
+          setWaveform({ peaks: extractPeaks(buf, PEAK_SAMPLES), duration: buf.duration });
+          ctx.close();
+        });
+      }).catch(() => {});
+    }
 
     return () => {
       audio.pause();
@@ -309,7 +314,7 @@ export function FitTab({
       URL.revokeObjectURL(url);
       audioRef.current = null;
     };
-  }, [audioFile]);
+  }, [audioFile, parentWaveform]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -902,7 +907,7 @@ export function FitTab({
       ) : hasRealAudio ? (
         <div className="glass-card rounded-xl p-3">
           <LyricWaveform
-            waveform={waveform}
+            waveform={waveform || parentWaveform || null}
             isPlaying={isPlaying}
             currentTime={currentTime}
             onSeek={handleSeek}
