@@ -269,7 +269,7 @@ export class BeatConductor {
       }
     }
 
-    // V2: Energy and brightness from audio analysis
+    // V2: Energy and brightness from audio analysis — or synthesize from beat grid
     let energy = 0;
     let brightness = 0.5;
     if (this._analysis) {
@@ -279,6 +279,16 @@ export class BeatConductor {
         energy = frames[idx].energy;
         brightness = frames[idx].brightness;
       }
+    } else if (len > 0) {
+      // No runtime analysis available (DB playback). Synthesize energy from beat proximity.
+      // Energy = smoothed envelope that rises near beats and decays between them.
+      // This gives the beat visualizer bars something to work with.
+      const beatProximity = 1.0 - Math.min(1.0, minDist / Math.max(0.1, this.period * 0.5));
+      const strengthFactor = strength > 0 ? strength : 0.5;
+      energy = Math.max(0.15, beatProximity * 0.7 * strengthFactor + pulse * 0.3);
+      // Brightness: approximate from song position (darker in verses, brighter in choruses)
+      const songProgress = this.songDuration > 0 ? Math.max(0, Math.min(1, tSec / this.songDuration)) : 0;
+      brightness = 0.4 + songProgress * 0.2 + pulse * 0.1;
     }
 
     return {

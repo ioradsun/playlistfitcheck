@@ -2698,8 +2698,8 @@ export class LyricDancePlayer {
     if (qTier < 2) {
       try { this.updateSims(tSec, frame); } catch (e) { console.error('[LyricEngine] sim crash:', e); }
     } else {
-      // Still update beat visualizer — it's drawn at tier < 2 only, but
-      // _globalBeatVis needs state for when we recover to tier 1.
+      // At tier >= 2, skip expensive fire/water/aurora sims but still update beat visualizer
+      // (beat vis is always drawn — it's a single cheap drawImage).
       if (this._globalBeatVis) {
         const bs = this._lastBeatState;
         this._globalBeatVis.update(bs?.energy ?? 0, bs?.pulse ?? 0, bs?.hitStrength ?? 0, bs?.phase ?? 0, bs?.beatIndex ?? 0);
@@ -4443,7 +4443,7 @@ export class LyricDancePlayer {
     }
 
     // ═══ Beat visualizer strip — bottom ~25% of canvas, synced to actual beatmap ═══
-    // Skip at tier 2+ (full-width drawImage with alpha composite)
+    // Beat vis is a single lightweight drawImage (320×64) — always render regardless of tier.
     if (this._globalBeatVis && !this._beatVisLogOnce) {
       this._beatVisLogOnce = true;
       const bs = this._lastBeatState;
@@ -4453,10 +4453,10 @@ export class LyricDancePlayer {
         pulse: bs?.pulse ?? 0,
         hitStrength: bs?.hitStrength ?? 0,
         beatIndex: bs?.beatIndex ?? -1,
-        willDraw: this._qualityTier < 2,
+        willDraw: !!this._globalBeatVis,
       });
     }
-    if (this._globalBeatVis && this._qualityTier < 2) {
+    if (this._globalBeatVis) {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
