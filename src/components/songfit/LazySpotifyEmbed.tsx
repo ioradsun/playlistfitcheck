@@ -56,6 +56,8 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
         scrolling={platform === "soundcloud" ? "no" : undefined}
         onLoad={() => setIframeLoaded(true)}
       />
+      {/* Mask overlay to hide Spotify's light bottom strip */}
+      <div className="absolute bottom-0 left-0 right-0 h-4 bg-card pointer-events-none" />
       {iframeLoaded && (
         <div className="absolute top-3 left-3 z-20 pointer-events-none">
           <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
