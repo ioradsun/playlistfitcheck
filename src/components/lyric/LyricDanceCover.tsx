@@ -23,9 +23,7 @@ export function LyricDanceCover({
   return (
     <div
       className="absolute inset-0 z-20 flex flex-col items-center justify-center"
-      style={{ background: "#0a0a0a" }}
-    >
-      {/* Top row — badge + expand, pinned top */}
+      style={{ background: "#0a0a0a + expand, pinned top */}
       {(badge || onExpand) && (
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-3">
           {badge ? (
@@ -56,11 +54,7 @@ export function LyricDanceCover({
             {songName}
           </p>
         ) : (
-          <div className="h-8 w-48 rounded bg-white/[0.07] animate-pulse mb-6" />
-        )}
-
-        {waiting ? (
-          <div className="flex items-end gap-[3px] h-4">
+          <div className="h-8 w-48 rounded bg-white/[0.07] animate4 mb-4          <div className="flex items-end gap-[3px] h-4">
             {[0.5, 0.8, 1, 0.7, 0.4].map((h, i) => (
               <div
                 key={i}
