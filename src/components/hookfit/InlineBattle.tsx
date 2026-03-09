@@ -47,13 +47,14 @@ interface Props {
   onTileTap?: (side: "a" | "b") => void;
   activePlaying: "a" | "b" | null;
   forceMuted?: boolean;
+  onCoverImage?: (url: string) => void;
 }
 
 const HOOK_SELECT = "id,user_id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,battle_position,artist_slug,song_slug,vote_count,palette";
 
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
   battleId, mode, votedSide, voteCount, votePct, onHookEnd, onHooksLoaded,
-  onTileTap, activePlaying, forceMuted,
+  onTileTap, activePlaying, forceMuted, onCoverImage,
 }, ref) {
   const [hookA, setHookA] = useState<HookInfo | null>(null);
   const [hookB, setHookB] = useState<HookInfo | null>(null);
@@ -121,7 +122,10 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
       if (fetchId !== fetchRef.current) return; // stale
       if (dances && dances.length > 0) {
-        setDanceData(dances[0] as unknown as LyricDanceData);
+        const dance = dances[0] as unknown as LyricDanceData;
+        setDanceData(dance);
+        const firstImage = (dance.section_images as string[] | undefined)?.find(Boolean);
+        if (firstImage) onCoverImage?.(firstImage);
       }
       setLoading(false);
     })();
