@@ -488,7 +488,7 @@ export function LyricDanceEmbed({
               waiting={isWaiting}
               badge="In Studio"
               onExpand={showExpandButton ? () => window.open(lyricDanceUrl, "_blank") : undefined}
-              topReaction={!isWaiting ? topReaction : null}
+              topReaction={null}
               onListen={(e) => {
                 e.stopPropagation();
                 setShowCover(false);
