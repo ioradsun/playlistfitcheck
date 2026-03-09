@@ -78,7 +78,7 @@ function InlineLyricDanceInner(
   const [playerEvicted, setPlayerEvicted] = useState(false);
   // In battle mode (region set), skip cover — player renders immediately
   const isBattleMode = regionStart != null && regionEnd != null;
-  const [showCover, setShowCover] = useState(!isBattleMode);
+  const [showCover, setShowCover] = useState(!isBattleMode && !isActive);
   const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
   const [forceDemoted, setForceDemoted] = useState(false);
   const [battleContentReady, setBattleContentReady] = useState(false);
