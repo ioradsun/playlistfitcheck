@@ -1969,12 +1969,12 @@ export function LyricDisplay({
                       <Video size={10} />
                       <span>Create Lyric Video</span>
                     </button>
-                  )}
-                </div>
-              );
-            })()}
+                   )}
+                 </div>
+               );
+             })}
 
-          {/* ── Export Video — Full Song Video ── */}
+           {/* ── Export Video — Full Song Video ── */}
           {features?.export_video && renderData?.motionProfileSpec && beatGrid && (
             <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
               <div className="flex items-center gap-1.5">
