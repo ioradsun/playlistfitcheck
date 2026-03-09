@@ -28,8 +28,7 @@ interface BattleEmbedProps {
 
   // Display
   songTitle: string;
-  albumArtUrl?: string | null;
-  showSplitCover?: boolean;   // true = feed split-screen; false = fullscreen dark overlay
+  showSplitCover?: boolean;   // true = feed split-screen labels; false = fullscreen dark overlay
   showExpandButton?: boolean;
 
   // Feed lifecycle — omit for fullscreen/shareable usage
@@ -44,7 +43,6 @@ function BattleEmbedInner({
   battleId: propBattleId,
   battleUrl,
   songTitle,
-  albumArtUrl,
   showSplitCover = false,
   showExpandButton = true,
   cardState,
@@ -58,7 +56,6 @@ function BattleEmbedInner({
   const [hookPhrase, setHookPhrase] = useState<string | null>(null);
   const [loading, setLoading] = useState(!propBattleId);
   const [error, setError] = useState(false);
-  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
 
   // Resolve battleId from battleUrl if not passed directly
   useEffect(() => {
@@ -298,21 +295,14 @@ function BattleEmbedInner({
     );
   }
 
-  const effectiveAlbumArt = albumArtUrl || coverImageUrl;
-
   // ── Cover area background ───────────────────────────────────
+  // No static images — canvas is the background.
+  // Split-screen labels still shown over canvas during cover state.
   const CoverBackground = () => (
     <>
-      {showSplitCover && battleState === "cover" ? (
-        /* Feed: split-screen album art */
+      {showSplitCover && battleState === "cover" && (
         <div className="absolute inset-0 flex pointer-events-none">
           <div className="relative flex-1 overflow-hidden">
-            {effectiveAlbumArt ? (
-              <img src={effectiveAlbumArt} alt="" className="absolute inset-0 w-full h-full object-cover opacity-50" />
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950" />
-            )}
-            <div className="absolute inset-0 bg-black/40" />
             {hookA && (
               <div className="absolute bottom-16 left-0 right-0 flex justify-center">
                 <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">👊 Left Hook</span>
@@ -321,12 +311,6 @@ function BattleEmbedInner({
           </div>
           <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-white/15 z-10" />
           <div className="relative flex-1 overflow-hidden">
-            {effectiveAlbumArt ? (
-              <img src={effectiveAlbumArt} alt="" className="absolute inset-0 w-full h-full object-cover opacity-50" style={{ transform: "scaleX(-1)" }} />
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-bl from-zinc-800 to-zinc-950" />
-            )}
-            <div className="absolute inset-0 bg-black/40" />
             {hookB && (
               <div className="absolute bottom-16 left-0 right-0 flex justify-center">
                 <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Right Hook 👊</span>
@@ -334,10 +318,7 @@ function BattleEmbedInner({
             )}
           </div>
         </div>
-      ) : battleState !== "cover" && effectiveAlbumArt ? (
-        /* Active states: full-width scrim */
-        <img src={effectiveAlbumArt} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60 pointer-events-none" loading="lazy" />
-      ) : null}
+      )}
     </>
   );
 
@@ -525,7 +506,6 @@ function BattleEmbedInner({
               onTileTap={handleTileTap}
               onHooksLoaded={handleHooksLoaded}
               forceMuted={muted}
-              onCoverImage={setCoverImageUrl}
             />
           </div>
         )}
