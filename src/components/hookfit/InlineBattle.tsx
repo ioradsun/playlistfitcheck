@@ -257,6 +257,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             cardState={isActive && activePlaying === "a" ? "active" : "warm"}
             regionStart={hookA.hook_start}
             regionEnd={hookA.hook_end}
+            disableReactionPanel={true}
+            showExpandButton={false}
           />
           {getBorderStyle("a").boxShadow && (
             <div
@@ -291,6 +293,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
               cardState={isActive && activePlaying === "b" ? "active" : "warm"}
               regionStart={hookB.hook_start}
               regionEnd={hookB.hook_end}
+              disableReactionPanel={true}
+              showExpandButton={false}
             />
             {getBorderStyle("b").boxShadow && (
               <div

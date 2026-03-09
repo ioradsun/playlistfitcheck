@@ -100,6 +100,7 @@ interface LyricDanceEmbedProps {
 
   // Display
   showExpandButton?: boolean;
+  disableReactionPanel?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────
@@ -115,6 +116,7 @@ export function LyricDanceEmbed({
   regionStart,
   regionEnd,
   showExpandButton = true,
+  disableReactionPanel = false,
 }: LyricDanceEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
@@ -625,7 +627,7 @@ export function LyricDanceEmbed({
       )}
 
       {/* Reaction panel */}
-      <ReactionPanel
+      {!disableReactionPanel && <ReactionPanel
         displayMode="embedded"
         isOpen={reactionPanelOpen}
         onClose={handlePanelClose}
@@ -649,7 +651,7 @@ export function LyricDanceEmbed({
           setFrozenLineIndex(null);
           freezeAtSecRef.current = null;
         }}
-      />
+      />}
     </div>
   );
 }
