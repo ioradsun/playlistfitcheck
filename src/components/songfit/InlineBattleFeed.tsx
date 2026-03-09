@@ -285,7 +285,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
           <img
             src={albumArtUrl}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover opacity-40 pointer-events-none"
             loading="lazy"
           />
         )}
@@ -298,16 +298,21 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
             </div>
           </div>
         ) : (
-          <InlineBattle
-            battleId={battleId}
-            mode={battleMode}
-            activePlaying={activePlaying}
-            votedSide={votedSide}
-            voteCount={votedSide === "a" ? voteCountA : votedSide === "b" ? voteCountB : undefined}
-            votePct={votedSide === "a" ? pctA : votedSide === "b" ? pctB : undefined}
-            onTileTap={handleTileTap}
-            onHooksLoaded={handleHooksLoaded}
-          />
+          <div
+            className="absolute inset-0"
+            style={{ opacity: battleState === "cover" ? 0 : 1, transition: "opacity 0.4s ease" }}
+          >
+            <InlineBattle
+              battleId={battleId}
+              mode={battleMode}
+              activePlaying={activePlaying}
+              votedSide={votedSide}
+              voteCount={votedSide === "a" ? voteCountA : votedSide === "b" ? voteCountB : undefined}
+              votePct={votedSide === "a" ? pctA : votedSide === "b" ? pctB : undefined}
+              onTileTap={handleTileTap}
+              onHooksLoaded={handleHooksLoaded}
+            />
+          </div>
         )}
 
         {/* "In Battle" badge — top left */}
