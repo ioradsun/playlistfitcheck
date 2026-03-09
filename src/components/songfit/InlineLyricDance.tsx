@@ -81,6 +81,7 @@ function InlineLyricDanceInner(
   const [showCover, setShowCover] = useState(!isBattleMode);
   const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
   const [forceDemoted, setForceDemoted] = useState(false);
+  const [battleContentReady, setBattleContentReady] = useState(false);
   const [fullDataRequested, setFullDataRequested] = useState(bootMode === "full" || isBattleMode);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -301,6 +302,17 @@ function InlineLyricDanceInner(
     }
   }, [visibility, isBattleMode, isActive, cardState, forceDemoted, playerReady, player, forceMuted]);
 
+  // Battle mode: fade out poster once player has been active long enough to render real frames
+  useEffect(() => {
+    if (!isBattleMode) return;
+    if (!isActive || !playerReady) {
+      setBattleContentReady(false);
+      return;
+    }
+    const timer = setTimeout(() => setBattleContentReady(true), 600);
+    return () => clearTimeout(timer);
+  }, [isBattleMode, isActive, playerReady]);
+
   // ── Handlers ─────────────────────────────────────────────────────────
 
   const toggleMute = useCallback((e: React.MouseEvent) => {
@@ -336,8 +348,28 @@ function InlineLyricDanceInner(
           <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none"
             style={{ display: "none" }} />
         </div>
+
+        {/* Poster overlay — covers opaque canvas until real frames are rendering */}
+        <div
+          className="absolute inset-0 pointer-events-none transition-opacity duration-500"
+          style={{ opacity: battleContentReady ? 0 : 1 }}
+        >
+          {fetchedData?.section_images?.[0] ? (
+            <img
+              src={fetchedData.section_images[0] as string}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800/80 via-zinc-900/80 to-black/80" />
+          )}
+          <div className="absolute inset-0 bg-black/30" />
+        </div>
+
+        {/* Spinner — only before player initializes */}
         {!playerReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+          <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-5 h-5 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
           </div>
         )}
@@ -423,7 +455,7 @@ function InlineLyricDanceInner(
       </div>
 
       {/* Playbar — overlaid at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 z-20">
+      <div className="absolute bottom-0 left-0 right-0 z-[100]">
         <InlineLyricDancePlaybar
         player={player}
         playerReady={playerReady}
