@@ -233,9 +233,10 @@ export function computeAllLineLayouts(
   const effectiveMaxWidth = isPortrait ? canvasW * 0.75 : canvasW - margin * 2;
 
   const getWordWidth = (word: string, fontSize: number) => {
+    const measured = textTransform === 'uppercase' ? word.toUpperCase() : word;
     const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
     if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
-    return measureCtx.measureText(word).width;
+    return measureCtx.measureText(measured).width;
   };
   const getSpaceWidth = (fontSize: number) => {
     const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
