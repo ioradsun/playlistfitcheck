@@ -627,7 +627,7 @@ export function LyricDanceEmbed({
       )}
 
       {/* Reaction panel */}
-      <ReactionPanel
+      {!disableReactionPanel && <ReactionPanel
         displayMode="embedded"
         isOpen={reactionPanelOpen}
         onClose={handlePanelClose}
