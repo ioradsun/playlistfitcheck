@@ -116,6 +116,7 @@ export function LyricDanceEmbed({
   regionStart,
   regionEnd,
   showExpandButton = true,
+  disableReactionPanel = false,
 }: LyricDanceEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
