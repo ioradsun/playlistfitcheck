@@ -1974,11 +1974,11 @@ export function LyricDisplay({
        </div>
 
        {/* ── Export Video — Full Song Video ── */}
-          {features?.export_video && renderData?.motionProfileSpec && beatGrid && (
-            <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
-              <div className="flex items-center gap-1.5">
-                <Film size={11} className="text-primary" />
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+       {features?.export_video && renderData?.motionProfileSpec && beatGrid && (
+         <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
+           <div className="flex items-center gap-1.5">
+             <Film size={11} className="text-primary" />
+             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
                   Lyric Dance
                 </span>
               </div>
