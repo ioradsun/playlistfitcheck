@@ -324,11 +324,17 @@ function InlineLyricDanceInner(
       return;
     }
 
-    const shouldRun = cardState === "active" && visibility === "visible" && !forceDemoted;
-    if (shouldRun) {
+    const shouldPlayUnmuted = cardState === "active" && visibility === "visible" && !forceDemoted;
+    const shouldPlayMuted = !shouldPlayUnmuted && cardState !== "cold" && visibility === "visible" && !forceDemoted;
+
+    if (shouldPlayUnmuted) {
       player.play();
-      player.setMuted(false);
-      setMuted(false);
+      player.setMuted(forceMuted);
+      setMuted(forceMuted);
+    } else if (shouldPlayMuted) {
+      player.play();
+      player.setMuted(true);
+      setMuted(true);
     } else {
       player.pause();
       player.setMuted(true);
@@ -496,14 +502,15 @@ function InlineLyricDanceInner(
         )}
       </div>
 
-      {/* Playbar — overlaid at bottom */}
+      {/* Playbar — overlaid at bottom, always visible */}
       <div className="absolute bottom-0 left-0 right-0 z-[100]">
         <InlineLyricDancePlaybar
-        player={player}
-        playerReady={playerReady}
-        data={data}
-        reactionData={reactionData}
+          player={player}
+          playerReady={playerReady}
+          data={data}
+          reactionData={reactionData}
           onReactionDataChange={setReactionData}
+          showCover={showCover || isWaitingForPlayer}
         />
       </div>
     </div>
