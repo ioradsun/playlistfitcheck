@@ -173,19 +173,6 @@ export function LyricDanceEmbed({
       });
   }, [lyricDanceId, prefetchedData]);
 
-  // ── Upgrade to full columns when card becomes active ───────────────
-  useEffect(() => {
-    if (cardState !== "active" || !lyricDanceId) return;
-    if ((fetchedData as any)?.cinematic_direction) return; // already full
-    supabase
-      .from("shareable_lyric_dances" as any)
-      .select(LYRIC_DANCE_COLUMNS)
-      .eq("id", lyricDanceId)
-      .maybeSingle()
-      .then(({ data: row }) => {
-        if (row) setFetchedData(row as unknown as LyricDanceData);
-      });
-  }, [cardState, lyricDanceId, fetchedData]);
 
   // ── Player data (apply region constraints) ─────────────────────────
   const playerData = useMemo(() => {
