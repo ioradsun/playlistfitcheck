@@ -1,12 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { User, Music, Heart, ChevronDown, Send } from "lucide-react";
+import { User, Music, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Loader2 } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 interface Reply {
@@ -14,8 +13,6 @@ interface Reply {
   content: string;
   created_at: string;
   user_id: string | null;
-  liked: boolean;
-  likes: number;
   profiles: { display_name: string | null; avatar_url: string | null } | null;
 }
 
@@ -28,8 +25,6 @@ interface ReviewRow {
   user_id: string | null;
   session_id: string | null;
   profiles: { display_name: string | null; avatar_url: string | null } | null;
-  likes: number;
-  liked: boolean;
   replies: Reply[];
   showReplies: boolean;
   showReplyInput: boolean;
@@ -47,6 +42,7 @@ interface Props {
   postId: string | null;
   onClose: () => void;
   onRemoved?: () => void;
+  onVoteChange?: (vote: boolean | null) => void;
   spotifyTrackUrl?: string;
   artistsJson?: any[];
 }
@@ -67,7 +63,7 @@ function AvatarBubble({ avatar, name, size = 8 }: { avatar?: string | null; name
   );
 }
 
-export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, artistsJson }: Props) {
+export function HookReviewsSheet({ postId, onClose, onRemoved, onVoteChange, spotifyTrackUrl, artistsJson }: Props) {
   const { user, profile } = useAuth();
   
   const [rows, setRows] = useState<ReviewRow[]>([]);
@@ -78,11 +74,15 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
   const [replySubmitting, setReplySubmitting] = useState<Record<string, boolean>>({});
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  const [localVote, setLocalVote] = useState<boolean | null | undefined>(undefined);
+  const [voteLoading, setVoteLoading] = useState(false);
+
   useEffect(() => {
     if (!postId) return;
     setLoading(true);
     setRows([]);
     setPost(null);
+    setLocalVote(undefined);
 
     (async () => {
       const [postRes, reviewsRes] = await Promise.all([
@@ -116,6 +116,12 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
         setRows([]);
         setLoading(false);
         return;
+      }
+
+      // Detect current user's vote
+      if (user) {
+        const existing = reviews.find(r => r.user_id === user.id);
+        setLocalVote(existing ? existing.would_replay : null);
       }
 
       const userIds = [...new Set(reviews.filter(r => r.user_id).map(r => r.user_id!))];
@@ -160,8 +166,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
           content: reply.content.replace(tagPattern, ""),
           created_at: reply.created_at,
           user_id: reply.user_id,
-          liked: false,
-          likes: 0,
           profiles: reply.user_id ? (replyProfileMap[reply.user_id] ?? null) : null,
         });
       }
@@ -169,8 +173,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
       setRows(reviews.map(r => ({
         ...r,
         profiles: r.user_id ? (profileMap[r.user_id] ?? null) : null,
-        likes: 0,
-        liked: false,
         replies: replyMap[r.id] ?? [],
         showReplies: true,
         showReplyInput: false,
@@ -186,28 +188,57 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
     onRemoved?.();
   }, [onRemoved]);
 
-  const toggleLike = useCallback((reviewId: string) => {
-    setRows(prev => prev.map(r =>
-      r.id === reviewId
-        ? { ...r, liked: !r.liked, likes: r.liked ? r.likes - 1 : r.likes + 1 }
-        : r
-    ));
-  }, []);
-
-  const toggleReplyLike = useCallback((reviewId: string, replyId: string) => {
-    setRows(prev => prev.map(r =>
-      r.id === reviewId
-        ? {
-            ...r,
-            replies: r.replies.map(rep =>
-              rep.id === replyId
-                ? { ...rep, liked: !rep.liked, likes: rep.liked ? rep.likes - 1 : rep.likes + 1 }
-                : rep
-            ),
-          }
-        : r
-    ));
-  }, []);
+  const handleVoteChange = async (vote: boolean) => {
+    if (!user || !postId) return;
+    setVoteLoading(true);
+    try {
+      // Remove existing vote first
+      if (localVote !== null && localVote !== undefined) {
+        await supabase
+          .from("songfit_hook_reviews")
+          .delete()
+          .eq("post_id", postId)
+          .eq("user_id", user.id);
+      }
+      // If tapping same vote, just remove (toggle off)
+      if (vote === localVote) {
+        setLocalVote(null);
+        onVoteChange?.(null);
+        setRows(prev => prev.filter(r => r.user_id !== user.id));
+      } else {
+        // Insert new vote
+        await supabase.from("songfit_hook_reviews").insert({
+          post_id: postId,
+          user_id: user.id,
+          hook_rating: "solid",
+          would_replay: vote,
+          context_note: null,
+        });
+        setLocalVote(vote);
+        onVoteChange?.(vote);
+        // Refresh rows
+        setRows(prev => {
+          const without = prev.filter(r => r.user_id !== user.id);
+          const newRow: ReviewRow = {
+            id: crypto.randomUUID(),
+            hook_rating: "solid",
+            would_replay: vote,
+            context_note: null,
+            created_at: new Date().toISOString(),
+            user_id: user.id,
+            session_id: null,
+            profiles: { display_name: profile?.display_name ?? null, avatar_url: profile?.avatar_url ?? null },
+            replies: [],
+            showReplies: true,
+            showReplyInput: false,
+          };
+          return [newRow, ...without];
+        });
+      }
+      window.dispatchEvent(new CustomEvent("crowdfit:vote"));
+    } catch {}
+    setVoteLoading(false);
+  };
 
   const openReplyInput = useCallback((reviewId: string, mentionName?: string) => {
     setRows(prev => prev.map(r =>
@@ -241,8 +272,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
         content: text,
         created_at: data.created_at,
         user_id: data.user_id,
-        liked: false,
-        likes: 0,
         profiles: { display_name: profile?.display_name ?? null, avatar_url: profile?.avatar_url ?? null },
       };
       setRows(prev => prev.map(r =>
@@ -261,20 +290,20 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
     <Sheet open={!!postId} onOpenChange={(open) => { if (!open) onClose(); }}>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col gap-0">
 
-        {/* ── Song identity header ── */}
-        <div className="shrink-0 px-5 pt-5 pb-4 border-b border-border/40 space-y-4">
+        {/* ── Header ── */}
+        <div className="shrink-0 border-b border-border/30">
 
-          {/* Song row */}
-          <div className="flex items-center gap-3">
+          {/* Song identity row */}
+          <div className="flex items-center gap-3 px-4 pt-4 pb-3">
             {post?.album_art_url ? (
               <img
                 src={post.album_art_url}
                 alt={post?.track_title}
-                className="w-11 h-11 rounded-xl object-cover shrink-0 shadow-sm"
+                className="w-10 h-10 rounded-lg object-cover shrink-0"
               />
             ) : (
-              <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                <Music size={16} className="text-muted-foreground" />
+              <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                <Music size={14} className="text-muted-foreground" />
               </div>
             )}
             <div className="flex-1 min-w-0">
@@ -282,88 +311,19 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
                 {post?.track_title ?? "Loading…"}
               </h2>
               {artistNames && (
-                <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{artistNames}</p>
+                <p className="text-[11px] text-muted-foreground/60 truncate mt-0.5">{artistNames}</p>
               )}
             </div>
-          </div>
-
-          {/* Hook lyrics — collapsible */}
-          {post?.caption && (
-            <button
-              onClick={() => setLyricsExpanded(prev => !prev)}
-              className="w-full text-left rounded-xl bg-muted/40 border border-border/50 px-3 py-2.5 hover:bg-muted/60 transition-colors group"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <ChevronDown
-                  size={13}
-                  className={`text-muted-foreground/40 transition-transform duration-200 group-hover:text-muted-foreground/70 ${lyricsExpanded ? "rotate-180" : ""}`}
-                />
-              </div>
-              {lyricsExpanded ? (
-                <p className="text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap">
-                  {post.caption}
-                </p>
-              ) : (
-                <>
-                  <p className="text-xs leading-relaxed text-foreground/80 line-clamp-1">
-                    {post.caption}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/40 mt-1">Tap to expand</p>
-                </>
-              )}
-            </button>
-          )}
-
-          {/* Replay Fit card */}
-          {!loading && rows.length > 0 && (() => {
-            const total = rows.length;
-            const signals = rows.filter(r => r.would_replay).length;
-            const hasSignals = signals > 0;
-            const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
-
-            const bigDisplay = hasSignals ? `${pct}%` : "CALIBRATING";
-
-            return (
-              <TooltipProvider delayDuration={350}>
-                <div className="rounded-2xl border border-border/50 bg-card px-4 py-3.5 flex flex-col gap-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 leading-none font-mono">
-                    Replay Fit
-                  </p>
-                  <p className={`text-2xl font-bold leading-none tracking-tight text-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
-                    {bigDisplay}
-                  </p>
-                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 leading-snug mt-0.5">
-                    {!hasSignals ? (
-                      "WAITING FOR INPUT"
-                    ) : (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="cursor-default underline-offset-2 decoration-dotted hover:underline">
-                            {signals} OF {total} FMLY MEMBERS
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          {signals} out of {total} listeners signaled this track.
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </p>
-                </div>
-              </TooltipProvider>
-            );
-          })()}
-
-          {/* Follow / Save links */}
-          {(artistsJson?.[0]?.spotifyUrl || spotifyTrackUrl) && (
-            <div className="flex gap-2 flex-wrap">
+            {/* Follow / Save — text only */}
+            <div className="flex items-center gap-3 shrink-0">
               {artistsJson?.[0]?.spotifyUrl && (
                 <a
                   href={artistsJson[0].spotifyUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                  className="text-[11px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                 >
-                  Follow {artistsJson[0].name}
+                  Follow
                 </a>
               )}
               {spotifyTrackUrl && (
@@ -371,11 +331,75 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
                   href={spotifyTrackUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                  className="text-[11px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                 >
-                  Save track
+                  Save
                 </a>
               )}
+            </div>
+          </div>
+
+          {/* Caption — tap to expand, no label */}
+          {post?.caption && (
+            <button
+              onClick={() => setLyricsExpanded(prev => !prev)}
+              className="w-full text-left px-4 pb-3"
+            >
+              <p className={`text-[11px] leading-relaxed text-muted-foreground/50 whitespace-pre-wrap ${lyricsExpanded ? "" : "line-clamp-1"}`}>
+                {post.caption}
+              </p>
+            </button>
+          )}
+
+          {/* Score — flat typographic row */}
+          {!loading && rows.length > 0 && (() => {
+            const total = rows.length;
+            const signals = rows.filter(r => r.would_replay).length;
+            const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
+            return (
+              <div className="flex items-center justify-between px-4 py-2 border-t border-border/20">
+                <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                  {signals > 0 ? `${pct}% replay fit` : "calibrating"}
+                </span>
+                <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/40">
+                  {total} {total === 1 ? "signal" : "signals"}
+                </span>
+              </div>
+            );
+          })()}
+
+          {/* YOUR SIGNAL vote controls */}
+          {user && (
+            <div className="border-t border-border/20">
+              <div className="flex items-stretch">
+                <button
+                  onClick={() => handleVoteChange(true)}
+                  disabled={voteLoading}
+                  className="flex-1 flex items-center justify-center py-3 hover:bg-foreground/[0.03] transition-colors duration-[120ms] group"
+                >
+                  <span className={`text-[11px] font-mono tracking-[0.18em] uppercase transition-colors ${
+                    localVote === true
+                      ? "text-foreground"
+                      : "text-muted-foreground/50 group-hover:text-muted-foreground"
+                  }`}>
+                    {localVote === true ? "✓ Run it back" : "Run it back"}
+                  </span>
+                </button>
+                <div style={{ width: "0.5px" }} className="bg-border/30 self-stretch my-2" />
+                <button
+                  onClick={() => handleVoteChange(false)}
+                  disabled={voteLoading}
+                  className="flex-1 flex items-center justify-center py-3 hover:bg-foreground/[0.03] transition-colors duration-[120ms] group"
+                >
+                  <span className={`text-[11px] font-mono tracking-[0.18em] uppercase transition-colors ${
+                    localVote === false
+                      ? "text-foreground"
+                      : "text-muted-foreground/50 group-hover:text-muted-foreground"
+                  }`}>
+                    {localVote === false ? "✓ Skip" : "Skip"}
+                  </span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -410,11 +434,13 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
 
                       {/* Content */}
                       <div className="flex-1 min-w-0 pb-2">
-                         {/* Name + badges */}
-                         <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                         {/* Name + vote state via typography */}
+                         <div className="flex items-center gap-2 mb-0.5">
                            <span className="text-sm font-semibold leading-none">{name}</span>
-                           <span className="text-[10px] border border-border/30 rounded-full px-2 py-0.5 text-muted-foreground/60">
-                             {row.would_replay ? "Signaled" : "Bypassed"}
+                           <span className={`text-[10px] font-mono uppercase tracking-wider ${
+                             row.would_replay ? "text-muted-foreground/60" : "text-muted-foreground/30"
+                           }`}>
+                             {row.would_replay ? "replay" : "skip"}
                            </span>
                          </div>
 
@@ -427,11 +453,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
                           <span className="text-xs text-muted-foreground/50">
                             {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
                           </span>
-                          {row.likes > 0 && (
-                            <span className="text-xs text-muted-foreground/50">
-                              {row.likes} {row.likes === 1 ? "like" : "likes"}
-                            </span>
-                          )}
                           {user && (
                              <button
                                onClick={() => openReplyInput(row.id)}
@@ -450,20 +471,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
                            )}
                         </div>
                       </div>
-
-                      {/* Heart — right side */}
-                      <button
-                        onClick={() => toggleLike(row.id)}
-                        className="shrink-0 flex flex-col items-center gap-0.5 pt-0.5"
-                      >
-                        <Heart
-                          size={14}
-                          className={`transition-colors ${row.liked ? "fill-destructive text-destructive" : "text-muted-foreground/30 hover:text-muted-foreground"}`}
-                        />
-                        {row.likes > 0 && (
-                          <span className={`text-[10px] ${row.liked ? "text-destructive" : "text-muted-foreground/40"}`}>{row.likes}</span>
-                        )}
-                      </button>
                     </div>
 
                     {/* ── Replies ── */}
@@ -473,7 +480,7 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
                           const rName = reply.profiles?.display_name || "User";
                           const rAvatar = reply.profiles?.avatar_url;
                           return (
-                            <div key={reply.id} className="flex gap-2.5 py-2 pl-3 group">
+                            <div key={reply.id} className="flex gap-2.5 py-2 pl-3">
                               <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden mt-0.5">
                                 {rAvatar
                                   ? <img src={rAvatar} alt="" className="w-full h-full object-cover" />
@@ -498,18 +505,6 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
                                   )}
                                 </div>
                               </div>
-                              <button
-                                onClick={() => toggleReplyLike(row.id, reply.id)}
-                                className="shrink-0 flex flex-col items-center gap-0.5 pt-0.5"
-                              >
-                                <Heart
-                                  size={13}
-                                  className={`transition-colors ${reply.liked ? "fill-destructive text-destructive" : "text-muted-foreground/30 hover:text-muted-foreground"}`}
-                                />
-                                {reply.likes > 0 && (
-                                  <span className={`text-[10px] ${reply.liked ? "text-destructive" : "text-muted-foreground/40"}`}>{reply.likes}</span>
-                                )}
-                              </button>
                             </div>
                           );
                         })}
