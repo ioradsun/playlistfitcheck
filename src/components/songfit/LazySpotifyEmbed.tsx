@@ -36,12 +36,15 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
   };
 
   return (
-    <div className="w-full relative px-3 py-2" onClick={handleClick}>
-      <div className="w-full rounded-xl overflow-hidden relative" style={{ height: platform === "soundcloud" ? 166 : 152 }}>
+    <div
+      className="w-full relative flex items-center justify-center"
+      style={{ height: 320 }}
+      onClick={handleClick}
+    >
+      <div className="w-full rounded-xl overflow-hidden relative mx-3" style={{ height: platform === "soundcloud" ? 166 : 152 }}>
         {!iframeLoaded && (
           <div className="absolute inset-0 w-full animate-pulse rounded-xl" style={{ backgroundColor: "rgba(26,26,26,0.5)" }} />
         )}
-
         <iframe
           src={embedSrc}
           width="100%"
@@ -54,7 +57,6 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
           scrolling={platform === "soundcloud" ? "no" : undefined}
           onLoad={() => setIframeLoaded(true)}
         />
-
         {iframeLoaded && (
           <div className="absolute top-3 left-3 z-20 pointer-events-none">
             <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
