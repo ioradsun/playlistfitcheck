@@ -93,10 +93,27 @@ function InlineLyricDanceInner(
 
   // ── Fetch (skipped when prefetchedData provided) ──────────────────────
   useEffect(() => {
-    if (prefetchedData) { setFetchedData(prefetchedData); setLoading(false); return; }
     if (!lyricDanceId) return;
 
     const needsFull = fullDataRequested || isBattleMode;
+
+    // If we were given prefetchedData, use it as an immediate seed.
+    // BUT: allow upgrading to a full fetch (needed for beat bars, cinematic direction, etc.).
+    if (prefetchedData) {
+      setFetchedData(prefetchedData);
+
+      const prefetchedHasFull =
+        !!(prefetchedData as any)?.cinematic_direction &&
+        // beat_grid is required for the beat visualizer strip
+        !!(prefetchedData as any)?.beat_grid;
+
+      if (!needsFull || prefetchedHasFull) {
+        setLoading(false);
+        return;
+      }
+      // else: fall through and fetch full columns
+    }
+
     setLoading(true);
     setFetchError(false);
 
