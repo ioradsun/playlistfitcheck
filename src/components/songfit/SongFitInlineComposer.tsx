@@ -293,7 +293,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   }
 
   return (
-    <div ref={ref} className="border-b border-border/40 transition-colors">
+    <div className="border-b border-border/40 transition-colors">
       <div className="flex gap-3 px-4 pt-3 pb-3">
         {/* Avatar — h-10, bg-muted fallback, ring-primary/20 */}
         <Avatar className="h-10 w-10 border border-border/40 ring-2 ring-primary/20 shrink-0 mt-0.5">
