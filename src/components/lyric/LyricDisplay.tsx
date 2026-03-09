@@ -2002,7 +2002,6 @@ export function LyricDisplay({
            {/* Spacer so floating widget doesn't block last card */}
            <div className="h-20" />
          </div>
-       </div>
 
        <SignUpToSaveBanner />
 
