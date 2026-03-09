@@ -500,6 +500,7 @@ export function LyricFitTab({
   // ── Hook Detection (parallel, non-blocking) ──
   const hookDetectionRunRef = useRef(false);
   const startHookDetection = useCallback(async () => {
+    if (!hottestHooksEnabled) return;
     if (hookDetectionRunRef.current) return;
     if (!words?.length || !lines?.length) return;
     // Skip if hooks already loaded from DB
