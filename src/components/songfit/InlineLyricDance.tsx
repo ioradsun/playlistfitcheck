@@ -82,7 +82,7 @@ function InlineLyricDanceInner(
   const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
   const [forceDemoted, setForceDemoted] = useState(false);
   const [battleContentReady, setBattleContentReady] = useState(false);
-  const [fullDataRequested, setFullDataRequested] = useState(bootMode === "full" || isBattleMode || isActive);
+  const [fullDataRequested, setFullDataRequested] = useState(bootMode === "full" || isBattleMode);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);

@@ -795,7 +795,6 @@ export function LyricDisplay({
       setIsPlaying(false);
       loopRegionRef.current = null;
       setActiveHookIndex(null);
-      setActiveCustomHookIndex(null);
       if (clipProgressRafRef.current)
         cancelAnimationFrame(clipProgressRafRef.current);
     } else {
@@ -811,7 +810,6 @@ export function LyricDisplay({
       const wasPlaying = !audio.paused;
       loopRegionRef.current = null;
       setActiveHookIndex(null);
-      setActiveCustomHookIndex(null);
       if (clipProgressRafRef.current)
         cancelAnimationFrame(clipProgressRafRef.current);
       audio.currentTime = time;
@@ -836,7 +834,6 @@ export function LyricDisplay({
       if (activeHookIndex === hookIdx) {
         loopRegionRef.current = null;
         setActiveHookIndex(null);
-        setActiveCustomHookIndex(null);
         if (clipProgressRafRef.current)
           cancelAnimationFrame(clipProgressRafRef.current);
         setClipProgress(0);
@@ -846,7 +843,6 @@ export function LyricDisplay({
       }
       loopRegionRef.current = { start: hook.start, end: hook.end };
       setActiveHookIndex(hookIdx);
-      setActiveCustomHookIndex(null);
       audio.currentTime = hook.start;
       audio.play();
       setIsPlaying(true);
@@ -1979,32 +1975,31 @@ export function LyricDisplay({
            <div className="flex items-center gap-1.5">
              <Film size={11} className="text-primary" />
              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  Lyric Dance
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Full-song lyric video powered by the{" "}
-                {renderData.motionProfileSpec.system} physics engine. All{" "}
-                {data.lines.filter((l) => l.tag !== "adlib").length} lines
-                rendered with effects.
-              </p>
-              <button
-                onClick={() => setLyricDanceExportOpen(true)}
-                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-              >
-                <Film size={10} />
-                Export Video
-              </button>
-               {/* PublishLyricDanceButton removed — publishing handled by FitTab */}
-             </div>
-           )}
-
-           {/* Spacer so floating widget doesn't block last card */}
-           <div className="h-20" />
+               Lyric Dance
+             </span>
+           </div>
+           <p className="text-[11px] text-muted-foreground leading-relaxed">
+             Full-song lyric video powered by the{" "}
+             {renderData.motionProfileSpec.system} physics engine. All{" "}
+             {data.lines.filter((l) => l.tag !== "adlib").length} lines
+             rendered with effects.
+           </p>
+           <button
+             onClick={() => setLyricDanceExportOpen(true)}
+             className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+           >
+             <Film size={10} />
+             Export Video
+           </button>
+           {/* PublishLyricDanceButton removed — publishing handled by FitTab */}
          </div>
-       </div>
+       )}
 
-       <SignUpToSaveBanner />
+       {/* Spacer so floating widget doesn't block last card */}
+       <div className="h-20" />
+      </div>
+
+      <SignUpToSaveBanner />
 
        {/* Director's Cut overlay — system selection */}
        <AnimatePresence>
