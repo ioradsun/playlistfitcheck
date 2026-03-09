@@ -283,11 +283,10 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
   }
 
   return (
-    <div ref={containerRef} className="relative w-full overflow-hidden flex flex-col">
+    <div ref={containerRef} className="relative w-full overflow-hidden" style={{ height: 320 }}>
       {/* ── Canvas area ─────────────────────────────────────── */}
       <div
-        className="relative w-full overflow-hidden"
-        style={{ height: 320 }}
+        className="absolute inset-0 w-full overflow-hidden"
         onClick={() => {
           if (battleState === "round-1" || battleState === "round-2" || battleState === "results") {
             toggleMute();
@@ -420,8 +419,8 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
         )}
       </div>
 
-      {/* ── Bottom bar ──────────────────────────────────────── */}
-      <div className="w-full flex-shrink-0" style={{ background: "rgba(0,0,0,0.4)" }}>
+      {/* ── Bottom bar — overlaid at bottom ────────────────── */}
+      <div className="absolute bottom-0 left-0 right-0 z-20" style={{ background: "rgba(0,0,0,0.4)" }}>
         {/* Progress bar — visible during rounds */}
         {(battleState === "round-1" || battleState === "round-2") && (
           <div className="w-full h-[3px] bg-white/[0.06]">
