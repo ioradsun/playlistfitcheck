@@ -2109,6 +2109,13 @@ export class LyricDancePlayer {
       }
     }
 
+    // Restart the RAF loop — the browser kills requestAnimationFrame while the tab
+    // is hidden. playing may still be true but the loop is dead. Restart it.
+    if (this.playing && !this.rafHandle) {
+      this.lastTimestamp = 0;
+      this.rafHandle = requestAnimationFrame(this.tick);
+    }
+
     console.info('[LyricEngine] tab resumed — reset transient state');
   }
 
