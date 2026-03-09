@@ -729,7 +729,7 @@ export default function ShareableLyricDance() {
                 waiting={isWaitingForPlayer}
                 badge="In Studio"
                 onExpand={undefined}
-                topReaction={!isWaitingForPlayer ? topReaction : null}
+                topReaction={null}
                 onListen={(e) => {
                   e.stopPropagation();
                   setShowCover(false);
@@ -791,7 +791,7 @@ export default function ShareableLyricDance() {
               style={{ background: "rgba(255,255,255,0.02)" }}
               onClick={() => setReactionPanelOpen(true)}
             >
-              {activeLine ? (
+              {activeLine && !showCover ? (
                 <>
                   <div
                     className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
