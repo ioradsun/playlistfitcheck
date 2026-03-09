@@ -269,14 +269,17 @@ export function LyricDanceEmbed({
     // Feed embed:
     // "near" = partially in viewport — keep playing muted so animation is live when scrolled in.
     // Only fully pause when "far" (off-screen entirely).
-    const shouldUnmuted = cardState === "active" && visibility === "visible" && !forceDemoted;
-    const shouldMuted = cardState !== "active" && (visibility === "visible" || visibility === "near");
+    // When cover is showing, always mute — audio only starts after "Listen Now".
+    const coverUp = showCover;
+    const shouldUnmuted = !coverUp && cardState === "active" && visibility === "visible" && !forceDemoted;
+    const shouldMuted = !coverUp && cardState !== "active" && (visibility === "visible" || visibility === "near");
 
     if (shouldUnmuted) {
       player.play();
       player.setMuted(false);
       setMuted(false);
-    } else if (shouldMuted) {
+    } else if (shouldMuted || coverUp) {
+      // Keep animation running (muted) so it's live behind the cover
       player.play();
       player.setMuted(true);
       setMuted(true);
