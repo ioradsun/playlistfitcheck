@@ -261,7 +261,7 @@ export default function ShareableLyricDance() {
 
   // ── Player lifecycle — shared hook ───────────────────────────────────
   const { player: playerInstance, data: liveData } = useLyricDancePlayer(
-    data, bgCanvasRef, textCanvasRef, containerRef, { bootMode: "minimal" },
+    data, bgCanvasRef, textCanvasRef, containerRef, { bootMode: "full" },
   );
   // Sync hook's hot-patched data (auto_palettes etc.) back to local state
   useEffect(() => { if (liveData) setDataRaw(liveData); }, [liveData]);
