@@ -261,7 +261,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             <div className="absolute inset-0 z-10 pointer-events-none rounded-sm" style={getBorderStyle("a")} />
           )}
           {votedSide === "a" && voteCount != null && (
-            <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
+            <div className="absolute bottom-14 right-2 z-10 pointer-events-none">
               <span className="text-[9px] font-mono text-green-400/90 bg-black/60 backdrop-blur-sm border border-green-500/30 rounded-full px-2 py-0.5">
                 ✓ You + {Math.max(0, (voteCount ?? 1) - 1)} FMLY ({votePct ?? 0}%)
               </span>
@@ -295,7 +295,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
               <div className="absolute inset-0 z-10 pointer-events-none rounded-sm" style={getBorderStyle("b")} />
             )}
             {votedSide === "b" && voteCount != null && (
-              <div className="absolute bottom-2 left-2 z-10 pointer-events-none">
+              <div className="absolute bottom-14 left-2 z-10 pointer-events-none">
                 <span className="text-[9px] font-mono text-green-400/90 bg-black/60 backdrop-blur-sm border border-green-500/30 rounded-full px-2 py-0.5">
                   ✓ You + {Math.max(0, (voteCount ?? 1) - 1)} FMLY ({votePct ?? 0}%)
                 </span>
