@@ -4,7 +4,7 @@
  * Player lifecycle is fully owned by useLyricDancePlayer.
  */
 
-import { useState, useEffect, useRef, useCallback, memo, forwardRef, useImperativeHandle, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useMemo } from "react";
 import { Maximize2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -436,4 +436,5 @@ function InlineLyricDanceInner(
   );
 }
 
-export const InlineLyricDance = memo(forwardRef(InlineLyricDanceInner));
+export const InlineLyricDance = forwardRef<InlineLyricDanceHandle, Props>(InlineLyricDanceInner);
+InlineLyricDance.displayName = "InlineLyricDance";
