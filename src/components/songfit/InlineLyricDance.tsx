@@ -346,7 +346,7 @@ function InlineLyricDanceInner(
   // ── Standard mode: full card with cover, playbar, title ────────────────
 
   return (
-    <div className="w-full overflow-hidden bg-black/90 relative" style={{ height: 320 }}>
+    <div className="w-full overflow-hidden relative" style={{ height: 320 }}>
       {/* Canvas area — matches tier 1 height exactly */}
       <div ref={containerRef}
         className="absolute inset-0 w-full overflow-hidden cursor-pointer"
