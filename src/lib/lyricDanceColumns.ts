@@ -14,4 +14,4 @@ export const LYRIC_DANCE_COLUMNS =
 
 export const LYRIC_DANCE_FEED_COLUMNS =
   "id,artist_slug,song_slug,artist_name,song_name,audio_url," +
-  "auto_palettes,palette,section_images";
+  "auto_palettes,palette,section_images,beat_grid";
