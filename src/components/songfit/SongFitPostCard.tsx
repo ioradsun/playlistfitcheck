@@ -64,6 +64,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDancePost = !!(post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id);
   const isBattlePost = !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
+  const isSpotifyEmbed = !hasLyricDancePost && !isBattlePost && !!post.spotify_track_id;
   const CAPTION_MAX = 300;
   const tier: 1 | 3 = cardState === "active" ? 3 : 1;
 
@@ -326,66 +327,126 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             onPlay={activate}
           />
         ) : (
-          <LazySpotifyEmbed
-            trackId={post.spotify_track_id}
-            trackTitle={post.track_title}
-            trackUrl={post.spotify_track_url}
-            postId={post.id}
-            albumArtUrl={post.album_art_url}
-            artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
-            genre={((post.tags_json as any[]) || [])[0] || null}
-            cardState={cardState}
-          />
+          <div className="relative" style={{ height: 320 }}>
+            <LazySpotifyEmbed
+              trackId={post.spotify_track_id}
+              trackTitle={post.track_title}
+              trackUrl={post.spotify_track_url}
+              postId={post.id}
+              albumArtUrl={post.album_art_url}
+              artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
+              genre={((post.tags_json as any[]) || [])[0] || null}
+              cardState={cardState}
+            />
+
+            {/* Caption + actions overlaid at bottom inside 320px */}
+            <div className="absolute bottom-0 left-0 right-0 z-20" style={{ background: "rgba(0,0,0,0.3)" }}>
+              {/* Inline caption */}
+              {!editing && localCaption && localCaption.trim() && (
+                <div className="px-3 pt-1.5 pb-0.5">
+                  {localCaption.length <= 100 || captionExpanded ? (
+                    <p className="text-sm leading-snug text-white/70">{localCaption}</p>
+                  ) : (
+                    <p className="text-sm leading-snug text-white/70">
+                      {localCaption.slice(0, 100).trimEnd()}
+                      <span className="text-white/30">… </span>
+                      <button onClick={() => setCaptionExpanded(true)} className="text-white/30 hover:text-white/50 text-sm">more</button>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Inline action row */}
+              {crowdfitMode !== "hook_review" && (
+                <div className="flex items-center justify-between px-1 py-0.5">
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => { onOpenComments(post.id); if (user) logEngagementEvent(post.id, user.id, "comment"); }}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group"
+                    >
+                      <MessageCircle size={16} className="text-white/35 group-hover:text-white/80 transition-colors" />
+                      {post.comments_count > 0 && <span className="text-[11px] text-white/35 font-mono group-hover:text-white/80">{post.comments_count}</span>}
+                    </button>
+                    <button onClick={handleShare} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group">
+                      <Share2 size={16} className="text-white/35 group-hover:text-white/80 transition-colors" />
+                    </button>
+                    <button onClick={toggleLike} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group">
+                      <Flame size={16} className={liked ? "fill-green-400 text-green-400" : "text-white/35 group-hover:text-white/80 transition-colors"} />
+                      {likesCount > 0 && <button onClick={(e) => { e.stopPropagation(); onOpenLikes(post.id); }} className="text-[11px] text-white/35 font-mono group-hover:text-white/80">{likesCount}</button>}
+                    </button>
+                    <button onClick={toggleSave} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group">
+                      <Bookmark size={16} className={saved ? "fill-green-400 text-green-400" : "text-white/35 group-hover:text-white/80 transition-colors"} />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 text-white/30">
+                    {post.status === "live" && post.expires_at && (
+                      <span className="flex items-center gap-1 px-2 py-1 text-[11px] font-mono">
+                        <Clock size={12} />
+                        {Math.max(0, Math.ceil((new Date(post.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}d
+                      </span>
+                    )}
+                    {rank && rank <= 50 && (
+                      <span className="text-[11px] font-bold text-green-400 font-mono px-2 py-1">#{rank}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
       {/* Caption - Instagram style */}
-      {editing ? (
-        <div className="relative px-3 pt-2 pb-1 space-y-2">
-          <textarea
-            value={editCaption}
-            onChange={e => setEditCaption(e.target.value.slice(0, CAPTION_MAX))}
-            rows={3}
-            className="w-full bg-white/5 text-sm text-white/90 placeholder:text-white/20 outline-none resize-none rounded-lg p-2 border border-white/10 focus:border-white/20"
-            autoFocus
-          />
-          <div className="flex items-center justify-between">
-            <span className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-red-400" : "text-white/20"}`}>
-              {editCaption.length}/{CAPTION_MAX}
-            </span>
-            <div className="flex gap-1.5">
-              <button onClick={() => setEditing(false)} className="p-1.5 rounded-full hover:bg-white/5 text-white/40">
-                <X size={14} />
-              </button>
-              <button onClick={handleSaveEdit} disabled={saving} className="p-1.5 rounded-full hover:bg-white/5 text-green-400">
-                <Check size={14} />
-              </button>
+      {!isSpotifyEmbed && (
+        <>
+          {editing ? (
+            <div className="relative px-3 pt-2 pb-1 space-y-2">
+              <textarea
+                value={editCaption}
+                onChange={e => setEditCaption(e.target.value.slice(0, CAPTION_MAX))}
+                rows={3}
+                className="w-full bg-white/5 text-sm text-white/90 placeholder:text-white/20 outline-none resize-none rounded-lg p-2 border border-white/10 focus:border-white/20"
+                autoFocus
+              />
+              <div className="flex items-center justify-between">
+                <span className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-red-400" : "text-white/20"}`}>
+                  {editCaption.length}/{CAPTION_MAX}
+                </span>
+                <div className="flex gap-1.5">
+                  <button onClick={() => setEditing(false)} className="p-1.5 rounded-full hover:bg-white/5 text-white/40">
+                    <X size={14} />
+                  </button>
+                  <button onClick={handleSaveEdit} disabled={saving} className="p-1.5 rounded-full hover:bg-white/5 text-green-400">
+                    <Check size={14} />
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      ) : localCaption && localCaption.trim() ? (
-        <div className="relative px-3 pt-2 pb-1">
-          {localCaption.length <= 125 || captionExpanded ? (
-            <p className="text-sm leading-snug text-white/70">
-              {localCaption}
-            </p>
-          ) : (
-            <p className="text-sm leading-snug text-white/70">
-              {localCaption.slice(0, 125).trimEnd()}
-              <span className="text-white/30">… </span>
-              <button
-                onClick={() => setCaptionExpanded(true)}
-                className="text-white/30 hover:text-white/50 text-sm"
-              >
-                more
-              </button>
-            </p>
-          )}
-        </div>
-      ) : null}
+          ) : localCaption && localCaption.trim() ? (
+            <div className="relative px-3 pt-2 pb-1">
+              {localCaption.length <= 125 || captionExpanded ? (
+                <p className="text-sm leading-snug text-white/70">
+                  {localCaption}
+                </p>
+              ) : (
+                <p className="text-sm leading-snug text-white/70">
+                  {localCaption.slice(0, 125).trimEnd()}
+                  <span className="text-white/30">… </span>
+                  <button
+                    onClick={() => setCaptionExpanded(true)}
+                    className="text-white/30 hover:text-white/50 text-sm"
+                  >
+                    more
+                  </button>
+                </p>
+              )}
+            </div>
+          ) : null}
+        </>
+      )}
 
       {/* Action Row — reactions mode only here */}
-      {crowdfitMode !== "hook_review" && !hasLyricDancePost && !isBattlePost && (
+      {crowdfitMode !== "hook_review" && !hasLyricDancePost && !isBattlePost && !isSpotifyEmbed && (
         <div className="relative flex items-center justify-between px-1 py-1">
           {/* Left group: comment, share, like, bookmark */}
           <div className="flex items-center">
