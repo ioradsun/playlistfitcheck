@@ -23,7 +23,10 @@ export function LyricDanceCover({
   return (
     <div
       className="absolute inset-0 z-20 flex flex-col items-center justify-center"
-      style={{ background: "#0a0a0ae || onExpand) && (
+      style={{ background: "#0a0a0a" }}
+    >
+      {/* Top row — badge + expand, pinned top */}
+      {(badge || onExpand) && (
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-3">
           {badge ? (
             <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
@@ -53,37 +56,35 @@ export function LyricDanceCover({
             {songName}
           </p>
         ) : (
-          <div className="h-8 w-48 rounded bg-white/[0.07] animate4 mb-4          <div className="flex i4 mb-41, 0.7, 0.4].map((h, i) => (
-              <div
-                key={i}
-                className="w-[3px] rounded-full bg-white/20"
-                style={{ height: `${h * 100}%`, animation: `pulse 1.2s ease-in-out ${i * 0.15}s infinite` }}
-              />
-            ))}
-          </div>
-        ) : (
-          <>
-            <button
-              onClick={onListen}
-              className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
-            >
-              Listen Now
-            </button>
-
-            {/* Social proof — tight under button, only when reactions exist */}
-            {topReaction && (
-              <div className="flex items-center gap-1.5 mt-3">
-                <span className="text-[11px] leading-none select-none">{topReaction.symbol}</span>
-                <span className="text-[10px] font-mono text-white/50">
-                  {topReaction.lineReactionCount}
-                </span>
-                <span className="text-[10px] font-mono text-white/25 truncate max-w-[180px]">
-                  &ldquo;{topReaction.lineText}&rdquo;
-                </span>
-              </div>
-            )}
-          </>
+          <div className="h-4 mb-4" />
         )}
+
+        <>
+          <button
+            onClick={waiting ? undefined : onListen}
+            className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
+            style={{
+              color: waiting ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,1)",
+              borderColor: waiting ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.20)",
+              cursor: waiting ? "default" : "pointer",
+            }}
+          >
+            Listen Now
+          </button>
+
+          {/* Social proof — tight under button, only when reactions exist */}
+          {topReaction && (
+            <div className="flex items-center gap-1.5 mt-3">
+              <span className="text-[11px] leading-none select-none">{topReaction.symbol}</span>
+              <span className="text-[10px] font-mono text-white/50">
+                {topReaction.lineReactionCount}
+              </span>
+              <span className="text-[10px] font-mono text-white/25 truncate max-w-[180px]">
+                &ldquo;{topReaction.lineText}&rdquo;
+              </span>
+            </div>
+          )}
+        </>
       </div>
     </div>
   );
