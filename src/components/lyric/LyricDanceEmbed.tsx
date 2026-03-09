@@ -183,6 +183,13 @@ export function LyricDanceEmbed({
     playerData, canvasRef, textCanvasRef, containerRef, { bootMode: "full" },
   );
 
+  // ── Text vertical bias — shift canvas text above the bottom bar ────
+  useEffect(() => {
+    if (!player || !playerReady) return;
+    // Battle tiles have no bottom bar of their own (BattleEmbed owns that)
+    player.setTextVerticalBias(isBattleMode ? 0 : 60);
+  }, [player, playerReady, isBattleMode]);
+
   // ── Scroll visibility (feed only) ─────────────────────────────────
   useEffect(() => {
     if (!isFeedEmbed) return;
