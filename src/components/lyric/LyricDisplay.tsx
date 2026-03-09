@@ -795,7 +795,6 @@ export function LyricDisplay({
       setIsPlaying(false);
       loopRegionRef.current = null;
       setActiveHookIndex(null);
-      setActiveCustomHookIndex(null);
       if (clipProgressRafRef.current)
         cancelAnimationFrame(clipProgressRafRef.current);
     } else {
