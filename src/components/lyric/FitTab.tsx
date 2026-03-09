@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Loader2, RefreshCw, Music, Sparkles, Eye, Zap, Image, ExternalLink, Download, Link, Users, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
@@ -106,6 +107,8 @@ export function FitTab({
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const dancePlayerRef = useRef<any>(null);
+  const siteCopy = useSiteCopy();
+  const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
 
   const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
   const [sectionImagesError, setSectionImagesError] = useState<string | null>(null);
@@ -937,6 +940,7 @@ export function FitTab({
 
       {/* ── Hottest Hooks ── */}
       {(() => {
+        if (!hottestHooksEnabled) return null;
         const aiHooks = [renderData?.hook, renderData?.secondHook].filter(Boolean) as LyricHook[];
         if (aiHooks.length === 0) return null;
 
