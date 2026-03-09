@@ -862,14 +862,13 @@ export function FitTab({
       {/* Dance preview or waveform fallback */}
       {publishedUrl && publishedDanceId ? (
         <div className="space-y-3">
-          <div className="rounded-xl overflow-hidden aspect-[9/16] max-h-[70vh]">
+          <div className="rounded-xl overflow-hidden w-full aspect-video">
             <LyricDanceEmbed
               lyricDanceId={publishedDanceId}
               lyricDanceUrl={publishedUrl}
               songTitle={lyricData.title || "Untitled"}
               artistName=""
               prefetchedData={prefetchedDanceData}
-              autoPlay
             />
           </div>
           {/* Action toolbar — single row of icon buttons */}
