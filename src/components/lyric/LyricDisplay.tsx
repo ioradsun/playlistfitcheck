@@ -350,6 +350,7 @@ export function LyricDisplay({
   const siteCopy = useSiteCopy();
   const features = (siteCopy as any)?.features;
   const hookfitEnabled = features?.tools_enabled?.hookfit !== false;
+  const hottestHooksEnabled = features?.hookfit_hottest_hooks !== false;
   const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
   const [showDebug, setShowDebug] = useState(false);
   const { decodeFile, play, stop, playingId, getPlayheadPosition } =
@@ -1929,7 +1930,7 @@ export function LyricDisplay({
            )}
 
            {/* Publish Hook Battle / Hook Page — below both hooks */}
-           {(renderData?.hook || renderData?.secondHook) && renderData?.motionProfileSpec && beatGrid && (
+           {hottestHooksEnabled && (renderData?.hook || renderData?.secondHook) && renderData?.motionProfileSpec && beatGrid && (
              <PublishHookButton
                hook={renderData.hook}
                secondHook={renderData.secondHook || null}

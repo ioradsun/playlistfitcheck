@@ -44,6 +44,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const siteCopy = useSiteCopy();
   const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
   const crowdfitMode = siteCopy.features?.crowdfit_mode ?? "reactions";
+  const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
   const navigate = useNavigate();
   const [liked, setLiked] = useState(post.user_has_liked ?? false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
@@ -64,7 +65,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
 
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDancePost = !!(post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id);
-  const isBattlePost = !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
+  const isBattlePost = hottestHooksEnabled && !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
   const isSpotifyEmbed = !hasLyricDancePost && !isBattlePost && !!post.spotify_track_id;
   const CAPTION_MAX = 300;
   const tier: 1 | 3 = cardState === "active" ? 3 : 1;

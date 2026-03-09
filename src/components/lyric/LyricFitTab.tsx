@@ -8,6 +8,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { useBeatGrid, preloadEssentia, type BeatGridData } from "@/hooks/useBeatGrid";
 import type { LyricData, LyricLine } from "./LyricDisplay";
@@ -96,6 +97,8 @@ export function LyricFitTab({
   onUploadStarted: onUploadStartedProp,
 }: Props) {
   const { user } = useAuth();
+  const siteCopy = useSiteCopy();
+  const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
 
   const artistNameRef = useRef<string>("artist");
   // Compute initial values synchronously from initialLyric to avoid flash of uploader
@@ -499,6 +502,7 @@ export function LyricFitTab({
   // ── Hook Detection (parallel, non-blocking) ──
   const hookDetectionRunRef = useRef(false);
   const startHookDetection = useCallback(async () => {
+    if (!hottestHooksEnabled) return;
     if (hookDetectionRunRef.current) return;
     if (!words?.length || !lines?.length) return;
     // Skip if hooks already loaded from DB
@@ -548,7 +552,7 @@ export function LyricFitTab({
     } catch (err: any) {
       plog("HOOKS FAILED", err?.message || err);
     }
-  }, [words, lines, beatGrid , audioDurationSec, renderData?.hook, persistRenderData]);
+  }, [words, lines, beatGrid , audioDurationSec, renderData?.hook, persistRenderData, hottestHooksEnabled]);
 
   const startCinematicDirection = useCallback(async (sourceLines: LyricLine[], force = false) => {
     if (!lyricData || !sourceLines.length) return;
