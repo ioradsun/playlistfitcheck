@@ -98,6 +98,36 @@ export type Database = {
         }
         Relationships: []
       }
+      battle_comments: {
+        Row: {
+          battle_id: string
+          created_at: string | null
+          id: string
+          session_id: string | null
+          text: string
+          user_id: string | null
+          voted_side: string | null
+        }
+        Insert: {
+          battle_id: string
+          created_at?: string | null
+          id?: string
+          session_id?: string | null
+          text: string
+          user_id?: string | null
+          voted_side?: string | null
+        }
+        Update: {
+          battle_id?: string
+          created_at?: string | null
+          id?: string
+          session_id?: string | null
+          text?: string
+          user_id?: string | null
+          voted_side?: string | null
+        }
+        Relationships: []
+      }
       battle_passes: {
         Row: {
           battle_id: string
