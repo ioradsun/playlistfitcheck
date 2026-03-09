@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, X, Music, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,7 +33,7 @@ interface Props {
 
 const CAPTION_MAX = 500;
 
-export function SongFitInlineComposer({ onPostCreated }: Props) {
+export const SongFitInlineComposer = forwardRef<HTMLDivElement, Props>(function SongFitInlineComposerInner({ onPostCreated }, ref) {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -293,7 +293,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   }
 
   return (
-    <div className="border-b border-border/40 transition-colors">
+    <div ref={ref} className="border-b border-border/40 transition-colors">
       <div className="flex gap-3 px-4 pt-3 pb-3">
         {/* Avatar — h-10, bg-muted fallback, ring-primary/20 */}
         <Avatar className="h-10 w-10 border border-border/40 ring-2 ring-primary/20 shrink-0 mt-0.5">
@@ -433,4 +433,4 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
       </div>
     </div>
   );
-}
+});
