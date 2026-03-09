@@ -379,6 +379,7 @@ export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, 
             </div>
           )}
 
+        </div>
 
         {/* ── Reviews list ── */}
         <div className="flex-1 overflow-y-auto">
