@@ -285,13 +285,13 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
           <img
             src={albumArtUrl}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-40 pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover opacity-60 pointer-events-none"
             loading="lazy"
           />
         )}
 
         {(loading || !battleId) ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <div className="text-center space-y-2">
               <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto" />
               <p className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">Loading battle…</p>
@@ -333,7 +333,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4 }}
               className="absolute inset-0 z-20 flex flex-col items-center justify-center"
-              style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(2px)" }}
+              style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)" }}
             >
               <button
                 onClick={(e) => { e.stopPropagation(); window.open(battleUrl, "_blank"); }}
@@ -406,7 +406,7 @@ function InlineBattleFeedInner({ battleUrl, songTitle, artistName, albumArtUrl, 
       </div>
 
       {/* ── Bottom bar ──────────────────────────────────────── */}
-      <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }}>
+      <div className="w-full flex-shrink-0" style={{ background: "rgba(0,0,0,0.4)" }}>
         {/* Progress bar — visible during rounds */}
         {(battleState === "round-1" || battleState === "round-2") && (
           <div className="w-full h-[3px] bg-white/[0.06]">

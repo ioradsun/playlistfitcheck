@@ -327,7 +327,7 @@ function InlineLyricDanceInner(
   // ── Battle mode: bare canvas, no chrome ────────────────────────────────
   if (isBattleMode) {
     return (
-      <div className="absolute inset-0 overflow-hidden bg-black">
+      <div className="absolute inset-0 overflow-hidden">
         <div ref={containerRef} className="absolute inset-0 overflow-hidden">
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
             style={{ display: playerReady ? "block" : "none" }} />
@@ -335,7 +335,7 @@ function InlineLyricDanceInner(
             style={{ display: "none" }} />
         </div>
         {!playerReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <div className="w-5 h-5 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
           </div>
         )}
@@ -364,7 +364,7 @@ function InlineLyricDanceInner(
                 loading="lazy"
               />
             ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black" />
+              <div className="absolute inset-0 bg-gradient-to-br from-zinc-800/60 via-zinc-900/60 to-black/60" />
             )}
           </>
         )}
