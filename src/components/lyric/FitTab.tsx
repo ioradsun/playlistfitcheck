@@ -869,6 +869,7 @@ export function FitTab({
               songTitle={lyricData.title || "Untitled"}
               artistName=""
               prefetchedData={prefetchedDanceData}
+              autoPlay
             />
           </div>
           {/* Action toolbar — single row of icon buttons */}
