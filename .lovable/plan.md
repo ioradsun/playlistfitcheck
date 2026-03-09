@@ -1,34 +1,31 @@
 
 
-# HookReview UX Unification — Verified Plan
+# Download Export Modal — Implementation Complete
 
-Both verification points confirmed:
+## Summary
 
-1. **Focus effect** — will consolidate to single `useEffect` on `step === "cta"` with `textareaRef` only. `skipTextareaRef` deleted.
+Replaced the "Republish" button in the FIT tab with a "Download" button that opens a full export modal (`FitExportModal`). Removed the download popover from the `ShareableLyricDance` page.
 
-2. **HookReviewsSheet props** — currently receives `postId` and `onClose`. The Follow/Save links will render conditionally (`{artistsJson?.[0]?.spotifyUrl && ...}`, `{spotifyTrackUrl && ...}`), safe for Billboard view where these may be undefined.
+## Files Changed
 
-## Files & Changes
+| File | Action |
+|------|--------|
+| `src/components/lyric/FitExportModal.tsx` | **Created** — Export modal with format/quality selection, progress states, download |
+| `src/components/songfit/InlineLyricDance.tsx` | **Edited** — Added `forwardRef` + `useImperativeHandle` to expose player |
+| `src/components/lyric/FitTab.tsx` | **Edited** — Replaced Republish with Download button + FitExportModal |
+| `src/pages/ShareableLyricDance.tsx` | **Edited** — Removed download popover, export state, and handleExport |
 
-### 1. `src/components/songfit/HookReview.tsx`
-- Step type: `2 | "cta" | "done"`
-- Add prop `onOpenReactions?: () => void`
-- Add state `showIdentity`, remove `skipTextareaRef`
-- Single focus `useEffect` for `step === "cta"` → `textareaRef`
-- Deterministic comment prompt array
-- `handleVoteClick` → `setStep("cta")`
-- `handleSubmit` → `setTimeout(() => setShowIdentity(true), 400)` after done
-- Pre-resolved guard: check `step !== "done" && step !== "cta"`
-- Replace render with 3-state layout (Decision / Response / Done)
-- Remove all Follow/Save `<a>` tags
+## Architecture
 
-### 2. `src/components/songfit/SongFitPostCard.tsx`
-- Add `onOpenReactions={() => setReviewsSheetPostId(post.id)}` to `<HookReview>`
-- Pass `spotifyTrackUrl` and `artistsJson` to `<HookReviewsSheet>`
+- `InlineLyricDance` exposes `InlineLyricDanceHandle.getPlayer()` via `forwardRef`
+- `FitTab` holds a ref to `InlineLyricDance` and passes `getPlayer` to `FitExportModal`
+- `FitExportModal` uses `exportVideoAsMP4` from `src/engine/exportVideo.ts` (WebCodecs + mp4-muxer)
+- Export is video-only; audio notice is displayed in the modal
 
-### 3. `src/components/songfit/HookReviewsSheet.tsx`
-- Add optional props `spotifyTrackUrl?: string`, `artistsJson?: any[]`
-- Render Follow/Save links conditionally inside the sheet
+## Export Options
 
-No new dependencies. Ready to implement.
-
+| Quality | 9:16 | 16:9 | 1:1 |
+|---------|------|------|-----|
+| 1080p | 1080×1920 | 1920×1080 | 1080×1080 |
+| 720p | 720×1280 | 1280×720 | 720×720 |
+| 480p | 480×854 | 854×480 | 480×480 |

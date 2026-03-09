@@ -47,6 +47,8 @@ interface Props {
   postId: string | null;
   onClose: () => void;
   onRemoved?: () => void;
+  spotifyTrackUrl?: string;
+  artistsJson?: any[];
 }
 
 function AvatarBubble({ avatar, name, size = 8 }: { avatar?: string | null; name: string; size?: number }) {
@@ -65,7 +67,7 @@ function AvatarBubble({ avatar, name, size = 8 }: { avatar?: string | null; name
   );
 }
 
-export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
+export function HookReviewsSheet({ postId, onClose, onRemoved, spotifyTrackUrl, artistsJson }: Props) {
   const { user, profile } = useAuth();
   
   const [rows, setRows] = useState<ReviewRow[]>([]);
@@ -350,6 +352,32 @@ export function HookReviewsSheet({ postId, onClose, onRemoved }: Props) {
               </TooltipProvider>
             );
           })()}
+
+          {/* Follow / Save links */}
+          {(artistsJson?.[0]?.spotifyUrl || spotifyTrackUrl) && (
+            <div className="flex gap-2 flex-wrap">
+              {artistsJson?.[0]?.spotifyUrl && (
+                <a
+                  href={artistsJson[0].spotifyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                >
+                  Follow {artistsJson[0].name}
+                </a>
+              )}
+              {spotifyTrackUrl && (
+                <a
+                  href={spotifyTrackUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
+                >
+                  Save track
+                </a>
+              )}
+            </div>
+          )}
 
         </div>
 

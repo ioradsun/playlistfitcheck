@@ -6,10 +6,7 @@ import { getSessionId } from "@/lib/sessionId";
 
 type HookRating = "missed" | "almost" | "solid" | "hit";
 
-
-
-
-type Step = 2 | "replay_cta" | "skip_cta" | "done";
+type Step = 2 | "cta" | "done";
 
 interface Props {
   postId: string;
@@ -22,6 +19,7 @@ interface Props {
   onUnscored?: () => void;
   onVotedSide?: (side: "a" | "b" | null) => void;
   isBattle?: boolean;
+  onOpenReactions?: () => void;
   // Billboard pre-resolved mode
   showPreResolved?: boolean;
   preResolved?: { total: number; replay_yes: number; saves_count?: number };
@@ -37,6 +35,13 @@ interface Results {
 
 const SESSION_COUNT_KEY = "crowdfit_reviews_this_session";
 
+const COMMENT_PROMPTS = [
+  "What made you run it back?",
+  "What would make this stronger?",
+  "Where did the hook land for you?",
+  "What moment stuck with you?",
+];
+
 function getSessionReviewCount(): number {
   return parseInt(sessionStorage.getItem(SESSION_COUNT_KEY) || "0", 10);
 }
@@ -46,7 +51,7 @@ function incrementSessionReviewCount(): number {
   return next;
 }
 
-export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson, onScored, onUnscored, onVotedSide, isBattle, showPreResolved, preResolved, rank }: Props) {
+export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, artistsJson, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, showPreResolved, preResolved, rank }: Props) {
   const leftLabel = isBattle ? "LEFT HOOK" : "Run it back";
   const rightLabel = isBattle ? "RIGHT HOOK" : "Skip";
   const fitLabel = isBattle ? "LEFT HOOK" : "REPLAY FIT";
@@ -59,12 +64,15 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   const [contextNote, setContextNote] = useState("");
   const [alreadyChecked, setAlreadyChecked] = useState(false);
   const [results, setResults] = useState<Results | null>(null);
+  const [showIdentity, setShowIdentity] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const skipTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const commentPrompt = wouldReplay === false
+    ? "The missing piece... (Optional but helpful)"
+    : COMMENT_PROMPTS[parseInt(postId.slice(-1), 16) % COMMENT_PROMPTS.length];
 
   useEffect(() => {
-    if (step === "replay_cta") setTimeout(() => textareaRef.current?.focus(), 50);
-    if (step === "skip_cta") setTimeout(() => skipTextareaRef.current?.focus(), 50);
+    if (step === "cta") setTimeout(() => textareaRef.current?.focus(), 50);
   }, [step]);
 
   useEffect(() => {
@@ -113,7 +121,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
     }
     setWouldReplay(replay);
     onVotedSide?.(replay ? "a" : "b");
-    setStep(replay ? "replay_cta" : "skip_cta");
+    setStep("cta");
   };
 
   const handleRemoveSignal = async () => {
@@ -124,6 +132,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
     setResults(null);
     setStep(2);
     setContextNote("");
+    setShowIdentity(false);
     onVotedSide?.(null);
     onUnscored?.();
     window.dispatchEvent(new CustomEvent("crowdfit:vote"));
@@ -146,11 +155,11 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
     incrementSessionReviewCount();
     window.dispatchEvent(new CustomEvent("crowdfit:vote"));
 
-    // Fetch results and go directly to done — no intermediate flash state
     const r = await fetchResults();
     setResults(r);
     setStep("done");
     onScored?.();
+    setTimeout(() => setShowIdentity(true), 400);
   };
 
   const handleContextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -163,7 +172,7 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
   if (!alreadyChecked) return null;
 
   // Pre-resolved (FMLY 40 billboard) layout
-  if (showPreResolved && step !== "done" && step !== "replay_cta" && step !== "skip_cta") {
+  if (showPreResolved && step !== "done" && step !== "cta") {
     const total = preResolved?.total ?? 0;
     const replayYes = preResolved?.replay_yes ?? 0;
     const savesCount = preResolved?.saves_count ?? 0;
@@ -201,18 +210,19 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
 
   return (
     <div>
-      {/* Done */}
+
+      {/* ── DONE ── */}
       {step === "done" && results && (() => {
         const total = results.total;
         const signals = results.replay_yes;
         const hasSignals = signals > 0;
         const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
-        const bigDisplay = hasSignals ? `${pct}%` : "CALIBRATING";
+
         return (
           <div className="animate-fade-in">
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
             <div className="px-3 py-2 space-y-0.5">
-              {/* Top row: Turn Off Signal (right only) */}
+              {/* Turn Off Signal */}
               <div className="flex items-center justify-end">
                 <button
                   onClick={handleRemoveSignal}
@@ -221,32 +231,48 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                   Turn Off Signal
                 </button>
               </div>
-              {/* Bottom row: % + fit label (left) + clickable tally (right) */}
+              {/* Result row */}
               <div className="flex items-center justify-between gap-3">
-                 <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
-                   {hasSignals ? `${pct}% ${fitLabel}` : "CALIBRATING"}
-                 </p>
-                {hasSignals && onOpenReviews ? (
-                  <button
-                    onClick={onOpenReviews}
-                    className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                  >
-                    {signals} OF {total} FMLY MEMBERS
-                  </button>
-                ) : !hasSignals && (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/40">
-                    Waiting for input
-                  </span>
-                )}
+                <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
+                  {hasSignals ? `${pct}% ${fitLabel}` : "CALIBRATING"}
+                </p>
+                <div className="flex items-center gap-2">
+                  {hasSignals && onOpenReviews ? (
+                    <button
+                      onClick={onOpenReviews}
+                      className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    >
+                      {signals} of {total} FMLY signals in
+                    </button>
+                  ) : !hasSignals && (
+                    <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/40">
+                      Waiting for input
+                    </span>
+                  )}
+                  {/* Rank */}
+                  <div className="flex items-center gap-1.5 text-muted-foreground/30 text-[11px] font-mono">
+                    {rank && rank <= 50 && <span>#{rank}</span>}
+                  </div>
+                </div>
               </div>
+
+              {/* Identity line — fades in 400ms after signal */}
+              {showIdentity && (
+                <p
+                  className="text-[10px] font-mono text-muted-foreground/30 text-center mt-1 transition-opacity duration-700"
+                  style={{ opacity: showIdentity ? 1 : 0 }}
+                >
+                  {wouldReplay ? "You called it early." : "Your read is logged."}
+                </p>
+              )}
             </div>
             <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
           </div>
         );
       })()}
 
-      {/* Step 2 / CTA: Run it back / Skip (or LEFT HOOK / RIGHT HOOK) */}
-      {(step === 2 || step === "replay_cta" || step === "skip_cta") && (
+      {/* ── STATE 1: DECISION ── */}
+      {step === 2 && (
         <div>
           <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
           <div className="flex gap-2 px-3 py-2.5">
@@ -254,46 +280,37 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
               onClick={() => handleVoteClick(true)}
               className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
             >
-              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">{leftLabel}</span>
+              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">
+                {leftLabel}
+              </span>
             </button>
             <button
               onClick={() => handleVoteClick(false)}
               className="flex-1 flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
             >
-              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">{rightLabel}</span>
+              <span className="text-[13px] leading-none font-bold tracking-[0.15em] text-muted-foreground">
+                {rightLabel}
+              </span>
+            </button>
+            {/* React button */}
+            <button
+              onClick={onOpenReactions}
+              className="flex items-center justify-center py-2.5 px-3 rounded-lg border border-border/40 bg-transparent hover:border-foreground/15 hover:bg-foreground/[0.03] transition-all duration-[120ms]"
+              aria-label="React"
+            >
+              <span className="text-[15px] leading-none">🔥</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* replay_cta: Spotify CTAs + comment + vote */}
-      {step === "replay_cta" && (
+      {/* ── STATE 2: RESPONSE (unified) ── */}
+      {step === "cta" && (
         <div>
           <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
           <div className="px-3 py-2.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex gap-2 flex-wrap">
-                {!isBattle && artistsJson && artistsJson.length > 0 && artistsJson[0]?.spotifyUrl && (
-                  <a
-                    href={artistsJson[0].spotifyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
-                  >
-                    Follow {artistsJson[0].name}
-                  </a>
-                )}
-                {!isBattle && spotifyTrackUrl && (
-                  <a
-                    href={spotifyTrackUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center text-[11px] border border-border/40 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all duration-[120ms]"
-                  >
-                    Save track
-                  </a>
-                )}
-              </div>
+            {/* Cancel */}
+            <div className="flex items-center justify-end">
               <button
                 onClick={() => setStep(2)}
                 className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
@@ -302,53 +319,29 @@ export function HookReview({ postId, isOwner, onOpenReviews, spotifyTrackUrl, ar
                 ✕
               </button>
             </div>
+            {/* Signal locked in */}
+            <p className="font-mono text-[11px] text-muted-foreground tracking-wide uppercase">
+              Signal locked in
+            </p>
+            {/* Comment + React + BROADCAST */}
             <div className="flex items-end gap-2">
               <textarea
                 ref={textareaRef}
                 value={contextNote}
                 onChange={e => setContextNote(e.target.value)}
                 onKeyDown={handleContextKeyDown}
-                placeholder={isBattle ? "Why this hook? (Optional)" : "What hit? (Optional but helpful)"}
+                placeholder={commentPrompt}
                 rows={2}
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/35 outline-none resize-none leading-relaxed"
               />
+              {/* React button */}
               <button
-                onClick={() => handleSubmit(contextNote)}
-                className="shrink-0 text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-4 py-2.5 rounded-md hover:opacity-90 transition-opacity"
+                onClick={onOpenReactions}
+                className="shrink-0 flex items-center justify-center py-2 px-2.5 rounded-md border border-border/40 hover:border-foreground/15 transition-all"
+                aria-label="React"
               >
-                BROADCAST
+                <span className="text-[15px] leading-none">🔥</span>
               </button>
-            </div>
-          </div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-        </div>
-      )}
-
-      {/* skip_cta: comment + vote (no Spotify CTAs) */}
-      {step === "skip_cta" && (
-        <div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-          <div className="px-3 py-2.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <p className="font-mono text-[11px] text-muted-foreground tracking-wide uppercase">{isBattle ? "What sealed it?" : "Real talk: What's missing?"}</p>
-              <button
-                onClick={() => setStep(2)}
-                className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground transition-colors leading-none"
-                aria-label="Cancel"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex items-end gap-2">
-              <textarea
-                ref={skipTextareaRef}
-                value={contextNote}
-                onChange={e => setContextNote(e.target.value)}
-                onKeyDown={handleContextKeyDown}
-                placeholder={isBattle ? "What made it hit? (Optional)" : "The missing piece... (Optional but helpful)"}
-                rows={2}
-                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/35 outline-none resize-none leading-relaxed"
-              />
               <button
                 onClick={() => handleSubmit(contextNote)}
                 className="shrink-0 text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background px-4 py-2.5 rounded-md hover:opacity-90 transition-opacity"
