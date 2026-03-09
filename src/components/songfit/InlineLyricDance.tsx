@@ -436,4 +436,5 @@ function InlineLyricDanceInner(
   );
 }
 
-export const InlineLyricDance = memo(forwardRef(InlineLyricDanceInner));
+export const InlineLyricDance = forwardRef<InlineLyricDanceHandle, Props>(InlineLyricDanceInner);
+InlineLyricDance.displayName = "InlineLyricDance";
