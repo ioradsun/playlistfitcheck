@@ -41,8 +41,32 @@ function LazySpotifyEmbedInner({ trackId, trackTitle, trackUrl, postId, albumArt
       style={{ height: platform === "soundcloud" ? 166 : 232 }}
       onClick={handleClick}
     >
+      {/* Album art placeholder while iframe loads */}
       {!iframeLoaded && (
-        <div className="absolute inset-0 w-full animate-pulse" style={{ backgroundColor: "rgba(26,26,26,0.5)" }} />
+        <div className="absolute inset-0 w-full flex items-center bg-black/60">
+          {albumArtUrl ? (
+            <img
+              src={albumArtUrl}
+              alt={trackTitle}
+              className="absolute inset-0 w-full h-full object-cover blur-sm scale-110 opacity-60"
+            />
+          ) : (
+            <div className="absolute inset-0 w-full animate-pulse" style={{ backgroundColor: "rgba(26,26,26,0.5)" }} />
+          )}
+          {albumArtUrl && (
+            <div className="relative z-10 flex items-center gap-3 px-4">
+              <img
+                src={albumArtUrl}
+                alt={trackTitle}
+                className="w-14 h-14 rounded shadow-lg"
+              />
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold text-white drop-shadow-md line-clamp-1">{trackTitle}</span>
+                <span className="text-xs text-white/60 font-mono uppercase tracking-wider">Loading player…</span>
+              </div>
+            </div>
+          )}
+        </div>
       )}
       <iframe
         src={embedSrc}
