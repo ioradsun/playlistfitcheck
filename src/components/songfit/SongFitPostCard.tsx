@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock, Flame, Film } from "lucide-react";
+import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink, Pencil, Trash2, X, Check, Trophy, Bookmark, Share2, Clock, Flame } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
@@ -19,8 +19,8 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent } from "@/lib/engagementTracking";
 import { HookReview } from "./HookReview";
-import { HookReviewsSheet } from "./HookReviewsSheet";
 import { useCardState, type CardState } from "./useCardLifecycle";
+import { PostCommentPanel } from "./PostCommentPanel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,56 +58,18 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
   const [isScored, setIsScored] = useState(false);
-  const [votedBattleSide, setVotedBattleSide] = useState<"a" | "b" | null>(null);
-  const [reviewsSheetPostId, setReviewsSheetPostId] = useState<string | null>(null);
+  const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
+  const [postPanelOpen, setPostPanelOpen] = useState(false);
   const [hookReviewKey, setHookReviewKey] = useState(0);
-  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
 
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDancePost = !!(post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id);
   const isBattlePost = hottestHooksEnabled && !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
   const isSpotifyEmbed = !hasLyricDancePost && !isBattlePost && !!post.spotify_track_id;
   const CAPTION_MAX = 300;
-  const tier: 1 | 3 = cardState === "active" ? 3 : 1;
 
   const { activate } = useCardState(post.id);
 
-  useEffect(() => {
-    if (post.album_art_url) return;
-
-    if (hasLyricDancePost && post.lyric_dance_id) {
-      supabase
-        .from("shareable_lyric_dances" as any)
-        .select("section_images")
-        .eq("id", post.lyric_dance_id)
-        .maybeSingle()
-        .then(({ data }) => {
-          const images = (data as any)?.section_images;
-          const firstImage = Array.isArray(images) ? images.find(Boolean) : null;
-          if (firstImage) setCoverImageUrl(firstImage);
-        });
-    } else if (isBattlePost && post.lyric_dance_url) {
-      const segments = post.lyric_dance_url.replace(/^\//, "").split("/").filter(Boolean);
-      if (segments.length >= 2) {
-        const [artistSlug, songSlug] = segments;
-        supabase
-          .from("shareable_lyric_dances" as any)
-          .select("section_images")
-          .eq("artist_slug", artistSlug)
-          .eq("song_slug", songSlug)
-          .maybeSingle()
-          .then(({ data }) => {
-            const images = (data as any)?.section_images;
-            const firstImage = Array.isArray(images) ? images.find(Boolean) : null;
-            if (firstImage) setCoverImageUrl(firstImage);
-          });
-      }
-    }
-  }, [post.album_art_url, post.lyric_dance_id, post.lyric_dance_url, hasLyricDancePost, isBattlePost]);
-
-  const handlePlayTap = () => {
-    activate();
-  };
 
   const handleSaveEdit = async () => {
     setSaving(true);
@@ -218,15 +180,6 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
   return (
     <div className="px-2 pb-3">
       <div className="relative rounded-2xl overflow-hidden" style={{ background: "#121212" }}>
-      {(post.album_art_url || coverImageUrl) && (
-        <img
-          src={(post.album_art_url || coverImageUrl)!}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-50 pointer-events-none"
-          loading="lazy"
-        />
-      )}
-      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
       {/* Header */}
       <div className="relative flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -308,38 +261,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
           isScored && "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.25)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]"
         )}
       >
-        {tier === 1 && !hasLyricDancePost && !isBattlePost && !post.spotify_track_id ? (
-          <div className="relative overflow-hidden" style={{ height: 320 }}>
-            {post.album_art_url ? (
-              <img
-                src={post.album_art_url}
-                alt={post.track_title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-zinc-800 via-zinc-900 to-black" />
-            )}
-            <div className="absolute inset-0 bg-black/45" />
-            {/* "Now Streaming" badge — top left */}
-            <div className="absolute top-3 left-3 z-30 pointer-events-none">
-              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
-                Now Streaming
-              </span>
-            </div>
-            <div className="absolute left-3 bottom-3 right-3">
-              <p className="text-white font-semibold text-sm truncate">{post.track_title}</p>
-              <p className="text-white/75 text-xs truncate">{(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || displayName}</p>
-            </div>
-            <button
-              onClick={handlePlayTap}
-              className="absolute inset-0 flex items-center justify-center"
-              aria-label={`Play ${post.track_title}`}
-            >
-              <span className="h-14 w-14 rounded-full bg-white/20 backdrop-blur-sm text-white flex items-center justify-center text-xl">▶</span>
-            </button>
-          </div>
-        ) : post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
+        {post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id ? (
           <div className="relative overflow-hidden" style={{ height: 320 }}>
             <LyricDanceEmbed
               lyricDanceId={post.lyric_dance_id}
@@ -348,6 +270,9 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
               artistName={displayName}
               cardState={cardState}
               onPlay={activate}
+              hideReactButton
+              externalPanelOpen={reactionPanelOpen}
+              onExternalPanelOpenChange={setReactionPanelOpen}
             />
           </div>
         ) : post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id ? (
@@ -362,7 +287,7 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             />
           </div>
         ) : (
-          <div style={{ height: 320 }}>
+          <div className="relative" style={{ height: 320 }}>
             <LazySpotifyEmbed
               trackId={post.spotify_track_id}
               trackTitle={post.track_title}
@@ -372,6 +297,11 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
               artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
               genre={((post.tags_json as any[]) || [])[0] || null}
               cardState={cardState}
+            />
+            <PostCommentPanel
+              postId={post.id}
+              isOpen={postPanelOpen}
+              onClose={() => setPostPanelOpen(false)}
             />
 
             {/* Caption — stacked below embed inside 320px */}
@@ -590,25 +520,15 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             key={hookReviewKey}
             postId={post.id}
             isOwner={isOwnPost}
-            onOpenReviews={() => setReviewsSheetPostId(post.id)}
-            onOpenReactions={() => setReviewsSheetPostId(post.id)}
+            onOpenReactions={() => (hasLyricDancePost ? setReactionPanelOpen(true) : setPostPanelOpen(true))}
             spotifyTrackUrl={post.spotify_track_url}
             artistsJson={post.track_artists_json as any[]}
             isBattle={isBattlePost}
-            onVotedSide={isBattlePost ? setVotedBattleSide : undefined}
             showPreResolved={isBillboard && !!signalData}
             preResolved={signalData}
             rank={rank}
             onScored={() => setIsScored(true)}
             onUnscored={() => setIsScored(false)}
-          />
-          <HookReviewsSheet
-            postId={reviewsSheetPostId}
-            onClose={() => setReviewsSheetPostId(null)}
-            onRemoved={() => setHookReviewKey(k => k + 1)}
-            onVoteChange={() => setHookReviewKey(k => k + 1)}
-            spotifyTrackUrl={post.spotify_track_url ?? undefined}
-            artistsJson={post.track_artists_json as any[]}
           />
         </>
       )}
