@@ -4,7 +4,7 @@ import { MessageCircle, User, MoreHorizontal, UserPlus, UserMinus, ExternalLink,
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
-import { InlineBattleFeed } from "./InlineBattleFeed";
+import { BattleEmbed } from "@/components/hookfit/BattleEmbed";
 import { SubmissionBadge } from "./SubmissionBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -350,15 +350,17 @@ export function SongFitPostCard({ post, rank, onOpenComments, onOpenLikes, onRef
             />
           </div>
         ) : post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id ? (
-          <InlineBattleFeed
-            battleUrl={post.lyric_dance_url}
-            cardState={cardState}
-            songTitle={post.track_title}
-            artistName={displayName}
-            albumArtUrl={post.album_art_url || coverImageUrl}
-            votedSide={votedBattleSide}
-            onPlay={activate}
-          />
+          <div className="relative overflow-hidden" style={{ height: 320 }}>
+            <BattleEmbed
+              battleUrl={post.lyric_dance_url}
+              songTitle={post.track_title}
+              albumArtUrl={post.album_art_url ?? undefined}
+              showSplitCover={true}
+              cardState={cardState}
+              onPlay={activate}
+              initialVotedSide={post.voted_side ?? null}
+            />
+          </div>
         ) : (
           <div style={{ height: 320 }}>
             <LazySpotifyEmbed
