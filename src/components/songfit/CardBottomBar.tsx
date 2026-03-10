@@ -34,7 +34,7 @@ export function CardBottomBar({
   const wrapperClass =
     variant === "embedded"
       ? "flex items-stretch"
-      : "flex items-stretch mx-1 my-1 rounded-md overflow-hidden";
+      : "flex items-stretch mx-1 mt-1 rounded-md overflow-hidden";
   const wrapperStyle = { background: "#0a0a0a" };
 
   return (
