@@ -13,7 +13,6 @@ interface Props {
   artistName?: string;
   genre?: string | null;
   cardState: CardState;
-  scorePill?: { total: number; replay_yes: number } | null;
 }
 
 function LazySpotifyEmbedInner({
@@ -24,7 +23,6 @@ function LazySpotifyEmbedInner({
   albumArtUrl,
   artistName,
   cardState: _cardState,
-  scorePill,
 }: Props) {
   const { user } = useAuth();
   const [iframeLoaded, setIframeLoaded] = useState(false);

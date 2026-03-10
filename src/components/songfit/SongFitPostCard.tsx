@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   MessageCircle,
@@ -39,9 +39,10 @@ import { FmlyBadge } from "@/components/FmlyBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent } from "@/lib/engagementTracking";
-import { HookReview } from "./HookReview";
 import { useCardState, type CardState } from "./useCardLifecycle";
 import { PostCommentPanel } from "./PostCommentPanel";
+import { useCardVote } from "@/hooks/useCardVote";
+import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,15 +97,7 @@ export function SongFitPostCard({
   
   const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
   const [postPanelOpen, setPostPanelOpen] = useState(false);
-  const [hookReviewKey, setHookReviewKey] = useState(0);
-  const voteHandlerRef = useRef<((replay: boolean) => void) | null>(null);
-  const submitHandlerRef = useRef<(() => void) | null>(null);
-  const commentSubmitRef = useRef<(() => void) | null>(null);
-  const [canvasNote, setCanvasNote] = useState("");
-  const [canvasVotedSide, setCanvasVotedSide] = useState<"a" | "b" | null>(
-    null,
-  );
-  const [hookResults, setHookResults] = useState<{ total: number; replay_yes: number } | null>(null);
+  const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(post.id);
 
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDancePost = !!(
@@ -394,13 +387,6 @@ export function SongFitPostCard({
                 hideReactButton
                 externalPanelOpen={reactionPanelOpen}
                 onExternalPanelOpenChange={setReactionPanelOpen}
-                onVoteYes={() => voteHandlerRef.current?.(true)}
-                onVoteNo={() => voteHandlerRef.current?.(false)}
-                votedSide={canvasVotedSide}
-                scorePill={hookResults}
-                canvasNote={canvasNote}
-                onCanvasNoteChange={setCanvasNote}
-                onCanvasSubmit={() => submitHandlerRef.current?.()}
                 onOpenReactions={() => setReactionPanelOpen(true)}
               />
             </div>
@@ -431,15 +417,12 @@ export function SongFitPostCard({
                   .join(", ")}
                 genre={((post.tags_json as any[]) || [])[0] || null}
                 cardState={cardState}
-                scorePill={hookResults}
               />
               <PostCommentPanel
                 postId={post.id}
                 isOpen={postPanelOpen}
                 onClose={() => setPostPanelOpen(false)}
                 hideOwnInput
-                externalText={canvasNote}
-                onRegisterSubmit={(fn) => { commentSubmitRef.current = fn; }}
               />
               </div>
 
@@ -465,96 +448,19 @@ export function SongFitPostCard({
                 </div>
               )}
 
-              {/* Vote bar — below caption, three states */}
               {isSpotifyEmbed && crowdfitMode === "hook_review" && (
-                <div
-                  className="flex items-stretch mx-1 my-1 rounded-md overflow-hidden"
-                  style={{ background: "rgba(255,255,255,0.03)" }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {canvasVotedSide == null ? (
-
-                    /* Pre-vote */
-                    <>
-                      <button
-                        onClick={() => voteHandlerRef.current?.(true)}
-                        className="flex-1 flex items-center justify-center py-2.5 hover:bg-white/[0.04] transition-colors group"
-                      >
-                        <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-                          Run it back
-                        </span>
-                      </button>
-                      <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-1.5" />
-                      <button
-                        onClick={() => voteHandlerRef.current?.(false)}
-                        className="flex-1 flex items-center justify-center py-2.5 hover:bg-white/[0.04] transition-colors group"
-                      >
-                        <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-                          Skip
-                        </span>
-                      </button>
-                    </>
-
-                  ) : postPanelOpen ? (
-
-                    /* Panel open — input + X */
-                    <>
-                      <input
-                        type="text"
-                        value={canvasNote}
-                        onChange={(e) => setCanvasNote(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            if (commentSubmitRef.current) {
-                              commentSubmitRef.current();
-                              setCanvasNote("");
-                            } else {
-                              submitHandlerRef.current?.();
-                            }
-                          }
-                          if (e.key === "Escape") setPostPanelOpen(false);
-                        }}
-                        placeholder="drop your take..."
-                        className="flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 py-2.5 tracking-wide min-w-0"
-                      />
-                      <button
-                        onClick={() => setPostPanelOpen(false)}
-                        className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
-                      >
-                        <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-                      </button>
-                    </>
-
-                  ) : (
-
-                    /* Post-vote default — social proof + 🔥 */
-                    <>
-                      <div className="flex-1 flex items-center px-3 py-2.5 overflow-hidden min-w-0">
-                        {hookResults && hookResults.total > 0 ? (
-                          <span className="text-[10px] font-mono text-emerald-400 truncate">
-                            {canvasVotedSide === "a"
-                              ? `You + ${Math.max(0, hookResults.replay_yes - 1)} FMLY would Replay this`
-                              : `${hookResults.replay_yes} / ${hookResults.total} FMLY would Replay this`
-                            }
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-mono text-white/20 truncate">
-                            calibrating...
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-1.5" />
-                      <button
-                        onClick={() => setPostPanelOpen((prev) => !prev)}
-                        className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
-                      >
-                        <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
-                      </button>
-                    </>
-
-                  )}
-                </div>
+                <CardBottomBar
+                  variant="fullscreen"
+                  votedSide={votedSide}
+                  score={score}
+                  note={note}
+                  onNoteChange={setNote}
+                  onVoteYes={() => handleVote(true)}
+                  onVoteNo={() => handleVote(false)}
+                  onSubmit={handleSubmit}
+                  onOpenReactions={() => setPostPanelOpen(true)}
+                  onClose={() => setPostPanelOpen(false)}
+                />
               )}
 
               {/* Action row — stacked below caption inside 320px */}
@@ -885,38 +791,6 @@ export function SongFitPostCard({
             </div>
           )}
 
-        {/* Hook Review — after caption */}
-        {crowdfitMode === "hook_review" && (
-          <>
-            <HookReview
-              key={hookReviewKey}
-              postId={post.id}
-              isOwner={isOwnPost}
-              onOpenReactions={() =>
-                hasLyricDancePost
-                  ? setReactionPanelOpen(true)
-                  : setPostPanelOpen(true)
-              }
-              spotifyTrackUrl={post.spotify_track_url}
-              artistsJson={post.track_artists_json as any[]}
-              isBattle={isBattlePost}
-              showPreResolved={isBillboard && !!signalData}
-              preResolved={signalData}
-              rank={rank}
-              
-              onVotedSide={(side) => {
-                setCanvasVotedSide(side);
-              }}
-              onRegisterVoteHandler={(fn) => {
-                voteHandlerRef.current = fn;
-              }}
-              onRegisterSubmitHandler={(fn) => {
-                submitHandlerRef.current = fn;
-              }}
-              onResultsChange={setHookResults}
-            />
-          </>
-        )}
         <div className="h-1" />
       </div>
     </div>
