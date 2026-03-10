@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   MessageCircle,
@@ -97,8 +97,23 @@ export function SongFitPostCard({
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
   
   const [panelOpen, setPanelOpen] = useState(false);
+  const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const topPostReaction = useTopPostReaction(post.id);
-  const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(post.id);
+  const { votedSide, score, note, setNote, handleVote } = useCardVote(post.id);
+
+  const handleCommentFromBar = useCallback(async () => {
+    const content = note.trim();
+    if (!content || !user) return;
+    try {
+      await supabase
+        .from("songfit_comments")
+        .insert({ post_id: post.id, user_id: user.id, content });
+    } catch {
+      // silent
+    }
+    setNote("");
+    setCommentRefreshKey((k) => k + 1);
+  }, [note, user, post.id, setNote]);
 
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDancePost = !!(
@@ -437,6 +452,7 @@ export function SongFitPostCard({
                   onVoteYes={() => handleVote(true)}
                   onVoteNo={() => handleVote(false)}
                   hideInput={crowdfitMode === "hook_review"}
+                  refreshKey={commentRefreshKey}
                 />
 
                 {/* Caption — directly below embed */}
@@ -471,7 +487,7 @@ export function SongFitPostCard({
                       onNoteChange={setNote}
                       onVoteYes={() => handleVote(true)}
                       onVoteNo={() => handleVote(false)}
-                      onSubmit={handleSubmit}
+                      onSubmit={handleCommentFromBar}
                       onOpenReactions={() => setPanelOpen(true)}
                       onClose={() => setPanelOpen(false)}
                       panelOpen={panelOpen}

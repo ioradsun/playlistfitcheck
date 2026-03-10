@@ -22,6 +22,7 @@ import {
   type CanonicalAudioSection,
 } from "@/components/lyric/ReactionPanel";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import { getSessionId } from "@/lib/sessionId";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 
@@ -174,6 +175,7 @@ export function LyricDanceEmbed({
   const [internalPanelOpen, setInternalPanelOpen] = useState(false);
   const isControlled = externalPanelOpen !== undefined;
   const reactionPanelOpen = isControlled ? externalPanelOpen : internalPanelOpen;
+  const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [engagementMode, setEngagementMode] = useState<
     "spectator" | "freezing" | "engaged"
   >("spectator");
@@ -181,7 +183,29 @@ export function LyricDanceEmbed({
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [forceDemoted, setForceDemoted] = useState(false);
 
-  const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(postId ?? lyricDanceId);
+  const { votedSide, score, note, setNote, handleVote } = useCardVote(postId ?? lyricDanceId);
+
+  const handleCommentFromBar = useCallback(async () => {
+    const text = note.trim();
+    if (!text) return;
+    const danceId = fetchedData?.id;
+    if (!danceId) return;
+    try {
+      await supabase
+        .from("lyric_dance_comments" as any)
+        .insert({
+          dance_id: danceId,
+          text,
+          session_id: getSessionId(),
+          line_index: null,
+          parent_comment_id: null,
+        });
+    } catch {
+      // silent
+    }
+    setNote("");
+    setCommentRefreshKey((k) => k + 1);
+  }, [note, fetchedData?.id, setNote]);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -776,7 +800,7 @@ export function LyricDanceEmbed({
           onNoteChange={setNote}
           onVoteYes={() => handleVote(true)}
           onVoteNo={() => handleVote(false)}
-          onSubmit={handleSubmit}
+          onSubmit={handleCommentFromBar}
           onOpenReactions={handleOpenReactions}
           onClose={closePanel}
           panelOpen={reactionPanelOpen}
@@ -790,6 +814,7 @@ export function LyricDanceEmbed({
           displayMode="embedded"
           isOpen={reactionPanelOpen}
           hideInput
+          refreshKey={commentRefreshKey}
           onClose={handlePanelClose}
           votedSide={votedSide}
           score={score}
