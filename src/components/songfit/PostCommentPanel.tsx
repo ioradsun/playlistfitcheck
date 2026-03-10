@@ -179,13 +179,14 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
     const content = text.trim();
     if (!content || !user || submitting) return;
     setSubmitting(true);
+    const parentCommentId = replyingTo?.id ?? null;
 
     const optimisticComment: Comment = {
       id: `optimistic-${Date.now()}`,
       content,
       created_at: new Date().toISOString(),
       user_id: user.id,
-      parent_comment_id: replyingTo?.id ?? null,
+      parent_comment_id: parentCommentId,
       profiles: {
         display_name: profile?.display_name ?? null,
         avatar_url: profile?.avatar_url ?? null,
@@ -216,7 +217,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
           post_id: postId,
           user_id: user.id,
           content,
-          parent_comment_id: replyingTo?.id ?? null,
+          parent_comment_id: parentCommentId,
         });
     } catch {
       // no-op — comment already shown optimistically
