@@ -28,6 +28,7 @@ interface Props {
   score: { total: number; replay_yes: number } | null;
   onVoteYes: () => void;
   onVoteNo: () => void;
+  hideInput?: boolean;
 }
 
 function CommentReactPicker({
@@ -72,7 +73,7 @@ function CommentReactPicker({
   );
 }
 
-export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, score, onVoteYes, onVoteNo }: Props) {
+export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, score, onVoteYes, onVoteNo, hideInput = false }: Props) {
   const { user, profile } = useAuth();
   const sessionId = getSessionId();
 
@@ -401,15 +402,17 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
         )}
       </div>
 
-      <CommentInput
-        value={text}
-        onChange={setText}
-        onSubmit={handleSubmit}
-        onClose={onClose}
-        hasSubmitted={hasSubmitted}
-        placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
-        size="compact"
-      />
+      {!hideInput && (
+        <CommentInput
+          value={text}
+          onChange={setText}
+          onSubmit={handleSubmit}
+          onClose={onClose}
+          hasSubmitted={hasSubmitted}
+          placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
+          size="compact"
+        />
+      )}
     </PanelShell>
   );
 }
