@@ -22,7 +22,6 @@ export function VoteStrip({
 
   const activeStyle = (active: boolean) => ({
     color: active ? accent : 'rgba(255,255,255,0.25)',
-    borderBottom: active ? `1px solid ${accent}` : '1px solid transparent',
   });
 
   return (

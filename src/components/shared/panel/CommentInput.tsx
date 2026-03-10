@@ -22,7 +22,6 @@ export function CommentInput({
   const heightClass = size === 'full' ? 'h-11' : 'h-8';
   const textSize = size === 'full' ? 'text-[12px]' : 'text-[11px]';
   const px = size === 'full' ? 'px-4' : 'px-3';
-  const borderRadius = size === 'full' ? 'rounded-lg' : 'rounded-md';
 
   return (
     <div
@@ -49,7 +48,7 @@ export function CommentInput({
             }}
             placeholder={placeholder}
             maxLength={200}
-            className={`w-full ${heightClass} bg-white/[0.04] border border-white/[0.07] ${borderRadius} ${px} ${textSize} text-white placeholder:text-white/18 focus:outline-none focus:border-white/15 transition-colors`}
+            className={`w-full ${heightClass} bg-transparent ${px} ${textSize} text-white/80 placeholder:text-white/25 focus:outline-none transition-colors`}
           />
         </div>
         <div
