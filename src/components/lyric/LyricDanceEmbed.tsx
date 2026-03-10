@@ -572,6 +572,9 @@ export function LyricDanceEmbed({
     };
   }, [lyricSections, currentTimeSec, engagementMode, frozenLineIndex]);
 
+  const activeLineRef = useRef(activeLine);
+  activeLineRef.current = activeLine;
+
   const audioSections = useMemo<CanonicalAudioSection[]>(() => {
     const sections = data?.cinematic_direction?.sections;
     if (!Array.isArray(sections) || !sections.length || !durationSec) return [];
