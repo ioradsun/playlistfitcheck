@@ -837,7 +837,14 @@ export function LyricDanceEmbed({
                   className="flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 py-3 tracking-wide min-w-0"
                 />
                 <button
-                  onClick={() => { onCanvasSubmit?.(); setCommentFocused(false); }}
+                  onClick={() => {
+                    if (canvasNote) {
+                      onCanvasSubmit?.();
+                      setCommentFocused(false);
+                    } else {
+                      closePanel();
+                    }
+                  }}
                   className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
                 >
                   {canvasNote ? (
