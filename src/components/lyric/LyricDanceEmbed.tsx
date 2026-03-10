@@ -197,7 +197,7 @@ export function LyricDanceEmbed({
           dance_id: danceId,
           text,
           session_id: getSessionId(),
-          line_index: null,
+          line_index: frozenLineIndex ?? activeLine?.lineIndex ?? null,
           parent_comment_id: null,
         });
     } catch {
