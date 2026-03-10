@@ -21,6 +21,7 @@ interface Props {
   onCanvasNoteChange?: (note: string) => void;
   onCanvasSubmit?: () => void;
   onOpenReactions?: () => void;
+  externalPanelOpen?: boolean;
 }
 
 function LazySpotifyEmbedInner({
@@ -38,9 +39,14 @@ function LazySpotifyEmbedInner({
   canvasNote = "",
   onCanvasNoteChange,
   onCanvasSubmit,
+  onOpenReactions,
+  externalPanelOpen = false,
 }: Props) {
   const { user } = useAuth();
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [commentFocused, setCommentFocused] = useState(false);
+
+  const panelOpen = externalPanelOpen || commentFocused;
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
 
@@ -143,7 +149,7 @@ function LazySpotifyEmbedInner({
           </div>
         );
       })()}
-      {/* Vote bar — two states */}
+      {/* Vote bar — three states */}
       {(onVoteYes || onVoteNo) && (
         <div
           className="absolute bottom-0 left-0 right-0 z-30 flex items-stretch"
@@ -151,6 +157,8 @@ function LazySpotifyEmbedInner({
           onClick={(e) => e.stopPropagation()}
         >
           {votedSide == null ? (
+
+            /* State 1 — Pre-vote */
             <>
               <button
                 onClick={onVoteYes}
@@ -170,7 +178,10 @@ function LazySpotifyEmbedInner({
                 </span>
               </button>
             </>
-          ) : (
+
+          ) : panelOpen ? (
+
+            /* State 2 — Panel open: input + React ↓ or ↑ */
             <>
               <input
                 type="text"
@@ -180,21 +191,60 @@ function LazySpotifyEmbedInner({
                   if (e.key === "Enter") {
                     e.preventDefault();
                     onCanvasSubmit?.();
+                    setCommentFocused(false);
+                  }
+                  if (e.key === "Escape") {
+                    setCommentFocused(false);
                   }
                 }}
-                placeholder="Signal locked · drop your take"
+                onBlur={() => { if (!canvasNote && !externalPanelOpen) setCommentFocused(false); }}
+                placeholder="drop your take..."
+                autoFocus={commentFocused}
                 className="flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 py-3 tracking-wide min-w-0"
               />
               <button
-                onClick={onCanvasSubmit}
-                className="flex items-center justify-center px-4 hover:bg-white/[0.04] transition-colors group shrink-0"
+                onClick={() => {
+                  if (canvasNote) {
+                    onCanvasSubmit?.();
+                    setCommentFocused(false);
+                  } else {
+                    setCommentFocused(false);
+                    // signal parent to close panel
+                    if (externalPanelOpen) onOpenReactions?.();
+                  }
+                }}
+                className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
               >
-                <span
-                  className={`text-[13px] transition-colors ${
-                    canvasNote ? "text-white/70 group-hover:text-white" : "text-white/20"
-                  }`}
-                >
-                  ↑
+                <span className={`text-[11px] font-mono tracking-[0.12em] uppercase transition-colors ${
+                  canvasNote
+                    ? "text-white/70 group-hover:text-white"
+                    : "text-white/25 group-hover:text-white/60"
+                }`}>
+                  {canvasNote ? "↑" : "React ↓"}
+                </span>
+              </button>
+            </>
+
+          ) : (
+
+            /* State 3 — Post-vote default: artist pill + React ↑ */
+            <>
+              <div className="flex-1 flex items-center gap-2 px-3 py-2.5 overflow-hidden min-w-0 pointer-events-none">
+                <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-green-400/60" />
+                <span className="text-[10px] font-mono text-white/30 truncate">
+                  {artistName ? `Now streaming · ${artistName}` : "Now streaming"}
+                </span>
+              </div>
+              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+              <button
+                onClick={() => {
+                  onOpenReactions?.();
+                  setCommentFocused(true);
+                }}
+                className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
+              >
+                <span className="text-[11px] font-mono tracking-[0.12em] uppercase text-white/30 group-hover:text-white/70 transition-colors">
+                  React ↑
                 </span>
               </button>
             </>

@@ -436,7 +436,8 @@ export function SongFitPostCard({
                 canvasNote={canvasNote}
                 onCanvasNoteChange={setCanvasNote}
                 onCanvasSubmit={() => submitHandlerRef.current?.()}
-                onOpenReactions={() => setPostPanelOpen(true)}
+                externalPanelOpen={postPanelOpen}
+                onOpenReactions={() => setPostPanelOpen((prev) => !prev)}
               />
               <PostCommentPanel
                 postId={post.id}
