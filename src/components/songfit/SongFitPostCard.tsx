@@ -459,6 +459,7 @@ export function SongFitPostCard({
                   onSubmit={handleSubmit}
                   onOpenReactions={() => setPostPanelOpen(true)}
                   onClose={() => setPostPanelOpen(false)}
+                  panelOpen={postPanelOpen}
                 />
               )}
 
