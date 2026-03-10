@@ -875,9 +875,7 @@ export function LyricDanceEmbed({
                   onClick={() => { onOpenReactions?.(); setCommentFocused(true); }}
                   className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
                 >
-                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
-                    React
-                  </span>
+                  <Flame size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
                 </button>
               </>
             ) : (
