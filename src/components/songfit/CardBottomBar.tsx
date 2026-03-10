@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { X } from "lucide-react";
 
 interface CardBottomBarProps {
@@ -36,16 +36,6 @@ export function CardBottomBar({
   const [commentFocused, setCommentFocused] = useState(false);
   const py = variant === "embedded" ? "py-3" : "py-2.5";
 
-  const prevVotedSideRef = useRef<"a" | "b" | null | undefined>(undefined);
-
-  // Auto-open comment input only when a new vote is cast in-session
-  useEffect(() => {
-    if (prevVotedSideRef.current === null && votedSide !== null) {
-      setCommentFocused(true);
-    }
-    prevVotedSideRef.current = votedSide;
-  }, [votedSide]);
-
   const wrapperClass =
     variant === "embedded"
       ? "flex items-stretch"
@@ -55,11 +45,12 @@ export function CardBottomBar({
 
   return (
     <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
+      {/* Left — vote state content */}
       {votedSide === null ? (
         /* Pre-vote: Run it back / Skip */
         <>
           <button
-            onClick={onVoteYes}
+            onClick={() => { onVoteYes(); setCommentFocused(true); }}
             className={`flex-1 flex items-center justify-center ${py} hover:bg-white/[0.04] transition-colors group`}
           >
             <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
@@ -68,7 +59,7 @@ export function CardBottomBar({
           </button>
           <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
           <button
-            onClick={onVoteNo}
+            onClick={() => { onVoteNo(); setCommentFocused(true); }}
             className={`flex-1 flex items-center justify-center ${py} hover:bg-white/[0.04] transition-colors group`}
           >
             <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
@@ -77,70 +68,59 @@ export function CardBottomBar({
           </button>
         </>
       ) : commentFocused ? (
-        /* Post-vote comment input */
-        <>
-          <input
-            type="text"
-            value={note}
-            onChange={(e) => onNoteChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                onSubmit();
-                setCommentFocused(false);
-              }
-              if (e.key === "Escape") setCommentFocused(false);
-            }}
-            onBlur={() => {
-              if (!note) setCommentFocused(false);
-            }}
-            placeholder="drop your take..."
-            autoFocus
-            className={`flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 ${py} tracking-wide min-w-0`}
-          />
-          <button
-            onClick={() => {
+        /* Post-vote: comment input */
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => onNoteChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onSubmit();
               setCommentFocused(false);
-              onClose();
-            }}
-            className={`flex items-center justify-center px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0`}
-          >
-            <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-          </button>
-        </>
-      ) : (
-        /* Post-vote default: social proof + 🔥 */
-        <>
-          <div className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}>
-            {score && score.total > 0 ? (
-              <span className="text-[10px] font-mono text-emerald-400 truncate">
-                {votedSide === "a"
-                  ? `You + ${Math.max(0, score.replay_yes - 1)} FMLY would Replay this`
-                  : `${score.replay_yes} / ${score.total} FMLY would Replay this`}
-              </span>
-            ) : (
-              <span className="text-[10px] font-mono text-white/20 truncate">calibrating...</span>
-            )}
-          </div>
-          <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-          <button
-            onClick={() => {
-              if (panelOpen) {
-                onClose();
-              } else {
-                onOpenReactions();
-                setCommentFocused(true);
-              }
-            }}
-            className={`flex items-center justify-center px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0`}
-          >
-            {panelOpen
-              ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
-              : <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
             }
-          </button>
-        </>
+            if (e.key === "Escape") setCommentFocused(false);
+          }}
+          onBlur={() => {
+            if (!note) setCommentFocused(false);
+          }}
+          placeholder="drop your take..."
+          autoFocus
+          className={`flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 ${py} tracking-wide min-w-0`}
+        />
+      ) : (
+        /* Post-vote default: social proof */
+        <div className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}>
+          {score && score.total > 0 ? (
+            <span className="text-[10px] font-mono text-emerald-400 truncate">
+              {votedSide === "a"
+                ? `You + ${Math.max(0, score.replay_yes - 1)} FMLY would Replay this`
+                : `${score.replay_yes} / ${score.total} FMLY would Replay this`}
+            </span>
+          ) : (
+            <span className="text-[10px] font-mono text-white/20 truncate">calibrating...</span>
+          )}
+        </div>
       )}
+
+      {/* Right — persistent 🔥/X, always visible */}
+      <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+      <button
+        onClick={() => {
+          if (panelOpen) {
+            onClose();
+          } else {
+            onOpenReactions();
+            if (votedSide !== null) setCommentFocused(true);
+          }
+        }}
+        className={`flex items-center justify-center px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0`}
+      >
+        {panelOpen
+          ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
+          : <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
+        }
+      </button>
     </div>
   );
 }
