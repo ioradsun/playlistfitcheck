@@ -85,39 +85,36 @@ export function CardBottomBar({
           </button>
         </>
       ) : (
-        /* Post-vote: social proof — never shows "calibrating" */
-        <div className={`flex-1 flex flex-col justify-center px-3 ${py} overflow-hidden min-w-0`}>
-          {(() => {
-            const total = score?.total ?? 0;
-            const replay_yes = score?.replay_yes ?? 0;
-            const notForMeCount = total - replay_yes;
-            const majorityRanItBack = replay_yes > total / 2;
-            const isSplit = total > 0 && replay_yes === total / 2;
-            const userAgrees = votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
+        /* Post-vote: social proof — single line */
+        <div className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}>
+          <span className="text-[9px] font-mono tracking-[0.08em] text-white/30 truncate">
+            {(() => {
+              const total = score?.total ?? 0;
+              const replay_yes = score?.replay_yes ?? 0;
+              const notForMeCount = total - replay_yes;
+              const majorityRanItBack = replay_yes > total / 2;
+              const isSplit = total > 0 && replay_yes === total / 2;
+              const userAgrees = votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
 
-            let verdict: string;
-            let tally: string;
+              let verdict: string;
+              let tally: string;
 
-            if (total < 20) {
-              verdict = "FMLY STILL VOTING";
-              tally = `${replay_yes} / ${total} RAN IT BACK`;
-            } else if (isSplit) {
-              verdict = "FMLY IS SPLIT";
-              tally = `${replay_yes} / ${total} RAN IT BACK`;
-            } else {
-              verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
-              tally = majorityRanItBack
-                ? `${replay_yes} / ${total} RAN IT BACK`
-                : `${notForMeCount} / ${total} NOT FOR ME`;
-            }
+              if (total < 20) {
+                verdict = "FMLY STILL VOTING";
+                tally = `${replay_yes} / ${total} RAN IT BACK`;
+              } else if (isSplit) {
+                verdict = "FMLY IS SPLIT";
+                tally = `${replay_yes} / ${total} RAN IT BACK`;
+              } else {
+                verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
+                tally = majorityRanItBack
+                  ? `${replay_yes} / ${total} RAN IT BACK`
+                  : `${notForMeCount} / ${total} NOT FOR ME`;
+              }
 
-            return (
-              <>
-                <span className="text-[9px] font-mono tracking-[0.12em] text-white/25 leading-tight truncate">{verdict}</span>
-                <span className="text-[11px] font-mono tracking-[0.08em] text-white/40 leading-tight truncate">{tally}</span>
-              </>
-            );
-          })()}
+              return `${verdict} · ${tally}`;
+            })()}
+          </span>
         </div>
       )}
 
