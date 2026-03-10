@@ -210,7 +210,6 @@ function LazySpotifyEmbedInner({
                     setCommentFocused(false);
                   } else {
                     setCommentFocused(false);
-                    // signal parent to close panel
                     if (externalPanelOpen) onOpenReactions?.();
                   }
                 }}
@@ -219,7 +218,7 @@ function LazySpotifyEmbedInner({
                 {canvasNote ? (
                   <span className="text-[11px] font-mono tracking-[0.12em] uppercase text-white/70 group-hover:text-white transition-colors">Send</span>
                 ) : (
-                  <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+                  <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
                 )}
               </button>
             </>
