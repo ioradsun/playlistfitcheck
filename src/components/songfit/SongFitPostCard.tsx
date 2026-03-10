@@ -98,14 +98,10 @@ export function SongFitPostCard({
   const [postPanelOpen, setPostPanelOpen] = useState(false);
   const [hookReviewKey, setHookReviewKey] = useState(0);
   const voteHandlerRef = useRef<((replay: boolean) => void) | null>(null);
-  const submitHandlerRef = useRef<(() => void) | null>(null);
   const [canvasVotedSide, setCanvasVotedSide] = useState<"a" | "b" | null>(
     null,
   );
-  const [canvasStep, setCanvasStep] = useState<"vote" | "cta" | "done">(
-    "vote",
-  );
-  const [canvasNote, setCanvasNote] = useState("");
+  const [hookResults, setHookResults] = useState<{ total: number; replay_yes: number } | null>(null);
 
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDancePost = !!(
@@ -400,13 +396,7 @@ export function SongFitPostCard({
                 onVoteYes={() => voteHandlerRef.current?.(true)}
                 onVoteNo={() => voteHandlerRef.current?.(false)}
                 votedSide={canvasVotedSide}
-                canvasStep={canvasStep}
-                canvasNote={canvasNote}
-                onCanvasNoteChange={setCanvasNote}
-                onCanvasSubmit={() => {
-                  submitHandlerRef.current?.();
-                }}
-                onOpenReactions={() => setReactionPanelOpen(true)}
+                scorePill={hookResults}
               />
             </div>
           ) : post.lyric_dance_url &&
@@ -438,11 +428,7 @@ export function SongFitPostCard({
                 onVoteYes={() => voteHandlerRef.current?.(true)}
                 onVoteNo={() => voteHandlerRef.current?.(false)}
                 votedSide={canvasVotedSide}
-                canvasStep={canvasStep}
-                canvasNote={canvasNote}
-                onCanvasNoteChange={setCanvasNote}
-                onCanvasSubmit={() => submitHandlerRef.current?.()}
-                onOpenReactions={() => setPostPanelOpen(true)}
+                scorePill={hookResults}
               />
               <PostCommentPanel
                 postId={post.id}
@@ -818,23 +804,13 @@ export function SongFitPostCard({
               preResolved={signalData}
               rank={rank}
               onScored={() => setIsScored(true)}
-              onUnscored={() => {
-                setIsScored(false);
-                setCanvasVotedSide(null);
-                setCanvasStep("vote");
-              }}
               onVotedSide={(side) => {
                 setCanvasVotedSide(side);
               }}
               onRegisterVoteHandler={(fn) => {
                 voteHandlerRef.current = fn;
               }}
-              onRegisterSubmitHandler={(fn) => {
-                submitHandlerRef.current = fn;
-              }}
-              onStepChange={setCanvasStep}
-              note={canvasNote}
-              onNoteChange={setCanvasNote}
+              onResultsChange={setHookResults}
             />
           </>
         )}
