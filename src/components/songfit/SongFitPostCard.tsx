@@ -431,22 +431,7 @@ export function SongFitPostCard({
                   .join(", ")}
                 genre={((post.tags_json as any[]) || [])[0] || null}
                 cardState={cardState}
-                onVoteYes={() => voteHandlerRef.current?.(true)}
-                onVoteNo={() => voteHandlerRef.current?.(false)}
-                votedSide={canvasVotedSide}
                 scorePill={hookResults}
-                canvasNote={canvasNote}
-                onCanvasNoteChange={setCanvasNote}
-                onCanvasSubmit={() => {
-                  if (postPanelOpen && commentSubmitRef.current) {
-                    commentSubmitRef.current();
-                    setCanvasNote("");
-                  } else {
-                    submitHandlerRef.current?.();
-                  }
-                }}
-                externalPanelOpen={postPanelOpen}
-                onOpenReactions={() => setPostPanelOpen((prev) => !prev)}
               />
               <PostCommentPanel
                 postId={post.id}
@@ -480,30 +465,95 @@ export function SongFitPostCard({
                 </div>
               )}
 
-              {/* Now streaming bar + fire/X toggle */}
-              {post.spotify_track_id && (
+              {/* Vote bar — below caption, three states */}
+              {isSpotifyEmbed && crowdfitMode === "hook_review" && (
                 <div
-                  className="flex items-stretch mx-1 mt-1 rounded-md"
+                  className="flex items-stretch mx-1 my-1 rounded-md overflow-hidden"
                   style={{ background: "rgba(255,255,255,0.03)" }}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex-1 flex items-center gap-2 px-3 py-2 overflow-hidden min-w-0">
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-green-400/60" />
-                    <span className="text-[10px] font-mono text-white/30 truncate">
-                      {(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")
-                        ? `Now streaming · ${(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}`
-                        : "Now streaming"}
-                    </span>
-                  </div>
-                  <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-                  <button
-                    onClick={() => setPostPanelOpen((prev) => !prev)}
-                    className="flex items-center justify-center px-4 py-2 hover:bg-white/[0.04] transition-colors group shrink-0 rounded-r-md"
-                  >
-                    {postPanelOpen
-                      ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
-                      : <Flame size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-                    }
-                  </button>
+                  {canvasVotedSide == null ? (
+
+                    /* Pre-vote */
+                    <>
+                      <button
+                        onClick={() => voteHandlerRef.current?.(true)}
+                        className="flex-1 flex items-center justify-center py-2.5 hover:bg-white/[0.04] transition-colors group"
+                      >
+                        <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
+                          Run it back
+                        </span>
+                      </button>
+                      <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-1.5" />
+                      <button
+                        onClick={() => voteHandlerRef.current?.(false)}
+                        className="flex-1 flex items-center justify-center py-2.5 hover:bg-white/[0.04] transition-colors group"
+                      >
+                        <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
+                          Skip
+                        </span>
+                      </button>
+                    </>
+
+                  ) : postPanelOpen ? (
+
+                    /* Panel open — input + X */
+                    <>
+                      <input
+                        type="text"
+                        value={canvasNote}
+                        onChange={(e) => setCanvasNote(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (commentSubmitRef.current) {
+                              commentSubmitRef.current();
+                              setCanvasNote("");
+                            } else {
+                              submitHandlerRef.current?.();
+                            }
+                          }
+                          if (e.key === "Escape") setPostPanelOpen(false);
+                        }}
+                        placeholder="drop your take..."
+                        className="flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 py-2.5 tracking-wide min-w-0"
+                      />
+                      <button
+                        onClick={() => setPostPanelOpen(false)}
+                        className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
+                      >
+                        <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+                      </button>
+                    </>
+
+                  ) : (
+
+                    /* Post-vote default — social proof + 🔥 */
+                    <>
+                      <div className="flex-1 flex items-center px-3 py-2.5 overflow-hidden min-w-0">
+                        {hookResults && hookResults.total > 0 ? (
+                          <span className="text-[10px] font-mono text-white/40 truncate">
+                            {canvasVotedSide === "a"
+                              ? `You + ${Math.max(0, hookResults.replay_yes - 1)} FMLY would Replay this`
+                              : `${hookResults.replay_yes} / ${hookResults.total} FMLY would Replay this`
+                            }
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-white/20 truncate">
+                            calibrating...
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-1.5" />
+                      <button
+                        onClick={() => setPostPanelOpen((prev) => !prev)}
+                        className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
+                      >
+                        <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
+                      </button>
+                    </>
+
+                  )}
                 </div>
               )}
 
