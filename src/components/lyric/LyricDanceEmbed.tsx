@@ -678,22 +678,6 @@ export function LyricDanceEmbed({
         className="absolute inset-0 w-full h-full pointer-events-none"
       />
 
-      {scorePill && (() => {
-        const { total, replay_yes } = scorePill;
-        const pct = total > 0 ? Math.round((replay_yes / total) * 100) : null;
-        return (
-          <div
-            className="absolute top-2 right-2 z-[90] flex items-center gap-1.5 px-2 py-1 rounded-full pointer-events-none"
-            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)" }}
-          >
-            <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
-            <span className="text-[10px] font-mono uppercase tracking-widest text-white/70">
-              {pct !== null ? `${pct}% REPLAY` : "CALIBRATING"}
-            </span>
-          </div>
-        );
-      })()}
-
       {/* Cover overlay */}
       <AnimatePresence>
         {(effectiveShowCover || isWaiting) && (
@@ -844,28 +828,22 @@ export function LyricDanceEmbed({
                 </button>
               </>
             ) : hideReactButton ? (
-              /* Post-vote default: lyric pill + React */
+              /* Post-vote default: social proof + 🔥 */
               <>
-                <button
-                  className="flex-1 flex items-center gap-2 px-3 py-2.5 text-left overflow-hidden min-w-0"
-                  onClick={() => setCommentFocused(true)}
-                >
-                  {activeLine ? (
-                    <>
-                      <div
-                        className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                        style={{ background: palette[1] ?? "#ffffff", opacity: 0.5 }}
-                      />
-                      <span className="text-[10px] font-mono text-white/30 truncate">
-                        {activeLine.text}
-                      </span>
-                    </>
+                <div className="flex-1 flex items-center px-3 py-2.5 overflow-hidden min-w-0">
+                  {scorePill && scorePill.total > 0 ? (
+                    <span className="text-[10px] font-mono text-white/40 truncate">
+                      {votedSide === "a"
+                        ? `You + ${Math.max(0, scorePill.replay_yes - 1)} FMLY would Replay this`
+                        : `${scorePill.replay_yes} / ${scorePill.total} FMLY would Replay this`
+                      }
+                    </span>
                   ) : (
                     <span className="text-[10px] font-mono text-white/20 truncate">
-                      {lyricSections.isReady ? "listening..." : "..."}
+                      calibrating...
                     </span>
                   )}
-                </button>
+                </div>
                 <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
                 <button
                   onClick={() => { onOpenReactions?.(); setCommentFocused(true); }}
