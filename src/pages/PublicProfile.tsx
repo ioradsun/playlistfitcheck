@@ -582,6 +582,10 @@ const PublicProfile = () => {
           postId={reviewSheetPostId}
           isOpen={true}
           onClose={() => setReviewSheetPostId(null)}
+          votedSide={null}
+          score={null}
+          onVoteYes={() => {}}
+          onVoteNo={() => {}}
         />
       )}
     </div>
