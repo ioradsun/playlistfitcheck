@@ -906,9 +906,10 @@ export function LyricDanceEmbed({
                   onClick={openPanel}
                   className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
                 >
-                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
-                    React
-                  </span>
+                  {reactionPanelOpen
+                    ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
+                    : <Flame size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+                  }
                 </button>
               </>
             )}
