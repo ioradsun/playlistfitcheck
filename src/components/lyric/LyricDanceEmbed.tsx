@@ -755,9 +755,9 @@ export function LyricDanceEmbed({
       )}
 
       {/* Bottom bar — progress + now-playing chip + React button */}
-      {!reactionPanelOpen && (
+      {(!reactionPanelOpen || (hideReactButton && votedSide != null)) && (
         <div
-          className="absolute bottom-0 left-0 right-0 z-[100]"
+          className={`absolute bottom-0 left-0 right-0 ${reactionPanelOpen ? "z-[101]" : "z-[100]"}`}
           style={{
             background: "rgba(0,0,0,0.4)",
             backdropFilter: "blur(12px)",
