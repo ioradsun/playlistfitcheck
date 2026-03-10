@@ -18,6 +18,7 @@ interface Props {
   onVotedSide?: (side: "a" | "b" | null) => void;
   isBattle?: boolean;
   onOpenReactions?: () => void;
+  onRegisterVoteHandler?: (fn: (replay: boolean) => void) => void;
   showPreResolved?: boolean;
   preResolved?: { total: number; replay_yes: number; saves_count?: number };
   rank?: number;
@@ -36,13 +37,14 @@ function incrementSessionReviewCount() {
   sessionStorage.setItem(SESSION_COUNT_KEY, String(next));
 }
 
-export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, showPreResolved, preResolved, rank }: Props) {
+export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, onRegisterVoteHandler, showPreResolved, preResolved, rank }: Props) {
   const leftLabel  = isBattle ? "LEFT HOOK"  : "Run it back";
   const rightLabel = isBattle ? "RIGHT HOOK" : "Skip";
   const fitLabel   = isBattle ? "LEFT HOOK"  : "REPLAY FIT";
 
   const { user } = useAuth();
   const sessionId = getSessionId();
+
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>(2);
@@ -94,7 +96,12 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
     setStep("cta");
   };
 
-  const handleRemove = async () => {
+  // Register the vote handler so external components can trigger votes
+  useEffect(() => {
+    onRegisterVoteHandler?.(handleVote);
+  });
+
+
     let q = supabase.from("songfit_hook_reviews").delete().eq("post_id", postId);
     if (user) q = q.eq("user_id", user.id);
     else q = (q as any).eq("session_id", sessionId).is("user_id", null);
