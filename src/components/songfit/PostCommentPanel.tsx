@@ -398,6 +398,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
       </div>
 
       <CommentInput
+        ref={inputRef}
         value={text}
         onChange={setText}
         onSubmit={handleSubmit}
