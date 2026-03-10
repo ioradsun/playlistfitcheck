@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getSessionId } from '@/lib/sessionId';
 import type { LyricSectionLine } from '@/hooks/useLyricSections';
@@ -638,12 +638,9 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                 </button>
                 <button
                   onClick={onClose}
-                  className="text-white/25 hover:text-white/60 transition-colors p-1 -mr-1 focus:outline-none"
+                  className="text-white/40 hover:text-white/80 transition-colors p-1 -mr-1 focus:outline-none"
                 >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <line x1="2" y1="2" x2="8" y2="8" />
-                    <line x1="8" y1="2" x2="2" y2="8" />
-                  </svg>
+                  <X size={14} />
                 </button>
               </div>
             </div>
