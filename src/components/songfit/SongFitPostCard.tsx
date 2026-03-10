@@ -454,7 +454,7 @@ export function SongFitPostCard({
                 )}
 
                 {isSpotifyEmbed && crowdfitMode === "hook_review" && (
-                  <div className="relative z-[80]">
+                  <div className="relative z-[300]">
                     <CardBottomBar
                       variant="fullscreen"
                       votedSide={votedSide}
