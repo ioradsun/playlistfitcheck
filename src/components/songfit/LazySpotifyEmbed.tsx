@@ -32,7 +32,7 @@ function LazySpotifyEmbedInner({
   const embedSrc =
     platform === "soundcloud" && trackUrl
       ? toSoundCloudEmbedUrl(trackUrl)
-      : `https://open.spotify.com/embed/track/${trackId}?utm_source=generator`;
+      : `https://open.spotify.com/embed/track/${trackId}?utm_source=generator&theme=0`;
 
   useEffect(() => {
     setIframeLoaded(false);
