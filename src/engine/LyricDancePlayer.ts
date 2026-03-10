@@ -1273,7 +1273,7 @@ export class LyricDancePlayer {
 
   private kickFontStabilizationLoad(): void {
     const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
-    if (!fontsApi || this._fontStabilized) return;
+    if (!fontsApi) return;
     Promise.all([
       fontsApi.load('400 16px Montserrat'),
       fontsApi.load('500 16px Montserrat'),
@@ -2442,11 +2442,17 @@ export class LyricDancePlayer {
         // Wait for font to actually load (with timeout)
         const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
         if (fontsApi) {
+          const weightsToLoad = [400, 500, 600, 700, 800, 900].map(
+            w => fontsApi.load(`${w} 48px "${fontName}"`),
+          );
           await Promise.race([
-            fontsApi.load(`700 48px "${fontName}"`),
-            new Promise<void>(resolve => setTimeout(resolve, 2000)),
+            Promise.all(weightsToLoad),
+            new Promise<void>(resolve => setTimeout(resolve, 2500)),
           ]);
-          const loaded = fontsApi.check(`700 48px "${fontName}"`);
+          const compileWeight = 600;
+          const loaded =
+            fontsApi.check(`${compileWeight} 48px "${fontName}"`) ||
+            fontsApi.check(`700 48px "${fontName}"`);
             if (loaded) {
             this._fontStabilized = true;
           }
