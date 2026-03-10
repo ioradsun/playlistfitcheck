@@ -741,7 +741,7 @@ export function LyricDanceEmbed({
       <div
         className="absolute bottom-0 left-0 right-0 z-[300]"
         style={{
-          background: "rgba(0,0,0,0.4)",
+          background: "rgba(8,8,8,0.92)",
           backdropFilter: "blur(12px)",
         }}
         onClick={(e) => e.stopPropagation()}
