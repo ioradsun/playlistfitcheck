@@ -102,6 +102,7 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
   });
 
 
+  const handleRemove = async () => {
     let q = supabase.from("songfit_hook_reviews").delete().eq("post_id", postId);
     if (user) q = q.eq("user_id", user.id);
     else q = (q as any).eq("session_id", sessionId).is("user_id", null);
