@@ -1,5 +1,5 @@
 import { useState, useEffect, memo } from "react";
-import { Flame, X } from "lucide-react";
+import { X } from "lucide-react";
 import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { logEngagementEvent } from "@/lib/engagementTracking";
@@ -146,10 +146,22 @@ function LazySpotifyEmbedInner({
             className="flex-1 bg-transparent text-[13px] text-white placeholder:text-white/35 outline-none font-mono"
           />
           <button
-            onClick={() => onOpenReactions?.()}
-            className="text-[11px] font-mono text-white/60 hover:text-white transition-colors"
+            onClick={() => {
+              if (externalPanelOpen) {
+                setCommentFocused(false);
+                onOpenReactions?.();
+                return;
+              }
+              onOpenReactions?.();
+              setCommentFocused(true);
+            }}
+            className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
           >
-            React {externalPanelOpen ? "↓" : "↑"}
+            {externalPanelOpen ? (
+              <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+            ) : (
+              <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
+            )}
           </button>
         </div>
       </div>
