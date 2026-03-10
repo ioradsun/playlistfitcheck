@@ -1389,6 +1389,7 @@ export type Database = {
           lyrics: Json
           palette: Json
           physics_spec: Json | null
+          post_id: string | null
           scene_context: Json | null
           scene_manifest: Json | null
           section_images: Json | null
@@ -1415,6 +1416,7 @@ export type Database = {
           lyrics: Json
           palette?: Json
           physics_spec?: Json | null
+          post_id?: string | null
           scene_context?: Json | null
           scene_manifest?: Json | null
           section_images?: Json | null
@@ -1441,6 +1443,7 @@ export type Database = {
           lyrics?: Json
           palette?: Json
           physics_spec?: Json | null
+          post_id?: string | null
           scene_context?: Json | null
           scene_manifest?: Json | null
           section_images?: Json | null
@@ -1453,6 +1456,13 @@ export type Database = {
           words?: Json | null
         }
         Relationships: [
+          {
+            foreignKeyName: "shareable_lyric_dances_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "songfit_posts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "shareable_lyric_dances_user_id_fkey"
             columns: ["user_id"]
