@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { getSessionId } from '@/lib/sessionId';
@@ -75,7 +75,6 @@ function CommentReactPicker({
 export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, score, onVoteYes, onVoteNo }: Props) {
   const { user, profile } = useAuth();
   const sessionId = getSessionId();
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText] = useState('');
@@ -214,7 +213,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
         setText('');
         setReplyingTo(null);
         setHasSubmitted(true);
-        setTimeout(() => setHasSubmitted(false), 2000);
+        setTimeout(() => setHasSubmitted(false), 500);
       }
     } catch {
       // no-op
@@ -321,7 +320,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
           />
           {!isReply && (
             <button
-              onClick={() => { setReplyingTo(comment); setTimeout(() => inputRef.current?.focus(), 0); }}
+              onClick={() => setReplyingTo(comment)}
               className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors ml-auto focus:outline-none"
             >
               reply
@@ -398,7 +397,6 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
       </div>
 
       <CommentInput
-        ref={inputRef}
         value={text}
         onChange={setText}
         onSubmit={handleSubmit}
