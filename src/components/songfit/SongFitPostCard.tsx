@@ -98,6 +98,8 @@ export function SongFitPostCard({
   const [postPanelOpen, setPostPanelOpen] = useState(false);
   const [hookReviewKey, setHookReviewKey] = useState(0);
   const voteHandlerRef = useRef<((replay: boolean) => void) | null>(null);
+  const submitHandlerRef = useRef<(() => void) | null>(null);
+  const [canvasNote, setCanvasNote] = useState("");
   const [canvasVotedSide, setCanvasVotedSide] = useState<"a" | "b" | null>(
     null,
   );
@@ -397,6 +399,10 @@ export function SongFitPostCard({
                 onVoteNo={() => voteHandlerRef.current?.(false)}
                 votedSide={canvasVotedSide}
                 scorePill={hookResults}
+                canvasNote={canvasNote}
+                onCanvasNoteChange={setCanvasNote}
+                onCanvasSubmit={() => submitHandlerRef.current?.()}
+                onOpenReactions={() => setReactionPanelOpen(true)}
               />
             </div>
           ) : post.lyric_dance_url &&
@@ -429,6 +435,10 @@ export function SongFitPostCard({
                 onVoteNo={() => voteHandlerRef.current?.(false)}
                 votedSide={canvasVotedSide}
                 scorePill={hookResults}
+                canvasNote={canvasNote}
+                onCanvasNoteChange={setCanvasNote}
+                onCanvasSubmit={() => submitHandlerRef.current?.()}
+                onOpenReactions={() => setPostPanelOpen(true)}
               />
               <PostCommentPanel
                 postId={post.id}
@@ -809,6 +819,9 @@ export function SongFitPostCard({
               }}
               onRegisterVoteHandler={(fn) => {
                 voteHandlerRef.current = fn;
+              }}
+              onRegisterSubmitHandler={(fn) => {
+                submitHandlerRef.current = fn;
               }}
               onResultsChange={setHookResults}
             />
