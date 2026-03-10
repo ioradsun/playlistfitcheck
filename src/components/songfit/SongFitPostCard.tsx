@@ -811,7 +811,7 @@ export function SongFitPostCard({
               showPreResolved={isBillboard && !!signalData}
               preResolved={signalData}
               rank={rank}
-              onScored={() => setIsScored(true)}
+              
               onVotedSide={(side) => {
                 setCanvasVotedSide(side);
               }}
