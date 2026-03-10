@@ -74,7 +74,7 @@ function LazySpotifyEmbedInner({
   return (
     <div
       className="w-full overflow-hidden relative"
-      style={{ height: platform === "soundcloud" ? 166 : 232 }}
+      style={{ height: platform === "soundcloud" ? 166 : 232, background: "#121212" }}
       onClick={handleClick}
     >
       {/* Full-bleed album art poster — sits behind iframe */}
