@@ -409,69 +409,69 @@ export function SongFitPostCard({
           ) : (
             <>
               <div className="relative">
-              <LazySpotifyEmbed
-                trackId={post.spotify_track_id}
-                trackTitle={post.track_title}
-                trackUrl={post.spotify_track_url}
-                postId={post.id}
-                albumArtUrl={post.album_art_url}
-                artistName={(post.track_artists_json as any[])
-                  ?.map((a: any) => a.name)
-                  .join(", ")}
-                genre={((post.tags_json as any[]) || [])[0] || null}
-                cardState={cardState}
-              />
-              <PostCommentPanel
-                postId={post.id}
-                isOpen={postPanelOpen}
-                onClose={() => setPostPanelOpen(false)}
-                votedSide={votedSide}
-                score={score}
-                onVoteYes={() => handleVote(true)}
-                onVoteNo={() => handleVote(false)}
-              />
+                <LazySpotifyEmbed
+                  trackId={post.spotify_track_id}
+                  trackTitle={post.track_title}
+                  trackUrl={post.spotify_track_url}
+                  postId={post.id}
+                  albumArtUrl={post.album_art_url}
+                  artistName={(post.track_artists_json as any[])
+                    ?.map((a: any) => a.name)
+                    .join(", ")}
+                  genre={((post.tags_json as any[]) || [])[0] || null}
+                  cardState={cardState}
+                />
+                <PostCommentPanel
+                  postId={post.id}
+                  isOpen={postPanelOpen}
+                  onClose={() => setPostPanelOpen(false)}
+                  votedSide={votedSide}
+                  score={score}
+                  onVoteYes={() => handleVote(true)}
+                  onVoteNo={() => handleVote(false)}
+                />
+
+                {/* Caption — directly below embed */}
+                {!editing && localCaption && localCaption.trim() && (
+                  <div className="px-3 pt-1 pb-0.5">
+                    {localCaption.length <= 100 || captionExpanded ? (
+                      <p className="text-[13px] leading-snug text-white/70">
+                        {localCaption}
+                      </p>
+                    ) : (
+                      <p className="text-[13px] leading-snug text-white/70">
+                        {localCaption.slice(0, 100).trimEnd()}
+                        <span className="text-white/30">… </span>
+                        <button
+                          onClick={() => setCaptionExpanded(true)}
+                          className="text-white/30 hover:text-white/50 text-[13px]"
+                        >
+                          more
+                        </button>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {isSpotifyEmbed && crowdfitMode === "hook_review" && (
+                  <div className="relative z-[80]">
+                    <CardBottomBar
+                      variant="fullscreen"
+                      votedSide={votedSide}
+                      score={score}
+                      note={note}
+                      onNoteChange={setNote}
+                      onVoteYes={() => handleVote(true)}
+                      onVoteNo={() => handleVote(false)}
+                      onSubmit={handleSubmit}
+                      onOpenReactions={() => setPostPanelOpen(true)}
+                      onClose={() => setPostPanelOpen(false)}
+                      panelOpen={postPanelOpen}
+                      topReaction={topPostReaction}
+                    />
+                  </div>
+                )}
               </div>
-
-              {/* Caption — directly below embed */}
-              {!editing && localCaption && localCaption.trim() && (
-                <div className="px-3 pt-1 pb-0.5">
-                  {localCaption.length <= 100 || captionExpanded ? (
-                    <p className="text-[13px] leading-snug text-white/70">
-                      {localCaption}
-                    </p>
-                  ) : (
-                    <p className="text-[13px] leading-snug text-white/70">
-                      {localCaption.slice(0, 100).trimEnd()}
-                      <span className="text-white/30">… </span>
-                      <button
-                        onClick={() => setCaptionExpanded(true)}
-                        className="text-white/30 hover:text-white/50 text-[13px]"
-                      >
-                        more
-                      </button>
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {isSpotifyEmbed && crowdfitMode === "hook_review" && (
-                <div className="relative z-[80]">
-                  <CardBottomBar
-                    variant="fullscreen"
-                    votedSide={votedSide}
-                    score={score}
-                    note={note}
-                    onNoteChange={setNote}
-                    onVoteYes={() => handleVote(true)}
-                    onVoteNo={() => handleVote(false)}
-                    onSubmit={handleSubmit}
-                    onOpenReactions={() => setPostPanelOpen(true)}
-                    onClose={() => setPostPanelOpen(false)}
-                    panelOpen={postPanelOpen}
-                    topReaction={topPostReaction}
-                  />
-                </div>
-              )}
 
               {/* Action row — stacked below caption inside 320px */}
               {crowdfitMode !== "hook_review" && (
