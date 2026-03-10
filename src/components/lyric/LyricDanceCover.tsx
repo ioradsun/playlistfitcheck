@@ -72,7 +72,7 @@ export function LyricDanceCover({
       )}
 
       {/* Layer 3 — song title + Listen Now */}
-      <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center">
+      <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ marginBottom: 48 }}>
         {songName ? (
           <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4 max-w-[85%]">
             {songName}
