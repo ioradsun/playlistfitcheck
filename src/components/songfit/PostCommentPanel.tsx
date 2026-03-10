@@ -213,7 +213,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
         setText('');
         setReplyingTo(null);
         setHasSubmitted(true);
-        setTimeout(() => setHasSubmitted(false), 2000);
+        setTimeout(() => setHasSubmitted(false), 500);
       }
     } catch {
       // no-op
