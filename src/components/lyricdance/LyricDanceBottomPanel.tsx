@@ -180,7 +180,7 @@ export default function LyricDanceBottomPanel({ danceId, constellationRef, onCom
               onClick={() => handleSignal(false)}
               className="px-6 py-2.5 border border-white/20 rounded font-mono text-xs uppercase tracking-[0.15em] text-white/80 hover:bg-white/10 transition-colors min-h-[44px]"
             >
-              SKIP
+              NOT FOR ME
             </button>
           </motion.div>
         )}

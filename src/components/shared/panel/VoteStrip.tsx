@@ -55,7 +55,7 @@ export function VoteStrip({
           className="text-[11px] font-mono tracking-[0.12em] uppercase transition-colors pb-px"
           style={activeStyle(votedSide === 'b')}
         >
-          Skip
+          Not For Me
         </span>
         {skipCount > 0 && (
           <span className="text-[9px] font-mono text-white/20">{skipCount}</span>

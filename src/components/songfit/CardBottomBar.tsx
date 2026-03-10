@@ -70,7 +70,7 @@ export function CardBottomBar({
             className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
             <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-              Skip
+              Not For Me
             </span>
             {score != null && (score.total - score.replay_yes) > 0 && (
               <span className="text-[9px] font-mono text-white/20">{score.total - score.replay_yes}</span>
@@ -100,14 +100,37 @@ export function CardBottomBar({
         />
       ) : (
         /* Post-vote: social proof */
-        <div className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}>
-          {score && score.total > 0 ? (
-            <span className="text-[10px] font-mono text-emerald-400 truncate">
-              {votedSide === "a"
-                ? `You + ${Math.max(0, score.replay_yes - 1)} FMLY would Replay this`
-                : `${score.replay_yes} / ${score.total} FMLY would Replay this`}
-            </span>
-          ) : (
+        <div className={`flex-1 flex flex-col justify-center px-3 ${py} overflow-hidden min-w-0`}>
+          {score && score.total > 0 ? (() => {
+            const { total, replay_yes } = score;
+            const notForMeCount = total - replay_yes;
+            const majorityRanItBack = replay_yes > total / 2;
+            const isSplit = replay_yes === total / 2;
+            const userAgrees = votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
+
+            let verdict: string;
+            let tally: string;
+
+            if (total < 20) {
+              verdict = "FMLY STILL VOTING";
+              tally = `${replay_yes} / ${total} RAN IT BACK`;
+            } else if (isSplit) {
+              verdict = "FMLY IS SPLIT";
+              tally = `${replay_yes} / ${total} RAN IT BACK`;
+            } else {
+              verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
+              tally = majorityRanItBack
+                ? `${replay_yes} / ${total} RAN IT BACK`
+                : `${notForMeCount} / ${total} NOT FOR ME`;
+            }
+
+            return (
+              <>
+                <span className="text-[9px] font-mono tracking-[0.12em] text-white/35 leading-tight truncate">{verdict}</span>
+                <span className="text-[10px] font-mono tracking-[0.08em] text-white/60 leading-tight truncate">{tally}</span>
+              </>
+            );
+          })() : (
             <span className="text-[10px] font-mono text-white/20 truncate">calibrating...</span>
           )}
         </div>
