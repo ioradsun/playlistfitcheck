@@ -146,7 +146,7 @@ export function CardBottomBar({
             if (votedSide !== null) setCommentFocused(true);
           }
         }}
-        className={`flex items-center justify-center gap-1 px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0`}
+        className={`relative z-[500] flex items-center justify-center gap-1 px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0`}
       >
         {panelOpen ? (
           <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
