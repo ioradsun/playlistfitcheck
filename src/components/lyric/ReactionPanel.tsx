@@ -589,7 +589,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                 'live'
           }
           palette={palette}
-          onClose={onClose}
           size="compact"
           actions={(
             <button
@@ -781,7 +780,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               'live'
         }
         palette={palette}
-        onClose={onClose}
         size="full"
         actions={(
           <>

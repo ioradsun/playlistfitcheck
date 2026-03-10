@@ -1,5 +1,3 @@
-import { X } from 'lucide-react';
-
 interface PanelHeaderProps {
   /**
    * "live"    — pulsing dot, "Live" label
@@ -8,8 +6,7 @@ interface PanelHeaderProps {
    */
   status?: 'live' | 'freezing' | 'engaged';
   palette?: string[];
-  onClose: () => void;
-  /** Optional right-side actions rendered before the X button */
+  /** Optional right-side actions rendered on the right side of the header */
   actions?: React.ReactNode;
   /**
    * "compact" — 28px height (embedded cards)
@@ -21,7 +18,6 @@ interface PanelHeaderProps {
 export function PanelHeader({
   status = 'live',
   palette,
-  onClose,
   actions,
   size = 'compact',
 }: PanelHeaderProps) {
@@ -60,15 +56,7 @@ export function PanelHeader({
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
-        {actions}
-        <button
-          onClick={onClose}
-          className="text-white/40 hover:text-white/80 transition-colors p-1 -mr-1 focus:outline-none"
-        >
-          <X size={size === 'full' ? 12 : 14} />
-        </button>
-      </div>
+      <div className="flex items-center gap-2">{actions}</div>
     </div>
   );
 }

@@ -11,6 +11,8 @@ interface CardBottomBarProps {
   onSubmit: () => void;
   onOpenReactions: () => void;
   onClose: () => void;
+  /** When true the panel is open — render X instead of 🔥 */
+  panelOpen?: boolean;
   /**
    * "embedded" — inside LyricDanceEmbed canvas (backdrop blur, py-3 buttons)
    * "fullscreen" — SongFitPostCard / ShareableLyricDance (no backdrop, py-2.5, rounded wrapper)
@@ -28,6 +30,7 @@ export function CardBottomBar({
   onSubmit,
   onOpenReactions,
   onClose,
+  panelOpen = false,
   variant = "embedded",
 }: CardBottomBarProps) {
   const [commentFocused, setCommentFocused] = useState(false);
@@ -117,12 +120,19 @@ export function CardBottomBar({
           <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
           <button
             onClick={() => {
-              onOpenReactions();
-              setCommentFocused(true);
+              if (panelOpen) {
+                onClose();
+              } else {
+                onOpenReactions();
+                setCommentFocused(true);
+              }
             }}
             className={`flex items-center justify-center px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0`}
           >
-            <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
+            {panelOpen
+              ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
+              : <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
+            }
           </button>
         </>
       )}

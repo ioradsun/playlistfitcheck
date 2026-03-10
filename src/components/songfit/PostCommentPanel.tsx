@@ -128,7 +128,6 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette }: Props) {
       <PanelHeader
         status="live"
         palette={palette}
-        onClose={onClose}
         size="compact"
       />
 
