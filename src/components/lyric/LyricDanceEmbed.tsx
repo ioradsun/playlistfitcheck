@@ -281,9 +281,10 @@ export function LyricDanceEmbed({
   // ── Eviction when scrolled far away (feed only) ────────────────────
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) return;
-    if (!player && !playerReady) return;
 
     if (visibility === "far") {
+      // Nothing to evict if player hasn't initialized yet — skip timer
+      if (!player && !playerReady) return;
       if (farTimerRef.current) return;
       farTimerRef.current = setTimeout(() => {
         farTimerRef.current = null;
@@ -291,6 +292,9 @@ export function LyricDanceEmbed({
       }, 3000);
       return;
     }
+    // Card is visible/near — always cancel pending eviction and un-evict.
+    // Must NOT guard on player/playerReady here: after eviction the player is
+    // null and we still need setPlayerEvicted(false) to reinitialize it.
     if (farTimerRef.current) {
       clearTimeout(farTimerRef.current);
       farTimerRef.current = null;
