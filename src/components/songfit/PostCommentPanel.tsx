@@ -179,44 +179,47 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
     const content = text.trim();
     if (!content || !user || submitting) return;
     setSubmitting(true);
+
+    const optimisticComment: Comment = {
+      id: `optimistic-${Date.now()}`,
+      content,
+      created_at: new Date().toISOString(),
+      user_id: user.id,
+      parent_comment_id: replyingTo?.id ?? null,
+      profiles: {
+        display_name: profile?.display_name ?? null,
+        avatar_url: profile?.avatar_url ?? null,
+      },
+      replies: [],
+    };
+
+    if (replyingTo) {
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === replyingTo.id
+            ? { ...c, replies: [...(c.replies ?? []), optimisticComment] }
+            : c,
+        ),
+      );
+    } else {
+      setComments((prev) => [...prev, optimisticComment]);
+    }
+    setText('');
+    setReplyingTo(null);
+    setHasSubmitted(true);
+    setTimeout(() => setHasSubmitted(false), 500);
+
     try {
-      const { data, error } = await supabase
+      await supabase
         .from('songfit_comments')
         .insert({
           post_id: postId,
           user_id: user.id,
           content,
           parent_comment_id: replyingTo?.id ?? null,
-        })
-        .select('id, content, created_at, user_id, parent_comment_id')
-        .single();
-      if (!error && data) {
-        const newComment: Comment = {
-          ...(data as any),
-          profiles: {
-            display_name: profile?.display_name ?? null,
-            avatar_url: profile?.avatar_url ?? null,
-          },
-          replies: [],
-        };
-        if (replyingTo) {
-          setComments((prev) =>
-            prev.map((c) =>
-              c.id === replyingTo.id
-                ? { ...c, replies: [...(c.replies ?? []), newComment] }
-                : c,
-            ),
-          );
-        } else {
-          setComments((prev) => [...prev, newComment]);
-        }
-        setText('');
-        setReplyingTo(null);
-        setHasSubmitted(true);
-        setTimeout(() => setHasSubmitted(false), 500);
-      }
+        });
     } catch {
-      // no-op
+      // no-op — comment already shown optimistically
     }
     setSubmitting(false);
   };

@@ -1,3 +1,5 @@
+import { useRef, useEffect } from 'react';
+
 interface CommentInputProps {
   value: string;
   onChange: (v: string) => void;
@@ -23,10 +25,18 @@ export function CommentInput({
   const textSize = size === 'full' ? 'text-[12px]' : 'text-[11px]';
   const px = size === 'full' ? 'px-4' : 'px-3';
 
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!hasSubmitted) {
+      inputRef.current?.focus();
+    }
+  }, [hasSubmitted]);
+
   return (
     <div
-      className="shrink-0 border-t border-white/[0.06] px-2 py-1 relative"
-      style={{ background: '#0a0a0a' }}
+      className="relative z-10 shrink-0 px-2 py-1"
+      style={{ background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.08)' }}
     >
       <div className={`relative ${heightClass}`}>
         <div
@@ -35,6 +45,7 @@ export function CommentInput({
           }`}
         >
           <input
+            ref={inputRef}
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
