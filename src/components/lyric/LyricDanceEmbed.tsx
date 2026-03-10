@@ -743,7 +743,7 @@ export function LyricDanceEmbed({
           className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="text-[10px] font-mono text-white/60 uppercase tracking-wider bg-black/40 backdrop-blur-sm rounded px-1.5 py-0.5">
+          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider bg-black/30 backdrop-blur-sm rounded px-1.5 py-0.5">
             {songTitle}
           </span>
           {showExpandButton && (
@@ -788,8 +788,8 @@ export function LyricDanceEmbed({
               className="h-full transition-none"
               style={{
                 width: `${progress * 100}%`,
-                background: palette[1] ?? "#a855f7",
-                opacity: 0.6,
+                background: palette[1] ?? "rgba(255,255,255,0.35)",
+                opacity: 0.5,
               }}
             />
           </div>

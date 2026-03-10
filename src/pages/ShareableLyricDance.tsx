@@ -602,8 +602,8 @@ export default function ShareableLyricDance() {
   if (notFound) {
     return (
       <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 z-50">
-        <p className="text-white/40 text-lg font-mono">Lyric Dance not found.</p>
-        <button onClick={() => navigate("/")} className="text-white/30 text-sm hover:text-white/60 transition-colors">tools.fm</button>
+        <p className="text-white/30 text-lg font-mono">Lyric Dance not found.</p>
+        <button onClick={() => navigate("/")} className="text-white/20 text-sm hover:text-white/40 transition-colors focus:outline-none">tools.fm</button>
       </div>
     );
   }
@@ -631,9 +631,9 @@ export default function ShareableLyricDance() {
             initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.4 }}
             onClick={() => navigate(`/?from=lyric-dance&song=${encodeURIComponent(data.song_name)}`)}
-            className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 hover:border-white/25 hover:bg-black/80 transition-all group"
+            className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/[0.06] hover:border-white/15 hover:bg-black/80 transition-all group focus:outline-none"
           >
-            <span className="text-[10px] font-mono text-white/50 group-hover:text-white/80 tracking-wider transition-colors">Fit by toolsFM</span>
+            <span className="text-[9px] font-mono text-white/30 group-hover:text-white/60 tracking-wider transition-colors">Fit by toolsFM</span>
           </motion.button>
         )}
       </AnimatePresence>
@@ -701,14 +701,14 @@ export default function ShareableLyricDance() {
         {!showCover && !isWaitingForPlayer && (
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2.5">
             {coverAvatarUrl ? (
-              <img src={coverAvatarUrl} alt={coverArtist || coverSongName} className="w-8 h-8 rounded-full object-cover border border-white/10" />
+              <img src={coverAvatarUrl} alt={coverArtist || coverSongName} className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
             ) : (
               <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                <span className="text-xs font-mono text-white/40">{coverInitial}</span>
+                <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
               </div>
             )}
             <div className="flex flex-col">
-              <span className="text-[11px] font-semibold text-white/70 leading-tight truncate max-w-[180px]">{coverSongName}</span>
+              <span className="text-[11px] font-semibold text-white/60 leading-tight truncate max-w-[180px]">{coverSongName}</span>
               <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">{coverArtist}</span>
             </div>
           </div>

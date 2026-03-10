@@ -283,7 +283,7 @@ export function SongFitPostCard({
     <div className="px-2 pb-3">
       <div
         className="relative rounded-2xl overflow-hidden"
-        style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.06)" }}
+        style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.04)" }}
       >
         {/* Header */}
         <div className="relative flex items-center justify-between px-3 py-2.5">
@@ -294,7 +294,7 @@ export function SongFitPostCard({
                 onClick={handleProfileClick}
               >
                 <div className="relative shrink-0">
-                  <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
+                  <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.06]">
                     {post.profiles?.avatar_url ? (
                       <img
                         src={post.profiles.avatar_url}
@@ -313,12 +313,12 @@ export function SongFitPostCard({
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <p className="text-xs font-medium leading-tight truncate text-white/70">
+                    <p className="text-[13px] font-medium leading-tight truncate text-white/60">
                       {displayName}
                     </p>
                     <FmlyBadge userId={post.user_id} compact />
                   </div>
-                  <p className="font-mono text-[10px] text-white/30 leading-tight">
+                  <p className="font-mono text-[9px] text-white/25 leading-tight">
                     {timeAgo}
                   </p>
                 </div>
@@ -328,7 +328,7 @@ export function SongFitPostCard({
 
           {/* Card type label */}
           {(hasLyricDancePost || isSpotifyEmbed) && (
-            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400/70 shrink-0 mr-1">
+            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400/40 shrink-0 mr-1">
               {hasLyricDancePost ? "In Studio" : "Now Streaming"}
             </span>
           )}
@@ -340,7 +340,7 @@ export function SongFitPostCard({
             }}
           >
             <DropdownMenuTrigger asChild>
-              <button className="p-1.5 rounded-full hover:bg-white/5 text-white/20 hover:text-white/50 transition-colors shrink-0">
+              <button className="p-1.5 rounded-full hover:bg-white/[0.04] text-white/15 hover:text-white/40 transition-colors shrink-0 focus:outline-none">
                 <MoreHorizontal size={16} />
               </button>
             </DropdownMenuTrigger>
@@ -459,16 +459,16 @@ export function SongFitPostCard({
                 {!editing && localCaption && localCaption.trim() && (
                   <div className="px-3 pt-1.5 pb-1" style={{ background: "#0a0a0a" }}>
                     {localCaption.length <= 100 || captionExpanded ? (
-                      <p className="text-[13px] leading-snug text-white/70">
+                      <p className="text-[13px] leading-snug text-white/50">
                         {localCaption}
                       </p>
                     ) : (
-                      <p className="text-[13px] leading-snug text-white/70">
+                      <p className="text-[13px] leading-snug text-white/50">
                         {localCaption.slice(0, 100).trimEnd()}
-                        <span className="text-white/30">… </span>
+                        <span className="text-white/20">… </span>
                         <button
                           onClick={() => setCaptionExpanded(true)}
-                          className="text-white/30 hover:text-white/50 text-[13px]"
+                          className="text-white/20 hover:text-white/40 text-[13px]"
                         >
                           more
                         </button>
@@ -507,37 +507,37 @@ export function SongFitPostCard({
                         if (user)
                           logEngagementEvent(post.id, user.id, "comment");
                       }}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
                     >
                       <MessageCircle
                         size={16}
-                        className="text-white/35 group-hover:text-white/80 transition-colors"
+                        className="text-white/25 group-hover:text-white/60 transition-colors"
                       />
                       {post.comments_count > 0 && (
-                        <span className="text-[11px] text-white/35 font-mono group-hover:text-white/80">
+                        <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
                           {post.comments_count}
                         </span>
                       )}
                     </button>
                     <button
                       onClick={handleShare}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
                     >
                       <Share2
                         size={16}
-                        className="text-white/35 group-hover:text-white/80 transition-colors"
+                        className="text-white/25 group-hover:text-white/60 transition-colors"
                       />
                     </button>
                     <button
                       onClick={toggleLike}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
                     >
                       <Flame
                         size={16}
                         className={
                           liked
-                            ? "fill-green-400 text-green-400"
-                            : "text-white/35 group-hover:text-white/80 transition-colors"
+                            ? "fill-white/80 text-white/80"
+                            : "text-white/25 group-hover:text-white/60 transition-colors"
                         }
                       />
                       {likesCount > 0 && (
@@ -546,7 +546,7 @@ export function SongFitPostCard({
                             e.stopPropagation();
                             onOpenLikes(post.id);
                           }}
-                          className="text-[11px] text-white/35 font-mono group-hover:text-white/80"
+                          className="text-[11px] text-white/20 font-mono group-hover:text-white/50 focus:outline-none"
                         >
                           {likesCount}
                         </button>
@@ -554,19 +554,19 @@ export function SongFitPostCard({
                     </button>
                     <button
                       onClick={toggleSave}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
                     >
                       <Bookmark
                         size={16}
                         className={
                           saved
-                            ? "fill-green-400 text-green-400"
-                            : "text-white/35 group-hover:text-white/80 transition-colors"
+                            ? "fill-white/80 text-white/80"
+                            : "text-white/25 group-hover:text-white/60 transition-colors"
                         }
                       />
                     </button>
                   </div>
-                  <div className="flex items-center gap-2 text-white/30">
+                  <div className="flex items-center gap-2 text-white/20">
                     {post.status === "live" && post.expires_at && (
                       <span className="flex items-center gap-1 px-2 py-1 text-[11px] font-mono">
                         <Clock size={12} />
@@ -581,7 +581,7 @@ export function SongFitPostCard({
                       </span>
                     )}
                     {rank && rank <= 50 && (
-                      <span className="text-[11px] font-bold text-green-400 font-mono px-2 py-1">
+                      <span className="text-[11px] font-bold text-white/50 font-mono px-2 py-1">
                         #{rank}
                       </span>
                     )}
@@ -609,7 +609,7 @@ export function SongFitPostCard({
                 />
                 <div className="flex items-center justify-between">
                   <span
-                    className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-red-400" : "text-white/20"}`}
+                    className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-white/60" : "text-white/20"}`}
                   >
                     {editCaption.length}/{CAPTION_MAX}
                   </span>
@@ -623,7 +623,7 @@ export function SongFitPostCard({
                     <button
                       onClick={handleSaveEdit}
                       disabled={saving}
-                      className="p-1.5 rounded-full hover:bg-white/5 text-green-400"
+                      className="p-1.5 rounded-full hover:bg-white/5 text-white/60"
                     >
                       <Check size={14} />
                     </button>
@@ -633,16 +633,16 @@ export function SongFitPostCard({
             ) : localCaption && localCaption.trim() ? (
               <div className="relative px-3 pt-1.5 pb-1" style={{ background: "#0a0a0a" }}>
                 {localCaption.length <= 125 || captionExpanded ? (
-                  <p className="text-[13px] leading-snug text-white/70">
+                  <p className="text-[13px] leading-snug text-white/50">
                     {localCaption}
                   </p>
                 ) : (
-                  <p className="text-[13px] leading-snug text-white/70">
+                  <p className="text-[13px] leading-snug text-white/50">
                     {localCaption.slice(0, 125).trimEnd()}
-                    <span className="text-white/30">… </span>
+                    <span className="text-white/20">… </span>
                     <button
                       onClick={() => setCaptionExpanded(true)}
-                      className="text-white/30 hover:text-white/50 text-[13px]"
+                      className="text-white/20 hover:text-white/40 text-[13px]"
                     >
                       more
                     </button>
@@ -666,14 +666,14 @@ export function SongFitPostCard({
                     onOpenComments(post.id);
                     if (user) logEngagementEvent(post.id, user.id, "comment");
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group"
+                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
                 >
                   <MessageCircle
                     size={17}
-                    className="text-white/35 group-hover:text-white/80 transition-colors"
+                    className="text-white/25 group-hover:text-white/60 transition-colors"
                   />
                   {post.comments_count > 0 && (
-                    <span className="text-[11px] text-white/35 font-mono group-hover:text-white/80">
+                    <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
                       {post.comments_count}
                     </span>
                   )}
@@ -681,24 +681,24 @@ export function SongFitPostCard({
 
                 <button
                   onClick={handleShare}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group"
+                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
                 >
                   <Share2
                     size={17}
-                    className="text-white/35 group-hover:text-white/80 transition-colors"
+                    className="text-white/25 group-hover:text-white/60 transition-colors"
                   />
                 </button>
 
                 <button
                   onClick={toggleLike}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group"
+                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
                 >
                   <Flame
                     size={17}
                     className={
                       liked
-                        ? "fill-green-400 text-green-400"
-                        : "text-white/35 group-hover:text-white/80 transition-colors"
+                        ? "fill-white/80 text-white/80"
+                        : "text-white/25 group-hover:text-white/60 transition-colors"
                     }
                   />
                   {likesCount > 0 && (
@@ -707,7 +707,7 @@ export function SongFitPostCard({
                         e.stopPropagation();
                         onOpenLikes(post.id);
                       }}
-                      className="text-[11px] text-white/35 font-mono group-hover:text-white/80"
+                      className="text-[11px] text-white/20 font-mono group-hover:text-white/50 focus:outline-none"
                     >
                       {likesCount}
                     </button>
@@ -716,18 +716,18 @@ export function SongFitPostCard({
 
                 <button
                   onClick={toggleSave}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group"
+                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
                 >
                   <Bookmark
                     size={17}
                     className={
                       saved
-                        ? "fill-green-400 text-green-400"
-                        : "text-white/35 group-hover:text-white/80 transition-colors"
+                        ? "fill-white/80 text-white/80"
+                        : "text-white/25 group-hover:text-white/60 transition-colors"
                     }
                   />
                   {(post as any).saves_count > 0 && (
-                    <span className="text-[11px] text-white/35 font-mono group-hover:text-white/80">
+                    <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
                       {(post as any).saves_count}
                     </span>
                   )}
@@ -753,13 +753,13 @@ export function SongFitPostCard({
 
               {/* Right: game mechanics */}
               <TooltipProvider delayDuration={350}>
-                <div className="flex items-center gap-2 text-white/30">
+                <div className="flex items-center gap-2 text-white/20">
                   {post.engagement_score > 0 && (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help"
+                          className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
                         >
                           <Trophy size={13} />
                           <span className="text-[11px] font-mono">
@@ -781,7 +781,7 @@ export function SongFitPostCard({
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help"
+                          className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
                         >
                           <Clock size={13} />
                           <span className="text-[11px] font-mono">
@@ -810,7 +810,7 @@ export function SongFitPostCard({
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          className="text-[11px] font-bold text-green-400 font-mono px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help"
+                          className="text-[11px] font-bold text-white/50 font-mono px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
                         >
                           #{rank}
                         </button>
@@ -825,7 +825,7 @@ export function SongFitPostCard({
             </div>
           )}
 
-        <div className="h-1" />
+        <div className="h-px" />
       </div>
     </div>
   );
