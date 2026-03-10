@@ -211,7 +211,7 @@ export default function ShareableLyricDance() {
   const engagementModeRef = useRef<'spectator' | 'freezing' | 'engaged'>('spectator');
 
   const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(
-    data?.id ?? "",
+    data?.post_id ?? "",
     { allowAnonymous: true },
   );
 
@@ -523,7 +523,7 @@ export default function ShareableLyricDance() {
 
 
   useEffect(() => {
-    if (!reactionPanelOpen && engagementMode !== 'spectator') {
+    if (engagementMode !== 'spectator' && !reactionPanelOpen) {
       setEngagementMode('spectator');
       setFrozenLineIndex(null);
       freezeAtSecRef.current = null;
@@ -721,7 +721,6 @@ export default function ShareableLyricDance() {
       </div>
 
       {/* Bottom action bar */}
-      {!reactionPanelOpen && (
       <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }}>
 
         {/* Progress bar — full width, always visible */}
@@ -748,11 +747,11 @@ export default function ShareableLyricDance() {
               onSubmit={handleSubmit}
               onOpenReactions={() => setReactionPanelOpen(true)}
               onClose={() => setReactionPanelOpen(false)}
+              panelOpen={reactionPanelOpen}
             />
           )}
         </div>
       </div>
-      )}
 
       <ReactionPanel
         displayMode="fullscreen"

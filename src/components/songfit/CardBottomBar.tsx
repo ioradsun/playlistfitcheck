@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 
 interface CardBottomBarProps {
@@ -36,9 +36,14 @@ export function CardBottomBar({
   const [commentFocused, setCommentFocused] = useState(false);
   const py = variant === "embedded" ? "py-3" : "py-2.5";
 
-  // Auto-open comment input immediately after voting
+  const prevVotedSideRef = useRef<"a" | "b" | null | undefined>(undefined);
+
+  // Auto-open comment input only when a new vote is cast in-session
   useEffect(() => {
-    if (votedSide !== null) setCommentFocused(true);
+    if (prevVotedSideRef.current === null && votedSide !== null) {
+      setCommentFocused(true);
+    }
+    prevVotedSideRef.current = votedSide;
   }, [votedSide]);
 
   const wrapperClass =
