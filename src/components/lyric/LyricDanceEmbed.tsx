@@ -105,6 +105,7 @@ interface LyricDanceEmbedProps {
   lyricDanceUrl: string;
   songTitle: string;
   artistName?: string;
+  coverImageUrl?: string | null;
   prefetchedData?: LyricDanceData | null;
 
   // Feed lifecycle — omit for fullscreen/shareable usage
@@ -134,6 +135,7 @@ export function LyricDanceEmbed({
   lyricDanceUrl,
   songTitle,
   artistName,
+  coverImageUrl,
   prefetchedData,
   cardState,
   onPlay,
@@ -684,6 +686,7 @@ export function LyricDanceEmbed({
               songName={songTitle}
               waiting={isWaiting}
               badge="In Studio"
+              coverImageUrl={coverImageUrl}
               onExpand={
                 showExpandButton
                   ? () => window.open(lyricDanceUrl, "_blank")

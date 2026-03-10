@@ -387,6 +387,7 @@ export function SongFitPostCard({
                 cardState={cardState}
                 onPlay={activate}
                 postId={post.id}
+                coverImageUrl={post.album_art_url}
                 hideReactButton
                 externalPanelOpen={reactionPanelOpen}
                 onExternalPanelOpenChange={setReactionPanelOpen}
