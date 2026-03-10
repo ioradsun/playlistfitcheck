@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Maximize2, Flame, X } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
@@ -119,6 +119,7 @@ interface LyricDanceEmbedProps {
   showExpandButton?: boolean;
   disableReactionPanel?: boolean;
   hideReactButton?: boolean;
+  postId?: string;
   externalPanelOpen?: boolean;
   onExternalPanelOpenChange?: (open: boolean) => void;
   /** Skip cover overlay and start playing immediately (muted). */
@@ -141,6 +142,7 @@ export function LyricDanceEmbed({
   showExpandButton = true,
   disableReactionPanel = false,
   hideReactButton = false,
+  postId,
   externalPanelOpen,
   onExternalPanelOpenChange,
   autoPlay = false,
@@ -175,7 +177,7 @@ export function LyricDanceEmbed({
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [forceDemoted, setForceDemoted] = useState(false);
 
-  const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(lyricDanceId);
+  const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(postId ?? lyricDanceId);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -202,6 +204,14 @@ export function LyricDanceEmbed({
     setReactionPanelOpen(false);
     onExternalPanelOpenChange?.(false);
   }, [onExternalPanelOpenChange]);
+
+  const handleOpenReactions = useCallback(() => {
+    if (hideReactButton) {
+      onOpenReactions?.();
+      return;
+    }
+    openPanel();
+  }, [hideReactButton, onOpenReactions, openPanel]);
 
   // ── Data fetch ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -720,93 +730,55 @@ export function LyricDanceEmbed({
       )}
 
       {/* Bottom bar — progress + now-playing chip + React button */}
-      {(!reactionPanelOpen || (hideReactButton && votedSide != null)) && (
+      <div
+        className="absolute bottom-0 left-0 right-0 z-[100]"
+        style={{
+          background: "rgba(0,0,0,0.4)",
+          backdropFilter: "blur(12px)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Progress bar */}
         <div
-          className={`absolute bottom-0 left-0 right-0 ${reactionPanelOpen ? "z-[101]" : "z-[100]"}`}
-          style={{
-            background: "rgba(0,0,0,0.4)",
-            backdropFilter: "blur(12px)",
+          className="w-full h-1 cursor-pointer"
+          style={{ background: "rgba(255,255,255,0.05)" }}
+          onClick={(e) => {
+            if (!player || !data?.lyrics) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const ratio = Math.max(
+              0,
+              Math.min(1, (e.clientX - rect.left) / rect.width),
+            );
+            const lines = data.lyrics;
+            const start = Math.max(0, (lines[0] as any).start - 0.5);
+            const end = (lines[lines.length - 1] as any).end + 1;
+            player.seek(start + ratio * (end - start));
           }}
-          onClick={(e) => e.stopPropagation()}
         >
-          {/* Progress bar */}
           <div
-            className="w-full h-1 cursor-pointer"
-            style={{ background: "rgba(255,255,255,0.05)" }}
-            onClick={(e) => {
-              if (!player || !data?.lyrics) return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              const ratio = Math.max(
-                0,
-                Math.min(1, (e.clientX - rect.left) / rect.width),
-              );
-              const lines = data.lyrics;
-              const start = Math.max(0, (lines[0] as any).start - 0.5);
-              const end = (lines[lines.length - 1] as any).end + 1;
-              player.seek(start + ratio * (end - start));
+            className="h-full transition-none"
+            style={{
+              width: `${progress * 100}%`,
+              background: palette[1] ?? "#a855f7",
+              opacity: 0.6,
             }}
-          >
-            <div
-              className="h-full transition-none"
-              style={{
-                width: `${progress * 100}%`,
-                background: palette[1] ?? "#a855f7",
-                opacity: 0.6,
-              }}
-            />
-          </div>
-
-
-          {hideReactButton ? (
-            <CardBottomBar
-              variant="embedded"
-              votedSide={votedSide}
-              score={score}
-              note={note}
-              onNoteChange={setNote}
-              onVoteYes={() => handleVote(true)}
-              onVoteNo={() => handleVote(false)}
-              onSubmit={handleSubmit}
-              onOpenReactions={() => onOpenReactions?.()}
-              onClose={closePanel}
-            />
-          ) : (
-            /* Standalone (not card mode): lyric pill + React button */
-            <div className="flex items-stretch" onClick={e => e.stopPropagation()}>
-              <button
-                className={`flex-1 flex items-center gap-2 px-2 py-2 rounded-md border text-left overflow-hidden min-w-0 mx-3 my-2 transition-all duration-300 ${
-                  reactionPanelOpen ? "border-white/15" : "border-white/[0.05]"
-                }`}
-                style={{ background: "rgba(255,255,255,0.02)" }}
-                onClick={openPanel}
-              >
-                {activeLine ? (
-                  <>
-                    <div
-                      className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                      style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }}
-                    />
-                    <span className="text-[10px] font-mono text-white/30 truncate">{activeLine.text}</span>
-                  </>
-                ) : (
-                  <span className="text-[10px] font-mono text-white/20 truncate">
-                    {lyricSections.isReady ? "listening..." : "..."}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={openPanel}
-                className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
-              >
-                {reactionPanelOpen
-                  ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
-                  : <Flame size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-                }
-              </button>
-            </div>
-          )}
+          />
         </div>
-      )}
+
+        <CardBottomBar
+          variant="embedded"
+          votedSide={votedSide}
+          score={score}
+          note={note}
+          onNoteChange={setNote}
+          onVoteYes={() => handleVote(true)}
+          onVoteNo={() => handleVote(false)}
+          onSubmit={handleSubmit}
+          onOpenReactions={handleOpenReactions}
+          onClose={closePanel}
+          panelOpen={reactionPanelOpen}
+        />
+      </div>
 
       {/* Reaction panel */}
       {!disableReactionPanel && (

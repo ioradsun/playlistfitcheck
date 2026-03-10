@@ -384,6 +384,7 @@ export function SongFitPostCard({
                 artistName={displayName}
                 cardState={cardState}
                 onPlay={activate}
+                postId={post.id}
                 hideReactButton
                 externalPanelOpen={reactionPanelOpen}
                 onExternalPanelOpenChange={setReactionPanelOpen}
