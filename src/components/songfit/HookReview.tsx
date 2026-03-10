@@ -4,8 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 
-type Step = 2 | "cta" | "done";
-
 interface Props {
   postId: string;
   isOwner?: boolean;
@@ -19,10 +17,7 @@ interface Props {
   isBattle?: boolean;
   onOpenReactions?: () => void;
   onRegisterVoteHandler?: (fn: (replay: boolean) => void) => void;
-  onRegisterSubmitHandler?: (fn: () => void) => void;
-  onStepChange?: (step: "vote" | "cta" | "done") => void;
-  onNoteChange?: (note: string) => void;
-  note?: string;
+  onResultsChange?: (results: { total: number; replay_yes: number } | null) => void;
   showPreResolved?: boolean;
   preResolved?: { total: number; replay_yes: number; saves_count?: number };
   rank?: number;
@@ -41,20 +36,17 @@ function incrementSessionReviewCount() {
   sessionStorage.setItem(SESSION_COUNT_KEY, String(next));
 }
 
-export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, onRegisterVoteHandler, onRegisterSubmitHandler, onStepChange, onNoteChange, note: externalNote, rank }: Props) {
-  const fitLabel   = isBattle ? "LEFT HOOK"  : "REPLAY FIT";
-
+export function HookReview({ postId, onScored, onVotedSide, onOpenReactions, onRegisterVoteHandler, onResultsChange }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
 
   const navigate = useNavigate();
 
-  const [step, setStep] = useState<Step>(2);
   const [wouldReplay, setWouldReplay] = useState<boolean | null>(null);
   const [note, setNote] = useState("");
   const [alreadyChecked, setAlreadyChecked] = useState(false);
   const [results, setResults] = useState<Results | null>(null);
-  const activeNote = externalNote !== undefined ? externalNote : note;
+  const activeNote = note;
 
   useEffect(() => {
     const check = async () => {
@@ -65,7 +57,9 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
         const voted = (data as any).would_replay;
         setWouldReplay(voted);
         onVotedSide?.(voted === true ? "a" : voted === false ? "b" : null);
-        fetchResults().then(r => { setResults(r); setStep("done"); onStepChange?.("done"); });
+        fetchResults().then((r) => {
+          setResults(r);
+        });
         onScored?.();
       }
       setAlreadyChecked(true);
@@ -91,31 +85,11 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
     if (!user) { navigate("/Auth", { state: { returnTab: "crowdfit" } }); return; }
     setWouldReplay(replay);
     onVotedSide?.(replay ? "a" : "b");
-    setStep("cta");
-    onStepChange?.("cta");
   };
 
   useEffect(() => {
     onRegisterVoteHandler?.(handleVote);
-    onRegisterSubmitHandler?.(() => {
-      handleSubmit(activeNote);
-    });
-  }, [onRegisterVoteHandler, onRegisterSubmitHandler, activeNote, user]);
-
-
-  const handleRemove = async () => {
-    let q = supabase.from("songfit_hook_reviews").delete().eq("post_id", postId);
-    if (user) q = q.eq("user_id", user.id);
-    else q = (q as any).eq("session_id", sessionId).is("user_id", null);
-    await q;
-    setResults(null);
-    setStep(2);
-    onStepChange?.("vote");
-    (onNoteChange ?? setNote)("");
-    onVotedSide?.(null);
-    onUnscored?.();
-    window.dispatchEvent(new CustomEvent("crowdfit:vote"));
-  };
+  }, [onRegisterVoteHandler, user]);
 
   const handleSubmit = async (text: string) => {
     try {
@@ -133,51 +107,44 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
     window.dispatchEvent(new CustomEvent("crowdfit:vote"));
     const r = await fetchResults();
     setResults(r);
-    setStep("done");
-    onStepChange?.("done");
     onScored?.();
   };
 
-  if (!alreadyChecked) return null;
+
+  useEffect(() => {
+    onResultsChange?.(results ? { total: results.total, replay_yes: results.replay_yes } : null);
+  }, [results, onResultsChange]);
+  const hasVoted = wouldReplay !== null;
+  if (!alreadyChecked || !hasVoted) return null;
 
   return (
     <div>
-
-      {/* ── DONE ── */}
-      {step === "done" && results && (() => {
-        const { total, replay_yes: signals } = results;
-        const hasSignals = signals > 0;
-        const pct = total > 0 ? Math.round((signals / total) * 100) : 0;
-        return (
-          <div className="animate-fade-in">
-            <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-            <div className="px-3 py-2 flex items-center justify-between gap-3">
-              <p className={`font-mono text-[11px] uppercase tracking-widest text-muted-foreground ${!hasSignals ? "animate-signal-pulse" : ""}`}>
-                {hasSignals ? `${pct}% ${fitLabel}` : "CALIBRATING"}
-              </p>
-              <div className="flex items-center gap-3">
-                {hasSignals && onOpenReactions ? (
-                  <button onClick={onOpenReactions} className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                    {signals} of {total} FMLY signals in
-                  </button>
-                ) : !hasSignals && (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground/40">
-                    Waiting for input
-                  </span>
-                )}
-                {rank != null && rank <= 50 && (
-                  <span className="font-mono text-[11px] text-muted-foreground/30">#{rank}</span>
-                )}
-                <button onClick={handleRemove} className="font-mono text-[11px] text-muted-foreground/30 hover:text-destructive transition-colors">
-                  ✕
-                </button>
-              </div>
-            </div>
-            <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-          </div>
-        );
-      })()}
-
+      <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
+      <div className="flex items-stretch">
+        <input
+          type="text"
+          value={activeNote}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleSubmit(activeNote);
+            }
+          }}
+          placeholder="Signal locked · drop your take"
+          className="flex-1 bg-transparent text-[12px] font-mono text-muted-foreground placeholder:text-muted-foreground/40 outline-none px-3 py-3.5 tracking-wide focus:text-foreground transition-colors"
+        />
+        <div style={{ width: "0.5px" }} className="bg-border/30 self-stretch my-2" />
+        <button
+          onClick={onOpenReactions}
+          className="flex items-center justify-center px-5 py-3.5 hover:bg-foreground/[0.03] transition-colors duration-[120ms] group"
+        >
+          <span className="text-[12px] font-mono tracking-[0.18em] uppercase text-muted-foreground group-hover:text-foreground transition-colors">
+            React
+          </span>
+        </button>
+      </div>
+      <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
     </div>
   );
 }
