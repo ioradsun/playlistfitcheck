@@ -197,7 +197,7 @@ export function LyricDanceEmbed({
           dance_id: danceId,
           text,
           session_id: getSessionId(),
-          line_index: null,
+          line_index: frozenLineIndex ?? activeLineRef.current?.lineIndex ?? null,
           parent_comment_id: null,
         });
     } catch {
@@ -205,7 +205,7 @@ export function LyricDanceEmbed({
     }
     setNote("");
     setCommentRefreshKey((k) => k + 1);
-  }, [note, fetchedData?.id, setNote]);
+  }, [note, fetchedData?.id, setNote, frozenLineIndex]);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -571,6 +571,9 @@ export function LyricDanceEmbed({
       sectionLabel: section?.label ?? null,
     };
   }, [lyricSections, currentTimeSec, engagementMode, frozenLineIndex]);
+
+  const activeLineRef = useRef(activeLine);
+  activeLineRef.current = activeLine;
 
   const audioSections = useMemo<CanonicalAudioSection[]>(() => {
     const sections = data?.cinematic_direction?.sections;
