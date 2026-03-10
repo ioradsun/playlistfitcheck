@@ -838,20 +838,12 @@ export function LyricDanceEmbed({
                 />
                 <button
                   onClick={() => {
-                    if (canvasNote) {
-                      onCanvasSubmit?.();
-                      setCommentFocused(false);
-                    } else {
-                      closePanel();
-                    }
+                    setCommentFocused(false);
+                    handlePanelClose();
                   }}
                   className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
                 >
-                  {canvasNote ? (
-                    <span className="text-[13px] text-white/70 group-hover:text-white transition-colors">Send</span>
-                  ) : (
-                    <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-                  )}
+                  <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
                 </button>
               </>
             ) : hideReactButton ? (
@@ -882,7 +874,7 @@ export function LyricDanceEmbed({
                   onClick={() => { onOpenReactions?.(); setCommentFocused(true); }}
                   className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
                 >
-                  <Flame size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+                  <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
                 </button>
               </>
             ) : (
