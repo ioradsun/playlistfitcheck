@@ -75,6 +75,7 @@ function CommentReactPicker({
 export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, score, onVoteYes, onVoteNo }: Props) {
   const { user, profile } = useAuth();
   const sessionId = getSessionId();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText] = useState('');
