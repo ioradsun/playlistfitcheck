@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
-import { Send, X } from "lucide-react";
+import { Send } from "lucide-react";
 
 interface Comment {
   id: string;
@@ -84,11 +84,8 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette = ["#a855f7"
       className="absolute inset-0 z-[200] flex flex-col"
       style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(16px)" }}
     >
-      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+      <div className="flex items-center px-4 py-3 shrink-0">
         <span className="text-[11px] font-mono uppercase tracking-widest text-white/40">FMLY</span>
-        <button onClick={onClose} className="text-white/30 hover:text-white/70 transition-colors">
-          <X size={16} />
-        </button>
       </div>
 
       <div className="h-px mx-4 shrink-0" style={{ background: accentColor, opacity: 0.3 }} />

@@ -47,7 +47,7 @@ function LazySpotifyEmbedInner({
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [commentFocused, setCommentFocused] = useState(false);
 
-  const panelOpen = externalPanelOpen || commentFocused;
+  const panelOpen = commentFocused;
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
 
