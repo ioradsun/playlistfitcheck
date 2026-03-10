@@ -585,7 +585,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   // ── Embedded compact layout ──────────────────────────────────────────
   if (displayMode === 'embedded') {
     return (
-      <PanelShell isOpen={isOpen} variant="embedded" topOffset={52}>
+      <PanelShell isOpen={isOpen} variant="embedded" topOffset={52} bottomOffset={44}>
         <VoteStrip
           votedSide={votedSide}
           score={score}
