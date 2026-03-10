@@ -444,8 +444,9 @@ export function SongFitPostCard({
                 isOpen={postPanelOpen}
                 onClose={() => setPostPanelOpen(false)}
               />
+              </div>
 
-              {/* Caption — stacked below embed inside 320px */}
+              {/* Caption — directly below embed */}
               {!editing && localCaption && localCaption.trim() && (
                 <div className="px-3 pt-1 pb-0.5">
                   {localCaption.length <= 100 || captionExpanded ? (
