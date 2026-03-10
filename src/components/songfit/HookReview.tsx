@@ -18,6 +18,7 @@ interface Props {
   onVotedSide?: (side: "a" | "b" | null) => void;
   isBattle?: boolean;
   onOpenReactions?: () => void;
+  onRegisterVoteHandler?: (fn: (side: "a" | "b") => void) => void;
   showPreResolved?: boolean;
   preResolved?: { total: number; replay_yes: number; saves_count?: number };
   rank?: number;
