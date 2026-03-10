@@ -93,7 +93,7 @@ export function SongFitPostCard({
   const [localCaption, setLocalCaption] = useState(post.caption || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
-  const [isScored, setIsScored] = useState(false);
+  
   const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
   const [postPanelOpen, setPostPanelOpen] = useState(false);
   const [hookReviewKey, setHookReviewKey] = useState(0);
