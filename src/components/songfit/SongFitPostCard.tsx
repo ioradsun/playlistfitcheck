@@ -559,7 +559,8 @@ export function SongFitPostCard({
                   </div>
                 </div>
               )}
-            </div>
+            </>
+
           )}
         </div>
 
