@@ -740,7 +740,7 @@ export function LyricDanceEmbed({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Progress bar — hidden when reaction panel open (active line is the signal) */}
-        {!reactionPanelOpen && (
+        {!reactionPanelOpen && !effectiveShowCover && !isWaiting && (
           <div
             className="w-full h-1 cursor-pointer"
             style={{ background: "rgba(255,255,255,0.05)" }}
