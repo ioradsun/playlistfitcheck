@@ -417,7 +417,8 @@ export function SongFitPostCard({
               />
             </div>
           ) : (
-            <div className="relative" style={{ height: 320 }}>
+            <>
+              <div className="relative">
               <LazySpotifyEmbed
                 trackId={post.spotify_track_id}
                 trackTitle={post.track_title}
