@@ -44,7 +44,7 @@ export function LyricDanceCover({
       {/* Layer 2 — dark gradient over the image */}
       <div
         className="absolute inset-0"
-        style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.65) 100%)" }}
+        style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)" }}
       />
 
       {/* Layer 3 — badge + expand, pinned top */}
