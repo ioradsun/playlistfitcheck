@@ -417,7 +417,8 @@ export function SongFitPostCard({
               />
             </div>
           ) : (
-            <div className="relative" style={{ height: 320 }}>
+            <>
+              <div className="relative">
               <LazySpotifyEmbed
                 trackId={post.spotify_track_id}
                 trackTitle={post.track_title}
@@ -443,8 +444,9 @@ export function SongFitPostCard({
                 isOpen={postPanelOpen}
                 onClose={() => setPostPanelOpen(false)}
               />
+              </div>
 
-              {/* Caption — stacked below embed inside 320px */}
+              {/* Caption — directly below embed */}
               {!editing && localCaption && localCaption.trim() && (
                 <div className="px-3 pt-1 pb-0.5">
                   {localCaption.length <= 100 || captionExpanded ? (
@@ -557,7 +559,8 @@ export function SongFitPostCard({
                   </div>
                 </div>
               )}
-            </div>
+            </>
+
           )}
         </div>
 
