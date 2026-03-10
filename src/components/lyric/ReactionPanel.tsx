@@ -52,6 +52,7 @@ interface ReactionPanelProps {
   score: { total: number; replay_yes: number } | null;
   onVoteYes: () => void;
   onVoteNo: () => void;
+  hideInput?: boolean;
 }
 
 function CommentReactPicker({
@@ -102,7 +103,7 @@ function isLineOutsideViewport(container: HTMLElement, row: HTMLElement, thresho
   return rowRect.top < containerRect.top + threshold || rowRect.bottom > containerRect.bottom - threshold;
 }
 
-function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart, onResetEngagement, votedSide, score, onVoteYes, onVoteNo }: ReactionPanelProps) {
+function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart, onResetEngagement, votedSide, score, onVoteYes, onVoteNo, hideInput = false }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -752,15 +753,17 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               </div>
             </div>
 
-        <CommentInput
-          value={textInput}
-          onChange={setTextInput}
-          onSubmit={handleTextSubmit}
-          onClose={onClose}
-          onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
-          hasSubmitted={hasSubmitted}
-          size="compact"
-        />
+        {!hideInput && (
+          <CommentInput
+            value={textInput}
+            onChange={setTextInput}
+            onSubmit={handleTextSubmit}
+            onClose={onClose}
+            onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
+            hasSubmitted={hasSubmitted}
+            size="compact"
+          />
+        )}
       </PanelShell>
     );
   }

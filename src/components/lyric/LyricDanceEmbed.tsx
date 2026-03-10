@@ -789,6 +789,7 @@ export function LyricDanceEmbed({
         <ReactionPanel
           displayMode="embedded"
           isOpen={reactionPanelOpen}
+          hideInput
           onClose={handlePanelClose}
           votedSide={votedSide}
           score={score}
