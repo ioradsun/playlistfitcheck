@@ -579,13 +579,13 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     setTextInput('');
     setReplyingTo(null);
     onReactionFired('fire');
-    setTimeout(() => setHasSubmitted(false), 2000);
+    setTimeout(() => setHasSubmitted(false), 500);
   };
 
   // ── Embedded compact layout ──────────────────────────────────────────
   if (displayMode === 'embedded') {
     return (
-      <PanelShell isOpen={isOpen} variant="embedded">
+      <PanelShell isOpen={isOpen} variant="embedded" topOffset={52}>
         <VoteStrip
           votedSide={votedSide}
           score={score}

@@ -7,13 +7,16 @@ interface PanelShellProps {
    * "fullscreen" — fixed, bottom-anchored, 88vh (ShareableLyricDance)
    */
   variant?: 'embedded' | 'fullscreen';
+  /** Pixels to extend upward beyond the positioned ancestor — covers the card
+   *  profile header in embedded mode. Outer overflow:hidden clips cleanly. */
+  topOffset?: number;
   children: React.ReactNode;
 }
 
-export function PanelShell({ isOpen, variant = 'embedded', children }: PanelShellProps) {
+export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, children }: PanelShellProps) {
   const positionClass = variant === 'fullscreen'
     ? 'fixed bottom-0 left-0 right-0 z-[70] h-[88vh]'
-    : 'absolute inset-x-0 top-0 bottom-0 z-[200]';
+    : 'absolute inset-x-0 bottom-0 z-[200]';
 
   return (
     <AnimatePresence>
@@ -28,6 +31,7 @@ export function PanelShell({ isOpen, variant = 'embedded', children }: PanelShel
             background: variant === 'fullscreen' ? '#0d0d0d' : 'rgba(10,10,10,0.97)',
             backdropFilter: variant === 'embedded' ? 'blur(12px)' : undefined,
             borderTop: variant === 'fullscreen' ? '1px solid rgba(255,255,255,0.06)' : undefined,
+            top: variant === 'embedded' ? -topOffset : undefined,
           }}
         >
           {children}
