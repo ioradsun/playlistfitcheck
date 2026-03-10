@@ -269,7 +269,7 @@ export function SongFitPostCard({
     <div className="px-2 pb-3">
       <div
         className="relative rounded-2xl overflow-hidden"
-        style={{ background: "#121212" }}
+        style={{ background: "#0a0a0a" }}
       >
         {/* Header */}
         <div className="relative flex items-center justify-between px-3 py-2.5">
