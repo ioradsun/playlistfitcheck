@@ -857,7 +857,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               }}
               onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
               hasSubmitted={hasSubmitted}
-              placeholder={replyingTo ? 'write your reply...' : 'drop your comment on this line...'}
+              placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
               size="full"
             />
           </div>

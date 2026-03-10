@@ -338,7 +338,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
   };
 
   return (
-    <PanelShell isOpen={isOpen} variant="embedded">
+    <PanelShell isOpen={isOpen} variant="embedded" topOffset={52}>
       <VoteStrip
         votedSide={votedSide}
         score={score}
@@ -402,7 +402,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
         onSubmit={handleSubmit}
         onClose={onClose}
         hasSubmitted={hasSubmitted}
-        placeholder={replyingTo ? 'write your reply...' : 'drop your take…'}
+        placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
         size="compact"
       />
     </PanelShell>
