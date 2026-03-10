@@ -96,8 +96,7 @@ export function SongFitPostCard({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
   
-  const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
-  const [postPanelOpen, setPostPanelOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const topPostReaction = useTopPostReaction(post.id);
   const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(post.id);
 
@@ -396,9 +395,9 @@ export function SongFitPostCard({
                 postId={post.id}
                 coverImageUrl={post.album_art_url}
                 hideReactButton
-                externalPanelOpen={reactionPanelOpen}
-                onExternalPanelOpenChange={setReactionPanelOpen}
-                onOpenReactions={() => setReactionPanelOpen(true)}
+                externalPanelOpen={panelOpen}
+                onExternalPanelOpenChange={setPanelOpen}
+                onOpenReactions={() => setPanelOpen(true)}
               />
             </div>
           ) : post.lyric_dance_url &&
@@ -431,8 +430,8 @@ export function SongFitPostCard({
                 />
                 <PostCommentPanel
                   postId={post.id}
-                  isOpen={postPanelOpen}
-                  onClose={() => setPostPanelOpen(false)}
+                  isOpen={panelOpen}
+                  onClose={() => setPanelOpen(false)}
                   votedSide={votedSide}
                   score={score}
                   onVoteYes={() => handleVote(true)}
@@ -462,7 +461,7 @@ export function SongFitPostCard({
                 )}
 
                 {isSpotifyEmbed && crowdfitMode === "hook_review" && (
-                  <div className={`relative ${postPanelOpen ? 'z-[500]' : 'z-[300]'}`}>
+                  <div className={`relative ${panelOpen ? 'z-[500]' : 'z-[300]'}`}>
                     <CardBottomBar
                       variant="fullscreen"
                       votedSide={votedSide}
@@ -472,9 +471,9 @@ export function SongFitPostCard({
                       onVoteYes={() => handleVote(true)}
                       onVoteNo={() => handleVote(false)}
                       onSubmit={handleSubmit}
-                      onOpenReactions={() => setPostPanelOpen(true)}
-                      onClose={() => setPostPanelOpen(false)}
-                      panelOpen={postPanelOpen}
+                      onOpenReactions={() => setPanelOpen(true)}
+                      onClose={() => setPanelOpen(false)}
+                      panelOpen={panelOpen}
                       topReaction={topPostReaction}
                     />
                   </div>
