@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Flame, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
