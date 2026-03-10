@@ -369,19 +369,16 @@ export function LyricDanceEmbed({
     const shouldMuted =
       !coverUp &&
       cardState !== "active" &&
-      (visibility === "visible" || visibility === "near");
+      (visibility === "visible" || visibility === "near" || visibility === "far");
 
     if (shouldUnmuted) {
       player.play();
       player.setMuted(false);
       setMuted(false);
     } else if (shouldMuted || coverUp) {
-      // Keep animation running (muted) so it's live behind the cover
+      // Keep animation running (muted) — even when "far", let the eviction timer
+      // handle cleanup. This prevents animation freeze during scroll momentum.
       player.play();
-      player.setMuted(true);
-      setMuted(true);
-    } else {
-      player.pause();
       player.setMuted(true);
       setMuted(true);
     }
