@@ -236,7 +236,11 @@ export function computeAllLineLayouts(
     const measured = textTransform === 'uppercase' ? word.toUpperCase() : word;
     const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
     if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
-    return measureCtx.measureText(measured).width;
+    const raw = measureCtx.measureText(measured).width;
+    // Guard: fallback fonts can return near-zero widths before the custom font loads.
+    // A minimum of 0.35em × char count prevents two words collapsing to the same X.
+    const minWidth = measured.length * fontSize * 0.35;
+    return Math.max(raw, minWidth);
   };
   const getSpaceWidth = (fontSize: number) => {
     const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
