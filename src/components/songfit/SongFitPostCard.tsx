@@ -93,7 +93,7 @@ export function SongFitPostCard({
   const [localCaption, setLocalCaption] = useState(post.caption || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
-  const [isScored, setIsScored] = useState(false);
+  
   const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
   const [postPanelOpen, setPostPanelOpen] = useState(false);
   const [hookReviewKey, setHookReviewKey] = useState(0);
@@ -377,8 +377,6 @@ export function SongFitPostCard({
         <div
           className={cn(
             "relative transition-all duration-500",
-            isScored &&
-              "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.25)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]",
           )}
         >
           {post.lyric_dance_url &&
@@ -813,7 +811,7 @@ export function SongFitPostCard({
               showPreResolved={isBillboard && !!signalData}
               preResolved={signalData}
               rank={rank}
-              onScored={() => setIsScored(true)}
+              
               onVotedSide={(side) => {
                 setCanvasVotedSide(side);
               }}
