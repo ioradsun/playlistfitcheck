@@ -79,11 +79,7 @@ function LazySpotifyEmbedInner({
     >
       {/* Full-bleed album art poster — sits behind iframe */}
       <div
-        className="absolute inset-0 w-full h-full transition-opacity duration-500 z-[1]"
-        style={{
-          opacity: iframeLoaded ? 0 : 1,
-          pointerEvents: iframeLoaded ? "none" : "auto",
-        }}
+        className="absolute inset-0 w-full h-full z-[1]"
       >
         {albumArtUrl ? (
           <>
