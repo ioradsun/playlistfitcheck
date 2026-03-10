@@ -10,13 +10,15 @@ interface PanelShellProps {
   /** Pixels to extend upward beyond the positioned ancestor — covers the card
    *  profile header in embedded mode. Outer overflow:hidden clips cleanly. */
   topOffset?: number;
+  /** Pixels from the bottom to leave clear — keeps the panel above CardBottomBar. */
+  bottomOffset?: number;
   children: React.ReactNode;
 }
 
-export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, children }: PanelShellProps) {
+export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, bottomOffset = 0, children }: PanelShellProps) {
   const positionClass = variant === 'fullscreen'
     ? 'fixed bottom-0 left-0 right-0 z-[70] h-[88vh]'
-    : 'absolute inset-x-0 bottom-0 z-[400]';
+    : 'absolute inset-x-0 z-[400]';
 
   return (
     <AnimatePresence>
@@ -32,6 +34,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, childr
             backdropFilter: variant === 'embedded' ? 'blur(12px)' : undefined,
             borderTop: variant === 'fullscreen' ? '1px solid rgba(255,255,255,0.06)' : undefined,
             top: variant === 'embedded' ? -topOffset : undefined,
+            bottom: variant === 'embedded' ? bottomOffset : undefined,
           }}
         >
           {variant === 'embedded' && topOffset > 0 && (
