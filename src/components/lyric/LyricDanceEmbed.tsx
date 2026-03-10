@@ -171,7 +171,9 @@ export function LyricDanceEmbed({
   const [reactionData, setReactionData] = useState<
     Record<string, { line: Record<number, number>; total: number }>
   >({});
-  const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
+  const [internalPanelOpen, setInternalPanelOpen] = useState(false);
+  const isControlled = externalPanelOpen !== undefined;
+  const reactionPanelOpen = isControlled ? externalPanelOpen : internalPanelOpen;
   const [engagementMode, setEngagementMode] = useState<
     "spectator" | "freezing" | "engaged"
   >("spectator");
@@ -190,22 +192,21 @@ export function LyricDanceEmbed({
   );
   const currentTimeSecRef = useRef(0);
 
-  // Sync external open control
-  useEffect(() => {
-    if (externalPanelOpen !== undefined) {
-      setReactionPanelOpen(externalPanelOpen);
-    }
-  }, [externalPanelOpen]);
-
   const openPanel = useCallback(() => {
-    setReactionPanelOpen(true);
-    onExternalPanelOpenChange?.(true);
-  }, [onExternalPanelOpenChange]);
+    if (isControlled) {
+      onExternalPanelOpenChange?.(true);
+    } else {
+      setInternalPanelOpen(true);
+    }
+  }, [isControlled, onExternalPanelOpenChange]);
 
   const closePanel = useCallback(() => {
-    setReactionPanelOpen(false);
-    onExternalPanelOpenChange?.(false);
-  }, [onExternalPanelOpenChange]);
+    if (isControlled) {
+      onExternalPanelOpenChange?.(false);
+    } else {
+      setInternalPanelOpen(false);
+    }
+  }, [isControlled, onExternalPanelOpenChange]);
 
   const handleOpenReactions = useCallback(() => {
     if (hideReactButton) {
