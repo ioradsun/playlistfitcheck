@@ -51,7 +51,7 @@ function LazySpotifyEmbedInner({
       onClick={handleClick}
     >
       {/* Full-bleed album art poster — sits behind iframe */}
-      <div className="absolute inset-0 w-full h-full z-[1]">
+      <div className="absolute inset-0 w-full h-full z-[6] pointer-events-none">
         {albumArtUrl ? (
           <>
             <img
