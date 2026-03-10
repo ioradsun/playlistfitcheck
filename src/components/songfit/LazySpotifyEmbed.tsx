@@ -1,4 +1,5 @@
 import { useState, useEffect, memo } from "react";
+import { Flame, X } from "lucide-react";
 import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { logEngagementEvent } from "@/lib/engagementTracking";
