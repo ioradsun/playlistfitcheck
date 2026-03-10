@@ -532,7 +532,7 @@ export function SongFitPostCard({
                     <>
                       <div className="flex-1 flex items-center px-3 py-2.5 overflow-hidden min-w-0">
                         {hookResults && hookResults.total > 0 ? (
-                          <span className="text-[10px] font-mono text-white/40 truncate">
+                          <span className="text-[10px] font-mono text-emerald-400 truncate">
                             {canvasVotedSide === "a"
                               ? `You + ${Math.max(0, hookResults.replay_yes - 1)} FMLY would Replay this`
                               : `${hookResults.replay_yes} / ${hookResults.total} FMLY would Replay this`
