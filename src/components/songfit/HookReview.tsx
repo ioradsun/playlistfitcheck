@@ -17,6 +17,7 @@ interface Props {
   isBattle?: boolean;
   onOpenReactions?: () => void;
   onRegisterVoteHandler?: (fn: (replay: boolean) => void) => void;
+  onRegisterSubmitHandler?: (fn: () => void) => void;
   onResultsChange?: (results: { total: number; replay_yes: number } | null) => void;
   showPreResolved?: boolean;
   preResolved?: { total: number; replay_yes: number; saves_count?: number };
@@ -36,7 +37,7 @@ function incrementSessionReviewCount() {
   sessionStorage.setItem(SESSION_COUNT_KEY, String(next));
 }
 
-export function HookReview({ postId, onScored, onVotedSide, onOpenReactions, onRegisterVoteHandler, onResultsChange }: Props) {
+export function HookReview({ postId, onScored, onVotedSide, onRegisterVoteHandler, onRegisterSubmitHandler, onResultsChange }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
 
@@ -46,7 +47,6 @@ export function HookReview({ postId, onScored, onVotedSide, onOpenReactions, onR
   const [note, setNote] = useState("");
   const [alreadyChecked, setAlreadyChecked] = useState(false);
   const [results, setResults] = useState<Results | null>(null);
-  const activeNote = note;
 
   useEffect(() => {
     const check = async () => {
@@ -110,41 +110,21 @@ export function HookReview({ postId, onScored, onVotedSide, onOpenReactions, onR
     onScored?.();
   };
 
+  const hasVoted = wouldReplay !== null;
+
+  useEffect(() => {
+    onRegisterSubmitHandler?.(() => {
+      if (!alreadyChecked || !hasVoted) return;
+      void handleSubmit(note);
+      setNote("");
+    });
+  }, [onRegisterSubmitHandler, alreadyChecked, hasVoted, note]);
 
   useEffect(() => {
     onResultsChange?.(results ? { total: results.total, replay_yes: results.replay_yes } : null);
   }, [results, onResultsChange]);
-  const hasVoted = wouldReplay !== null;
   if (!alreadyChecked || !hasVoted) return null;
 
-  return (
-    <div>
-      <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-      <div className="flex items-stretch">
-        <input
-          type="text"
-          value={activeNote}
-          onChange={(e) => setNote(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleSubmit(activeNote);
-            }
-          }}
-          placeholder="Signal locked · drop your take"
-          className="flex-1 bg-transparent text-[12px] font-mono text-muted-foreground placeholder:text-muted-foreground/40 outline-none px-3 py-3.5 tracking-wide focus:text-foreground transition-colors"
-        />
-        <div style={{ width: "0.5px" }} className="bg-border/30 self-stretch my-2" />
-        <button
-          onClick={onOpenReactions}
-          className="flex items-center justify-center px-5 py-3.5 hover:bg-foreground/[0.03] transition-colors duration-[120ms] group"
-        >
-          <span className="text-[12px] font-mono tracking-[0.18em] uppercase text-muted-foreground group-hover:text-foreground transition-colors">
-            React
-          </span>
-        </button>
-      </div>
-      <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-    </div>
-  );
+  // HookReview renders nothing — all UI is in the canvas
+  return null;
 }

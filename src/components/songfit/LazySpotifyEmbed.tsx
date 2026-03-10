@@ -17,6 +17,10 @@ interface Props {
   onVoteNo?: () => void;
   votedSide?: "a" | "b" | null;
   scorePill?: { total: number; replay_yes: number } | null;
+  canvasNote?: string;
+  onCanvasNoteChange?: (note: string) => void;
+  onCanvasSubmit?: () => void;
+  onOpenReactions?: () => void;
 }
 
 function LazySpotifyEmbedInner({
@@ -31,6 +35,10 @@ function LazySpotifyEmbedInner({
   onVoteNo,
   votedSide,
   scorePill,
+  canvasNote = "",
+  onCanvasNoteChange,
+  onCanvasSubmit,
+  onOpenReactions,
 }: Props) {
   const { user } = useAuth();
   const [iframeLoaded, setIframeLoaded] = useState(false);
@@ -139,45 +147,60 @@ function LazySpotifyEmbedInner({
       {/* Vote bar — always visible in card mode when handlers provided */}
       {(onVoteYes || onVoteNo) && (
         <div
-          className="absolute bottom-0 left-0 right-0 z-30 flex items-stretch"
-          style={{
-            background: "rgba(0,0,0,0.55)",
-            backdropFilter: "blur(12px)",
-          }}
+          className="absolute bottom-0 left-0 right-0 z-30"
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            onClick={onVoteYes}
-            className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
-          >
-            <span
-              className={`text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${
-                votedSide === "a"
-                  ? "text-white/90"
-                  : "text-white/30 group-hover:text-white/60"
-              }`}
-            >
-              {votedSide === "a" ? "✓ Run it back" : "Run it back"}
-            </span>
-          </button>
+          {/* Row 2 — vote + comment + React */}
           <div
-            style={{ width: "0.5px" }}
-            className="bg-white/10 self-stretch my-2"
-          />
-          <button
-            onClick={onVoteNo}
-            className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+            className="flex items-stretch"
+            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(12px)" }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <span
-              className={`text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${
-                votedSide === "b"
-                  ? "text-white/90"
-                  : "text-white/30 group-hover:text-white/60"
-              }`}
+            <button
+              onClick={onVoteYes}
+              className="flex items-center justify-center px-3 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
             >
-              {votedSide === "b" ? "✓ Skip" : "Skip"}
-            </span>
-          </button>
+              <span className={`text-[11px] font-mono tracking-[0.12em] uppercase transition-colors ${
+                votedSide === "a" ? "text-white/90" : "text-white/30 group-hover:text-white/60"
+              }`}>
+                {votedSide === "a" ? "✓ Run it back" : "Run it back"}
+              </span>
+            </button>
+            <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+            <button
+              onClick={onVoteNo}
+              className="flex items-center justify-center px-3 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
+            >
+              <span className={`text-[11px] font-mono tracking-[0.12em] uppercase transition-colors ${
+                votedSide === "b" ? "text-white/90" : "text-white/30 group-hover:text-white/60"
+              }`}>
+                {votedSide === "b" ? "✓ Skip" : "Skip"}
+              </span>
+            </button>
+            <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+            <input
+              type="text"
+              value={canvasNote}
+              onChange={(e) => onCanvasNoteChange?.(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  onCanvasSubmit?.();
+                }
+              }}
+              placeholder="Signal locked · drop your take"
+              className="flex-1 bg-transparent text-[11px] font-mono text-white/60 placeholder:text-white/20 outline-none px-3 tracking-wide min-w-0"
+            />
+            <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+            <button
+              onClick={onOpenReactions}
+              className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
+            >
+              <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
+                React
+              </span>
+            </button>
+          </div>
         </div>
       )}
     </div>

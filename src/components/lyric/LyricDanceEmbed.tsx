@@ -125,6 +125,10 @@ interface LyricDanceEmbedProps {
   onVoteNo?: () => void;
   votedSide?: "a" | "b" | null;
   scorePill?: { total: number; replay_yes: number } | null;
+  canvasNote?: string;
+  onCanvasNoteChange?: (note: string) => void;
+  onCanvasSubmit?: () => void;
+  onOpenReactions?: () => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────
@@ -149,6 +153,10 @@ export function LyricDanceEmbed({
   onVoteNo,
   votedSide,
   scorePill,
+  canvasNote = "",
+  onCanvasNoteChange,
+  onCanvasSubmit,
+  onOpenReactions,
 }: LyricDanceEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
@@ -782,22 +790,22 @@ export function LyricDanceEmbed({
             />
           </div>
 
-          {/* Now-playing row */}
-          {effectiveShowCover || isWaiting ? (
-            /* Pre-active: FOMO chip */
-            <div className="flex items-center gap-2 px-3 py-2">
-              <div
-                className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.07] overflow-hidden min-w-0 opacity-80"
-                style={{ background: "rgba(255,255,255,0.02)" }}
-              >
-                {topReaction ? (
+          {/* Row 1 — lyric pill (full width) */}
+          <div
+            className="flex items-center px-3 py-2 border-b"
+            style={{ borderColor: "rgba(255,255,255,0.06)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border text-left overflow-hidden min-w-0 transition-all duration-300 border-white/[0.05] hover:border-white/10"
+              style={{ background: "rgba(255,255,255,0.02)" }}
+              onClick={openPanel}
+            >
+              {effectiveShowCover || isWaiting ? (
+                topReaction ? (
                   <>
-                    <span className="text-[11px] leading-none shrink-0">
-                      {topReaction.symbol}
-                    </span>
-                    <span className="text-[10px] font-mono text-white/50 shrink-0">
-                      {topReaction.count}
-                    </span>
+                    <span className="text-[11px] leading-none shrink-0">{topReaction.symbol}</span>
+                    <span className="text-[10px] font-mono text-white/50 shrink-0">{topReaction.count}</span>
                     <span className="text-[10px] font-mono text-white/30 truncate">
                       &ldquo;{topReaction.lineText}&rdquo;
                     </span>
@@ -809,102 +817,70 @@ export function LyricDanceEmbed({
                       {fetchedData ? "ready" : "loading..."}
                     </span>
                   </>
-                )}
-              </div>
-              {hideReactButton && (
-                <div className="flex items-stretch shrink-0">
-                  <button
-                    onClick={onVoteYes}
-                    className="flex items-center justify-center px-4 py-1.5 hover:bg-white/[0.04] transition-colors group"
-                  >
-                    <span
-                      className={`text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${
-                        votedSide === "a"
-                          ? "text-white/90"
-                          : "text-white/30 group-hover:text-white/60"
-                      }`}
-                    >
-                      {votedSide === "a" ? "✓ Run it back" : "Run it back"}
-                    </span>
-                  </button>
+                )
+              ) : activeLine ? (
+                <>
                   <div
-                    style={{ width: "0.5px" }}
-                    className="bg-white/10 self-stretch my-1.5"
+                    className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                    style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }}
                   />
-                  <button
-                    onClick={onVoteNo}
-                    className="flex items-center justify-center px-4 py-1.5 hover:bg-white/[0.04] transition-colors group"
-                  >
-                    <span
-                      className={`text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${
-                        votedSide === "b"
-                          ? "text-white/90"
-                          : "text-white/30 group-hover:text-white/60"
-                      }`}
-                    >
-                      {votedSide === "b" ? "✓ Skip" : "Skip"}
-                    </span>
-                  </button>
-                </div>
+                  <span className="text-[10px] font-mono text-white/30 truncate">{activeLine.text}</span>
+                </>
+              ) : (
+                <span className="text-[10px] font-mono text-white/20 truncate">
+                  {lyricSections.isReady ? "listening..." : "..."}
+                </span>
               )}
-            </div>
-          ) : (
-            /* Active: live now-playing chip */
-            <div
-              className="flex items-center gap-2 px-3 py-2"
-              style={{ background: "rgba(0,0,0,0.3)" }}
-            >
+            </button>
+          </div>
+
+          {/* Row 2 — vote buttons + comment input + React */}
+          {hideReactButton && (
+            <div className="flex items-stretch" onClick={(e) => e.stopPropagation()}>
               <button
-                className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border text-left overflow-hidden min-w-0 transition-all duration-300 ${
-                  reactionPanelOpen ? "border-white/15" : "border-white/[0.05]"
-                }`}
-                style={{ background: "rgba(255,255,255,0.02)" }}
-                onClick={openPanel}
+                onClick={onVoteYes}
+                className="flex items-center justify-center px-3 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
               >
-                {activeLine ? (
-                  <>
-                    <div
-                      className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                      style={{
-                        background: palette[1] ?? "#ffffff",
-                        opacity: 0.6,
-                      }}
-                    />
-                    <span className="text-[10px] font-mono text-white/30 truncate">
-                      {activeLine.text}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-[10px] font-mono text-white/20 truncate">
-                    {lyricSections.isReady ? "listening..." : "..."}
-                  </span>
-                )}
+                <span className={`text-[11px] font-mono tracking-[0.12em] uppercase transition-colors ${
+                  votedSide === "a" ? "text-white/90" : "text-white/30 group-hover:text-white/60"
+                }`}>
+                  {votedSide === "a" ? "✓ Run it back" : "Run it back"}
+                </span>
               </button>
-              {hideReactButton && (
-                <div className="flex items-stretch shrink-0">
-                  <button
-                    onClick={onVoteYes}
-                    className="flex items-center justify-center px-4 py-1.5 hover:bg-white/[0.04] transition-colors group"
-                  >
-                    <span className={`text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${
-                      votedSide === "a" ? "text-white/90" : "text-white/30 group-hover:text-white/60"
-                    }`}>
-                      {votedSide === "a" ? "✓ Run it back" : "Run it back"}
-                    </span>
-                  </button>
-                  <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-1.5" />
-                  <button
-                    onClick={onVoteNo}
-                    className="flex items-center justify-center px-4 py-1.5 hover:bg-white/[0.04] transition-colors group"
-                  >
-                    <span className={`text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${
-                      votedSide === "b" ? "text-white/90" : "text-white/30 group-hover:text-white/60"
-                    }`}>
-                      {votedSide === "b" ? "✓ Skip" : "Skip"}
-                    </span>
-                  </button>
-                </div>
-              )}
+              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+              <button
+                onClick={onVoteNo}
+                className="flex items-center justify-center px-3 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
+              >
+                <span className={`text-[11px] font-mono tracking-[0.12em] uppercase transition-colors ${
+                  votedSide === "b" ? "text-white/90" : "text-white/30 group-hover:text-white/60"
+                }`}>
+                  {votedSide === "b" ? "✓ Skip" : "Skip"}
+                </span>
+              </button>
+              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+              <input
+                type="text"
+                value={canvasNote}
+                onChange={(e) => onCanvasNoteChange?.(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onCanvasSubmit?.();
+                  }
+                }}
+                placeholder="Signal locked · drop your take"
+                className="flex-1 bg-transparent text-[11px] font-mono text-white/60 placeholder:text-white/20 outline-none px-3 tracking-wide min-w-0"
+              />
+              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+              <button
+                onClick={onOpenReactions}
+                className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
+              >
+                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
+                  React
+                </span>
+              </button>
             </div>
           )}
         </div>
