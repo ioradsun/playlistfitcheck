@@ -45,10 +45,6 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
   const { user } = useAuth();
   const sessionId = getSessionId();
 
-  // Register the vote handler so external components can trigger votes
-  useEffect(() => {
-    onRegisterVoteHandler?.(handleVote);
-  });
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>(2);
