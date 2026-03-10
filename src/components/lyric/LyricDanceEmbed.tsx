@@ -736,10 +736,7 @@ export function LyricDanceEmbed({
       {/* Bottom bar — progress + now-playing chip + React button */}
       <div
         className="absolute bottom-0 left-0 right-0 z-[300]"
-        style={{
-          background: "rgba(8,8,8,0.92)",
-          backdropFilter: "blur(12px)",
-        }}
+        style={{ background: "#0a0a0a" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Progress bar — hidden when reaction panel open (active line is the signal) */}
