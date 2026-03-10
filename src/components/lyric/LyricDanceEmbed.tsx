@@ -816,7 +816,7 @@ export function LyricDanceEmbed({
                   </span>
                 </button>
               </>
-            ) : hideReactButton && commentFocused ? (
+            ) : hideReactButton && (commentFocused || reactionPanelOpen) ? (
               /* Post-vote comment focused: input + send arrow */
               <>
                 <input
