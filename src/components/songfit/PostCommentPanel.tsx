@@ -343,7 +343,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
   };
 
   return (
-    <PanelShell isOpen={isOpen} variant="embedded" topOffset={52}>
+    <PanelShell isOpen={isOpen} variant="embedded" topOffset={52} bottomOffset={40}>
       <VoteStrip
         votedSide={votedSide}
         score={score}
