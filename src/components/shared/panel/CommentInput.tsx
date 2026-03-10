@@ -15,7 +15,7 @@ export function CommentInput({
   onSubmit,
   onClose,
   onFocus,
-  placeholder = 'drop your take…',
+  placeholder = 'What hit the hardest?',
   hasSubmitted = false,
   size = 'compact',
 }: CommentInputProps) {
