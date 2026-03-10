@@ -321,12 +321,7 @@ export function LyricDanceEmbed({
   // When the card goes "far" (fully off-screen), restore the cover so it's
   // always fresh on scroll-back — animation runs behind it immediately.
   // Also fire media-deactivate so the parent resets cardState → audio mutes.
-  // Auto-dismiss cover once canvas is ready
-  useEffect(() => {
-    if (playerReady && showCover) {
-      setShowCover(false);
-    }
-  }, [playerReady]);
+  
 
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) return;
@@ -693,6 +688,7 @@ export function LyricDanceEmbed({
               waiting={isWaiting}
               badge="In Studio"
               coverImageUrl={fetchedData?.section_images?.[0] ?? coverImageUrl}
+              hideBackground={playerReady}
               onExpand={
                 showExpandButton
                   ? () => window.open(lyricDanceUrl, "_blank")
