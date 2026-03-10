@@ -312,6 +312,13 @@ export function SongFitPostCard({
             </ProfileHoverCard>
           </div>
 
+          {/* Card type label */}
+          {(hasLyricDancePost || isSpotifyEmbed) && (
+            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400/70 shrink-0 mr-1">
+              {hasLyricDancePost ? "In Studio" : "Now Streaming"}
+            </span>
+          )}
+
           {/* 3-dot menu */}
           <DropdownMenu
             onOpenChange={(open) => {

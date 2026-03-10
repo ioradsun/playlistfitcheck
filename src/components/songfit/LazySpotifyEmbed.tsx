@@ -59,7 +59,7 @@ function LazySpotifyEmbedInner({
               alt=""
               className="absolute inset-0 w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             <div className="absolute bottom-3 left-3 right-3 z-10 flex items-end gap-3">
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="text-sm font-bold text-white drop-shadow-md line-clamp-1">
@@ -84,19 +84,12 @@ function LazySpotifyEmbedInner({
         width="100%"
         height={platform === "soundcloud" ? 166 : 232}
         allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-        className={`absolute inset-0 border-0 block w-full transition-opacity duration-700 rounded-xl ${iframeLoaded ? "z-[8]" : "z-[5]"}`}
-        style={{ opacity: iframeLoaded ? 1 : 0, clipPath: "inset(0 round 12px)" }}
+        className={`absolute inset-0 border-0 block w-full transition-opacity duration-700 ${iframeLoaded ? "z-[8]" : "z-[5]"}`}
+        style={{ opacity: iframeLoaded ? 1 : 0 }}
         title={`Play ${trackTitle}`}
         scrolling={platform === "soundcloud" ? "no" : undefined}
         onLoad={() => setIframeLoaded(true)}
       />
-
-      {/* NOW STREAMING badge — top left */}
-      <div className="absolute top-3 left-3 z-30 pointer-events-none">
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/40 rounded px-1.5 py-0.5">
-          Now Streaming
-        </span>
-      </div>
 
     </div>
   );
