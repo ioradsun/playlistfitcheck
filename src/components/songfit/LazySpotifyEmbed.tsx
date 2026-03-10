@@ -84,7 +84,7 @@ function LazySpotifyEmbedInner({
         width="100%"
         height={platform === "soundcloud" ? 166 : 232}
         allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-        className="absolute inset-0 border-0 block w-full transition-opacity duration-700 z-[5] rounded-xl"
+        className={`absolute inset-0 border-0 block w-full transition-opacity duration-700 rounded-xl ${iframeLoaded ? "z-[8]" : "z-[5]"}`}
         style={{ opacity: iframeLoaded ? 1 : 0, clipPath: "inset(0 round 12px)" }}
         title={`Play ${trackTitle}`}
         scrolling={platform === "soundcloud" ? "no" : undefined}
