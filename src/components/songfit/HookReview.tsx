@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,6 +19,10 @@ interface Props {
   isBattle?: boolean;
   onOpenReactions?: () => void;
   onRegisterVoteHandler?: (fn: (replay: boolean) => void) => void;
+  onRegisterSubmitHandler?: (fn: () => void) => void;
+  onStepChange?: (step: "vote" | "cta" | "done") => void;
+  onNoteChange?: (note: string) => void;
+  note?: string;
   showPreResolved?: boolean;
   preResolved?: { total: number; replay_yes: number; saves_count?: number };
   rank?: number;
@@ -37,9 +41,7 @@ function incrementSessionReviewCount() {
   sessionStorage.setItem(SESSION_COUNT_KEY, String(next));
 }
 
-export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, onRegisterVoteHandler, showPreResolved, preResolved, rank }: Props) {
-  const leftLabel  = isBattle ? "LEFT HOOK"  : "Run it back";
-  const rightLabel = isBattle ? "RIGHT HOOK" : "Skip";
+export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, onRegisterVoteHandler, onRegisterSubmitHandler, onStepChange, onNoteChange, note: externalNote, rank }: Props) {
   const fitLabel   = isBattle ? "LEFT HOOK"  : "REPLAY FIT";
 
   const { user } = useAuth();
@@ -52,11 +54,7 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
   const [note, setNote] = useState("");
   const [alreadyChecked, setAlreadyChecked] = useState(false);
   const [results, setResults] = useState<Results | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (step === "cta") setTimeout(() => inputRef.current?.focus(), 50);
-  }, [step]);
+  const activeNote = externalNote !== undefined ? externalNote : note;
 
   useEffect(() => {
     const check = async () => {
@@ -67,7 +65,7 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
         const voted = (data as any).would_replay;
         setWouldReplay(voted);
         onVotedSide?.(voted === true ? "a" : voted === false ? "b" : null);
-        fetchResults().then(r => { setResults(r); setStep("done"); });
+        fetchResults().then(r => { setResults(r); setStep("done"); onStepChange?.("done"); });
         onScored?.();
       }
       setAlreadyChecked(true);
@@ -94,12 +92,15 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
     setWouldReplay(replay);
     onVotedSide?.(replay ? "a" : "b");
     setStep("cta");
+    onStepChange?.("cta");
   };
 
-  // Register the vote handler so external components can trigger votes
   useEffect(() => {
     onRegisterVoteHandler?.(handleVote);
-  });
+    onRegisterSubmitHandler?.(() => {
+      handleSubmit(activeNote);
+    });
+  }, [onRegisterVoteHandler, onRegisterSubmitHandler, activeNote, user]);
 
 
   const handleRemove = async () => {
@@ -109,7 +110,8 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
     await q;
     setResults(null);
     setStep(2);
-    setNote("");
+    onStepChange?.("vote");
+    (onNoteChange ?? setNote)("");
     onVotedSide?.(null);
     onUnscored?.();
     window.dispatchEvent(new CustomEvent("crowdfit:vote"));
@@ -132,37 +134,11 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
     const r = await fetchResults();
     setResults(r);
     setStep("done");
+    onStepChange?.("done");
     onScored?.();
   };
 
   if (!alreadyChecked) return null;
-
-  // ── Pre-resolved (Billboard) ──
-  if (showPreResolved && step !== "done" && step !== "cta") {
-    const total     = preResolved?.total ?? 0;
-    const replayYes = preResolved?.replay_yes ?? 0;
-    const strength  = total > 0 ? Math.round((replayYes / total) * 100) : null;
-    const rankStr   = rank != null ? `#${String(rank).padStart(2, "0")}` : null;
-    return (
-      <div className="border-t border-border/30">
-        <div className="px-4 py-2.5 flex items-center justify-between">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">
-            {rankStr && <>RANK: {rankStr} · </>}
-            SIGNAL: {strength !== null ? `${strength}%` : "—"}
-          </span>
-        </div>
-        <div className="border-t border-border/30 flex items-stretch">
-          <button onClick={() => handleVote(true)} className="flex-1 flex items-center justify-center py-3.5 hover:bg-foreground/[0.03] transition-colors duration-[120ms] group">
-            <span className="text-[12px] font-mono tracking-[0.18em] uppercase text-muted-foreground group-hover:text-foreground transition-colors">{leftLabel}</span>
-          </button>
-          <div style={{ width: "0.5px" }} className="bg-border/30 self-stretch my-2" />
-          <button onClick={() => handleVote(false)} className="flex-1 flex items-center justify-center py-3.5 hover:bg-foreground/[0.03] transition-colors duration-[120ms] group">
-            <span className="text-[12px] font-mono tracking-[0.18em] uppercase text-muted-foreground group-hover:text-foreground transition-colors">{rightLabel}</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -201,53 +177,6 @@ export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle
           </div>
         );
       })()}
-
-      {/* ── DECISION ── */}
-      {step === 2 && (
-        <div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-          <div className="flex items-stretch">
-            <button onClick={() => handleVote(true)} className="flex-1 flex items-center justify-center py-3.5 hover:bg-foreground/[0.03] transition-colors duration-[120ms] group">
-              <span className="text-[12px] font-mono tracking-[0.18em] uppercase text-muted-foreground group-hover:text-foreground transition-colors">{leftLabel}</span>
-            </button>
-            <div style={{ width: "0.5px" }} className="bg-border/30 self-stretch my-2" />
-            <button onClick={() => handleVote(false)} className="flex-1 flex items-center justify-center py-3.5 hover:bg-foreground/[0.03] transition-colors duration-[120ms] group">
-              <span className="text-[12px] font-mono tracking-[0.18em] uppercase text-muted-foreground group-hover:text-foreground transition-colors">{rightLabel}</span>
-            </button>
-            <div style={{ width: "0.5px" }} className="bg-border/30 self-stretch my-2" />
-            <button onClick={onOpenReactions} className="flex items-center justify-center px-5 py-3.5 hover:bg-foreground/[0.03] transition-colors duration-[120ms] group" aria-label="React">
-              <span className="text-[12px] font-mono tracking-[0.18em] uppercase text-muted-foreground group-hover:text-foreground transition-colors">React</span>
-            </button>
-          </div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-        </div>
-      )}
-
-      {/* ── CTA — single row, no jump ── */}
-      {step === "cta" && (
-        <div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-          <div className="flex items-stretch">
-            <input
-              ref={inputRef}
-              type="text"
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter") { e.preventDefault(); handleSubmit(note); }
-                if (e.key === "Escape") setStep(2);
-              }}
-              placeholder="Signal locked · drop your take"
-              className="flex-1 bg-transparent text-[12px] font-mono text-muted-foreground placeholder:text-muted-foreground/50 outline-none px-3 py-3.5 tracking-wide focus:text-foreground transition-colors"
-            />
-            <div style={{ width: "0.5px" }} className="bg-border/30 self-stretch my-2" />
-            <button onClick={onOpenReactions} className="flex items-center justify-center px-5 py-3.5 hover:bg-foreground/[0.03] transition-colors duration-[120ms] group" aria-label="React">
-              <span className="text-[12px] font-mono tracking-[0.18em] uppercase text-muted-foreground group-hover:text-foreground transition-colors">React</span>
-            </button>
-          </div>
-          <div style={{ borderTopWidth: "0.5px" }} className="border-border/30" />
-        </div>
-      )}
 
     </div>
   );
