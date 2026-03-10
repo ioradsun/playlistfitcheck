@@ -842,7 +842,7 @@ export function LyricDanceEmbed({
                 >
                   <span className={`text-[13px] transition-colors ${
                     canvasNote ? "text-white/70 group-hover:text-white" : "text-white/20"
-                  }`}>↑</span>
+                  }`}>Send</span>
                 </button>
               </>
             ) : hideReactButton ? (
