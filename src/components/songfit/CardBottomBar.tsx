@@ -44,7 +44,7 @@ export function CardBottomBar({
       ? "flex items-stretch"
       : "flex items-stretch mx-1 my-1 rounded-md overflow-hidden";
   const wrapperStyle =
-    variant === "embedded" ? {} : { background: "rgba(255,255,255,0.03)" };
+    variant === "embedded" ? {} : { background: "rgba(255,255,255,0.05)", borderTop: "1px solid rgba(255,255,255,0.06)" };
 
   return (
     <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
