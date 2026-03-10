@@ -140,13 +140,22 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette = ["#a855f7"
               placeholder="Drop your take"
               className="flex-1 bg-transparent text-[13px] text-white placeholder:text-white/25 outline-none font-mono"
             />
-            <button
-              onClick={handleSubmit}
-              disabled={!text.trim() || submitting}
-              className="text-white/40 hover:text-white/80 disabled:opacity-20 transition-colors"
-            >
-              <Send size={14} />
-            </button>
+            {text.trim() ? (
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="text-white/40 hover:text-white/80 disabled:opacity-20 transition-colors"
+              >
+                <Send size={14} />
+              </button>
+            ) : (
+              <button
+                onClick={onClose}
+                className="text-white/30 hover:text-white/70 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            )}
           </>
         ) : (
           <p className="text-[11px] font-mono text-white/30">Sign in to drop a take</p>
