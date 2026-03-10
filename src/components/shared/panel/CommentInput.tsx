@@ -26,7 +26,7 @@ export function CommentInput({
   return (
     <div
       className="shrink-0 border-t border-white/[0.06] px-2 py-1 relative"
-      style={{ background: 'rgba(10,10,10,0.95)' }}
+      style={{ background: '#0a0a0a' }}
     >
       <div className={`relative ${heightClass}`}>
         <div
