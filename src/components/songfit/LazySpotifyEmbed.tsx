@@ -1,4 +1,5 @@
 import { useState, useEffect, memo } from "react";
+import { Flame, X } from "lucide-react";
 import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { logEngagementEvent } from "@/lib/engagementTracking";
@@ -215,13 +216,11 @@ function LazySpotifyEmbedInner({
                 }}
                 className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
               >
-                <span className={`text-[11px] font-mono tracking-[0.12em] uppercase transition-colors ${
-                  canvasNote
-                    ? "text-white/70 group-hover:text-white"
-                    : "text-white/25 group-hover:text-white/60"
-                }`}>
-                  {canvasNote ? "Send" : "React"}
-                </span>
+                {canvasNote ? (
+                  <span className="text-[11px] font-mono tracking-[0.12em] uppercase text-white/70 group-hover:text-white transition-colors">Send</span>
+                ) : (
+                  <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+                )}
               </button>
             </>
 
@@ -243,9 +242,10 @@ function LazySpotifyEmbedInner({
                 }}
                 className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
               >
-                <span className="text-[11px] font-mono tracking-[0.12em] uppercase text-white/30 group-hover:text-white/70 transition-colors">
-                   React
-                </span>
+                {externalPanelOpen
+                  ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
+                  : <Flame size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+                }
               </button>
             </>
           )}
