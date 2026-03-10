@@ -377,8 +377,6 @@ export function SongFitPostCard({
         <div
           className={cn(
             "relative transition-all duration-500",
-            isScored &&
-              "opacity-70 [filter:grayscale(60%)_brightness(0.80)_contrast(1.25)] dark:opacity-50 dark:[filter:grayscale(40%)_brightness(0.75)]",
           )}
         >
           {post.lyric_dance_url &&
