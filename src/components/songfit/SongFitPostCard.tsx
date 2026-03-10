@@ -422,6 +422,10 @@ export function SongFitPostCard({
                 postId={post.id}
                 isOpen={postPanelOpen}
                 onClose={() => setPostPanelOpen(false)}
+                votedSide={votedSide}
+                score={score}
+                onVoteYes={() => handleVote(true)}
+                onVoteNo={() => handleVote(false)}
               />
               </div>
 

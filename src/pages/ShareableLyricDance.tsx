@@ -758,6 +758,10 @@ export default function ShareableLyricDance() {
         displayMode="fullscreen"
         isOpen={reactionPanelOpen}
         onClose={handlePanelClose}
+        votedSide={votedSide}
+        score={score}
+        onVoteYes={() => handleVote(true)}
+        onVoteNo={() => handleVote(false)}
         engagementMode={engagementMode}
         frozenLineIndex={frozenLineIndex}
         danceId={data?.id ?? ''}
