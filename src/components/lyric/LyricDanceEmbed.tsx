@@ -321,6 +321,13 @@ export function LyricDanceEmbed({
   // When the card goes "far" (fully off-screen), restore the cover so it's
   // always fresh on scroll-back — animation runs behind it immediately.
   // Also fire media-deactivate so the parent resets cardState → audio mutes.
+  // Auto-dismiss cover once canvas is ready
+  useEffect(() => {
+    if (playerReady && showCover) {
+      setShowCover(false);
+    }
+  }, [playerReady]);
+
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) return;
     if (visibility === "far") {
@@ -679,8 +686,7 @@ export function LyricDanceEmbed({
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="absolute inset-x-0 top-0"
-            style={{ bottom: 60 }}
+            className="absolute inset-0"
           >
             <LyricDanceCover
               songName={songTitle}
@@ -735,7 +741,7 @@ export function LyricDanceEmbed({
       <div
         className="absolute bottom-0 left-0 right-0 z-[300]"
         style={{
-          background: "rgba(0,0,0,0.4)",
+          background: "rgba(8,8,8,0.92)",
           backdropFilter: "blur(12px)",
         }}
         onClick={(e) => e.stopPropagation()}
