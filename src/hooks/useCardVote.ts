@@ -54,9 +54,9 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
         const side = voted === true ? "a" : voted === false ? "b" : null;
         setWouldReplay(voted);
         setVotedSide(side);
-        const results = await fetchResults();
-        setScore({ total: results.total, replay_yes: results.replay_yes });
       }
+      const results = await fetchResults();
+      setScore({ total: results.total, replay_yes: results.replay_yes });
       setAlreadyChecked(true);
     };
     check();

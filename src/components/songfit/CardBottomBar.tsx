@@ -51,20 +51,30 @@ export function CardBottomBar({
         <>
           <button
             onClick={() => { onVoteYes(); setCommentFocused(true); }}
-            className={`flex-1 flex items-center justify-center ${py} hover:bg-white/[0.04] transition-colors group`}
+            className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
             <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
               Run it back
             </span>
+            {(score?.replay_yes ?? 0) > 0 && (
+              <span className="text-[9px] font-mono text-white/20">
+                {score!.replay_yes}
+              </span>
+            )}
           </button>
           <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
           <button
             onClick={() => { onVoteNo(); setCommentFocused(true); }}
-            className={`flex-1 flex items-center justify-center ${py} hover:bg-white/[0.04] transition-colors group`}
+            className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
             <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
               Skip
             </span>
+            {score != null && (score.total - score.replay_yes) > 0 && (
+              <span className="text-[9px] font-mono text-white/20">
+                {score.total - score.replay_yes}
+              </span>
+            )}
           </button>
         </>
       ) : commentFocused ? (

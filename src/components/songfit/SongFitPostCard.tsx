@@ -453,19 +453,21 @@ export function SongFitPostCard({
               )}
 
               {isSpotifyEmbed && crowdfitMode === "hook_review" && (
-                <CardBottomBar
-                  variant="fullscreen"
-                  votedSide={votedSide}
-                  score={score}
-                  note={note}
-                  onNoteChange={setNote}
-                  onVoteYes={() => handleVote(true)}
-                  onVoteNo={() => handleVote(false)}
-                  onSubmit={handleSubmit}
-                  onOpenReactions={() => setPostPanelOpen(true)}
-                  onClose={() => setPostPanelOpen(false)}
-                  panelOpen={postPanelOpen}
-                />
+                <div className="relative z-[80]">
+                  <CardBottomBar
+                    variant="fullscreen"
+                    votedSide={votedSide}
+                    score={score}
+                    note={note}
+                    onNoteChange={setNote}
+                    onVoteYes={() => handleVote(true)}
+                    onVoteNo={() => handleVote(false)}
+                    onSubmit={handleSubmit}
+                    onOpenReactions={() => setPostPanelOpen(true)}
+                    onClose={() => setPostPanelOpen(false)}
+                    panelOpen={postPanelOpen}
+                  />
+                </div>
               )}
 
               {/* Action row — stacked below caption inside 320px */}
