@@ -60,6 +60,11 @@ function LazySpotifyEmbedInner({
     setIframeLoaded(false);
   }, [embedSrc]);
 
+  // Reset comment input when external panel closes
+  useEffect(() => {
+    if (!externalPanelOpen) setCommentFocused(false);
+  }, [externalPanelOpen]);
+
   const handleClick = () => {
     if (user && postId) {
       logEngagementEvent(postId, user.id, "spotify_click");
