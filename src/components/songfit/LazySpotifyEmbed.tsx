@@ -93,7 +93,7 @@ function LazySpotifyEmbedInner({
 
       {/* NOW STREAMING badge — top left */}
       <div className="absolute top-3 left-3 z-30 pointer-events-none">
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/40 rounded px-1.5 py-0.5">
           Now Streaming
         </span>
       </div>

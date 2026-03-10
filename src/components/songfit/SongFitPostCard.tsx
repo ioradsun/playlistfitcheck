@@ -434,7 +434,7 @@ export function SongFitPostCard({
 
                 {/* Caption — directly below embed */}
                 {!editing && localCaption && localCaption.trim() && (
-                  <div className="px-3 pt-1 pb-0.5">
+                  <div className="px-3 pt-1.5 pb-1" style={{ background: "#0a0a0a" }}>
                     {localCaption.length <= 100 || captionExpanded ? (
                       <p className="text-[13px] leading-snug text-white/70">
                         {localCaption}
@@ -608,18 +608,18 @@ export function SongFitPostCard({
                 </div>
               </div>
             ) : localCaption && localCaption.trim() ? (
-              <div className="relative px-3 pt-2 pb-1">
+              <div className="relative px-3 pt-1.5 pb-1" style={{ background: "#0a0a0a" }}>
                 {localCaption.length <= 125 || captionExpanded ? (
-                  <p className="text-sm leading-snug text-white/70">
+                  <p className="text-[13px] leading-snug text-white/70">
                     {localCaption}
                   </p>
                 ) : (
-                  <p className="text-sm leading-snug text-white/70">
+                  <p className="text-[13px] leading-snug text-white/70">
                     {localCaption.slice(0, 125).trimEnd()}
                     <span className="text-white/30">… </span>
                     <button
                       onClick={() => setCaptionExpanded(true)}
-                      className="text-white/30 hover:text-white/50 text-sm"
+                      className="text-white/30 hover:text-white/50 text-[13px]"
                     >
                       more
                     </button>
