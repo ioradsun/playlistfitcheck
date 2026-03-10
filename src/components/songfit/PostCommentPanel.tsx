@@ -29,6 +29,7 @@ interface Props {
   onVoteYes: () => void;
   onVoteNo: () => void;
   hideInput?: boolean;
+  refreshKey?: number;
 }
 
 function CommentReactPicker({
@@ -73,7 +74,7 @@ function CommentReactPicker({
   );
 }
 
-export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, score, onVoteYes, onVoteNo, hideInput = false }: Props) {
+export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0 }: Props) {
   const { user, profile } = useAuth();
   const sessionId = getSessionId();
 
@@ -174,7 +175,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
     setHasSubmitted(false);
     setText('');
     setReplyingTo(null);
-  }, [isOpen, postId]);
+  }, [isOpen, postId, refreshKey]);
 
   const handleSubmit = async () => {
     const content = text.trim();

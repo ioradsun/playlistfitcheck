@@ -53,6 +53,7 @@ interface ReactionPanelProps {
   onVoteYes: () => void;
   onVoteNo: () => void;
   hideInput?: boolean;
+  refreshKey?: number;
 }
 
 function CommentReactPicker({
@@ -103,7 +104,7 @@ function isLineOutsideViewport(container: HTMLElement, row: HTMLElement, thresho
   return rowRect.top < containerRect.top + threshold || rowRect.bottom > containerRect.bottom - threshold;
 }
 
-function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart, onResetEngagement, votedSide, score, onVoteYes, onVoteNo, hideInput = false }: ReactionPanelProps) {
+function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart, onResetEngagement, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0 }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -408,7 +409,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         }
         setCommentReactions(counts);
       });
-  }, [danceId, isOpen]);
+  }, [danceId, isOpen, refreshKey]);
 
   useEffect(() => {
     if (!isOpen && repeatMode) {
