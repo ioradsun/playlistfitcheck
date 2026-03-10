@@ -221,8 +221,9 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
         });
     } catch {
       // no-op — comment already shown optimistically
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   const handleReact = async (key: EmojiKey) => {

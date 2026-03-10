@@ -82,36 +82,69 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
     }
     setWouldReplay(replay);
     setVotedSide(replay ? "a" : "b");
+
+    // Optimistically update score so UI never shows "calibrating" after a vote
+    setScore((prev) => {
+      const total = (prev?.total ?? 0) + 1;
+      const replay_yes = (prev?.replay_yes ?? 0) + (replay ? 1 : 0);
+      return { total, replay_yes };
+    });
+
+    // Auto-persist the vote in the background
+    const persistVote = async () => {
+      try {
+        const payload: any = {
+          post_id: postId,
+          hook_rating: "solid",
+          would_replay: replay,
+          context_note: null,
+        };
+        if (user) {
+          payload.user_id = user.id;
+          await supabase
+            .from("songfit_hook_reviews")
+            .upsert(payload, { onConflict: "user_id,post_id" });
+        } else {
+          payload.session_id = sessionId;
+          await supabase
+            .from("songfit_hook_reviews")
+            .upsert(payload, { onConflict: "session_id,post_id" });
+        }
+      } catch {
+        // ignore
+      }
+      incrementSessionReviewCount();
+      window.dispatchEvent(new CustomEvent("crowdfit:vote"));
+    };
+    persistVote();
   };
 
   const handleSubmit = async () => {
     if (!alreadyChecked || wouldReplay === null) return;
-    try {
-      const payload: any = {
-        post_id: postId,
-        hook_rating: "solid",
-        would_replay: wouldReplay,
-        context_note: note.trim() || null,
-      };
-      if (user) {
-        payload.user_id = user.id;
-        await supabase
-          .from("songfit_hook_reviews")
-          .upsert(payload, { onConflict: "user_id,post_id" });
-      } else {
-        payload.session_id = sessionId;
-        await supabase
-          .from("songfit_hook_reviews")
-          .upsert(payload, { onConflict: "session_id,post_id" });
+    // Update context note on existing review
+    if (note.trim()) {
+      try {
+        const payload: any = {
+          post_id: postId,
+          hook_rating: "solid",
+          would_replay: wouldReplay,
+          context_note: note.trim(),
+        };
+        if (user) {
+          payload.user_id = user.id;
+          await supabase
+            .from("songfit_hook_reviews")
+            .upsert(payload, { onConflict: "user_id,post_id" });
+        } else {
+          payload.session_id = sessionId;
+          await supabase
+            .from("songfit_hook_reviews")
+            .upsert(payload, { onConflict: "session_id,post_id" });
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
-    incrementSessionReviewCount();
-    // This event drives the StagePresence vote counter in SongFitFeed — do not remove
-    window.dispatchEvent(new CustomEvent("crowdfit:vote"));
-    const results = await fetchResults();
-    setScore({ total: results.total, replay_yes: results.replay_yes });
     setNote("");
   };
 
