@@ -115,7 +115,7 @@ function LazySpotifyEmbedInner({
       <iframe
         src={embedSrc}
         width="100%"
-        height={platform === "soundcloud" ? 166 : 260}
+        height={platform === "soundcloud" ? 166 : 232}
         allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
         className="absolute inset-0 border-0 block w-full transition-opacity duration-700 z-[5]"
         style={{ opacity: iframeLoaded ? 1 : 0 }}
@@ -123,138 +123,6 @@ function LazySpotifyEmbedInner({
         scrolling={platform === "soundcloud" ? "no" : undefined}
         onLoad={() => setIframeLoaded(true)}
       />
-
-      {/* Mask overlays to hide Spotify's light strips */}
-      <div
-        className="absolute top-0 left-0 right-0 bg-black pointer-events-none z-20"
-        style={{ height: 10 }}
-      />
-      <div
-        className="absolute bottom-0 left-0 right-0 bg-black pointer-events-none z-20"
-        style={{ height: 10 }}
-      />
-      {iframeLoaded && (
-        <div className="absolute top-3 left-3 z-30 pointer-events-none">
-          <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
-            Now Streaming
-          </span>
-        </div>
-      )}
-      {scorePill && (() => {
-        const { total, replay_yes } = scorePill;
-        const pct = total > 0 ? Math.round((replay_yes / total) * 100) : null;
-        return (
-          <div
-            className="absolute top-2 right-2 z-[30] flex items-center gap-1.5 px-2 py-1 rounded-full pointer-events-none"
-            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)" }}
-          >
-            <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
-            <span className="text-[10px] font-mono uppercase tracking-widest text-white/70">
-              {pct !== null ? `${pct}% REPLAY` : "CALIBRATING"}
-            </span>
-          </div>
-        );
-      })()}
-      {/* Vote bar — three states */}
-      {(onVoteYes || onVoteNo) && (
-        <div
-          className="absolute bottom-0 left-0 right-0 z-30 flex items-stretch"
-          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(12px)" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {votedSide == null ? (
-
-            /* State 1 — Pre-vote */
-            <>
-              <button
-                onClick={onVoteYes}
-                className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
-              >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-                  Run it back
-                </span>
-              </button>
-              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-              <button
-                onClick={onVoteNo}
-                className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
-              >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-                  Skip
-                </span>
-              </button>
-            </>
-
-          ) : panelOpen ? (
-
-            /* State 2 — Panel open: input + React ↓ or ↑ */
-            <>
-              <input
-                type="text"
-                value={canvasNote}
-                onChange={(e) => onCanvasNoteChange?.(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    onCanvasSubmit?.();
-                    setCommentFocused(false);
-                  }
-                  if (e.key === "Escape") {
-                    setCommentFocused(false);
-                  }
-                }}
-                onBlur={() => { if (!canvasNote && !externalPanelOpen) setCommentFocused(false); }}
-                placeholder="drop your take..."
-                autoFocus={commentFocused}
-                className="flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 py-3 tracking-wide min-w-0"
-              />
-              <button
-                onClick={() => {
-                  if (canvasNote) {
-                    onCanvasSubmit?.();
-                    setCommentFocused(false);
-                  } else {
-                    setCommentFocused(false);
-                    if (externalPanelOpen) onOpenReactions?.();
-                  }
-                }}
-                className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
-              >
-                {canvasNote ? (
-                  <span className="text-[11px] font-mono tracking-[0.12em] uppercase text-white/70 group-hover:text-white transition-colors">Send</span>
-                ) : (
-                  <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
-                )}
-              </button>
-            </>
-
-          ) : (
-
-            /* State 3 — Post-vote default: artist pill + React ↑ */
-            <>
-              <div className="flex-1 flex items-center gap-2 px-3 py-2.5 overflow-hidden min-w-0 pointer-events-none">
-                <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-green-400/60" />
-                <span className="text-[10px] font-mono text-white/30 truncate">
-                  {artistName ? `Now streaming · ${artistName}` : "Now streaming"}
-                </span>
-              </div>
-              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-              <button
-                onClick={() => {
-                  onOpenReactions?.();
-                  setCommentFocused(true);
-                }}
-                className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
-              >
-                {externalPanelOpen
-                  ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
-                  : <Flame size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-                }
-              </button>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }

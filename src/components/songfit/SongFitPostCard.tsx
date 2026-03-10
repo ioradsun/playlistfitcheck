@@ -469,6 +469,33 @@ export function SongFitPostCard({
                 </div>
               )}
 
+              {/* Now streaming bar + fire/X toggle */}
+              {post.spotify_track_id && (
+                <div
+                  className="flex items-stretch mx-1 mt-1 rounded-md"
+                  style={{ background: "rgba(255,255,255,0.03)" }}
+                >
+                  <div className="flex-1 flex items-center gap-2 px-3 py-2 overflow-hidden min-w-0">
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-green-400/60" />
+                    <span className="text-[10px] font-mono text-white/30 truncate">
+                      {(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")
+                        ? `Now streaming · ${(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}`
+                        : "Now streaming"}
+                    </span>
+                  </div>
+                  <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+                  <button
+                    onClick={() => setPostPanelOpen((prev) => !prev)}
+                    className="flex items-center justify-center px-4 py-2 hover:bg-white/[0.04] transition-colors group shrink-0 rounded-r-md"
+                  >
+                    {postPanelOpen
+                      ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
+                      : <Flame size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+                    }
+                  </button>
+                </div>
+              )}
+
               {/* Action row — stacked below caption inside 320px */}
               {crowdfitMode !== "hook_review" && (
                 <div className="flex items-center justify-between px-1 py-0.5">
