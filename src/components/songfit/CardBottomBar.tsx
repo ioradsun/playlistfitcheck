@@ -55,7 +55,7 @@ export function CardBottomBar({
           }}
           placeholder="What hit the most?"
           autoFocus
-          className={`flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 ${py} tracking-wide min-w-0`}
+          className={`flex-1 bg-transparent text-[11px] font-mono text-white/60 placeholder:text-white/25 outline-none px-3 ${py} tracking-wide min-w-0`}
         />
       ) : votedSide === null ? (
         /* Pre-vote: Run it back / Not for me */
@@ -64,23 +64,23 @@ export function CardBottomBar({
             onClick={onVoteYes}
             className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
-            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
+            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
               Run it back
             </span>
             {(score?.replay_yes ?? 0) > 0 && (
-              <span className="text-[9px] font-mono text-white/20">{score!.replay_yes}</span>
+              <span className="text-[9px] font-mono text-white/15">{score!.replay_yes}</span>
             )}
           </button>
-          <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+          <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
           <button
             onClick={onVoteNo}
             className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
-            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
+            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
               Not For Me
             </span>
             {score != null && score.total - score.replay_yes > 0 && (
-              <span className="text-[9px] font-mono text-white/20">{score.total - score.replay_yes}</span>
+              <span className="text-[9px] font-mono text-white/15">{score.total - score.replay_yes}</span>
             )}
           </button>
         </>
@@ -113,8 +113,8 @@ export function CardBottomBar({
 
             return (
               <>
-                <span className="text-[9px] font-mono tracking-[0.12em] text-white/35 leading-tight truncate">{verdict}</span>
-                <span className="text-[10px] font-mono tracking-[0.08em] text-white/60 leading-tight truncate">{tally}</span>
+                <span className="text-[9px] font-mono tracking-[0.12em] text-white/25 leading-tight truncate">{verdict}</span>
+                <span className="text-[11px] font-mono tracking-[0.08em] text-white/40 leading-tight truncate">{tally}</span>
               </>
             );
           })()}
@@ -122,7 +122,7 @@ export function CardBottomBar({
       )}
 
       {/* ── Divider — always present ── */}
-      <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+      <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
 
       {/* ── Right side: 🔥 / ✕ — always in the same position ── */}
       <button
@@ -133,23 +133,23 @@ export function CardBottomBar({
             onOpenReactions();
           }
         }}
-        className={`relative z-[500] flex items-center justify-center gap-1 px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0`}
+        className={`relative z-[500] flex items-center justify-center gap-1 px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none`}
       >
         {panelOpen ? (
-          <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
+          <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
         ) : (
           <>
             <span
               className="text-[13px] leading-none transition-all duration-300"
               style={{
-                filter: votedSide !== null ? "none" : "grayscale(1)",
-                opacity: votedSide !== null ? 1 : 0.4,
+                filter: votedSide !== null ? "none" : "grayscale(1) brightness(0.7)",
+                opacity: votedSide !== null ? 0.85 : 0.3,
               }}
             >
               {topReaction?.symbol ?? "🔥"}
             </span>
             {topReaction && topReaction.count > 0 && (
-              <span className="text-[9px] font-mono text-white/25 group-hover:text-white/50 transition-colors">
+              <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
                 {topReaction.count}
               </span>
             )}
