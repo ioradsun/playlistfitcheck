@@ -211,7 +211,7 @@ export default function ShareableLyricDance() {
   const engagementModeRef = useRef<'spectator' | 'freezing' | 'engaged'>('spectator');
 
   const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(
-    data?.id ?? "",
+    data?.post_id ?? data?.id ?? "",
     { allowAnonymous: true },
   );
 

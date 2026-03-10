@@ -54,6 +54,7 @@ const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2
 export interface LyricDanceData {
   id: string;
   user_id: string;
+  post_id?: string | null;
   artist_slug: string;
   song_slug: string;
   artist_name: string;
