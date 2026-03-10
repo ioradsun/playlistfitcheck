@@ -321,7 +321,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
           />
           {!isReply && (
             <button
-              onClick={() => setReplyingTo(comment)}
+              onClick={() => { setReplyingTo(comment); setTimeout(() => inputRef.current?.focus(), 0); }}
               className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors ml-auto focus:outline-none"
             >
               reply
