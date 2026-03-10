@@ -37,13 +37,18 @@ function incrementSessionReviewCount() {
   sessionStorage.setItem(SESSION_COUNT_KEY, String(next));
 }
 
-export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, showPreResolved, preResolved, rank }: Props) {
+export function HookReview({ postId, onScored, onUnscored, onVotedSide, isBattle, onOpenReactions, onRegisterVoteHandler, showPreResolved, preResolved, rank }: Props) {
   const leftLabel  = isBattle ? "LEFT HOOK"  : "Run it back";
   const rightLabel = isBattle ? "RIGHT HOOK" : "Skip";
   const fitLabel   = isBattle ? "LEFT HOOK"  : "REPLAY FIT";
 
   const { user } = useAuth();
   const sessionId = getSessionId();
+
+  // Register the vote handler so external components can trigger votes
+  useEffect(() => {
+    onRegisterVoteHandler?.(handleVote);
+  });
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>(2);
