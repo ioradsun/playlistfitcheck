@@ -18,6 +18,8 @@ import { useLyricSections, type LyricSectionLine } from "@/hooks/useLyricSection
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { HotSectionPill } from "@/components/lyric/HotSectionPill";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
+import { useCardVote } from "@/hooks/useCardVote";
+import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
@@ -207,6 +209,11 @@ export default function ShareableLyricDance() {
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const freezeAtSecRef = useRef<number | null>(null);
   const engagementModeRef = useRef<'spectator' | 'freezing' | 'engaged'>('spectator');
+
+  const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(
+    data?.id ?? "",
+    { allowAnonymous: true },
+  );
 
   useEffect(() => {
     engagementModeRef.current = engagementMode;
@@ -580,21 +587,6 @@ export default function ShareableLyricDance() {
     };
   }, [playerInstance]);
 
-  // ── Song-end detection → auto-open reaction panel ────────────────────
-  useEffect(() => {
-    const player = playerInstance;
-    if (!player) return;
-    const audio = player.audio;
-
-    const onEnded = () => {
-      // Small delay so the last frame holds before panel slides up
-      setTimeout(() => setReactionPanelOpen(true), 800);
-    };
-
-    audio.addEventListener('ended', onEnded);
-    return () => audio.removeEventListener('ended', onEnded);
-  }, [playerInstance]);
-
   // Badge timer + hide Lovable widget
   useEffect(() => { const t = setTimeout(() => setBadgeVisible(true), 1000); return () => clearTimeout(t); }, []);
   useEffect(() => {
@@ -624,43 +616,6 @@ export default function ShareableLyricDance() {
   const coverArtist    = profile?.display_name ?? data?.artist_name ?? "";
   const coverAvatarUrl = profile?.avatar_url ?? null;
   const coverInitial   = (data?.artist_name || data?.song_name || "♪")[0].toUpperCase();
-
-  const topReaction = useMemo(() => {
-    const EMOJI_SYMBOLS: Record<string, string> = {
-      fire: '🔥', dead: '💀', mind_blown: '🤯',
-      emotional: '😭', respect: '🙏', accurate: '🎯',
-    };
-
-    const lineTotals = new Map<number, number>();
-    for (const d of Object.values(reactionData)) {
-      for (const [lineIdxStr, count] of Object.entries(d.line)) {
-        const idx = Number(lineIdxStr);
-        lineTotals.set(idx, (lineTotals.get(idx) ?? 0) + count);
-      }
-    }
-
-    if (lineTotals.size === 0) return null;
-
-    let bestLineIndex = -1;
-    let bestLineTotal = 0;
-    for (const [idx, total] of lineTotals.entries()) {
-      if (total > bestLineTotal) { bestLineTotal = total; bestLineIndex = idx; }
-    }
-
-    let topEmojiKey: string | null = null;
-    let topEmojiCount = 0;
-    for (const [key, d] of Object.entries(reactionData)) {
-      const count = d.line[bestLineIndex] ?? 0;
-      if (count > topEmojiCount) { topEmojiCount = count; topEmojiKey = key; }
-    }
-
-    const symbol = topEmojiKey ? (EMOJI_SYMBOLS[topEmojiKey] ?? '🔥') : '🔥';
-    const lines = data?.lyrics ?? [];
-    const line = (lines as any[])[bestLineIndex];
-    const lineText = (line?.text ?? '').slice(0, 60);
-
-    return { symbol, count: topEmojiCount, lineText, lineReactionCount: bestLineTotal };
-  }, [reactionData, data?.lyrics]);
 
   // ── Render ──────────────────────────────────────────────────────────
 
@@ -781,65 +736,19 @@ export default function ShareableLyricDance() {
         )}
 
         <div className="w-full max-w-2xl mx-auto">
-          {showCover || isWaitingForPlayer ? (
-            /* Pre-active: FOMO chip — mirrors embed bottom bar */
-            <div className="flex items-center gap-2 px-3 py-2">
-              <div
-                className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.07] overflow-hidden min-w-0 opacity-80"
-                style={{ background: "rgba(255,255,255,0.02)" }}
-              >
-                {topReaction ? (
-                  <>
-                    <span className="text-[11px] leading-none shrink-0">{topReaction.symbol}</span>
-                    <span className="text-[10px] font-mono text-white/50 shrink-0">{topReaction.count}</span>
-                    <span className="text-[10px] font-mono text-white/30 truncate">
-                      &ldquo;{topReaction.lineText}&rdquo;
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-1.5 h-1.5 rounded-full bg-white/20 shrink-0 animate-pulse" />
-                    <span className="text-[10px] font-mono text-white/25 truncate">
-                      {data ? "ready" : "loading..."}
-                    </span>
-                  </>
-                )}
-              </div>
-              <div className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-white/[0.06] shrink-0 pointer-events-none">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-white/25">React</span>
-                <span className="text-[9px] text-white/20">↑</span>
-              </div>
-            </div>
-          ) : (
-            /* Active: live now-playing chip */
-            <div className="flex items-center gap-2 px-3 py-2">
-              <button
-                className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border border-white/[0.05] text-left overflow-hidden min-w-0 transition-all hover:border-white/15"
-                style={{ background: "rgba(255,255,255,0.02)" }}
-                onClick={() => setReactionPanelOpen(true)}
-              >
-                {activeLine ? (
-                  <>
-                    <div
-                      className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                      style={{ background: Array.isArray(data?.palette) ? data.palette[1] ?? '#ffffff' : '#ffffff', opacity: 0.6 }}
-                    />
-                    <span className="text-[10px] font-mono text-white/30 truncate">{activeLine.text}</span>
-                  </>
-                ) : (
-                  <span className="text-[10px] font-mono text-white/20 truncate">
-                    {lyricSections.isReady ? 'listening...' : '...'}
-                  </span>
-                )}
-              </button>
-              <button
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-white/[0.08] text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
-                onClick={() => setReactionPanelOpen(true)}
-              >
-                <span className="text-[11px] font-mono uppercase tracking-wider">React</span>
-                <span className="text-[10px] opacity-60">↑</span>
-              </button>
-            </div>
+          {!showCover && !isWaitingForPlayer && (
+            <CardBottomBar
+              variant="fullscreen"
+              votedSide={votedSide}
+              score={score}
+              note={note}
+              onNoteChange={setNote}
+              onVoteYes={() => handleVote(true)}
+              onVoteNo={() => handleVote(false)}
+              onSubmit={handleSubmit}
+              onOpenReactions={() => setReactionPanelOpen(true)}
+              onClose={() => setReactionPanelOpen(false)}
+            />
           )}
         </div>
       </div>

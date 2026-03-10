@@ -14,6 +14,8 @@ import { Maximize2, Flame, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
+import { useCardVote } from "@/hooks/useCardVote";
+import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import {
   ReactionPanel,
@@ -121,13 +123,6 @@ interface LyricDanceEmbedProps {
   onExternalPanelOpenChange?: (open: boolean) => void;
   /** Skip cover overlay and start playing immediately (muted). */
   autoPlay?: boolean;
-  onVoteYes?: () => void;
-  onVoteNo?: () => void;
-  votedSide?: "a" | "b" | null;
-  scorePill?: { total: number; replay_yes: number } | null;
-  canvasNote?: string;
-  onCanvasNoteChange?: (note: string) => void;
-  onCanvasSubmit?: () => void;
   onOpenReactions?: () => void;
 }
 
@@ -149,13 +144,6 @@ export function LyricDanceEmbed({
   externalPanelOpen,
   onExternalPanelOpenChange,
   autoPlay = false,
-  onVoteYes,
-  onVoteNo,
-  votedSide,
-  scorePill,
-  canvasNote = "",
-  onCanvasNoteChange,
-  onCanvasSubmit,
   onOpenReactions,
 }: LyricDanceEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
@@ -183,11 +171,11 @@ export function LyricDanceEmbed({
   const [engagementMode, setEngagementMode] = useState<
     "spectator" | "freezing" | "engaged"
   >("spectator");
-  const [commentFocused, setCommentFocused] = useState(false);
   const [frozenLineIndex, setFrozenLineIndex] = useState<number | null>(null);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [forceDemoted, setForceDemoted] = useState(false);
 
+  const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(lyricDanceId);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -208,13 +196,11 @@ export function LyricDanceEmbed({
   const openPanel = useCallback(() => {
     setReactionPanelOpen(true);
     onExternalPanelOpenChange?.(true);
-    if (hideReactButton && votedSide != null) setCommentFocused(true);
-  }, [onExternalPanelOpenChange, hideReactButton, votedSide]);
+  }, [onExternalPanelOpenChange]);
 
   const closePanel = useCallback(() => {
     setReactionPanelOpen(false);
     onExternalPanelOpenChange?.(false);
-    setCommentFocused(false);
   }, [onExternalPanelOpenChange]);
 
   // ── Data fetch ─────────────────────────────────────────────────────
@@ -510,14 +496,6 @@ export function LyricDanceEmbed({
     engagementModeRef.current = engagementMode;
   }, [engagementMode]);
 
-  // ── Song ended → open reaction panel ─────────────────────────────
-  useEffect(() => {
-    if (!player) return;
-    const onEnded = () => setTimeout(() => openPanel(), 800);
-    player.audio.addEventListener("ended", onEnded);
-    return () => player.audio.removeEventListener("ended", onEnded);
-  }, [player, openPanel]);
-
   // ── Derived values ────────────────────────────────────────────────
   const durationSec = useMemo(() => {
     const lines = data?.lyrics ?? [];
@@ -778,120 +756,55 @@ export function LyricDanceEmbed({
             />
           </div>
 
-          {/* Single row — two-state */}
-          <div className="flex items-stretch" onClick={e => e.stopPropagation()}>
-            {hideReactButton && votedSide == null ? (
-              /* Pre-vote: Run it back / Skip */
-              <>
-                <button
-                  onClick={onVoteYes}
-                  className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
-                >
-                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-                    Run it back
+
+          {hideReactButton ? (
+            <CardBottomBar
+              variant="embedded"
+              votedSide={votedSide}
+              score={score}
+              note={note}
+              onNoteChange={setNote}
+              onVoteYes={() => handleVote(true)}
+              onVoteNo={() => handleVote(false)}
+              onSubmit={handleSubmit}
+              onOpenReactions={() => onOpenReactions?.()}
+              onClose={closePanel}
+            />
+          ) : (
+            /* Standalone (not card mode): lyric pill + React button */
+            <div className="flex items-stretch" onClick={e => e.stopPropagation()}>
+              <button
+                className={`flex-1 flex items-center gap-2 px-2 py-2 rounded-md border text-left overflow-hidden min-w-0 mx-3 my-2 transition-all duration-300 ${
+                  reactionPanelOpen ? "border-white/15" : "border-white/[0.05]"
+                }`}
+                style={{ background: "rgba(255,255,255,0.02)" }}
+                onClick={openPanel}
+              >
+                {activeLine ? (
+                  <>
+                    <div
+                      className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                      style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }}
+                    />
+                    <span className="text-[10px] font-mono text-white/30 truncate">{activeLine.text}</span>
+                  </>
+                ) : (
+                  <span className="text-[10px] font-mono text-white/20 truncate">
+                    {lyricSections.isReady ? "listening..." : "..."}
                   </span>
-                </button>
-                <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-                <button
-                  onClick={onVoteNo}
-                  className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
-                >
-                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-                    Skip
-                  </span>
-                </button>
-              </>
-            ) : hideReactButton && (commentFocused || reactionPanelOpen) ? (
-              /* Post-vote comment focused: input + send arrow */
-              <>
-                <input
-                  type="text"
-                  value={canvasNote}
-                  onChange={e => onCanvasNoteChange?.(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      onCanvasSubmit?.();
-                      setCommentFocused(false);
-                    }
-                    if (e.key === "Escape") setCommentFocused(false);
-                  }}
-                  onBlur={() => { if (!canvasNote) setCommentFocused(false); }}
-                  placeholder="Signal locked · drop your take"
-                  autoFocus
-                  className="flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 py-3 tracking-wide min-w-0"
-                />
-                <button
-                  onClick={() => {
-                    setCommentFocused(false);
-                    handlePanelClose();
-                  }}
-                  className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
-                >
-                  <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-                </button>
-              </>
-            ) : hideReactButton ? (
-              /* Post-vote default: social proof + 🔥 */
-              <>
-                <div className="flex-1 flex items-center px-3 py-2.5 overflow-hidden min-w-0">
-                  {scorePill && scorePill.total > 0 ? (
-                    <span className="text-[10px] font-mono text-emerald-400 truncate">
-                      {votedSide === "a"
-                        ? `You + ${Math.max(0, scorePill.replay_yes - 1)} FMLY would Replay this`
-                        : `${scorePill.replay_yes} / ${scorePill.total} FMLY would Replay this`
-                      }
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono text-white/20 truncate">
-                      calibrating...
-                    </span>
-                  )}
-                </div>
-                <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-                <button
-                  onClick={() => { onOpenReactions?.(); setCommentFocused(true); }}
-                  className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
-                >
-                  <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
-                </button>
-              </>
-            ) : (
-              /* Standalone (not card mode): existing lyric pill + React button */
-              <>
-                <button
-                  className={`flex-1 flex items-center gap-2 px-2 py-2 rounded-md border text-left overflow-hidden min-w-0 mx-3 my-2 transition-all duration-300 ${
-                    reactionPanelOpen ? "border-white/15" : "border-white/[0.05]"
-                  }`}
-                  style={{ background: "rgba(255,255,255,0.02)" }}
-                  onClick={openPanel}
-                >
-                  {activeLine ? (
-                    <>
-                      <div
-                        className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                        style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }}
-                      />
-                      <span className="text-[10px] font-mono text-white/30 truncate">{activeLine.text}</span>
-                    </>
-                  ) : (
-                    <span className="text-[10px] font-mono text-white/20 truncate">
-                      {lyricSections.isReady ? "listening..." : "..."}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={openPanel}
-                  className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
-                >
-                  {reactionPanelOpen
-                    ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
-                    : <Flame size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-                  }
-                </button>
-              </>
-            )}
-          </div>
+                )}
+              </button>
+              <button
+                onClick={openPanel}
+                className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
+              >
+                {reactionPanelOpen
+                  ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
+                  : <Flame size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+                }
+              </button>
+            </div>
+          )}
         </div>
       )}
 

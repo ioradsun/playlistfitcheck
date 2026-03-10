@@ -22,7 +22,7 @@ import { useSiteCopy } from "@/hooks/useSiteCopy";
 import type { SongFitPost } from "@/components/songfit/types";
 import { PostCommentPanel } from "@/components/songfit/PostCommentPanel";
 
-interface HookReviewSummary {
+interface ReviewSummary {
   total: number;
   topRatingPct: number;
   topRatingLabel: string;
@@ -64,7 +64,7 @@ const PublicProfile = () => {
   const [roles, setRoles] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<SongFitPost[]>([]);
   const [saveCounts, setSaveCounts] = useState<Record<string, number>>({});
-  const [hookReviews, setHookReviews] = useState<Record<string, HookReviewSummary>>({});
+  const [reviewSummaries, setReviewSummaries] = useState<Record<string, ReviewSummary>>({});
   const [notFound, setNotFound] = useState(false);
 
   const isOwner = user?.id === userId;
@@ -122,7 +122,7 @@ const PublicProfile = () => {
           .in("post_id", postIds);
         if (reviews) {
           const HOOK_ORDER = ["missed", "almost", "solid", "hit"];
-          const byPost: Record<string, HookReviewSummary> = {};
+          const byPost: Record<string, ReviewSummary> = {};
           postIds.forEach(id => {
             const pr = reviews.filter((r: any) => r.post_id === id);
             if (pr.length === 0) return;
@@ -136,7 +136,7 @@ const PublicProfile = () => {
             const LABELS: Record<string, string> = { missed: "missed", almost: "almost", solid: "solid", hit: "hit" };
             byPost[id] = { total, topRatingPct: Math.round((topCount / total) * 100), topRatingLabel: LABELS[topRating] ?? topRating, replayPct };
           });
-          setHookReviews(byPost);
+          setReviewSummaries(byPost);
         }
       });
   }, [userId]);
@@ -239,13 +239,13 @@ const PublicProfile = () => {
   const totalComments = submissions.reduce((sum, s) => sum + (s.comments_count || 0), 0);
   const totalSaves = Object.values(saveCounts).reduce((sum, c) => sum + c, 0);
   // Hook mode aggregate stats
-  const hookReviewsAll = Object.values(hookReviews);
-  const totalReviews = hookReviewsAll.reduce((sum, r) => sum + r.total, 0);
-  const avgReplayPct = hookReviewsAll.length > 0
-    ? Math.round(hookReviewsAll.reduce((sum, r) => sum + r.replayPct, 0) / hookReviewsAll.length)
+  const reviewSummariesAll = Object.values(reviewSummaries);
+  const totalReviews = reviewSummariesAll.reduce((sum, r) => sum + r.total, 0);
+  const avgReplayPct = reviewSummariesAll.length > 0
+    ? Math.round(reviewSummariesAll.reduce((sum, r) => sum + r.replayPct, 0) / reviewSummariesAll.length)
     : 0;
-  const avgHitPct = hookReviewsAll.length > 0
-    ? Math.round(hookReviewsAll.reduce((sum, r) => sum + r.topRatingPct, 0) / hookReviewsAll.length)
+  const avgHitPct = reviewSummariesAll.length > 0
+    ? Math.round(reviewSummariesAll.reduce((sum, r) => sum + r.topRatingPct, 0) / reviewSummariesAll.length)
     : 0;
 
   if (notFound) {
@@ -500,20 +500,20 @@ const PublicProfile = () => {
                           <div className="flex items-center gap-2.5 mt-0.5">
                             <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
                             {isHookMode ? (
-                              hookReviews[s.id] ? (
+                              reviewSummaries[s.id] ? (
                                 <>
                                   <span className="text-[10px] text-muted-foreground font-mono">
-                                    <span className="text-foreground font-semibold">{hookReviews[s.id].topRatingPct}%</span> {hookReviews[s.id].topRatingLabel}
+                                    <span className="text-foreground font-semibold">{reviewSummaries[s.id].topRatingPct}%</span> {reviewSummaries[s.id].topRatingLabel}
                                   </span>
                                   <span className="text-[10px] text-muted-foreground/40">·</span>
                                   <span className="text-[10px] text-muted-foreground font-mono">
-                                    <span className="text-foreground font-semibold">{hookReviews[s.id].replayPct}%</span> replay
+                                    <span className="text-foreground font-semibold">{reviewSummaries[s.id].replayPct}%</span> replay
                                   </span>
                                   <button
                                     onClick={e => { e.stopPropagation(); setReviewSheetPostId(s.id); }}
                                     className="text-[10px] text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
                                   >
-                                    {hookReviews[s.id].total} reviews
+                                    {reviewSummaries[s.id].total} reviews
                                   </button>
                                 </>
                               ) : (
