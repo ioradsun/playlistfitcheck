@@ -689,7 +689,6 @@ export function LyricDanceEmbed({
                   ? () => window.open(lyricDanceUrl, "_blank")
                   : undefined
               }
-              topReaction={topReaction}
               onListen={(e) => {
                 e.stopPropagation();
                 setShowCover(false);
@@ -777,6 +776,7 @@ export function LyricDanceEmbed({
           onOpenReactions={handleOpenReactions}
           onClose={closePanel}
           panelOpen={reactionPanelOpen}
+          topReaction={topReaction ? { symbol: topReaction.symbol, count: topReaction.count } : null}
         />
       </div>
 

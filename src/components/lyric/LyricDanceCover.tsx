@@ -9,7 +9,6 @@ interface LyricDanceCoverProps {
   onListen?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   badge?: string | null;
   onExpand?: () => void;
-  topReaction?: { symbol: string; count: number; lineText: string; lineReactionCount: number } | null;
 }
 
 export function LyricDanceCover({
@@ -18,7 +17,6 @@ export function LyricDanceCover({
   onListen,
   badge,
   onExpand,
-  topReaction,
 }: LyricDanceCoverProps) {
   return (
     <div
@@ -49,7 +47,7 @@ export function LyricDanceCover({
         </div>
       )}
 
-      {/* Center: song title + CTA + social proof */}
+      {/* Center: song title + CTA */}
       <div className="flex flex-col items-center justify-center px-6 text-center">
         {songName ? (
           <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4 max-w-[85%]">
@@ -59,8 +57,7 @@ export function LyricDanceCover({
           <div className="h-4 mb-4" />
         )}
 
-        <>
-          <button
+        <button
             onClick={waiting ? undefined : onListen}
             className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
             style={{
@@ -71,20 +68,6 @@ export function LyricDanceCover({
           >
             Listen Now
           </button>
-
-          {/* Social proof — tight under button, only when reactions exist */}
-          {topReaction && (
-            <div className="flex items-center gap-1.5 mt-3">
-              <span className="text-[11px] leading-none select-none">{topReaction.symbol}</span>
-              <span className="text-[10px] font-mono text-white/50">
-                {topReaction.lineReactionCount}
-              </span>
-              <span className="text-[10px] font-mono text-white/25 truncate max-w-[180px]">
-                &ldquo;{topReaction.lineText}&rdquo;
-              </span>
-            </div>
-          )}
-        </>
       </div>
     </div>
   );
