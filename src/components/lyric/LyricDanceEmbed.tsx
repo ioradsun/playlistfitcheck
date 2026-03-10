@@ -208,11 +208,13 @@ export function LyricDanceEmbed({
   const openPanel = useCallback(() => {
     setReactionPanelOpen(true);
     onExternalPanelOpenChange?.(true);
-  }, [onExternalPanelOpenChange]);
+    if (hideReactButton && votedSide != null) setCommentFocused(true);
+  }, [onExternalPanelOpenChange, hideReactButton, votedSide]);
 
   const closePanel = useCallback(() => {
     setReactionPanelOpen(false);
     onExternalPanelOpenChange?.(false);
+    setCommentFocused(false);
   }, [onExternalPanelOpenChange]);
 
   // ── Data fetch ─────────────────────────────────────────────────────
