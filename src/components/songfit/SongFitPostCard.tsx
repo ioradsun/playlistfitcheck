@@ -43,6 +43,7 @@ import { useCardState, type CardState } from "./useCardLifecycle";
 import { PostCommentPanel } from "./PostCommentPanel";
 import { useCardVote } from "@/hooks/useCardVote";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
+import { useTopPostReaction } from "@/hooks/useTopPostReaction";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -97,6 +98,7 @@ export function SongFitPostCard({
   
   const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
   const [postPanelOpen, setPostPanelOpen] = useState(false);
+  const topPostReaction = useTopPostReaction(post.id);
   const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(post.id);
 
   const isOwnPost = user?.id === post.user_id;
@@ -466,6 +468,7 @@ export function SongFitPostCard({
                     onOpenReactions={() => setPostPanelOpen(true)}
                     onClose={() => setPostPanelOpen(false)}
                     panelOpen={postPanelOpen}
+                    topReaction={topPostReaction}
                   />
                 </div>
               )}

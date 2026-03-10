@@ -13,6 +13,8 @@ interface CardBottomBarProps {
   onClose: () => void;
   /** When true the panel is open — render X instead of 🔥 */
   panelOpen?: boolean;
+  /** Most-voted reaction emoji + count. Shown greyscale pre-vote, color post-vote. */
+  topReaction?: { symbol: string; count: number } | null;
   /**
    * "embedded" — inside LyricDanceEmbed canvas (backdrop blur, py-3 buttons)
    * "fullscreen" — SongFitPostCard / ShareableLyricDance (no backdrop, py-2.5, rounded wrapper)
@@ -31,6 +33,7 @@ export function CardBottomBar({
   onOpenReactions,
   onClose,
   panelOpen = false,
+  topReaction,
   variant = "embedded",
 }: CardBottomBarProps) {
   const [commentFocused, setCommentFocused] = useState(false);
@@ -113,7 +116,7 @@ export function CardBottomBar({
         </div>
       )}
 
-      {/* Right — persistent 🔥/X, always visible */}
+      {/* Right — persistent reaction/X, always visible */}
       <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
       <button
         onClick={() => {
@@ -124,12 +127,28 @@ export function CardBottomBar({
             if (votedSide !== null) setCommentFocused(true);
           }
         }}
-        className={`flex items-center justify-center px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0`}
+        className={`flex items-center justify-center gap-1 px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0`}
       >
-        {panelOpen
-          ? <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
-          : <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
-        }
+        {panelOpen ? (
+          <X size={14} className="text-white/40 group-hover:text-white/80 transition-colors" />
+        ) : (
+          <>
+            <span
+              className="text-[13px] leading-none transition-all duration-300"
+              style={{
+                filter: votedSide !== null ? "none" : "grayscale(1)",
+                opacity: votedSide !== null ? 1 : 0.4,
+              }}
+            >
+              {topReaction?.symbol ?? "🔥"}
+            </span>
+            {topReaction && topReaction.count > 0 && (
+              <span className="text-[9px] font-mono text-white/25 group-hover:text-white/50 transition-colors">
+                {topReaction.count}
+              </span>
+            )}
+          </>
+        )}
       </button>
     </div>
   );
