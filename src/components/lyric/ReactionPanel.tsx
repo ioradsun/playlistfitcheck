@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { MessageCircle, X } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getSessionId } from '@/lib/sessionId';
 import type { LyricSectionLine } from '@/hooks/useLyricSections';
 import type { LyricDancePlayer } from '@/engine/LyricDancePlayer';
+import { PanelShell } from '@/components/shared/panel/PanelShell';
+import { PanelHeader } from '@/components/shared/panel/PanelHeader';
+import { EmojiBar } from '@/components/shared/panel/EmojiBar';
+import { CommentInput } from '@/components/shared/panel/CommentInput';
+import { EMOJIS, type EmojiKey } from '@/components/shared/panel/panelConstants';
 
 export interface CanonicalAudioSection {
   sectionIndex: number;
@@ -45,17 +49,6 @@ interface ReactionPanelProps {
   onEngagementStart: (targetLineIndex?: number) => void;
   onResetEngagement?: () => void;
 }
-
-const EMOJIS = [
-  { key: 'fire', symbol: '🔥', label: 'fire' },
-  { key: 'dead', symbol: '💀', label: 'dead' },
-  { key: 'mind_blown', symbol: '🤯', label: 'blown' },
-  { key: 'emotional', symbol: '😭', label: 'felt' },
-  { key: 'respect', symbol: '🙏', label: 'respect' },
-  { key: 'accurate', symbol: '🎯', label: 'accurate' },
-] as const;
-
-type EmojiKey = typeof EMOJIS[number]['key'];
 
 function CommentReactPicker({
   commentId,
@@ -121,7 +114,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(null);
   const [autoFollowEnabled, setAutoFollowEnabled] = useState(true);
   const [replyingTo, setReplyingTo] = useState<CommentRow | null>(null);
-  const [liftingText, setLiftingText] = useState<string | null>(null);
   const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(null);
   const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
   const [sessionCommentReacted, setSessionCommentReacted] = useState<Set<string>>(new Set());
@@ -260,9 +252,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     return currentLine?.lineIndex ?? null;
   }, [repeatMode, repeatTimeSec, allLines]);
 
-  const panelStyles = displayMode === 'fullscreen'
-    ? 'fixed bottom-0 left-0 right-0 z-[70] h-[88vh]'
-    : 'absolute left-0 right-0 bottom-0 z-30 h-[310px]';
 
   useEffect(() => {
     if (!isOpen) {
@@ -541,8 +530,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     const text = textInput.trim().slice(0, 200);
     const sessionId = getSessionId();
 
-    setLiftingText(text);
-    setTimeout(() => setLiftingText(null), 400);
 
     const { data: inserted, error } = await supabase
       .from('lyric_dance_comments' as any)
@@ -558,7 +545,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
     if (error) {
       console.error('Comment insert failed:', error);
-      setLiftingText(null);
       return;
     }
 
@@ -595,84 +581,56 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   // ── Embedded compact layout ──────────────────────────────────────────
   if (displayMode === 'embedded') {
     return (
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ y: '100%', opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: '100%', opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
-            className={`${panelStyles} flex flex-col overflow-hidden`}
-            style={{ background: 'rgba(10,10,10,0.97)', backdropFilter: 'blur(12px)' }}
-          >
-            {/* ── Compact header: 28px ── */}
-            <div className="flex items-center justify-between px-3 h-7 shrink-0 border-b border-white/[0.05]">
-              <div className="flex items-center gap-1.5">
-                <div
-                  className="w-1 h-1 rounded-full shrink-0"
-                  style={{
-                    background: palette[1] ?? 'rgba(255,255,255,0.4)',
-                    opacity: engagementMode === 'engaged' ? 0 : 0.5,
-                    animation: engagementMode === 'engaged' ? 'none' : 'pulse 2s ease-in-out infinite',
-                  }}
-                />
-                <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/20">
-                  {engagementMode === 'freezing' ? 'Line Live' : engagementMode === 'engaged' ? 'Line Paused' : 'Live'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    if (!player) return;
-                    releaseManualSelectionLock();
-                    setAutoFollowEnabled(true);
-                    setRepeatMode(false);
-                    onResetEngagement?.();
-                    player.setMuted(false);
-                    player.seek(0);
-                    player.play();
-                  }}
-                  className="text-[8px] font-mono uppercase tracking-[0.15em] text-white/30 hover:text-white/60 transition-colors px-1.5 py-0.5 rounded border border-white/[0.08] hover:border-white/15"
-                >
-                  ↺ Replay
-                </button>
-                <button
-                  onClick={onClose}
-                  className="text-white/40 hover:text-white/80 transition-colors p-1 -mr-1 focus:outline-none"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            </div>
+      <PanelShell isOpen={isOpen} variant="embedded">
+        <PanelHeader
+          status={
+            engagementMode === 'freezing' ? 'freezing' :
+              engagementMode === 'engaged' ? 'engaged' :
+                'live'
+          }
+          palette={palette}
+          onClose={onClose}
+          size="compact"
+          actions={(
+            <button
+              onClick={() => {
+                if (!player) return;
+                releaseManualSelectionLock();
+                setAutoFollowEnabled(true);
+                setRepeatMode(false);
+                onResetEngagement?.();
+                player.setMuted(false);
+                player.seek(0);
+                player.play();
+              }}
+              className="text-[8px] font-mono uppercase tracking-[0.15em] text-white/30 hover:text-white/60 transition-colors px-1.5 py-0.5 rounded border border-white/[0.08] hover:border-white/15"
+            >
+              ↺ Replay
+            </button>
+          )}
+        />
 
-            {/* ── Compact emoji strip: 32px ── */}
-            <div className="flex items-center justify-around px-2 h-8 shrink-0 border-b border-white/[0.04]">
-              {EMOJIS.map(({ key, symbol }) => {
-                const targetIdx = displayLineIndex ?? activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null;
-                const reacted = targetIdx != null
-                  ? sessionReacted.has(`${key}-${targetIdx}`)
-                  : false;
-                const count = targetIdx != null ? (reactionData[key]?.line[targetIdx] ?? 0) : 0;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      if (targetIdx != null) handleReact(key as EmojiKey, targetIdx);
-                    }}
-                    className="flex items-center gap-0.5 text-base px-1.5 py-0.5 rounded-md transition-all active:scale-90 focus:outline-none"
-                    style={{
-                      background: reacted ? `${palette[1] ?? '#ffffff'}15` : 'transparent',
-                      opacity: reacted ? 1 : 0.7,
-                    }}
-                  >
-                    <span>{symbol}</span>
-                    {count > 0 && (
-                      <span className="text-[8px] font-mono text-white/30">{count}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+        <EmojiBar
+          variant="strip"
+          palette={palette}
+          counts={Object.fromEntries(
+            EMOJIS.map(({ key }) => [
+              key,
+              displayLineIndex != null ? (reactionData[key]?.line[displayLineIndex] ?? 0) : 0,
+            ]),
+          ) as any}
+          reacted={new Set(
+            EMOJIS
+              .filter(({ key }) =>
+                displayLineIndex != null && sessionReacted.has(`${key}-${displayLineIndex}`),
+              )
+              .map(({ key }) => key),
+          )}
+          onReact={(key) => {
+            const targetIdx = displayLineIndex ?? activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null;
+            if (targetIdx != null) handleReact(key, targetIdx);
+          }}
+        />
 
             {/* ── Lyrics scroll: fills remaining space ── */}
             <div
@@ -800,99 +758,43 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               </div>
             </div>
 
-            {/* ── Compact comment input: 36px ── */}
-            <div className="shrink-0 border-t border-white/[0.06] px-2 py-1" style={{ background: 'rgba(10,10,10,0.95)' }}>
-              {liftingText && (
-                <div
-                  className="absolute left-3 right-3 pointer-events-none"
-                  style={{
-                    bottom: '100%',
-                    animation: 'liftFade 400ms ease-out forwards',
-                    fontSize: 11,
-                    color: 'rgba(255,255,255,0.5)',
-                    fontFamily: 'monospace',
-                    zIndex: 20,
-                  }}
-                />
-              )}
-              <div className="relative h-8">
-                <div className={`absolute inset-0 transition-opacity ${hasSubmitted ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                  <input
-                    type="text"
-                    onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
-                    value={textInput}
-                    onChange={e => setTextInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleTextSubmit();
-                      if (e.key === 'Escape') onClose();
-                    }}
-                    placeholder="drop your take…"
-                    maxLength={200}
-                    className="w-full h-8 bg-white/[0.04] border border-white/[0.07] rounded-md px-3 text-[11px] text-white placeholder:text-white/18 focus:outline-none focus:border-white/15 transition-colors"
-                  />
-                </div>
-                <div className={`absolute inset-0 flex items-center justify-center text-[10px] font-mono text-white/30 transition-opacity ${hasSubmitted ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                  ✓ sent
-                </div>
-              </div>
-            </div>
-
-            <style>{`
-              @keyframes liftFade {
-                0%   { transform: translateY(0);     opacity: 0.7; }
-                100% { transform: translateY(-36px); opacity: 0;   }
-              }
-            `}</style>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <CommentInput
+          value={textInput}
+          onChange={setTextInput}
+          onSubmit={handleTextSubmit}
+          onClose={onClose}
+          onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
+          hasSubmitted={hasSubmitted}
+          size="compact"
+        />
+      </PanelShell>
     );
   }
 
   // ── Fullscreen layout (unchanged) ──────────────────────────────────────
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ y: '100%', opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: '100%', opacity: 0 }}
-          transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
-          className={`${panelStyles} flex flex-col overflow-hidden`}
-          style={{ background: '#0d0d0d', borderTop: '1px solid rgba(255,255,255,0.06)' }}
-        >
-          <div
-            className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[0.05] shrink-0"
-            style={{ background: '#0d0d0d' }}
-          >
-            <div className="flex items-center gap-1.5 min-w-[46px]">
-              {repeatMode ? (
-                <button
-                  onClick={handleStopRepeat}
-                  className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-white/50 hover:text-white/80 transition-colors"
-                >
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-400/70 animate-pulse" />
-                  ■ Stop
-                </button>
-              ) : (
-                <>
-                  <div
-                    className="w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{
-                      background: palette[1] ?? 'rgba(255,255,255,0.4)',
-                      opacity: 0.45,
-                      animation: engagementMode === 'engaged' ? 'none' : 'pulse 2s ease-in-out infinite',
-                    }}
-                  />
-                  <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/25">
-                    {engagementMode === 'freezing' ? 'Line Live' : engagementMode === 'engaged' ? 'Line Paused' : 'Live'}
-                  </span>
-                </>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {!repeatMode && (
+    <PanelShell isOpen={isOpen} variant="fullscreen">
+      <PanelHeader
+        status={
+          engagementMode === 'freezing' ? 'freezing' :
+            engagementMode === 'engaged' ? 'engaged' :
+              'live'
+        }
+        palette={palette}
+        onClose={onClose}
+        size="full"
+        actions={(
+          <>
+            {repeatMode ? (
+              <button
+                onClick={handleStopRepeat}
+                className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-white/50 hover:text-white/80 transition-colors"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-red-400/70 animate-pulse" />
+                ■ Stop
+              </button>
+            ) : (
+              <>
                 <button
                   onClick={handleStartRepeat}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 text-[10px] font-mono uppercase tracking-wider text-white/35 hover:text-white/65 hover:border-white/25 hover:bg-white/[0.04] transition-all"
@@ -900,29 +802,22 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   <span>↺</span>
                   <span>Replay</span>
                 </button>
-              )}
-              {!autoFollowEnabled && !repeatMode && (
-                <button
-                  onClick={() => {
-                    releaseManualSelectionLock();
-                    setAutoFollowEnabled(true);
-                  }}
-                  className="px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-wider text-white/35 border border-white/10 hover:text-white/60"
-                >
-                  resume live
-                </button>
-              )}
-              <button
-                onClick={onClose}
-                className="text-white/25 hover:text-white/60 transition-colors ml-1 focus:outline-none"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <line x1="2" y1="2" x2="10" y2="10" />
-                  <line x1="10" y1="2" x2="2" y2="10" />
-                </svg>
-              </button>
-            </div>
-          </div>
+                {!autoFollowEnabled && (
+                  <button
+                    onClick={() => {
+                      releaseManualSelectionLock();
+                      setAutoFollowEnabled(true);
+                    }}
+                    className="px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-wider text-white/35 border border-white/10 hover:text-white/60"
+                  >
+                    resume live
+                  </button>
+                )}
+              </>
+            )}
+          </>
+        )}
+      />
 
           <div className="border-b border-white/[0.07] shrink-0" style={{ background: '#111111' }}>
             <div className="px-5 pt-4 pb-2 h-8 flex items-center justify-between gap-3">
@@ -943,94 +838,41 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               </p>
             </div>
 
-            <div className="grid grid-cols-6 gap-1 px-3 pb-3 min-h-[74px]">
-              {EMOJIS.map(({ key, symbol, label }) => {
-                const count = displayLine?.lineIndex != null ? (reactionData[key]?.line[displayLine.lineIndex] ?? 0) : 0;
-                const reacted = displayLine?.lineIndex != null ? sessionReacted.has(`${key}-${displayLine.lineIndex}`) : false;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      if (displayLine?.lineIndex != null) handleReact(key as EmojiKey, displayLine.lineIndex);
-                    }}
-                    className="flex flex-col items-center py-2 rounded-xl transition-all active:scale-95 focus:outline-none"
-                    style={{
-                      background: reacted ? `${palette[1] ?? '#ffffff'}12` : 'transparent',
-                      boxShadow: reacted ? `inset 0 -2px 0 0 ${palette[1] ?? 'rgba(255,255,255,0.5)'}` : 'inset 0 -2px 0 0 transparent',
-                    }}
-                  >
-                    <span className="text-lg leading-none">{symbol}</span>
-                    <span className="text-[8px] font-mono uppercase tracking-wide text-white/22">{label}</span>
-                    <span
-                      className="text-[9px] font-mono leading-none min-h-[11px]"
-                      style={{
-                        opacity: count > 0 ? 1 : 0,
-                        color: reacted ? (palette[1] ?? 'rgba(255,255,255,0.8)') : 'rgba(255,255,255,0.35)',
-                      }}
-                    >
-                      {count || 0}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="px-4 pb-3 relative min-h-[78px]">
-              <div className="h-5 mb-2 flex items-center gap-2">
-                <span className={`text-[10px] font-mono text-white/40 truncate ${replyingTo ? 'opacity-100' : 'opacity-0'}`}>
-                  {replyingTo ? `"${replyingTo.text.slice(0, 40)}"` : 'placeholder'}
-                </span>
-                <button
-                  onClick={() => setReplyingTo(null)}
-                  className={`text-white/20 hover:text-white/50 transition-colors ml-auto shrink-0 focus:outline-none ${replyingTo ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <line x1="2" y1="2" x2="8" y2="8" /><line x1="8" y1="2" x2="2" y2="8" />
-                  </svg>
-                </button>
-              </div>
-
-              {liftingText && (
-                <div
-                  className="absolute left-4 right-4 pointer-events-none"
-                  style={{
-                    bottom: '100%',
-                    animation: 'liftFade 400ms ease-out forwards',
-                    fontSize: 12,
-                    color: 'rgba(255,255,255,0.6)',
-                    fontFamily: 'monospace',
-                    zIndex: 20,
-                  }}
-                >
-                  {liftingText}
-                </div>
+            <EmojiBar
+              variant="grid"
+              palette={palette}
+              counts={Object.fromEntries(
+                EMOJIS.map(({ key }) => [
+                  key,
+                  displayLine?.lineIndex != null ? (reactionData[key]?.line[displayLine.lineIndex] ?? 0) : 0,
+                ]),
+              ) as any}
+              reacted={new Set(
+                EMOJIS
+                  .filter(({ key }) =>
+                    displayLine?.lineIndex != null &&
+                    sessionReacted.has(`${key}-${displayLine.lineIndex}`),
+                  )
+                  .map(({ key }) => key),
               )}
+              onReact={(key) => {
+                if (displayLine?.lineIndex != null) handleReact(key, displayLine.lineIndex);
+              }}
+            />
 
-              <div className="h-11 relative">
-                <div className={`absolute inset-0 transition-opacity ${hasSubmitted ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                  <input
-                    type="text"
-                    onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
-                    value={textInput}
-                    onChange={e => setTextInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleTextSubmit();
-                      if (e.key === 'Escape') {
-                        if (replyingTo) setReplyingTo(null);
-                        else onClose();
-                      }
-                    }}
-                    placeholder={replyingTo ? 'write your reply...' : 'drop your comment on this line...'}
-                    maxLength={200}
-                    className="w-full h-11 bg-white/[0.04] border border-white/[0.08] rounded-lg px-4 text-[12px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors pr-8"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/15 pointer-events-none">↵</span>
-                </div>
-                <div className={`absolute inset-0 flex items-center justify-center text-[10px] font-mono text-white/30 transition-opacity ${hasSubmitted ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                  ✓ comment sent
-                </div>
-              </div>
-            </div>
+            <CommentInput
+              value={textInput}
+              onChange={setTextInput}
+              onSubmit={handleTextSubmit}
+              onClose={() => {
+                if (replyingTo) setReplyingTo(null);
+                else onClose();
+              }}
+              onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
+              hasSubmitted={hasSubmitted}
+              placeholder={replyingTo ? 'write your reply...' : 'drop your comment on this line...'}
+              size="full"
+            />
           </div>
 
           <div
@@ -1215,15 +1057,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
             </div>
           </div>
 
-          <style>{`
-            @keyframes liftFade {
-              0%   { transform: translateY(0);     opacity: 0.7; }
-              100% { transform: translateY(-36px); opacity: 0;   }
-            }
-          `}</style>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </PanelShell>
   );
 }
 

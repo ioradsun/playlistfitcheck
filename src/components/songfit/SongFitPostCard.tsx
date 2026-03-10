@@ -422,7 +422,6 @@ export function SongFitPostCard({
                 postId={post.id}
                 isOpen={postPanelOpen}
                 onClose={() => setPostPanelOpen(false)}
-                hideOwnInput
               />
               </div>
 
