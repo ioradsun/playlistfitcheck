@@ -220,7 +220,7 @@ function LazySpotifyEmbedInner({
                     ? "text-white/70 group-hover:text-white"
                     : "text-white/25 group-hover:text-white/60"
                 }`}>
-                  {canvasNote ? "↑" : "React ↓"}
+                  {canvasNote ? "Send" : "React"}
                 </span>
               </button>
             </>
