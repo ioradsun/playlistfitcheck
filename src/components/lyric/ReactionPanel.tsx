@@ -5,10 +5,10 @@ import { getSessionId } from '@/lib/sessionId';
 import type { LyricSectionLine } from '@/hooks/useLyricSections';
 import type { LyricDancePlayer } from '@/engine/LyricDancePlayer';
 import { PanelShell } from '@/components/shared/panel/PanelShell';
-import { PanelHeader } from '@/components/shared/panel/PanelHeader';
 import { EmojiBar } from '@/components/shared/panel/EmojiBar';
 import { CommentInput } from '@/components/shared/panel/CommentInput';
 import { EMOJIS, type EmojiKey } from '@/components/shared/panel/panelConstants';
+import { VoteStrip } from '@/components/shared/panel/VoteStrip';
 
 export interface CanonicalAudioSection {
   sectionIndex: number;
@@ -48,6 +48,10 @@ interface ReactionPanelProps {
   onReactionFired: (emoji: string) => void;
   onEngagementStart: (targetLineIndex?: number) => void;
   onResetEngagement?: () => void;
+  votedSide: 'a' | 'b' | null;
+  score: { total: number; replay_yes: number } | null;
+  onVoteYes: () => void;
+  onVoteNo: () => void;
 }
 
 function CommentReactPicker({
@@ -98,7 +102,7 @@ function isLineOutsideViewport(container: HTMLElement, row: HTMLElement, thresho
   return rowRect.top < containerRect.top + threshold || rowRect.bottom > containerRect.bottom - threshold;
 }
 
-function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart, onResetEngagement }: ReactionPanelProps) {
+function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart, onResetEngagement, votedSide, score, onVoteYes, onVoteNo }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -582,31 +586,22 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   if (displayMode === 'embedded') {
     return (
       <PanelShell isOpen={isOpen} variant="embedded">
-        <PanelHeader
-          status={
-            engagementMode === 'freezing' ? 'freezing' :
-              engagementMode === 'engaged' ? 'engaged' :
-                'live'
-          }
+        <VoteStrip
+          votedSide={votedSide}
+          score={score}
+          onVoteYes={onVoteYes}
+          onVoteNo={onVoteNo}
+          onReplay={() => {
+            if (!player) return;
+            releaseManualSelectionLock();
+            setAutoFollowEnabled(true);
+            setRepeatMode(false);
+            onResetEngagement?.();
+            player.setMuted(false);
+            player.seek(0);
+            player.play();
+          }}
           palette={palette}
-          size="compact"
-          actions={(
-            <button
-              onClick={() => {
-                if (!player) return;
-                releaseManualSelectionLock();
-                setAutoFollowEnabled(true);
-                setRepeatMode(false);
-                onResetEngagement?.();
-                player.setMuted(false);
-                player.seek(0);
-                player.play();
-              }}
-              className="text-[8px] font-mono uppercase tracking-[0.15em] text-white/30 hover:text-white/60 transition-colors px-1.5 py-0.5 rounded border border-white/[0.08] hover:border-white/15"
-            >
-              ↺ Replay
-            </button>
-          )}
         />
 
         <EmojiBar
@@ -770,51 +765,45 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     );
   }
 
-  // ── Fullscreen layout (unchanged) ──────────────────────────────────────
   return (
     <PanelShell isOpen={isOpen} variant="fullscreen">
-      <PanelHeader
-        status={
-          engagementMode === 'freezing' ? 'freezing' :
-            engagementMode === 'engaged' ? 'engaged' :
-              'live'
-        }
-        palette={palette}
-        size="full"
-        actions={(
-          <>
-            {repeatMode ? (
-              <button
-                onClick={handleStopRepeat}
-                className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-white/50 hover:text-white/80 transition-colors"
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-red-400/70 animate-pulse" />
-                ■ Stop
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={handleStartRepeat}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 text-[10px] font-mono uppercase tracking-wider text-white/35 hover:text-white/65 hover:border-white/25 hover:bg-white/[0.04] transition-all"
-                >
-                  <span>↺</span>
-                  <span>Replay</span>
-                </button>
-                {!autoFollowEnabled && (
-                  <button
-                    onClick={() => {
-                      releaseManualSelectionLock();
-                      setAutoFollowEnabled(true);
-                    }}
-                    className="px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-wider text-white/35 border border-white/10 hover:text-white/60"
-                  >
-                    resume live
-                  </button>
-                )}
-              </>
-            )}
-          </>
+      <div className="flex items-center justify-end gap-2 px-4 pt-2 pb-1 shrink-0">
+        {repeatMode ? (
+          <button
+            onClick={handleStopRepeat}
+            className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-white/50 hover:text-white/80 transition-colors"
+          >
+            <div className="w-1.5 h-1.5 rounded-full bg-red-400/70 animate-pulse" />
+            ■ Stop
+          </button>
+        ) : (
+          !autoFollowEnabled && (
+            <button
+              onClick={() => { releaseManualSelectionLock(); setAutoFollowEnabled(true); }}
+              className="px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-wider text-white/35 border border-white/10 hover:text-white/60"
+            >
+              resume live
+            </button>
+          )
         )}
+      </div>
+
+      <VoteStrip
+        votedSide={votedSide}
+        score={score}
+        onVoteYes={onVoteYes}
+        onVoteNo={onVoteNo}
+        onReplay={() => {
+          if (!player) return;
+          releaseManualSelectionLock();
+          setAutoFollowEnabled(true);
+          setRepeatMode(false);
+          onResetEngagement?.();
+          player.setMuted(false);
+          player.seek(0);
+          player.play();
+        }}
+        palette={palette}
       />
 
           <div className="border-b border-white/[0.07] shrink-0" style={{ background: '#111111' }}>

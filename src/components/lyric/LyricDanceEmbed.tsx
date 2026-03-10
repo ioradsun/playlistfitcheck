@@ -814,6 +814,10 @@ export function LyricDanceEmbed({
           displayMode="embedded"
           isOpen={reactionPanelOpen}
           onClose={handlePanelClose}
+          votedSide={votedSide}
+          score={score}
+          onVoteYes={() => handleVote(true)}
+          onVoteNo={() => handleVote(false)}
           danceId={data?.id ?? ""}
           activeLine={activeLine}
           allLines={lyricSections.allLines}
