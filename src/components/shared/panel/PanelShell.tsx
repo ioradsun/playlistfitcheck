@@ -2,7 +2,13 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 interface PanelShellProps {
   isOpen: boolean;
+  /**
+   * "embedded" — absolute, fills positioned ancestor (InStudio card default)
+   * "fullscreen" — fixed, bottom-anchored, 88vh (ShareableLyricDance)
+   */
   variant?: 'embedded' | 'fullscreen';
+  /** Pixels to extend upward beyond the positioned ancestor — covers the card
+   *  profile header in embedded mode. Outer overflow:hidden clips cleanly. */
   topOffset?: number;
   children: React.ReactNode;
 }

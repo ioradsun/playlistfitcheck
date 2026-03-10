@@ -48,95 +48,91 @@ export function CardBottomBar({
   return (
     <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
 
-      {!panelOpen && (
+      {/* Left — three states */}
+      {votedSide === null ? (
+        /* Pre-vote: Run it back / Skip */
         <>
-          {/* Left — three states */}
-          {votedSide === null ? (
-            /* Pre-vote: Run it back / Skip */
-            <>
-              <button
-                onClick={() => { onVoteYes(); setCommentFocused(true); }}
-                className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
-              >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-                  Run it back
-                </span>
-                {(score?.replay_yes ?? 0) > 0 && (
-                  <span className="text-[9px] font-mono text-white/20">{score!.replay_yes}</span>
-                )}
-              </button>
-              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-              <button
-                onClick={() => { onVoteNo(); setCommentFocused(true); }}
-                className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
-              >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-                  Not For Me
-                </span>
-                {score != null && (score.total - score.replay_yes) > 0 && (
-                  <span className="text-[9px] font-mono text-white/20">{score.total - score.replay_yes}</span>
-                )}
-              </button>
-            </>
-          ) : commentFocused ? (
-            /* Post-vote: comment input */
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => onNoteChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  onSubmit();
-                  setCommentFocused(false);
-                }
-                if (e.key === "Escape") setCommentFocused(false);
-              }}
-              onBlur={() => {
-                if (!note) setCommentFocused(false);
-              }}
-              placeholder="drop your take..."
-              autoFocus
-              className={`flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 ${py} tracking-wide min-w-0`}
-            />
-          ) : (
-            /* Post-vote: social proof */
-            <div className={`flex-1 flex flex-col justify-center px-3 ${py} overflow-hidden min-w-0`}>
-              {score && score.total > 0 ? (() => {
-                const { total, replay_yes } = score;
-                const notForMeCount = total - replay_yes;
-                const majorityRanItBack = replay_yes > total / 2;
-                const isSplit = replay_yes === total / 2;
-                const userAgrees = votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
-
-                let verdict: string;
-                let tally: string;
-
-                if (total < 20) {
-                  verdict = "FMLY STILL VOTING";
-                  tally = `${replay_yes} / ${total} RAN IT BACK`;
-                } else if (isSplit) {
-                  verdict = "FMLY IS SPLIT";
-                  tally = `${replay_yes} / ${total} RAN IT BACK`;
-                } else {
-                  verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
-                  tally = majorityRanItBack
-                    ? `${replay_yes} / ${total} RAN IT BACK`
-                    : `${notForMeCount} / ${total} NOT FOR ME`;
-                }
-
-                return (
-                  <>
-                    <span className="text-[9px] font-mono tracking-[0.12em] text-white/35 leading-tight truncate">{verdict}</span>
-                    <span className="text-[10px] font-mono tracking-[0.08em] text-white/60 leading-tight truncate">{tally}</span>
-                  </>
-                );
-              })() : (
-                <span className="text-[10px] font-mono text-white/20 truncate">calibrating...</span>
-              )}
-            </div>
-          )}
+          <button
+            onClick={() => { onVoteYes(); setCommentFocused(true); }}
+            className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
+          >
+            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
+              Run it back
+            </span>
+            {(score?.replay_yes ?? 0) > 0 && (
+              <span className="text-[9px] font-mono text-white/20">{score!.replay_yes}</span>
+            )}
+          </button>
+          <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+          <button
+            onClick={() => { onVoteNo(); setCommentFocused(true); }}
+            className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
+          >
+            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
+              Not For Me
+            </span>
+            {score != null && (score.total - score.replay_yes) > 0 && (
+              <span className="text-[9px] font-mono text-white/20">{score.total - score.replay_yes}</span>
+            )}
+          </button>
         </>
+      ) : commentFocused ? (
+        /* Post-vote: comment input */
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => onNoteChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onSubmit();
+              setCommentFocused(false);
+            }
+            if (e.key === "Escape") setCommentFocused(false);
+          }}
+          onBlur={() => {
+            if (!note) setCommentFocused(false);
+          }}
+          placeholder="drop your take..."
+          autoFocus
+          className={`flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 ${py} tracking-wide min-w-0`}
+        />
+      ) : (
+        /* Post-vote: social proof */
+        <div className={`flex-1 flex flex-col justify-center px-3 ${py} overflow-hidden min-w-0`}>
+          {score && score.total > 0 ? (() => {
+            const { total, replay_yes } = score;
+            const notForMeCount = total - replay_yes;
+            const majorityRanItBack = replay_yes > total / 2;
+            const isSplit = replay_yes === total / 2;
+            const userAgrees = votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
+
+            let verdict: string;
+            let tally: string;
+
+            if (total < 20) {
+              verdict = "FMLY STILL VOTING";
+              tally = `${replay_yes} / ${total} RAN IT BACK`;
+            } else if (isSplit) {
+              verdict = "FMLY IS SPLIT";
+              tally = `${replay_yes} / ${total} RAN IT BACK`;
+            } else {
+              verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
+              tally = majorityRanItBack
+                ? `${replay_yes} / ${total} RAN IT BACK`
+                : `${notForMeCount} / ${total} NOT FOR ME`;
+            }
+
+            return (
+              <>
+                <span className="text-[9px] font-mono tracking-[0.12em] text-white/35 leading-tight truncate">{verdict}</span>
+                <span className="text-[10px] font-mono tracking-[0.08em] text-white/60 leading-tight truncate">{tally}</span>
+              </>
+            );
+          })() : (
+            <span className="text-[10px] font-mono text-white/20 truncate">calibrating...</span>
+          )}
+        </div>
       )}
 
       {/* Right — persistent emoji/X, always visible */}
