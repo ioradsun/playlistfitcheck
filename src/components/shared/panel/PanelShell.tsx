@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 interface PanelShellProps {
   isOpen: boolean;
   /**
-   * "embedded" — absolute, bottom-anchored, 310px tall (InStudio card default)
+   * "embedded" — absolute, fills positioned ancestor (InStudio card default)
    * "fullscreen" — fixed, bottom-anchored, 88vh (ShareableLyricDance)
    */
   variant?: 'embedded' | 'fullscreen';
@@ -13,7 +13,7 @@ interface PanelShellProps {
 export function PanelShell({ isOpen, variant = 'embedded', children }: PanelShellProps) {
   const positionClass = variant === 'fullscreen'
     ? 'fixed bottom-0 left-0 right-0 z-[70] h-[88vh]'
-    : 'absolute left-0 right-0 bottom-0 z-[200] h-[310px]';
+    : 'absolute inset-x-0 top-0 bottom-0 z-[200]';
 
   return (
     <AnimatePresence>

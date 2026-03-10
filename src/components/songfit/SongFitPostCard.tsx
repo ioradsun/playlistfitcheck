@@ -378,7 +378,7 @@ export function SongFitPostCard({
           {post.lyric_dance_url &&
           post.lyric_dance_id &&
           !post.spotify_track_id ? (
-            <div className="relative overflow-hidden" style={{ height: 320 }}>
+            <div className="relative" style={{ height: 320 }}>
               <LyricDanceEmbed
                 lyricDanceId={post.lyric_dance_id}
                 lyricDanceUrl={post.lyric_dance_url}
