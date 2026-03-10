@@ -742,32 +742,34 @@ export function LyricDanceEmbed({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Progress bar */}
-        <div
-          className="w-full h-1 cursor-pointer"
-          style={{ background: "rgba(255,255,255,0.05)" }}
-          onClick={(e) => {
-            if (!player || !data?.lyrics) return;
-            const rect = e.currentTarget.getBoundingClientRect();
-            const ratio = Math.max(
-              0,
-              Math.min(1, (e.clientX - rect.left) / rect.width),
-            );
-            const lines = data.lyrics;
-            const start = Math.max(0, (lines[0] as any).start - 0.5);
-            const end = (lines[lines.length - 1] as any).end + 1;
-            player.seek(start + ratio * (end - start));
-          }}
-        >
+        {/* Progress bar — hidden when reaction panel open (active line is the signal) */}
+        {!reactionPanelOpen && (
           <div
-            className="h-full transition-none"
-            style={{
-              width: `${progress * 100}%`,
-              background: palette[1] ?? "#a855f7",
-              opacity: 0.6,
+            className="w-full h-1 cursor-pointer"
+            style={{ background: "rgba(255,255,255,0.05)" }}
+            onClick={(e) => {
+              if (!player || !data?.lyrics) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const ratio = Math.max(
+                0,
+                Math.min(1, (e.clientX - rect.left) / rect.width),
+              );
+              const lines = data.lyrics;
+              const start = Math.max(0, (lines[0] as any).start - 0.5);
+              const end = (lines[lines.length - 1] as any).end + 1;
+              player.seek(start + ratio * (end - start));
             }}
-          />
-        </div>
+          >
+            <div
+              className="h-full transition-none"
+              style={{
+                width: `${progress * 100}%`,
+                background: palette[1] ?? "#a855f7",
+                opacity: 0.6,
+              }}
+            />
+          </div>
+        )}
 
         <CardBottomBar
           variant="embedded"
