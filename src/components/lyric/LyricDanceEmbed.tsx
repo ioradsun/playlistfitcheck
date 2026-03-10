@@ -205,7 +205,7 @@ export function LyricDanceEmbed({
     }
     setNote("");
     setCommentRefreshKey((k) => k + 1);
-  }, [note, fetchedData?.id, setNote]);
+  }, [note, fetchedData?.id, setNote, frozenLineIndex, activeLine?.lineIndex]);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
