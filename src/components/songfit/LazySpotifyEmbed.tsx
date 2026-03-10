@@ -100,22 +100,6 @@ function LazySpotifyEmbedInner({
         </span>
       </div>
 
-      {/* Score pill — top right */}
-      {scorePill && scorePill.total > 0 && (() => {
-        const { total, replay_yes } = scorePill;
-        const pct = Math.round((replay_yes / total) * 100);
-        return (
-          <div
-            className="absolute top-2 right-2 z-30 flex items-center gap-1.5 px-2 py-1 rounded-full pointer-events-none"
-            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)" }}
-          >
-            <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
-            <span className="text-[10px] font-mono uppercase tracking-widest text-white/70">
-              {pct}% REPLAY
-            </span>
-          </div>
-        );
-      })()}
     </div>
   );
 }
