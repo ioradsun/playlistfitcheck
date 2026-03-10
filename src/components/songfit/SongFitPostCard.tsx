@@ -99,6 +99,7 @@ export function SongFitPostCard({
   const [hookReviewKey, setHookReviewKey] = useState(0);
   const voteHandlerRef = useRef<((replay: boolean) => void) | null>(null);
   const submitHandlerRef = useRef<(() => void) | null>(null);
+  const commentSubmitRef = useRef<(() => void) | null>(null);
   const [canvasNote, setCanvasNote] = useState("");
   const [canvasVotedSide, setCanvasVotedSide] = useState<"a" | "b" | null>(
     null,
@@ -436,7 +437,14 @@ export function SongFitPostCard({
                 scorePill={hookResults}
                 canvasNote={canvasNote}
                 onCanvasNoteChange={setCanvasNote}
-                onCanvasSubmit={() => submitHandlerRef.current?.()}
+                onCanvasSubmit={() => {
+                  if (postPanelOpen && commentSubmitRef.current) {
+                    commentSubmitRef.current();
+                    setCanvasNote("");
+                  } else {
+                    submitHandlerRef.current?.();
+                  }
+                }}
                 externalPanelOpen={postPanelOpen}
                 onOpenReactions={() => setPostPanelOpen((prev) => !prev)}
               />
@@ -444,6 +452,9 @@ export function SongFitPostCard({
                 postId={post.id}
                 isOpen={postPanelOpen}
                 onClose={() => setPostPanelOpen(false)}
+                hideOwnInput
+                externalText={canvasNote}
+                onRegisterSubmit={(fn) => { commentSubmitRef.current = fn; }}
               />
               </div>
 

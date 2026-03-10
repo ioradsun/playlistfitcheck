@@ -23,6 +23,7 @@ interface Props {
   onCanvasSubmit?: () => void;
   onOpenReactions?: () => void;
   externalPanelOpen?: boolean;
+  onRegisterCommentSubmit?: (fn: () => void) => void;
 }
 
 function LazySpotifyEmbedInner({
@@ -42,6 +43,7 @@ function LazySpotifyEmbedInner({
   onCanvasSubmit,
   onOpenReactions,
   externalPanelOpen = false,
+  onRegisterCommentSubmit,
 }: Props) {
   const { user } = useAuth();
   const [iframeLoaded, setIframeLoaded] = useState(false);
@@ -64,6 +66,11 @@ function LazySpotifyEmbedInner({
   useEffect(() => {
     if (!externalPanelOpen) setCommentFocused(false);
   }, [externalPanelOpen]);
+
+  useEffect(() => {
+    if (!onRegisterCommentSubmit) return;
+    onRegisterCommentSubmit(() => onCanvasSubmit?.());
+  }, [onCanvasSubmit, onRegisterCommentSubmit]);
 
   const handleClick = () => {
     if (user && postId) {
@@ -119,6 +126,33 @@ function LazySpotifyEmbedInner({
         scrolling={platform === "soundcloud" ? "no" : undefined}
         onLoad={() => setIframeLoaded(true)}
       />
+
+      <div
+        className={`absolute bottom-0 left-0 right-0 flex items-stretch ${externalPanelOpen ? "z-[201]" : "z-30"}`}
+      >
+        <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-black/55 backdrop-blur-sm border-t border-white/10">
+          <input
+            value={canvasNote}
+            onChange={(e) => onCanvasNoteChange?.(e.target.value)}
+            onFocus={() => setCommentFocused(true)}
+            onBlur={() => setCommentFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                onCanvasSubmit?.();
+              }
+            }}
+            placeholder="Drop your take..."
+            className="flex-1 bg-transparent text-[13px] text-white placeholder:text-white/35 outline-none font-mono"
+          />
+          <button
+            onClick={() => onOpenReactions?.()}
+            className="text-[11px] font-mono text-white/60 hover:text-white transition-colors"
+          >
+            React {externalPanelOpen ? "↓" : "↑"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
