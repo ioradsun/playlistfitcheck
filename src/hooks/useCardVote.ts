@@ -93,11 +93,19 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
         would_replay: wouldReplay,
         context_note: note.trim() || null,
       };
-      if (user) payload.user_id = user.id;
-      else payload.session_id = sessionId;
-      await supabase.from("songfit_hook_reviews").insert(payload);
+      if (user) {
+        payload.user_id = user.id;
+        await supabase
+          .from("songfit_hook_reviews")
+          .upsert(payload, { onConflict: "user_id,post_id" });
+      } else {
+        payload.session_id = sessionId;
+        await supabase
+          .from("songfit_hook_reviews")
+          .upsert(payload, { onConflict: "session_id,post_id" });
+      }
     } catch {
-      // ignore unique constraint on double-submit
+      // ignore
     }
     incrementSessionReviewCount();
     // This event drives the StagePresence vote counter in SongFitFeed — do not remove

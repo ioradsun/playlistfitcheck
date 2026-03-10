@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { X } from "lucide-react";
 
 interface CardBottomBarProps {
@@ -25,18 +24,14 @@ interface CardBottomBarProps {
 export function CardBottomBar({
   votedSide,
   score,
-  note,
-  onNoteChange,
   onVoteYes,
   onVoteNo,
-  onSubmit,
   onOpenReactions,
   onClose,
   panelOpen = false,
   topReaction,
   variant = "embedded",
 }: CardBottomBarProps) {
-  const [commentFocused, setCommentFocused] = useState(false);
   const py = variant === "embedded" ? "py-3" : "py-2.5";
 
   const wrapperClass =
@@ -50,13 +45,50 @@ export function CardBottomBar({
     <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
       {/* Left — vote state content */}
       {votedSide === null ? (
-        /* Pre-vote: Run it back / Skip */
+        /* Pre-vote: Run it back / Skip — no selection yet */
         <>
           <button
-            onClick={() => { onVoteYes(); setCommentFocused(true); }}
+            onClick={() => { onVoteYes(); }}
             className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
-            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
+            <span
+              className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
+              style={{
+                color: "rgba(255,255,255,0.40)",
+              }}
+            >
+              Run it back
+            </span>
+          </button>
+          <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+          <button
+            onClick={() => { onVoteNo(); }}
+            className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
+          >
+            <span
+              className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
+              style={{
+                color: "rgba(255,255,255,0.40)",
+              }}
+            >
+              Skip
+            </span>
+          </button>
+        </>
+      ) : (
+        /* Post-vote: same buttons, active side highlighted, tapping the other side re-votes */
+        <>
+          <button
+            onClick={() => { onVoteYes(); }}
+            className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
+          >
+            <span
+              className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors pb-px"
+              style={{
+                color: votedSide === "a" ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.25)",
+                borderBottom: votedSide === "a" ? "1px solid rgba(255,255,255,0.50)" : "1px solid transparent",
+              }}
+            >
               Run it back
             </span>
             {(score?.replay_yes ?? 0) > 0 && (
@@ -67,10 +99,16 @@ export function CardBottomBar({
           </button>
           <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
           <button
-            onClick={() => { onVoteNo(); setCommentFocused(true); }}
+            onClick={() => { onVoteNo(); }}
             className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
-            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
+            <span
+              className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors pb-px"
+              style={{
+                color: votedSide === "b" ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.25)",
+                borderBottom: votedSide === "b" ? "1px solid rgba(255,255,255,0.50)" : "1px solid transparent",
+              }}
+            >
               Skip
             </span>
             {score != null && (score.total - score.replay_yes) > 0 && (
@@ -80,41 +118,8 @@ export function CardBottomBar({
             )}
           </button>
         </>
-      ) : commentFocused ? (
-        /* Post-vote: comment input */
-        <input
-          type="text"
-          value={note}
-          onChange={(e) => onNoteChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              onSubmit();
-              setCommentFocused(false);
-            }
-            if (e.key === "Escape") setCommentFocused(false);
-          }}
-          onBlur={() => {
-            if (!note) setCommentFocused(false);
-          }}
-          placeholder="drop your take..."
-          autoFocus
-          className={`flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 ${py} tracking-wide min-w-0`}
-        />
-      ) : (
-        /* Post-vote default: social proof */
-        <div className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}>
-          {score && score.total > 0 ? (
-            <span className="text-[10px] font-mono text-emerald-400 truncate">
-              {votedSide === "a"
-                ? `You + ${Math.max(0, score.replay_yes - 1)} FMLY would Replay this`
-                : `${score.replay_yes} / ${score.total} FMLY would Replay this`}
-            </span>
-          ) : (
-            <span className="text-[10px] font-mono text-white/20 truncate">calibrating...</span>
-          )}
-        </div>
       )}
+
 
       {/* Right — persistent reaction/X, always visible */}
       <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
@@ -124,7 +129,6 @@ export function CardBottomBar({
             onClose();
           } else {
             onOpenReactions();
-            if (votedSide !== null) setCommentFocused(true);
           }
         }}
         className={`flex items-center justify-center gap-1 px-4 ${py} hover:bg-white/[0.04] transition-colors group shrink-0`}
