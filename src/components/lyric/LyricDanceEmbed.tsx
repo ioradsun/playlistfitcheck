@@ -688,6 +688,7 @@ export function LyricDanceEmbed({
               waiting={isWaiting}
               badge="In Studio"
               coverImageUrl={fetchedData?.section_images?.[0] ?? coverImageUrl}
+              hideBackground={playerReady}
               onExpand={
                 showExpandButton
                   ? () => window.open(lyricDanceUrl, "_blank")

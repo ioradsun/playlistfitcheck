@@ -10,6 +10,8 @@ interface LyricDanceCoverProps {
   badge?: string | null;
   onExpand?: () => void;
   coverImageUrl?: string | null;
+  /** When true, fades out the background image (canvas is ready, lyrics show through) */
+  hideBackground?: boolean;
 }
 
 export function LyricDanceCover({
@@ -19,6 +21,7 @@ export function LyricDanceCover({
   badge,
   onExpand,
   coverImageUrl,
+  hideBackground = false,
 }: LyricDanceCoverProps) {
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
@@ -26,13 +29,14 @@ export function LyricDanceCover({
       {/* Layer 1 — album art, blurred */}
       {coverImageUrl && (
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 transition-opacity duration-500"
           style={{
             backgroundImage: `url(${coverImageUrl})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
             filter: "blur(8px) saturate(0.5)",
             transform: "scale(1.08)",
+            opacity: hideBackground ? 0 : 1,
           }}
         />
       )}
