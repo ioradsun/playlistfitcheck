@@ -9,6 +9,8 @@ interface LyricDanceCoverProps {
   onListen?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   badge?: string | null;
   onExpand?: () => void;
+  /** Album art shown as full-bleed background while canvas loads */
+  coverImageUrl?: string | null;
 }
 
 export function LyricDanceCover({
@@ -17,12 +19,27 @@ export function LyricDanceCover({
   onListen,
   badge,
   onExpand,
+  coverImageUrl,
 }: LyricDanceCoverProps) {
   return (
     <div
       className="absolute inset-0 z-20 flex flex-col items-center justify-center"
       style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.65) 100%)", backdropFilter: "blur(2px)" }}
     >
+      {/* Album art background — shown while canvas loads */}
+      {coverImageUrl && (
+        <div
+          className="absolute inset-0 -z-10"
+          style={{
+            backgroundImage: `url(${coverImageUrl})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            filter: "blur(8px) saturate(0.6)",
+            transform: "scale(1.08)",
+          }}
+        />
+      )}
+
       {/* Top row — badge + expand, pinned top */}
       {(badge || onExpand) && (
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-3">
