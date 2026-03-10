@@ -9,7 +9,6 @@ interface LyricDanceCoverProps {
   onListen?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   badge?: string | null;
   onExpand?: () => void;
-  /** Album art shown as full-bleed background while canvas loads */
   coverImageUrl?: string | null;
 }
 
@@ -22,27 +21,31 @@ export function LyricDanceCover({
   coverImageUrl,
 }: LyricDanceCoverProps) {
   return (
-    <div
-      className="absolute inset-0 z-20 flex flex-col items-center justify-center"
-      style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.65) 100%)", backdropFilter: "blur(2px)" }}
-    >
-      {/* Album art background — shown while canvas loads */}
+    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
+
+      {/* Layer 1 — album art, blurred */}
       {coverImageUrl && (
         <div
-          className="absolute inset-0 -z-10"
+          className="absolute inset-0"
           style={{
             backgroundImage: `url(${coverImageUrl})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
-            filter: "blur(8px) saturate(0.6)",
+            filter: "blur(8px) saturate(0.5)",
             transform: "scale(1.08)",
           }}
         />
       )}
 
-      {/* Top row — badge + expand, pinned top */}
+      {/* Layer 2 — dark gradient over the image */}
+      <div
+        className="absolute inset-0"
+        style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.65) 100%)" }}
+      />
+
+      {/* Layer 3 — badge + expand, pinned top */}
       {(badge || onExpand) && (
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-3">
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-3 z-10">
           {badge ? (
             <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
               {badge}
@@ -64,8 +67,8 @@ export function LyricDanceCover({
         </div>
       )}
 
-      {/* Center: song title + CTA */}
-      <div className="flex flex-col items-center justify-center px-6 text-center">
+      {/* Layer 3 — song title + Listen Now */}
+      <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center">
         {songName ? (
           <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4 max-w-[85%]">
             {songName}
@@ -73,19 +76,19 @@ export function LyricDanceCover({
         ) : (
           <div className="h-4 mb-4" />
         )}
-
         <button
-            onClick={waiting ? undefined : onListen}
-            className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
-            style={{
-              color: waiting ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,1)",
-              borderColor: waiting ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.20)",
-              cursor: waiting ? "default" : "pointer",
-            }}
-          >
-            Listen Now
-          </button>
+          onClick={waiting ? undefined : onListen}
+          className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
+          style={{
+            color: waiting ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,1)",
+            borderColor: waiting ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.20)",
+            cursor: waiting ? "default" : "pointer",
+          }}
+        >
+          Listen Now
+        </button>
       </div>
+
     </div>
   );
 }
