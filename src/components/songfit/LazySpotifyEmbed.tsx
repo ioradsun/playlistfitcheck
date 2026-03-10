@@ -1,5 +1,4 @@
 import { useState, useEffect, memo } from "react";
-import { X } from "lucide-react";
 import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { logEngagementEvent } from "@/lib/engagementTracking";
@@ -14,16 +13,7 @@ interface Props {
   artistName?: string;
   genre?: string | null;
   cardState: CardState;
-  onVoteYes?: () => void;
-  onVoteNo?: () => void;
-  votedSide?: "a" | "b" | null;
   scorePill?: { total: number; replay_yes: number } | null;
-  canvasNote?: string;
-  onCanvasNoteChange?: (note: string) => void;
-  onCanvasSubmit?: () => void;
-  onOpenReactions?: () => void;
-  externalPanelOpen?: boolean;
-  onRegisterCommentSubmit?: (fn: () => void) => void;
 }
 
 function LazySpotifyEmbedInner({
@@ -34,22 +24,10 @@ function LazySpotifyEmbedInner({
   albumArtUrl,
   artistName,
   cardState: _cardState,
-  onVoteYes,
-  onVoteNo,
-  votedSide,
   scorePill,
-  canvasNote = "",
-  onCanvasNoteChange,
-  onCanvasSubmit,
-  onOpenReactions,
-  externalPanelOpen = false,
-  onRegisterCommentSubmit,
 }: Props) {
   const { user } = useAuth();
   const [iframeLoaded, setIframeLoaded] = useState(false);
-  const [commentFocused, setCommentFocused] = useState(false);
-
-  const panelOpen = externalPanelOpen || commentFocused;
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
 
@@ -61,15 +39,6 @@ function LazySpotifyEmbedInner({
   useEffect(() => {
     setIframeLoaded(false);
   }, [embedSrc]);
-
-  useEffect(() => {
-    if (!externalPanelOpen) setCommentFocused(false);
-  }, [externalPanelOpen]);
-
-  useEffect(() => {
-    if (!onRegisterCommentSubmit) return;
-    onRegisterCommentSubmit(() => onCanvasSubmit?.());
-  }, [onCanvasSubmit, onRegisterCommentSubmit]);
 
   const handleClick = () => {
     if (user && postId) {
@@ -111,7 +80,7 @@ function LazySpotifyEmbedInner({
         )}
       </div>
 
-      {/* Iframe fades in on top when loaded */}
+      {/* Iframe */}
       <iframe
         src={embedSrc}
         width="100%"
@@ -147,104 +116,6 @@ function LazySpotifyEmbedInner({
           </div>
         );
       })()}
-
-      {/* Vote bar — only shown when vote handlers provided */}
-      {(onVoteYes || onVoteNo) && (
-        <div
-          className={`absolute bottom-0 left-0 right-0 flex items-stretch ${panelOpen ? "z-[201]" : "z-30"}`}
-          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(12px)" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {votedSide == null ? (
-
-            /* ── State 1: Pre-vote — Run it back / Skip ── */
-            <>
-              <button
-                onClick={onVoteYes}
-                className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
-              >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-                  Run it back
-                </span>
-              </button>
-              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-              <button
-                onClick={onVoteNo}
-                className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
-              >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
-                  Skip
-                </span>
-              </button>
-            </>
-
-          ) : panelOpen ? (
-
-            /* ── State 2: Panel open — input + X ── */
-            <>
-              <input
-                type="text"
-                value={canvasNote}
-                onChange={(e) => onCanvasNoteChange?.(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    onCanvasSubmit?.();
-                    setCommentFocused(false);
-                  }
-                  if (e.key === "Escape") setCommentFocused(false);
-                }}
-                onBlur={() => {
-                  if (!canvasNote && !externalPanelOpen) setCommentFocused(false);
-                }}
-                placeholder="drop your take..."
-                autoFocus={commentFocused}
-                className="flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 py-3 tracking-wide min-w-0"
-              />
-              <button
-                onClick={() => {
-                  setCommentFocused(false);
-                  if (externalPanelOpen) onOpenReactions?.();
-                }}
-                className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
-              >
-                <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-              </button>
-            </>
-
-          ) : (
-
-            /* ── State 3: Post-vote default — social proof + 🔥 ── */
-            <>
-              <div className="flex-1 flex items-center px-3 py-2.5 overflow-hidden min-w-0">
-                {scorePill && scorePill.total > 0 ? (
-                  <span className="text-[10px] font-mono text-white/40 truncate">
-                    {votedSide === "a"
-                      ? `You + ${Math.max(0, scorePill.replay_yes - 1)} FMLY would Replay this`
-                      : `${scorePill.replay_yes} / ${scorePill.total} FMLY would Replay this`
-                    }
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-mono text-white/20 truncate">
-                    calibrating...
-                  </span>
-                )}
-              </div>
-              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-              <button
-                onClick={() => {
-                  onOpenReactions?.();
-                  setCommentFocused(true);
-                }}
-                className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
-              >
-                <span className="text-[15px] grayscale opacity-40 group-hover:opacity-70 transition-opacity">🔥</span>
-              </button>
-            </>
-
-          )}
-        </div>
-      )}
     </div>
   );
 }
