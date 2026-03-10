@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
-import { Send } from "lucide-react";
+import { Send, X } from "lucide-react";
 
 interface Comment {
   id: string;
