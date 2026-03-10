@@ -183,6 +183,7 @@ export function LyricDanceEmbed({
   const [engagementMode, setEngagementMode] = useState<
     "spectator" | "freezing" | "engaged"
   >("spectator");
+  const [commentFocused, setCommentFocused] = useState(false);
   const [frozenLineIndex, setFrozenLineIndex] = useState<number | null>(null);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [forceDemoted, setForceDemoted] = useState(false);
@@ -713,7 +714,7 @@ export function LyricDanceEmbed({
                   ? () => window.open(lyricDanceUrl, "_blank")
                   : undefined
               }
-              topReaction={null}
+              topReaction={topReaction}
               onListen={(e) => {
                 e.stopPropagation();
                 setShowCover(false);
@@ -790,99 +791,126 @@ export function LyricDanceEmbed({
             />
           </div>
 
-          {/* Row 1 — lyric pill (full width) */}
-          <div
-            className="flex items-center px-3 py-2 border-b"
-            style={{ borderColor: "rgba(255,255,255,0.06)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md border text-left overflow-hidden min-w-0 transition-all duration-300 border-white/[0.05] hover:border-white/10"
-              style={{ background: "rgba(255,255,255,0.02)" }}
-              onClick={openPanel}
-            >
-              {effectiveShowCover || isWaiting ? (
-                topReaction ? (
-                  <>
-                    <span className="text-[11px] leading-none shrink-0">{topReaction.symbol}</span>
-                    <span className="text-[10px] font-mono text-white/50 shrink-0">{topReaction.count}</span>
-                    <span className="text-[10px] font-mono text-white/30 truncate">
-                      &ldquo;{topReaction.lineText}&rdquo;
+          {/* Single row — two-state */}
+          <div className="flex items-stretch" onClick={e => e.stopPropagation()}>
+            {hideReactButton && votedSide == null ? (
+              /* Pre-vote: Run it back / Skip */
+              <>
+                <button
+                  onClick={onVoteYes}
+                  className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+                >
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
+                    Run it back
+                  </span>
+                </button>
+                <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+                <button
+                  onClick={onVoteNo}
+                  className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+                >
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/40 group-hover:text-white/80 transition-colors">
+                    Skip
+                  </span>
+                </button>
+              </>
+            ) : hideReactButton && commentFocused ? (
+              /* Post-vote comment focused: input + send arrow */
+              <>
+                <input
+                  type="text"
+                  value={canvasNote}
+                  onChange={e => onCanvasNoteChange?.(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      onCanvasSubmit?.();
+                      setCommentFocused(false);
+                    }
+                    if (e.key === "Escape") setCommentFocused(false);
+                  }}
+                  onBlur={() => { if (!canvasNote) setCommentFocused(false); }}
+                  placeholder="Signal locked · drop your take"
+                  autoFocus
+                  className="flex-1 bg-transparent text-[11px] font-mono text-white/70 placeholder:text-white/30 outline-none px-3 py-3 tracking-wide min-w-0"
+                />
+                <button
+                  onClick={() => { onCanvasSubmit?.(); setCommentFocused(false); }}
+                  className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
+                >
+                  <span className={`text-[13px] transition-colors ${
+                    canvasNote ? "text-white/70 group-hover:text-white" : "text-white/20"
+                  }`}>↑</span>
+                </button>
+              </>
+            ) : hideReactButton ? (
+              /* Post-vote default: lyric pill + React */
+              <>
+                <button
+                  className="flex-1 flex items-center gap-2 px-3 py-2.5 text-left overflow-hidden min-w-0"
+                  onClick={() => setCommentFocused(true)}
+                >
+                  {activeLine ? (
+                    <>
+                      <div
+                        className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                        style={{ background: palette[1] ?? "#ffffff", opacity: 0.5 }}
+                      />
+                      <span className="text-[10px] font-mono text-white/30 truncate">
+                        {activeLine.text}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[10px] font-mono text-white/20 truncate">
+                      {lyricSections.isReady ? "listening..." : "..."}
                     </span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-1.5 h-1.5 rounded-full bg-white/20 shrink-0 animate-pulse" />
-                    <span className="text-[10px] font-mono text-white/25 truncate">
-                      {fetchedData ? "ready" : "loading..."}
+                  )}
+                </button>
+                <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
+                <button
+                  onClick={() => { onOpenReactions?.(); setCommentFocused(true); }}
+                  className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
+                >
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
+                    React
+                  </span>
+                </button>
+              </>
+            ) : (
+              /* Standalone (not card mode): existing lyric pill + React button */
+              <>
+                <button
+                  className={`flex-1 flex items-center gap-2 px-2 py-2 rounded-md border text-left overflow-hidden min-w-0 mx-3 my-2 transition-all duration-300 ${
+                    reactionPanelOpen ? "border-white/15" : "border-white/[0.05]"
+                  }`}
+                  style={{ background: "rgba(255,255,255,0.02)" }}
+                  onClick={openPanel}
+                >
+                  {activeLine ? (
+                    <>
+                      <div
+                        className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
+                        style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }}
+                      />
+                      <span className="text-[10px] font-mono text-white/30 truncate">{activeLine.text}</span>
+                    </>
+                  ) : (
+                    <span className="text-[10px] font-mono text-white/20 truncate">
+                      {lyricSections.isReady ? "listening..." : "..."}
                     </span>
-                  </>
-                )
-              ) : activeLine ? (
-                <>
-                  <div
-                    className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-                    style={{ background: palette[1] ?? "#ffffff", opacity: 0.6 }}
-                  />
-                  <span className="text-[10px] font-mono text-white/30 truncate">{activeLine.text}</span>
-                </>
-              ) : (
-                <span className="text-[10px] font-mono text-white/20 truncate">
-                  {lyricSections.isReady ? "listening..." : "..."}
-                </span>
-              )}
-            </button>
+                  )}
+                </button>
+                <button
+                  onClick={openPanel}
+                  className="flex items-center justify-center px-4 py-2.5 hover:bg-white/[0.04] transition-colors group shrink-0"
+                >
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
+                    React
+                  </span>
+                </button>
+              </>
+            )}
           </div>
-
-          {/* Row 2 — vote buttons + comment input + React */}
-          {hideReactButton && (
-            <div className="flex items-stretch" onClick={(e) => e.stopPropagation()}>
-              <button
-                onClick={onVoteYes}
-                className="flex items-center justify-center px-3 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
-              >
-                <span className={`text-[11px] font-mono tracking-[0.12em] uppercase transition-colors ${
-                  votedSide === "a" ? "text-white/90" : "text-white/30 group-hover:text-white/60"
-                }`}>
-                  {votedSide === "a" ? "✓ Run it back" : "Run it back"}
-                </span>
-              </button>
-              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-              <button
-                onClick={onVoteNo}
-                className="flex items-center justify-center px-3 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
-              >
-                <span className={`text-[11px] font-mono tracking-[0.12em] uppercase transition-colors ${
-                  votedSide === "b" ? "text-white/90" : "text-white/30 group-hover:text-white/60"
-                }`}>
-                  {votedSide === "b" ? "✓ Skip" : "Skip"}
-                </span>
-              </button>
-              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-              <input
-                type="text"
-                value={canvasNote}
-                onChange={(e) => onCanvasNoteChange?.(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    onCanvasSubmit?.();
-                  }
-                }}
-                placeholder="Signal locked · drop your take"
-                className="flex-1 bg-transparent text-[11px] font-mono text-white/60 placeholder:text-white/20 outline-none px-3 tracking-wide min-w-0"
-              />
-              <div style={{ width: "0.5px" }} className="bg-white/10 self-stretch my-2" />
-              <button
-                onClick={onOpenReactions}
-                className="flex items-center justify-center px-4 py-3 hover:bg-white/[0.04] transition-colors group shrink-0"
-              >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
-                  React
-                </span>
-              </button>
-            </div>
-          )}
         </div>
       )}
 

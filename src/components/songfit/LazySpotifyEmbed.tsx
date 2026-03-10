@@ -143,7 +143,7 @@ function LazySpotifyEmbedInner({
           </div>
         );
       })()}
-      {/* Vote bar — always visible in card mode when handlers provided */}
+      {/* Vote bar — two states */}
       {(onVoteYes || onVoteNo) && (
         <div
           className="absolute bottom-0 left-0 right-0 z-30 flex items-stretch"
