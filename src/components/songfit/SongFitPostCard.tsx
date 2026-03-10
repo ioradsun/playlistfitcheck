@@ -434,7 +434,7 @@ export function SongFitPostCard({
 
                 {/* Caption — directly below embed */}
                 {!editing && localCaption && localCaption.trim() && (
-                  <div className="px-3 pt-1 pb-0.5">
+                  <div className="px-3 pt-1.5 pb-1" style={{ background: "#0a0a0a" }}>
                     {localCaption.length <= 100 || captionExpanded ? (
                       <p className="text-[13px] leading-snug text-white/70">
                         {localCaption}
