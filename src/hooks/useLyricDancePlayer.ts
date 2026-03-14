@@ -89,6 +89,14 @@ export function useLyricDancePlayer(
       });
       ro.observe(containerRef.current!);
 
+      // Force correct viewport dimensions before first frame render.
+      // On mobile, canvas.offsetWidth may be 0 before CSS layout completes,
+      // causing init() to fall back to 960×540 and produce tiny fonts.
+      const rect = containerRef.current!.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        p.resize(rect.width, rect.height);
+      }
+
       await p.init();
       if (!destroyed) {
         p.audio.muted = true;

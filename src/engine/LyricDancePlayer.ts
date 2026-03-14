@@ -1308,7 +1308,9 @@ export class LyricDancePlayer {
     // This ensures Montserrat / custom font is ready well before first vocal line.
     this.kickFontStabilizationLoad();
 
-    this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
+    const cw = this.container?.offsetWidth || this.canvas.offsetWidth || 960;
+    const ch = this.container?.offsetHeight || this.canvas.offsetHeight || 540;
+    this.resize(cw, ch);
     this.displayWidth = this.width;
     this.displayHeight = this.height;
     this.drawMinimalFirstFrame();
@@ -1526,7 +1528,9 @@ export class LyricDancePlayer {
       this.songStartSec = payload.songStart;
       this.songEndSec = payload.songEnd;
 
-      this.resize(this.canvas.offsetWidth || 960, this.canvas.offsetHeight || 540);
+      const cw = this.container?.offsetWidth || this.canvas.offsetWidth || 960;
+      const ch = this.container?.offsetHeight || this.canvas.offsetHeight || 540;
+      this.resize(cw, ch);
       const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
       this._markCompiledViewport(this.width || 960, this.height || 540);
