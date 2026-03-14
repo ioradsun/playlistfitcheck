@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface LyricDanceCoverProps {
   songName: string;
@@ -23,11 +23,40 @@ export function LyricDanceCover({
   coverImageUrl,
   hideBackground = false,
 }: LyricDanceCoverProps) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const loadedImageRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!coverImageUrl) {
+      setImageLoaded(false);
+      loadedImageRef.current = null;
+      return;
+    }
+
+    if (loadedImageRef.current === coverImageUrl) {
+      setImageLoaded(true);
+      return;
+    }
+
+    setImageLoaded(false);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      loadedImageRef.current = coverImageUrl;
+      setImageLoaded(true);
+    };
+    img.onerror = () => {
+      loadedImageRef.current = coverImageUrl;
+      setImageLoaded(true);
+    };
+    img.src = coverImageUrl;
+  }, [coverImageUrl]);
+
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
 
       {/* Layer 1 — album art, blurred */}
-      {coverImageUrl && (
+      {coverImageUrl && imageLoaded && (
         <div
           className="absolute inset-0 transition-opacity duration-500"
           style={{

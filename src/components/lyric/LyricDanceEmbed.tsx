@@ -264,6 +264,17 @@ export function LyricDanceEmbed({
       });
   }, [lyricDanceId, prefetchedData]);
 
+  const preloadedCoverRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const url = fetchedData?.section_images?.[0] ?? coverImageUrl;
+    if (!url || url === preloadedCoverRef.current) return;
+    preloadedCoverRef.current = url;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = url;
+  }, [fetchedData?.section_images, coverImageUrl]);
+
   // ── Player data (apply region constraints) ─────────────────────────
   const playerData = useMemo(() => {
     if (playerEvicted) return null;

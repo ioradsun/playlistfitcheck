@@ -682,6 +682,7 @@ export default function ShareableLyricDance() {
               <LyricDanceCover
                 songName={coverSongName}
                 waiting={isWaitingForPlayer}
+                coverImageUrl={dataRaw?.section_images?.[0] ?? null}
                 badge="In Studio"
                 onExpand={undefined}
                 onListen={(e) => {
