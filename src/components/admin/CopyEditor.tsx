@@ -209,17 +209,27 @@ export function CopyEditor() {
             <Button variant="ghost" size="sm" onClick={() => { setShowImport(false); setImportJson(""); }}>Cancel</Button>
             <Button size="sm" onClick={() => {
               try {
-                const parsed = JSON.parse(importJson);
+                // Sanitize smart quotes and other common paste artifacts
+                const cleaned = importJson
+                  .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+                  .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
+                  .replace(/\u2026/g, "...")
+                  .replace(/[\u2013\u2014]/g, "-")
+                  .replace(/^\s*```\s*json?\s*/i, "")
+                  .replace(/\s*```\s*$/, "")
+                  .trim();
+                const parsed = JSON.parse(cleaned);
                 if (parsed.tools && parsed.about && parsed.sidebar && parsed.pages) {
-                  setCopy(parsed);
+                  setCopy(deepMergeEditor(EDITOR_DEFAULTS, parsed));
                   setShowImport(false);
                   setImportJson("");
                   toast.success("Copy imported — click Save to apply");
                 } else {
-                  toast.error("Invalid copy JSON structure");
+                  const missing = ["tools", "about", "sidebar", "pages"].filter(k => !(k in parsed));
+                  toast.error(`Missing keys: ${missing.join(", ")}`);
                 }
-              } catch {
-                toast.error("Failed to parse JSON");
+              } catch (err: any) {
+                toast.error(`JSON parse error: ${err.message?.slice(0, 120) || "Unknown"}`);
               }
             }}>Apply</Button>
           </div>
