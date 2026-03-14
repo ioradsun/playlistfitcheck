@@ -707,10 +707,15 @@ export function LyricDanceEmbed({
       }}
     >
       {/* Canvas — always rendered, player controls content */}
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full"
+        style={{ background: "#0a0a0a" }}
+      />
       <canvas
         ref={textCanvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none"
+        style={{ background: "#0a0a0a" }}
       />
 
       {/* Cover overlay */}
