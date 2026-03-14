@@ -54,6 +54,8 @@ export function LyricDanceCover({
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
+      {/* Layer 0 — solid dark base (never see white while image/engine loads) */}
+      <div className="absolute inset-0" style={{ background: "#0a0a0a" }} />
 
       {/* Layer 1 — album art, blurred */}
       {coverImageUrl && imageLoaded && (

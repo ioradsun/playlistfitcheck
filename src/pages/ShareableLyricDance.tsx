@@ -646,8 +646,8 @@ export default function ShareableLyricDance() {
           className="relative flex-1 min-w-0 cursor-pointer overflow-hidden"
           onClick={() => { if (!showCover) handleMuteToggle(); }}
         >
-          <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-          <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+          <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ background: "#0a0a0a" }} />
+          <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ background: "#0a0a0a" }} />
 
           {/* Hot section incoming pill */}
           {!showCover && !isWaitingForPlayer && (
