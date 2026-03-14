@@ -71,6 +71,8 @@ interface Props {
   pipelineStages?: PipelineStages;
   stageRestarters?: import("./PipelineDebugPanel").StageRestarters;
   pipelineStageTimes?: PipelineStageTimes;
+  initialDanceId?: string | null;
+  initialDanceUrl?: string | null;
 }
 
 export function FitTab({
@@ -94,6 +96,8 @@ export function FitTab({
   pipelineStages: pipelineStagesProp,
   pipelineStageTimes,
   stageRestarters,
+  initialDanceId,
+  initialDanceUrl,
 }: Props) {
   const { user } = useAuth();
   
@@ -101,8 +105,8 @@ export function FitTab({
   const pipelineStages = pipelineStagesProp ?? defaultStages;
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
-  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
-  const [publishedDanceId, setPublishedDanceId] = useState<string | null>(null);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(initialDanceUrl ?? null);
+  const [publishedDanceId, setPublishedDanceId] = useState<string | null>(initialDanceId ?? null);
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);

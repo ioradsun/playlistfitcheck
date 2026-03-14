@@ -136,6 +136,8 @@ export function LyricFitTab({
   const [renderData, setRenderData] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
+  const [pipelineDanceId, setPipelineDanceId] = useState<string | null>(null);
+  const [pipelineDanceUrl, setPipelineDanceUrl] = useState<string | null>(null);
   const cinematicDirectionRef = useRef(cinematicDirection);
   cinematicDirectionRef.current = cinematicDirection;
   // bgImageUrl and frameState removed — V3 derives from cinematicDirection
@@ -369,6 +371,23 @@ export function LyricFitTab({
       setFitReadiness("ready");
       setFitProgress(100);
       setFitUnlocked(true);
+
+      if (user) {
+        void (async () => {
+          const { slugify } = await import("@/lib/slugify");
+          const s = slugify(initialLyric.title || "untitled");
+          const { data: d }: any = await supabase
+            .from("shareable_lyric_dances")
+            .select("id, artist_slug, song_slug")
+            .eq("user_id", user.id)
+            .eq("song_slug", s)
+            .maybeSingle();
+          if (d) {
+            setPipelineDanceId(d.id);
+            setPipelineDanceUrl(`/${d.artist_slug}/${d.song_slug}/lyric-dance`);
+          }
+        })();
+      }
 
       import("@/engine/presetDerivation").then(({ deriveFrameState }) => {
         import("@/engine/presetDerivation").then(({ getTypography }) => {
@@ -713,6 +732,8 @@ export function LyricFitTab({
             .maybeSingle();
           if (existing?.id) {
             resolvedDanceId = existing.id;
+            setPipelineDanceId(resolvedDanceId);
+            setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
             await supabase
               .from("shareable_lyric_dances" as any)
               .update({ cinematic_direction: enrichedScene } as any)
@@ -754,6 +775,10 @@ export function LyricFitTab({
               .eq("song_slug", songSlugVal)
               .maybeSingle();
             resolvedDanceId = newRow?.id ?? null;
+            if (resolvedDanceId) {
+              setPipelineDanceId(resolvedDanceId);
+              setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
+            }
           }
 
           if (!resolvedDanceId) {
@@ -1084,6 +1109,8 @@ export function LyricFitTab({
                     setGenerationStatus({ beatGrid: "idle", renderData: "done", cinematicDirection: "idle", sectionImages: "idle" });
             setFitReadiness("not_started");
             setFitUnlocked(false);
+            setPipelineDanceId(null);
+            setPipelineDanceUrl(null);
             cinematicTriggeredRef.current = false;
             pipelineTriggeredRef.current = false;
             hookDetectionRunRef.current = false;
@@ -1124,6 +1151,8 @@ export function LyricFitTab({
             onImageGenerationStatusChange={handleImageGenerationStatusChange}
             pipelineStages={pipelineStages}
             parentWaveform={waveformData}
+            initialDanceId={pipelineDanceId}
+            initialDanceUrl={pipelineDanceUrl}
           />
         </div>
       )}
