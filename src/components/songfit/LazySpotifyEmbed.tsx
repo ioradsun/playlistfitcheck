@@ -52,7 +52,10 @@ function LazySpotifyEmbedInner({
         background: "#0a0a0a",
         borderRadius: 12,
         overflow: "hidden",
-        WebkitMaskImage: "-webkit-radial-gradient(white, black)",
+        WebkitMaskImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='12' ry='12'/%3E%3C/svg%3E")`,
+        WebkitMaskSize: "100% 100%",
+        maskImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='12' ry='12'/%3E%3C/svg%3E")`,
+        maskSize: "100% 100%",
       }}
       onClick={handleClick}
     >
