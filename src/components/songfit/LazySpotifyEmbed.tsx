@@ -85,10 +85,16 @@ function LazySpotifyEmbedInner({
         height={platform === "soundcloud" ? 166 : 232}
         allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
         className={`absolute inset-0 border-0 block w-full transition-opacity duration-700 ${iframeLoaded ? "z-[8]" : "z-[5]"}`}
-        style={{ opacity: iframeLoaded ? 1 : 0, clipPath: "inset(0 round 12px)" }}
+        style={{ opacity: iframeLoaded ? 1 : 0 }}
         title={`Play ${trackTitle}`}
         scrolling={platform === "soundcloud" ? "no" : undefined}
         onLoad={() => setIframeLoaded(true)}
+      />
+
+      {/* Corner mask — paints over iframe corners using inset box-shadow */}
+      <div
+        className="absolute inset-0 z-[9] pointer-events-none"
+        style={{ borderRadius: 12, boxShadow: "inset 0 0 0 2px #0a0a0a" }}
       />
 
     </div>
