@@ -51,8 +51,8 @@ function LazySpotifyEmbedInner({
         height: platform === "soundcloud" ? 166 : 232,
         background: "#0a0a0a",
         borderRadius: 12,
-        transform: "translateZ(0)",
         overflow: "hidden",
+        WebkitMaskImage: "-webkit-radial-gradient(white, black)",
       }}
       onClick={handleClick}
     >
