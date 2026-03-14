@@ -94,7 +94,7 @@ function LazySpotifyEmbedInner({
       {/* Corner mask — paints over iframe corners using inset box-shadow */}
       <div
         className="absolute inset-0 z-[9] pointer-events-none"
-        style={{ borderRadius: 12, boxShadow: "inset 0 0 0 8px #0a0a0a" }}
+        style={{ borderRadius: 14, boxShadow: "inset 0 0 0 12px #0a0a0a" }}
       />
 
     </div>
