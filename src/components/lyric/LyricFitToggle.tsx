@@ -102,14 +102,6 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
           ) : (
             <FitButton isLocked={isLocked} isRunning={isRunning} isError={isError} isReady={isReady} view={view} onClick={handleClick} />
           )}
-          {isRunning && (
-            <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-border/30 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-500 rounded-full"
-                style={{ width: `${fitProgress}%` }}
-              />
-            </div>
-          )}
           {isLocked && !isError && fitStageLabel && (
             <span className="text-[9px] text-muted-foreground/60 absolute -bottom-3.5 whitespace-nowrap">
               {fitStageLabel}
