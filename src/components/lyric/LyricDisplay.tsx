@@ -644,6 +644,17 @@ export function LyricDisplay({
     return cd ? deriveFrameState(cd, 0, 0) : null;
   }, [manifest, renderData]);
 
+  const exporterAudioUrl = useMemo(
+    () => (audioFile ? URL.createObjectURL(audioFile) : ""),
+    [audioFile],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (exporterAudioUrl) URL.revokeObjectURL(exporterAudioUrl);
+    };
+  }, [exporterAudioUrl]);
+
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw =
     activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
@@ -769,7 +780,9 @@ export function LyricDisplay({
       beatAudioContextRef.current = null;
       URL.revokeObjectURL(url);
     };
-  }, [audioFile, decodeFile]);
+  // decodeFile is intentionally omitted to avoid re-running setup when its identity changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioFile]);
 
   // ── Auto-scroll active lyric ──────────────────────────────────────────────
   // Scroll within the lyrics container only — never scroll the page
@@ -2351,7 +2364,7 @@ export function LyricDisplay({
           lines={data.lines.filter((l) => l.tag !== "adlib")}
           songStart={0}
           songEnd={data.lines[data.lines.length - 1]?.end ?? 0}
-          audioUrl={audioFile ? URL.createObjectURL(audioFile) : ""}
+          audioUrl={exporterAudioUrl}
           cinematicDirection={(renderData as any)?.cinematic_direction ?? null}
           frameState={(renderData as any)?.frame_state ?? null}
         />
