@@ -47,7 +47,13 @@ function LazySpotifyEmbedInner({
   return (
     <div
       className="w-full overflow-hidden relative"
-      style={{ height: platform === "soundcloud" ? 166 : 232, background: "#0a0a0a", borderRadius: 12 }}
+      style={{
+        height: platform === "soundcloud" ? 166 : 232,
+        background: "#0a0a0a",
+        borderRadius: 12,
+        transform: "translateZ(0)",
+        overflow: "hidden",
+      }}
       onClick={handleClick}
     >
       {/* Full-bleed album art poster — sits behind iframe */}
@@ -90,20 +96,6 @@ function LazySpotifyEmbedInner({
         scrolling={platform === "soundcloud" ? "no" : undefined}
         onLoad={() => setIframeLoaded(true)}
       />
-
-      {/* Corner masks — cover only corner pixels without affecting straight edges */}
-      {[
-        { top: 0, left: 0, borderRadius: "12px 0 0 0" },
-        { top: 0, right: 0, borderRadius: "0 12px 0 0" },
-        { bottom: 0, left: 0, borderRadius: "0 0 0 12px" },
-        { bottom: 0, right: 0, borderRadius: "0 0 12px 0" },
-      ].map((style, i) => (
-        <div
-          key={i}
-          className="absolute z-[9] pointer-events-none"
-          style={{ ...style, width: 14, height: 14, background: "#0a0a0a" }}
-        />
-      ))}
 
     </div>
   );
