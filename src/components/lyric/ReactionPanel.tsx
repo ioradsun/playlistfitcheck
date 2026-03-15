@@ -235,6 +235,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   }, [comments]);
 
   const engagedDisplayLineIndex = engagementMode === 'engaged' ? frozenLineIndex : null;
+  const voteAccent = palette[1] ?? 'rgba(255,255,255,0.7)';
 
   const displayLineIndex = engagedDisplayLineIndex ?? (isManualSelectionLocked
     ? (selectedLineIndex ?? manualPlaybackTargetIndex)
@@ -849,6 +850,20 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     );
   }
 
+  const handleFullscreenCommentClose = () => {
+    if (replyingTo) setReplyingTo(null);
+    else onClose();
+  };
+
+  const voteLabelStyle = (active: boolean) => ({
+    color:
+      votedSide === null
+        ? 'rgba(255,255,255,1)'
+        : active
+          ? voteAccent
+          : 'rgba(255,255,255,0.25)',
+  });
+
   return (
     <PanelShell isOpen={isOpen} variant="fullscreen">
       <div className="flex items-center justify-end gap-2 px-4 pt-2 pb-1 shrink-0">
@@ -871,24 +886,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
           )
         )}
       </div>
-
-      <VoteStrip
-        votedSide={votedSide}
-        score={score}
-        onVoteYes={onVoteYes}
-        onVoteNo={onVoteNo}
-        onReplay={() => {
-          if (!player) return;
-          releaseManualSelectionLock();
-          resetManualScrollOverride('snap');
-          setRepeatMode(false);
-          onResetEngagement?.();
-          player.setMuted(false);
-          player.seek(0);
-          player.play();
-        }}
-        palette={palette}
-      />
 
       <div
         ref={scrollContainerRef}
@@ -926,19 +923,44 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               }}
             />
 
-            <CommentInput
-              value={textInput}
-              onChange={setTextInput}
-              onSubmit={handleTextSubmit}
-              onClose={() => {
-                if (replyingTo) setReplyingTo(null);
-                else onClose();
-              }}
-              onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
-              hasSubmitted={hasSubmitted}
-              placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
-              size="full"
-            />
+            <div className="flex items-stretch shrink-0" style={{ background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <button
+                onClick={onVoteYes}
+                className="px-3 h-11 text-[11px] font-mono tracking-[0.12em] uppercase hover:bg-white/[0.03] transition-colors"
+                style={voteLabelStyle(votedSide === 'a')}
+              >
+                Run it back
+              </button>
+              <div className="w-[0.5px] bg-white/[0.06]" />
+              <button
+                onClick={onVoteNo}
+                className="px-3 h-11 text-[11px] font-mono tracking-[0.12em] uppercase hover:bg-white/[0.03] transition-colors"
+                style={voteLabelStyle(votedSide === 'b')}
+              >
+                Not for me
+              </button>
+              <div className="w-[0.5px] bg-white/[0.06]" />
+              <div className="min-w-0 flex-1">
+                <CommentInput
+                  value={textInput}
+                  onChange={setTextInput}
+                  onSubmit={handleTextSubmit}
+                  onClose={handleFullscreenCommentClose}
+                  onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
+                  hasSubmitted={hasSubmitted}
+                  placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
+                  size="full"
+                />
+              </div>
+              <div className="w-[0.5px] bg-white/[0.06]" />
+              <button
+                onClick={handleFullscreenCommentClose}
+                className="px-3 h-11 text-[11px] font-mono tracking-[0.12em] uppercase text-white/35 hover:text-white/70 hover:bg-white/[0.03] transition-colors"
+                aria-label="Close panel"
+              >
+                X
+              </button>
+            </div>
           </div>
         </div>
 
