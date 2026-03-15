@@ -293,6 +293,17 @@ const Auth = () => {
       <Card className="w-full glass-card border-border">
         {!checkEmail && (
           <CardHeader className="text-center pb-2">
+            {claimSlug && (
+              <div className="mb-4 p-3 rounded-xl bg-primary/10 border border-primary/20 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  Claiming your artist page
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Sign up or sign in to own
+                  <span className="font-mono text-primary"> tools.fm/artist/{claimSlug}</span>
+                </p>
+              </div>
+            )}
             <div className="mx-auto mb-2 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
               <Music className="text-primary" size={24} />
             </div>
