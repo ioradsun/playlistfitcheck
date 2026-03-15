@@ -6,7 +6,8 @@ export interface EssentiaResult {
 
 const ESSENTIA_WASM_URL = "https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia-wasm.web.js";
 const ESSENTIA_UMD_URL = "https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia-wasm.umd.js";
-const ESSENTIA_CORE_URL = "https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js";
+const ESSENTIA_CORE_WORKER_URL = "https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.umd.js";
+const ESSENTIA_CORE_MAIN_URL = "https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js";
 
 let workerBlobUrl: string | null = null;
 let essentiaInstance: any = null;
@@ -31,7 +32,7 @@ async function loadEssentiaMainThread(): Promise<any> {
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    await Promise.all([loadScript(ESSENTIA_WASM_URL), loadScript(ESSENTIA_CORE_URL)]);
+    await Promise.all([loadScript(ESSENTIA_WASM_URL), loadScript(ESSENTIA_CORE_MAIN_URL)]);
 
     const w = window as any;
     const wasmModule = await w.EssentiaWASM();
@@ -78,7 +79,7 @@ function getWorkerUrl(): string {
       if (initPromise) return initPromise;
 
       initPromise = (async () => {
-        importScripts(${JSON.stringify(ESSENTIA_UMD_URL)}, ${JSON.stringify(ESSENTIA_CORE_URL)});
+        importScripts(${JSON.stringify(ESSENTIA_UMD_URL)}, ${JSON.stringify(ESSENTIA_CORE_WORKER_URL)});
 
         let wasmModule = self.EssentiaWASM;
         if (typeof wasmModule === 'function') {
