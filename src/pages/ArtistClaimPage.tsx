@@ -24,6 +24,7 @@ type LyricMeta = {
   artist_name: string;
   album_art_url: string | null;
   preview_url: string | null;
+  lyric_dance_url: string | null;
 };
 
 export default function ArtistClaimPage() {
