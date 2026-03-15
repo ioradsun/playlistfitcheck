@@ -639,7 +639,7 @@ export default function ShareableLyricDance() {
               <LyricDanceCover
                 songName={coverSongName}
                 waiting={isWaitingForPlayer}
-                coverImageUrl={data?.section_images?.[0] ?? null}
+                coverImageUrl={data?.section_images?.[0] ?? (data as any)?.album_art_url ?? null}
                 hideBackground={playerReady}
                 badge="In Studio"
                 onExpand={undefined}
