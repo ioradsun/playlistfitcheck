@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, ExternalLink, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useBeatGrid } from "@/hooks/useBeatGrid";
 
 type JobStatus = "running" | "done" | "error" | "skipped";
 type StepName =
