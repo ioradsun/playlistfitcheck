@@ -146,7 +146,7 @@ export function useNotifications() {
     const { data } = await supabase
       .from("notifications")
       .select(
-        "id, type, post_id, dance_id, comment_id, actor_user_id, is_read, created_at, source, metadata, actor:actor_user_id(display_name, avatar_url)"
+        "id, type, post_id, comment_id, actor_user_id, is_read, created_at, actor:actor_user_id(display_name, avatar_url)"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
@@ -191,14 +191,14 @@ export function useNotifications() {
       const mapped: Signal[] = (data as any[]).map((notification) => ({
         id: notification.id,
         type: notification.type as SignalType,
-        source: (notification.source || "crowdfit_feed") as SignalSource,
+        source: "crowdfit_feed" as SignalSource,
         post_id: notification.post_id,
-        dance_id: notification.dance_id ?? null,
+        dance_id: null,
         comment_id: notification.comment_id,
         actor_user_id: notification.actor_user_id ?? null,
         is_read: notification.is_read,
         created_at: notification.created_at,
-        metadata: notification.metadata || {},
+        metadata: {},
         actor: notification.actor,
         post: notification.post_id ? postMap[notification.post_id] ?? null : null,
       }));
