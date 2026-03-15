@@ -139,6 +139,7 @@ export default function Admin() {
   // Fetch reach rows when tab switches
   useEffect(() => {
     if (tab === "reach" && isAdmin) {
+      preloadEssentia();
       fetchReachRows().catch(console.error);
     }
   }, [tab, isAdmin, fetchReachRows]);
