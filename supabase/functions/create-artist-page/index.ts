@@ -263,7 +263,7 @@ serve(async (req) => {
 
     const token = await getSpotifyToken(clientId, clientSecret);
 
-    fireAndForgetLog("spotify_fetch", "running", null, trackId);
+    fireAndForgetLog("spotify_fetch", "running", null, `track:${trackId}`);
     const track = await fetchSpotifyTrack(trackId, token);
 
     const trackTitle = track.name;
@@ -276,6 +276,14 @@ serve(async (req) => {
       .toLowerCase()
       .replace(/\s+/g, "-")
       .replace(/[^a-z0-9-]/g, "");
+
+    // Backfill the spotify_fetch running row with the real slug
+    void supabase
+      .from("claim_page_jobs")
+      .update({ spotify_artist_slug: slug })
+      .eq("job_id", jobId)
+      .eq("step", "spotify_fetch")
+      .then(() => {}).catch(() => {});
 
     fireAndForgetLog(
       "spotify_fetch",
