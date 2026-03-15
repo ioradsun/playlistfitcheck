@@ -14,6 +14,8 @@ function incrementSessionReviewCount() {
 interface Options {
   /** When true, unauthed users vote via session_id instead of being redirected to /Auth */
   allowAnonymous?: boolean;
+  /** Alias for allowAnonymous */
+  anonymous?: boolean;
 }
 
 export interface CardVoteState {
@@ -27,7 +29,7 @@ export interface CardVoteState {
 }
 
 export function useCardVote(postId: string, options: Options = {}): CardVoteState {
-  const { allowAnonymous = false } = options;
+  const allowAnonymous = options.allowAnonymous ?? options.anonymous ?? false;
   const { user } = useAuth();
   const sessionId = getSessionId();
   const navigate = useNavigate();
