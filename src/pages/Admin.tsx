@@ -73,21 +73,36 @@ export default function Admin() {
   }, []);
 
   const fetchReachRows = useCallback(async () => {
-    const { data } = await (supabase as any)
-      .from("profiles")
-      .select("id, display_name, spotify_artist_slug, is_claimed, created_at, artist_lyric_videos(id, track_title, artist_name, album_art_url, created_at)")
-      .not("spotify_artist_slug", "is", null)
-      .order("created_at", { ascending: false });
-    if (data) {
+    // profiles and artist_lyric_videos have no FK, so query separately
+    const [{ data: profiles }, { data: videos }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, display_name, spotify_artist_slug, is_claimed, created_at")
+        .not("spotify_artist_slug", "is", null)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("artist_lyric_videos")
+        .select("id, user_id, track_title, artist_name, album_art_url, created_at")
+        .order("created_at", { ascending: false }),
+    ]);
+    if (profiles) {
+      // Build a map: user_id → first video
+      const videoByUser = new Map<string, any>();
+      (videos ?? []).forEach((v: any) => {
+        if (!videoByUser.has(v.user_id)) videoByUser.set(v.user_id, v);
+      });
       setReachRows(
-        data.map((p: any) => ({
-          spotify_artist_slug: p.spotify_artist_slug,
-          artist_name: p.display_name ?? p.artist_lyric_videos?.[0]?.artist_name ?? "Unknown",
-          track_title: p.artist_lyric_videos?.[0]?.track_title ?? "—",
-          album_art_url: p.artist_lyric_videos?.[0]?.album_art_url ?? null,
-          is_claimed: p.is_claimed,
-          created_at: p.created_at,
-        }))
+        profiles.map((p: any) => {
+          const vid = videoByUser.get(p.id);
+          return {
+            spotify_artist_slug: p.spotify_artist_slug,
+            artist_name: p.display_name ?? vid?.artist_name ?? "Unknown",
+            track_title: vid?.track_title ?? "—",
+            album_art_url: vid?.album_art_url ?? null,
+            is_claimed: p.is_claimed,
+            created_at: p.created_at,
+          };
+        })
       );
     }
   }, []);
