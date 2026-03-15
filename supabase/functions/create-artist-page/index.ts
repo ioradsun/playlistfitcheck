@@ -482,8 +482,9 @@ serve(async (req) => {
               beat_grid: { bpm: 0, beats: [], confidence: 0 },
               palette: cinematicDirection?.defaults?.palette ??
                 ["#ffffff", "#a855f7", "#ec4899"],
-              section_images: null,
+               section_images: null,
               auto_palettes: null,
+              album_art_url: albumArtUrl,
             }, { onConflict: "artist_slug,song_slug" });
 
           if (danceErr) throw new Error(danceErr.message);
