@@ -205,7 +205,8 @@ export default function ShareableLyricDance() {
   );
   // Sync hook's hot-patched data (auto_palettes etc.) back to local state
   useEffect(() => { if (liveData) setDataRaw(liveData); }, [liveData]);
-  const playerRef = { current: playerInstance };
+  const playerRef = useRef<typeof playerInstance>(null);
+  useEffect(() => { playerRef.current = playerInstance; }, [playerInstance]);
 
   const {
     reactionPanelOpen,
@@ -422,6 +423,13 @@ export default function ShareableLyricDance() {
 
   // ── Mute toggle ─────────────────────────────────────────────────────
 
+  useEffect(() => {
+    if (!playerReady || !playerInstance) return;
+    playerInstance.setMuted(true);
+    // Start canvas rendering so it's live behind the cover
+    playerInstance.play().catch(() => {});
+  }, [playerReady, playerInstance]);
+
   const handleMuteToggle = useCallback(() => {
     const player = playerRef.current;
     if (!player) return;
@@ -536,8 +544,18 @@ export default function ShareableLyricDance() {
           className="relative flex-1 min-w-0 cursor-pointer overflow-hidden"
           onClick={() => { if (!showCover) handleMuteToggle(); }}
         >
-          <canvas id="bg-canvas" ref={bgCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-          <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+          <canvas
+            id="bg-canvas"
+            ref={bgCanvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ opacity: showCover ? 0 : 1 }}
+          />
+          <canvas
+            id="text-canvas"
+            ref={textCanvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ opacity: showCover ? 0 : 1 }}
+          />
 
           {/* Hot section incoming pill */}
           {!showCover && !isWaitingForPlayer && (
@@ -581,7 +599,6 @@ export default function ShareableLyricDance() {
                   setShowCover(false);
                   playerRef.current?.setMuted(false);
                   playerRef.current?.seek(0);
-                  playerRef.current?.play();
                   setMuted(false);
                 }}
               />
