@@ -115,6 +115,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   const [isUserScrollingLyrics, setIsUserScrollingLyrics] = useState(false);
   const [lyricsOffset, setLyricsOffset] = useState(0);
   const [lyricsTransitionMs, setLyricsTransitionMs] = useState(200);
+  const [activeRowHeight, setActiveRowHeight] = useState(46);
   const [replyingTo, setReplyingTo] = useState<CommentRow | null>(null);
   const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(null);
   const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
@@ -263,19 +264,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     applyCenteredLyricsOffset(displayLineIndex);
   }, [applyCenteredLyricsOffset, displayLineIndex]);
 
-  const displayLine = displayLineIndex != null
-    ? (lineByIndex.get(displayLineIndex) ?? activeLine)
-    : (activeLine ?? allLines[0] ?? null);
-
-  const displaySectionLabel = displayLine?.lineIndex != null
-    ? (sectionMeta.labelByLineIndex.get(displayLine.lineIndex) ?? activeLine?.sectionLabel ?? null)
-    : null;
-
-  const displayLineComments = useMemo(() => {
-    if (displayLineIndex == null) return [];
-    return comments.filter(c => c.line_index === displayLineIndex && !c.parent_comment_id);
-  }, [comments, displayLineIndex]);
-
   const expandedLineComments = useMemo(() => {
     if (expandedLineIndex == null) return [];
     return comments.filter(c => c.line_index === expandedLineIndex && !c.parent_comment_id);
@@ -395,6 +383,19 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     setLyricsTransitionMs(200);
     applyCenteredLyricsOffset(displayLineIndex);
   }, [applyCenteredLyricsOffset, displayLineIndex]);
+
+  useEffect(() => {
+    if (displayLineIndex == null) {
+      setActiveRowHeight(46);
+      return;
+    }
+    const activeRow = rowRefs.current[displayLineIndex];
+    if (!activeRow) {
+      setActiveRowHeight(46);
+      return;
+    }
+    setActiveRowHeight(activeRow.offsetHeight || 46);
+  }, [displayLineIndex, lyricsOffset]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -889,44 +890,39 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         palette={palette}
       />
 
-          <div className="border-b border-white/[0.07] shrink-0" style={{ background: '#111111' }}>
-            <div className="px-5 pt-4 pb-2 h-8 flex items-center justify-between gap-3">
-              <p className="text-[8px] font-mono uppercase tracking-[0.22em] text-white/25 truncate">
-                {displaySectionLabel ? `now playing · ${displaySectionLabel}` : 'now playing'}
-              </p>
-              {displayLineComments.length > 0 && (
-                <span className="text-[8px] font-mono uppercase tracking-[0.16em] text-white/35 shrink-0 min-w-[54px] text-right inline-flex items-center justify-end gap-1">
-                  <MessageCircle size={10} />
-                  {displayLineComments.length}
-                </span>
-              )}
-            </div>
-
-            <div className="px-5 pb-3 h-[78px]">
-              <p className="text-[15px] font-light leading-relaxed text-white/85 line-clamp-3 min-h-[66px]">
-                {displayLine?.text ?? '...'}
-              </p>
-            </div>
-
+      <div
+        ref={scrollContainerRef}
+        className="relative flex-1 min-h-0 overflow-hidden"
+      >
+        <div className="pointer-events-none absolute left-0 right-0 top-1/2 z-10 -translate-y-1/2">
+          <div
+            className="w-full"
+            style={{
+              height: activeRowHeight,
+              background: 'rgba(255,255,255,0.03)',
+              boxShadow: `inset 2px 0 0 0 ${palette[1] ?? '#ffffff'}`,
+            }}
+          />
+          <div className="pointer-events-auto" style={{ background: '#111111' }}>
             <EmojiBar
               variant="grid"
               palette={palette}
               counts={Object.fromEntries(
                 EMOJIS.map(({ key }) => [
                   key,
-                  displayLine?.lineIndex != null ? (reactionData[key]?.line[displayLine.lineIndex] ?? 0) : 0,
+                  displayLineIndex != null ? (reactionData[key]?.line[displayLineIndex] ?? 0) : 0,
                 ]),
               ) as any}
               reacted={new Set(
                 EMOJIS
                   .filter(({ key }) =>
-                    displayLine?.lineIndex != null &&
-                    sessionReacted.has(`${key}-${displayLine.lineIndex}`),
+                    displayLineIndex != null &&
+                    sessionReacted.has(`${key}-${displayLineIndex}`),
                   )
                   .map(({ key }) => key),
               )}
               onReact={(key) => {
-                if (displayLine?.lineIndex != null) handleReact(key, displayLine.lineIndex);
+                if (displayLineIndex != null) handleReact(key, displayLineIndex);
               }}
             />
 
@@ -944,13 +940,9 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               size="full"
             />
           </div>
+        </div>
 
-          <div
-            ref={scrollContainerRef}
-            className="relative flex-1 overflow-hidden"
-          >
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 h-10 border-y border-white/10" />
-            <div className="pb-2" style={{ transform: `translateY(${lyricsOffset}px)`, transition: `transform ${lyricsTransitionMs}ms ease` }}>
+        <div className="pb-2" style={{ transform: `translateY(${lyricsOffset}px)`, transition: `transform ${lyricsTransitionMs}ms ease` }}>
               {allLines.map((line, linePosition) => {
                     const currentSection = sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
                     const previousSection = linePosition > 0
@@ -1122,8 +1114,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                       </div>
                     );
                   })}
-            </div>
-          </div>
+        </div>
+      </div>
 
     </PanelShell>
   );
