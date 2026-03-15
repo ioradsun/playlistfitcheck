@@ -75,7 +75,7 @@ export function LyricSkeleton({ title, fileName, loading, waveformData, onRetry,
               <div className="flex items-center justify-center gap-2 py-3">
                 {loading ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" style={{ willChange: "transform" }} />
                     <span className="text-xs text-muted-foreground tracking-wide">
                       Transcribing lyrics…
                     </span>
