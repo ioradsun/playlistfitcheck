@@ -1,10 +1,8 @@
-import { ChevronLeft } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import SpotifyArtistInput from "@/components/SpotifyArtistInput";
 import LyricVideoSection from "@/components/lyric/LyricVideoSection";
-import { supabase } from "@/integrations/supabase/client";
-import type { User } from "@supabase/supabase-js";
 
 function hexToRgb(hex: string) {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -13,99 +11,89 @@ function hexToRgb(hex: string) {
   return { r, g, b };
 }
 
-type ClaimProfile = {
-  id: string;
-  display_name: string | null;
-  claim_token: string | null;
-};
-
-type LyricMeta = {
-  track_title: string;
-  artist_name: string;
-  album_art_url: string | null;
-  preview_url: string | null;
-  lyric_dance_url: string | null;
-};
-
 export default function ArtistClaimPage() {
-  const { username } = useParams();
+  const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
-
-  const justClaimed = (location.state as any)?.justClaimed ?? false;
-
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<ClaimProfile | null>(null);
-  const [accentColor, setAccentColor] = useState("#a855f7");
-  const [lyricVideoUserId, setLyricVideoUserId] = useState<string | null>(null);
-  const [lyricMeta, setLyricMeta] = useState<LyricMeta | null>(null);
-  const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [fallback, setFallback] = useState<{
+    profileId: string;
+    accentRgb: string;
+    albumArtUrl: string | null;
+    artistName: string;
+    trackTitle: string;
+  } | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
+    if (!username) { setNotFound(true); return; }
 
-  useEffect(() => {
-    if (!username) {
-      setNotFound(true);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
     (async () => {
-      const { data: p } = await (supabase as any)
+      // Try ghost_artist_profiles first, fall back to profiles
+      let profileId: string | null = null;
+
+      const { data: ghost } = await (supabase as any)
         .from("ghost_artist_profiles")
-        .select("id, display_name, claim_token")
+        .select("id")
         .eq("spotify_artist_slug", username)
-        .eq("is_claimed", false)
         .maybeSingle();
 
-      if (!p) {
-        setProfile(null);
-        setNotFound(true);
-        setLoading(false);
-        return;
+      if (ghost?.id) {
+        profileId = ghost.id;
+      } else {
+        const { data: prof } = await (supabase as any)
+          .from("profiles")
+          .select("id")
+          .eq("spotify_artist_slug", username)
+          .maybeSingle();
+        profileId = prof?.id ?? null;
       }
 
-      setProfile(p);
-      setLyricVideoUserId(p.id);
-      setNotFound(false);
+      if (!profileId) { setNotFound(true); return; }
 
-      const { data: latestVideo } = await (supabase as any)
+      // Fetch lyric video
+      const { data: vid } = await (supabase as any)
         .from("artist_lyric_videos")
-        .select("track_title, artist_name, album_art_url, preview_url, lyric_dance_url")
-        .eq("ghost_profile_id", p.id)
+        .select("lyric_dance_url, album_art_url, artist_name, track_title, preview_url, synced_lyrics_lrc")
+        .or(`ghost_profile_id.eq.${profileId},user_id.eq.${profileId}`)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      setLyricMeta(latestVideo ?? null);
-      setLoading(false);
+      if (vid?.lyric_dance_url) {
+        // Happy path: redirect to full lyric dance with claim context
+        const separator = vid.lyric_dance_url.includes("?") ? "&" : "?";
+        navigate(`${vid.lyric_dance_url}${separator}from=claim`, { replace: true });
+        return;
+      }
+
+      // Fallback: show simple player
+      const { data: page } = await (supabase as any)
+        .from("artist_pages")
+        .select("accent_color")
+        .eq("user_id", profileId)
+        .maybeSingle();
+
+      const accent = page?.accent_color ?? "#a855f7";
+      const { r, g, b } = hexToRgb(accent);
+      setFallback({
+        profileId,
+        accentRgb: `${r}, ${g}, ${b}`,
+        albumArtUrl: vid?.album_art_url ?? null,
+        artistName: vid?.artist_name ?? username,
+        trackTitle: vid?.track_title ?? "",
+      });
     })();
-  }, [username]);
+  }, [username, navigate]);
 
-  const accentRgb = useMemo(() => {
-    const rgb = hexToRgb(accentColor);
-    return `${rgb.r}, ${rgb.g}, ${rgb.b}`;
-  }, [accentColor]);
-
-  if (loading) {
-    return <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center text-white/40">Loading…</div>;
-  }
-
-  if (notFound || !username) {
+  // Not found → creation screen
+  if (notFound) {
     return (
       <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-6 px-6 z-50">
         <div className="text-center">
           <p className="text-white/25 text-xs uppercase tracking-widest mb-2">tools.fm</p>
-          <h1 className="text-2xl font-bold text-white mb-1">Create your artist page</h1>
-          <p className="text-white/40 text-sm">Paste any Spotify track to get started.</p>
+          <h1 className="text-2xl font-bold text-white mb-1">Your music. Your page.</h1>
+          <p className="text-white/40 text-sm">
+            Paste a Spotify track and we'll build it in seconds.
+          </p>
         </div>
         <div className="w-full max-w-md">
           <SpotifyArtistInput onSuccess={(slug) => navigate(`/artist/${slug}/claim-page`)} />
@@ -114,102 +102,55 @@ export default function ArtistClaimPage() {
     );
   }
 
-  const albumArtUrl = lyricMeta?.album_art_url ?? null;
+  // Loading state while redirect happens
+  if (!fallback) {
+    return (
+      <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center text-white/40">
+        Loading…
+      </div>
+    );
+  }
 
+  // Fallback: no lyric dance yet — show simple player with claim CTA
+  const { profileId, accentRgb, albumArtUrl, artistName, trackTitle } = fallback;
   return (
     <div className="fixed inset-0 bg-[#0a0a0a] overflow-y-auto">
       {albumArtUrl && (
         <div className="absolute inset-0">
-          <img
-            src={albumArtUrl}
-            className="w-full h-full object-cover scale-110"
-            style={{ filter: "blur(2px) brightness(0.25)" }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background: `linear-gradient(to bottom,
-                rgba(${accentRgb}, 0.08) 0%,
-                rgba(10,10,10,0.7) 50%,
-                rgba(10,10,10,1) 100%)`,
-            }}
-          />
+          <img src={albumArtUrl} className="w-full h-full object-cover scale-110" style={{ filter: "blur(2px) brightness(0.25)" }} />
         </div>
       )}
-
-      <div className="relative z-10 min-h-full px-5 py-6 max-w-2xl mx-auto text-white">
-        <button
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1 text-white/70 hover:text-white mb-6"
-        >
-          <ChevronLeft size={18} /> Back
-        </button>
-
-        <div className="flex items-center gap-4 mb-6">
-          {albumArtUrl ? (
-            <img src={albumArtUrl} className="h-14 w-14 rounded-lg object-cover border border-white/20" />
-          ) : (
-            <div className="h-14 w-14 rounded-lg bg-white/10" />
-          )}
-          <div>
-            <p className="text-xl font-semibold">{profile?.display_name ?? lyricMeta?.artist_name ?? username}</p>
-            {lyricMeta?.track_title && <p className="text-white/70 text-sm">"{lyricMeta.track_title}"</p>}
-            <p className="text-white/50 text-xs">30-sec preview</p>
+      <div className="relative z-10 min-h-full flex flex-col px-5 py-6 max-w-2xl mx-auto text-white">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3 min-w-0">
+            {albumArtUrl && (
+              <img src={albumArtUrl} className="h-10 w-10 rounded-lg object-cover border border-white/20 flex-shrink-0" />
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{artistName}</p>
+              {trackTitle && (
+                <p className="text-white/50 text-xs truncate">"{trackTitle}" · 30-sec preview</p>
+              )}
+            </div>
           </div>
+          <button
+            onClick={() => navigate("/auth", {
+              state: { claimSlug: username, returnTab: "CrowdFit" }
+            })}
+            className="flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold text-white ml-4"
+            style={{
+              background: "linear-gradient(135deg, #a855f7, #ec4899)",
+              boxShadow: "0 0 16px rgba(168,85,247,0.3)",
+            }}
+          >
+            Claim free →
+          </button>
         </div>
 
-        {lyricMeta?.lyric_dance_url ? (
-          <div className="rounded-xl overflow-hidden border border-white/10 aspect-[9/16] max-h-[70vh]">
-            <iframe
-              src={`${lyricMeta.lyric_dance_url}${lyricMeta.lyric_dance_url?.includes('?') ? '&' : '?'}from=claim`}
-              className="w-full h-full"
-              allow="autoplay"
-            />
-          </div>
-        ) : lyricVideoUserId ? (
-          <LyricVideoSection userId={lyricVideoUserId} accentRgb={accentRgb} />
-        ) : null}
-
-        <div className="border-t border-white/10 mt-8 pt-7">
-          {justClaimed ? (
-            <div className="text-center space-y-4 py-8">
-              <p className="text-2xl">✦</p>
-              <p className="text-white font-semibold text-lg">Page claimed.</p>
-              <p className="text-white/40 text-sm">
-                This page is now yours.
-              </p>
-              <button
-                onClick={() => navigate(`/artist/${username}`)}
-                className="px-6 py-2.5 rounded-full text-sm font-semibold text-white border border-white/20 hover:border-white/40 transition-colors"
-              >
-                Go to your artist page →
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold">Is this your music?</h2>
-              <p className="text-white/55 text-sm">Create a free account to own this page.</p>
-              <button
-                onClick={() => navigate("/auth", {
-                  state: {
-                    claimSlug: username,
-                    claimToken: profile?.claim_token,
-                    returnTab: "CrowdFit",
-                  }
-                })}
-                className="w-full py-3 rounded-full font-semibold text-white transition-all active:scale-95"
-                style={{
-                  background: `rgb(${accentRgb})`,
-                  boxShadow: `0 0 20px rgba(${accentRgb}, 0.3)`,
-                }}
-              >
-                Claim this page →
-              </button>
-              <p className="text-center text-xs text-white/30 mt-2">
-                Create a free account to own this page
-              </p>
-            </div>
-          )}
+        {/* Simple lyric player takes remaining space */}
+        <div className="flex-1 min-h-0">
+          <LyricVideoSection userId={profileId} accentRgb={accentRgb} />
         </div>
       </div>
     </div>
