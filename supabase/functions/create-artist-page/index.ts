@@ -40,6 +40,29 @@ async function fetchSpotifyTrack(trackId: string, token: string) {
   return await resp.json();
 }
 
+async function scrapePreviewFromEmbed(trackId: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://open.spotify.com/embed/track/${trackId}`,
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+    if (!res.ok) return null;
+    const html = await res.text();
+    const match = html.match(/"audioPreview"\s*:\s*\{"url"\s*:\s*"([^"]+)"/);
+    if (match?.[1]) return match[1];
+    const fallback = html.match(/https:\/\/p\.scdn\.co\/mp3-preview\/[a-zA-Z0-9]+/);
+    return fallback?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchLrclib(
   trackTitle: string,
   artistName: string
@@ -269,7 +292,8 @@ serve(async (req) => {
     const trackTitle = track.name;
     const artistName = track.artists[0].name;
     const albumArtUrl = track.album.images[0]?.url ?? null;
-    const previewUrl = track.preview_url ?? null;
+    let previewUrl: string | null = track.preview_url ?? null;
+    const apiHadPreview = !!previewUrl;
     const trackUrl = track.external_urls.spotify;
 
     const slug = artistName
@@ -285,10 +309,16 @@ serve(async (req) => {
       .eq("step", "spotify_fetch")
       .then(() => {}).catch(() => {});
 
+    // If Spotify API didn't return a preview, try scraping the embed player
+    if (!previewUrl) {
+      fireAndForgetLog("spotify_fetch", "running", "preview_url null — trying embed scrape…", slug);
+      previewUrl = await scrapePreviewFromEmbed(trackId);
+    }
+
     fireAndForgetLog(
       "spotify_fetch",
       "done",
-      `${artistName} — "${trackTitle}" | preview: ${previewUrl ? "yes" : "no"}`,
+      `${artistName} — "${trackTitle}" | preview: ${previewUrl ? (apiHadPreview ? "api" : "embed") : "none"}`,
       slug
     );
 
