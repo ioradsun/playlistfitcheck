@@ -551,6 +551,19 @@ export default function Admin() {
                 </div>
 
                 {/* ── ReachDashboard table ── */}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
+                    Generated Pages
+                  </span>
+                  <button
+                    onClick={() => fetchReachRows().catch(console.error)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground 
+                      hover:text-foreground transition-colors"
+                  >
+                    <RefreshCw size={12} />
+                    Refresh
+                  </button>
+                </div>
                 <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
                   <ReachDashboard rows={reachRows} activeJobSlug={reachActiveSlug} onRefresh={fetchReachRows} />
                 </Suspense>
