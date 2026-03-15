@@ -78,7 +78,11 @@ export function LyricDanceCover({
       {/* Layer 2 — dark gradient over the image */}
       <div
         className="absolute inset-0"
-        style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)" }}
+        style={{
+          background: isMarketingCover
+            ? "rgba(0,0,0,0.88)"
+            : "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)"
+        }}
       />
 
       {/* Layer 3 — badge + expand, pinned top */}
@@ -109,31 +113,15 @@ export function LyricDanceCover({
       <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ marginBottom: 48 }}>
         {isMarketingCover ? (
           <>
-            {/* Wordmark — tertiary */}
-            <p className="text-[11px] tracking-[0.2em] uppercase text-white/25 mb-6">
-              tools.fm
-            </p>
-
-            {/* Personalized hook — primary */}
-            <p className="text-[16px] sm:text-[17px] leading-[1.5] text-white/80 mb-3 max-w-[320px]">
+            {/* Personalized hook */}
+            <p className="text-[16px] sm:text-[17px] leading-[1.5] text-white/80 mb-10 max-w-[300px]">
               <span className="font-medium">{claimArtistName}</span>
               {" — we turned your song "}
               <span className="font-medium">"{claimSongName || songName}"</span>
-              {" into this interactive lyric video."}
+              {" into this interactive lyric video with one click."}
             </p>
 
-            {/* Imagination seed — secondary */}
-            <p className="text-white/45 text-[13px] mb-5 max-w-[280px]">
-              Imagine your biggest fans giving feedback
-              on every lyric you write.
-            </p>
-
-            {/* Tagline — tertiary */}
-            <p className="text-white/25 text-[11px] tracking-wide mb-6">
-              artists building tools for artists
-            </p>
-
-            {/* Play button — keep existing style */}
+            {/* Play button */}
             <button
               onClick={waiting ? undefined : onListen}
               className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
@@ -145,11 +133,6 @@ export function LyricDanceCover({
             >
               {waiting ? "Loading…" : "▶  Play Video"}
             </button>
-
-            {/* Fan intelligence — secondary, below button */}
-            <p className="text-white/45 text-[13px] mt-5 max-w-[260px]">
-              Fans can react and comment on every lyric line.
-            </p>
           </>
         ) : (
           <>

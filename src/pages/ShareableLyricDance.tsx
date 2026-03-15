@@ -19,6 +19,7 @@ import { useReactionPanel } from "@/hooks/useReactionPanel";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { HotSectionPill } from "@/components/lyric/HotSectionPill";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
+import ClaimBanner from "@/components/claim/ClaimBanner";
 import { useCardVote } from "@/hooks/useCardVote";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -521,43 +522,10 @@ export default function ShareableLyricDance() {
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
       {isMarketingView && (
-        <div
-          className="flex-shrink-0 w-full px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3"
-          style={{
-            background: "rgba(10,10,10,0.95)",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-            backdropFilter: "blur(12px)",
-          }}
-        >
-          {/* Left: context + exclusivity */}
-          <div className="min-w-0 flex-1">
-            <p className="text-white/70 text-[13px] leading-snug truncate">
-              <span className="text-white font-medium">{data?.artist_name}</span>
-              {" — claim your Artist Account"}
-            </p>
-            <p className="text-white/30 text-[11px] mt-0.5">
-              Founding Artist · limited to 1,000
-            </p>
-          </div>
-
-          {/* Right: CTA */}
-          <button
-            onClick={() => navigate("/auth", {
-              state: {
-                claimSlug: artistSlug,
-                returnTab: "CrowdFit",
-              }
-            })}
-            className="flex-shrink-0 px-5 py-2 rounded-full text-xs sm:text-sm font-bold text-white transition-all active:scale-95 whitespace-nowrap"
-            style={{
-              background: "linear-gradient(135deg, #a855f7 0%, #ec4899 100%)",
-              boxShadow: "0 0 20px rgba(168,85,247,0.4)",
-              letterSpacing: "0.02em",
-            }}
-          >
-            Claim Your Free Artist Account →
-          </button>
-        </div>
+        <ClaimBanner
+          artistSlug={artistSlug}
+          accent={palette?.[1] || palette?.[0] || data?.palette?.[1] || "#a855f7"}
+        />
       )}
 
 
@@ -683,7 +651,7 @@ export default function ShareableLyricDance() {
           />
         )}
 
-        {!reactionPanelOpen && (
+        {!reactionPanelOpen && !isMarketingView && (
           <div className="w-full max-w-2xl mx-auto">
             <CardBottomBar
               variant="fullscreen"
@@ -698,6 +666,15 @@ export default function ShareableLyricDance() {
               onClose={() => setReactionPanelOpen(false)}
               panelOpen={reactionPanelOpen}
             />
+          </div>
+        )}
+
+        {/* Marketing view: reaction hint in place of vote controls */}
+        {isMarketingView && (
+          <div className="w-full max-w-2xl mx-auto px-4 py-3 flex items-center justify-center gap-2">
+            <span className="text-white/35 text-[11px]">fans react on every line</span>
+            <span className="text-white/25 text-[11px]">→</span>
+            <span className="text-[14px]">🔥</span>
           </div>
         )}
       </div>
