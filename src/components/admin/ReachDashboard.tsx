@@ -110,7 +110,131 @@ function StepTimeline({ steps }: { steps: JobStep[] }) {
   );
 }
 
-export function ReachDashboard({ rows, activeJobSlug = null, onRefresh }: Props) {
+function BeatGridEnhancer({
+  row,
+  onDone,
+}: {
+  row: ReachDashboardRow;
+  onDone: () => void;
+}) {
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+
+  const { beatGrid, loading: beatLoading } = useBeatGrid(audioBuffer);
+
+  // When beat grid is ready, save it
+  useEffect(() => {
+    if (!beatGrid || !running) return;
+    void saveBeatGrid(beatGrid);
+  }, [beatGrid]);
+
+  const saveBeatGrid = async (grid: any) => {
+    setStatus("Saving beat grid…");
+    try {
+      const artistSlug = row.spotify_artist_slug;
+      const songSlug = row.track_title
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "")
+        .slice(0, 50);
+
+      const { error: updateErr } = await (supabase as any)
+        .from("shareable_lyric_dances")
+        .update({
+          beat_grid: {
+            bpm: grid.bpm,
+            beats: grid.beats,
+            confidence: grid.confidence,
+          },
+        })
+        .eq("artist_slug", artistSlug)
+        .eq("song_slug", songSlug);
+
+      if (updateErr) throw new Error(updateErr.message);
+
+      setStatus(`✓ ${Math.round(grid.bpm)} BPM · ${grid.beats.length} beats`);
+      setRunning(false);
+      setTimeout(onDone, 1500);
+    } catch (e: any) {
+      setError(e.message ?? "Save failed");
+      setRunning(false);
+    }
+  };
+
+  const handleEnhance = async () => {
+    setRunning(true);
+    setError(null);
+    setStatus("Fetching audio…");
+
+    try {
+      let audioUrl = row.preview_url ?? null;
+
+      if (!audioUrl && row.lyric_dance_url) {
+        const slugParts = row.lyric_dance_url.split("/").filter(Boolean);
+        if (slugParts.length >= 2) {
+          const { data: danceRow } = await (supabase as any)
+            .from("shareable_lyric_dances")
+            .select("audio_url")
+            .eq("artist_slug", slugParts[0])
+            .eq("song_slug", slugParts[1])
+            .maybeSingle();
+          audioUrl = danceRow?.audio_url ?? null;
+        }
+      }
+
+      if (!audioUrl) {
+        throw new Error("No audio URL found");
+      }
+
+      const res = await fetch(audioUrl);
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+      const arrayBuffer = await res.arrayBuffer();
+
+      setStatus("Running beat detection…");
+      const ctx = new AudioContext();
+      const decoded = await ctx.decodeAudioData(arrayBuffer);
+      ctx.close();
+
+      setAudioBuffer(decoded);
+    } catch (e: any) {
+      setError(e.message ?? "Failed");
+      setRunning(false);
+    }
+  };
+
+  if (!running && !error && status?.startsWith("✓")) {
+    return <span className="text-xs text-green-500 font-mono">{status}</span>;
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {!running && !status && (
+        <button
+          onClick={handleEnhance}
+          className="text-[11px] font-mono font-semibold text-primary hover:text-primary/80 transition-colors"
+        >
+          ⚡ Enhance
+        </button>
+      )}
+      {running && (
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground font-mono">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          {beatLoading ? "Analyzing beats…" : status}
+        </span>
+      )}
+      {!running && status && !error && (
+        <span className="text-[11px] text-muted-foreground font-mono">{status}</span>
+      )}
+      {error && (
+        <span className="text-[11px] text-red-500 font-mono">{error.slice(0, 50)}</span>
+      )}
+    </div>
+  );
+}
+
+
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [expandedJobs, setExpandedJobs] = useState<Record<string, JobStep[]>>({});
   const [liveJobSteps, setLiveJobSteps] = useState<JobStep[]>([]);
