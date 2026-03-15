@@ -42,6 +42,8 @@ export type ReachDashboardRow = {
   spotify_artist_slug: string;
   artist_name: string;
   track_title: string;
+  preview_url?: string | null;
+  lyric_dance_url?: string | null;
 };
 
 type Props = {
