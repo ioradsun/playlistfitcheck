@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music, Bomb, X } from "lucide-react";
+import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music, Bomb, X, RefreshCw } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -193,14 +193,17 @@ export default function Admin() {
       clearInterval(interval);
 
       if (error) throw error;
+
       if (data?.alreadyClaimed) {
         toast.info("This artist has already claimed their page.");
       } else if (data?.slug) {
         toast.success(`Page ready → /artist/${data.slug}/claim-page`);
         setReachSelected(null);
         setReachQuery("");
-        await fetchReachRows();
       }
+      // Always refresh table after generation regardless of result
+      await fetchReachRows();
+      setReachActiveSlug(null);
     } catch (e: any) {
       clearInterval(interval);
       toast.error(e.message || "Generation failed");
@@ -548,6 +551,19 @@ export default function Admin() {
                 </div>
 
                 {/* ── ReachDashboard table ── */}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
+                    Generated Pages
+                  </span>
+                  <button
+                    onClick={() => fetchReachRows().catch(console.error)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground 
+                      hover:text-foreground transition-colors"
+                  >
+                    <RefreshCw size={12} />
+                    Refresh
+                  </button>
+                </div>
                 <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
                   <ReachDashboard rows={reachRows} activeJobSlug={reachActiveSlug} onRefresh={fetchReachRows} />
                 </Suspense>
