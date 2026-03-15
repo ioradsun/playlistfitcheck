@@ -548,13 +548,11 @@ export default function ShareableLyricDance() {
             id="bg-canvas"
             ref={bgCanvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ opacity: showCover ? 0 : 1 }}
           />
           <canvas
             id="text-canvas"
             ref={textCanvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ opacity: showCover ? 0 : 1 }}
           />
 
           {/* Hot section incoming pill */}
