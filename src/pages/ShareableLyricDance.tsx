@@ -426,8 +426,8 @@ export default function ShareableLyricDance() {
   useEffect(() => {
     if (!playerReady || !playerInstance) return;
     playerInstance.setMuted(true);
-    // Start canvas rendering so it's live behind the cover
-    playerInstance.play();
+    // Start canvas animation behind cover — audio stays silent until user taps LISTEN NOW
+    playerInstance.startRendering();
   }, [playerReady, playerInstance]);
 
   const handleMuteToggle = useCallback(() => {
@@ -597,8 +597,9 @@ export default function ShareableLyricDance() {
                 onListen={(e) => {
                   e.stopPropagation();
                   setShowCover(false);
-                  playerRef.current?.setMuted(false);
                   playerRef.current?.seek(0);
+                  playerRef.current?.setMuted(false);
+                  playerRef.current?.play();
                   setMuted(false);
                 }}
               />

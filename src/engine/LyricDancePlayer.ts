@@ -1594,6 +1594,16 @@ export class LyricDancePlayer {
     // Note: audio is NOT paused — it continues loading/buffering silently
   }
 
+  /** Start the visual render loop without touching audio. Used to animate
+   *  the canvas behind a cover screen before the user has interacted. */
+  startRendering(): void {
+    if (this.destroyed) return;
+    this.playing = true;
+    if (!this.rafHandle) {
+      this.rafHandle = requestAnimationFrame(this.tick);
+    }
+  }
+
   seek(timeSec: number): void {
     this.audio.currentTime = timeSec;
     const t = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
