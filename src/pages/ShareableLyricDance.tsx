@@ -529,19 +529,30 @@ export default function ShareableLyricDance() {
             backdropFilter: "blur(12px)",
           }}
         >
-          <div className="text-center sm:text-left min-w-0">
-            <p className="text-white/90 text-xs sm:text-sm font-medium leading-snug">
-              This isn't a platform. It's a{" "}
-              <span className="text-primary font-semibold">FMLY.</span>
-              {" "}Artists creating tools for artists.
-            </p>
-            <p className="text-white/40 text-[11px] sm:text-xs mt-0.5">
-              Preview your lyric video for{" "}
-              <span className="text-white/70 font-medium">"{data?.song_name}"</span>
-              {" "}— generated in one click.
-              {" "}Join the movement. Free forever.
+          {/* Left: artist info + tagline */}
+          <div className="min-w-0">
+            {/* Desktop */}
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-white/90 text-sm font-medium truncate max-w-[220px]">
+                {data?.artist_name}
+                {" · "}
+                "{data?.song_name}"
+              </span>
+              <span className="text-white/30 text-xs">
+                This isn't a platform. It's a{" "}
+                <span className="text-primary font-semibold">FMLY.</span>
+                {" "}Artists creating tools for artists. Free forever.
+              </span>
+            </div>
+            {/* Mobile: shorter */}
+            <p className="sm:hidden text-white/70 text-xs font-medium text-center">
+              {data?.artist_name}
+              {" · "}
+              tools.fm
             </p>
           </div>
+
+          {/* Right: CTA */}
           <button
             onClick={() => navigate("/auth", {
               state: {
@@ -549,10 +560,11 @@ export default function ShareableLyricDance() {
                 returnTab: "CrowdFit",
               }
             })}
-            className="flex-shrink-0 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold text-white transition-all active:scale-95 whitespace-nowrap"
+            className="flex-shrink-0 px-5 py-2 rounded-full text-xs sm:text-sm font-bold text-white transition-all active:scale-95 whitespace-nowrap"
             style={{
-              background: "linear-gradient(135deg, #a855f7, #ec4899)",
-              boxShadow: "0 0 20px rgba(168,85,247,0.35)",
+              background: "linear-gradient(135deg, #a855f7 0%, #ec4899 100%)",
+              boxShadow: "0 0 20px rgba(168,85,247,0.4)",
+              letterSpacing: "0.02em",
             }}
           >
             Claim Your Free Artist Account →
