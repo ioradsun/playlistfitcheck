@@ -392,7 +392,7 @@ export function ReachDashboard({ rows, activeJobSlug = null, onRefresh }: Props)
                   </tr>
                   {isExpanded && (
                     <tr className="border-t border-border/30 bg-muted/10">
-                      <td colSpan={5} className="p-3">
+                      <td colSpan={6} className="p-3">
                         <StepTimeline steps={steps} />
                       </td>
                     </tr>
