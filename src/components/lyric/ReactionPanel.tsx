@@ -884,7 +884,10 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         className="shrink-0 flex"
         style={{ background: '#0a0a0a', borderTop: '0.5px solid rgba(255,255,255,0.06)' }}
       >
-        <div className="w-full max-w-2xl mx-auto flex items-stretch" style={{ height: 48 }}>
+        <div
+          className="w-full max-w-2xl mx-auto flex items-stretch"
+          style={{ height: displayMode === 'fullscreen' ? 44 : 48 }}
+        >
           <button
             onClick={onVoteYes}
             className="flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors"
@@ -927,7 +930,17 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
           <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
 
-          <div className="flex items-center shrink-0 px-3 gap-2">
+          <div
+            className="flex items-center justify-center shrink-0 gap-2"
+            style={{ minWidth: 56, paddingLeft: 16, paddingRight: 16 }}
+          >
+            <button
+              onClick={handlePanelClose}
+              aria-label="Close"
+              className="flex items-center justify-center"
+            >
+              <X size={13} className="text-white/30 hover:text-white/60 transition-colors" />
+            </button>
             <button
               onClick={() => {
                 releaseManualSelectionLock();
@@ -947,14 +960,10 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                 }
                 player?.play();
               }}
-              className="text-[15px] text-white/25 hover:text-white/65 transition-colors"
               aria-label="Replay"
+              className="flex items-center justify-center text-[15px] text-white/25 hover:text-white/65 transition-colors"
             >
               ↺
-            </button>
-            <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
-            <button onClick={handlePanelClose} aria-label="Close">
-              <X size={13} className="text-white/30 hover:text-white/60 transition-colors" />
             </button>
           </div>
         </div>
