@@ -19,6 +19,7 @@ const PendingVerifications = lazy(() => import("@/components/admin/PendingVerifi
 const ToolsEditor = lazy(() => import("@/components/admin/ToolsEditor").then((m) => ({ default: m.ToolsEditor })));
 const FmlyArtists = lazy(() => import("@/components/admin/FmlyArtists").then((m) => ({ default: m.FmlyArtists })));
 const GlobalCssEditor = lazy(() => import("@/components/admin/GlobalCssEditor").then((m) => ({ default: m.GlobalCssEditor })));
+const ReachDashboard = lazy(() => import("@/components/admin/ReachDashboard").then((m) => ({ default: m.ReachDashboard })));
 
 interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; }
 interface DashboardData { totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
