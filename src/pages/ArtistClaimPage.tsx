@@ -102,7 +102,7 @@ export default function ArtistClaimPage() {
     if (searchParams.get("claimed") !== "true") return;
     if (!user || !profile || !username) return;
 
-    supabase
+    (supabase as any)
       .from("profiles")
       .update({ is_claimed: true })
       .eq("spotify_artist_slug", username)

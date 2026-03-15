@@ -120,7 +120,7 @@ async function runAssemblyAI(
       authorization: apiKey,
       "content-type": "application/octet-stream",
     },
-    body: audioBytes,
+    body: audioBytes as unknown as BodyInit,
   });
   if (!uploadRes.ok) {
     const errText = await uploadRes.text();
