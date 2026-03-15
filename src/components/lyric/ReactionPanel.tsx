@@ -81,7 +81,10 @@ function CommentReactPicker({
             return (
               <button
                 key={key}
-                onClick={() => { onPick(key); setOpen(false); }}
+                onClick={() => {
+                  onPick(key);
+                  setOpen(false);
+                }}
                 className="text-base px-0.5 hover:scale-125 transition-transform active:scale-95"
                 style={{ opacity: reacted ? 0.4 : 1 }}
               >
@@ -109,7 +112,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   const [manualPlaybackTargetIndex, setManualPlaybackTargetIndex] = useState<number | null>(null);
   const [manualPlaybackEndTimeSec, setManualPlaybackEndTimeSec] = useState<number | null>(null);
   const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(null);
-  const [isInputFocused, setIsInputFocused] = useState(false);
   const [replyingTo, setReplyingTo] = useState<CommentRow | null>(null);
   const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(null);
   const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
@@ -231,9 +233,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     return comments.filter(c => c.line_index === expandedLineIndex && !c.parent_comment_id);
   }, [comments, expandedLineIndex]);
 
-  const isEmbedded = displayMode === 'embedded';
-
-
   useEffect(() => {
     if (!isOpen) {
       releaseManualSelectionLock();
@@ -249,7 +248,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     setPlayheadLineIndex(startingLineIndex);
   }, [isOpen, allLines]);
 
-  // playhead tracking is intentionally separate from manual selection/lock
   useEffect(() => {
     if (repeatMode) return;
 
@@ -294,7 +292,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     player,
   ]);
 
-  // repeat loop only updates playhead state when line actually changes
   useEffect(() => {
     if (!repeatMode || !player) return;
     const audio = player.audio;
@@ -343,7 +340,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     container.scrollTo({ top: row.offsetTop, behavior: 'smooth' });
   }, [playheadLineIndex]);
 
-  // Reel: scroll stops → seek to nearest line and play
+  // Reel: scroll stops → seek nearest line and play
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -436,7 +433,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     setSelectedLineIndex(line.lineIndex);
     setPlayheadLineIndex(line.lineIndex);
 
-    // Always release any prior lock before starting a new one
     releaseManualSelectionLock();
 
     isManualSelectionLockedRef.current = true;
@@ -522,7 +518,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     const text = textInput.trim().slice(0, 200);
     const sessionId = getSessionId();
 
-
     const { data: inserted, error } = await supabase
       .from('lyric_dance_comments' as any)
       .insert({
@@ -571,10 +566,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   };
 
   const displayLine = allLines.find(line => line.lineIndex === displayLineIndex) ?? null;
-  const displaySectionLabel = displayLineIndex != null
-    ? (sectionMeta.labelByLineIndex.get(displayLineIndex) ?? null)
-    : null;
-
   const handlePanelClose = () => {
     if (replyingTo) setReplyingTo(null);
     else onClose();
@@ -585,14 +576,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
   return (
     <PanelShell isOpen={isOpen} variant={displayMode}>
-      <div className="shrink-0 px-4 pt-3 pb-2">
-        <div className="text-[7px] font-mono uppercase tracking-[0.2em] text-white/25">{displaySectionLabel ?? ''}</div>
-        <p className={`${isEmbedded ? 'text-[13px]' : 'text-[15px]'} font-light leading-relaxed text-white/85`}>
-          {displayLine?.text ?? '...'}
-        </p>
-      </div>
-
-      <div className="shrink-0 flex items-center justify-center gap-2 px-4 py-2">
+      <div className="shrink-0 flex items-center justify-center gap-3 px-4 py-2 border-b border-white/[0.05]">
         {EMOJIS.map(({ key, symbol, label }) => {
           const targetIdx = displayLine?.lineIndex ?? allLines[0]?.lineIndex;
           const count = targetIdx != null ? (reactionData[key]?.line[targetIdx] ?? 0) : 0;
@@ -603,19 +587,20 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               onClick={() => {
                 if (targetIdx != null) handleReact(key, targetIdx);
               }}
-              className="flex flex-col items-center gap-0.5 w-10 py-1"
-              style={reacted ? { background: `${palette[1] ?? '#ffffff'}15`, borderRadius: 8 } : undefined}
+              className="flex flex-col items-center gap-0.5 w-9"
+              style={reacted ? { background: `${palette[1] ?? '#fff'}18`, borderRadius: '8px' } : undefined}
             >
-              <span className="text-[16px]">{symbol}</span>
+              <span className="text-[15px]">{symbol}</span>
               <span className="text-[7px] font-mono uppercase tracking-wide text-white/20">{label}</span>
-              {count > 0 && (
-                <span
-                  className="text-[8px] font-mono"
-                  style={{ color: reacted ? (palette[1] ?? 'rgba(255,255,255,0.7)') : 'rgba(255,255,255,0.30)' }}
-                >
-                  {count}
-                </span>
-              )}
+              <span
+                className="text-[8px] font-mono min-h-[10px]"
+                style={{
+                  color: reacted ? (palette[1] ?? 'rgba(255,255,255,0.7)') : 'rgba(255,255,255,0.30)',
+                  visibility: count > 0 ? 'visible' : 'hidden',
+                }}
+              >
+                {count > 0 ? count : ''}
+              </span>
             </button>
           );
         })}
@@ -623,10 +608,12 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
       {!hideInput && (
         <div
-          className="shrink-0 mx-3 mb-2 px-3 py-2 rounded-lg"
+          className="shrink-0 mx-3 my-2"
           style={{
             background: 'rgba(255,255,255,0.05)',
-            border: `1px solid ${isInputFocused ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.10)'}`,
+            border: '1px solid rgba(255,255,255,0.09)',
+            borderRadius: '8px',
+            padding: '8px 12px',
           }}
         >
           <input
@@ -640,77 +627,13 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                 handleTextSubmit();
               }
             }}
-            onFocus={() => {
-              setIsInputFocused(true);
-              onEngagementStart(displayLineIndex ?? undefined);
-            }}
-            onBlur={() => setIsInputFocused(false)}
+            onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
           />
         </div>
       )}
 
-      <div
-        className="shrink-0 flex items-center"
-        style={{
-          height: 40,
-          background: '#0a0a0a',
-          borderTop: '0.5px solid rgba(255,255,255,0.06)',
-          borderBottom: '0.5px solid rgba(255,255,255,0.06)',
-        }}
-      >
-        <button
-          onClick={onVoteYes}
-          className="flex-1 h-full flex items-center justify-center gap-1.5 text-[10px] font-mono tracking-[0.14em] uppercase"
-          style={{
-            color: votedSide === null
-              ? 'rgba(255,255,255,1)'
-              : votedSide === 'a'
-                ? voteAccent
-                : 'rgba(255,255,255,0.22)',
-          }}
-        >
-          <span>Run it back</span>
-          {runItBackCount > 0 && <span className="text-[9px] opacity-60">{runItBackCount}</span>}
-        </button>
-        <div className="w-[0.5px] bg-white/[0.06] self-stretch my-2" />
-        <button
-          onClick={onVoteNo}
-          className="flex-1 h-full flex items-center justify-center gap-1.5 text-[10px] font-mono tracking-[0.14em] uppercase"
-          style={{
-            color: votedSide === null
-              ? 'rgba(255,255,255,1)'
-              : votedSide === 'b'
-                ? voteAccent
-                : 'rgba(255,255,255,0.22)',
-          }}
-        >
-          <span>Not for me</span>
-          {notForMeCount > 0 && <span className="text-[9px] opacity-60">{notForMeCount}</span>}
-        </button>
-        <div className="w-[0.5px] bg-white/[0.06] self-stretch my-2" />
-        <button
-          onClick={() => {
-            releaseManualSelectionLock();
-            setAutoFollowEnabled(true);
-            setRepeatMode(false);
-            onResetEngagement?.();
-            player?.setMuted(false);
-            player?.seek(0);
-            player?.play();
-          }}
-          className="px-3 h-full flex items-center text-[13px] text-white/30 hover:text-white/70 transition-colors"
-          aria-label="Replay"
-        >
-          ↺
-        </button>
-        <div className="w-[0.5px] bg-white/[0.06] self-stretch my-2" />
-        <button onClick={handlePanelClose} className="px-3 h-full flex items-center shrink-0" aria-label="Close panel">
-          <X size={13} className="text-white/30 hover:text-white/60 transition-colors" />
-        </button>
-      </div>
-
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0" style={{ scrollbarWidth: 'none' }}>
-        <div className={isEmbedded ? 'py-1' : 'pb-2'}>
+        <div className="pb-2">
           {allLines.map((line, linePosition) => {
             const currentSection = sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
             const previousSection = linePosition > 0
@@ -734,65 +657,76 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
             const isExpanded = expandedLineIndex === line.lineIndex;
 
             return (
-              <div key={line.lineIndex} className={!isEmbedded && linePosition === 0 ? 'mt-3' : undefined}>
+              <div key={line.lineIndex}>
                 {shouldShowSectionHeader && (
-                  <div className={isEmbedded ? (linePosition === 0 ? 'mb-0.5' : 'mt-2 mb-0.5') : (linePosition === 0 ? 'mb-1' : 'mt-5 mb-1')}>
-                    <div className={`flex items-center gap-2 ${isEmbedded ? 'px-3' : 'px-5 mb-1'}`}>
-                      <span className={isEmbedded ? 'text-[7px] font-mono uppercase tracking-[0.2em] text-white/15' : 'text-[8px] font-mono uppercase tracking-[0.22em] text-white/18'}>{sectionLabel}</span>
-                      <div className={`flex-1 h-px ${isEmbedded ? 'bg-white/[0.03]' : 'bg-white/[0.035]'}`} />
+                  <div className={linePosition === 0 ? 'mb-0.5' : 'mt-2 mb-0.5'}>
+                    <div className="flex items-center gap-2 px-3">
+                      <span className="text-[7px] font-mono uppercase tracking-[0.2em] text-white/15">{sectionLabel}</span>
+                      <div className="flex-1 h-px bg-white/[0.03]" />
                     </div>
                   </div>
                 )}
                 <div
                   ref={node => { rowRefs.current[line.lineIndex] = node; }}
                   onClick={() => handleLineTap(line)}
-                  className={isEmbedded ? 'flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors' : 'relative flex items-center gap-3 px-5 py-2.5 cursor-pointer transition-colors'}
+                  className="flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors"
                   style={{
-                    minHeight: isEmbedded ? 30 : 46,
+                    minHeight: 30,
                     background: isActive ? 'rgba(255,255,255,0.03)' : 'transparent',
-                    boxShadow: isActive ? `inset 2px 0 0 0 ${palette[1] ?? '#ffffff'}` : 'inset 2px 0 0 0 transparent',
+                    boxShadow: isActive ? `inset 2px 0 0 0 ${palette[1] ?? '#ffffff'}` : 'none',
                   }}
                 >
                   <span
-                    className={isEmbedded ? 'flex-1 text-[11px] font-light leading-relaxed transition-colors duration-100' : 'flex-1 text-[12px] font-light leading-relaxed transition-colors duration-100'}
-                    style={{ color: isActive ? 'rgba(255,255,255,0.80)' : 'rgba(255,255,255,0.30)' }}
+                    className="flex-1 text-[11px] font-light leading-relaxed transition-colors duration-100"
+                    style={{ color: isActive ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.28)' }}
                   >
                     {line.text}
                   </span>
 
-                  <div className={isEmbedded ? 'min-h-5 shrink-0 flex items-center justify-end gap-1.5' : 'min-h-6 shrink-0 flex items-center justify-end gap-2'}>
-                    {lineCommentCount > 0 && (
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          setExpandedLineIndex(prev => (prev === line.lineIndex ? null : line.lineIndex));
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {topReaction && (
+                      <span
+                        className="text-[9px] font-mono px-1 py-0.5 rounded"
+                        style={{
+                          color: 'rgba(255,255,255,0.45)',
+                          background: 'rgba(255,255,255,0.04)',
                         }}
-                        className={isEmbedded
-                          ? `h-5 px-1.5 rounded-full border text-[9px] font-mono transition-colors inline-flex items-center gap-1 ${isExpanded ? 'border-white/25 text-white/65' : 'border-white/10 text-white/30 hover:text-white/55'}`
-                          : `h-6 px-2 rounded-full border text-[10px] font-mono transition-colors inline-flex items-center gap-1 ${isExpanded ? 'border-white/30 text-white/70' : 'border-white/10 text-white/35 hover:text-white/60'}`}
                       >
-                        <MessageCircle size={isEmbedded ? 10 : 12} />
-                        {lineCommentCount}
-                      </button>
+                        {topReaction.symbol}
+                        {totalLineReactions > 1 ? ` ${totalLineReactions}` : ''}
+                      </span>
                     )}
 
-                    {totalLineReactions > 0 && (
-                      <div className={isEmbedded ? 'h-5 min-w-[16px] text-right text-[9px] font-mono text-white/35 inline-flex items-center' : 'h-6 min-w-[20px] text-right text-[10px] font-mono text-white/35 inline-flex items-center'}>
-                        <span>
-                          {topReaction?.symbol ?? '·'}{totalLineReactions}
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (expandedLineIndex === line.lineIndex) {
+                          setExpandedLineIndex(null);
+                          if (replyingTo?.line_index === line.lineIndex) setReplyingTo(null);
+                        } else {
+                          setExpandedLineIndex(line.lineIndex);
+                        }
+                      }}
+                      className={`relative transition-all ${lineCommentCount > 0 ? 'opacity-90' : 'opacity-45 hover:opacity-70'} ${isCommentPulsing ? 'scale-110' : ''}`}
+                      aria-label="Toggle comments"
+                    >
+                      <MessageCircle size={11} className="text-white/30" />
+                      {lineCommentCount > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 text-[7px] font-mono text-white/50 min-w-[10px] text-center">
+                          {lineCommentCount}
                         </span>
-                      </div>
-                    )}
+                      )}
+                    </button>
                   </div>
                 </div>
 
                 {isExpanded && (
                   <div
-                    className={isEmbedded ? 'mx-3 mb-1 rounded-xl overflow-hidden' : 'mx-4 mb-2 rounded-xl overflow-hidden'}
+                    className="mx-3 mb-1 rounded-xl overflow-hidden"
                     style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}
                   >
                     {expandedLineComments.length === 0 ? (
-                      <p className={isEmbedded ? 'text-[10px] font-mono text-white/20 text-center py-3' : 'text-[11px] font-mono text-white/20 text-center py-5'}>no comments yet — be first</p>
+                      <p className="text-[10px] font-mono text-white/20 text-center py-3">no comments yet — be first</p>
                     ) : (
                       <div>
                         {(() => {
@@ -815,14 +749,14 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                               <div
                                 key={comment.id}
                                 className={isReply
-                                  ? (isEmbedded ? 'ml-3 border-l border-white/[0.06] pl-2 py-2' : 'ml-4 border-l border-white/[0.06] pl-3 py-2.5')
-                                  : (isEmbedded ? 'px-3 py-2.5 border-b border-white/[0.04]' : 'px-4 py-3 border-b border-white/[0.04]')}
+                                  ? 'ml-3 border-l border-white/[0.06] pl-2 py-2'
+                                  : 'px-3 py-2.5 border-b border-white/[0.04]'}
                               >
                                 {comment.is_pinned && (
-                                  <span className={isEmbedded ? 'text-[7px] font-mono uppercase tracking-wider text-white/25 mb-0.5 block' : 'text-[8px] font-mono uppercase tracking-wider text-white/25 mb-1 block'}>📌 pinned</span>
+                                  <span className="text-[7px] font-mono uppercase tracking-wider text-white/25 mb-0.5 block">📌 pinned</span>
                                 )}
-                                <p className={isEmbedded ? 'text-[11px] font-light leading-relaxed text-white/60' : 'text-[12px] font-light leading-relaxed text-white/65 mb-2'}>{comment.text}</p>
-                                <div className={isEmbedded ? 'mt-1 flex items-center gap-2.5 flex-wrap' : 'flex items-center gap-3 flex-wrap'}>
+                                <p className="text-[11px] font-light leading-relaxed text-white/60">{comment.text}</p>
+                                <div className="mt-1 flex items-center gap-2.5 flex-wrap">
                                   {reactionEntries.map(([emoji, count]) => (
                                     <button
                                       key={emoji}
@@ -849,9 +783,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                                         setReplyingTo(comment);
                                         setExpandedLineIndex(line.lineIndex);
                                       }}
-                                      className={isEmbedded
-                                        ? 'text-[9px] font-mono text-white/18 hover:text-white/45 transition-colors ml-auto focus:outline-none'
-                                        : 'text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors ml-auto focus:outline-none'}
+                                      className="text-[9px] font-mono text-white/18 hover:text-white/45 transition-colors ml-auto focus:outline-none"
                                     >
                                       reply
                                     </button>
@@ -871,9 +803,9 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   </div>
                 )}
 
-                <div className={isEmbedded ? 'h-[1px] mx-3' : 'h-[2px] px-5'}>
+                <div className="h-[1px] mx-3">
                   <div
-                    className={isEmbedded ? 'h-full rounded-full' : 'h-full rounded-full transition-opacity'}
+                    className="h-full rounded-full"
                     style={{
                       background: palette[1] ?? 'rgba(255,255,255,0.4)',
                       opacity: isCommentPulsing ? 0.6 : 0,
@@ -884,6 +816,65 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
             );
           })}
         </div>
+      </div>
+
+      <div
+        className="shrink-0 flex items-center"
+        style={{
+          height: 40,
+          background: '#0a0a0a',
+          borderTop: '0.5px solid rgba(255,255,255,0.06)',
+        }}
+      >
+        <button
+          onClick={onVoteYes}
+          className="flex-1 h-full flex items-center justify-center gap-1.5 text-[10px] font-mono tracking-[0.14em] uppercase"
+          style={{
+            color: votedSide === null
+              ? 'rgba(255,255,255,1)'
+              : votedSide === 'a'
+                ? voteAccent
+                : 'rgba(255,255,255,0.22)',
+          }}
+        >
+          <span>Run it back</span>
+          {runItBackCount > 0 && <span className="text-[9px] opacity-50">{runItBackCount}</span>}
+        </button>
+        <div className="w-[0.5px] bg-white/[0.06] self-stretch my-2" />
+        <button
+          onClick={onVoteNo}
+          className="flex-1 h-full flex items-center justify-center gap-1.5 text-[10px] font-mono tracking-[0.14em] uppercase"
+          style={{
+            color: votedSide === null
+              ? 'rgba(255,255,255,1)'
+              : votedSide === 'b'
+                ? voteAccent
+                : 'rgba(255,255,255,0.22)',
+          }}
+        >
+          <span>Not for me</span>
+          {notForMeCount > 0 && <span className="text-[9px] opacity-50">{notForMeCount}</span>}
+        </button>
+        <div className="w-[0.5px] bg-white/[0.06] self-stretch my-2" />
+        <button
+          onClick={() => {
+            releaseManualSelectionLock();
+            setAutoFollowEnabled(true);
+            setRepeatMode(false);
+            onResetEngagement?.();
+            player?.setMuted(false);
+            player?.seek(0);
+            player?.play();
+          }}
+          className="px-3 h-full flex items-center text-[16px] text-white/25 hover:text-white/65 transition-colors"
+          aria-label="Replay"
+        >
+          ↺
+        </button>
+        <div className="w-[0.5px] bg-white/[0.06] self-stretch my-2" />
+        <button onClick={handlePanelClose} className="px-3 h-full flex items-center shrink-0" aria-label="Close panel">
+          <X size={13} className="text-white/30 hover:text-white/60 transition-colors" />
+        </button>
       </div>
     </PanelShell>
   );
