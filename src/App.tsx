@@ -26,6 +26,8 @@ import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import ArtistStage from "./pages/ArtistStage";
 import SeoPages from "./pages/SeoPages";
+import ArtistClaimPage from "./pages/ArtistClaimPage";
+import CreateArtistPage from "./pages/CreateArtistPage";
 import { AdminPageImport, ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
 
 const Admin = lazy(AdminPageImport);
@@ -75,6 +77,8 @@ const App = () => (
             <Route path="/:artistSlug/:songSlug/lyric-dance" element={
               <Suspense fallback={<HookEmbedFallback />}><ShareableLyricDance /></Suspense>
             } />
+            <Route path="/artist/:username/claim-page" element={<ArtistClaimPage />} />
+            <Route path="/create" element={<CreateArtistPage />} />
             {/* ── Hook embed: lightweight path — no Auth/SiteCopy/Wallet/Sidebar overhead ── */}
             <Route path="/:artistSlug/:songSlug/:hookSlug" element={
               <Suspense fallback={<HookEmbedFallback />}><ShareableHook /></Suspense>
