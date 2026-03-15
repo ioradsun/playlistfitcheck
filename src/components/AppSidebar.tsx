@@ -24,10 +24,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Music,
   Bell,
-  User,
-  Heart,
-  MessageCircle,
-  UserPlus,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -70,12 +66,6 @@ const TOOLS: ToolItem[] = [
   { value: "dreamfit", label: "DreamFit", path: "/DreamFit" },
 ];
 
-const NOTI_ICON_MAP = {
-  like: { icon: Heart, className: "text-red-500 fill-red-500" },
-  comment: { icon: MessageCircle, className: "text-blue-400" },
-  follow: { icon: UserPlus, className: "text-primary" },
-};
-
 export interface RecentItem {
   id: string;
   label: string;
@@ -111,7 +101,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   const location = useLocation();
   const { state: sidebarState, setOpenMobile, isMobile } = useSidebar();
   const { toggleSidebar } = useSidebar();
-  const { notifications, unreadCount, loading: notiLoading, markAllRead, refetch: refetchNotifications } = useNotifications();
+  const { unreadCount } = useNotifications();
   const { number: pioneerNumber, isBlazer } = useFmlyNumber(user?.id);
   const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";
@@ -693,6 +683,24 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
         {authLoading ? null : user ? (
           <div className="space-y-1">
             <button
+              onClick={() => { navigate("/Signals"); closeMobileIfNeeded(); }}
+              className="flex items-center gap-2.5 w-full px-2 py-2 rounded-md hover:bg-sidebar-accent transition-colors"
+            >
+              <div className="relative">
+                <Bell size={18} className="text-primary" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-sm font-medium text-sidebar-foreground">Signals</span>
+              {unreadCount > 0 && (
+                <span className="ml-auto text-xs text-primary font-medium">{unreadCount} new</span>
+              )}
+            </button>
+
+            <button
               onClick={() => setProfileExpanded(!profileExpanded)}
               className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors"
             >
@@ -735,69 +743,6 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
             </button>
             {profileExpanded && (
               <div className="space-y-0.5 pl-2">
-                {/* Notifications inline */}
-                <div className="px-2 py-1">
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={markAllRead}
-                      className="text-[11px] text-primary hover:underline mb-1 block"
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                  {notiLoading ? (
-                    <p className="text-[11px] text-muted-foreground py-1">Loading...</p>
-                  ) : notifications.filter(n => !n.is_read).length === 0 ? null : (
-                    <div className="space-y-0.5 max-h-40 overflow-y-auto">
-                      {notifications.filter(n => !n.is_read).slice(0, 6).map((n) => {
-                        const { icon: NIcon, className: nClass } = NOTI_ICON_MAP[n.type as keyof typeof NOTI_ICON_MAP] || NOTI_ICON_MAP.like;
-                        const actorName = n.actor?.display_name || "Someone";
-                        let text = "";
-                        if (n.type === "like") text = "liked your post";
-                        else if (n.type === "comment") text = "commented";
-                        else if (n.type === "follow") text = "followed you";
-
-                        return (
-                          <div
-                            key={n.id}
-                            className={`flex items-start gap-2 px-1.5 py-1 rounded-md text-[11px] ${!n.is_read ? "bg-primary/5" : ""}`}
-                          >
-                            <button
-                              onMouseEnter={() => handleNavHover(`/u/${n.actor_user_id}`)}
-                              onClick={() => { navigate(`/u/${n.actor_user_id}`); closeMobileIfNeeded(); }}
-                              className="w-4 h-4 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 mt-0.5 hover:ring-1 hover:ring-primary transition-all"
-                            >
-                              {n.actor?.avatar_url ? (
-                                <img src={n.actor.avatar_url} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <User size={8} className="text-muted-foreground" />
-                              )}
-                            </button>
-                            <div className="min-w-0 flex-1">
-                              <p className="leading-tight truncate">
-                                <button
-                                  onMouseEnter={() => handleNavHover(`/u/${n.actor_user_id}`)}
-                              onClick={() => { navigate(`/u/${n.actor_user_id}`); closeMobileIfNeeded(); }}
-                                  className="font-medium hover:underline"
-                                >
-                                  {actorName}
-                                </button>{" "}
-                                <span className="text-muted-foreground">{text}</span>
-                              </p>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <NIcon size={9} className={nClass} />
-                                <span className="text-[9px] text-muted-foreground">
-                                  {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
                 <SidebarSeparator className="my-1" />
 
                 <button
