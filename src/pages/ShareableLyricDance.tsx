@@ -57,7 +57,6 @@ function extractAudioSectionsFromDirection(
 // ─── Types ──────────────────────────────────────────────────────────
 
 interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
-const DIRECTION_COLUMNS = "cinematic_direction";
 
 // ─── Progress Bar ───────────────────────────────────────────────────
 
@@ -304,34 +303,19 @@ export default function ShareableLyricDance() {
         supabase.from("profiles").select("display_name, avatar_url").eq("id", d.user_id).maybeSingle()
           .then(({ data: pData }) => { if (pData) setProfile(pData as ProfileInfo); }, () => {});
 
-        // Phase 2: cinematic direction + section images — one async IIFE, properly caught.
-        // async finally() swallows its own rejections; IIFE + terminal .catch() doesn't.
+        // Phase 2: generate section images or cinematic direction if missing.
+        // The first query already fetched cinematic_direction and section_images,
+        // so we only need to generate what's absent — no re-fetch needed.
         (async () => {
-          // Step 1: fast read of already-stored direction
-          const { data: dirRow } = await supabase
-            .from("shareable_lyric_dances" as any)
-            .select(DIRECTION_COLUMNS + ",cinematic_direction,section_images")
-            .eq("id", d.id)
-            .maybeSingle();
+          const existingDir = d.cinematic_direction;
+          const existingImages = (d as any).section_images;
 
-          const existingDir = (dirRow as any)?.cinematic_direction;
-          const existingImages = (dirRow as any)?.section_images;
-
-          // Patch direction immediately if cached
-          if (existingDir && !Array.isArray(existingDir)) {
-            setDataRaw(prev => prev ? { ...prev, cinematic_direction: existingDir } : prev);
-          }
-
-          // Patch section images if complete set exists
           const imagesComplete =
             Array.isArray(existingImages) &&
             existingImages.length >= 3 &&
             existingImages.every((url: string) => !!url);
-          if (imagesComplete) {
-            setDataRaw(prev => prev ? { ...prev, section_images: existingImages } : prev);
-          }
 
-          // If direction is already good, only generate images if missing
+          // Direction exists — only generate images if missing
           if (existingDir && !Array.isArray(existingDir) && existingDir.sections?.length > 0) {
             if (!imagesComplete) {
               supabase.functions.invoke("generate-section-images", { body: { lyric_dance_id: d.id } })
@@ -343,14 +327,21 @@ export default function ShareableLyricDance() {
             return;
           }
 
-          // No cached direction — generate fresh
+          // No direction — generate fresh
           if (!d.lyrics?.length) return;
           const linesForDir = (d.lyrics as any[])
             .filter((l: any) => l.tag !== "adlib")
             .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
           const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
-            body: { title: d.song_name, artist: d.artist_name, lines: linesForDir, beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined, lyricId: d.id, words: d.words ?? undefined },
+            body: {
+              title: d.song_name,
+              artist: d.artist_name,
+              lines: linesForDir,
+              beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined,
+              lyricId: d.id,
+              words: d.words ?? undefined,
+            },
           });
 
           if (dirResult?.cinematicDirection) {
