@@ -53,6 +53,18 @@ export default function Admin() {
   const [nukeConfirmText, setNukeConfirmText] = useState("");
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
+  // ── Reach tab state ──
+  const [reachRows, setReachRows] = useState<any[]>([]);
+  const [reachActiveSlug, setReachActiveSlug] = useState<string | null>(null);
+  const [reachQuery, setReachQuery] = useState("");
+  const [reachResults, setReachResults] = useState<any[]>([]);
+  const [reachSearching, setReachSearching] = useState(false);
+  const [reachSelected, setReachSelected] = useState<any>(null);
+  const [reachGenerating, setReachGenerating] = useState(false);
+  const [reachStatusMsg, setReachStatusMsg] = useState("");
+  const [reachFocused, setReachFocused] = useState(false);
+  const reachDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+
   const fetchUsers = useCallback(async () => {
     const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", { body: { section: "users" } });
     if (fnError) throw fnError;
