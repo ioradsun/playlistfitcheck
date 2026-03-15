@@ -175,27 +175,7 @@ export function LyricDanceEmbed({
 
   const { votedSide, score, note, setNote, handleVote } = useCardVote(postId ?? lyricDanceId);
 
-  const handleCommentFromBar = useCallback(async () => {
-    const text = note.trim();
-    if (!text) return;
-    const danceId = fetchedData?.id;
-    if (!danceId) return;
-    try {
-      await supabase
-        .from("lyric_dance_comments" as any)
-        .insert({
-          dance_id: danceId,
-          text,
-          session_id: getSessionId(),
-          line_index: frozenLineIndex ?? activeLineRef.current?.lineIndex ?? null,
-          parent_comment_id: null,
-        });
-    } catch {
-      // silent
-    }
-    setNote("");
-    setCommentRefreshKey((k) => k + 1);
-  }, [note, fetchedData?.id, setNote, frozenLineIndex]);
+  const frozenLineIndexRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
