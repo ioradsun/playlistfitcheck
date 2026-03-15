@@ -54,11 +54,8 @@ export function LyricDanceCover({
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
-      {/* Layer 0 — solid dark base (never see white while image/engine loads) */}
-      <div className="absolute inset-0" style={{ backgroundColor: "#0a0a0a" }} />
-
       {/* Layer 1 — album art, blurred */}
-      {coverImageUrl && imageLoaded && (
+      {coverImageUrl && (
         <div
           className="absolute inset-0 transition-opacity duration-500"
           style={{
@@ -67,7 +64,7 @@ export function LyricDanceCover({
             backgroundPosition: "center",
             filter: "blur(8px) saturate(0.5)",
             transform: "scale(1.08)",
-            opacity: hideBackground ? 0 : 1,
+            opacity: hideBackground ? 0 : imageLoaded ? 1 : 0,
           }}
         />
       )}
