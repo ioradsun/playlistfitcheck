@@ -305,6 +305,15 @@ export default function Admin() {
             )}
           </TabsContent>
 
+          {/* ── REACH TAB ── */}
+          <TabsContent value="reach" className="mt-4">
+            {tab === "reach" && (
+              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
+                <ReachDashboard />
+              </Suspense>
+            )}
+          </TabsContent>
+
           {/* ── VERIFY TAB ── */}
           <TabsContent value="verify" className="mt-4">
             {tab === "verify" && (
