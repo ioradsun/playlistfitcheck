@@ -234,7 +234,7 @@ function BeatGridEnhancer({
   );
 }
 
-
+export function ReachDashboard({ rows, activeJobSlug = null, onRefresh }: Props) {
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [expandedJobs, setExpandedJobs] = useState<Record<string, JobStep[]>>({});
   const [liveJobSteps, setLiveJobSteps] = useState<JobStep[]>([]);
