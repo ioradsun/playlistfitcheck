@@ -1,6 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music, Bomb } from "lucide-react";
+import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music, Bomb, X } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,25 +19,9 @@ const PendingVerifications = lazy(() => import("@/components/admin/PendingVerifi
 const ToolsEditor = lazy(() => import("@/components/admin/ToolsEditor").then((m) => ({ default: m.ToolsEditor })));
 const FmlyArtists = lazy(() => import("@/components/admin/FmlyArtists").then((m) => ({ default: m.FmlyArtists })));
 const GlobalCssEditor = lazy(() => import("@/components/admin/GlobalCssEditor").then((m) => ({ default: m.GlobalCssEditor })));
-const ReachDashboardWrapper = lazy(() =>
+const ReachDashboard = lazy(() =>
   import("@/components/admin/ReachDashboard").then((m) => ({
-    default: function ReachWrap() {
-      const [rows, setRows] = useState<{ spotify_artist_slug: string; artist_name: string; track_title: string }[]>([]);
-      useEffect(() => {
-        (async () => {
-          const { data } = await (supabase as any).from("artist_lyric_videos").select("user_id, artist_name, track_title").order("created_at", { ascending: false });
-          if (!data) return;
-          const userIds = [...new Set((data as any[]).map((d: any) => d.user_id))];
-          if (!userIds.length) return;
-          const { data: profiles } = await (supabase as any).from("profiles").select("id, spotify_artist_slug").in("id", userIds);
-          const slugMap = new Map((profiles || []).map((p: any) => [p.id, p.spotify_artist_slug]));
-          setRows((data as any[]).filter((d: any) => slugMap.get(d.user_id)).map((d: any) => ({
-            spotify_artist_slug: slugMap.get(d.user_id) as string, artist_name: d.artist_name as string, track_title: d.track_title as string,
-          })));
-        })();
-      }, []);
-      return <m.ReachDashboard rows={rows} />;
-    },
+    default: m.ReachDashboard,
   }))
 );
 
@@ -69,11 +53,43 @@ export default function Admin() {
   const [nukeConfirmText, setNukeConfirmText] = useState("");
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
+  // ── Reach tab state ──
+  const [reachRows, setReachRows] = useState<any[]>([]);
+  const [reachActiveSlug, setReachActiveSlug] = useState<string | null>(null);
+  const [reachQuery, setReachQuery] = useState("");
+  const [reachResults, setReachResults] = useState<any[]>([]);
+  const [reachSearching, setReachSearching] = useState(false);
+  const [reachSelected, setReachSelected] = useState<any>(null);
+  const [reachGenerating, setReachGenerating] = useState(false);
+  const [reachStatusMsg, setReachStatusMsg] = useState("");
+  const [reachFocused, setReachFocused] = useState(false);
+  const reachDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+
   const fetchUsers = useCallback(async () => {
     const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", { body: { section: "users" } });
     if (fnError) throw fnError;
     if (result?.error) throw new Error(result.error);
     return result.users as AdminUser[];
+  }, []);
+
+  const fetchReachRows = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from("profiles")
+      .select("id, display_name, spotify_artist_slug, is_claimed, created_at, artist_lyric_videos(id, track_title, artist_name, album_art_url, created_at)")
+      .not("spotify_artist_slug", "is", null)
+      .order("created_at", { ascending: false });
+    if (data) {
+      setReachRows(
+        data.map((p: any) => ({
+          spotify_artist_slug: p.spotify_artist_slug,
+          artist_name: p.display_name ?? p.artist_lyric_videos?.[0]?.artist_name ?? "Unknown",
+          track_title: p.artist_lyric_videos?.[0]?.track_title ?? "—",
+          album_art_url: p.artist_lyric_videos?.[0]?.album_art_url ?? null,
+          is_claimed: p.is_claimed,
+          created_at: p.created_at,
+        }))
+      );
+    }
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -99,6 +115,85 @@ export default function Admin() {
       fetchData().then((d) => { setData(d); setDataLoaded(true); }).catch(console.error).finally(() => setRefreshing(false));
     }
   }, [tab, dataLoaded, isAdmin, fetchData]);
+
+  // Fetch reach rows when tab switches
+  useEffect(() => {
+    if (tab === "reach" && isAdmin) {
+      fetchReachRows().catch(console.error);
+    }
+  }, [tab, isAdmin, fetchReachRows]);
+
+  // Reach search debounce
+  useEffect(() => {
+    if (!reachQuery.trim() || reachQuery.includes("spotify.com") || reachSelected) {
+      setReachResults([]);
+      return;
+    }
+    clearTimeout(reachDebounceRef.current);
+    reachDebounceRef.current = setTimeout(async () => {
+      setReachSearching(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("spotify-search", {
+          body: { query: reachQuery.trim(), type: "track" },
+        });
+        if (!error && data?.results) setReachResults(data.results.slice(0, 6));
+      } catch {}
+      setReachSearching(false);
+    }, 350);
+    return () => clearTimeout(reachDebounceRef.current);
+  }, [reachQuery, reachSelected]);
+
+  // Reach generate handler
+  const handleReachGenerate = async () => {
+    if (!reachSelected) return;
+    setReachGenerating(true);
+    setReachActiveSlug(null);
+
+    const STATUS = [
+      "Fetching track from Spotify…",
+      "Checking lrclib for synced lyrics…",
+      "Syncing with AssemblyAI…",
+      "Building artist page…",
+    ];
+    let msgIdx = 0;
+    setReachStatusMsg(STATUS[0]);
+    const interval = setInterval(() => {
+      msgIdx = Math.min(msgIdx + 1, STATUS.length - 1);
+      setReachStatusMsg(STATUS[msgIdx]);
+    }, 1500);
+
+    try {
+      const { data: trackData } = await supabase.functions.invoke("songfit-track", {
+        body: { trackUrl: reachSelected.url },
+      });
+      const spotifyUrl = trackData?.spotifyUrl ?? reachSelected.url;
+
+      const artistName = trackData?.artists?.[0]?.name ?? reachSelected.artists ?? "";
+      const slug = artistName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+      setReachActiveSlug(slug);
+
+      const { data, error } = await supabase.functions.invoke("create-artist-page", {
+        body: { spotifyUrl },
+      });
+      clearInterval(interval);
+
+      if (error) throw error;
+      if (data?.alreadyClaimed) {
+        toast.info("This artist has already claimed their page.");
+      } else if (data?.slug) {
+        toast.success(`Page ready → /artist/${data.slug}/claim-page`);
+        setReachSelected(null);
+        setReachQuery("");
+        await fetchReachRows();
+      }
+    } catch (e: any) {
+      clearInterval(interval);
+      toast.error(e.message || "Generation failed");
+    } finally {
+      setReachGenerating(false);
+      setReachStatusMsg("");
+    }
+  };
 
   const userRows = useMemo(() => {
     return users.map((u) => {
@@ -328,9 +423,120 @@ export default function Admin() {
           {/* ── REACH TAB ── */}
           <TabsContent value="reach" className="mt-4">
             {tab === "reach" && (
-              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
-                <ReachDashboardWrapper />
-              </Suspense>
+              <>
+                {/* ── Track search / generator ── */}
+                <div className="glass-card rounded-xl p-4 mb-6 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Music size={14} className="text-primary" />
+                    <span className="text-sm font-mono font-medium">Generate Artist Page</span>
+                  </div>
+
+                  {/* Search input */}
+                  <div className="relative">
+                    {reachSelected ? (
+                      <div className="flex items-center gap-3 bg-muted/40 border border-border/40 rounded-xl px-4 py-2.5">
+                        {reachSelected.image ? (
+                          <img src={reachSelected.image} className="h-8 w-8 rounded object-cover" alt="" />
+                        ) : (
+                          <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
+                            <Music size={14} className="text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{reachSelected.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{reachSelected.artists}</p>
+                        </div>
+                        <button
+                          onClick={() => { setReachSelected(null); setReachQuery(""); }}
+                          className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          value={reachQuery}
+                          onChange={(e) => setReachQuery(e.target.value)}
+                          onFocus={() => setReachFocused(true)}
+                          onBlur={() => setTimeout(() => setReachFocused(false), 200)}
+                          onPaste={(e) => {
+                            const text = e.clipboardData.getData("text");
+                            if (text.includes("spotify.com/track/")) {
+                              e.preventDefault();
+                              setReachQuery(text);
+                              supabase.functions.invoke("songfit-track", {
+                                body: { trackUrl: text.trim() },
+                              }).then(({ data }) => {
+                                if (data) setReachSelected({
+                                  name: data.title,
+                                  artists: data.artists?.map((a: any) => a.name).join(", "),
+                                  image: data.albumArt,
+                                  url: data.spotifyUrl,
+                                });
+                              });
+                            }
+                          }}
+                          placeholder="Search artist or song, or paste Spotify link"
+                          className="w-full bg-muted/40 border border-border/40 rounded-xl px-4 py-2.5 text-sm placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
+                          disabled={reachGenerating}
+                        />
+                        {reachSearching && (
+                          <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                        {/* Dropdown results */}
+                        {reachFocused && reachResults.length > 0 && (
+                          <div className="absolute z-20 left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                            {reachResults.map((r: any, i: number) => (
+                              <button
+                                key={i}
+                                onClick={() => { setReachSelected(r); setReachResults([]); setReachQuery(""); }}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/60 transition-colors text-left"
+                              >
+                                {r.image ? (
+                                  <img src={r.image} className="h-8 w-8 rounded object-cover" alt="" />
+                                ) : (
+                                  <div className="h-8 w-8 rounded bg-muted" />
+                                )}
+                                <div className="min-w-0">
+                                  <p className="text-sm truncate">{r.name}</p>
+                                  <p className="text-xs text-muted-foreground truncate">{r.artists}</p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Generate button + status */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleReachGenerate}
+                      disabled={!reachSelected || reachGenerating}
+                      className="rounded-xl px-5 py-2.5 text-sm font-semibold bg-primary text-primary-foreground disabled:opacity-40 transition-colors"
+                    >
+                      {reachGenerating ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {reachStatusMsg}
+                        </span>
+                      ) : (
+                        "Generate page →"
+                      )}
+                    </button>
+                    {reachActiveSlug && reachGenerating && (
+                      <span className="text-xs text-muted-foreground font-mono">{reachActiveSlug}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── ReachDashboard table ── */}
+                <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
+                  <ReachDashboard rows={reachRows} activeJobSlug={reachActiveSlug} onRefresh={fetchReachRows} />
+                </Suspense>
+              </>
             )}
           </TabsContent>
 
