@@ -54,6 +54,8 @@ const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const returnTab = (location.state as any)?.returnTab;
+  const claimSlug = (location.state as any)?.claimSlug ?? null;
+  const claimToken = (location.state as any)?.claimToken ?? null;
 
   useEffect(() => {
     if (user) {
