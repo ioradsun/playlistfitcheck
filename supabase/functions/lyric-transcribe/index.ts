@@ -751,7 +751,12 @@ serve(async (req) => {
 
     // Resolve transcription engine
     const useGeminiTranscription = transcriptionModel === "gemini";
-    if (!useGeminiTranscription && !ELEVENLABS_API_KEY) {
+    const useAssemblyAI = transcriptionModel === "assemblyai";
+    const ASSEMBLYAI_API_KEY = useAssemblyAI ? Deno.env.get("ASSEMBLYAI_API_KEY") : undefined;
+    if (useAssemblyAI && !ASSEMBLYAI_API_KEY) {
+      throw new Error("ASSEMBLYAI_API_KEY is not configured");
+    }
+    if (!useGeminiTranscription && !useAssemblyAI && !ELEVENLABS_API_KEY) {
       throw new Error("ELEVENLABS_API_KEY is not configured (required for Scribe engine)");
     }
 
