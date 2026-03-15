@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -709,7 +709,10 @@ export function LyricDisplay({
   const applyCenteredLyricsOffset = useCallback((lineIndex: number) => {
     if (lineIndex < 0) return;
     const centeredOffset = getCenteredLyricsOffset(lineIndex);
-    if (centeredOffset == null) return;
+    if (centeredOffset == null) {
+      requestAnimationFrame(() => applyCenteredLyricsOffset(lineIndex));
+      return;
+    }
     setLyricsOffset(centeredOffset + manualLyricOffsetRef.current);
   }, [getCenteredLyricsOffset]);
 
@@ -818,6 +821,13 @@ export function LyricDisplay({
   // decodeFile is intentionally omitted to avoid re-running setup when its identity changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioFile]);
+
+  useLayoutEffect(() => {
+    if (activeLines.length === 0) return;
+    setLyricsTransitionMs(0);
+    applyCenteredLyricsOffset(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLines.length]);
 
   useEffect(() => {
     if (userScrollingLyricsRef.current) return;
