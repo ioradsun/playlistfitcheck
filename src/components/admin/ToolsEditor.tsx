@@ -257,7 +257,12 @@ export function ToolsEditor() {
     setSavingKey("lyric_transcription");
     try {
       await patchFeatures({ lyric_transcription_model: model });
-      toast.success(model === "scribe" ? "Transcription → ElevenLabs Scribe" : "Transcription → Gemini (audio-only)");
+      const labels: Record<TranscriptionModel, string> = {
+        scribe: "Transcription → ElevenLabs Scribe",
+        gemini: "Transcription → Gemini (audio-only)",
+        assemblyai: "Transcription → AssemblyAI",
+      };
+      toast.success(labels[model]);
     } catch {
       setFeatures(f => ({ ...f, lyric_transcription_model: prev }));
       toast.error("Failed to update");
