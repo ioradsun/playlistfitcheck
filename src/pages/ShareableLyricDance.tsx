@@ -163,7 +163,8 @@ const ProgressBar = React.forwardRef<HTMLDivElement, {
 export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
-
+  const [searchParams] = useSearchParams();
+  const isMarketingView = searchParams.get("from") === "claim";
 
   const [data, setDataRaw] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
