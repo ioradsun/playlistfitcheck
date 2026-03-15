@@ -163,6 +163,7 @@ export default function Admin() {
           <TabsList className="flex flex-wrap gap-x-4 gap-y-1 max-w-3xl mb-2">
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="artists">Artists</TabsTrigger>
+            <TabsTrigger value="reach">Reach</TabsTrigger>
             <TabsTrigger value="verify">Verify</TabsTrigger>
             <TabsTrigger value="data">Data</TabsTrigger>
             <TabsTrigger value="tools">Tools</TabsTrigger>
