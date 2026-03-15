@@ -368,6 +368,12 @@ export function ReachDashboard({ rows, activeJobSlug = null, onRefresh }: Props)
                       </a>
                     </td>
                     <td className="p-3">{totalDuration}</td>
+                    <td className="p-3">
+                      <BeatGridEnhancer
+                        row={row}
+                        onDone={() => onRefresh?.()}
+                      />
+                    </td>
                     <td className="p-3 text-right">
                       <button
                         type="button"
