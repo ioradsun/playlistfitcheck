@@ -427,7 +427,7 @@ export default function ShareableLyricDance() {
     if (!playerReady || !playerInstance) return;
     playerInstance.setMuted(true);
     // Start canvas rendering so it's live behind the cover
-    playerInstance.play().catch(() => {});
+    playerInstance.play();
   }, [playerReady, playerInstance]);
 
   const handleMuteToggle = useCallback(() => {
