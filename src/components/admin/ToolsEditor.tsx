@@ -176,7 +176,7 @@ export function ToolsEditor() {
           tools_enabled,
           tools_order: merged,
           crowdfit_mode: f.crowdfit_mode ?? "reactions",
-          lyric_transcription_model: f.lyric_transcription_model === "gemini" ? "gemini" : "scribe",
+          lyric_transcription_model: (["scribe", "gemini", "assemblyai"].includes(f.lyric_transcription_model)) ? f.lyric_transcription_model : "scribe",
           lyric_analysis_model: f.lyric_analysis_model ?? f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
           lyric_video: f.lyric_video ?? false,
           hookfit_hottest_hooks: f.hookfit_hottest_hooks ?? true,
