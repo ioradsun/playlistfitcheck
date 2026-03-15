@@ -507,6 +507,18 @@ serve(async (req) => {
             .eq("spotify_track_id", trackId);
 
           await logStep("lyric_dance_save", "done", `Live at ${lyricDanceUrl}`, slug);
+
+          // Trigger section image generation (fire and forget — non-blocking)
+          if (danceRow?.id) {
+            fetch(`${supabaseUrl}/functions/v1/generate-section-images`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+              },
+              body: JSON.stringify({ lyric_dance_id: danceRow.id }),
+            }).catch(() => {}); // fire and forget
+          }
         } catch (e: any) {
           await logStep("lyric_dance_save", "error", e.message ?? "Dance save failed", slug);
         }
