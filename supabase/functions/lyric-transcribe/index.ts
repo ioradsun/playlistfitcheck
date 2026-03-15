@@ -137,7 +137,7 @@ async function runAssemblyAI(
     },
     body: JSON.stringify({
       audio_url: upload_url,
-      speech_model: "universal-3-pro",
+      speech_models: ["universal-3-pro"],
     }),
   });
   if (!transcriptRes.ok) {
