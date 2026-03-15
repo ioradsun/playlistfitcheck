@@ -899,7 +899,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         >
           <button
             onClick={onVoteYes}
-            className="flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors"
+            className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === 'fullscreen' ? 'py-2.5' : 'py-3'}`}
           >
             <span
               className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
@@ -920,7 +920,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
           <button
             onClick={onVoteNo}
-            className="flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors"
+            className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === 'fullscreen' ? 'py-2.5' : 'py-3'}`}
           >
             <span
               className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
@@ -941,7 +941,13 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
           <div
             className="flex items-center justify-center shrink-0 gap-2"
-            style={{ minWidth: 56, paddingLeft: 16, paddingRight: 16 }}
+            style={{
+              minWidth: 56,
+              paddingLeft: 16,
+              paddingRight: 16,
+              paddingTop: displayMode === 'fullscreen' ? 10 : 12,
+              paddingBottom: displayMode === 'fullscreen' ? 10 : 12,
+            }}
           >
             <button
               onClick={handlePanelClose}
