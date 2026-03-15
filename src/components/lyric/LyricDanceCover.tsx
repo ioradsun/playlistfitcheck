@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from "react";
 
 interface LyricDanceCoverProps {
   songName: string;
+  claimArtistName?: string;
+  claimSongName?: string;
+  isMarketingCover?: boolean;
   artistName?: string | null;
   avatarUrl?: string | null;
   initial?: string;
@@ -16,6 +19,9 @@ interface LyricDanceCoverProps {
 
 export function LyricDanceCover({
   songName,
+  claimArtistName = "",
+  claimSongName = "",
+  isMarketingCover = false,
   waiting,
   onListen,
   badge,
@@ -101,24 +107,72 @@ export function LyricDanceCover({
 
       {/* Layer 3 — song title + Listen Now */}
       <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ marginBottom: 48 }}>
-        {songName ? (
-          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4 max-w-[85%]">
-            {songName}
-          </p>
+        {isMarketingCover ? (
+          <>
+            {/* Wordmark — tertiary */}
+            <p className="text-[11px] tracking-[0.2em] uppercase text-white/25 mb-6">
+              tools.fm
+            </p>
+
+            {/* Personalized hook — primary */}
+            <p className="text-[16px] sm:text-[17px] leading-[1.5] text-white/80 mb-3 max-w-[320px]">
+              <span className="font-medium">{claimArtistName}</span>
+              {" — we turned your song "}
+              <span className="font-medium">"{claimSongName || songName}"</span>
+              {" into this interactive lyric video."}
+            </p>
+
+            {/* Imagination seed — secondary */}
+            <p className="text-white/45 text-[13px] mb-5 max-w-[280px]">
+              Imagine your biggest fans giving feedback
+              on every lyric you write.
+            </p>
+
+            {/* Tagline — tertiary */}
+            <p className="text-white/25 text-[11px] tracking-wide mb-6">
+              artists building tools for artists
+            </p>
+
+            {/* Play button — keep existing style */}
+            <button
+              onClick={waiting ? undefined : onListen}
+              className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
+              style={{
+                color: waiting ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,1)",
+                borderColor: waiting ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.20)",
+                cursor: waiting ? "default" : "pointer",
+              }}
+            >
+              {waiting ? "Loading…" : "▶  Play Video"}
+            </button>
+
+            {/* Fan intelligence — secondary, below button */}
+            <p className="text-white/45 text-[13px] mt-5 max-w-[260px]">
+              Fans can react and comment on every lyric line.
+            </p>
+          </>
         ) : (
-          <div className="h-4 mb-4" />
+          <>
+            {songName ? (
+              <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4 max-w-[85%]">
+                {songName}
+              </p>
+            ) : (
+              <div className="h-4 mb-4" />
+            )}
+            <button
+              onClick={waiting ? undefined : onListen}
+              className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
+              style={{
+                color: waiting ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,1)",
+                borderColor: waiting ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.20)",
+                cursor: waiting ? "default" : "pointer",
+              }}
+            >
+              Listen Now
+            </button>
+          </>
         )}
-        <button
-          onClick={waiting ? undefined : onListen}
-          className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
-          style={{
-            color: waiting ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,1)",
-            borderColor: waiting ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.20)",
-            cursor: waiting ? "default" : "pointer",
-          }}
-        >
-          Listen Now
-        </button>
       </div>
 
     </div>

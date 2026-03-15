@@ -529,26 +529,14 @@ export default function ShareableLyricDance() {
             backdropFilter: "blur(12px)",
           }}
         >
-          {/* Left: artist info + tagline */}
-          <div className="min-w-0">
-            {/* Desktop */}
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-white/90 text-sm font-medium truncate max-w-[220px]">
-                {data?.artist_name}
-                {" · "}
-                "{data?.song_name}"
-              </span>
-              <span className="text-white/30 text-xs">
-                This isn't a platform. It's a{" "}
-                <span className="text-primary font-semibold">FMLY.</span>
-                {" "}Artists creating tools for artists. Free forever.
-              </span>
-            </div>
-            {/* Mobile: shorter */}
-            <p className="sm:hidden text-white/70 text-xs font-medium text-center">
-              {data?.artist_name}
-              {" · "}
-              tools.fm
+          {/* Left: context + exclusivity */}
+          <div className="min-w-0 flex-1">
+            <p className="text-white/70 text-[13px] leading-snug truncate">
+              <span className="text-white font-medium">{data?.artist_name}</span>
+              {" — claim your Artist Account"}
+            </p>
+            <p className="text-white/30 text-[11px] mt-0.5">
+              Founding Artist · limited to 1,000
             </p>
           </div>
 
@@ -638,6 +626,9 @@ export default function ShareableLyricDance() {
             >
               <LyricDanceCover
                 songName={coverSongName}
+                claimArtistName={data?.artist_name ?? ""}
+                claimSongName={data?.song_name ?? ""}
+                isMarketingCover={isMarketingView}
                 waiting={isWaitingForPlayer}
                 coverImageUrl={data?.section_images?.[0] ?? (data as any)?.album_art_url ?? null}
                 hideBackground={playerReady}
@@ -692,7 +683,7 @@ export default function ShareableLyricDance() {
           />
         )}
 
-        {!reactionPanelOpen && !isMarketingView && (
+        {!reactionPanelOpen && (
           <div className="w-full max-w-2xl mx-auto">
             <CardBottomBar
               variant="fullscreen"
