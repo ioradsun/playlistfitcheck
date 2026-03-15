@@ -335,6 +335,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
   // Auto-scroll: smart nudge active block during playback
   useEffect(() => {
+    if (!player || player.audio.paused) return;
     if (isBrowsing) return;
     const container = scrollContainerRef.current;
     const row = rowRefs.current[playheadLineIndex ?? -1];
@@ -368,6 +369,28 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     const targetTop = rowTop - container.clientHeight * 0.30;
     container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }, [playheadLineIndex, isBrowsing]);
+
+  // After tap: nudge just enough to show emoji/comment block if clipped
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    const row = rowRefs.current[playheadLineIndex ?? -1];
+    if (!container || !row) return;
+
+    // Wait one frame for emoji/comment block to render
+    const raf = requestAnimationFrame(() => {
+      const block = row.parentElement ?? row;
+      const containerBottom = container.scrollTop + container.clientHeight;
+      const blockBottom = block.offsetTop + block.offsetHeight;
+
+      if (blockBottom > containerBottom) {
+        const nudge = blockBottom - containerBottom + 12;
+        container.scrollBy({ top: nudge, behavior: 'smooth' });
+      }
+      // If block is fully visible — do nothing. Line stays exactly where it is.
+    });
+
+    return () => cancelAnimationFrame(raf);
+  }, [playheadLineIndex]);
 
   // Scroll → pause, enter browse mode
   useEffect(() => {
@@ -452,17 +475,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   }, []);
 
   const handleLineTap = (line: LyricSectionLine) => {
-    // Clear browse mode first so auto-scroll effect can fire correctly
-    setIsBrowsing(false);
-    userScrollingRef.current = false;
-
     setSelectedLineIndex(line.lineIndex);
     setPlayheadLineIndex(line.lineIndex);
-    requestAnimationFrame(() => {
-      const container = scrollContainerRef.current;
-      const row = rowRefs.current[line.lineIndex];
-      if (container && row) container.scrollTo({ top: row.offsetTop, behavior: 'smooth' });
-    });
 
     releaseManualSelectionLock();
 
@@ -478,8 +492,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         player.setMuted(false);
         player.seek(line.startSec);
         player.play();
-        userScrollingRef.current = false;
-        setIsBrowsing(false);
 
         const safeStopSec = Math.max(line.startSec, line.endSec - 0.02);
         const stopAfterMs = Math.max((safeStopSec - line.startSec) * 1000, 50);
@@ -488,8 +500,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         }, stopAfterMs);
       } else {
         onSeekTo(line.startSec);
-        userScrollingRef.current = false;
-        setIsBrowsing(false);
       }
     });
   };
