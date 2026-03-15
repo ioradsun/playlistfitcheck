@@ -923,7 +923,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               aria-label="Close"
               className="flex items-center justify-center"
             >
-              <X size={13} className="text-white/30 hover:text-white/60 transition-colors" />
+              <X size={13} className="text-white hover:text-white/70 transition-colors" />
             </button>
             <button
               onClick={() => {
@@ -945,7 +945,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                 player?.play();
               }}
               aria-label="Replay"
-              className="flex items-center justify-center text-[15px] text-white/25 hover:text-white/65 transition-colors"
+              className="flex items-center justify-center text-[15px] text-white hover:text-white/70 transition-colors"
             >
               ↺
             </button>
