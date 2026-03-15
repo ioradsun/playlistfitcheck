@@ -64,7 +64,7 @@ export function CardBottomBar({
             onClick={onVoteYes}
             className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
-            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
+            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors">
               Run it back
             </span>
             {(score?.replay_yes ?? 0) > 0 && (
@@ -76,7 +76,7 @@ export function CardBottomBar({
             onClick={onVoteNo}
             className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
-            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white/30 group-hover:text-white/60 transition-colors">
+            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors">
               Not For Me
             </span>
             {score != null && score.total - score.replay_yes > 0 && (
@@ -87,7 +87,7 @@ export function CardBottomBar({
       ) : (
         /* Post-vote: social proof — single line */
         <div className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}>
-          <span className="text-[9px] font-mono tracking-[0.08em] text-white/30 truncate">
+          <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
             {(() => {
               const total = score?.total ?? 0;
               const replay_yes = score?.replay_yes ?? 0;
