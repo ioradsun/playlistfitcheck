@@ -124,6 +124,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   const manualPlaybackTargetIndexRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const activeBlockRef = useRef<HTMLDivElement | null>(null);
   const userScrollingRef = useRef(false);
 
   const clearLoopTimeout = () => {
@@ -332,13 +333,40 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     };
   }, [repeatMode, player, allLines]);
 
-  // Auto-scroll: snap playhead to top during playback
+  // Auto-scroll: smart nudge active block during playback
   useEffect(() => {
     if (isBrowsing) return;
     const container = scrollContainerRef.current;
     const row = rowRefs.current[playheadLineIndex ?? -1];
+    const block = activeBlockRef.current;
     if (!container || !row) return;
-    container.scrollTo({ top: row.offsetTop, behavior: 'smooth' });
+
+    const containerTop = container.scrollTop;
+    const containerBottom = containerTop + container.clientHeight;
+
+    const rowTop = row.offsetTop;
+    const blockBottom = block
+      ? block.offsetTop + block.offsetHeight
+      : row.offsetTop + row.offsetHeight;
+
+    const rowVisible = rowTop >= containerTop && rowTop < containerBottom;
+    const blockFullyVisible = blockBottom <= containerBottom;
+
+    if (rowVisible && blockFullyVisible) {
+      // Active line and its emoji/comment rows are fully in view — don't move
+      return;
+    }
+
+    if (rowVisible && !blockFullyVisible) {
+      // Active line visible but emoji/comment clipped at bottom — nudge up just enough
+      const nudge = blockBottom - containerBottom + 12;
+      container.scrollBy({ top: nudge, behavior: 'smooth' });
+      return;
+    }
+
+    // Active line off screen — scroll to 30% from top for spatial context
+    const targetTop = rowTop - container.clientHeight * 0.30;
+    container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }, [playheadLineIndex, isBrowsing]);
 
   // Scroll → pause, enter browse mode
@@ -639,7 +667,10 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
             const isExpanded = expandedLineIndex === line.lineIndex;
 
             return (
-              <div key={line.lineIndex}>
+              <div
+                key={line.lineIndex}
+                ref={isActive ? (node) => { activeBlockRef.current = node; } : undefined}
+              >
                 {shouldShowSectionHeader && (
                   <div className={linePosition === 0 ? 'mb-0.5' : 'mt-2 mb-0.5'}>
                     <div className="flex items-center gap-2 px-3">
