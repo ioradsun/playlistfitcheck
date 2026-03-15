@@ -41,7 +41,12 @@ export type Database = {
           artist_name: string
           created_at: string
           id: string
+          lyrics_source: string | null
+          plain_lyrics: string | null
           preview_url: string | null
+          spotify_track_id: string | null
+          spotify_track_url: string | null
+          synced_lyrics_lrc: string | null
           track_title: string
           user_id: string
         }
@@ -50,7 +55,12 @@ export type Database = {
           artist_name: string
           created_at?: string
           id?: string
+          lyrics_source?: string | null
+          plain_lyrics?: string | null
           preview_url?: string | null
+          spotify_track_id?: string | null
+          spotify_track_url?: string | null
+          synced_lyrics_lrc?: string | null
           track_title: string
           user_id: string
         }
@@ -59,7 +69,12 @@ export type Database = {
           artist_name?: string
           created_at?: string
           id?: string
+          lyrics_source?: string | null
+          plain_lyrics?: string | null
           preview_url?: string | null
+          spotify_track_id?: string | null
+          spotify_track_url?: string | null
+          synced_lyrics_lrc?: string | null
           track_title?: string
           user_id?: string
         }
@@ -179,6 +194,39 @@ export type Database = {
           id?: string
           session_id?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      claim_page_jobs: {
+        Row: {
+          completed_at: string | null
+          detail: string | null
+          id: string
+          job_id: string
+          spotify_artist_slug: string
+          started_at: string
+          status: string
+          step: string
+        }
+        Insert: {
+          completed_at?: string | null
+          detail?: string | null
+          id?: string
+          job_id: string
+          spotify_artist_slug: string
+          started_at?: string
+          status?: string
+          step: string
+        }
+        Update: {
+          completed_at?: string | null
+          detail?: string | null
+          id?: string
+          job_id?: string
+          spotify_artist_slug?: string
+          started_at?: string
+          status?: string
+          step?: string
         }
         Relationships: []
       }
@@ -874,6 +922,7 @@ export type Database = {
           artist_fingerprint: Json | null
           avatar_url: string | null
           bio: string | null
+          claim_token: string | null
           created_at: string
           display_name: string | null
           id: string
@@ -895,6 +944,7 @@ export type Database = {
           artist_fingerprint?: Json | null
           avatar_url?: string | null
           bio?: string | null
+          claim_token?: string | null
           created_at?: string
           display_name?: string | null
           id: string
@@ -916,6 +966,7 @@ export type Database = {
           artist_fingerprint?: Json | null
           avatar_url?: string | null
           bio?: string | null
+          claim_token?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
