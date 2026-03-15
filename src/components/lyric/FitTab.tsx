@@ -1323,10 +1323,6 @@ function CinematicDirectionCard({
   const [imagesHydrated, setImagesHydrated] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // autoImageTriggered ref removed — auto-trigger now lives in LyricFitTab pipeline
-  const fitTabImageT0Ref = useRef<number | null>(null);
-  const fitTabImageMs = useCallback(() => fitTabImageT0Ref.current === null
-    ? "0ms"
-    : `${(performance.now() - fitTabImageT0Ref.current).toFixed(0)}ms`, []);
 
   useEffect(() => {
     setSectionImagesGenerating(generating);
@@ -1378,7 +1374,6 @@ function CinematicDirectionCard({
         if (cancelled) return;
         const savedImgs = lyricRow?.section_images;
         if (Array.isArray(savedImgs) && savedImgs.length > 0 && savedImgs.some(Boolean)) {
-          console.log(`[FitTab Debug] hydrated ${savedImgs.filter(Boolean).length} section images from saved_lyrics`);
           setSectionImages(savedImgs);
           setImageTimestamps(Array.from({ length: savedImgs.length }, () => null));
           setImagesHydrated(true);
@@ -1470,7 +1465,6 @@ function CinematicDirectionCard({
     }
 
     // Create a draft row with minimal data so edge function can read cinematic_direction
-    console.log("[FitTab Debug] creating draft dance row for image generation");
     const displayName = "artist";
     const artistSlug = slugify(displayName);
 
@@ -1516,7 +1510,6 @@ function CinematicDirectionCard({
 
     if (newRow?.id) {
       setDanceId(newRow.id);
-      console.log(`[FitTab Debug] draft dance row created: ${newRow.id}`);
       return newRow.id;
     }
     return null;
@@ -1533,9 +1526,6 @@ function CinematicDirectionCard({
     }
 
     setGenerationError(null);
-    console.log("[SectionImages] Generate clicked", { generating, sectionsLen: sections.length, danceId: resolvedDanceId });
-    fitTabImageT0Ref.current = performance.now();
-    console.log(`[FitTab Debug] starting image generation (${sections.length} sections)`);
     setGenerating(true);
     onImageGenerationStatusChange?.("running");
     setGenProgress({ done: 0, total: sections.length });
@@ -1547,11 +1537,6 @@ function CinematicDirectionCard({
       const urls = result?.urls || result?.section_images || [];
       const timingCandidates = result?.image_timestamps || result?.timings || result?.durations || [];
       const normalizedTimestamps = Array.from({ length: urls.length }, (_, idx) => formatImageTimestamp(timingCandidates[idx]));
-      urls.forEach((url: string | null | undefined, index: number) => {
-        const preview = typeof url === "string" ? `${url.slice(0, 50)}...` : "null";
-        console.log(`[FitTab Debug] ${fitTabImageMs()} image ${index + 1}/${sections.length} done, url=${preview}`);
-      });
-      console.log(`[FitTab Debug] image generation complete in ${fitTabImageMs()}`);
       setSectionImages(urls);
       setImageTimestamps(normalizedTimestamps);
       setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
@@ -1563,7 +1548,6 @@ function CinematicDirectionCard({
           .from("saved_lyrics")
           .update({ section_images: urls as any })
           .eq("id", projectId);
-        console.log(`[FitTab Debug] saved ${urls.filter(Boolean).length} section images to DB`);
       }
 
       toast.success(`Generated ${urls.filter(Boolean).length}/${sections.length} section images`);
@@ -1575,7 +1559,7 @@ function CinematicDirectionCard({
     } finally {
       setGenerating(false);
     }
-  }, [ensureDanceId, fitTabImageMs, formatImageTimestamp, generating, onImageGenerationStatusChange, projectId, sections]);
+  }, [ensureDanceId, formatImageTimestamp, generating, onImageGenerationStatusChange, projectId, sections]);
 
   useEffect(() => {
     const handler = () => {

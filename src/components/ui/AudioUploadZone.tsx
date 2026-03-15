@@ -23,14 +23,12 @@ export function AudioUploadZone({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const validateAndAdd = (incoming: FileList | null) => {
-    console.log("[AudioUploadZone] validateAndAdd called, incoming:", incoming?.length, "disabled:", disabled);
     if (!incoming) return;
     const remaining = maxFiles - files.length;
     const toAdd: File[] = [];
 
     for (const file of Array.from(incoming).slice(0, remaining)) {
       if (!ACCEPTED_EXTENSIONS.test(file.name)) {
-        console.log("[AudioUploadZone] rejected extension:", file.name);
         toast.error(`${file.name}: unsupported format`);
         continue;
       }
@@ -41,7 +39,6 @@ export function AudioUploadZone({
       toAdd.push(file);
     }
 
-    console.log("[AudioUploadZone] toAdd:", toAdd.length, toAdd.map(f => f.name));
     if (toAdd.length > 0) {
       onChange([...files, ...toAdd]);
     }

@@ -1403,14 +1403,6 @@ export class LyricDancePlayer {
         const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
         const beatGridData = this.data.beat_grid ?? { bpm: 120, beats: [], confidence: 0 };
         this.conductor = new BeatConductor(beatGridData, songDuration);
-        console.log('[LyricEngine] CONDUCTOR created', {
-          bpm: beatGridData.bpm,
-          beatsCount: beatGridData.beats?.length ?? 0,
-          confidence: beatGridData.confidence,
-          songDuration,
-          hasBeatGrid: !!this.data.beat_grid,
-          beatGridSource: this.data.beat_grid ? 'DB' : 'FALLBACK',
-        });
         // Attach runtime analysis if available (has energy/brightness curves not stored in DB)
         if ((beatGridData as any)._analysis) {
           this.conductor.setAnalysis((beatGridData as any)._analysis);
@@ -1470,7 +1462,6 @@ export class LyricDancePlayer {
 
   private enableFullVisualMode(): void {
     if (this.destroyed || this.fullModeEnabled) return;
-    console.log('[LyricEngine] FULL VISUAL MODE enabling', { bootMode: this.bootMode });
     this.buildBgCache();
     this.deriveVisualSystems();
     this.buildChapterSims();
@@ -2108,7 +2099,6 @@ export class LyricDancePlayer {
       const minTier = (this.data.region_start != null && this.data.region_end != null) ? 2 : 0;
       this._qualityTier = minTier as 0 | 1 | 2 | 3;
       this._qUpgradeStreak = 0;
-      console.info(`[LyricEngine] quality tier reset to ${minTier} after tab resume`);
       if (prevBucket === 'low' && this._qualityTier < 2) {
         this._applyDprToCanvas();
       }
@@ -2121,7 +2111,6 @@ export class LyricDancePlayer {
       this.rafHandle = requestAnimationFrame(this.tick);
     }
 
-    console.info('[LyricEngine] tab resumed — reset transient state');
   }
 
   private tick = (timestamp: number): void => {
@@ -4367,7 +4356,6 @@ export class LyricDancePlayer {
       if (!this._globalBeatVis) {
         this._globalBeatVis = new BeatVisSim(accentColor);
       }
-      console.log('[LyricEngine] BEAT VIS created', { hasVis: !!this._globalBeatVis, accentColor });
 
       this.chapterSims = chapters.map((chapter: any, ci: number) => {
         const dominant = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#111111';
@@ -4473,14 +4461,6 @@ export class LyricDancePlayer {
     if (this._globalBeatVis && !this._beatVisLogOnce) {
       this._beatVisLogOnce = true;
       const bs = this._lastBeatState;
-      console.log('[LyricEngine] BEAT VIS first draw attempt', {
-        qualityTier: this._qualityTier,
-        energy: bs?.energy ?? 0,
-        pulse: bs?.pulse ?? 0,
-        hitStrength: bs?.hitStrength ?? 0,
-        beatIndex: bs?.beatIndex ?? -1,
-        willDraw: !!this._globalBeatVis,
-      });
     }
     if (this._globalBeatVis) {
       const bs = this._lastBeatState;
