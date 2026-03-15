@@ -144,6 +144,7 @@ async function submitAssemblyAI(
     },
     body: JSON.stringify({
       audio_url: audioUrl,
+      speech_model: "universal-2",
       ...(wordBoost.length > 0 && {
         word_boost: wordBoost,
         boost_param: "high",
