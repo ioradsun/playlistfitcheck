@@ -1512,6 +1512,7 @@ export type Database = {
       }
       shareable_lyric_dances: {
         Row: {
+          album_art_url: string | null
           artist_dna: Json | null
           artist_name: string
           artist_slug: string
@@ -1539,6 +1540,7 @@ export type Database = {
           words: Json | null
         }
         Insert: {
+          album_art_url?: string | null
           artist_dna?: Json | null
           artist_name: string
           artist_slug: string
@@ -1566,6 +1568,7 @@ export type Database = {
           words?: Json | null
         }
         Update: {
+          album_art_url?: string | null
           artist_dna?: Json | null
           artist_name?: string
           artist_slug?: string
