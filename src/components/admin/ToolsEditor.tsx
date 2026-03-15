@@ -20,7 +20,7 @@ const ALL_TOOLS = [
 const DEFAULT_ORDER = ALL_TOOLS.map(t => t.key);
 
 // ── LyricFit pipeline model types ─────────────────────────────────────────────
-type TranscriptionModel = "scribe" | "gemini";
+type TranscriptionModel = "scribe" | "gemini" | "assemblyai";
 type AnalysisModel =
   | "google/gemini-3-flash-preview"
   | "google/gemini-2.5-flash"
