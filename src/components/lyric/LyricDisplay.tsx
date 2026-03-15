@@ -822,6 +822,13 @@ export function LyricDisplay({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioFile]);
 
+  useLayoutEffect(() => {
+    if (activeLines.length === 0) return;
+    setLyricsTransitionMs(0);
+    applyCenteredLyricsOffset(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLines.length]);
+
   useEffect(() => {
     if (userScrollingLyricsRef.current) return;
     setLyricsTransitionMs(200);
