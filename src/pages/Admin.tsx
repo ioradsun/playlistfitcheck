@@ -193,14 +193,17 @@ export default function Admin() {
       clearInterval(interval);
 
       if (error) throw error;
+
       if (data?.alreadyClaimed) {
         toast.info("This artist has already claimed their page.");
       } else if (data?.slug) {
         toast.success(`Page ready → /artist/${data.slug}/claim-page`);
         setReachSelected(null);
         setReachQuery("");
-        await fetchReachRows();
       }
+      // Always refresh table after generation regardless of result
+      await fetchReachRows();
+      setReachActiveSlug(null);
     } catch (e: any) {
       clearInterval(interval);
       toast.error(e.message || "Generation failed");
