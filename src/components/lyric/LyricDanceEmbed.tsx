@@ -14,13 +14,11 @@ import { Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
+import { useReactionPanel } from "@/hooks/useReactionPanel";
 import { useCardVote } from "@/hooks/useCardVote";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
-import {
-  ReactionPanel,
-  type CanonicalAudioSection,
-} from "@/components/lyric/ReactionPanel";
+import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { getSessionId } from "@/lib/sessionId";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -169,17 +167,9 @@ export function LyricDanceEmbed({
     isFeedEmbed ? "far" : "visible",
   );
   const [playerEvicted, setPlayerEvicted] = useState(false);
-  const [reactionData, setReactionData] = useState<
-    Record<string, { line: Record<number, number>; total: number }>
-  >({});
   const [internalPanelOpen, setInternalPanelOpen] = useState(false);
   const isControlled = externalPanelOpen !== undefined;
-  const reactionPanelOpen = isControlled ? externalPanelOpen : internalPanelOpen;
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
-  const [engagementMode, setEngagementMode] = useState<
-    "spectator" | "freezing" | "engaged"
-  >("spectator");
-  const [frozenLineIndex, setFrozenLineIndex] = useState<number | null>(null);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [forceDemoted, setForceDemoted] = useState(false);
 
@@ -210,10 +200,6 @@ export function LyricDanceEmbed({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const freezeAtSecRef = useRef<number | null>(null);
-  const engagementModeRef = useRef<"spectator" | "freezing" | "engaged">(
-    "spectator",
-  );
   const currentTimeSecRef = useRef(0);
 
   const openPanel = useCallback(() => {
@@ -501,29 +487,14 @@ export function LyricDanceEmbed({
     const audio = player.audio;
     let rafId = 0;
     const tick = () => {
-      const t = audio.currentTime;
-
-      if (engagementModeRef.current === "freezing") {
-        const freezeAt = freezeAtSecRef.current ?? t;
-        if (t >= freezeAt) {
-          audio.pause();
-          setCurrentTimeSec(Math.min(t, freezeAt));
-          setEngagementMode("engaged");
-          freezeAtSecRef.current = null;
-          return;
-        }
+      const timeSec = audio.currentTime;
+      if (Math.abs(timeSec - currentTimeSecRef.current) > 0.05) {
+        currentTimeSecRef.current = timeSec;
+        setCurrentTimeSec(timeSec);
       }
-
-      if (Math.abs(t - currentTimeSecRef.current) > 0.05) {
-        currentTimeSecRef.current = t;
-        setCurrentTimeSec(t);
-      }
-      if (engagementModeRef.current === "engaged") {
-        rafId = 0;
-        return;
-      }
-      if (!audio.paused && !document.hidden)
+      if (!audio.paused && !document.hidden) {
         rafId = requestAnimationFrame(tick);
+      }
     };
     const onPlay = () => {
       if (!rafId) rafId = requestAnimationFrame(tick);
@@ -542,10 +513,6 @@ export function LyricDanceEmbed({
     };
   }, [player]);
 
-  useEffect(() => {
-    engagementModeRef.current = engagementMode;
-  }, [engagementMode]);
-
   // ── Derived values ────────────────────────────────────────────────
   const durationSec = useMemo(() => {
     const lines = data?.lyrics ?? [];
@@ -560,56 +527,40 @@ export function LyricDanceEmbed({
     durationSec,
   );
 
-  const activeLine = useMemo(() => {
-    if (!lyricSections.isReady) return null;
-    const line =
-      engagementMode === "engaged" && frozenLineIndex != null
-        ? (lyricSections.allLines.find(
-            (l) => l.lineIndex === frozenLineIndex,
-          ) ?? null)
-        : (lyricSections.allLines.find(
-            (l) =>
-              currentTimeSec >= l.startSec && currentTimeSec < l.endSec + 0.1,
-          ) ?? null);
-    if (!line) return null;
-    const section =
-      lyricSections.sections.find((s) =>
-        s.lines.some((sl) => sl.lineIndex === line.lineIndex),
-      ) ?? null;
-    return {
-      text: line.text,
-      lineIndex: line.lineIndex,
-      sectionLabel: section?.label ?? null,
-    };
-  }, [lyricSections, currentTimeSec, engagementMode, frozenLineIndex]);
+  const {
+    reactionPanelOpen: panelFromHook,
+    setReactionPanelOpen,
+    engagementMode,
+    frozenLineIndex,
+    reactionData,
+    setReactionData,
+    activeLine,
+    audioSections,
+    palette,
+    handleEngagementStart,
+    handlePanelClose,
+    handleResetEngagement,
+  } = useReactionPanel({
+    player,
+    lyricSections,
+    currentTimeSec,
+    data,
+    durationSec,
+    onPanelClose: closePanel,
+  });
+
+  useEffect(() => {
+    if (isControlled) {
+      setReactionPanelOpen(Boolean(externalPanelOpen));
+      return;
+    }
+    setReactionPanelOpen(internalPanelOpen);
+  }, [isControlled, externalPanelOpen, internalPanelOpen, setReactionPanelOpen]);
+
+  const reactionPanelOpen = panelFromHook;
 
   const activeLineRef = useRef(activeLine);
   activeLineRef.current = activeLine;
-
-  const audioSections = useMemo<CanonicalAudioSection[]>(() => {
-    const sections = data?.cinematic_direction?.sections;
-    if (!Array.isArray(sections) || !sections.length || !durationSec) return [];
-    return sections
-      .map((s: any, i: number): CanonicalAudioSection | null => {
-        const start = Number(s?.startRatio);
-        const end = Number(s?.endRatio);
-        if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-        return {
-          sectionIndex: Number.isFinite(Number(s?.sectionIndex))
-            ? Number(s.sectionIndex)
-            : i,
-          startSec: start * durationSec,
-          endSec: end * durationSec,
-          role: s?.mood ?? null,
-        };
-      })
-      .filter((s): s is CanonicalAudioSection => s != null);
-  }, [data?.cinematic_direction?.sections, durationSec]);
-
-  const palette = useMemo(
-    () => (Array.isArray(data?.palette) ? (data!.palette as string[]) : []),
-    [data?.palette],
-  );
 
   const topReaction = useMemo(
     () => computeTopReaction(reactionData, data?.lyrics ?? []),
@@ -617,38 +568,6 @@ export function LyricDanceEmbed({
   );
 
   const isWaiting = loading || !fetchedData;
-
-  // ── Engagement handlers ────────────────────────────────────────────
-  const handleEngagementStart = useCallback(
-    (targetLineIndex?: number) => {
-      if (!player) return;
-      if (engagementModeRef.current === "engaged") {
-        if (targetLineIndex != null) setFrozenLineIndex(targetLineIndex);
-        return;
-      }
-      const t = player.audio.currentTime;
-      const liveLine = lyricSections.allLines.find(
-        (l) => t >= l.startSec && t < l.endSec + 0.1,
-      );
-      if (targetLineIndex != null) setFrozenLineIndex(targetLineIndex);
-      else if (liveLine) setFrozenLineIndex(liveLine.lineIndex);
-      freezeAtSecRef.current = liveLine?.endSec ?? t;
-      setEngagementMode("freezing");
-    },
-    [player, lyricSections.allLines],
-  );
-
-  const handlePanelClose = useCallback(() => {
-    closePanel();
-    freezeAtSecRef.current = null;
-    engagementModeRef.current = "spectator";
-    setEngagementMode("spectator");
-    setFrozenLineIndex(null);
-    if (!player || player.audio.ended) return;
-    try {
-      player.play();
-    } catch {}
-  }, [player, closePanel]);
 
   const toggleMute = useCallback(
     (e: React.MouseEvent) => {
@@ -850,11 +769,7 @@ export function LyricDanceEmbed({
           engagementMode={engagementMode}
           frozenLineIndex={frozenLineIndex}
           onEngagementStart={handleEngagementStart}
-          onResetEngagement={() => {
-            setEngagementMode("spectator");
-            setFrozenLineIndex(null);
-            freezeAtSecRef.current = null;
-          }}
+          onResetEngagement={handleResetEngagement}
         />
       )}
     </div>
