@@ -566,6 +566,9 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   };
 
   const displayLine = allLines.find(line => line.lineIndex === displayLineIndex) ?? null;
+  const displaySectionLabel = displayLine?.lineIndex != null
+    ? (sectionMeta.labelByLineIndex.get(displayLine.lineIndex) ?? null)
+    : null;
   const handlePanelClose = () => {
     if (replyingTo) setReplyingTo(null);
     else onClose();
@@ -576,7 +579,18 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
   return (
     <PanelShell isOpen={isOpen} variant={displayMode}>
-      <div className="shrink-0 flex items-center justify-center gap-3 px-4 py-2 border-b border-white/[0.05]">
+      <div className="shrink-0 px-4 pt-3 pb-2 border-b border-white/[0.05]">
+        {displaySectionLabel && (
+          <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-white/25 mb-1">
+            {displaySectionLabel}
+          </p>
+        )}
+        <p className="text-[13px] font-light leading-relaxed text-white/85">
+          {displayLine?.text ?? '...'}
+        </p>
+      </div>
+
+      <div className="shrink-0 flex items-center justify-center gap-3 px-4 py-2">
         {EMOJIS.map(({ key, symbol, label }) => {
           const targetIdx = displayLine?.lineIndex ?? allLines[0]?.lineIndex;
           const count = targetIdx != null ? (reactionData[key]?.line[targetIdx] ?? 0) : 0;
@@ -606,31 +620,29 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         })}
       </div>
 
-      {!hideInput && (
-        <div
-          className="shrink-0 mx-3 my-2"
-          style={{
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.09)',
-            borderRadius: '8px',
-            padding: '8px 12px',
+      <div
+        className="shrink-0 mx-3 my-2"
+        style={{
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.09)',
+          borderRadius: '8px',
+          padding: '8px 12px',
+        }}
+      >
+        <input
+          className="w-full bg-transparent text-[11px] font-mono text-white placeholder:text-white/35 outline-none"
+          placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
+          value={textInput}
+          onChange={(event) => setTextInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              handleTextSubmit();
+            }
           }}
-        >
-          <input
-            className="w-full bg-transparent text-[11px] font-mono text-white placeholder:text-white/35 outline-none"
-            placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
-            value={textInput}
-            onChange={(event) => setTextInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                handleTextSubmit();
-              }
-            }}
-            onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
-          />
-        </div>
-      )}
+          onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
+        />
+      </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0" style={{ scrollbarWidth: 'none' }}>
         <div className="pb-2">
@@ -819,62 +831,72 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
       </div>
 
       <div
-        className="shrink-0 flex items-center"
-        style={{
-          height: 40,
-          background: '#0a0a0a',
-          borderTop: '0.5px solid rgba(255,255,255,0.06)',
-        }}
+        className="shrink-0 flex items-stretch"
+        style={{ height: 48, background: '#0a0a0a', borderTop: '0.5px solid rgba(255,255,255,0.06)' }}
       >
         <button
           onClick={onVoteYes}
-          className="flex-1 h-full flex items-center justify-center gap-1.5 text-[10px] font-mono tracking-[0.14em] uppercase"
-          style={{
-            color: votedSide === null
-              ? 'rgba(255,255,255,1)'
-              : votedSide === 'a'
-                ? voteAccent
-                : 'rgba(255,255,255,0.22)',
-          }}
+          className="flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors"
         >
-          <span>Run it back</span>
-          {runItBackCount > 0 && <span className="text-[9px] opacity-50">{runItBackCount}</span>}
+          <span
+            className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
+            style={{
+              color: votedSide === null ? 'rgba(255,255,255,1)'
+                : votedSide === 'a' ? voteAccent
+                : 'rgba(255,255,255,0.22)',
+            }}
+          >
+            Run it back
+          </span>
+          {runItBackCount > 0 && (
+            <span className="text-[9px] font-mono text-white/25">{runItBackCount}</span>
+          )}
         </button>
-        <div className="w-[0.5px] bg-white/[0.06] self-stretch my-2" />
+
+        <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
+
         <button
           onClick={onVoteNo}
-          className="flex-1 h-full flex items-center justify-center gap-1.5 text-[10px] font-mono tracking-[0.14em] uppercase"
-          style={{
-            color: votedSide === null
-              ? 'rgba(255,255,255,1)'
-              : votedSide === 'b'
-                ? voteAccent
+          className="flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors"
+        >
+          <span
+            className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
+            style={{
+              color: votedSide === null ? 'rgba(255,255,255,1)'
+                : votedSide === 'b' ? voteAccent
                 : 'rgba(255,255,255,0.22)',
-          }}
-        >
-          <span>Not for me</span>
-          {notForMeCount > 0 && <span className="text-[9px] opacity-50">{notForMeCount}</span>}
+            }}
+          >
+            Not for me
+          </span>
+          {notForMeCount > 0 && (
+            <span className="text-[9px] font-mono text-white/25">{notForMeCount}</span>
+          )}
         </button>
-        <div className="w-[0.5px] bg-white/[0.06] self-stretch my-2" />
-        <button
-          onClick={() => {
-            releaseManualSelectionLock();
-            setAutoFollowEnabled(true);
-            setRepeatMode(false);
-            onResetEngagement?.();
-            player?.setMuted(false);
-            player?.seek(0);
-            player?.play();
-          }}
-          className="px-3 h-full flex items-center text-[16px] text-white/25 hover:text-white/65 transition-colors"
-          aria-label="Replay"
-        >
-          ↺
-        </button>
-        <div className="w-[0.5px] bg-white/[0.06] self-stretch my-2" />
-        <button onClick={handlePanelClose} className="px-3 h-full flex items-center shrink-0" aria-label="Close panel">
-          <X size={13} className="text-white/30 hover:text-white/60 transition-colors" />
-        </button>
+
+        <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
+
+        <div className="flex items-center shrink-0 px-3 gap-2">
+          <button
+            onClick={() => {
+              releaseManualSelectionLock();
+              setAutoFollowEnabled(true);
+              setRepeatMode(false);
+              onResetEngagement?.();
+              player?.setMuted(false);
+              player?.seek(0);
+              player?.play();
+            }}
+            className="text-[15px] text-white/25 hover:text-white/65 transition-colors"
+            aria-label="Replay"
+          >
+            ↺
+          </button>
+          <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
+          <button onClick={handlePanelClose} aria-label="Close">
+            <X size={13} className="text-white/30 hover:text-white/60 transition-colors" />
+          </button>
+        </div>
       </div>
     </PanelShell>
   );

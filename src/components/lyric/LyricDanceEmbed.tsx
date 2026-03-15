@@ -773,62 +773,62 @@ export function LyricDanceEmbed({
       )}
 
       {/* Bottom bar — progress + now-playing chip + React button */}
-      <div
-        className={`absolute bottom-0 left-0 right-0 ${reactionPanelOpen ? "z-[500]" : "z-[300]"}`}
-        style={{ background: "#0a0a0a" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Progress bar — hidden when reaction panel open (active line is the signal) */}
-        {!reactionPanelOpen && !effectiveShowCover && !isWaiting && (
-          <div
-            className="w-full h-1 cursor-pointer"
-            style={{ background: "rgba(255,255,255,0.05)" }}
-            onClick={(e) => {
-              if (!player || !data?.lyrics) return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              const ratio = Math.max(
-                0,
-                Math.min(1, (e.clientX - rect.left) / rect.width),
-              );
-              const lines = data.lyrics;
-              const start = Math.max(0, (lines[0] as any).start - 0.5);
-              const end = (lines[lines.length - 1] as any).end + 1;
-              player.seek(start + ratio * (end - start));
-            }}
-          >
+      {!reactionPanelOpen && (
+        <div
+          className={`absolute bottom-0 left-0 right-0 ${reactionPanelOpen ? "z-[500]" : "z-[300]"}`}
+          style={{ background: "#0a0a0a" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {!effectiveShowCover && !isWaiting && (
             <div
-              className="h-full transition-none"
-              style={{
-                width: `${progress * 100}%`,
-                background: palette[1] ?? "rgba(255,255,255,0.35)",
-                opacity: 0.5,
+              className="w-full h-1 cursor-pointer"
+              style={{ background: "rgba(255,255,255,0.05)" }}
+              onClick={(e) => {
+                if (!player || !data?.lyrics) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const ratio = Math.max(
+                  0,
+                  Math.min(1, (e.clientX - rect.left) / rect.width),
+                );
+                const lines = data.lyrics;
+                const start = Math.max(0, (lines[0] as any).start - 0.5);
+                const end = (lines[lines.length - 1] as any).end + 1;
+                player.seek(start + ratio * (end - start));
               }}
-            />
-          </div>
-        )}
+            >
+              <div
+                className="h-full transition-none"
+                style={{
+                  width: `${progress * 100}%`,
+                  background: palette[1] ?? "rgba(255,255,255,0.35)",
+                  opacity: 0.5,
+                }}
+              />
+            </div>
+          )}
 
-        <CardBottomBar
-          variant="embedded"
-          votedSide={votedSide}
-          score={score}
-          note={note}
-          onNoteChange={setNote}
-          onVoteYes={() => handleVote(true)}
-          onVoteNo={() => handleVote(false)}
-          onSubmit={handleCommentFromBar}
-          onOpenReactions={handleOpenReactions}
-          onClose={closePanel}
-          panelOpen={reactionPanelOpen}
-          topReaction={topReaction ? { symbol: topReaction.symbol, count: topReaction.count } : null}
-        />
-      </div>
+          <CardBottomBar
+            variant="embedded"
+            votedSide={votedSide}
+            score={score}
+            note={note}
+            onNoteChange={setNote}
+            onVoteYes={() => handleVote(true)}
+            onVoteNo={() => handleVote(false)}
+            onSubmit={handleCommentFromBar}
+            onOpenReactions={handleOpenReactions}
+            onClose={closePanel}
+            panelOpen={reactionPanelOpen}
+            topReaction={topReaction ? { symbol: topReaction.symbol, count: topReaction.count } : null}
+          />
+        </div>
+      )}
 
       {/* Reaction panel */}
       {!disableReactionPanel && (
         <ReactionPanel
           displayMode="embedded"
           isOpen={reactionPanelOpen}
-          hideInput
           refreshKey={commentRefreshKey}
           onClose={handlePanelClose}
           votedSide={votedSide}
