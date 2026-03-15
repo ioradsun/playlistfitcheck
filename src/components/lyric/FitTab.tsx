@@ -303,6 +303,8 @@ export function FitTab({
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const rafRef = useRef<number | null>(null);
+  const parentWaveformRef = useRef(parentWaveform);
+  parentWaveformRef.current = parentWaveform;
 
   useEffect(() => {
     if (!audioFile || audioFile.size === 0) return;
@@ -323,7 +325,7 @@ export function FitTab({
     audio.addEventListener("ended", onEnded);
 
     // Only decode locally if parent didn't provide waveform
-    if (!parentWaveform) {
+    if (!parentWaveformRef.current) {
       const ctx = new AudioContext();
       audioFile.arrayBuffer().then((ab) => {
         ctx.decodeAudioData(ab).then((buf) => {
@@ -342,7 +344,9 @@ export function FitTab({
       URL.revokeObjectURL(url);
       audioRef.current = null;
     };
-  }, [audioFile, parentWaveform]);
+    // parentWaveform intentionally read from ref — avoids re-creating Audio + blob on waveform updates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioFile]);
 
   useEffect(() => {
     if (!isPlaying) {
