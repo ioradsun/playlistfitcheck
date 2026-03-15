@@ -599,6 +599,7 @@ export default function ShareableLyricDance() {
                   setShowCover(false);
                   playerRef.current?.setMuted(false);
                   playerRef.current?.seek(0);
+                  playerRef.current?.play();
                   setMuted(false);
                 }}
               />
