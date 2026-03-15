@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import SpotifyArtistInput from "@/components/SpotifyArtistInput";
 import LyricVideoSection from "@/components/lyric/LyricVideoSection";
+import ClaimBanner from "@/components/claim/ClaimBanner";
 
 function hexToRgb(hex: string) {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -18,6 +19,7 @@ export default function ArtistClaimPage() {
   const [fallback, setFallback] = useState<{
     profileId: string;
     accentRgb: string;
+    accentHex: string;
     albumArtUrl: string | null;
     artistName: string;
     trackTitle: string;
@@ -77,6 +79,7 @@ export default function ArtistClaimPage() {
       setFallback({
         profileId,
         accentRgb: `${r}, ${g}, ${b}`,
+        accentHex: accent,
         albumArtUrl: vid?.album_art_url ?? null,
         artistName: vid?.artist_name ?? username,
         trackTitle: vid?.track_title ?? "",
@@ -112,7 +115,7 @@ export default function ArtistClaimPage() {
   }
 
   // Fallback: no lyric dance yet — show simple player with claim CTA
-  const { profileId, accentRgb, albumArtUrl, artistName, trackTitle } = fallback;
+  const { profileId, accentRgb, accentHex, albumArtUrl, artistName, trackTitle } = fallback;
   return (
     <div className="fixed inset-0 bg-[#0a0a0a] overflow-y-auto">
       {albumArtUrl && (
@@ -121,8 +124,13 @@ export default function ArtistClaimPage() {
         </div>
       )}
       <div className="relative z-10 min-h-full flex flex-col px-5 py-6 max-w-2xl mx-auto text-white">
+        <ClaimBanner
+          artistSlug={username}
+          accent={accentHex}
+        />
+
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 mt-6">
           <div className="flex items-center gap-3 min-w-0">
             {albumArtUrl && (
               <img src={albumArtUrl} className="h-10 w-10 rounded-lg object-cover border border-white/20 flex-shrink-0" />
@@ -134,18 +142,6 @@ export default function ArtistClaimPage() {
               )}
             </div>
           </div>
-          <button
-            onClick={() => navigate("/auth", {
-              state: { claimSlug: username, returnTab: "CrowdFit" }
-            })}
-            className="flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold text-white ml-4"
-            style={{
-              background: "linear-gradient(135deg, #a855f7, #ec4899)",
-              boxShadow: "0 0 16px rgba(168,85,247,0.3)",
-            }}
-          >
-            Claim free →
-          </button>
         </div>
 
         {/* Simple lyric player takes remaining space */}
