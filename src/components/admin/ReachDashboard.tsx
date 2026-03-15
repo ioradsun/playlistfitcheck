@@ -339,6 +339,7 @@ export function ReachDashboard({ rows, activeJobSlug = null, onRefresh }: Props)
               <th className="p-3">Track</th>
               <th className="p-3">Slug</th>
               <th className="p-3">Duration</th>
+              <th className="p-3">Beat</th>
               <th className="p-3 text-right">Timeline</th>
             </tr>
           </thead>
