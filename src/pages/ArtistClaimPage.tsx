@@ -161,7 +161,7 @@ export default function ArtistClaimPage() {
         {lyricMeta?.lyric_dance_url ? (
           <div className="rounded-xl overflow-hidden border border-white/10 aspect-[9/16] max-h-[70vh]">
             <iframe
-              src={lyricMeta.lyric_dance_url}
+              src={`${lyricMeta.lyric_dance_url}${lyricMeta.lyric_dance_url?.includes('?') ? '&' : '?'}from=claim`}
               className="w-full h-full"
               allow="autoplay"
             />

@@ -8,7 +8,7 @@
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -163,7 +163,8 @@ const ProgressBar = React.forwardRef<HTMLDivElement, {
 export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
-
+  const [searchParams] = useSearchParams();
+  const isMarketingView = searchParams.get("from") === "claim";
 
   const [data, setDataRaw] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -519,7 +520,45 @@ export default function ShareableLyricDance() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
-      {/* Close button removed — nothing to close */}
+      {isMarketingView && (
+        <div
+          className="flex-shrink-0 w-full px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3"
+          style={{
+            background: "rgba(10,10,10,0.95)",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div className="text-center sm:text-left min-w-0">
+            <p className="text-white/90 text-xs sm:text-sm font-medium leading-snug">
+              This isn't a platform. It's a{" "}
+              <span className="text-primary font-semibold">FMLY.</span>
+              {" "}Artists creating tools for artists.
+            </p>
+            <p className="text-white/40 text-[11px] sm:text-xs mt-0.5">
+              Preview your lyric video for{" "}
+              <span className="text-white/70 font-medium">"{data?.song_name}"</span>
+              {" "}— generated in one click.
+              {" "}Join the movement. Free forever.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/auth", {
+              state: {
+                claimSlug: artistSlug,
+                returnTab: "CrowdFit",
+              }
+            })}
+            className="flex-shrink-0 px-4 py-2 rounded-full text-xs sm:text-sm font-semibold text-white transition-all active:scale-95 whitespace-nowrap"
+            style={{
+              background: "linear-gradient(135deg, #a855f7, #ec4899)",
+              boxShadow: "0 0 20px rgba(168,85,247,0.35)",
+            }}
+          >
+            Claim Your Free Artist Account →
+          </button>
+        </div>
+      )}
 
 
       {/* Badge */}
