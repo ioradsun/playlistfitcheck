@@ -177,7 +177,22 @@ const Auth = () => {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         localStorage.setItem("tfm_has_account", "1");
-        navigate("/", { state: { returnTab } });
+        if (claimSlug && claimToken) {
+          const userId = (await supabase.auth.getUser()).data.user?.id;
+          await supabase
+            .from("profiles")
+            .update({ 
+              is_claimed: true,
+            })
+            .eq("spotify_artist_slug", claimSlug)
+            .eq("claim_token", claimToken)
+            .eq("is_claimed", false);
+          navigate(`/artist/${claimSlug}/claim-page`, { 
+            state: { justClaimed: true } 
+          });
+        } else {
+          navigate("/", { state: { returnTab } });
+        }
       }
     } catch (err: any) {
       toast.error(err.message);
