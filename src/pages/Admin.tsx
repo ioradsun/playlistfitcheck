@@ -19,25 +19,9 @@ const PendingVerifications = lazy(() => import("@/components/admin/PendingVerifi
 const ToolsEditor = lazy(() => import("@/components/admin/ToolsEditor").then((m) => ({ default: m.ToolsEditor })));
 const FmlyArtists = lazy(() => import("@/components/admin/FmlyArtists").then((m) => ({ default: m.FmlyArtists })));
 const GlobalCssEditor = lazy(() => import("@/components/admin/GlobalCssEditor").then((m) => ({ default: m.GlobalCssEditor })));
-const ReachDashboardWrapper = lazy(() =>
+const ReachDashboard = lazy(() =>
   import("@/components/admin/ReachDashboard").then((m) => ({
-    default: function ReachWrap() {
-      const [rows, setRows] = useState<{ spotify_artist_slug: string; artist_name: string; track_title: string }[]>([]);
-      useEffect(() => {
-        (async () => {
-          const { data } = await (supabase as any).from("artist_lyric_videos").select("user_id, artist_name, track_title").order("created_at", { ascending: false });
-          if (!data) return;
-          const userIds = [...new Set((data as any[]).map((d: any) => d.user_id))];
-          if (!userIds.length) return;
-          const { data: profiles } = await (supabase as any).from("profiles").select("id, spotify_artist_slug").in("id", userIds);
-          const slugMap = new Map((profiles || []).map((p: any) => [p.id, p.spotify_artist_slug]));
-          setRows((data as any[]).filter((d: any) => slugMap.get(d.user_id)).map((d: any) => ({
-            spotify_artist_slug: slugMap.get(d.user_id) as string, artist_name: d.artist_name as string, track_title: d.track_title as string,
-          })));
-        })();
-      }, []);
-      return <m.ReachDashboard rows={rows} />;
-    },
+    default: m.ReachDashboard,
   }))
 );
 
