@@ -737,32 +737,41 @@ export type Database = {
       }
       notifications: {
         Row: {
-          actor_user_id: string
+          actor_user_id: string | null
           comment_id: string | null
           created_at: string
+          dance_id: string | null
           id: string
           is_read: boolean
+          metadata: Json | null
           post_id: string | null
+          source: string | null
           type: string
           user_id: string
         }
         Insert: {
-          actor_user_id: string
+          actor_user_id?: string | null
           comment_id?: string | null
           created_at?: string
+          dance_id?: string | null
           id?: string
           is_read?: boolean
+          metadata?: Json | null
           post_id?: string | null
+          source?: string | null
           type: string
           user_id: string
         }
         Update: {
-          actor_user_id?: string
+          actor_user_id?: string | null
           comment_id?: string | null
           created_at?: string
+          dance_id?: string | null
           id?: string
           is_read?: boolean
+          metadata?: Json | null
           post_id?: string | null
+          source?: string | null
           type?: string
           user_id?: string
         }
@@ -779,6 +788,13 @@ export type Database = {
             columns: ["comment_id"]
             isOneToOne: false
             referencedRelation: "songfit_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_dance_id_fkey"
+            columns: ["dance_id"]
+            isOneToOne: false
+            referencedRelation: "shareable_lyric_dances"
             referencedColumns: ["id"]
           },
           {

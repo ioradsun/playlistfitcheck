@@ -16,6 +16,7 @@ import Index from "./pages/Index";
 import About from "./pages/About";
 
 import { FitWidget } from "@/components/FitWidget";
+import { SignalsPanel } from "@/components/signals/SignalsPanel";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import PublicProfile from "./pages/PublicProfile";
@@ -123,6 +124,11 @@ const App = () => (
                     />
                     <Route path="/auth" element={<PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout>} />
                     <Route path="/terms" element={<PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout>} />
+                    <Route path="/Signals" element={
+                      <PageLayout title="Signals" subtitle="What your music is doing right now">
+                        <SignalsPanel />
+                      </PageLayout>
+                    } />
                     <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
                     <Route path="/reset-password" element={<PageLayout title="Reset Password"><ResetPassword /></PageLayout>} />
                     <Route path="/u/:userId" element={<PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout>} />
