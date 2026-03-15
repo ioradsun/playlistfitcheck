@@ -70,9 +70,13 @@ const Auth = () => {
           .catch(console.error);
       }
       if (claimSlug && claimToken) {
-        supabase
-          .from("profiles")
-          .update({ is_claimed: true })
+        (supabase as any)
+          .from("ghost_artist_profiles")
+          .update({
+            is_claimed: true,
+            claimed_by_user_id: user.id,
+            claimed_at: new Date().toISOString(),
+          })
           .eq("spotify_artist_slug", claimSlug)
           .eq("claim_token", claimToken)
           .eq("is_claimed", false)
@@ -193,10 +197,12 @@ const Auth = () => {
         localStorage.setItem("tfm_has_account", "1");
         if (claimSlug && claimToken) {
           const userId = (await supabase.auth.getUser()).data.user?.id;
-          await supabase
-            .from("profiles")
-            .update({ 
+          await (supabase as any)
+            .from("ghost_artist_profiles")
+            .update({
               is_claimed: true,
+              claimed_by_user_id: userId,
+              claimed_at: new Date().toISOString(),
             })
             .eq("spotify_artist_slug", claimSlug)
             .eq("claim_token", claimToken)

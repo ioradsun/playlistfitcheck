@@ -10,6 +10,9 @@ type StepName =
   | "assemblyai_submit"
   | "assemblyai_poll"
   | "lyric_video_save"
+  | "lyric_dance_mp3"
+  | "lyric_dance_cinematic"
+  | "lyric_dance_save"
   | "complete";
 
 const STEP_ORDER: StepName[] = [
@@ -19,6 +22,9 @@ const STEP_ORDER: StepName[] = [
   "assemblyai_submit",
   "assemblyai_poll",
   "lyric_video_save",
+  "lyric_dance_mp3",
+  "lyric_dance_cinematic",
+  "lyric_dance_save",
   "complete",
 ];
 

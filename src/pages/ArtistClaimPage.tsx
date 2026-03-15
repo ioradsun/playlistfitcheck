@@ -24,6 +24,7 @@ type LyricMeta = {
   artist_name: string;
   album_art_url: string | null;
   preview_url: string | null;
+  lyric_dance_url: string | null;
 };
 
 export default function ArtistClaimPage() {
@@ -59,7 +60,7 @@ export default function ArtistClaimPage() {
     setLoading(true);
     (async () => {
       const { data: p } = await (supabase as any)
-        .from("profiles")
+        .from("ghost_artist_profiles")
         .select("id, display_name, claim_token")
         .eq("spotify_artist_slug", username)
         .eq("is_claimed", false)
@@ -76,22 +77,14 @@ export default function ArtistClaimPage() {
       setLyricVideoUserId(p.id);
       setNotFound(false);
 
-      const [{ data: page }, { data: latestVideo }] = await Promise.all([
-        (supabase as any)
-          .from("artist_pages")
-          .select("accent_color")
-          .eq("user_id", p.id)
-          .maybeSingle(),
-        (supabase as any)
-          .from("artist_lyric_videos")
-          .select("track_title, artist_name, album_art_url, preview_url")
-          .eq("user_id", p.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
+      const { data: latestVideo } = await (supabase as any)
+        .from("artist_lyric_videos")
+        .select("track_title, artist_name, album_art_url, preview_url, lyric_dance_url")
+        .eq("ghost_profile_id", p.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      setAccentColor(page?.accent_color ?? "#a855f7");
       setLyricMeta(latestVideo ?? null);
       setLoading(false);
     })();
@@ -165,7 +158,17 @@ export default function ArtistClaimPage() {
           </div>
         </div>
 
-        {lyricVideoUserId && <LyricVideoSection userId={lyricVideoUserId} accentRgb={accentRgb} />}
+        {lyricMeta?.lyric_dance_url ? (
+          <div className="rounded-xl overflow-hidden border border-white/10 aspect-[9/16] max-h-[70vh]">
+            <iframe
+              src={lyricMeta.lyric_dance_url}
+              className="w-full h-full"
+              allow="autoplay"
+            />
+          </div>
+        ) : lyricVideoUserId ? (
+          <LyricVideoSection userId={lyricVideoUserId} accentRgb={accentRgb} />
+        ) : null}
 
         <div className="border-t border-white/10 mt-8 pt-7">
           {justClaimed ? (
