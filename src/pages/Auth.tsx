@@ -54,6 +54,8 @@ const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const returnTab = (location.state as any)?.returnTab;
+  const claimSlug = (location.state as any)?.claimSlug ?? null;
+  const claimToken = (location.state as any)?.claimToken ?? null;
 
   useEffect(() => {
     if (user) {
@@ -67,9 +69,23 @@ const Auth = () => {
           })
           .catch(console.error);
       }
-      navigate("/", { state: { returnTab } });
+      if (claimSlug && claimToken) {
+        supabase
+          .from("profiles")
+          .update({ is_claimed: true })
+          .eq("spotify_artist_slug", claimSlug)
+          .eq("claim_token", claimToken)
+          .eq("is_claimed", false)
+          .then(() => {
+            navigate(`/artist/${claimSlug}/claim-page`, { 
+              state: { justClaimed: true } 
+            });
+          });
+      } else {
+        navigate("/", { state: { returnTab } });
+      }
     }
-  }, [user, navigate, returnTab, refCode]);
+  }, [user, navigate, returnTab, refCode, claimSlug, claimToken]);
 
   // Auto-focus email after artist is selected
   useEffect(() => {
@@ -175,7 +191,22 @@ const Auth = () => {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         localStorage.setItem("tfm_has_account", "1");
-        navigate("/", { state: { returnTab } });
+        if (claimSlug && claimToken) {
+          const userId = (await supabase.auth.getUser()).data.user?.id;
+          await supabase
+            .from("profiles")
+            .update({ 
+              is_claimed: true,
+            })
+            .eq("spotify_artist_slug", claimSlug)
+            .eq("claim_token", claimToken)
+            .eq("is_claimed", false);
+          navigate(`/artist/${claimSlug}/claim-page`, { 
+            state: { justClaimed: true } 
+          });
+        } else {
+          navigate("/", { state: { returnTab } });
+        }
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -276,6 +307,17 @@ const Auth = () => {
       <Card className="w-full glass-card border-border">
         {!checkEmail && (
           <CardHeader className="text-center pb-2">
+            {claimSlug && (
+              <div className="mb-4 p-3 rounded-xl bg-primary/10 border border-primary/20 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  Claiming your artist page
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Sign up or sign in to own
+                  <span className="font-mono text-primary"> tools.fm/artist/{claimSlug}</span>
+                </p>
+              </div>
+            )}
             <div className="mx-auto mb-2 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
               <Music className="text-primary" size={24} />
             </div>

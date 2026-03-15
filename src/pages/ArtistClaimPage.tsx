@@ -1,6 +1,6 @@
 import { ChevronLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import SpotifyArtistInput from "@/components/SpotifyArtistInput";
 import LyricVideoSection from "@/components/lyric/LyricVideoSection";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,7 @@ function hexToRgb(hex: string) {
 type ClaimProfile = {
   id: string;
   display_name: string | null;
+  claim_token: string | null;
 };
 
 type LyricMeta = {
@@ -28,7 +29,9 @@ type LyricMeta = {
 export default function ArtistClaimPage() {
   const { username } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+
+  const justClaimed = (location.state as any)?.justClaimed ?? false;
 
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<ClaimProfile | null>(null);
@@ -37,10 +40,6 @@ export default function ArtistClaimPage() {
   const [lyricMeta, setLyricMeta] = useState<LyricMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [claimEmail, setClaimEmail] = useState("");
-  const [claimSending, setClaimSending] = useState(false);
-  const [claimSent, setClaimSent] = useState(false);
-  const [justClaimed, setJustClaimed] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
@@ -61,7 +60,7 @@ export default function ArtistClaimPage() {
     (async () => {
       const { data: p } = await (supabase as any)
         .from("profiles")
-        .select("id, display_name")
+        .select("id, display_name, claim_token")
         .eq("spotify_artist_slug", username)
         .eq("is_claimed", false)
         .maybeSingle();
@@ -98,37 +97,10 @@ export default function ArtistClaimPage() {
     })();
   }, [username]);
 
-  useEffect(() => {
-    if (searchParams.get("claimed") !== "true") return;
-    if (!user || !profile || !username) return;
-
-    (supabase as any)
-      .from("profiles")
-      .update({ is_claimed: true })
-      .eq("spotify_artist_slug", username)
-      .eq("is_claimed", false)
-      .then(() => {
-        setJustClaimed(true);
-        navigate(`/artist/${username}/claim-page`, { replace: true });
-      });
-  }, [searchParams, user, profile, username, navigate]);
-
   const accentRgb = useMemo(() => {
     const rgb = hexToRgb(accentColor);
     return `${rgb.r}, ${rgb.g}, ${rgb.b}`;
   }, [accentColor]);
-
-  const handleSendClaim = async () => {
-    if (!claimEmail.trim() || !username) return;
-    setClaimSending(true);
-    const redirectTo = `${window.location.origin}/artist/${username}/claim-page?claimed=true`;
-    const { error } = await supabase.auth.signInWithOtp({
-      email: claimEmail.trim(),
-      options: { emailRedirectTo: redirectTo },
-    });
-    setClaimSending(false);
-    if (!error) setClaimSent(true);
-  };
 
   if (loading) {
     return <div className="fixed inset-0 bg-[#0a0a0a] flex items-center justify-center text-white/40">Loading…</div>;
@@ -188,7 +160,7 @@ export default function ArtistClaimPage() {
           )}
           <div>
             <p className="text-xl font-semibold">{profile?.display_name ?? lyricMeta?.artist_name ?? username}</p>
-            {lyricMeta?.track_title && <p className="text-white/70 text-sm">“{lyricMeta.track_title}”</p>}
+            {lyricMeta?.track_title && <p className="text-white/70 text-sm">"{lyricMeta.track_title}"</p>}
             <p className="text-white/50 text-xs">30-sec preview</p>
           </div>
         </div>
@@ -196,45 +168,43 @@ export default function ArtistClaimPage() {
         {lyricVideoUserId && <LyricVideoSection userId={lyricVideoUserId} accentRgb={accentRgb} />}
 
         <div className="border-t border-white/10 mt-8 pt-7">
-          {!justClaimed ? (
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold">Is this your music?</h2>
-              <p className="text-white/55 text-sm">Verify your email to own this page.</p>
-
-              {!claimSent ? (
-                <>
-                  <input
-                    type="email"
-                    value={claimEmail}
-                    onChange={(e) => setClaimEmail(e.target.value)}
-                    placeholder="artist@email.com"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm"
-                  />
-                  <button
-                    onClick={handleSendClaim}
-                    disabled={claimSending}
-                    className="rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40"
-                    style={{ backgroundColor: accentColor }}
-                  >
-                    {claimSending ? "Sending..." : "Send magic link"}
-                  </button>
-                </>
-              ) : (
-                <p className="text-sm font-medium" style={{ color: accentColor }}>
-                  ✓ Check your email for the magic link
-                </p>
-              )}
+          {justClaimed ? (
+            <div className="text-center space-y-4 py-8">
+              <p className="text-2xl">✦</p>
+              <p className="text-white font-semibold text-lg">Page claimed.</p>
+              <p className="text-white/40 text-sm">
+                This page is now yours.
+              </p>
+              <button
+                onClick={() => navigate(`/artist/${username}`)}
+                className="px-6 py-2.5 rounded-full text-sm font-semibold text-white border border-white/20 hover:border-white/40 transition-colors"
+              >
+                Go to your artist page →
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
-              <h2 className="text-lg font-semibold">✦ Page claimed</h2>
+              <h2 className="text-lg font-semibold">Is this your music?</h2>
+              <p className="text-white/55 text-sm">Create a free account to own this page.</p>
               <button
-                className="rounded-xl px-5 py-3 text-sm font-semibold text-white"
-                style={{ backgroundColor: accentColor }}
-                onClick={() => navigate(`/artist/${username}`)}
+                onClick={() => navigate("/auth", {
+                  state: {
+                    claimSlug: username,
+                    claimToken: profile?.claim_token,
+                    returnTab: "CrowdFit",
+                  }
+                })}
+                className="w-full py-3 rounded-full font-semibold text-white transition-all active:scale-95"
+                style={{
+                  background: `rgb(${accentRgb})`,
+                  boxShadow: `0 0 20px rgba(${accentRgb}, 0.3)`,
+                }}
               >
-                Head to your artist page →
+                Claim this page →
               </button>
+              <p className="text-center text-xs text-white/30 mt-2">
+                Create a free account to own this page
+              </p>
             </div>
           )}
         </div>
