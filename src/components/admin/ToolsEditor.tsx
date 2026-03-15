@@ -20,7 +20,7 @@ const ALL_TOOLS = [
 const DEFAULT_ORDER = ALL_TOOLS.map(t => t.key);
 
 // ── LyricFit pipeline model types ─────────────────────────────────────────────
-type TranscriptionModel = "scribe" | "gemini";
+type TranscriptionModel = "scribe" | "gemini" | "assemblyai";
 type AnalysisModel =
   | "google/gemini-3-flash-preview"
   | "google/gemini-2.5-flash"
@@ -176,7 +176,7 @@ export function ToolsEditor() {
           tools_enabled,
           tools_order: merged,
           crowdfit_mode: f.crowdfit_mode ?? "reactions",
-          lyric_transcription_model: f.lyric_transcription_model === "gemini" ? "gemini" : "scribe",
+          lyric_transcription_model: (["scribe", "gemini", "assemblyai"].includes(f.lyric_transcription_model)) ? f.lyric_transcription_model : "scribe",
           lyric_analysis_model: f.lyric_analysis_model ?? f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
           lyric_video: f.lyric_video ?? false,
           hookfit_hottest_hooks: f.hookfit_hottest_hooks ?? true,
@@ -257,7 +257,12 @@ export function ToolsEditor() {
     setSavingKey("lyric_transcription");
     try {
       await patchFeatures({ lyric_transcription_model: model });
-      toast.success(model === "scribe" ? "Transcription → ElevenLabs Scribe" : "Transcription → Gemini (audio-only)");
+      const labels: Record<TranscriptionModel, string> = {
+        scribe: "Transcription → ElevenLabs Scribe",
+        gemini: "Transcription → Gemini (audio-only)",
+        assemblyai: "Transcription → AssemblyAI",
+      };
+      toast.success(labels[model]);
     } catch {
       setFeatures(f => ({ ...f, lyric_transcription_model: prev }));
       toast.error("Failed to update");
@@ -406,11 +411,18 @@ export function ToolsEditor() {
             badge="recommended"
           />
           <RadioOption
+            active={features.lyric_transcription_model === "assemblyai"}
+            disabled={savingKey === "lyric_transcription"}
+            onClick={() => setTranscriptionModel("assemblyai")}
+            title="AssemblyAI"
+            desc="Word-level timestamps, language detection, high accuracy. Requires ASSEMBLYAI_API_KEY."
+          />
+          <RadioOption
             active={features.lyric_transcription_model === "gemini"}
             disabled={savingKey === "lyric_transcription"}
             onClick={() => setTranscriptionModel("gemini")}
             title="Gemini (audio-only)"
-            desc="No ElevenLabs dependency. Gemini handles timestamps — less precise but zero extra API keys."
+            desc="No external API dependency. Gemini handles timestamps — less precise but zero extra API keys."
           />
         </div>
 

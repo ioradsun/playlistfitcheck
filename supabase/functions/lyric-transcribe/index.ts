@@ -101,6 +101,100 @@ async function runScribe(
   return { words, segments, rawText, duration };
 }
 
+// ── AssemblyAI: word-level transcription with polling ─────────────────────────
+async function runAssemblyAI(
+  audioBytes: Uint8Array,
+  ext: string,
+  mimeType: string,
+  apiKey: string
+): Promise<{
+  words: WhisperWord[];
+  segments: Array<{ start: number; end: number; text: string }>;
+  rawText: string;
+  duration: number;
+}> {
+  // Step 1: Upload audio
+  const uploadRes = await fetch("https://api.assemblyai.com/v2/upload", {
+    method: "POST",
+    headers: {
+      authorization: apiKey,
+      "content-type": "application/octet-stream",
+    },
+    body: audioBytes,
+  });
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text();
+    throw new Error(`AssemblyAI upload error ${uploadRes.status}: ${errText.slice(0, 300)}`);
+  }
+  const { upload_url } = await uploadRes.json();
+
+  // Step 2: Create transcript
+  const transcriptRes = await fetch("https://api.assemblyai.com/v2/transcript", {
+    method: "POST",
+    headers: {
+      authorization: apiKey,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      audio_url: upload_url,
+      word_boost: [],
+      language_detection: true,
+    }),
+  });
+  if (!transcriptRes.ok) {
+    const errText = await transcriptRes.text();
+    throw new Error(`AssemblyAI transcript error ${transcriptRes.status}: ${errText.slice(0, 300)}`);
+  }
+  const { id: transcriptId } = await transcriptRes.json();
+
+  // Step 3: Poll until complete (max ~5 min)
+  const MAX_POLLS = 60;
+  const POLL_INTERVAL = 5000;
+  let result: any = null;
+  for (let i = 0; i < MAX_POLLS; i++) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+    const pollRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
+      headers: { authorization: apiKey },
+    });
+    if (!pollRes.ok) {
+      const errText = await pollRes.text();
+      throw new Error(`AssemblyAI poll error ${pollRes.status}: ${errText.slice(0, 300)}`);
+    }
+    result = await pollRes.json();
+    if (result.status === "completed") break;
+    if (result.status === "error") throw new Error(`AssemblyAI transcription failed: ${result.error || "unknown"}`);
+  }
+  if (!result || result.status !== "completed") {
+    throw new Error("AssemblyAI transcription timed out");
+  }
+
+  // Convert AssemblyAI words (ms timestamps) to our format (seconds)
+  const words: WhisperWord[] = (result.words || []).map((w: any) => ({
+    word: String(w.text || "").trim(),
+    start: Math.round((Number(w.start) / 1000) * 1000) / 1000,
+    end: Math.round((Number(w.end) / 1000) * 1000) / 1000,
+  })).filter((w: WhisperWord) => w.word.length > 0 && w.end > w.start);
+
+  // Build segments (~6 words each)
+  const segments: Array<{ start: number; end: number; text: string }> = [];
+  const MAX_WORDS_PER_SEG = 6;
+  for (let i = 0; i < words.length; i += MAX_WORDS_PER_SEG) {
+    const chunk = words.slice(i, i + MAX_WORDS_PER_SEG);
+    if (chunk.length === 0) continue;
+    segments.push({
+      start: chunk[0].start,
+      end: chunk[chunk.length - 1].end,
+      text: chunk.map(w => w.word).join(" "),
+    });
+  }
+
+  const lastWord = words.length > 0 ? words[words.length - 1] : null;
+  const duration = lastWord ? lastWord.end + 0.5 : 0;
+  const rawText = result.text || words.map(w => w.word).join(" ");
+
+  return { words, segments, rawText, duration };
+}
+
 // ── Gemini Prompt: Song DNA (Hook + Insights + Metadata + Meaning) ────────────
 const DEFAULT_HOOK_PROMPT = `ROLE: Lead Music Intelligence Analyst — Song DNA Engine
 
@@ -657,7 +751,12 @@ serve(async (req) => {
 
     // Resolve transcription engine
     const useGeminiTranscription = transcriptionModel === "gemini";
-    if (!useGeminiTranscription && !ELEVENLABS_API_KEY) {
+    const useAssemblyAI = transcriptionModel === "assemblyai";
+    const ASSEMBLYAI_API_KEY = useAssemblyAI ? Deno.env.get("ASSEMBLYAI_API_KEY") : undefined;
+    if (useAssemblyAI && !ASSEMBLYAI_API_KEY) {
+      throw new Error("ASSEMBLYAI_API_KEY is not configured");
+    }
+    if (!useGeminiTranscription && !useAssemblyAI && !ELEVENLABS_API_KEY) {
       throw new Error("ELEVENLABS_API_KEY is not configured (required for Scribe engine)");
     }
 
@@ -700,30 +799,26 @@ serve(async (req) => {
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
-    const transcriptionEngine = useGeminiTranscription ? "gemini" : "scribe_v2";
+    const transcriptionEngine = useAssemblyAI ? "assemblyai" : useGeminiTranscription ? "gemini" : "scribe_v2";
 
     // ── Stage 1: Transcription ──
-    // For Scribe: pass raw bytes directly (no base64 round-trip)
-    // For Gemini: encode to base64 only when needed (data: URI format)
-    
     let transcribePromise: Promise<{ words: WhisperWord[]; segments: Array<{ start: number; end: number; text: string }>; rawText: string; duration: number }>;
 
-    if (useGeminiTranscription) {
+    if (useAssemblyAI) {
+      transcribePromise = runAssemblyAI(audioRawBytes!, ext, mimeType, ASSEMBLYAI_API_KEY!);
+    } else if (useGeminiTranscription) {
       // Gemini needs base64 — encode only here
       if (!audioBase64 && audioRawBytes) {
-        
         let binary = "";
         const chunkSize = 8192;
         for (let i = 0; i < audioRawBytes.length; i += chunkSize) {
           binary += String.fromCharCode(...audioRawBytes.subarray(i, i + chunkSize));
         }
         audioBase64 = btoa(binary);
-        
       }
       transcribePromise = runGeminiTranscribe(audioBase64!, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics!.trim() : undefined);
     } else {
       // Scribe: raw bytes, no base64 needed
-      
       transcribePromise = runScribe(audioRawBytes!, ext, mimeType, ELEVENLABS_API_KEY!);
     }
 
