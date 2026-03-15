@@ -423,9 +423,120 @@ export default function Admin() {
           {/* ── REACH TAB ── */}
           <TabsContent value="reach" className="mt-4">
             {tab === "reach" && (
-              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
-                <ReachDashboardWrapper />
-              </Suspense>
+              <>
+                {/* ── Track search / generator ── */}
+                <div className="glass-card rounded-xl p-4 mb-6 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Music size={14} className="text-primary" />
+                    <span className="text-sm font-mono font-medium">Generate Artist Page</span>
+                  </div>
+
+                  {/* Search input */}
+                  <div className="relative">
+                    {reachSelected ? (
+                      <div className="flex items-center gap-3 bg-muted/40 border border-border/40 rounded-xl px-4 py-2.5">
+                        {reachSelected.image ? (
+                          <img src={reachSelected.image} className="h-8 w-8 rounded object-cover" alt="" />
+                        ) : (
+                          <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
+                            <Music size={14} className="text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{reachSelected.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{reachSelected.artists}</p>
+                        </div>
+                        <button
+                          onClick={() => { setReachSelected(null); setReachQuery(""); }}
+                          className="p-1 rounded-full hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          value={reachQuery}
+                          onChange={(e) => setReachQuery(e.target.value)}
+                          onFocus={() => setReachFocused(true)}
+                          onBlur={() => setTimeout(() => setReachFocused(false), 200)}
+                          onPaste={(e) => {
+                            const text = e.clipboardData.getData("text");
+                            if (text.includes("spotify.com/track/")) {
+                              e.preventDefault();
+                              setReachQuery(text);
+                              supabase.functions.invoke("songfit-track", {
+                                body: { trackUrl: text.trim() },
+                              }).then(({ data }) => {
+                                if (data) setReachSelected({
+                                  name: data.title,
+                                  artists: data.artists?.map((a: any) => a.name).join(", "),
+                                  image: data.albumArt,
+                                  url: data.spotifyUrl,
+                                });
+                              });
+                            }
+                          }}
+                          placeholder="Search artist or song, or paste Spotify link"
+                          className="w-full bg-muted/40 border border-border/40 rounded-xl px-4 py-2.5 text-sm placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 transition-colors"
+                          disabled={reachGenerating}
+                        />
+                        {reachSearching && (
+                          <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                        {/* Dropdown results */}
+                        {reachFocused && reachResults.length > 0 && (
+                          <div className="absolute z-20 left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                            {reachResults.map((r: any, i: number) => (
+                              <button
+                                key={i}
+                                onClick={() => { setReachSelected(r); setReachResults([]); setReachQuery(""); }}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/60 transition-colors text-left"
+                              >
+                                {r.image ? (
+                                  <img src={r.image} className="h-8 w-8 rounded object-cover" alt="" />
+                                ) : (
+                                  <div className="h-8 w-8 rounded bg-muted" />
+                                )}
+                                <div className="min-w-0">
+                                  <p className="text-sm truncate">{r.name}</p>
+                                  <p className="text-xs text-muted-foreground truncate">{r.artists}</p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Generate button + status */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleReachGenerate}
+                      disabled={!reachSelected || reachGenerating}
+                      className="rounded-xl px-5 py-2.5 text-sm font-semibold bg-primary text-primary-foreground disabled:opacity-40 transition-colors"
+                    >
+                      {reachGenerating ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {reachStatusMsg}
+                        </span>
+                      ) : (
+                        "Generate page →"
+                      )}
+                    </button>
+                    {reachActiveSlug && reachGenerating && (
+                      <span className="text-xs text-muted-foreground font-mono">{reachActiveSlug}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── ReachDashboard table ── */}
+                <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
+                  <ReachDashboard rows={reachRows} activeJobSlug={reachActiveSlug} onRefresh={fetchReachRows} />
+                </Suspense>
+              </>
             )}
           </TabsContent>
 
