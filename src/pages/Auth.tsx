@@ -69,9 +69,23 @@ const Auth = () => {
           })
           .catch(console.error);
       }
-      navigate("/", { state: { returnTab } });
+      if (claimSlug && claimToken) {
+        supabase
+          .from("profiles")
+          .update({ is_claimed: true })
+          .eq("spotify_artist_slug", claimSlug)
+          .eq("claim_token", claimToken)
+          .eq("is_claimed", false)
+          .then(() => {
+            navigate(`/artist/${claimSlug}/claim-page`, { 
+              state: { justClaimed: true } 
+            });
+          });
+      } else {
+        navigate("/", { state: { returnTab } });
+      }
     }
-  }, [user, navigate, returnTab, refCode]);
+  }, [user, navigate, returnTab, refCode, claimSlug, claimToken]);
 
   // Auto-focus email after artist is selected
   useEffect(() => {
