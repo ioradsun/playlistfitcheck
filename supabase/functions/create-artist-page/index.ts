@@ -428,7 +428,7 @@ serve(async (req) => {
 
     fireAndForgetLog("lyric_video_save", "running", null, slug);
     try {
-      await supabase.from("artist_lyric_videos").insert({
+      const { error: insertError } = await supabase.from("artist_lyric_videos").insert({
         user_id: profile.userId,
         spotify_track_id: trackId,
         track_title: trackTitle,
@@ -440,6 +440,7 @@ serve(async (req) => {
         plain_lyrics: plainLyrics,
         lyrics_source: lyricsSource,
       });
+      if (insertError) throw new Error(insertError.message);
 
       fireAndForgetLog(
         "lyric_video_save",
