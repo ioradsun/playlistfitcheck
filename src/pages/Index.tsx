@@ -186,7 +186,7 @@ const Index = () => {
       return;
     }
 
-    if (projectLoadedRef.current === projectId && loadedLyric?.id === projectId) {
+    if (projectLoadedRef.current === projectId) {
       setIsFetchingProject(false);
       return;
     }
