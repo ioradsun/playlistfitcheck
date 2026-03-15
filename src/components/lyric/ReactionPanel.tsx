@@ -565,10 +565,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     setTimeout(() => setHasSubmitted(false), 500);
   };
 
-  const displayLine = allLines.find(line => line.lineIndex === displayLineIndex) ?? null;
-  const displaySectionLabel = displayLine?.lineIndex != null
-    ? (sectionMeta.labelByLineIndex.get(displayLine.lineIndex) ?? null)
-    : null;
   const handlePanelClose = () => {
     if (replyingTo) setReplyingTo(null);
     else onClose();
@@ -579,71 +575,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
   return (
     <PanelShell isOpen={isOpen} variant={displayMode}>
-      <div className="shrink-0 px-4 pt-3 pb-2 border-b border-white/[0.05]">
-        {displaySectionLabel && (
-          <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-white/25 mb-1">
-            {displaySectionLabel}
-          </p>
-        )}
-        <p className="text-[13px] font-light leading-relaxed text-white/85">
-          {displayLine?.text ?? '...'}
-        </p>
-      </div>
-
-      <div className="shrink-0 flex items-center justify-center gap-3 px-4 py-2">
-        {EMOJIS.map(({ key, symbol, label }) => {
-          const targetIdx = displayLine?.lineIndex ?? allLines[0]?.lineIndex;
-          const count = targetIdx != null ? (reactionData[key]?.line[targetIdx] ?? 0) : 0;
-          const reacted = targetIdx != null && sessionReacted.has(`${key}-${targetIdx}`);
-          return (
-            <button
-              key={key}
-              onClick={() => {
-                if (targetIdx != null) handleReact(key, targetIdx);
-              }}
-              className="flex flex-col items-center gap-0.5 w-9"
-              style={reacted ? { background: `${palette[1] ?? '#fff'}18`, borderRadius: '8px' } : undefined}
-            >
-              <span className="text-[15px]">{symbol}</span>
-              <span className="text-[7px] font-mono uppercase tracking-wide text-white/20">{label}</span>
-              <span
-                className="text-[8px] font-mono min-h-[10px]"
-                style={{
-                  color: reacted ? (palette[1] ?? 'rgba(255,255,255,0.7)') : 'rgba(255,255,255,0.30)',
-                  visibility: count > 0 ? 'visible' : 'hidden',
-                }}
-              >
-                {count > 0 ? count : ''}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div
-        className="shrink-0 mx-3 my-2"
-        style={{
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.09)',
-          borderRadius: '8px',
-          padding: '8px 12px',
-        }}
-      >
-        <input
-          className="w-full bg-transparent text-[11px] font-mono text-white placeholder:text-white/35 outline-none"
-          placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
-          value={textInput}
-          onChange={(event) => setTextInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              handleTextSubmit();
-            }
-          }}
-          onFocus={() => onEngagementStart(displayLineIndex ?? undefined)}
-        />
-      </div>
-
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0" style={{ scrollbarWidth: 'none' }}>
         <div className="pb-2">
           {allLines.map((line, linePosition) => {
@@ -731,6 +662,55 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                     </button>
                   </div>
                 </div>
+
+                {isActive && (
+                  <>
+                    {/* Emoji bar — inline under active line */}
+                    <div className="flex items-center justify-center gap-3 px-4 py-2 border-b border-white/[0.04]">
+                      {EMOJIS.map(({ key, symbol, label }) => {
+                        const count = reactionData[key]?.line[line.lineIndex] ?? 0;
+                        const reacted = sessionReacted.has(`${key}-${line.lineIndex}`);
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => handleReact(key, line.lineIndex)}
+                            className="flex flex-col items-center gap-0.5 w-9"
+                            style={reacted ? { background: `${palette[1] ?? '#fff'}18`, borderRadius: '8px' } : undefined}
+                          >
+                            <span className="text-[15px]">{symbol}</span>
+                            <span className="text-[7px] font-mono uppercase tracking-wide text-white/20">{label}</span>
+                            <span
+                              className="text-[8px] font-mono min-h-[10px]"
+                              style={{
+                                color: reacted ? (palette[1] ?? 'rgba(255,255,255,0.7)') : 'rgba(255,255,255,0.30)',
+                                visibility: count > 0 ? 'visible' : 'hidden',
+                              }}
+                            >
+                              {count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Comment input — inline under emoji bar */}
+                    {!hideInput && (
+                      <div
+                        className="mx-3 my-2"
+                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: '8px', padding: '8px 12px' }}
+                      >
+                        <input
+                          className="w-full bg-transparent text-[11px] font-mono text-white placeholder:text-white/35 outline-none"
+                          placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
+                          value={textInput}
+                          onChange={(e) => setTextInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleTextSubmit(); } }}
+                          onFocus={() => onEngagementStart(line.lineIndex)}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
 
                 {isExpanded && (
                   <div
