@@ -133,7 +133,7 @@ async function submitAssemblyAI(
   audioUrl: string,
   plainLyrics: string | null,
   apiKey: string
-): Promise<string | null> {
+): Promise<{ jobId: string | null; error: string | null }> {
   const wordBoost = buildWordBoost(plainLyrics);
 
   const submitRes = await fetch("https://api.assemblyai.com/v2/transcript", {
@@ -153,9 +153,17 @@ async function submitAssemblyAI(
     }),
   });
 
-  if (!submitRes.ok) return null;
-  const { id: jobId } = await submitRes.json();
-  return typeof jobId === "string" ? jobId : null;
+  if (!submitRes.ok) {
+    const errText = await submitRes.text().catch(() => `HTTP ${submitRes.status}`);
+    return { jobId: null, error: `HTTP ${submitRes.status}: ${errText.slice(0, 200)}` };
+  }
+
+  const data = await submitRes.json();
+  const jobId = typeof data.id === "string" ? data.id : null;
+  if (!jobId) {
+    return { jobId: null, error: `No job ID in response: ${JSON.stringify(data).slice(0, 200)}` };
+  }
+  return { jobId, error: null };
 }
 
 async function pollAssemblyAI(
@@ -390,7 +398,7 @@ serve(async (req) => {
 
     if (!lrclib.syncedLyrics && previewUrl && assemblyKey) {
       fireAndForgetLog("assemblyai_submit", "running", `Submitting preview: ${previewUrl.slice(0, 60)}…`, slug);
-      const jobIdAi = await submitAssemblyAI(previewUrl, lrclib.plainLyrics, assemblyKey);
+      const { jobId: jobIdAi, error: submitError } = await submitAssemblyAI(previewUrl, lrclib.plainLyrics, assemblyKey);
 
       if (jobIdAi) {
         fireAndForgetLog("assemblyai_submit", "done", `Job ID: ${jobIdAi}`, slug);
@@ -406,7 +414,7 @@ serve(async (req) => {
           fireAndForgetLog("assemblyai_poll", "error", "Transcript failed or timed out", slug);
         }
       } else {
-        fireAndForgetLog("assemblyai_submit", "error", "Failed to submit job", slug);
+        fireAndForgetLog("assemblyai_submit", "error", submitError ?? "Failed to submit job", slug);
         fireAndForgetLog("assemblyai_poll", "skipped", "Submit failed", slug);
       }
     } else if (!lrclib.syncedLyrics && !previewUrl) {
