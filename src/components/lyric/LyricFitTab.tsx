@@ -112,7 +112,10 @@ export function LyricFitTab({
     return { title, lines: initialLyric.lines as any[] };
   }, [initialLyric]);
 
-  const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
+  const [activeTab, setActiveTab] = useState<LyricFitView>(() => {
+    console.log('[LyricFitTab] INIT activeTab — component (re)mounted');
+    return "lyrics";
+  });
   const [sceneDescription, setSceneDescription] = useState('');
   const [resolvedScene, setResolvedScene] = useState<SceneContextResult | null>(null);
   const [resolvingScene, setResolvingScene] = useState(false);
@@ -1031,6 +1034,8 @@ export function LyricFitTab({
 
   const fitDisabled = !transcriptionDone;
 
+  console.log('[LyricFitTab] RENDER', { activeTab, fitReadiness, audioFile: !!audioFile });
+
 
 
   const sceneInputNode = !lyricData ? (
@@ -1129,8 +1134,8 @@ export function LyricFitTab({
           }}
         />
       </div>
-      {activeTab === "fit" && lyricData && audioFile && (
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      {lyricData && audioFile && (
+        <div style={{ display: activeTab === "fit" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
           <FitTab
             lyricData={lyricData}
             audioFile={audioFile}
