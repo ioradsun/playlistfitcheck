@@ -736,21 +736,19 @@ export default function ShareableLyricDance() {
         )}
 
         <div className="w-full max-w-2xl mx-auto">
-          {!showCover && !isWaitingForPlayer && (
-            <CardBottomBar
-              variant="fullscreen"
-              votedSide={votedSide}
-              score={score}
-              note={note}
-              onNoteChange={setNote}
-              onVoteYes={() => handleVote(true)}
-              onVoteNo={() => handleVote(false)}
-              onSubmit={handleSubmit}
-              onOpenReactions={() => setReactionPanelOpen(true)}
-              onClose={() => setReactionPanelOpen(false)}
-              panelOpen={reactionPanelOpen}
-            />
-          )}
+          <CardBottomBar
+            variant="fullscreen"
+            votedSide={votedSide}
+            score={score}
+            note={note}
+            onNoteChange={setNote}
+            onVoteYes={() => handleVote(true)}
+            onVoteNo={() => handleVote(false)}
+            onSubmit={handleSubmit}
+            onOpenReactions={() => setReactionPanelOpen(true)}
+            onClose={() => setReactionPanelOpen(false)}
+            panelOpen={reactionPanelOpen}
+          />
         </div>
       </div>
 
