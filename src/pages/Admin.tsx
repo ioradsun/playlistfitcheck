@@ -32,7 +32,7 @@ const ReachDashboardWrapper = lazy(() =>
           const { data: profiles } = await (supabase as any).from("profiles").select("id, spotify_artist_slug").in("id", userIds);
           const slugMap = new Map((profiles || []).map((p: any) => [p.id, p.spotify_artist_slug]));
           setRows((data as any[]).filter((d: any) => slugMap.get(d.user_id)).map((d: any) => ({
-            spotify_artist_slug: slugMap.get(d.user_id)!, artist_name: d.artist_name, track_title: d.track_title,
+            spotify_artist_slug: slugMap.get(d.user_id) as string, artist_name: d.artist_name as string, track_title: d.track_title as string,
           })));
         })();
       }, []);
