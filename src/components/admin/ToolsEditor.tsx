@@ -411,11 +411,18 @@ export function ToolsEditor() {
             badge="recommended"
           />
           <RadioOption
+            active={features.lyric_transcription_model === "assemblyai"}
+            disabled={savingKey === "lyric_transcription"}
+            onClick={() => setTranscriptionModel("assemblyai")}
+            title="AssemblyAI"
+            desc="Word-level timestamps, language detection, high accuracy. Requires ASSEMBLYAI_API_KEY."
+          />
+          <RadioOption
             active={features.lyric_transcription_model === "gemini"}
             disabled={savingKey === "lyric_transcription"}
             onClick={() => setTranscriptionModel("gemini")}
             title="Gemini (audio-only)"
-            desc="No ElevenLabs dependency. Gemini handles timestamps — less precise but zero extra API keys."
+            desc="No external API dependency. Gemini handles timestamps — less precise but zero extra API keys."
           />
         </div>
 
