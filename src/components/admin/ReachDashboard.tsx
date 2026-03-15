@@ -228,7 +228,17 @@ export function ReachDashboard({ rows, activeJobSlug = null, onRefresh }: Props)
                   <tr key={row.spotify_artist_slug} className="border-t border-border/50">
                     <td className="p-3">{row.artist_name}</td>
                     <td className="p-3">{row.track_title}</td>
-                    <td className="p-3 font-mono text-xs">{row.spotify_artist_slug}</td>
+                    <td className="p-3 font-mono text-xs">
+                      <a
+                        href={`/artist/${row.spotify_artist_slug}/claim-page`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 hover:text-foreground text-muted-foreground"
+                      >
+                        {row.spotify_artist_slug}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </td>
                     <td className="p-3">{totalDuration}</td>
                     <td className="p-3 text-right">
                       <button
