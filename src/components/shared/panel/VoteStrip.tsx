@@ -21,7 +21,12 @@ export function VoteStrip({
   const skipCount = score != null ? score.total - score.replay_yes : 0;
 
   const activeStyle = (active: boolean) => ({
-    color: active ? accent : 'rgba(255,255,255,0.25)',
+    color:
+      votedSide === null
+        ? 'rgba(255,255,255,1)'
+        : active
+          ? accent
+          : 'rgba(255,255,255,0.25)',
   });
 
   return (
