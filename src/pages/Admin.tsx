@@ -72,6 +72,26 @@ export default function Admin() {
     return result.users as AdminUser[];
   }, []);
 
+  const fetchReachRows = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from("profiles")
+      .select("id, display_name, spotify_artist_slug, is_claimed, created_at, artist_lyric_videos(id, track_title, artist_name, album_art_url, created_at)")
+      .not("spotify_artist_slug", "is", null)
+      .order("created_at", { ascending: false });
+    if (data) {
+      setReachRows(
+        data.map((p: any) => ({
+          spotify_artist_slug: p.spotify_artist_slug,
+          artist_name: p.display_name ?? p.artist_lyric_videos?.[0]?.artist_name ?? "Unknown",
+          track_title: p.artist_lyric_videos?.[0]?.track_title ?? "—",
+          album_art_url: p.artist_lyric_videos?.[0]?.album_art_url ?? null,
+          is_claimed: p.is_claimed,
+          created_at: p.created_at,
+        }))
+      );
+    }
+  }, []);
+
   const fetchData = useCallback(async () => {
     const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", { body: { section: "data" } });
     if (fnError) throw fnError;
