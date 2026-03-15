@@ -669,12 +669,17 @@ export default function ShareableLyricDance() {
           </div>
         )}
 
-        {/* Marketing view: reaction hint in place of vote controls */}
+        {/* Marketing view: reaction hint — emoji opens reaction panel */}
         {isMarketingView && (
           <div className="w-full max-w-2xl mx-auto px-4 py-3 flex items-center justify-center gap-2">
-            <span className="text-white/35 text-[11px]">fans react on every line</span>
-            <span className="text-white/25 text-[11px]">→</span>
-            <span className="text-[14px]">🔥</span>
+            <span className="text-white text-[11px]">fans react on every line</span>
+            <span className="text-white/40 text-[11px]">→</span>
+            <button
+              onClick={() => setReactionPanelOpen(true)}
+              className="text-[16px] active:scale-110 transition-transform"
+            >
+              🔥
+            </button>
           </div>
         )}
       </div>
