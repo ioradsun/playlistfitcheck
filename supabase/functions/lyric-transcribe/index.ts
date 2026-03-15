@@ -799,30 +799,26 @@ serve(async (req) => {
     const ext = (format && mimeMap[format]) ? format : "mp3";
     const mimeType = mimeMap[ext] || "audio/mpeg";
 
-    const transcriptionEngine = useGeminiTranscription ? "gemini" : "scribe_v2";
+    const transcriptionEngine = useAssemblyAI ? "assemblyai" : useGeminiTranscription ? "gemini" : "scribe_v2";
 
     // ── Stage 1: Transcription ──
-    // For Scribe: pass raw bytes directly (no base64 round-trip)
-    // For Gemini: encode to base64 only when needed (data: URI format)
-    
     let transcribePromise: Promise<{ words: WhisperWord[]; segments: Array<{ start: number; end: number; text: string }>; rawText: string; duration: number }>;
 
-    if (useGeminiTranscription) {
+    if (useAssemblyAI) {
+      transcribePromise = runAssemblyAI(audioRawBytes!, ext, mimeType, ASSEMBLYAI_API_KEY!);
+    } else if (useGeminiTranscription) {
       // Gemini needs base64 — encode only here
       if (!audioBase64 && audioRawBytes) {
-        
         let binary = "";
         const chunkSize = 8192;
         for (let i = 0; i < audioRawBytes.length; i += chunkSize) {
           binary += String.fromCharCode(...audioRawBytes.subarray(i, i + chunkSize));
         }
         audioBase64 = btoa(binary);
-        
       }
       transcribePromise = runGeminiTranscribe(audioBase64!, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics!.trim() : undefined);
     } else {
       // Scribe: raw bytes, no base64 needed
-      
       transcribePromise = runScribe(audioRawBytes!, ext, mimeType, ELEVENLABS_API_KEY!);
     }
 
