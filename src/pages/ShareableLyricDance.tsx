@@ -295,7 +295,7 @@ export default function ShareableLyricDance() {
       .then(async ({ data: row, error }) => {
         if (error || !row) { setNotFound(true); setLoading(false); return; }
         const d = row as any as LyricDanceData;
-        setDataRaw({ ...d, cinematic_direction: null });
+        setDataRaw(d);
         setLoading(false);
 
         // ── PROFILE: fire immediately in parallel — don't wait for direction ──
