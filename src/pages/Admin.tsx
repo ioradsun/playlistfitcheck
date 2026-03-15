@@ -116,6 +116,85 @@ export default function Admin() {
     }
   }, [tab, dataLoaded, isAdmin, fetchData]);
 
+  // Fetch reach rows when tab switches
+  useEffect(() => {
+    if (tab === "reach" && isAdmin) {
+      fetchReachRows().catch(console.error);
+    }
+  }, [tab, isAdmin, fetchReachRows]);
+
+  // Reach search debounce
+  useEffect(() => {
+    if (!reachQuery.trim() || reachQuery.includes("spotify.com") || reachSelected) {
+      setReachResults([]);
+      return;
+    }
+    clearTimeout(reachDebounceRef.current);
+    reachDebounceRef.current = setTimeout(async () => {
+      setReachSearching(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("spotify-search", {
+          body: { query: reachQuery.trim(), type: "track" },
+        });
+        if (!error && data?.results) setReachResults(data.results.slice(0, 6));
+      } catch {}
+      setReachSearching(false);
+    }, 350);
+    return () => clearTimeout(reachDebounceRef.current);
+  }, [reachQuery, reachSelected]);
+
+  // Reach generate handler
+  const handleReachGenerate = async () => {
+    if (!reachSelected) return;
+    setReachGenerating(true);
+    setReachActiveSlug(null);
+
+    const STATUS = [
+      "Fetching track from Spotify…",
+      "Checking lrclib for synced lyrics…",
+      "Syncing with AssemblyAI…",
+      "Building artist page…",
+    ];
+    let msgIdx = 0;
+    setReachStatusMsg(STATUS[0]);
+    const interval = setInterval(() => {
+      msgIdx = Math.min(msgIdx + 1, STATUS.length - 1);
+      setReachStatusMsg(STATUS[msgIdx]);
+    }, 1500);
+
+    try {
+      const { data: trackData } = await supabase.functions.invoke("songfit-track", {
+        body: { trackUrl: reachSelected.url },
+      });
+      const spotifyUrl = trackData?.spotifyUrl ?? reachSelected.url;
+
+      const artistName = trackData?.artists?.[0]?.name ?? reachSelected.artists ?? "";
+      const slug = artistName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+      setReachActiveSlug(slug);
+
+      const { data, error } = await supabase.functions.invoke("create-artist-page", {
+        body: { spotifyUrl },
+      });
+      clearInterval(interval);
+
+      if (error) throw error;
+      if (data?.alreadyClaimed) {
+        toast.info("This artist has already claimed their page.");
+      } else if (data?.slug) {
+        toast.success(`Page ready → /artist/${data.slug}/claim-page`);
+        setReachSelected(null);
+        setReachQuery("");
+        await fetchReachRows();
+      }
+    } catch (e: any) {
+      clearInterval(interval);
+      toast.error(e.message || "Generation failed");
+    } finally {
+      setReachGenerating(false);
+      setReachStatusMsg("");
+    }
+  };
+
   const userRows = useMemo(() => {
     return users.map((u) => {
       const initials = (u.display_name ?? u.email ?? "?")
