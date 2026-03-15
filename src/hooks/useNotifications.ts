@@ -191,14 +191,14 @@ export function useNotifications() {
       const mapped: Signal[] = (data as any[]).map((notification) => ({
         id: notification.id,
         type: notification.type as SignalType,
-        source: (notification.source || "crowdfit_feed") as SignalSource,
+        source: "crowdfit_feed" as SignalSource,
         post_id: notification.post_id,
-        dance_id: notification.dance_id ?? null,
+        dance_id: null,
         comment_id: notification.comment_id,
         actor_user_id: notification.actor_user_id ?? null,
         is_read: notification.is_read,
         created_at: notification.created_at,
-        metadata: notification.metadata || {},
+        metadata: {},
         actor: notification.actor,
         post: notification.post_id ? postMap[notification.post_id] ?? null : null,
       }));
