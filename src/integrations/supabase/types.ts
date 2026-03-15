@@ -35,6 +35,36 @@ export type Database = {
         }
         Relationships: []
       }
+      artist_lyric_videos: {
+        Row: {
+          album_art_url: string | null
+          artist_name: string
+          created_at: string
+          id: string
+          preview_url: string | null
+          track_title: string
+          user_id: string
+        }
+        Insert: {
+          album_art_url?: string | null
+          artist_name: string
+          created_at?: string
+          id?: string
+          preview_url?: string | null
+          track_title: string
+          user_id: string
+        }
+        Update: {
+          album_art_url?: string | null
+          artist_name?: string
+          created_at?: string
+          id?: string
+          preview_url?: string | null
+          track_title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       artist_pages: {
         Row: {
           accent_color: string
@@ -849,9 +879,11 @@ export type Database = {
           id: string
           instagram_url: string | null
           invite_code: string | null
+          is_claimed: boolean
           is_unlimited: boolean
           is_verified: boolean
           spotify_artist_id: string | null
+          spotify_artist_slug: string | null
           spotify_embed_url: string | null
           theme: string
           trailblazer_number: number | null
@@ -868,9 +900,11 @@ export type Database = {
           id: string
           instagram_url?: string | null
           invite_code?: string | null
+          is_claimed?: boolean
           is_unlimited?: boolean
           is_verified?: boolean
           spotify_artist_id?: string | null
+          spotify_artist_slug?: string | null
           spotify_embed_url?: string | null
           theme?: string
           trailblazer_number?: number | null
@@ -887,9 +921,11 @@ export type Database = {
           id?: string
           instagram_url?: string | null
           invite_code?: string | null
+          is_claimed?: boolean
           is_unlimited?: boolean
           is_verified?: boolean
           spotify_artist_id?: string | null
+          spotify_artist_slug?: string | null
           spotify_embed_url?: string | null
           theme?: string
           trailblazer_number?: number | null
