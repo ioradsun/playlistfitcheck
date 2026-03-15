@@ -267,7 +267,7 @@ export default function ShareableLyricDance() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // ── Player lifecycle — shared hook ───────────────────────────────────
-  const { player: playerInstance, data: liveData } = useLyricDancePlayer(
+  const { player: playerInstance, playerReady, data: liveData } = useLyricDancePlayer(
     data, bgCanvasRef, textCanvasRef, containerRef, { bootMode: "full" },
   );
   // Sync hook's hot-patched data (auto_palettes etc.) back to local state
@@ -683,6 +683,7 @@ export default function ShareableLyricDance() {
                 songName={coverSongName}
                 waiting={isWaitingForPlayer}
                 coverImageUrl={data?.section_images?.[0] ?? null}
+                hideBackground={playerReady}
                 badge="In Studio"
                 onExpand={undefined}
                 onListen={(e) => {
