@@ -554,6 +554,7 @@ export function LyricDanceEmbed({
     setCommentRefreshKey((k) => k + 1);
   }, [note, fetchedData?.id, setNote]);
 
+  useEffect(() => {
     if (isControlled) {
       setReactionPanelOpen(Boolean(externalPanelOpen));
       return;
