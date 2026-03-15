@@ -398,7 +398,7 @@ serve(async (req) => {
 
     if (!lrclib.syncedLyrics && previewUrl && assemblyKey) {
       fireAndForgetLog("assemblyai_submit", "running", `Submitting preview: ${previewUrl.slice(0, 60)}…`, slug);
-      const jobIdAi = await submitAssemblyAI(previewUrl, lrclib.plainLyrics, assemblyKey);
+      const { jobId: jobIdAi, error: submitError } = await submitAssemblyAI(previewUrl, lrclib.plainLyrics, assemblyKey);
 
       if (jobIdAi) {
         fireAndForgetLog("assemblyai_submit", "done", `Job ID: ${jobIdAi}`, slug);
@@ -414,7 +414,7 @@ serve(async (req) => {
           fireAndForgetLog("assemblyai_poll", "error", "Transcript failed or timed out", slug);
         }
       } else {
-        fireAndForgetLog("assemblyai_submit", "error", "Failed to submit job", slug);
+        fireAndForgetLog("assemblyai_submit", "error", submitError ?? "Failed to submit job", slug);
         fireAndForgetLog("assemblyai_poll", "skipped", "Submit failed", slug);
       }
     } else if (!lrclib.syncedLyrics && !previewUrl) {
