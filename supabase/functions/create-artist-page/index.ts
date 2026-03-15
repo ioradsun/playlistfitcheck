@@ -133,7 +133,7 @@ async function submitAssemblyAI(
   audioUrl: string,
   plainLyrics: string | null,
   apiKey: string
-): Promise<string | null> {
+): Promise<{ jobId: string | null; error: string | null }> {
   const wordBoost = buildWordBoost(plainLyrics);
 
   const submitRes = await fetch("https://api.assemblyai.com/v2/transcript", {
@@ -153,9 +153,17 @@ async function submitAssemblyAI(
     }),
   });
 
-  if (!submitRes.ok) return null;
-  const { id: jobId } = await submitRes.json();
-  return typeof jobId === "string" ? jobId : null;
+  if (!submitRes.ok) {
+    const errText = await submitRes.text().catch(() => `HTTP ${submitRes.status}`);
+    return { jobId: null, error: `HTTP ${submitRes.status}: ${errText.slice(0, 200)}` };
+  }
+
+  const data = await submitRes.json();
+  const jobId = typeof data.id === "string" ? data.id : null;
+  if (!jobId) {
+    return { jobId: null, error: `No job ID in response: ${JSON.stringify(data).slice(0, 200)}` };
+  }
+  return { jobId, error: null };
 }
 
 async function pollAssemblyAI(
