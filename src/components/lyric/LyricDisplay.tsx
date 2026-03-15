@@ -709,7 +709,10 @@ export function LyricDisplay({
   const applyCenteredLyricsOffset = useCallback((lineIndex: number) => {
     if (lineIndex < 0) return;
     const centeredOffset = getCenteredLyricsOffset(lineIndex);
-    if (centeredOffset == null) return;
+    if (centeredOffset == null) {
+      requestAnimationFrame(() => applyCenteredLyricsOffset(lineIndex));
+      return;
+    }
     setLyricsOffset(centeredOffset + manualLyricOffsetRef.current);
   }, [getCenteredLyricsOffset]);
 
