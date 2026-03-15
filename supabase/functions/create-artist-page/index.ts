@@ -292,7 +292,8 @@ serve(async (req) => {
     const trackTitle = track.name;
     const artistName = track.artists[0].name;
     const albumArtUrl = track.album.images[0]?.url ?? null;
-    const previewUrl = track.preview_url ?? null;
+    let previewUrl: string | null = track.preview_url ?? null;
+    const apiHadPreview = !!previewUrl;
     const trackUrl = track.external_urls.spotify;
 
     const slug = artistName
@@ -308,10 +309,16 @@ serve(async (req) => {
       .eq("step", "spotify_fetch")
       .then(() => {}).catch(() => {});
 
+    // If Spotify API didn't return a preview, try scraping the embed player
+    if (!previewUrl) {
+      fireAndForgetLog("spotify_fetch", "running", "preview_url null — trying embed scrape…", slug);
+      previewUrl = await scrapePreviewFromEmbed(trackId);
+    }
+
     fireAndForgetLog(
       "spotify_fetch",
       "done",
-      `${artistName} — "${trackTitle}" | preview: ${previewUrl ? "yes" : "no"}`,
+      `${artistName} — "${trackTitle}" | preview: ${previewUrl ? (apiHadPreview ? "api" : "embed") : "none"}`,
       slug
     );
 
