@@ -116,6 +116,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(null);
   const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
   const [sessionCommentReacted, setSessionCommentReacted] = useState<Set<string>>(new Set());
+  const [isBrowsing, setIsBrowsing] = useState(false);
 
   const repeatRafRef = useRef<number>(0);
   const loopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -331,50 +332,44 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     };
   }, [repeatMode, player, allLines]);
 
-  // Snap active line to top on playback advance
+  // Auto-scroll: snap playhead to top during playback
   useEffect(() => {
-    if (userScrollingRef.current) return;
+    if (isBrowsing) return;
     const container = scrollContainerRef.current;
     const row = rowRefs.current[playheadLineIndex ?? -1];
     if (!container || !row) return;
     container.scrollTo({ top: row.offsetTop, behavior: 'smooth' });
-  }, [playheadLineIndex]);
+  }, [playheadLineIndex, isBrowsing]);
 
-  // Reel: scroll stops → seek nearest line and play
+  // Scroll → pause, enter browse mode
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    let debounce: ReturnType<typeof setTimeout>;
+    let hasScrolled = false;
     const onScroll = () => {
+      if (!hasScrolled) {
+        hasScrolled = true;
+        player?.pause();
+        setIsBrowsing(true);
+      }
       userScrollingRef.current = true;
-      clearTimeout(debounce);
-      debounce = setTimeout(() => {
-        userScrollingRef.current = false;
-        const scrollTop = container.scrollTop;
-        let nearest: { lineIndex: number; startSec: number } | null = null;
-        let minDist = Infinity;
-        for (const [idxStr, row] of Object.entries(rowRefs.current)) {
-          if (!row) continue;
-          const dist = Math.abs(row.offsetTop - scrollTop);
-          if (dist < minDist) {
-            minDist = dist;
-            const line = allLines.find(l => l.lineIndex === Number(idxStr));
-            if (line) nearest = { lineIndex: line.lineIndex, startSec: line.startSec };
-          }
-        }
-        if (!nearest || !player) return;
-        setPlayheadLineIndex(nearest.lineIndex);
-        setAutoFollowEnabled(true);
-        onSeekTo(nearest.startSec);
-        player.play();
-      }, 400);
+    };
+    const onScrollEnd = () => {
+      userScrollingRef.current = false;
+      hasScrolled = false;
     };
     container.addEventListener('scroll', onScroll, { passive: true });
+    container.addEventListener('scrollend', onScrollEnd, { passive: true });
     return () => {
       container.removeEventListener('scroll', onScroll);
-      clearTimeout(debounce);
+      container.removeEventListener('scrollend', onScrollEnd);
     };
-  }, [player, allLines, onSeekTo]);
+  }, [player]);
+
+  // Reset browse mode when panel closes
+  useEffect(() => {
+    if (!isOpen) setIsBrowsing(false);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!danceId) return;
@@ -447,6 +442,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         player.setMuted(false);
         player.seek(line.startSec);
         player.play();
+        userScrollingRef.current = false;
+        setIsBrowsing(false);
 
         const safeStopSec = Math.max(line.startSec, line.endSec - 0.02);
         const stopAfterMs = Math.max((safeStopSec - line.startSec) * 1000, 50);
@@ -455,6 +452,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         }, stopAfterMs);
       } else {
         onSeekTo(line.startSec);
+        userScrollingRef.current = false;
+        setIsBrowsing(false);
       }
     });
   };
@@ -576,6 +575,38 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   return (
     <PanelShell isOpen={isOpen} variant={displayMode}>
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0" style={{ scrollbarWidth: 'none' }}>
+        {isBrowsing && (
+          <div className="sticky top-2 z-20 flex justify-center pointer-events-none">
+            <button
+              className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider"
+              style={{ background: 'rgba(20,20,20,0.92)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)' }}
+              onClick={() => {
+                const container = scrollContainerRef.current;
+                if (!container) return;
+                const scrollTop = container.scrollTop;
+                let nearest: { lineIndex: number; startSec: number } | null = null;
+                let minDist = Infinity;
+                for (const [idxStr, row] of Object.entries(rowRefs.current)) {
+                  if (!row) continue;
+                  const dist = Math.abs(row.offsetTop - scrollTop);
+                  if (dist < minDist) {
+                    minDist = dist;
+                    const line = allLines.find(l => l.lineIndex === Number(idxStr));
+                    if (line) nearest = { lineIndex: line.lineIndex, startSec: line.startSec };
+                  }
+                }
+                if (!nearest) return;
+                userScrollingRef.current = false;
+                setIsBrowsing(false);
+                setPlayheadLineIndex(nearest.lineIndex);
+                onSeekTo(nearest.startSec);
+                player?.play();
+              }}
+            >
+              ▶ Resume
+            </button>
+          </div>
+        )}
         <div className="pb-2">
           {allLines.map((line, linePosition) => {
             const currentSection = sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
@@ -863,6 +894,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               setAutoFollowEnabled(true);
               setRepeatMode(false);
               onResetEngagement?.();
+              setIsBrowsing(false);
+              userScrollingRef.current = false;
               player?.setMuted(false);
               player?.seek(0);
               player?.play();

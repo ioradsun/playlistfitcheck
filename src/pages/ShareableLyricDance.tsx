@@ -14,7 +14,8 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
-import { useLyricSections, type LyricSectionLine } from "@/hooks/useLyricSections";
+import { useLyricSections } from "@/hooks/useLyricSections";
+import { useReactionPanel } from "@/hooks/useReactionPanel";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { HotSectionPill } from "@/components/lyric/HotSectionPill";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
@@ -27,32 +28,6 @@ import type { ArtistDNA } from "@/components/lyric/ArtistFingerprintTypes";
 import type { CinematicDirection } from "@/types/CinematicDirection";
 
 // ─── Helpers ────────────────────────────────────────────────────────
-
-/** Reconstruct audioSections from existing cinematic direction for regeneration calls */
-function extractAudioSectionsFromDirection(
-  cinematicDirection: any,
-  lyrics: any[],
-): any[] | undefined {
-  const sections = cinematicDirection?.sections;
-  if (!Array.isArray(sections) || sections.length === 0) return undefined;
-  const lastLine = lyrics[lyrics.length - 1];
-  const totalDur = lastLine?.end ?? lastLine?.start ?? 1;
-  return sections.map((s: any, i: number) => ({
-    index: s.sectionIndex ?? i,
-    startSec: (s.startRatio ?? i / sections.length) * totalDur,
-    endSec: (s.endRatio ?? (i + 1) / sections.length) * totalDur,
-    role: s.mood ?? "verse",
-    avgEnergy: 0.5,
-    beatDensity: 1,
-    lyrics: lyrics
-      .filter((l: any) => {
-        const secStart = (s.startRatio ?? i / sections.length) * totalDur;
-        const secEnd = (s.endRatio ?? (i + 1) / sections.length) * totalDur;
-        return (l.start ?? 0) >= secStart && (l.start ?? 0) < secEnd;
-      })
-      .map((l: any, li: number) => ({ text: l.text, lineIndex: li })),
-  }));
-}
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -198,30 +173,13 @@ export default function ShareableLyricDance() {
   const [showCover, setShowCover] = useState(true);
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [themeMode, setThemeMode] = useState<'auto' | 'light' | 'dark'>('auto');
-  const [reactionPanelOpen, setReactionPanelOpen] = useState(false);
-  const [engagementMode, setEngagementMode] = useState<'spectator' | 'freezing' | 'engaged'>('spectator');
-  const [frozenLineIndex, setFrozenLineIndex] = useState<number | null>(null);
-  const [reactionData, setReactionData] = useState<
-    Record<string, { line: Record<number, number>; total: number }>
-  >({});
   const currentTimeSecRef = useRef(0);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
-  const freezeAtSecRef = useRef<number | null>(null);
-  const engagementModeRef = useRef<'spectator' | 'freezing' | 'engaged'>('spectator');
 
   const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(
     data?.post_id ?? data?.id ?? "",
     { allowAnonymous: true },
   );
-
-  useEffect(() => {
-    engagementModeRef.current = engagementMode;
-  }, [engagementMode]);
-
-  // ── Audio sections — derived from cinematic direction ────────
-  const audioSections = useMemo(() => {
-    return extractAudioSectionsFromDirection(data?.cinematic_direction, data?.lyrics ?? []) ?? [];
-  }, [data?.cinematic_direction, data?.lyrics]);
 
   // ── Lyric sections — derived from words + cinematic direction ────────
   const durationSec = useMemo(() => {
@@ -237,30 +195,6 @@ export default function ShareableLyricDance() {
     durationSec,
   );
 
-  const lineByIndex = useMemo(() => {
-    const map = new Map<number, LyricSectionLine>();
-    lyricSections.allLines.forEach(line => map.set(line.lineIndex, line));
-    return map;
-  }, [lyricSections.allLines]);
-
-  const getLineAtTime = useCallback((timeSec: number) => {
-    return lyricSections.allLines.find(
-      l => timeSec >= l.startSec && timeSec < l.endSec + 0.1,
-    ) ?? null;
-  }, [lyricSections.allLines]);
-
-  const activeLine = useMemo(() => {
-    if (!lyricSections.isReady) return null;
-    const line = engagementMode === 'engaged' && frozenLineIndex != null
-      ? (lineByIndex.get(frozenLineIndex) ?? null)
-      : getLineAtTime(currentTimeSec);
-    if (!line) return null;
-    const section = lyricSections.sections.find(
-      s => s.lines.some(sl => sl.lineIndex === line.lineIndex),
-    ) ?? null;
-    return { text: line.text, lineIndex: line.lineIndex, sectionLabel: section?.label ?? null };
-  }, [lyricSections, currentTimeSec, engagementMode, frozenLineIndex, lineByIndex, getLineAtTime]);
-
   const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -272,6 +206,27 @@ export default function ShareableLyricDance() {
   // Sync hook's hot-patched data (auto_palettes etc.) back to local state
   useEffect(() => { if (liveData) setDataRaw(liveData); }, [liveData]);
   const playerRef = { current: playerInstance };
+
+  const {
+    reactionPanelOpen,
+    setReactionPanelOpen,
+    engagementMode,
+    frozenLineIndex,
+    reactionData,
+    setReactionData,
+    activeLine,
+    audioSections,
+    palette,
+    handleEngagementStart,
+    handlePanelClose,
+    handleResetEngagement,
+  } = useReactionPanel({
+    player: playerInstance,
+    lyricSections,
+    currentTimeSec,
+    data,
+    durationSec,
+  });
 
   // Sync theme override to player engine
   useEffect(() => {
@@ -475,51 +430,6 @@ export default function ShareableLyricDance() {
     setMuted(newMuted);
   }, [muted]);
 
-  const handleEngagementStart = useCallback((targetLineIndex?: number) => {
-    const player = playerRef.current;
-    if (!player) return;
-
-    if (engagementModeRef.current === 'engaged') {
-      if (targetLineIndex != null) setFrozenLineIndex(targetLineIndex);
-      return;
-    }
-
-    if (targetLineIndex != null) {
-      setFrozenLineIndex(targetLineIndex);
-    } else {
-      const liveLine = getLineAtTime(player.audio.currentTime);
-      if (liveLine) setFrozenLineIndex(liveLine.lineIndex);
-    }
-
-    const currentLine = getLineAtTime(player.audio.currentTime);
-    freezeAtSecRef.current = currentLine?.endSec ?? player.audio.currentTime;
-    setEngagementMode('freezing');
-  }, [getLineAtTime]);
-
-  const handlePanelClose = useCallback(() => {
-    setReactionPanelOpen(false);
-    freezeAtSecRef.current = null;
-    setEngagementMode('spectator');
-    setFrozenLineIndex(null);
-
-    const player = playerRef.current;
-    if (!player || player.audio.ended) return;
-
-    try {
-      player.play();
-    } catch (err) {
-      console.warn('ShareableLyricDance audio resume failed:', err);
-    }
-  }, []);
-
-
-  useEffect(() => {
-    if (engagementMode !== 'spectator' && !reactionPanelOpen) {
-      setEngagementMode('spectator');
-      setFrozenLineIndex(null);
-      freezeAtSecRef.current = null;
-    }
-  }, [reactionPanelOpen, engagementMode]);
   // ── Current time tracking for active lyric UI ───────────────────────
   useEffect(() => {
     const player = playerInstance;
@@ -528,41 +438,30 @@ export default function ShareableLyricDance() {
     let rafId = 0;
 
     const tick = () => {
-      const t = audio.currentTime;
-
-      if (engagementModeRef.current === 'freezing') {
-        const freezeAt = freezeAtSecRef.current ?? t;
-        if (t >= freezeAt) {
-          const clamped = Math.min(t, freezeAt);
-          currentTimeSecRef.current = clamped;
-          setCurrentTimeSec(clamped);
-          audio.pause();
-          setEngagementMode('engaged');
-          freezeAtSecRef.current = null;
-          return;
-        }
+      const timeSec = audio.currentTime;
+      if (Math.abs(timeSec - currentTimeSecRef.current) > 0.05) {
+        currentTimeSecRef.current = timeSec;
+        setCurrentTimeSec(timeSec);
       }
-
-      if (Math.abs(t - currentTimeSecRef.current) > 0.05) {
-        currentTimeSecRef.current = t;
-        setCurrentTimeSec(t);
-      }
-
-      if (engagementModeRef.current === 'engaged') {
-        rafId = 0;
-        return;
-      }
-
       if (!audio.paused && !document.hidden) {
         rafId = requestAnimationFrame(tick);
       }
     };
 
-    const onPlay = () => { if (!rafId) rafId = requestAnimationFrame(tick); };
-    const onPause = () => { cancelAnimationFrame(rafId); rafId = 0; };
+    const onPlay = () => {
+      if (!rafId) rafId = requestAnimationFrame(tick);
+    };
+    const onPause = () => {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    };
     const onVis = () => {
-      if (document.hidden) { cancelAnimationFrame(rafId); rafId = 0; }
-      else if (!audio.paused) onPlay();
+      if (document.hidden) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      } else if (!audio.paused) {
+        onPlay();
+      }
     };
 
     audio.addEventListener('play', onPlay);
@@ -647,7 +546,7 @@ export default function ShareableLyricDance() {
               currentTimeSec={currentTimeSec}
               reactionData={reactionData}
               allLines={lyricSections.allLines}
-              palette={Array.isArray(data?.palette) ? data.palette : []}
+              palette={palette}
               isVisible={!showCover && !isWaitingForPlayer}
             />
           )}
@@ -722,7 +621,7 @@ export default function ShareableLyricDance() {
             data={data}
             onSeekStart={() => {}}
             onSeekEnd={() => {}}
-            palette={Array.isArray(data.palette) ? data.palette : ["#ffffff", "#ffffff", "#ffffff"]}
+            palette={palette.length ? palette : ["#ffffff", "#ffffff", "#ffffff"]}
           />
         )}
 
@@ -760,13 +659,14 @@ export default function ShareableLyricDance() {
         allLines={lyricSections.allLines}
         audioSections={audioSections}
         currentTimeSec={currentTimeSec}
-        palette={Array.isArray(data?.palette) ? data.palette : []}
+        palette={palette}
         onSeekTo={(sec) => playerInstance?.seek(sec)}
         player={playerInstance}
         durationSec={durationSec}
         reactionData={reactionData}
         onReactionDataChange={setReactionData}
         onEngagementStart={handleEngagementStart}
+        onResetEngagement={handleResetEngagement}
         onReactionFired={(emoji) => {
           playerRef.current?.fireComment(emoji);
         }}
