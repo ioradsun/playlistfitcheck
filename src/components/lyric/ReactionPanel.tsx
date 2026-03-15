@@ -424,9 +424,17 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   }, []);
 
   const handleLineTap = (line: LyricSectionLine) => {
-    onEngagementStart(line.lineIndex);
+    // Clear browse mode first so auto-scroll effect can fire correctly
+    setIsBrowsing(false);
+    userScrollingRef.current = false;
+
     setSelectedLineIndex(line.lineIndex);
     setPlayheadLineIndex(line.lineIndex);
+    requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      const row = rowRefs.current[line.lineIndex];
+      if (container && row) container.scrollTo({ top: row.offsetTop, behavior: 'smooth' });
+    });
 
     releaseManualSelectionLock();
 
