@@ -146,7 +146,7 @@ export function useNotifications() {
     const { data } = await supabase
       .from("notifications")
       .select(
-        "id, type, post_id, dance_id, comment_id, actor_user_id, is_read, created_at, source, metadata, actor:actor_user_id(display_name, avatar_url)"
+        "id, type, post_id, comment_id, actor_user_id, is_read, created_at, actor:actor_user_id(display_name, avatar_url)"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
