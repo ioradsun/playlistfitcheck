@@ -251,6 +251,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
   useEffect(() => {
     if (repeatMode) return;
+    if (player && player.audio.paused) return;
 
     const nextFromActive = activeLine?.lineIndex;
     if (nextFromActive != null) {
@@ -264,7 +265,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     if (fallbackLine?.lineIndex != null) {
       setPlayheadLineIndex(prev => (prev === fallbackLine.lineIndex ? prev : fallbackLine.lineIndex));
     }
-  }, [activeLine?.lineIndex, allLines, currentTimeSec, repeatMode]);
+  }, [activeLine?.lineIndex, allLines, currentTimeSec, repeatMode, player]);
 
   useEffect(() => {
     if (!isManualSelectionLocked) return;
