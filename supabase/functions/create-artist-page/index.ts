@@ -7,12 +7,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ── Spotify token cache ──────────────────────────────────────────────────────
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 async function getSpotifyToken(clientId: string, clientSecret: string): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt) {
-    return cachedToken.token;
-  }
+  if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.token;
   const resp = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
     headers: {
@@ -21,37 +20,31 @@ async function getSpotifyToken(clientId: string, clientSecret: string): Promise<
     },
     body: "grant_type=client_credentials",
   });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Spotify auth failed [${resp.status}]: ${text}`);
-  }
+  if (!resp.ok) throw new Error(`Spotify auth failed [${resp.status}]`);
   const data = await resp.json();
   cachedToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 60) * 1000 };
-  return data.access_token;
+  return cachedToken.token;
 }
 
+// ── Fetch Spotify track metadata ─────────────────────────────────────────────
 async function fetchSpotifyTrack(trackId: string, token: string) {
   const resp = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!resp.ok) {
-    throw new Error("Failed to fetch Spotify track");
-  }
-  return await resp.json();
+  if (!resp.ok) throw new Error(`Spotify track fetch failed [${resp.status}]`);
+  return resp.json();
 }
 
+// ── Scrape preview URL from embed page ───────────────────────────────────────
 async function scrapePreviewFromEmbed(trackId: string): Promise<string | null> {
   try {
-    const res = await fetch(
-      `https://open.spotify.com/embed/track/${trackId}`,
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        },
-        signal: AbortSignal.timeout(5000),
-      }
-    );
+    const res = await fetch(`https://open.spotify.com/embed/track/${trackId}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+      },
+      signal: AbortSignal.timeout(5000),
+    });
     if (!res.ok) return null;
     const html = await res.text();
     const match = html.match(/"audioPreview"\s*:\s*\{"url"\s*:\s*"([^"]+)"/);
@@ -63,75 +56,58 @@ async function scrapePreviewFromEmbed(trackId: string): Promise<string | null> {
   }
 }
 
+// ── lrclib ───────────────────────────────────────────────────────────────────
 async function fetchLrclib(
   trackTitle: string,
   artistName: string
 ): Promise<{ syncedLyrics: string | null; plainLyrics: string | null }> {
   try {
-    const params = new URLSearchParams({
-      track_name: trackTitle,
-      artist_name: artistName,
-    });
+    const params = new URLSearchParams({ track_name: trackTitle, artist_name: artistName });
     const res = await fetch(`https://lrclib.net/api/get?${params}`, {
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return { syncedLyrics: null, plainLyrics: null };
     const data = await res.json();
-    return {
-      syncedLyrics: data.syncedLyrics ?? null,
-      plainLyrics: data.plainLyrics ?? null,
-    };
+    return { syncedLyrics: data.syncedLyrics ?? null, plainLyrics: data.plainLyrics ?? null };
   } catch {
     return { syncedLyrics: null, plainLyrics: null };
   }
 }
 
+// ── Ghost profile upsert (ghost_artist_profiles, no auth FK) ─────────────────
 async function upsertGhostProfile(
   slug: string,
   artistName: string,
   supabase: any
-): Promise<{ userId: string; isNew: boolean; alreadyClaimed: boolean; error?: string }> {
+): Promise<{ profileId: string; isNew: boolean; alreadyClaimed: boolean; error?: string }> {
   const { data: existing } = await supabase
-    .from("profiles")
-    .select("id, is_claimed, claim_token")
+    .from("ghost_artist_profiles")
+    .select("id, is_claimed")
     .eq("spotify_artist_slug", slug)
     .maybeSingle();
 
   if (existing) {
-    if (existing.is_claimed) {
-      return { userId: existing.id, isNew: false, alreadyClaimed: true };
-    }
-    return { userId: existing.id, isNew: false, alreadyClaimed: false };
+    if (existing.is_claimed) return { profileId: existing.id, isNew: false, alreadyClaimed: true };
+    return { profileId: existing.id, isNew: false, alreadyClaimed: false };
   }
 
-  const newId = crypto.randomUUID();
-  const { error: insertErr } = await supabase.from("profiles").insert({
-    id: newId,
-    display_name: artistName,
-    spotify_artist_slug: slug,
-    is_claimed: false,
-    claim_token: crypto.randomUUID(),
-  });
+  const { data: newProfile, error: insertErr } = await supabase
+    .from("ghost_artist_profiles")
+    .insert({ display_name: artistName, spotify_artist_slug: slug })
+    .select("id")
+    .single();
 
-  if (insertErr) {
-    return { userId: "", isNew: false, alreadyClaimed: false, error: insertErr.message };
-  }
-
-  await supabase
-    .from("artist_pages")
-    .upsert({ user_id: newId }, { onConflict: "user_id" });
-
-  return { userId: newId, isNew: true, alreadyClaimed: false };
+  if (insertErr) return { profileId: "", isNew: false, alreadyClaimed: false, error: insertErr.message };
+  return { profileId: newProfile.id, isNew: true, alreadyClaimed: false };
 }
 
+// ── AssemblyAI ────────────────────────────────────────────────────────────────
 function buildWordBoost(plainLyrics: string | null): string[] {
   if (!plainLyrics) return [];
-
   return [...new Set(
-    plainLyrics
-      .split(/\s+/)
-      .map((w) => w.replace(/[^a-zA-Z0-9']/g, ""))
-      .filter((w) => w.length > 1)
+    plainLyrics.split(/\s+/)
+      .map(w => w.replace(/[^a-zA-Z0-9']/g, ""))
+      .filter(w => w.length > 1)
       .slice(0, 200)
   )];
 }
@@ -142,52 +118,38 @@ async function submitAssemblyAI(
   apiKey: string
 ): Promise<{ jobId: string | null; error: string | null }> {
   const wordBoost = buildWordBoost(plainLyrics);
-
   const submitRes = await fetch("https://api.assemblyai.com/v2/transcript", {
     method: "POST",
-    headers: {
-      authorization: apiKey,
-      "content-type": "application/json",
-    },
+    headers: { authorization: apiKey, "content-type": "application/json" },
     body: JSON.stringify({
       audio_url: audioUrl,
       speech_models: ["universal-2"],
-      ...(wordBoost.length > 0 && {
-        word_boost: wordBoost,
-        boost_param: "high",
-      }),
+      ...(wordBoost.length > 0 && { word_boost: wordBoost, boost_param: "high" }),
       punctuate: false,
       format_text: false,
     }),
   });
-
   if (!submitRes.ok) {
     const errText = await submitRes.text().catch(() => `HTTP ${submitRes.status}`);
     return { jobId: null, error: `HTTP ${submitRes.status}: ${errText.slice(0, 200)}` };
   }
-
   const data = await submitRes.json();
   const jobId = typeof data.id === "string" ? data.id : null;
-  if (!jobId) {
-    return { jobId: null, error: `No job ID in response: ${JSON.stringify(data).slice(0, 200)}` };
-  }
+  if (!jobId) return { jobId: null, error: `No job ID: ${JSON.stringify(data).slice(0, 100)}` };
   return { jobId, error: null };
 }
 
 async function pollAssemblyAI(
   jobId: string,
   apiKey: string
-): Promise<string | null> {
+): Promise<{ lrc: string; words: Array<{ word: string; start: number; end: number }> } | null> {
   for (let i = 0; i < 20; i++) {
-    await new Promise((r) => setTimeout(r, 1500));
-    const poll = await fetch(
-      `https://api.assemblyai.com/v2/transcript/${jobId}`,
-      { headers: { authorization: apiKey } }
-    );
-
+    await new Promise(r => setTimeout(r, 1500));
+    const poll = await fetch(`https://api.assemblyai.com/v2/transcript/${jobId}`, {
+      headers: { authorization: apiKey },
+    });
     if (!poll.ok) continue;
     const data = await poll.json();
-
     if (data.status === "error") return null;
     if (data.status !== "completed") continue;
     if (!data.words?.length) return null;
@@ -201,139 +163,127 @@ async function pollAssemblyAI(
       const secs = (startSec % 60).toFixed(2).padStart(5, "0");
       lines.push(`[${mins}:${secs}]${chunk.map((x: any) => x.text).join(" ")}`);
     }
-    return lines.join("\n");
-  }
 
+    const words = data.words.map((w: any) => ({
+      word: w.text,
+      start: Math.round(w.start) / 1000,
+      end: Math.round(w.end) / 1000,
+    }));
+
+    return { lrc: lines.join("\n"), words };
+  }
   return null;
 }
 
+// ── LRC → LyricDancePlayer lyrics JSON ───────────────────────────────────────
+function lrcToLyricsJson(
+  lrc: string
+): Array<{ start: number; end: number; text: string; tag: string }> {
+  const parsed = lrc.split("\n").flatMap(line => {
+    const matches = [...line.matchAll(/\[(\d{2}):(\d{2}\.\d{2,3})\]/g)];
+    const text = line.replace(/\[\d{2}:\d{2}\.\d{2,3}\]/g, "").trim();
+    if (!text || !matches.length) return [];
+    return matches.map(m => ({
+      time: parseInt(m[1]) * 60 + parseFloat(m[2]),
+      text,
+    }));
+  }).sort((a, b) => a.time - b.time);
+
+  return parsed.map((line, i) => ({
+    start: line.time,
+    end: parsed[i + 1]?.time ?? line.time + 3,
+    text: line.text,
+    tag: "main" as const,
+  }));
+}
+
+// ── Main handler ──────────────────────────────────────────────────────────────
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    // ── Env vars ──
     const clientId = Deno.env.get("SPOTIFY_CLIENT_ID");
-    if (!clientId) throw new Error("SPOTIFY_CLIENT_ID is not configured");
+    if (!clientId) throw new Error("SPOTIFY_CLIENT_ID not configured");
     const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
-    if (!clientSecret) throw new Error("SPOTIFY_CLIENT_SECRET is not configured");
+    if (!clientSecret) throw new Error("SPOTIFY_CLIENT_SECRET not configured");
     const assemblyKey = Deno.env.get("ASSEMBLYAI_API_KEY") ?? "";
-    const adminUserId = Deno.env.get("ADMIN_USER_ID");
-    if (!adminUserId) throw new Error("ADMIN_USER_ID is not configured");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      throw new Error("Supabase service role is not configured");
-    }
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const adminUserId = Deno.env.get("ADMIN_USER_ID");
+    if (!supabaseUrl || !supabaseServiceKey) throw new Error("Supabase service role not configured");
+    if (!adminUserId) throw new Error("ADMIN_USER_ID not configured");
 
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const jobId = crypto.randomUUID();
 
+    // ── Step logger (always awaited — no fire-and-forget) ──
     async function logStep(
       step: string,
       status: "running" | "done" | "error" | "skipped",
       detail: string | null,
       slug: string
     ) {
+      const now = new Date().toISOString();
       try {
-        const now = new Date().toISOString();
-
         if (status === "running") {
           await supabase.from("claim_page_jobs").insert({
-            job_id: jobId,
-            spotify_artist_slug: slug,
-            step,
-            status: "running",
-            detail,
-            started_at: now,
+            job_id: jobId, spotify_artist_slug: slug,
+            step, status: "running", detail, started_at: now,
           });
           return;
         }
-
-        const { data: updatedRows } = await supabase
+        const { data: updated } = await supabase
           .from("claim_page_jobs")
-          .update({
-            status,
-            detail,
-            completed_at: now,
-          })
-          .eq("job_id", jobId)
-          .eq("step", step)
-          .eq("status", "running")
-          .select("id")
-          .limit(1);
-
-        if (!updatedRows || updatedRows.length === 0) {
+          .update({ status, detail, completed_at: now })
+          .eq("job_id", jobId).eq("step", step).eq("status", "running")
+          .select("id").limit(1);
+        if (!updated?.length) {
           await supabase.from("claim_page_jobs").insert({
-            job_id: jobId,
-            spotify_artist_slug: slug,
-            step,
-            status,
-            detail,
-            started_at: now,
-            completed_at: now,
+            job_id: jobId, spotify_artist_slug: slug,
+            step, status, detail, started_at: now, completed_at: now,
           });
         }
-      } catch (e) {
-        console.error(`logStep failed [${step}/${status}]:`, e);
-      }
+      } catch { /* log failures are non-fatal */ }
     }
 
+    // ── Parse request ──
     const { spotifyUrl } = await req.json();
-
-    const match = spotifyUrl.match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
+    const match = spotifyUrl?.match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
     if (!match) {
       return new Response(JSON.stringify({ error: "Invalid Spotify track URL" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     const trackId = match[1];
 
+    // ── STEP 1: Spotify fetch ──
+    await logStep("spotify_fetch", "running", null, trackId);
     const token = await getSpotifyToken(clientId, clientSecret);
-
-    await logStep("spotify_fetch", "running", null, `track:${trackId}`);
     const track = await fetchSpotifyTrack(trackId, token);
 
     const trackTitle = track.name;
     const artistName = track.artists[0].name;
     const albumArtUrl = track.album.images[0]?.url ?? null;
-    let previewUrl: string | null = track.preview_url ?? null;
-    const apiHadPreview = !!previewUrl;
     const trackUrl = track.external_urls.spotify;
+    let previewUrl: string | null = track.preview_url ?? null;
 
-    const slug = artistName
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "");
+    if (!previewUrl) previewUrl = await scrapePreviewFromEmbed(trackId);
 
-    // Backfill the spotify_fetch running row with the real slug
-    await supabase
-      .from("claim_page_jobs")
-      .update({ spotify_artist_slug: slug })
-      .eq("job_id", jobId)
-      .eq("step", "spotify_fetch");
+    const slug = artistName.toLowerCase()
+      .replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
-    // If Spotify API didn't return a preview, try scraping the embed player
-    if (!previewUrl) {
-      await logStep("spotify_fetch", "running", "preview_url null — trying embed scrape…", slug);
-      previewUrl = await scrapePreviewFromEmbed(trackId);
-    }
+    await logStep("spotify_fetch", "done",
+      `${artistName} — "${trackTitle}" | preview: ${previewUrl ? (track.preview_url ? "api" : "embed") : "none"}`,
+      slug);
 
-    await logStep(
-      "spotify_fetch",
-      "done",
-      `${artistName} — "${trackTitle}" | preview: ${previewUrl ? (apiHadPreview ? "api" : "embed") : "none"}`,
-      slug
-    );
-
+    // ── STEP 2: Ghost profile + lrclib IN PARALLEL ──
     await logStep("ghost_profile", "running", null, slug);
     await logStep("lrclib_check", "running", null, slug);
 
@@ -347,19 +297,30 @@ serve(async (req) => {
       if (p.error) {
         await logStep("ghost_profile", "error", p.error, slug);
       } else {
-        await logStep(
-          "ghost_profile",
+        await logStep("ghost_profile",
           p.alreadyClaimed ? "skipped" : "done",
-          p.alreadyClaimed
-            ? "Already claimed"
-            : p.isNew
-              ? `New profile created — id: ${p.userId}`
-              : `Existing profile found — id: ${p.userId}`,
-          slug
-        );
+          p.alreadyClaimed ? "Already claimed"
+            : p.isNew ? `New profile created — id: ${p.profileId}`
+              : `Existing profile found — id: ${p.profileId}`,
+          slug);
       }
     } else {
-      await logStep("ghost_profile", "error", profileResult.reason?.message ?? "Ghost profile failed", slug);
+      await logStep("ghost_profile", "error", profileResult.reason?.message ?? "Failed", slug);
+    }
+
+    const profile = profileResult.status === "fulfilled" ? profileResult.value : null;
+    if (!profile || profile.error) {
+      await logStep("complete", "error", "Profile creation failed", slug);
+      return new Response(JSON.stringify({ error: "Failed to create profile" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (profile.alreadyClaimed) {
+      await logStep("lrclib_check", "skipped", "Already claimed", slug);
+      await logStep("complete", "done", `/artist/${slug}/claim-page`, slug);
+      return new Response(JSON.stringify({ slug, alreadyClaimed: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const lrclib = lrclibResult.status === "fulfilled"
@@ -371,72 +332,56 @@ serve(async (req) => {
       await logStep("assemblyai_submit", "skipped", "lrclib hit — skipped", slug);
       await logStep("assemblyai_poll", "skipped", "lrclib hit — skipped", slug);
     } else if (lrclib.plainLyrics) {
-      await logStep(
-        "lrclib_check",
-        "done",
-        "Partial hit — plain lyrics only, falling back to AssemblyAI",
-        slug
-      );
+      await logStep("lrclib_check", "done", "Partial — plain lyrics only, using AssemblyAI for timing", slug);
     } else {
       await logStep("lrclib_check", "done", "Miss — no lyrics found", slug);
     }
 
-    const profile = profileResult.status === "fulfilled"
-      ? profileResult.value
-      : null;
-    if (!profile || profile.error) {
-      await logStep("complete", "error", profile?.error ?? "Failed to create profile", slug);
-      return new Response(JSON.stringify({ error: "Failed to create profile" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (profile.alreadyClaimed) {
-      await logStep("complete", "done", `/artist/${slug}/claim-page`, slug);
-      return new Response(JSON.stringify({ slug, alreadyClaimed: true }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    // ── STEP 3: AssemblyAI (only if no synced lyrics) ──
     let syncedLrc: string | null = lrclib.syncedLyrics;
     const plainLyrics: string | null = lrclib.plainLyrics;
     let lyricsSource = lrclib.syncedLyrics ? "lrclib" : "none";
+    let transcriptWords: Array<{ word: string; start: number; end: number }> = [];
 
-    if (!lrclib.syncedLyrics && previewUrl && assemblyKey) {
-      await logStep("assemblyai_submit", "running", `Submitting preview: ${previewUrl.slice(0, 60)}…`, slug);
-      const { jobId: jobIdAi, error: submitError } = await submitAssemblyAI(previewUrl, lrclib.plainLyrics, assemblyKey);
-
-      if (jobIdAi) {
-        await logStep("assemblyai_submit", "done", `Job ID: ${jobIdAi}`, slug);
-        await logStep("assemblyai_poll", "running", "Waiting for transcript…", slug);
-
-        const result = await pollAssemblyAI(jobIdAi, assemblyKey);
-        if (result) {
-          syncedLrc = result;
-          lyricsSource = "assemblyai";
-          const lineCount = result.split("\n").length;
-          await logStep("assemblyai_poll", "done", `Transcript complete — ${lineCount} lyric lines`, slug);
-        } else {
-          await logStep("assemblyai_poll", "error", "Transcript failed or timed out", slug);
-        }
+    if (!lrclib.syncedLyrics) {
+      if (!previewUrl) {
+        await logStep("assemblyai_submit", "skipped", "No preview URL available", slug);
+        await logStep("assemblyai_poll", "skipped", "No preview URL available", slug);
+      } else if (!assemblyKey) {
+        await logStep("assemblyai_submit", "skipped", "ASSEMBLYAI_API_KEY missing", slug);
+        await logStep("assemblyai_poll", "skipped", "ASSEMBLYAI_API_KEY missing", slug);
       } else {
-        await logStep("assemblyai_submit", "error", submitError ?? "Failed to submit job", slug);
-        await logStep("assemblyai_poll", "skipped", "Submit failed", slug);
+        await logStep("assemblyai_submit", "running",
+          `Submitting: ${previewUrl.slice(0, 60)}…`, slug);
+        const { jobId: aiJobId, error: submitError } = await submitAssemblyAI(
+          previewUrl, plainLyrics, assemblyKey
+        );
+        if (!aiJobId) {
+          await logStep("assemblyai_submit", "error", submitError ?? "Submit failed", slug);
+          await logStep("assemblyai_poll", "skipped", "Submit failed", slug);
+        } else {
+          await logStep("assemblyai_submit", "done", `Job ID: ${aiJobId}`, slug);
+          await logStep("assemblyai_poll", "running", "Waiting for transcript…", slug);
+          const pollResult = await pollAssemblyAI(aiJobId, assemblyKey);
+          if (pollResult) {
+            syncedLrc = pollResult.lrc;
+            transcriptWords = pollResult.words;
+            lyricsSource = "assemblyai";
+            await logStep("assemblyai_poll", "done",
+              `Transcript complete — ${pollResult.lrc.split("\n").length} lines, ${pollResult.words.length} words`,
+              slug);
+          } else {
+            await logStep("assemblyai_poll", "error", "Transcript failed or timed out", slug);
+          }
+        }
       }
-    } else if (!lrclib.syncedLyrics && !previewUrl) {
-      await logStep("assemblyai_submit", "skipped", "No preview_url available", slug);
-      await logStep("assemblyai_poll", "skipped", "No preview_url available", slug);
-    } else if (!lrclib.syncedLyrics && !assemblyKey) {
-      await logStep("assemblyai_submit", "skipped", "ASSEMBLYAI_API_KEY missing", slug);
-      await logStep("assemblyai_poll", "skipped", "ASSEMBLYAI_API_KEY missing", slug);
     }
 
+    // ── STEP 4: Save lyric video row ──
     await logStep("lyric_video_save", "running", null, slug);
-
     const { error: insertError } = await supabase.from("artist_lyric_videos").insert({
-      user_id: profile.userId,
+      ghost_profile_id: profile.profileId,
+      user_id: adminUserId,
       spotify_track_id: trackId,
       track_title: trackTitle,
       artist_name: artistName,
@@ -447,24 +392,139 @@ serve(async (req) => {
       plain_lyrics: plainLyrics,
       lyrics_source: lyricsSource,
     });
-
     if (insertError) {
       await logStep("lyric_video_save", "error", insertError.message, slug);
     } else {
-      await logStep(
-        "lyric_video_save",
-        "done",
-        `Source: ${lyricsSource} | lyrics: ${syncedLrc ? "yes" : "none"} | user_id: ${profile.userId}`,
-        slug
-      );
+      await logStep("lyric_video_save", "done",
+        `Source: ${lyricsSource} | lyrics: ${syncedLrc ? "yes" : "none"}`, slug);
     }
 
-    // complete must be awaited BEFORE the return statement
+    // ── STEP 5: Generate LyricDance ──────────────────────────────────────────
+    if (syncedLrc && previewUrl) {
+
+      // 5a: Fetch MP3 + upload to storage
+      await logStep("lyric_dance_mp3", "running", "Fetching preview MP3…", slug);
+      let audioStorageUrl: string | null = null;
+      try {
+        const mp3Res = await fetch(previewUrl, { signal: AbortSignal.timeout(15000) });
+        if (!mp3Res.ok) throw new Error(`MP3 fetch ${mp3Res.status}`);
+        const mp3Bytes = new Uint8Array(await mp3Res.arrayBuffer());
+
+        const storagePath = `ghost/${slug}/${trackId}/preview.mp3`;
+        const { error: uploadErr } = await supabase.storage
+          .from("audio-clips")
+          .upload(storagePath, mp3Bytes, { upsert: true, contentType: "audio/mpeg" });
+        if (uploadErr) throw new Error(`Upload: ${uploadErr.message}`);
+
+        const { data: urlData } = supabase.storage
+          .from("audio-clips").getPublicUrl(storagePath);
+        audioStorageUrl = urlData.publicUrl;
+        await logStep("lyric_dance_mp3", "done",
+          `Stored: ghost/${slug}/${trackId}/preview.mp3`, slug);
+      } catch (e: any) {
+        await logStep("lyric_dance_mp3", "error", e.message ?? "MP3 fetch/upload failed", slug);
+      }
+
+      // 5b: Cinematic direction
+      let cinematicDirection: any = null;
+      await logStep("lyric_dance_cinematic", "running", "Generating cinematic direction…", slug);
+      try {
+        const lyrics = lrcToLyricsJson(syncedLrc);
+        const cdRes = await fetch(`${supabaseUrl}/functions/v1/cinematic-direction`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+          },
+          body: JSON.stringify({
+            title: trackTitle,
+            artist: artistName,
+            lines: lyrics,
+            lyrics: lyrics.map((l: any) => l.text).join("\n"),
+            mode: "scene",
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+        if (cdRes.ok) {
+          const cdData = await cdRes.json();
+          cinematicDirection = cdData.cinematicDirection ?? null;
+          await logStep("lyric_dance_cinematic", "done",
+            `Theme: ${cinematicDirection?.defaults?.scene_tone ?? "generated"}`, slug);
+        } else {
+          const errText = await cdRes.text().catch(() => String(cdRes.status));
+          await logStep("lyric_dance_cinematic", "error", errText.slice(0, 150), slug);
+        }
+      } catch (e: any) {
+        await logStep("lyric_dance_cinematic", "error",
+          e.message ?? "Cinematic direction failed", slug);
+      }
+
+      // 5c: Upsert shareable_lyric_dances
+      if (audioStorageUrl) {
+        await logStep("lyric_dance_save", "running", "Writing LyricDance row…", slug);
+        try {
+          const lyrics = lrcToLyricsJson(syncedLrc);
+          const songSlug = trackTitle.toLowerCase()
+            .replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 50);
+
+          const { error: danceErr } = await supabase
+            .from("shareable_lyric_dances")
+            .upsert({
+              user_id: adminUserId,
+              artist_slug: slug,
+              song_slug: songSlug,
+              artist_name: artistName,
+              song_name: trackTitle,
+              audio_url: audioStorageUrl,
+              lyrics,
+              words: transcriptWords.length > 0 ? transcriptWords : null,
+              cinematic_direction: cinematicDirection,
+              beat_grid: { bpm: 0, beats: [], confidence: 0 },
+              palette: cinematicDirection?.defaults?.palette ??
+                ["#ffffff", "#a855f7", "#ec4899"],
+              section_images: null,
+              auto_palettes: null,
+            }, { onConflict: "artist_slug,song_slug" });
+
+          if (danceErr) throw new Error(danceErr.message);
+
+          const { data: danceRow } = await supabase
+            .from("shareable_lyric_dances")
+            .select("id")
+            .eq("artist_slug", slug)
+            .eq("song_slug", songSlug)
+            .maybeSingle();
+
+          const lyricDanceUrl = `/${slug}/${songSlug}/lyric-dance`;
+
+          await supabase.from("artist_lyric_videos")
+            .update({
+              lyric_dance_url: lyricDanceUrl,
+              lyric_dance_id: danceRow?.id ?? null,
+            })
+            .eq("ghost_profile_id", profile.profileId)
+            .eq("spotify_track_id", trackId);
+
+          await logStep("lyric_dance_save", "done", `Live at ${lyricDanceUrl}`, slug);
+        } catch (e: any) {
+          await logStep("lyric_dance_save", "error", e.message ?? "Dance save failed", slug);
+        }
+      } else {
+        await logStep("lyric_dance_save", "skipped", "No audio URL — MP3 step failed", slug);
+      }
+    } else {
+      await logStep("lyric_dance_mp3", "skipped",
+        syncedLrc ? "No preview URL" : "No lyrics", slug);
+      await logStep("lyric_dance_cinematic", "skipped", "No lyrics or preview", slug);
+      await logStep("lyric_dance_save", "skipped", "No lyrics or preview", slug);
+    }
+
+    // ── COMPLETE ──
     await logStep("complete", "done", `/artist/${slug}/claim-page`, slug);
 
     return new Response(JSON.stringify({
       slug,
-      userId: profile.userId,
+      profileId: profile.profileId,
       trackTitle,
       artistName,
       albumArtUrl,
@@ -476,11 +536,11 @@ serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (error) {
-    console.error("create-artist-page error", error);
+    console.error("create-artist-page error:", error);
     return new Response(JSON.stringify({ error: "An internal error occurred" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

@@ -40,6 +40,7 @@ export type Database = {
           album_art_url: string | null
           artist_name: string
           created_at: string
+          ghost_profile_id: string | null
           id: string
           lyric_dance_id: string | null
           lyric_dance_url: string | null
@@ -56,6 +57,7 @@ export type Database = {
           album_art_url?: string | null
           artist_name: string
           created_at?: string
+          ghost_profile_id?: string | null
           id?: string
           lyric_dance_id?: string | null
           lyric_dance_url?: string | null
@@ -72,6 +74,7 @@ export type Database = {
           album_art_url?: string | null
           artist_name?: string
           created_at?: string
+          ghost_profile_id?: string | null
           id?: string
           lyric_dance_id?: string | null
           lyric_dance_url?: string | null
@@ -84,7 +87,15 @@ export type Database = {
           track_title?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "artist_lyric_videos_ghost_profile_id_fkey"
+            columns: ["ghost_profile_id"]
+            isOneToOne: false
+            referencedRelation: "ghost_artist_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       artist_pages: {
         Row: {
@@ -468,6 +479,39 @@ export type Database = {
         Update: {
           event_type?: string
           weight?: number
+        }
+        Relationships: []
+      }
+      ghost_artist_profiles: {
+        Row: {
+          claim_token: string
+          claimed_at: string | null
+          claimed_by_user_id: string | null
+          created_at: string
+          display_name: string
+          id: string
+          is_claimed: boolean
+          spotify_artist_slug: string
+        }
+        Insert: {
+          claim_token?: string
+          claimed_at?: string | null
+          claimed_by_user_id?: string | null
+          created_at?: string
+          display_name: string
+          id?: string
+          is_claimed?: boolean
+          spotify_artist_slug: string
+        }
+        Update: {
+          claim_token?: string
+          claimed_at?: string | null
+          claimed_by_user_id?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_claimed?: boolean
+          spotify_artist_slug?: string
         }
         Relationships: []
       }

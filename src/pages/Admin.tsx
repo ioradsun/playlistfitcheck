@@ -73,33 +73,37 @@ export default function Admin() {
   }, []);
 
   const fetchReachRows = useCallback(async () => {
-    // profiles and artist_lyric_videos have no FK, so query separately
     const [{ data: profiles }, { data: videos }] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("id, display_name, spotify_artist_slug, is_claimed, created_at")
-        .not("spotify_artist_slug", "is", null)
+      (supabase as any)
+        .from("ghost_artist_profiles")
+        .select("id, display_name, spotify_artist_slug, is_claimed, claimed_at, created_at")
         .order("created_at", { ascending: false }),
-      supabase
+      (supabase as any)
         .from("artist_lyric_videos")
-        .select("id, user_id, track_title, artist_name, album_art_url, created_at")
+        .select("id, ghost_profile_id, track_title, artist_name, album_art_url, spotify_track_url, lyrics_source, preview_url, synced_lyrics_lrc, lyric_dance_url, lyric_dance_id, created_at")
         .order("created_at", { ascending: false }),
     ]);
+
+    const videoByProfile = new Map<string, any>();
+    (videos ?? []).forEach((v: any) => {
+      if (!videoByProfile.has(v.ghost_profile_id))
+        videoByProfile.set(v.ghost_profile_id, v);
+    });
+
     if (profiles) {
-      // Build a map: user_id → first video
-      const videoByUser = new Map<string, any>();
-      (videos ?? []).forEach((v: any) => {
-        if (!videoByUser.has(v.user_id)) videoByUser.set(v.user_id, v);
-      });
       setReachRows(
         profiles.map((p: any) => {
-          const vid = videoByUser.get(p.id);
+          const vid = videoByProfile.get(p.id);
           return {
             spotify_artist_slug: p.spotify_artist_slug,
             artist_name: p.display_name ?? vid?.artist_name ?? "Unknown",
             track_title: vid?.track_title ?? "—",
             album_art_url: vid?.album_art_url ?? null,
+            spotify_track_url: vid?.spotify_track_url ?? null,
+            lyrics_source: vid?.lyrics_source ?? null,
+            lyric_dance_url: vid?.lyric_dance_url ?? null,
             is_claimed: p.is_claimed,
+            claimed_at: p.claimed_at ?? null,
             created_at: p.created_at,
           };
         })

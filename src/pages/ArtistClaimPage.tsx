@@ -158,7 +158,17 @@ export default function ArtistClaimPage() {
           </div>
         </div>
 
-        {lyricVideoUserId && <LyricVideoSection userId={lyricVideoUserId} accentRgb={accentRgb} />}
+        {lyricMeta?.lyric_dance_url ? (
+          <div className="rounded-xl overflow-hidden border border-white/10 aspect-[9/16] max-h-[70vh]">
+            <iframe
+              src={lyricMeta.lyric_dance_url}
+              className="w-full h-full"
+              allow="autoplay"
+            />
+          </div>
+        ) : lyricVideoUserId ? (
+          <LyricVideoSection userId={lyricVideoUserId} accentRgb={accentRgb} />
+        ) : null}
 
         <div className="border-t border-white/10 mt-8 pt-7">
           {justClaimed ? (
