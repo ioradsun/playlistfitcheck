@@ -842,73 +842,82 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
       </div>
 
       <div
-        className="shrink-0 flex items-stretch"
-        style={{ height: 48, background: '#0a0a0a', borderTop: '0.5px solid rgba(255,255,255,0.06)' }}
+        className="shrink-0 flex"
+        style={{ background: '#0a0a0a', borderTop: '0.5px solid rgba(255,255,255,0.06)' }}
       >
-        <button
-          onClick={onVoteYes}
-          className="flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors"
-        >
-          <span
-            className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
-            style={{
-              color: votedSide === null ? 'rgba(255,255,255,1)'
-                : votedSide === 'a' ? voteAccent
-                : 'rgba(255,255,255,0.22)',
-            }}
-          >
-            Run it back
-          </span>
-          {runItBackCount > 0 && (
-            <span className="text-[9px] font-mono text-white/25">{runItBackCount}</span>
-          )}
-        </button>
-
-        <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
-
-        <button
-          onClick={onVoteNo}
-          className="flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors"
-        >
-          <span
-            className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
-            style={{
-              color: votedSide === null ? 'rgba(255,255,255,1)'
-                : votedSide === 'b' ? voteAccent
-                : 'rgba(255,255,255,0.22)',
-            }}
-          >
-            Not for me
-          </span>
-          {notForMeCount > 0 && (
-            <span className="text-[9px] font-mono text-white/25">{notForMeCount}</span>
-          )}
-        </button>
-
-        <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
-
-        <div className="flex items-center shrink-0 px-3 gap-2">
+        <div className="w-full max-w-2xl mx-auto flex items-stretch" style={{ height: 48 }}>
           <button
-            onClick={() => {
-              releaseManualSelectionLock();
-              setAutoFollowEnabled(true);
-              setRepeatMode(false);
-              onResetEngagement?.();
-              setIsBrowsing(false);
-              userScrollingRef.current = false;
-              player?.setMuted(false);
-              player?.seek(0);
-              player?.play();
-            }}
-            className="text-[15px] text-white/25 hover:text-white/65 transition-colors"
-            aria-label="Replay"
+            onClick={onVoteYes}
+            className="flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors"
           >
-            ↺
+            <span
+              className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
+              style={{
+                color: votedSide === null ? 'rgba(255,255,255,1)'
+                  : votedSide === 'a' ? voteAccent
+                  : 'rgba(255,255,255,0.22)',
+              }}
+            >
+              Run it back
+            </span>
+            {runItBackCount > 0 && (
+              <span className="text-[9px] font-mono text-white/25">{runItBackCount}</span>
+            )}
           </button>
+
           <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
-          <button onClick={handlePanelClose} aria-label="Close">
-            <X size={13} className="text-white/30 hover:text-white/60 transition-colors" />
+
+          <button
+            onClick={onVoteNo}
+            className="flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors"
+          >
+            <span
+              className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
+              style={{
+                color: votedSide === null ? 'rgba(255,255,255,1)'
+                  : votedSide === 'b' ? voteAccent
+                  : 'rgba(255,255,255,0.22)',
+              }}
+            >
+              Not for me
+            </span>
+            {notForMeCount > 0 && (
+              <span className="text-[9px] font-mono text-white/25">{notForMeCount}</span>
+            )}
           </button>
+
+          <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
+
+          <div className="flex items-center shrink-0 px-3 gap-2">
+            <button
+              onClick={() => {
+                releaseManualSelectionLock();
+                setAutoFollowEnabled(true);
+                setRepeatMode(false);
+                onResetEngagement?.();
+                setIsBrowsing(false);
+                userScrollingRef.current = false;
+                player?.setMuted(false);
+                player?.seek(0);
+                const firstLine = allLines[0] ?? null;
+                if (firstLine) {
+                  setPlayheadLineIndex(firstLine.lineIndex);
+                  const container = scrollContainerRef.current;
+                  const row = rowRefs.current[firstLine.lineIndex];
+                  if (container && row) container.scrollTo({ top: row.offsetTop, behavior: 'smooth' });
+                }
+                player?.play();
+              }}
+              className="text-[15px] text-white/25 hover:text-white/65 transition-colors"
+              aria-label="Replay"
+            >
+              ↺
+            </button>
+            <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
+            <button onClick={handlePanelClose} aria-label="Close">
+              <X size={13} className="text-white/30 hover:text-white/60 transition-colors" />
+            </button>
+          </div>
         </div>
       </div>
     </PanelShell>

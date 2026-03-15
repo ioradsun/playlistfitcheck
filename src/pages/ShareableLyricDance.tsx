@@ -178,7 +178,7 @@ export default function ShareableLyricDance() {
 
   const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(
     data?.post_id ?? data?.id ?? "",
-    { allowAnonymous: true },
+    { anonymous: true },
   );
 
   // ── Lyric sections — derived from words + cinematic direction ────────
