@@ -41,6 +41,8 @@ export type Database = {
           artist_name: string
           created_at: string
           id: string
+          lyric_dance_id: string | null
+          lyric_dance_url: string | null
           lyrics_source: string | null
           plain_lyrics: string | null
           preview_url: string | null
@@ -55,6 +57,8 @@ export type Database = {
           artist_name: string
           created_at?: string
           id?: string
+          lyric_dance_id?: string | null
+          lyric_dance_url?: string | null
           lyrics_source?: string | null
           plain_lyrics?: string | null
           preview_url?: string | null
@@ -69,6 +73,8 @@ export type Database = {
           artist_name?: string
           created_at?: string
           id?: string
+          lyric_dance_id?: string | null
+          lyric_dance_url?: string | null
           lyrics_source?: string | null
           plain_lyrics?: string | null
           preview_url?: string | null
