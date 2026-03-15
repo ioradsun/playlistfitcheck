@@ -263,7 +263,7 @@ serve(async (req) => {
 
     const token = await getSpotifyToken(clientId, clientSecret);
 
-    fireAndForgetLog("spotify_fetch", "running", null, trackId);
+    fireAndForgetLog("spotify_fetch", "running", null, `track:${trackId}`);
     const track = await fetchSpotifyTrack(trackId, token);
 
     const trackTitle = track.name;
