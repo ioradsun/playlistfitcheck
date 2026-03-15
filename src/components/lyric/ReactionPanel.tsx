@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getSessionId } from '@/lib/sessionId';
@@ -98,12 +98,6 @@ function CommentReactPicker({
   );
 }
 
-function isLineOutsideViewport(container: HTMLElement, row: HTMLElement, threshold = 20) {
-  const containerRect = container.getBoundingClientRect();
-  const rowRect = row.getBoundingClientRect();
-  return rowRect.top < containerRect.top + threshold || rowRect.bottom > containerRect.bottom - threshold;
-}
-
 function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, durationSec, onReactionFired, reactionData, onReactionDataChange, onEngagementStart, onResetEngagement, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0 }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState('');
@@ -118,7 +112,9 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   const [manualPlaybackTargetIndex, setManualPlaybackTargetIndex] = useState<number | null>(null);
   const [manualPlaybackEndTimeSec, setManualPlaybackEndTimeSec] = useState<number | null>(null);
   const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(null);
-  const [autoFollowEnabled, setAutoFollowEnabled] = useState(true);
+  const [isUserScrollingLyrics, setIsUserScrollingLyrics] = useState(false);
+  const [lyricsOffset, setLyricsOffset] = useState(0);
+  const [lyricsTransitionMs, setLyricsTransitionMs] = useState(200);
   const [replyingTo, setReplyingTo] = useState<CommentRow | null>(null);
   const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(null);
   const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
@@ -130,11 +126,21 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   const manualPlaybackTargetIndexRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const manualOffsetRef = useRef(0);
+  const userScrollingRef = useRef(false);
+  const userScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchYRef = useRef<number | null>(null);
 
   const clearLoopTimeout = () => {
     if (!loopTimeoutRef.current) return;
     clearTimeout(loopTimeoutRef.current);
     loopTimeoutRef.current = null;
+  };
+
+  const clearUserScrollTimeout = () => {
+    if (!userScrollTimeoutRef.current) return;
+    clearTimeout(userScrollTimeoutRef.current);
+    userScrollTimeoutRef.current = null;
   };
 
   const releaseManualSelectionLock = () => {
@@ -159,7 +165,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
       player.seek(seekToSec);
     }
 
-    setAutoFollowEnabled(false);
     setManualPlaybackEndTimeSec(null);
   };
 
@@ -230,9 +235,33 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
   const engagedDisplayLineIndex = engagementMode === 'engaged' ? frozenLineIndex : null;
 
-  const displayLineIndex = engagedDisplayLineIndex ?? ((isManualSelectionLocked || !autoFollowEnabled)
+  const displayLineIndex = engagedDisplayLineIndex ?? (isManualSelectionLocked
     ? (selectedLineIndex ?? manualPlaybackTargetIndex)
     : (playheadLineIndex ?? activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null));
+
+  const getCenteredLyricsOffset = useCallback((lineIndex: number | null) => {
+    if (lineIndex == null) return null;
+    const container = scrollContainerRef.current;
+    const row = rowRefs.current[lineIndex];
+    if (!container || !row) return null;
+    const containerMidpoint = container.clientHeight / 2;
+    return containerMidpoint - row.offsetTop - row.offsetHeight / 2;
+  }, []);
+
+  const applyCenteredLyricsOffset = useCallback((lineIndex: number | null) => {
+    const centeredOffset = getCenteredLyricsOffset(lineIndex);
+    if (centeredOffset == null) return;
+    setLyricsOffset(centeredOffset + manualOffsetRef.current);
+  }, [getCenteredLyricsOffset]);
+
+  const resetManualScrollOverride = useCallback((mode: 'snap' | 'animate' = 'snap') => {
+    clearUserScrollTimeout();
+    userScrollingRef.current = false;
+    manualOffsetRef.current = 0;
+    setIsUserScrollingLyrics(false);
+    setLyricsTransitionMs(mode === 'animate' ? 400 : 0);
+    applyCenteredLyricsOffset(displayLineIndex);
+  }, [applyCenteredLyricsOffset, displayLineIndex]);
 
   const displayLine = displayLineIndex != null
     ? (lineByIndex.get(displayLineIndex) ?? activeLine)
@@ -272,7 +301,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     setExpandedLineIndex(null);
     setSelectedLineIndex(startingLineIndex);
     setPlayheadLineIndex(startingLineIndex);
-    setAutoFollowEnabled(true);
+    resetManualScrollOverride('snap');
   }, [isOpen, allLines]);
 
   // playhead tracking is intentionally separate from manual selection/lock
@@ -361,18 +390,69 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     };
   }, [repeatMode, player, allLines]);
 
-  // guarded passive live-follow scrolling: no smooth stacking and no manual lock fights
   useEffect(() => {
-    if (!autoFollowEnabled) return;
-    if (displayLineIndex == null) return;
+    if (userScrollingRef.current) return;
+    setLyricsTransitionMs(200);
+    applyCenteredLyricsOffset(displayLineIndex);
+  }, [applyCenteredLyricsOffset, displayLineIndex]);
 
+  useEffect(() => {
     const container = scrollContainerRef.current;
-    const row = rowRefs.current[displayLineIndex];
-    if (!container || !row) return;
-    if (!isLineOutsideViewport(container, row)) return;
+    if (!container) return;
 
-    row.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-  }, [autoFollowEnabled, displayLineIndex]);
+    const beginManualScroll = () => {
+      if (!userScrollingRef.current) {
+        userScrollingRef.current = true;
+        setIsUserScrollingLyrics(true);
+      }
+      setLyricsTransitionMs(0);
+      clearUserScrollTimeout();
+      userScrollTimeoutRef.current = setTimeout(() => {
+        resetManualScrollOverride('animate');
+      }, 2500);
+    };
+
+    const applyManualDelta = (deltaY: number) => {
+      beginManualScroll();
+      manualOffsetRef.current -= deltaY;
+      applyCenteredLyricsOffset(displayLineIndex);
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      applyManualDelta(event.deltaY);
+      onEngagementStart(displayLineIndex ?? undefined);
+    };
+
+    const onTouchStart = (event: TouchEvent) => {
+      touchYRef.current = event.touches[0]?.clientY ?? null;
+      onEngagementStart(displayLineIndex ?? undefined);
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY;
+      if (currentY == null || touchYRef.current == null) return;
+      event.preventDefault();
+      applyManualDelta(touchYRef.current - currentY);
+      touchYRef.current = currentY;
+    };
+
+    const onTouchEnd = () => {
+      touchYRef.current = null;
+    };
+
+    container.addEventListener('wheel', onWheel, { passive: false });
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd);
+
+    return () => {
+      container.removeEventListener('wheel', onWheel);
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [applyCenteredLyricsOffset, displayLineIndex, onEngagementStart, resetManualScrollOverride]);
 
   useEffect(() => {
     if (!danceId) return;
@@ -424,6 +504,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     return () => {
       clearLoopTimeout();
       cancelAnimationFrame(repeatRafRef.current);
+      clearUserScrollTimeout();
     };
   }, []);
 
@@ -432,7 +513,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     releaseManualSelectionLock();
     clearLoopTimeout();
     setRepeatMode(true);
-    setAutoFollowEnabled(true);
+    resetManualScrollOverride('snap');
     player.seek(0);
     player.play();
   };
@@ -446,9 +527,9 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
   const handleLineTap = (line: LyricSectionLine) => {
     onEngagementStart(line.lineIndex);
+    resetManualScrollOverride('snap');
     setSelectedLineIndex(line.lineIndex);
     setPlayheadLineIndex(line.lineIndex);
-    setAutoFollowEnabled(false);
 
     // Always release any prior lock before starting a new one
     releaseManualSelectionLock();
@@ -596,7 +677,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
           onReplay={() => {
             if (!player) return;
             releaseManualSelectionLock();
-            setAutoFollowEnabled(true);
+            resetManualScrollOverride('snap');
             setRepeatMode(false);
             onResetEngagement?.();
             player.setMuted(false);
@@ -629,14 +710,12 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         />
 
             {/* ── Lyrics scroll: fills remaining space ── */}
-            <div
+          <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto min-h-0"
-              style={{ scrollbarWidth: 'none' }}
-              onScroll={() => onEngagementStart(displayLineIndex ?? undefined)}
-              onTouchStart={() => onEngagementStart(displayLineIndex ?? undefined)}
+              className="relative flex-1 overflow-hidden min-h-0"
             >
-              <div className="py-1">
+              <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 h-8 border-y border-white/10" />
+              <div className="py-1" style={{ transform: `translateY(${lyricsOffset}px)`, transition: `transform ${lyricsTransitionMs}ms ease` }}>
                 {allLines.map((line, linePosition) => {
                   const currentSection = sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
                   const previousSection = linePosition > 0
@@ -649,7 +728,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                   const isSelected = selectedLineIndex === line.lineIndex;
                   const isPlayhead = playheadLineIndex === line.lineIndex;
                   const isRepeatActive = repeatMode && repeatActiveLineIndex === line.lineIndex;
-                  const isActive = (autoFollowEnabled && isPlayhead) || (!autoFollowEnabled && isSelected) || isRepeatActive;
+                  const isActive = (!isManualSelectionLocked && isPlayhead) || (isManualSelectionLocked && isSelected) || isRepeatActive;
                   const lineCommentCount = commentCountByLine[line.lineIndex] ?? 0;
                   const isCommentPulsing = submittedLineIndex === line.lineIndex;
                   const isExpanded = expandedLineIndex === line.lineIndex;
@@ -781,12 +860,12 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
             ■ Stop
           </button>
         ) : (
-          !autoFollowEnabled && (
+          isUserScrollingLyrics && (
             <button
-              onClick={() => { releaseManualSelectionLock(); setAutoFollowEnabled(true); }}
+              onClick={() => resetManualScrollOverride('animate')}
               className="px-2 py-1 rounded-md text-[9px] font-mono uppercase tracking-wider text-white/35 border border-white/10 hover:text-white/60"
             >
-              resume live
+              recenter
             </button>
           )
         )}
@@ -800,7 +879,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
         onReplay={() => {
           if (!player) return;
           releaseManualSelectionLock();
-          setAutoFollowEnabled(true);
+          resetManualScrollOverride('snap');
           setRepeatMode(false);
           onResetEngagement?.();
           player.setMuted(false);
@@ -868,12 +947,10 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
           <div
             ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto"
-            style={{ scrollbarWidth: 'none' }}
-            onScroll={() => onEngagementStart(displayLineIndex ?? undefined)}
-            onTouchStart={() => onEngagementStart(displayLineIndex ?? undefined)}
+            className="relative flex-1 overflow-hidden"
           >
-            <div className="pb-2">
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 h-10 border-y border-white/10" />
+            <div className="pb-2" style={{ transform: `translateY(${lyricsOffset}px)`, transition: `transform ${lyricsTransitionMs}ms ease` }}>
               {allLines.map((line, linePosition) => {
                     const currentSection = sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
                     const previousSection = linePosition > 0
@@ -886,7 +963,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                     const isSelected = selectedLineIndex === line.lineIndex;
                     const isPlayhead = playheadLineIndex === line.lineIndex;
                     const isRepeatActive = repeatMode && repeatActiveLineIndex === line.lineIndex;
-                    const isActive = (autoFollowEnabled && isPlayhead) || (!autoFollowEnabled && isSelected) || isRepeatActive;
+                    const isActive = (!isManualSelectionLocked && isPlayhead) || (isManualSelectionLocked && isSelected) || isRepeatActive;
 
                     const lineReactionsByEmoji = EMOJIS
                       .map(({ key, symbol }) => ({ key, symbol, count: reactionData[key]?.line[line.lineIndex] ?? 0 }))

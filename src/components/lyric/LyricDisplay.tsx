@@ -418,7 +418,13 @@ export function LyricDisplay({
 
   // Lyric scroll
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
-  const activeLineRef = useRef<HTMLDivElement>(null);
+  const lyricRowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const manualLyricOffsetRef = useRef(0);
+  const userScrollingLyricsRef = useRef(false);
+  const userScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchYRef = useRef<number | null>(null);
+  const [lyricsOffset, setLyricsOffset] = useState(0);
+  const [lyricsTransitionMs, setLyricsTransitionMs] = useState(200);
 
   // Copy state
   const [copied, setCopied] = useState<ExportFormat | null>(null);
@@ -686,6 +692,35 @@ export function LyricDisplay({
     ...(activeLineIndices.size > 0 ? [...activeLineIndices] : [-1]),
   );
 
+  const clearUserLyricsScrollTimeout = useCallback(() => {
+    if (!userScrollTimeoutRef.current) return;
+    clearTimeout(userScrollTimeoutRef.current);
+    userScrollTimeoutRef.current = null;
+  }, []);
+
+  const getCenteredLyricsOffset = useCallback((lineIndex: number) => {
+    const container = lyricsContainerRef.current;
+    const row = lyricRowRefs.current[lineIndex];
+    if (!container || !row) return null;
+    const containerMidpoint = container.clientHeight / 2;
+    return containerMidpoint - row.offsetTop - row.offsetHeight / 2;
+  }, []);
+
+  const applyCenteredLyricsOffset = useCallback((lineIndex: number) => {
+    if (lineIndex < 0) return;
+    const centeredOffset = getCenteredLyricsOffset(lineIndex);
+    if (centeredOffset == null) return;
+    setLyricsOffset(centeredOffset + manualLyricOffsetRef.current);
+  }, [getCenteredLyricsOffset]);
+
+  const resetManualLyricsScrollOverride = useCallback((mode: 'snap' | 'animate' = 'snap') => {
+    clearUserLyricsScrollTimeout();
+    userScrollingLyricsRef.current = false;
+    manualLyricOffsetRef.current = 0;
+    setLyricsTransitionMs(mode === 'animate' ? 400 : 0);
+    applyCenteredLyricsOffset(primaryActiveLine);
+  }, [applyCenteredLyricsOffset, clearUserLyricsScrollTimeout, primaryActiveLine]);
+
   // ── Audio setup ───────────────────────────────────────────────────────────
   useEffect(() => {
     const url = URL.createObjectURL(audioFile);
@@ -784,22 +819,65 @@ export function LyricDisplay({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioFile]);
 
-  // ── Auto-scroll active lyric ──────────────────────────────────────────────
-  // Scroll within the lyrics container only — never scroll the page
+  useEffect(() => {
+    if (userScrollingLyricsRef.current) return;
+    setLyricsTransitionMs(200);
+    applyCenteredLyricsOffset(primaryActiveLine);
+  }, [applyCenteredLyricsOffset, primaryActiveLine]);
+
   useEffect(() => {
     const container = lyricsContainerRef.current;
-    const activeLine = activeLineRef.current;
-    if (!container || !activeLine) return;
-    const containerTop = container.scrollTop;
-    const containerBottom = containerTop + container.clientHeight;
-    const lineTop = activeLine.offsetTop;
-    const lineBottom = lineTop + activeLine.offsetHeight;
-    const targetScroll =
-      lineTop - container.clientHeight / 2 + activeLine.offsetHeight / 2;
-    if (lineTop < containerTop || lineBottom > containerBottom) {
-      container.scrollTo({ top: targetScroll, behavior: "smooth" });
-    }
-  }, [primaryActiveLine]);
+    if (!container) return;
+
+    const beginManualScroll = () => {
+      userScrollingLyricsRef.current = true;
+      setLyricsTransitionMs(0);
+      clearUserLyricsScrollTimeout();
+      userScrollTimeoutRef.current = setTimeout(() => {
+        resetManualLyricsScrollOverride('animate');
+      }, 2500);
+    };
+
+    const applyManualDelta = (deltaY: number) => {
+      beginManualScroll();
+      manualLyricOffsetRef.current -= deltaY;
+      applyCenteredLyricsOffset(primaryActiveLine);
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      applyManualDelta(event.deltaY);
+    };
+
+    const onTouchStart = (event: TouchEvent) => {
+      touchYRef.current = event.touches[0]?.clientY ?? null;
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY;
+      if (currentY == null || touchYRef.current == null) return;
+      event.preventDefault();
+      applyManualDelta(touchYRef.current - currentY);
+      touchYRef.current = currentY;
+    };
+
+    const onTouchEnd = () => {
+      touchYRef.current = null;
+    };
+
+    container.addEventListener('wheel', onWheel, { passive: false });
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd);
+
+    return () => {
+      container.removeEventListener('wheel', onWheel);
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
+      clearUserLyricsScrollTimeout();
+    };
+  }, [applyCenteredLyricsOffset, clearUserLyricsScrollTimeout, primaryActiveLine, resetManualLyricsScrollOverride]);
 
   // ── Playback controls ─────────────────────────────────────────────────────
   const togglePlay = useCallback(() => {
@@ -828,6 +906,7 @@ export function LyricDisplay({
         cancelAnimationFrame(clipProgressRafRef.current);
       audio.currentTime = time;
       setCurrentTime(time);
+      resetManualLyricsScrollOverride('snap');
       if (wasPlaying) {
         audio.play().catch(() => {});
       }
@@ -837,7 +916,7 @@ export function LyricDisplay({
         setIsPlaying(false);
       }
     },
-    [isPlaying],
+    [isPlaying, resetManualLyricsScrollOverride],
   );
 
   // ── Clip loop: play a hook region on repeat ───────────────────────────────
@@ -1595,11 +1674,12 @@ export function LyricDisplay({
                 </div>
               </div>
             )}
-            {/* v3.7: scroll height anchored to last element's start time so Outro adlibs are reachable */}
             <div
               ref={lyricsContainerRef}
-              className="overflow-y-auto space-y-0.5 flex-1 min-h-0 pb-6"
+              className="relative overflow-hidden space-y-0.5 flex-1 min-h-0"
             >
+              <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 h-10 border-y border-border/50" />
+              <div style={{ transform: `translateY(${lyricsOffset}px)`, transition: `transform ${lyricsTransitionMs}ms ease` }}>
               {activeLines.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   {activeVersion === "fmly"
@@ -1749,7 +1829,9 @@ export function LyricDisplay({
                   return (
                     <div
                       key={`${line.start}-${line.tag ?? "main"}-${i}`}
-                      ref={isPrimary ? activeLineRef : undefined}
+                      ref={(node) => {
+                        lyricRowRefs.current[i] = node;
+                      }}
                       className={`group flex items-start gap-3 px-3 py-1 rounded-lg transition-all ${
                         isAdlib ? "ml-6 opacity-70" : ""
                       } ${
@@ -1768,7 +1850,11 @@ export function LyricDisplay({
                     >
                       <span
                         className="text-[10px] font-mono text-muted-foreground/60 pt-0.5 shrink-0 w-12 cursor-pointer hover:text-primary"
-                        onClick={() => { seekTo(line.start); if (!isPlaying) togglePlay(); }}
+                        onClick={() => {
+                          resetManualLyricsScrollOverride('snap');
+                          seekTo(line.start);
+                          if (!isPlaying) togglePlay();
+                        }}
                       >
                         {formatTimeLRC(line.start)}
                       </span>
@@ -1854,6 +1940,7 @@ export function LyricDisplay({
                   );
                 })
               )}
+              </div>
             </div>
           </div>
 
