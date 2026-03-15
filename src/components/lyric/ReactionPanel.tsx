@@ -124,7 +124,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   const manualPlaybackTargetIndexRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
-  const activeBlockRef = useRef<HTMLDivElement | null>(null);
   const userScrollingRef = useRef(false);
 
   const clearLoopTimeout = () => {
@@ -338,33 +337,33 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     if (isBrowsing) return;
     const container = scrollContainerRef.current;
     const row = rowRefs.current[playheadLineIndex ?? -1];
-    const block = activeBlockRef.current;
     if (!container || !row) return;
+
+    // Use the row's parent div which wraps active line + emoji bar + comment input
+    const block = row.parentElement ?? row;
 
     const containerTop = container.scrollTop;
     const containerBottom = containerTop + container.clientHeight;
 
     const rowTop = row.offsetTop;
-    const blockBottom = block
-      ? block.offsetTop + block.offsetHeight
-      : row.offsetTop + row.offsetHeight;
+    const blockBottom = block.offsetTop + block.offsetHeight;
 
     const rowVisible = rowTop >= containerTop && rowTop < containerBottom;
     const blockFullyVisible = blockBottom <= containerBottom;
 
     if (rowVisible && blockFullyVisible) {
-      // Active line and its emoji/comment rows are fully in view — don't move
+      // Both line and emoji/comment block fully visible — don't move
       return;
     }
 
     if (rowVisible && !blockFullyVisible) {
-      // Active line visible but emoji/comment clipped at bottom — nudge up just enough
+      // Line visible but emoji/comment clipped — nudge just enough
       const nudge = blockBottom - containerBottom + 12;
       container.scrollBy({ top: nudge, behavior: 'smooth' });
       return;
     }
 
-    // Active line off screen — scroll to 30% from top for spatial context
+    // Line off screen — bring to 30% from top for spatial context
     const targetTop = rowTop - container.clientHeight * 0.30;
     container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }, [playheadLineIndex, isBrowsing]);
@@ -669,7 +668,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
             return (
               <div
                 key={line.lineIndex}
-                ref={isActive ? (node) => { activeBlockRef.current = node; } : undefined}
               >
                 {shouldShowSectionHeader && (
                   <div className={linePosition === 0 ? 'mb-0.5' : 'mt-2 mb-0.5'}>
