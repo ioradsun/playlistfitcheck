@@ -19,13 +19,11 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }:
   const [referenceLyrics, setReferenceLyrics] = useState("");
 
   const handleSubmit = () => {
-    console.log("[LyricUploader] handleSubmit called, files:", files.length, files[0]?.name, files[0]?.size);
     if (!files[0]) {
       toast.error("Please select an audio file first");
       return;
     }
     const lyrics = referenceLyrics.trim() || undefined;
-    console.log("[LyricUploader] calling onTranscribe");
     onTranscribe(files[0], lyrics);
   };
 

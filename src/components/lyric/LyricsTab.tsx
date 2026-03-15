@@ -120,9 +120,7 @@ export function LyricsTab({
 
   const handleTranscribe = useCallback(
     async (file: File, referenceLyrics?: string) => {
-      console.log("[LyricsTab] handleTranscribe called", file.name, file.size, "quota.canUse:", quota.canUse, "quota.tier:", quota.tier, "quota.loading:", quota.loading);
       if (!quota.canUse) {
-        console.log("[LyricsTab] quota blocked — canUse false");
         toast.error(
           quota.tier === "anonymous"
             ? "Sign up for more uses"
