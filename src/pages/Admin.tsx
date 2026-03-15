@@ -309,7 +309,7 @@ export default function Admin() {
           <TabsContent value="reach" className="mt-4">
             {tab === "reach" && (
               <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
-                <ReachDashboard />
+                <ReachDashboardWrapper />
               </Suspense>
             )}
           </TabsContent>
