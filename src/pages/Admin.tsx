@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { preloadEssentia } from "@/hooks/useBeatGrid";
 import { motion } from "framer-motion";
 import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music, Bomb, X, RefreshCw } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
@@ -98,10 +99,11 @@ export default function Admin() {
             spotify_artist_slug: p.spotify_artist_slug,
             artist_name: p.display_name ?? vid?.artist_name ?? "Unknown",
             track_title: vid?.track_title ?? "—",
+            preview_url: vid?.preview_url ?? null,
+            lyric_dance_url: vid?.lyric_dance_url ?? null,
             album_art_url: vid?.album_art_url ?? null,
             spotify_track_url: vid?.spotify_track_url ?? null,
             lyrics_source: vid?.lyrics_source ?? null,
-            lyric_dance_url: vid?.lyric_dance_url ?? null,
             is_claimed: p.is_claimed,
             claimed_at: p.claimed_at ?? null,
             created_at: p.created_at,
@@ -138,6 +140,7 @@ export default function Admin() {
   // Fetch reach rows when tab switches
   useEffect(() => {
     if (tab === "reach" && isAdmin) {
+      preloadEssentia();
       fetchReachRows().catch(console.error);
     }
   }, [tab, isAdmin, fetchReachRows]);
