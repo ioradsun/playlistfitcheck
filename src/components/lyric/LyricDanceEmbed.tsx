@@ -641,6 +641,7 @@ export function LyricDanceEmbed({
   const handlePanelClose = useCallback(() => {
     closePanel();
     freezeAtSecRef.current = null;
+    engagementModeRef.current = "spectator";
     setEngagementMode("spectator");
     setFrozenLineIndex(null);
     if (!player || player.audio.ended) return;
