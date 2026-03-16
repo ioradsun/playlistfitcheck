@@ -123,14 +123,11 @@ export default function ClaimBanner({
           {headline}
         </p>
 
-        {/* CTA — transparent pill with play icon */}
+        {/* CTA — matches PLAY VIDEO button radius */}
         <div
-          className="flex-shrink-0 flex items-center gap-2 text-[11px] sm:text-[11.5px] font-semibold text-white/90 border border-white/20 rounded-full px-3 py-1.5 backdrop-blur-sm"
+          className="flex-shrink-0 flex items-center text-[11px] sm:text-[11.5px] font-semibold text-white/90 border border-white/20 rounded-lg px-3 py-1.5 backdrop-blur-sm"
           style={{ background: "transparent" }}
         >
-          <svg width="10" height="11" viewBox="0 0 10 11" fill="none" aria-hidden>
-            <path d="M2 1.5L9 5.5L2 9.5V1.5Z" fill="currentColor" opacity="0.85" />
-          </svg>
           Claim Your Free Artist Account
         </div>
       </div>
