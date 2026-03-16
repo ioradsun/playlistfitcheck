@@ -25,49 +25,87 @@ export default function ClaimBanner({
     });
   };
 
-  const label = !loading && nextNumber
-    ? `Founding Artist #${nextNumber}`
-    : "Founding Artist";
+  const displayName = artistName
+    ? artistName.split(" ")[0].charAt(0).toUpperCase() + artistName.split(" ")[0].slice(1)
+    : null;
+
+  const headline = (() => {
+    if (!loading && nextNumber && displayName) {
+      return (
+        <>
+          {displayName}, you could be{" "}
+          <span className="text-white">Founding Artist #{nextNumber}</span>
+          {" "}of toolsFM
+        </>
+      );
+    }
+    if (!loading && nextNumber) {
+      return (
+        <>
+          You could be{" "}
+          <span className="text-white">Founding Artist #{nextNumber}</span>
+          {" "}of toolsFM
+        </>
+      );
+    }
+    return (
+      <>
+        Become a{" "}
+        <span className="text-white">Founding Artist</span>
+        {" "}of toolsFM
+      </>
+    );
+  })();
 
   return (
     <div
       onClick={handleClaim}
-      className="flex-shrink-0 w-full z-[55] relative cursor-pointer overflow-hidden"
+      className="flex-shrink-0 w-full z-[55] relative cursor-pointer overflow-hidden active:opacity-90 transition-opacity"
       style={{ height: "68px" }}
     >
-      {coverArtUrl && (
+      {/* Blurred cover art backdrop */}
+      {coverArtUrl ? (
         <img
           src={coverArtUrl}
           alt=""
           aria-hidden
           className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
           style={{
-            filter: "blur(18px) saturate(1.4) brightness(0.55)",
-            transform: "scale(1.15)",
+            filter: "blur(22px) saturate(1.2) brightness(0.45)",
+            transform: "scale(1.18)",
             transformOrigin: "center",
           }}
         />
+      ) : (
+        <div className="absolute inset-0" style={{ background: accent }} />
       )}
 
+      {/* Neutral dark scrim — no color tint, lighter over thumbnail zone, darker over text zone */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: coverArtUrl
-            ? `linear-gradient(90deg, ${accent}55 0%, ${accent}22 60%, transparent 100%)`
-            : accent,
+          background: "linear-gradient(90deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 58px, rgba(0,0,0,0.55) 120px, rgba(0,0,0,0.60) 100%)",
         }}
       />
 
+      {/* Top/bottom edge vignette only */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{ boxShadow: "inset 0 0 30px 4px rgba(0,0,0,0.5)" }}
+        style={{ boxShadow: "inset 0 8px 12px -4px rgba(0,0,0,0.4), inset 0 -8px 12px -4px rgba(0,0,0,0.4)" }}
       />
 
-      <div className="relative z-10 h-full flex items-center gap-3 px-3 sm:px-4 active:opacity-80 transition-opacity">
+      {/* Content row */}
+      <div className="relative z-10 h-full flex items-center gap-3 px-3 sm:px-4">
+
+        {/* Thumbnail — z-20, above the scrim stack, fully vivid */}
         {coverArtUrl && (
           <div
-            className="flex-shrink-0 rounded-[6px] overflow-hidden border border-white/20 shadow-lg"
-            style={{ width: 44, height: 44 }}
+            className="flex-shrink-0 rounded-[5px] overflow-hidden shadow-lg z-20"
+            style={{
+              width: 42,
+              height: 42,
+              border: "1px solid rgba(255,255,255,0.18)",
+            }}
           >
             <img
               src={coverArtUrl}
@@ -77,25 +115,23 @@ export default function ClaimBanner({
           </div>
         )}
 
-        <div className="flex flex-col min-w-0 flex-1">
-          <p className="text-[11px] sm:text-[12px] font-semibold text-white leading-tight tracking-wide">
-            {label} of tools<span style={{ color: accent === "#a855f7" ? "#c084fc" : accent }}>FM</span>
-          </p>
-          <p className="text-[10px] text-white/50 leading-tight mt-0.5 truncate">
-            {songName && artistName
-              ? `${artistName} · claim your page · free forever`
-              : "free forever · built for artists"}
-          </p>
-        </div>
-
-        <div
-          className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white border border-white/25 backdrop-blur-sm"
-          style={{ background: "rgba(255,255,255,0.12)" }}
+        {/* Headline — single line, no subheading */}
+        <p
+          className="flex-1 min-w-0 text-[11.5px] sm:text-[12.5px] font-medium leading-snug truncate"
+          style={{ color: "rgba(255,255,255,0.72)" }}
         >
-          Claim free
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
-            <path d="M2 5h6M5.5 2.5 8 5l-2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+          {headline}
+        </p>
+
+        {/* CTA — transparent pill with play icon */}
+        <div
+          className="flex-shrink-0 flex items-center gap-2 text-[11px] sm:text-[11.5px] font-semibold text-white/90 border border-white/20 rounded-full px-3 py-1.5 backdrop-blur-sm"
+          style={{ background: "transparent" }}
+        >
+          <svg width="10" height="11" viewBox="0 0 10 11" fill="none" aria-hidden>
+            <path d="M2 1.5L9 5.5L2 9.5V1.5Z" fill="currentColor" opacity="0.85" />
           </svg>
+          Claim Your Free Artist Account
         </div>
       </div>
     </div>

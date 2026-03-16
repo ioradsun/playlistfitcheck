@@ -525,7 +525,7 @@ export default function ShareableLyricDance() {
         <ClaimBanner
           artistSlug={artistSlug}
           accent={palette?.[1] || palette?.[0] || data?.palette?.[1] || "#a855f7"}
-          coverArtUrl={data?.section_images?.[0] ?? (data as any)?.album_art_url ?? null}
+          coverArtUrl={(data as any)?.album_art_url ?? data?.section_images?.[0] ?? null}
           songName={data?.song_name}
           artistName={data?.artist_name}
         />
