@@ -566,7 +566,7 @@ export default function ShareableLyricDance() {
           />
 
           {/* Hot section incoming pill */}
-          {!showCover && !isWaitingForPlayer && (
+          {!showCover && !isWaitingForPlayer && !isMarketingView && (
             <HotSectionPill
               sections={lyricSections.sections}
               currentTimeSec={currentTimeSec}
