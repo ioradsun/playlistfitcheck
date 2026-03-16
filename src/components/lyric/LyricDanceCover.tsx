@@ -131,7 +131,7 @@ export function LyricDanceCover({
                 cursor: waiting ? "default" : "pointer",
               }}
             >
-              {waiting ? "Loading…" : "▶  Play Video"}
+              {waiting ? "Loading…" : "Play Video"}
             </button>
           </>
         ) : (

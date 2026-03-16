@@ -619,7 +619,7 @@ export default function ShareableLyricDance() {
         </AnimatePresence>
 
         {/* Identity label — only when cover dismissed and data ready */}
-        {!showCover && !isWaitingForPlayer && (
+        {!showCover && !isWaitingForPlayer && !isMarketingView && (
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2.5">
             {coverAvatarUrl ? (
               <img src={coverAvatarUrl} alt={coverArtist || coverSongName} className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
