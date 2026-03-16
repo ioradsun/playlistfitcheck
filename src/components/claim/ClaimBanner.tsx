@@ -128,7 +128,7 @@ export default function ClaimBanner({
 
         {/* Row 2: CTA centered, full-width on mobile */}
         <div
-          className="flex items-center justify-center flex-shrink-0 text-[11px] sm:text-[11.5px] font-semibold text-white/90 border border-white/20 rounded-lg px-3 py-1.5 backdrop-blur-sm w-full sm:w-auto"
+          className="flex items-center justify-center flex-shrink-0 text-[11px] sm:text-[11.5px] font-semibold text-white/90 border border-white/20 rounded-lg px-3 py-1.5 backdrop-blur-sm w-auto"
           style={{ background: "transparent" }}
         >
           Claim Your Free Artist Account
