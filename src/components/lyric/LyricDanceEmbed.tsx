@@ -255,7 +255,7 @@ export function LyricDanceEmbed({
     canvasRef,
     textCanvasRef,
     containerRef,
-    { bootMode: "full" },
+    { bootMode: "minimal" },
   );
 
   // ── Text vertical bias — shift canvas text above the bottom bar ────
@@ -277,6 +277,25 @@ export function LyricDanceEmbed({
       sharedIO?.unobserve(el);
     };
   }, [isFeedEmbed, data]);
+
+  useEffect(() => {
+    if (!player || !playerReady) return;
+    if (!isFeedEmbed) return;
+    // "near" fires ~180px before the card enters the viewport (rootMargin on shared IO).
+    // Start the bake now so it's ready or nearly ready when the card becomes visible.
+    if (visibility === "near" || visibility === "visible") {
+      player.scheduleFullModeUpgrade();
+    }
+  }, [player, playerReady, visibility, isFeedEmbed]);
+
+  useEffect(() => {
+    if (!player || !playerReady) return;
+    if (isFeedEmbed) return; // feed handled by visibility effect above
+    // Non-feed (FitTab, export preview, etc): one player, already in view.
+    // Kick the bake immediately so animation is ready before Listen Now.
+    player.scheduleFullModeUpgrade();
+  }, [player, playerReady, isFeedEmbed]);
+
 
   // ── Eviction when scrolled far away (feed only) ────────────────────
   useEffect(() => {
@@ -396,6 +415,7 @@ export function LyricDanceEmbed({
     forceDemoted,
     isFeedEmbed,
     isBattleMode,
+    showCover,
   ]);
 
   // ── Reactions fetch ────────────────────────────────────────────────
