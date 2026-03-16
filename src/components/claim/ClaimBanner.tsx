@@ -61,7 +61,6 @@ export default function ClaimBanner({
     <div
       onClick={handleClaim}
       className="flex-shrink-0 w-full z-[55] relative cursor-pointer overflow-hidden active:opacity-90 transition-opacity"
-      style={{ height: "68px" }}
     >
       {/* Blurred cover art backdrop */}
       {coverArtUrl ? (
@@ -80,7 +79,7 @@ export default function ClaimBanner({
         <div className="absolute inset-0" style={{ background: accent }} />
       )}
 
-      {/* Neutral dark scrim — no color tint, lighter over thumbnail zone, darker over text zone */}
+      {/* Neutral dark scrim — lighter over thumbnail zone, darker over text */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -88,44 +87,44 @@ export default function ClaimBanner({
         }}
       />
 
-      {/* Top/bottom edge vignette only */}
+      {/* Top/bottom edge vignette */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{ boxShadow: "inset 0 8px 12px -4px rgba(0,0,0,0.4), inset 0 -8px 12px -4px rgba(0,0,0,0.4)" }}
       />
 
-      {/* Content row */}
-      <div className="relative z-10 h-full flex items-center gap-3 px-3 sm:px-4">
+      {/* Content — two rows on mobile, single row on sm+ */}
+      <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-0 sm:h-[68px]">
 
-        {/* Thumbnail — z-20, above the scrim stack, fully vivid */}
-        {coverArtUrl && (
-          <div
-            className="flex-shrink-0 rounded-[5px] overflow-hidden shadow-lg z-20"
-            style={{
-              width: 42,
-              height: 42,
-              border: "1px solid rgba(255,255,255,0.18)",
-            }}
+        {/* Row 1: thumbnail + headline */}
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {coverArtUrl && (
+            <div
+              className="flex-shrink-0 rounded-[5px] overflow-hidden shadow-lg z-20"
+              style={{
+                width: 42,
+                height: 42,
+                border: "1px solid rgba(255,255,255,0.18)",
+              }}
+            >
+              <img
+                src={coverArtUrl}
+                alt={songName ?? "cover"}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+          <p
+            className="flex-1 min-w-0 text-[11.5px] sm:text-[12.5px] font-medium leading-snug"
+            style={{ color: "rgba(255,255,255,0.72)" }}
           >
-            <img
-              src={coverArtUrl}
-              alt={songName ?? "cover"}
-              className="w-full h-full object-cover"
-            />
-          </div>
-        )}
+            {headline}
+          </p>
+        </div>
 
-        {/* Headline — single line, no subheading */}
-        <p
-          className="flex-1 min-w-0 text-[11.5px] sm:text-[12.5px] font-medium leading-snug truncate"
-          style={{ color: "rgba(255,255,255,0.72)" }}
-        >
-          {headline}
-        </p>
-
-        {/* CTA — matches PLAY VIDEO button radius */}
+        {/* Row 2 on mobile / inline on sm+: CTA button */}
         <div
-          className="flex-shrink-0 flex items-center text-[11px] sm:text-[11.5px] font-semibold text-white/90 border border-white/20 rounded-lg px-3 py-1.5 backdrop-blur-sm"
+          className="flex items-center justify-center sm:justify-start flex-shrink-0 text-[11px] sm:text-[11.5px] font-semibold text-white/90 border border-white/20 rounded-lg px-3 py-1.5 backdrop-blur-sm w-full sm:w-auto"
           style={{ background: "transparent" }}
         >
           Claim Your Free Artist Account
