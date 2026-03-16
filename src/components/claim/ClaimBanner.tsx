@@ -94,10 +94,12 @@ export default function ClaimBanner({
       />
 
       {/* Content — two rows on mobile, single row on sm+ */}
-      <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-0 sm:h-[68px]">
+      <div className="relative z-10 flex flex-col items-center gap-1.5 px-3 sm:px-4 py-2.5 sm:py-0 sm:h-[68px] sm:justify-center">
 
-        {/* Row 1: thumbnail + headline */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+        {/* Row 1: thumbnail + headline centered as a unit */}
+        <div className="flex items-center justify-center gap-3">
+
+          {/* Cover thumbnail — z-20, above scrim */}
           {coverArtUrl && (
             <div
               className="flex-shrink-0 rounded-[5px] overflow-hidden shadow-lg z-20"
@@ -114,17 +116,19 @@ export default function ClaimBanner({
               />
             </div>
           )}
+
+          {/* Headline */}
           <p
-            className="flex-1 min-w-0 text-[11.5px] sm:text-[12.5px] font-medium leading-snug"
+            className="text-[11.5px] sm:text-[12.5px] font-medium leading-snug text-center"
             style={{ color: "rgba(255,255,255,0.72)" }}
           >
             {headline}
           </p>
         </div>
 
-        {/* Row 2 on mobile / inline on sm+: CTA button */}
+        {/* Row 2: CTA centered, full-width on mobile */}
         <div
-          className="flex items-center justify-center sm:justify-start flex-shrink-0 text-[11px] sm:text-[11.5px] font-semibold text-white/90 border border-white/20 rounded-lg px-3 py-1.5 backdrop-blur-sm w-full sm:w-auto"
+          className="flex items-center justify-center flex-shrink-0 text-[11px] sm:text-[11.5px] font-semibold text-white/90 border border-white/20 rounded-lg px-3 py-1.5 backdrop-blur-sm w-full sm:w-auto"
           style={{ background: "transparent" }}
         >
           Claim Your Free Artist Account
