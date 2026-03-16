@@ -1226,7 +1226,7 @@ export class LyricDancePlayer {
     // Disable native loop for region-based players — tick() handles region looping manually
     this.audio.loop = !(data.region_start != null && data.region_end != null);
     this.audio.muted = true;
-    this.audio.preload = "auto";
+    this.audio.preload = "none";
     this.bootMode = options?.bootMode ?? "minimal";
     // Battle mode (region players): start at quality tier 2 to halve GPU fill rate
     // Two players running simultaneously = double the render cost
@@ -1334,6 +1334,7 @@ export class LyricDancePlayer {
   private startPlaybackClock(): void {
     if (this.destroyed) return;
     this.perfMarks.tClockStart = this.perfMarks.tClockStart ?? performance.now();
+    this.primeAudio();
     this.audio.play().catch(() => {});
     this.playing = true;
     this.startHealthMonitor();
@@ -1341,7 +1342,12 @@ export class LyricDancePlayer {
     this.rafHandle = requestAnimationFrame(this.tick);
   }
 
-  private scheduleFullModeUpgrade(): void {
+  private primeAudio(): void {
+    this.audio.preload = "auto";
+    this.audio.load();
+  }
+
+  scheduleFullModeUpgrade(): void {
     const run = () => {
       this.prepareFullMode().catch(() => {
         // keep minimal mode alive on upgrade errors
@@ -1543,6 +1549,7 @@ export class LyricDancePlayer {
 
   play(): void {
     if (this.destroyed) return;
+    this.primeAudio();
     this.playing = true;
     const playStart = this.data.region_start ?? this.songStartSec;
     if (this.audio.currentTime <= 0 || this.data.region_start != null) {
