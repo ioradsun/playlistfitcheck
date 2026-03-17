@@ -197,23 +197,6 @@ export function LyricDanceEmbed({
     }
   }, [isControlled, onExternalPanelOpenChange]);
 
-  const handleOpenReactions = useCallback(() => {
-    if (hideReactButton) {
-      onOpenReactions?.();
-      return;
-    }
-    openPanel();
-    const p = player;
-    if (showCover) {
-      setShowCover(false);
-      p?.setMuted(false);
-      setMuted(false);
-    }
-    if (p?.audio.paused) {
-      p.play();
-    }
-  }, [hideReactButton, onOpenReactions, openPanel, player, showCover]);
-
   // ── Data fetch ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!lyricDanceId) return;
@@ -265,6 +248,22 @@ export function LyricDanceEmbed({
     containerRef,
     { bootMode: "minimal" },
   );
+
+  const handleOpenReactions = useCallback(() => {
+    if (hideReactButton) {
+      onOpenReactions?.();
+      return;
+    }
+    openPanel();
+    if (showCover) {
+      setShowCover(false);
+      player?.setMuted(false);
+      setMuted(false);
+    }
+    if (player?.audio.paused) {
+      player.play();
+    }
+  }, [hideReactButton, onOpenReactions, openPanel, player, showCover]);
 
   useEffect(() => {
     if (!player || !playerReady) return;
