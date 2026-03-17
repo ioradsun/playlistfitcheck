@@ -451,13 +451,14 @@ export default function ShareableLyricDance() {
     playerRef.current?.pause();
   }, []);
 
-  const handleResumeAfterInput = useCallback(() => {
-    playerRef.current?.play();
-  }, []);
-
   const openReactionPanel = useCallback(() => {
     setReactionPanelOpen(true);
-    if (!showCover && playerRef.current && playerRef.current.audio.paused) {
+    if (showCover) {
+      setShowCover(false);
+      playerRef.current?.setMuted(false);
+      setMuted(false);
+    }
+    if (playerRef.current?.audio.paused) {
       playerRef.current.play();
     }
   }, [showCover, setReactionPanelOpen]);
@@ -630,7 +631,6 @@ export default function ShareableLyricDance() {
                 onListen={(e) => {
                   e.stopPropagation();
                   setShowCover(false);
-                  playerRef.current?.seek(0);
                   playerRef.current?.setMuted(false);
                   playerRef.current?.play();
                   setMuted(false);
@@ -643,23 +643,19 @@ export default function ShareableLyricDance() {
         {/* Persistent top bar */}
         {!isWaitingForPlayer && !isMarketingView && (
           <div className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-            {!showCover ? (
-              <div className="flex items-center gap-2.5">
-                {coverAvatarUrl ? (
-                  <img src={coverAvatarUrl} alt={coverArtist || coverSongName} className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                    <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
-                  </div>
-                )}
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-semibold text-white/60 leading-tight truncate max-w-[180px]">{coverSongName}</span>
-                  <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">{coverArtist}</span>
+            <div className="flex items-center gap-2.5">
+              {coverAvatarUrl ? (
+                <img src={coverAvatarUrl} alt={coverArtist || coverSongName} className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                  <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
                 </div>
+              )}
+              <div className="flex flex-col">
+                <span className="text-[11px] font-semibold text-white/60 leading-tight truncate max-w-[180px]">{coverSongName}</span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">{coverArtist}</span>
               </div>
-            ) : (
-              <span />
-            )}
+            </div>
             <div className="flex items-center gap-1">
               <button onClick={(e) => { e.stopPropagation(); handleMuteToggle(); }} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
                 {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -746,7 +742,6 @@ export default function ShareableLyricDance() {
           playerRef.current?.fireComment(emoji);
         }}
         onPause={handlePauseForInput}
-        onResume={handleResumeAfterInput}
       />
     </div>
   );

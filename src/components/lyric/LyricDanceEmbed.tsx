@@ -21,7 +21,7 @@ import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { getSessionId } from "@/lib/sessionId";
-import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
+import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 
 // ── Shared IntersectionObserver ────────────────────────────────────────
@@ -197,19 +197,22 @@ export function LyricDanceEmbed({
     }
   }, [isControlled, onExternalPanelOpenChange]);
 
-  const playerRef2 = useRef<LyricDancePlayer | null>(null);
-
   const handleOpenReactions = useCallback(() => {
     if (hideReactButton) {
       onOpenReactions?.();
       return;
     }
     openPanel();
-    const p = playerRef2.current;
-    if (!showCover && p && p.audio.paused) {
+    const p = player;
+    if (showCover) {
+      setShowCover(false);
+      p?.setMuted(false);
+      setMuted(false);
+    }
+    if (p?.audio.paused) {
       p.play();
     }
-  }, [hideReactButton, onOpenReactions, openPanel, showCover]);
+  }, [hideReactButton, onOpenReactions, openPanel, player, showCover]);
 
   // ── Data fetch ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -262,9 +265,6 @@ export function LyricDanceEmbed({
     containerRef,
     { bootMode: "minimal" },
   );
-
-  // Keep playerRef2 in sync for callbacks declared before useLyricDancePlayer
-  playerRef2.current = player;
 
   useEffect(() => {
     if (!player || !playerReady) return;
@@ -623,10 +623,6 @@ export function LyricDanceEmbed({
     player.pause();
   }, [player]);
 
-  const handleResumeAfterInput = useCallback(() => {
-    if (!player) return;
-    player.play();
-  }, [player]);
 
   // ── Progress tracking for playbar ─────────────────────────────────
   const [progress, setProgress] = useState(0);
@@ -706,7 +702,6 @@ export function LyricDanceEmbed({
                 onPlay?.();
                 if (player) {
                   player.setMuted(false);
-                  player.seek(regionStart ?? 0);
                   player.play();
                 }
                 setMuted(false);
@@ -722,13 +717,9 @@ export function LyricDanceEmbed({
           className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2"
           onClick={(e) => e.stopPropagation()}
         >
-          {!effectiveShowCover ? (
-            <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider bg-black/30 backdrop-blur-sm rounded px-1.5 py-0.5">
-              {songTitle}
-            </span>
-          ) : (
-            <span />
-          )}
+          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider bg-black/30 backdrop-blur-sm rounded px-1.5 py-0.5">
+            {songTitle}
+          </span>
           <div className="flex items-center gap-1">
             <button onClick={toggleMute} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
               {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -736,7 +727,7 @@ export function LyricDanceEmbed({
             <button onClick={handleReplay} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
               <RotateCcw size={14} />
             </button>
-            {showExpandButton && !effectiveShowCover && (
+            {showExpandButton && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -828,7 +819,6 @@ export function LyricDanceEmbed({
           onReactionDataChange={setReactionData}
           onReactionFired={(emoji) => player?.fireComment(emoji)}
           onPause={handlePauseForInput}
-          onResume={handleResumeAfterInput}
         />
       )}
     </div>
