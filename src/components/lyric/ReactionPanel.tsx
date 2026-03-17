@@ -490,9 +490,10 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     clearLoopTimeout();
     requestAnimationFrame(() => {
       if (player) {
-        player.setMuted(false);
         player.seek(line.startSec);
-        player.play();
+        player.audio.muted = false;
+        player.audio.play().catch(() => {});
+        player.startRendering();
 
         const safeStopSec = Math.max(line.startSec, line.endSec - 0.02);
         const stopAfterMs = Math.max((safeStopSec - line.startSec) * 1000, 50);
