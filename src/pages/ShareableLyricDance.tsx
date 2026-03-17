@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
+import { Volume2, VolumeX, RotateCcw } from "lucide-react";
 
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
@@ -213,16 +214,12 @@ export default function ShareableLyricDance() {
   const {
     reactionPanelOpen,
     setReactionPanelOpen,
-    engagementMode,
-    frozenLineIndex,
     reactionData,
     setReactionData,
     activeLine,
     audioSections,
     palette,
-    handleEngagementStart,
     handlePanelClose,
-    handleResetEngagement,
   } = useReactionPanel({
     player: playerInstance,
     lyricSections,
@@ -440,6 +437,20 @@ export default function ShareableLyricDance() {
     setMuted(newMuted);
   }, [muted]);
 
+  const handleReplay = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const player = playerRef.current;
+    if (!player) return;
+    player.setMuted(false);
+    player.seek(0);
+    player.play();
+    setMuted(false);
+  }, []);
+
+  const handlePauseForInput = useCallback(() => {
+    playerRef.current?.pause();
+  }, []);
+
   // ── Current time tracking for active lyric UI ───────────────────────
   useEffect(() => {
     const player = playerInstance;
@@ -618,19 +629,29 @@ export default function ShareableLyricDance() {
           )}
         </AnimatePresence>
 
-        {/* Identity label — only when cover dismissed and data ready */}
+        {/* Persistent top bar */}
         {!showCover && !isWaitingForPlayer && !isMarketingView && (
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-2.5">
-            {coverAvatarUrl ? (
-              <img src={coverAvatarUrl} alt={coverArtist || coverSongName} className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
+          <div className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2.5">
+              {coverAvatarUrl ? (
+                <img src={coverAvatarUrl} alt={coverArtist || coverSongName} className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                  <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
+                </div>
+              )}
+              <div className="flex flex-col">
+                <span className="text-[11px] font-semibold text-white/60 leading-tight truncate max-w-[180px]">{coverSongName}</span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">{coverArtist}</span>
               </div>
-            )}
-            <div className="flex flex-col">
-              <span className="text-[11px] font-semibold text-white/60 leading-tight truncate max-w-[180px]">{coverSongName}</span>
-              <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">{coverArtist}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={(e) => { e.stopPropagation(); handleMuteToggle(); }} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
+                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+              </button>
+              <button onClick={handleReplay} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
+                <RotateCcw size={14} />
+              </button>
             </div>
           </div>
         )}
@@ -695,8 +716,6 @@ export default function ShareableLyricDance() {
         score={score}
         onVoteYes={() => handleVote(true)}
         onVoteNo={() => handleVote(false)}
-        engagementMode={engagementMode}
-        frozenLineIndex={frozenLineIndex}
         danceId={data?.id ?? ''}
         activeLine={activeLine}
         allLines={lyricSections.allLines}
@@ -708,11 +727,10 @@ export default function ShareableLyricDance() {
         durationSec={durationSec}
         reactionData={reactionData}
         onReactionDataChange={setReactionData}
-        onEngagementStart={handleEngagementStart}
-        onResetEngagement={handleResetEngagement}
         onReactionFired={(emoji) => {
           playerRef.current?.fireComment(emoji);
         }}
+        onPause={handlePauseForInput}
       />
     </div>
   );
