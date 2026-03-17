@@ -42,7 +42,6 @@ interface ReactionPanelProps {
   onReactionDataChange: (data: Record<string, { line: Record<number, number>; total: number }> | ((prev: Record<string, { line: Record<number, number>; total: number }>) => Record<string, { line: Record<number, number>; total: number }>)) => void;
   onReactionFired: (emoji: string) => void;
   onPause?: () => void;
-  onResume?: () => void;
   votedSide: 'a' | 'b' | null;
   score: { total: number; replay_yes: number } | null;
   onVoteYes: () => void;
@@ -96,7 +95,7 @@ function CommentReactPicker({
   );
 }
 
-function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allLines, audioSections, currentTimeSec: _currentTimeSec, palette, onSeekTo, player, onReactionFired, reactionData, onReactionDataChange, onPause, onResume, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0 }: ReactionPanelProps) {
+function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allLines, audioSections, currentTimeSec: _currentTimeSec, palette, onSeekTo, player, onReactionFired, reactionData, onReactionDataChange, onPause, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0 }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -290,11 +289,10 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
       onSeekTo(line.startSec);
       return;
     }
+
     player.seek(line.startSec);
-    if (player.audio.paused) {
-      player.audio.play().catch(() => {});
-      player.startRendering();
-    }
+    player.play();
+
     userScrollingRef.current = false;
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
@@ -400,7 +398,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     setTextInput('');
     setReplyingTo(null);
     onReactionFired('fire');
-    onResume?.();
     setTimeout(() => setHasSubmitted(false), 500);
   };
 
