@@ -1344,7 +1344,10 @@ export class LyricDancePlayer {
 
   private primeAudio(): void {
     this.audio.preload = "auto";
-    this.audio.load();
+    // Avoid calling load() on every play/resume: it resets currentTime and breaks seek-based resumes.
+    if (this.audio.networkState === HTMLMediaElement.NETWORK_EMPTY) {
+      this.audio.load();
+    }
   }
 
   scheduleFullModeUpgrade(): void {
