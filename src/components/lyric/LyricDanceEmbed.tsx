@@ -21,7 +21,7 @@ import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { getSessionId } from "@/lib/sessionId";
-import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 
 // ── Shared IntersectionObserver ────────────────────────────────────────
