@@ -623,6 +623,11 @@ export function LyricDanceEmbed({
     player.pause();
   }, [player]);
 
+  const handleResumeAfterInput = useCallback(() => {
+    if (!player) return;
+    player.play();
+  }, [player]);
+
 
   // ── Progress tracking for playbar ─────────────────────────────────
   const [progress, setProgress] = useState(0);
@@ -819,6 +824,7 @@ export function LyricDanceEmbed({
           onReactionDataChange={setReactionData}
           onReactionFired={(emoji) => player?.fireComment(emoji)}
           onPause={handlePauseForInput}
+          onResume={handleResumeAfterInput}
         />
       )}
     </div>

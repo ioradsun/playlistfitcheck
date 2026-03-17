@@ -451,6 +451,10 @@ export default function ShareableLyricDance() {
     playerRef.current?.pause();
   }, []);
 
+  const handleResumeAfterInput = useCallback(() => {
+    playerRef.current?.play();
+  }, []);
+
   const openReactionPanel = useCallback(() => {
     setReactionPanelOpen(true);
     if (showCover) {
@@ -604,7 +608,10 @@ export default function ShareableLyricDance() {
             <div
               className="absolute inset-0 z-[15] cursor-pointer"
               style={{ background: 'rgba(0,0,0,0.55)', transition: 'opacity 200ms ease' }}
-              onClick={handlePanelClose}
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePanelClose();
+              }}
             />
           )}
 
@@ -742,6 +749,7 @@ export default function ShareableLyricDance() {
           playerRef.current?.fireComment(emoji);
         }}
         onPause={handlePauseForInput}
+        onResume={handleResumeAfterInput}
       />
     </div>
   );

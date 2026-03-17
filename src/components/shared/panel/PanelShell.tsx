@@ -27,6 +27,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, childr
           exit={{ y: '100%', opacity: 0 }}
           transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
           className={`${positionClass} flex flex-col overflow-hidden`}
+          onClick={(e) => e.stopPropagation()}
           style={{
             background: variant === 'fullscreen' ? '#0d0d0d' : 'rgba(10,10,10,0.97)',
             backdropFilter: variant === 'embedded' ? 'blur(12px)' : undefined,
