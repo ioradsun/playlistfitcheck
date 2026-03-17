@@ -257,13 +257,14 @@ export function LyricDanceEmbed({
     openPanel();
     if (showCover) {
       setShowCover(false);
+      onPlay?.();
       player?.setMuted(false);
       setMuted(false);
     }
     if (player?.audio.paused) {
       player.play();
     }
-  }, [hideReactButton, onOpenReactions, openPanel, player, showCover]);
+  }, [hideReactButton, onOpenReactions, openPanel, onPlay, player, showCover]);
 
   useEffect(() => {
     if (!player || !playerReady) return;
