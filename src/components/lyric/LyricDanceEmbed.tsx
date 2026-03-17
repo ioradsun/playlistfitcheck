@@ -180,6 +180,7 @@ export function LyricDanceEmbed({
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentTimeSecRef = useRef(0);
+  const userActivatedRef = useRef(false);
 
   const openPanel = useCallback(() => {
     if (isControlled) {
@@ -256,6 +257,7 @@ export function LyricDanceEmbed({
     }
     openPanel();
     if (showCover) {
+      userActivatedRef.current = true;
       setShowCover(false);
       onPlay?.();
       player?.setMuted(false);
@@ -334,6 +336,7 @@ export function LyricDanceEmbed({
     const handler = (e: Event) => {
       const ce = e as CustomEvent<{ cardId?: string }>;
       if (ce.detail?.cardId !== lyricDanceId) return;
+      userActivatedRef.current = false;
       setForceDemoted(true);
     };
     window.addEventListener("crowdfit:media-deactivate", handler);
@@ -355,6 +358,7 @@ export function LyricDanceEmbed({
     if (!isFeedEmbed || isBattleMode) return;
     if (visibility === "far") {
       setShowCover(true);
+      userActivatedRef.current = false;
       if (lyricDanceId) {
         window.dispatchEvent(
           new CustomEvent("crowdfit:media-deactivate", {
@@ -393,14 +397,15 @@ export function LyricDanceEmbed({
     // Only fully pause when "far" (off-screen entirely).
     // When cover is showing, always mute — audio only starts after "Listen Now".
     const coverUp = showCover;
+    const isUserEngaged = cardState === "active" || userActivatedRef.current;
     const shouldUnmuted =
       !coverUp &&
-      cardState === "active" &&
+      isUserEngaged &&
       visibility === "visible" &&
       !forceDemoted;
     const shouldMuted =
       !coverUp &&
-      cardState !== "active" &&
+      !isUserEngaged &&
       (visibility === "visible" || visibility === "near" || visibility === "far");
 
     if (shouldUnmuted) {
@@ -610,6 +615,7 @@ export function LyricDanceEmbed({
     (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!player) return;
+      userActivatedRef.current = true;
       player.setMuted(false);
       player.seek(0);
       player.play();
@@ -703,6 +709,7 @@ export function LyricDanceEmbed({
               }
               onListen={(e) => {
                 e.stopPropagation();
+                userActivatedRef.current = true;
                 setShowCover(false);
                 onPlay?.();
                 if (player) {
