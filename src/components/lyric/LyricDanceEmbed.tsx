@@ -21,7 +21,7 @@ import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { getSessionId } from "@/lib/sessionId";
-import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 
 // ── Shared IntersectionObserver ────────────────────────────────────────
@@ -197,16 +197,19 @@ export function LyricDanceEmbed({
     }
   }, [isControlled, onExternalPanelOpenChange]);
 
+  const playerRef2 = useRef<LyricDancePlayer | null>(null);
+
   const handleOpenReactions = useCallback(() => {
     if (hideReactButton) {
       onOpenReactions?.();
       return;
     }
     openPanel();
-    if (!showCover && player && player.audio.paused) {
-      player.play();
+    const p = playerRef2.current;
+    if (!showCover && p && p.audio.paused) {
+      p.play();
     }
-  }, [hideReactButton, onOpenReactions, openPanel, showCover, player]);
+  }, [hideReactButton, onOpenReactions, openPanel, showCover]);
 
   // ── Data fetch ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -260,7 +263,9 @@ export function LyricDanceEmbed({
     { bootMode: "minimal" },
   );
 
-  // ── Text vertical bias — shift canvas text above the bottom bar ────
+  // Keep playerRef2 in sync for callbacks declared before useLyricDancePlayer
+  playerRef2.current = player;
+
   useEffect(() => {
     if (!player || !playerReady) return;
     // Battle tiles have no bottom bar of their own (BattleEmbed owns that)
