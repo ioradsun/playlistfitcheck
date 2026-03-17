@@ -27,8 +27,6 @@ interface CommentRow {
 
 interface ReactionPanelProps {
   displayMode: 'fullscreen' | 'embedded';
-  engagementMode: 'spectator' | 'freezing' | 'engaged';
-  frozenLineIndex: number | null;
   isOpen: boolean;
   onClose: () => void;
   danceId: string;
@@ -43,8 +41,7 @@ interface ReactionPanelProps {
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
   onReactionDataChange: (data: Record<string, { line: Record<number, number>; total: number }> | ((prev: Record<string, { line: Record<number, number>; total: number }>) => Record<string, { line: Record<number, number>; total: number }>)) => void;
   onReactionFired: (emoji: string) => void;
-  onEngagementStart: (targetLineIndex?: number) => void;
-  onResetEngagement?: () => void;
+  onPause?: () => void;
   votedSide: 'a' | 'b' | null;
   score: { total: number; replay_yes: number } | null;
   onVoteYes: () => void;
@@ -98,70 +95,22 @@ function CommentReactPicker({
   );
 }
 
-function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLineIndex, danceId, activeLine, allLines, audioSections, currentTimeSec, palette, onSeekTo, player, onReactionFired, reactionData, onReactionDataChange, onEngagementStart, onResetEngagement, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0 }: ReactionPanelProps) {
+function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allLines, audioSections, currentTimeSec: _currentTimeSec, palette, onSeekTo, player, onReactionFired, reactionData, onReactionDataChange, onPause, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0 }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
   const [comments, setComments] = useState<CommentRow[]>([]);
-  const [repeatMode, setRepeatMode] = useState(false);
-  const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
-  const [playheadLineIndex, setPlayheadLineIndex] = useState<number | null>(null);
-  const [, setAutoFollowEnabled] = useState(true);
-  const [isManualSelectionLocked, setIsManualSelectionLocked] = useState(false);
-  const [manualPlaybackTargetIndex, setManualPlaybackTargetIndex] = useState<number | null>(null);
-  const [manualPlaybackEndTimeSec, setManualPlaybackEndTimeSec] = useState<number | null>(null);
   const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(null);
   const [replyingTo, setReplyingTo] = useState<CommentRow | null>(null);
   const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(null);
   const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
   const [sessionCommentReacted, setSessionCommentReacted] = useState<Set<string>>(new Set());
-  const [isBrowsing, setIsBrowsing] = useState(false);
 
-  const repeatRafRef = useRef<number>(0);
-  const loopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isManualSelectionLockedRef = useRef(false);
-  const manualPlaybackTargetIndexRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const userScrollingRef = useRef(false);
-
-  const clearLoopTimeout = () => {
-    if (!loopTimeoutRef.current) return;
-    clearTimeout(loopTimeoutRef.current);
-    loopTimeoutRef.current = null;
-  };
-
-  const releaseManualSelectionLock = () => {
-    isManualSelectionLockedRef.current = false;
-    manualPlaybackTargetIndexRef.current = null;
-    setIsManualSelectionLocked(false);
-    setManualPlaybackTargetIndex(null);
-    setManualPlaybackEndTimeSec(null);
-  };
-
-  const stopManualSingleLinePlayback = (seekToSec?: number) => {
-    clearLoopTimeout();
-    player?.pause();
-
-    const targetIndex = manualPlaybackTargetIndexRef.current;
-    if (targetIndex != null) {
-      setSelectedLineIndex(targetIndex);
-      setPlayheadLineIndex(targetIndex);
-    }
-
-    if (seekToSec != null && player) {
-      player.seek(seekToSec);
-    }
-
-    setManualPlaybackEndTimeSec(null);
-  };
-
-  const lineByIndex = useMemo(() => {
-    const map = new Map<number, LyricSectionLine>();
-    allLines.forEach(line => map.set(line.lineIndex, line));
-    return map;
-  }, [allLines]);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sectionMeta = useMemo(() => {
     const canonical = sections
@@ -222,12 +171,9 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
     return counts;
   }, [comments]);
 
-  const engagedDisplayLineIndex = engagementMode === 'engaged' ? frozenLineIndex : null;
   const voteAccent = palette[1] ?? 'rgba(255,255,255,0.7)';
-
-  const displayLineIndex = engagedDisplayLineIndex ?? (isManualSelectionLocked
-    ? (selectedLineIndex ?? manualPlaybackTargetIndex)
-    : (playheadLineIndex ?? activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null));
+  const playheadLineIndex = activeLine?.lineIndex ?? null;
+  const displayLineIndex = playheadLineIndex ?? allLines[0]?.lineIndex ?? null;
 
   const expandedLineComments = useMemo(() => {
     if (expandedLineIndex == null) return [];
@@ -235,192 +181,68 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
   }, [comments, expandedLineIndex]);
 
   useEffect(() => {
-    if (!isOpen) {
-      releaseManualSelectionLock();
-      return;
-    }
-
-    const startingLineIndex = activeLine?.lineIndex ?? allLines[0]?.lineIndex ?? null;
+    if (!isOpen) return;
     setHasSubmitted(false);
     setTextInput('');
     setReplyingTo(null);
     setExpandedLineIndex(null);
-    setSelectedLineIndex(startingLineIndex);
-    setPlayheadLineIndex(startingLineIndex);
-  }, [isOpen, allLines]);
+  }, [isOpen]);
 
   useEffect(() => {
-    if (repeatMode) return;
-    if (isManualSelectionLocked) return;
-    if (player && player.audio.paused) return;
-
-    const nextFromActive = activeLine?.lineIndex;
-    if (nextFromActive != null) {
-      setPlayheadLineIndex(prev => (prev === nextFromActive ? prev : nextFromActive));
-      return;
-    }
-
-    const fallbackLine = allLines.find(
-      line => currentTimeSec >= line.startSec && currentTimeSec < line.endSec + 0.1,
-    );
-    if (fallbackLine?.lineIndex != null) {
-      setPlayheadLineIndex(prev => (prev === fallbackLine.lineIndex ? prev : fallbackLine.lineIndex));
-    }
-  }, [activeLine?.lineIndex, allLines, currentTimeSec, repeatMode, isManualSelectionLocked, player]);
-
-  useEffect(() => {
-    if (!isManualSelectionLocked) return;
-    if (manualPlaybackTargetIndex == null) return;
-    if (selectedLineIndex === manualPlaybackTargetIndex) return;
-    setSelectedLineIndex(manualPlaybackTargetIndex);
-  }, [isManualSelectionLocked, manualPlaybackTargetIndex, selectedLineIndex]);
-
-  useEffect(() => {
-    if (!isManualSelectionLocked) return;
-    if (manualPlaybackEndTimeSec == null) return;
+    if (!isOpen) return;
+    if (userScrollingRef.current) return;
+    if (playheadLineIndex == null) return;
     if (!player || player.audio.paused) return;
-    if (currentTimeSec < manualPlaybackEndTimeSec) return;
-
-    const manualTargetLine = lineByIndex.get(manualPlaybackTargetIndex ?? -1);
-    const safeStopSec = manualTargetLine
-      ? Math.max(manualTargetLine.startSec, manualTargetLine.endSec - 0.02)
-      : undefined;
-    stopManualSingleLinePlayback(safeStopSec);
-  }, [
-    currentTimeSec,
-    isManualSelectionLocked,
-    lineByIndex,
-    manualPlaybackEndTimeSec,
-    manualPlaybackTargetIndex,
-    player,
-  ]);
-
-  useEffect(() => {
-    if (!repeatMode || !player) return;
-    const audio = player.audio;
-    let rafId = 0;
-
-    const tick = () => {
-      const nextLine = allLines.find(
-        line => audio.currentTime >= line.startSec && audio.currentTime < line.endSec + 0.1,
-      )?.lineIndex ?? null;
-      setPlayheadLineIndex(prev => (prev === nextLine ? prev : nextLine));
-
-      if (!audio.paused) {
-        rafId = requestAnimationFrame(tick);
-        repeatRafRef.current = rafId;
-      }
-    };
-
-    const onPlay = () => {
-      rafId = requestAnimationFrame(tick);
-      repeatRafRef.current = rafId;
-    };
-
-    const onPause = () => {
-      cancelAnimationFrame(rafId);
-      repeatRafRef.current = 0;
-    };
-
-    audio.addEventListener('play', onPlay);
-    audio.addEventListener('pause', onPause);
-    if (!audio.paused) onPlay();
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      repeatRafRef.current = 0;
-      audio.removeEventListener('play', onPlay);
-      audio.removeEventListener('pause', onPause);
-    };
-  }, [repeatMode, player, allLines]);
-
-  // Auto-scroll: smart nudge active block during playback
-  useEffect(() => {
-    if (!player || player.audio.paused) return;
-    if (isBrowsing) return;
     const container = scrollContainerRef.current;
-    const row = rowRefs.current[playheadLineIndex ?? -1];
+    const row = rowRefs.current[playheadLineIndex];
     if (!container || !row) return;
 
-    // Use the row's parent div which wraps active line + emoji bar + comment input
     const block = row.parentElement ?? row;
-
     const containerTop = container.scrollTop;
     const containerBottom = containerTop + container.clientHeight;
-
     const rowTop = row.offsetTop;
     const blockBottom = block.offsetTop + block.offsetHeight;
 
     const rowVisible = rowTop >= containerTop && rowTop < containerBottom;
     const blockFullyVisible = blockBottom <= containerBottom;
 
-    if (rowVisible && blockFullyVisible) {
-      // Both line and emoji/comment block fully visible — don't move
-      return;
-    }
+    if (rowVisible && blockFullyVisible) return;
 
     if (rowVisible && !blockFullyVisible) {
-      // Line visible but emoji/comment clipped — nudge just enough
       const nudge = blockBottom - containerBottom + 12;
       container.scrollBy({ top: nudge, behavior: 'smooth' });
       return;
     }
 
-    // Line off screen — bring to 30% from top for spatial context
     const targetTop = rowTop - container.clientHeight * 0.30;
     container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
-  }, [playheadLineIndex, isBrowsing]);
+  }, [playheadLineIndex, isOpen, player]);
 
-  // After tap: nudge just enough to show emoji/comment block if clipped
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    const row = rowRefs.current[playheadLineIndex ?? -1];
-    if (!container || !row) return;
-
-    // Wait one frame for emoji/comment block to render
-    const raf = requestAnimationFrame(() => {
-      const block = row.parentElement ?? row;
-      const containerBottom = container.scrollTop + container.clientHeight;
-      const blockBottom = block.offsetTop + block.offsetHeight;
-
-      if (blockBottom > containerBottom) {
-        const nudge = blockBottom - containerBottom + 12;
-        container.scrollBy({ top: nudge, behavior: 'smooth' });
-      }
-      // If block is fully visible — do nothing. Line stays exactly where it is.
-    });
-
-    return () => cancelAnimationFrame(raf);
-  }, [playheadLineIndex]);
-
-  // Scroll → pause, enter browse mode
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    let hasScrolled = false;
     const onScroll = () => {
-      if (!hasScrolled) {
-        hasScrolled = true;
-        player?.pause();
-        setIsBrowsing(true);
-      }
       userScrollingRef.current = true;
-    };
-    const onScrollEnd = () => {
-      userScrollingRef.current = false;
-      hasScrolled = false;
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = setTimeout(() => {
+        userScrollingRef.current = false;
+      }, 3000);
     };
     container.addEventListener('scroll', onScroll, { passive: true });
-    container.addEventListener('scrollend', onScrollEnd, { passive: true });
     return () => {
       container.removeEventListener('scroll', onScroll);
-      container.removeEventListener('scrollend', onScrollEnd);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     };
-  }, [player]);
+  }, []);
 
-  // Reset browse mode when panel closes
   useEffect(() => {
-    if (!isOpen) setIsBrowsing(false);
+    if (!isOpen) {
+      userScrollingRef.current = false;
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
+    }
   }, [isOpen]);
 
   useEffect(() => {
@@ -460,63 +282,32 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
       });
   }, [danceId, isOpen, refreshKey]);
 
-  useEffect(() => {
-    if (!isOpen && repeatMode) {
-      clearLoopTimeout();
-      player?.pause();
-      setRepeatMode(false);
-    }
-  }, [isOpen, repeatMode, player]);
 
-  useEffect(() => {
-    return () => {
-      clearLoopTimeout();
-      cancelAnimationFrame(repeatRafRef.current);
-    };
-  }, []);
 
   const handleLineTap = (line: LyricSectionLine) => {
-    setSelectedLineIndex(line.lineIndex);
-    setPlayheadLineIndex(line.lineIndex);
-
-    releaseManualSelectionLock();
-
-    isManualSelectionLockedRef.current = true;
-    manualPlaybackTargetIndexRef.current = line.lineIndex;
-    setIsManualSelectionLocked(true);
-    setManualPlaybackTargetIndex(line.lineIndex);
-    setManualPlaybackEndTimeSec(line.endSec);
-
-    clearLoopTimeout();
-    requestAnimationFrame(() => {
-      if (player) {
-        player.seek(line.startSec);
-        player.audio.muted = false;
-        player.audio.play().catch(() => {});
-        player.startRendering();
-
-        const safeStopSec = Math.max(line.startSec, line.endSec - 0.02);
-        const stopAfterMs = Math.max((safeStopSec - line.startSec) * 1000, 50);
-        loopTimeoutRef.current = setTimeout(() => {
-          stopManualSingleLinePlayback(safeStopSec);
-        }, stopAfterMs);
-      } else {
-        onSeekTo(line.startSec);
-      }
-    });
+    if (!player) {
+      onSeekTo(line.startSec);
+      return;
+    }
+    player.seek(line.startSec);
+    if (player.audio.paused) {
+      player.audio.play().catch(() => {});
+      player.startRendering();
+    }
+    userScrollingRef.current = false;
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+    }
   };
 
   const handleReact = async (emoji: EmojiKey, lineIndex?: number) => {
     if (!danceId) return;
-    onEngagementStart(lineIndex);
     const sessionId = getSessionId();
     const targetLineIndex = lineIndex ?? activeLine?.lineIndex ?? null;
     const reactionKey = `${emoji}-${targetLineIndex ?? 'song'}`;
     if (sessionReacted.has(reactionKey)) return;
 
-    if (repeatMode && player && !player.audio.paused) {
-      player.pause();
-    }
 
     setSessionReacted(prev => new Set([...prev, reactionKey]));
     onReactionFired(emoji);
@@ -561,7 +352,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
 
   const handleTextSubmit = async () => {
     if (!textInput.trim() || !danceId || hasSubmitted) return;
-    onEngagementStart(displayLineIndex ?? undefined);
     const text = textInput.trim().slice(0, 200);
     const sessionId = getSessionId();
 
@@ -754,7 +544,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
                           value={textInput}
                           onChange={(e) => setTextInput(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleTextSubmit(); } }}
-                          onFocus={() => onEngagementStart(line.lineIndex)}
+                          onFocus={() => onPause?.()}
                         />
                       </div>
                     )}
@@ -910,9 +700,9 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
           <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
 
           <div
-            className="flex items-center justify-center shrink-0 gap-2"
+            className="flex items-center justify-center shrink-0"
             style={{
-              minWidth: 56,
+              minWidth: 44,
               paddingLeft: 16,
               paddingRight: 16,
               paddingTop: displayMode === 'fullscreen' ? 10 : 12,
@@ -925,30 +715,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, engagementMode, frozenLin
               className="flex items-center justify-center"
             >
               <X size={13} className="text-white hover:text-white/70 transition-colors" />
-            </button>
-            <button
-              onClick={() => {
-                releaseManualSelectionLock();
-                setAutoFollowEnabled(true);
-                setRepeatMode(false);
-                onResetEngagement?.();
-                setIsBrowsing(false);
-                userScrollingRef.current = false;
-                player?.setMuted(false);
-                player?.seek(0);
-                const firstLine = allLines[0] ?? null;
-                if (firstLine) {
-                  setPlayheadLineIndex(firstLine.lineIndex);
-                  const container = scrollContainerRef.current;
-                  const row = rowRefs.current[firstLine.lineIndex];
-                  if (container && row) container.scrollTo({ top: row.offsetTop, behavior: 'smooth' });
-                }
-                player?.play();
-              }}
-              aria-label="Replay"
-              className="flex items-center justify-center text-[15px] text-white hover:text-white/70 transition-colors"
-            >
-              ↺
             </button>
           </div>
         </div>

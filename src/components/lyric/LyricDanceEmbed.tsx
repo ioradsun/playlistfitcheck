@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
@@ -175,7 +175,6 @@ export function LyricDanceEmbed({
 
   const { votedSide, score, note, setNote, handleVote } = useCardVote(postId ?? lyricDanceId);
 
-  const frozenLineIndexRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -530,16 +529,12 @@ export function LyricDanceEmbed({
   const {
     reactionPanelOpen: panelFromHook,
     setReactionPanelOpen,
-    engagementMode,
-    frozenLineIndex,
     reactionData,
     setReactionData,
     activeLine,
     audioSections,
     palette,
-    handleEngagementStart,
     handlePanelClose,
-    handleResetEngagement,
   } = useReactionPanel({
     player,
     lyricSections,
@@ -549,8 +544,6 @@ export function LyricDanceEmbed({
     onPanelClose: closePanel,
   });
 
-  // Keep frozenLineIndex ref in sync for handleCommentFromBar
-  frozenLineIndexRef.current = frozenLineIndex;
 
   const handleCommentFromBar = useCallback(async () => {
     const text = note.trim();
@@ -564,7 +557,7 @@ export function LyricDanceEmbed({
           dance_id: danceId,
           text,
           session_id: getSessionId(),
-          line_index: frozenLineIndexRef.current ?? activeLineRef.current?.lineIndex ?? null,
+          line_index: activeLineRef.current?.lineIndex ?? null,
           parent_comment_id: null,
         });
     } catch {
@@ -604,6 +597,23 @@ export function LyricDanceEmbed({
     },
     [muted, player],
   );
+
+  const handleReplay = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!player) return;
+      player.setMuted(false);
+      player.seek(0);
+      player.play();
+      setMuted(false);
+    },
+    [player],
+  );
+
+  const handlePauseForInput = useCallback(() => {
+    if (!player) return;
+    player.pause();
+  }, [player]);
 
   // ── Progress tracking for playbar ─────────────────────────────────
   const [progress, setProgress] = useState(0);
@@ -693,26 +703,35 @@ export function LyricDanceEmbed({
         )}
       </AnimatePresence>
 
-      {/* Top bar — song title + expand (when playing) */}
+      {/* Top bar — persistent song + transport controls */}
       {playerReady && !effectiveShowCover && (
         <div
-          className="absolute top-0 left-0 right-0 flex items-center justify-between p-2 z-10"
+          className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2"
           onClick={(e) => e.stopPropagation()}
         >
           <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider bg-black/30 backdrop-blur-sm rounded px-1.5 py-0.5">
             {songTitle}
           </span>
-          {showExpandButton && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                window.open(lyricDanceUrl, "_blank");
-              }}
-              className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
-            >
-              <Maximize2 size={14} />
+          <div className="flex items-center gap-1">
+            <button onClick={toggleMute} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
+              {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
             </button>
-          )}
+            <button onClick={handleReplay} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
+              <RotateCcw size={14} />
+            </button>
+            {showExpandButton && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(lyricDanceUrl, "_blank");
+                }}
+                className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors"
+                aria-label="Expand"
+              >
+                <Maximize2 size={14} />
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -791,10 +810,7 @@ export function LyricDanceEmbed({
           reactionData={reactionData}
           onReactionDataChange={setReactionData}
           onReactionFired={(emoji) => player?.fireComment(emoji)}
-          engagementMode={engagementMode}
-          frozenLineIndex={frozenLineIndex}
-          onEngagementStart={handleEngagementStart}
-          onResetEngagement={handleResetEngagement}
+          onPause={handlePauseForInput}
         />
       )}
     </div>
