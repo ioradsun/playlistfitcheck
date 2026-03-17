@@ -110,8 +110,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
-  const userScrollingRef = useRef(false);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userTookControlRef = useRef(false);
 
   const sectionMeta = useMemo(() => {
     const canonical = sections
@@ -189,11 +188,13 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     setExpandedLineIndex(null);
   }, [isOpen]);
 
+  // Auto-scroll: follows playhead until user takes control
   useEffect(() => {
     if (!isOpen) return;
-    if (userScrollingRef.current) return;
+    if (userTookControlRef.current) return;
     if (playheadLineIndex == null) return;
     if (!player || player.audio.paused) return;
+
     const container = scrollContainerRef.current;
     const row = rowRefs.current[playheadLineIndex];
     if (!container || !row) return;
@@ -219,30 +220,23 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }, [playheadLineIndex, isOpen, player]);
 
+  // User scroll → permanently stop auto-scroll for this panel session
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     const onScroll = () => {
-      userScrollingRef.current = true;
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-      scrollTimeoutRef.current = setTimeout(() => {
-        userScrollingRef.current = false;
-      }, 3000);
+      userTookControlRef.current = true;
     };
     container.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       container.removeEventListener('scroll', onScroll);
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     };
   }, []);
 
+  // Reset control flag when panel closes so next open starts with auto-scroll
   useEffect(() => {
     if (!isOpen) {
-      userScrollingRef.current = false;
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-        scrollTimeoutRef.current = null;
-      }
+      userTookControlRef.current = false;
     }
   }, [isOpen]);
 
@@ -290,15 +284,12 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
       onSeekTo(line.startSec);
       return;
     }
-
     player.seek(line.startSec);
-    player.play();
-
-    userScrollingRef.current = true;
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    scrollTimeoutRef.current = setTimeout(() => {
-      userScrollingRef.current = false;
-    }, 500);
+    if (player.audio.paused) {
+      player.audio.play().catch(() => {});
+      player.startRendering();
+    }
+    userTookControlRef.current = true;
   };
 
   const handleReact = async (emoji: EmojiKey, lineIndex?: number) => {
