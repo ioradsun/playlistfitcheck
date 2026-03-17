@@ -1552,7 +1552,7 @@ export class LyricDancePlayer {
     this.primeAudio();
     this.playing = true;
     const playStart = this.data.region_start ?? this.songStartSec;
-    if (this.audio.currentTime <= 0 || this.data.region_start != null) {
+    if (this.audio.currentTime <= 0 || (this.data.region_start != null && this.audio.currentTime < playStart)) {
       // Only seek if audio is ready; otherwise wait for canplay
       if (this.audio.readyState >= 2) {
         this.audio.currentTime = playStart;
