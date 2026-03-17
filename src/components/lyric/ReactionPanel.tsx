@@ -292,10 +292,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     }
 
     player.seek(line.startSec);
-    if (player.audio.paused) {
-      player.audio.play().catch(() => {});
-      player.startRendering();
-    }
+    player.play();
 
     userScrollingRef.current = true;
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);

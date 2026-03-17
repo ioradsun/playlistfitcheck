@@ -459,11 +459,12 @@ export default function ShareableLyricDance() {
     setReactionPanelOpen(true);
     if (showCover) {
       setShowCover(false);
-      playerRef.current?.setMuted(false);
-      setMuted(false);
     }
-    if (playerRef.current?.audio.paused) {
-      playerRef.current.play();
+    const p = playerRef.current;
+    if (p) {
+      p.setMuted(false);
+      p.play();
+      setMuted(false);
     }
   }, [showCover, setReactionPanelOpen]);
 
@@ -638,8 +639,11 @@ export default function ShareableLyricDance() {
                 onListen={(e) => {
                   e.stopPropagation();
                   setShowCover(false);
-                  playerRef.current?.setMuted(false);
-                  playerRef.current?.play();
+                  const p = playerRef.current;
+                  if (p) {
+                    p.setMuted(false);
+                    p.play();
+                  }
                   setMuted(false);
                 }}
               />

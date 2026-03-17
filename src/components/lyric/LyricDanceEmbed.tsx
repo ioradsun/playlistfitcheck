@@ -260,11 +260,11 @@ export function LyricDanceEmbed({
       userActivatedRef.current = true;
       setShowCover(false);
       onPlay?.();
-      player?.setMuted(false);
-      setMuted(false);
     }
-    if (player?.audio.paused) {
+    if (player) {
+      player.setMuted(false);
       player.play();
+      setMuted(false);
     }
   }, [hideReactButton, onOpenReactions, openPanel, onPlay, player, showCover]);
 
