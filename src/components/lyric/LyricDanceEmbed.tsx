@@ -263,7 +263,9 @@ export function LyricDanceEmbed({
     { bootMode: "minimal" },
   );
 
-  // ── Text vertical bias — shift canvas text above the bottom bar ────
+  // Keep playerRef2 in sync for callbacks declared before useLyricDancePlayer
+  playerRef2.current = player;
+
   useEffect(() => {
     if (!player || !playerReady) return;
     // Battle tiles have no bottom bar of their own (BattleEmbed owns that)
