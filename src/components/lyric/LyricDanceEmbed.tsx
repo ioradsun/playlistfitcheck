@@ -203,7 +203,10 @@ export function LyricDanceEmbed({
       return;
     }
     openPanel();
-  }, [hideReactButton, onOpenReactions, openPanel]);
+    if (!showCover && player && player.audio.paused) {
+      player.play();
+    }
+  }, [hideReactButton, onOpenReactions, openPanel, showCover, player]);
 
   // ── Data fetch ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -615,6 +618,11 @@ export function LyricDanceEmbed({
     player.pause();
   }, [player]);
 
+  const handleResumeAfterInput = useCallback(() => {
+    if (!player) return;
+    player.play();
+  }, [player]);
+
   // ── Progress tracking for playbar ─────────────────────────────────
   const [progress, setProgress] = useState(0);
   useEffect(() => {
@@ -704,14 +712,18 @@ export function LyricDanceEmbed({
       </AnimatePresence>
 
       {/* Top bar — persistent song + transport controls */}
-      {playerReady && !effectiveShowCover && (
+      {playerReady && (
         <div
           className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2"
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider bg-black/30 backdrop-blur-sm rounded px-1.5 py-0.5">
-            {songTitle}
-          </span>
+          {!effectiveShowCover ? (
+            <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider bg-black/30 backdrop-blur-sm rounded px-1.5 py-0.5">
+              {songTitle}
+            </span>
+          ) : (
+            <span />
+          )}
           <div className="flex items-center gap-1">
             <button onClick={toggleMute} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
               {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -719,7 +731,7 @@ export function LyricDanceEmbed({
             <button onClick={handleReplay} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
               <RotateCcw size={14} />
             </button>
-            {showExpandButton && (
+            {showExpandButton && !effectiveShowCover && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -811,6 +823,7 @@ export function LyricDanceEmbed({
           onReactionDataChange={setReactionData}
           onReactionFired={(emoji) => player?.fireComment(emoji)}
           onPause={handlePauseForInput}
+          onResume={handleResumeAfterInput}
         />
       )}
     </div>
