@@ -732,11 +732,11 @@ export function LyricDanceEmbed({
           <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider bg-black/30 backdrop-blur-sm rounded px-1.5 py-0.5">
             {songTitle}
           </span>
-          <div className="flex items-center gap-1">
-            <button onClick={toggleMute} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
+          <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
+            <button onClick={toggleMute} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
               {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
             </button>
-            <button onClick={handleReplay} className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
+            <button onClick={handleReplay} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
               <RotateCcw size={14} />
             </button>
             {showExpandButton && (
@@ -745,7 +745,7 @@ export function LyricDanceEmbed({
                   e.stopPropagation();
                   window.open(lyricDanceUrl, "_blank");
                 }}
-                className="p-1.5 rounded-full bg-black/30 backdrop-blur-sm text-white/40 hover:text-white/70 transition-colors"
+                className="p-1 text-white/40 hover:text-white/70 transition-colors"
                 aria-label="Expand"
               >
                 <Maximize2 size={14} />
