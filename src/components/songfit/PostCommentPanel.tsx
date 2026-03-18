@@ -88,6 +88,7 @@ export function PostCommentPanel({
   reelsMode = false,
   variant = 'embedded',
   palette,
+  caption,
 }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
