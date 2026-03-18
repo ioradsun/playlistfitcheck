@@ -25,7 +25,7 @@ import {
 import { useFeedWindow } from "./useFeedWindow";
 import { logImpression } from "@/lib/engagementTracking";
 import { RealtimeFeedHubProvider } from "./RealtimeFeedHub";
-import { consumeFeedPrefetch } from "@/lib/prefetch";
+import { consumeFeedPrefetch, getCachedFeed } from "@/lib/prefetch";
 import { cn } from "@/lib/utils";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -251,8 +251,20 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const { user } = useAuth();
   const isAdmin =
     user?.email === "sunpatel@gmail.com" || user?.email === "spatel@iorad.com";
-  const [posts, setPosts] = useState<SongFitPost[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [posts, setPosts] = useState<SongFitPost[]>(() => {
+    const cached = getCachedFeed();
+    if (!cached || cached.length === 0) return [];
+    return (cached as unknown as SongFitPost[]).map((p) => ({
+      ...p,
+      user_has_liked: false,
+      user_has_saved: false,
+      saves_count: 0,
+    }));
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = getCachedFeed();
+    return !cached || cached.length === 0;
+  });
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [likesPostId, setLikesPostId] = useState<string | null>(null);
   const [feedView, setFeedView] = useState<FeedView>("all");
@@ -323,7 +335,11 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   }, []);
 
   const fetchPosts = useCallback(async () => {
-    setLoading(true);
+    // If we already have posts (e.g. from cache), don't flash the skeleton
+    // during revalidation. Only show loading state on truly empty first loads.
+    if (postsRef.current.length === 0) {
+      setLoading(true);
+    }
 
     if (feedView !== "billboard") {
       setSignalMap({});
