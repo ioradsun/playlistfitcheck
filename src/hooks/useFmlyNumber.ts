@@ -20,10 +20,12 @@ const userNumberPromises = new Map<string, Promise<number | null>>();
 
 function fetchTotalCount() {
   if (!totalCountPromise) {
-    totalCountPromise = supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .not("trailblazer_number", "is", null)
+    totalCountPromise = Promise.resolve(
+      supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .not("trailblazer_number", "is", null)
+    )
       .then(({ count, error }) => {
         if (error) throw error;
         return count ?? 0;
