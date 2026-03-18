@@ -78,6 +78,7 @@ function MeasuredFeedCard({
     signal_velocity?: number;
   };
   reelsMode?: boolean;
+  isFirst?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const { state } = useCardState(post.id);
@@ -141,6 +142,7 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   loadPrevious: () => Promise<void>;
   onCenterChange: (idx: number) => void;
   reelsMode?: boolean;
+  isFirst?: boolean;
 }) {
   const lifecycle = useContext(CardLifecycleContext);
   const prevMapRef = useRef(new Map<string, boolean>());
@@ -210,6 +212,7 @@ const _WindowedFeedList = memo(function WindowedFeedList({
               feedView === "billboard" ? signalMap[post.id] : undefined
             }
             reelsMode={reelsMode}
+            isFirst={idx === 0}
           />
         ) : (
           <div
@@ -669,7 +672,20 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
 
   return (
     <div className={reelsMode ? "w-full" : "w-full max-w-[470px] mx-auto"}>
-      {!reelsMode && (
+      {reelsMode ? (
+        <div className="fixed top-14 left-0 right-0 z-30 flex justify-center pointer-events-none">
+          <div className="pointer-events-auto bg-black/50 backdrop-blur-md rounded-full px-1 border border-white/10">
+            <BillboardToggle
+              view={feedView}
+              onViewChange={setFeedView}
+              billboardMode={billboardMode}
+              onModeChange={setBillboardMode}
+              isLoggedIn={!!user}
+              compact
+            />
+          </div>
+        </div>
+      ) : (
         <>
           {user ? (
             composerUnlocked ? (
@@ -704,7 +720,6 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
               </div>
             </div>
           )}
-
           <BillboardToggle
             view={feedView}
             onViewChange={setFeedView}
@@ -714,47 +729,55 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           />
         </>
       )}
-
       {loading ? (
-        <div className="space-y-0 pt-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="px-2 pb-3">
-              <div
-                className="rounded-2xl overflow-hidden animate-pulse"
-                style={{ background: "#121212" }}
-              >
-                <div className="flex items-center gap-2.5 px-3 py-2.5">
-                  <div className="h-8 w-8 rounded-full bg-white/10" />
-                  <div className="space-y-1.5 flex-1">
-                    <div className="h-3 w-24 rounded bg-white/10" />
-                    <div className="h-2.5 w-16 rounded bg-white/5" />
-                  </div>
-                </div>
+        reelsMode ? (
+          <div className="h-[100dvh] snap-start bg-black flex items-center justify-center">
+            <Loader2 size={24} className="animate-spin text-white/20" />
+          </div>
+        ) : (
+          <div className="space-y-0 pt-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="px-2 pb-3">
                 <div
-                  className="relative overflow-hidden"
-                  style={{ height: 320 }}
+                  className="rounded-2xl overflow-hidden animate-pulse"
+                  style={{ background: "#121212" }}
                 >
-                  <LyricDanceCover
-                    songName=""
-                    artistName=""
-                    avatarUrl={null}
-                    initial=""
-                    waiting
-                  />
+                  <div className="flex items-center gap-2.5 px-3 py-2.5">
+                    <div className="h-8 w-8 rounded-full bg-white/10" />
+                    <div className="space-y-1.5 flex-1">
+                      <div className="h-3 w-24 rounded bg-white/10" />
+                      <div className="h-2.5 w-16 rounded bg-white/5" />
+                    </div>
+                  </div>
+                  <div
+                    className="relative overflow-hidden"
+                    style={{ height: 320 }}
+                  >
+                    <LyricDanceCover
+                      songName=""
+                      artistName=""
+                      avatarUrl={null}
+                      initial=""
+                      waiting
+                    />
+                  </div>
+                  <div className="px-3 pt-2 pb-1 space-y-1">
+                    <div className="h-2.5 w-3/4 rounded bg-white/10" />
+                  </div>
+                  <div className="flex items-center gap-3 px-3 py-2">
+                    {[0, 1, 2, 3].map((j) => (
+                      <div
+                        key={j}
+                        className="h-4 w-4 rounded-full bg-white/10"
+                      />
+                    ))}
+                  </div>
+                  <div className="h-1" />
                 </div>
-                <div className="px-3 pt-2 pb-1 space-y-1">
-                  <div className="h-2.5 w-3/4 rounded bg-white/10" />
-                </div>
-                <div className="flex items-center gap-3 px-3 py-2">
-                  {[0, 1, 2, 3].map((j) => (
-                    <div key={j} className="h-4 w-4 rounded-full bg-white/10" />
-                  ))}
-                </div>
-                <div className="h-1" />
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )
       ) : posts.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <p className="text-muted-foreground text-sm">

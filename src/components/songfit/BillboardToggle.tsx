@@ -28,18 +28,30 @@ interface Props {
   billboardMode: BillboardMode;
   onModeChange: (m: BillboardMode) => void;
   isLoggedIn?: boolean;
+  compact?: boolean;
 }
 
-export function BillboardToggle({ view, onViewChange, billboardMode, onModeChange, isLoggedIn }: Props) {
+export function BillboardToggle({
+  view,
+  onViewChange,
+  billboardMode,
+  onModeChange,
+  isLoggedIn,
+  compact = false,
+}: Props) {
   const [recentDropdownOpen, setRecentDropdownOpen] = useState(false);
   const [billboardDropdownOpen, setBillboardDropdownOpen] = useState(false);
 
-  const isRecentActive = view === "all" || view === "now_streaming" || view === "in_studio" || view === "in_battle";
+  const isRecentActive =
+    view === "all" ||
+    view === "now_streaming" ||
+    view === "in_studio" ||
+    view === "in_battle";
   const isBillboardActive = view === "billboard";
   const showRecentChevron = isLoggedIn && isRecentActive;
 
   return (
-    <div className="border-b border-border/40">
+    <div className={compact ? "" : "border-b border-border/40"}>
       <div className="flex">
         {/* Recent tab */}
         <div className="flex-1 flex items-center justify-center">
@@ -63,28 +75,38 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                 className={cn(
                   "flex items-center gap-0.5 py-2.5 text-sm transition-all duration-150",
                   isRecentActive
-                    ? "font-medium text-foreground"
-                    : "font-normal text-muted-foreground"
+                    ? compact
+                      ? "font-medium text-white"
+                      : "font-medium text-foreground"
+                    : compact
+                      ? "font-normal text-white/50"
+                      : "font-normal text-muted-foreground",
                 )}
               >
-                {recentSubViews.find(s => s.key === view)?.label ?? "All"}
+                {recentSubViews.find((s) => s.key === view)?.label ?? "All"}
                 <ChevronDown
                   size={12}
                   className={cn(
                     "transition-all duration-150",
-                    showRecentChevron ? "opacity-60" : "opacity-0 w-0"
+                    showRecentChevron ? "opacity-60" : "opacity-0 w-0",
                   )}
                 />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" className="w-40 bg-popover z-50">
+            <DropdownMenuContent
+              align="center"
+              className="w-40 bg-popover z-50"
+            >
               {recentSubViews.map(({ key, label }) => (
                 <DropdownMenuItem
                   key={key}
-                  onClick={() => { onViewChange(key); setRecentDropdownOpen(false); }}
+                  onClick={() => {
+                    onViewChange(key);
+                    setRecentDropdownOpen(false);
+                  }}
                   className={cn(
                     "text-sm",
-                    view === key && "text-foreground font-medium"
+                    view === key && "text-foreground font-medium",
                   )}
                 >
                   {label}
@@ -116,8 +138,12 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                 className={cn(
                   "flex items-center gap-0.5 py-2.5 text-sm transition-all duration-150",
                   isBillboardActive
-                    ? "font-medium text-foreground"
-                    : "font-normal text-muted-foreground"
+                    ? compact
+                      ? "font-medium text-white"
+                      : "font-medium text-foreground"
+                    : compact
+                      ? "font-normal text-white/50"
+                      : "font-normal text-muted-foreground",
                 )}
               >
                 FMLY Top 40
@@ -125,19 +151,26 @@ export function BillboardToggle({ view, onViewChange, billboardMode, onModeChang
                   size={12}
                   className={cn(
                     "transition-all duration-150",
-                    isBillboardActive ? "opacity-60" : "opacity-0 w-0"
+                    isBillboardActive ? "opacity-60" : "opacity-0 w-0",
                   )}
                 />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" className="w-44 bg-popover z-50">
+            <DropdownMenuContent
+              align="center"
+              className="w-44 bg-popover z-50"
+            >
               {billboardModes.map(({ key, label }) => (
                 <DropdownMenuItem
                   key={key}
-                  onClick={() => { onModeChange(key); onViewChange("billboard"); setBillboardDropdownOpen(false); }}
+                  onClick={() => {
+                    onModeChange(key);
+                    onViewChange("billboard");
+                    setBillboardDropdownOpen(false);
+                  }}
                   className={cn(
                     "text-sm",
-                    billboardMode === key && "text-foreground font-medium"
+                    billboardMode === key && "text-foreground font-medium",
                   )}
                 >
                   {label}

@@ -16,6 +16,7 @@ import {
   Share2,
   Clock,
   Flame,
+  ChevronDown,
 } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
@@ -66,6 +67,7 @@ interface Props {
   };
   cardState: CardState;
   reelsMode?: boolean;
+  isFirst?: boolean;
 }
 
 export function SongFitPostCard({
@@ -78,6 +80,7 @@ export function SongFitPostCard({
   signalData,
   cardState,
   reelsMode = false,
+  isFirst = false,
 }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
@@ -468,6 +471,7 @@ export function SongFitPostCard({
                 style={reelsMode ? undefined : { background: "#0a0a0a" }}
               >
                 <LazySpotifyEmbed
+                  reelsMode={reelsMode}
                   trackId={post.spotify_track_id}
                   trackTitle={post.track_title}
                   trackUrl={post.spotify_track_url}
@@ -735,6 +739,15 @@ export function SongFitPostCard({
                     }
                   />
                 </button>
+              </div>
+            )}
+
+            {isFirst && (
+              <div className="flex flex-col items-center gap-1 mt-4 animate-bounce">
+                <ChevronDown size={16} className="text-white/30 rotate-180" />
+                <span className="text-[10px] text-white/20 font-mono">
+                  swipe up
+                </span>
               </div>
             )}
           </div>

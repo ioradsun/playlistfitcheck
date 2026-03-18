@@ -1,5 +1,6 @@
 import { useState, useEffect, memo } from "react";
 import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { logEngagementEvent } from "@/lib/engagementTracking";
 import type { CardState } from "./useCardLifecycle";
@@ -13,6 +14,7 @@ interface Props {
   artistName?: string;
   genre?: string | null;
   cardState: CardState;
+  reelsMode?: boolean;
 }
 
 function LazySpotifyEmbedInner({
@@ -23,6 +25,7 @@ function LazySpotifyEmbedInner({
   albumArtUrl,
   artistName,
   cardState: _cardState,
+  reelsMode = false,
 }: Props) {
   const { user } = useAuth();
   const [iframeLoaded, setIframeLoaded] = useState(false);
@@ -46,60 +49,117 @@ function LazySpotifyEmbedInner({
 
   return (
     <div
-      className="w-full overflow-hidden relative"
-      style={{
-        height: platform === "soundcloud" ? 166 : 232,
-        background: "#0a0a0a",
-        borderRadius: 12,
-        overflow: "hidden",
-        WebkitMaskImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='12' ry='12'/%3E%3C/svg%3E")`,
-        WebkitMaskSize: "100% 100%",
-        maskImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='12' ry='12'/%3E%3C/svg%3E")`,
-        maskSize: "100% 100%",
-      }}
+      className={cn(
+        "w-full overflow-hidden relative",
+        reelsMode ? "h-full" : "",
+      )}
+      style={
+        reelsMode
+          ? { background: "#000" }
+          : {
+              height: platform === "soundcloud" ? 166 : 232,
+              background: "#0a0a0a",
+              borderRadius: 12,
+              overflow: "hidden",
+              WebkitMaskImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='12' ry='12'/%3E%3C/svg%3E")`,
+              WebkitMaskSize: "100% 100%",
+              maskImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='12' ry='12'/%3E%3C/svg%3E")`,
+              maskSize: "100% 100%",
+            }
+      }
       onClick={handleClick}
     >
-      {/* Full-bleed album art poster — sits behind iframe */}
-      <div className="absolute inset-0 w-full h-full z-[6] pointer-events-none">
-        {albumArtUrl ? (
-          <>
-            <img
-              src={albumArtUrl}
-              alt=""
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-            <div className="absolute bottom-3 left-3 right-3 z-10 flex items-end gap-3">
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-sm font-bold text-white drop-shadow-md line-clamp-1">
-                  {trackTitle}
-                </span>
-                {artistName && (
-                  <span className="text-xs text-white/70 drop-shadow-sm line-clamp-1">
-                    {artistName}
-                  </span>
-                )}
-              </div>
+      {reelsMode ? (
+        <>
+          {/* Blurred album art fills entire viewport */}
+          {albumArtUrl && (
+            <div className="absolute inset-0 z-[1]">
+              <img
+                src={albumArtUrl}
+                alt=""
+                className="w-full h-full object-cover blur-2xl scale-110 opacity-60"
+              />
+              <div className="absolute inset-0 bg-black/40" />
             </div>
-          </>
-        ) : (
-          <div className="absolute inset-0 w-full h-full animate-pulse bg-muted" />
-        )}
-      </div>
+          )}
 
-      {/* Iframe */}
-      <iframe
-        src={embedSrc}
-        width="100%"
-        height={platform === "soundcloud" ? 166 : 232}
-        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-        className={`absolute inset-0 border-0 block w-full transition-opacity duration-700 ${iframeLoaded ? "z-[8]" : "z-[5]"}`}
-        style={{ opacity: iframeLoaded ? 1 : 0 }}
-        title={`Play ${trackTitle}`}
-        scrolling={platform === "soundcloud" ? "no" : undefined}
-        onLoad={() => setIframeLoaded(true)}
-      />
+          {/* Centered iframe with constrained width */}
+          <div className="relative z-[10] flex items-center justify-center h-full px-6">
+            <div
+              className="w-full max-w-[400px]"
+              style={{ borderRadius: 12, overflow: "hidden" }}
+            >
+              <iframe
+                src={embedSrc}
+                width="100%"
+                height={platform === "soundcloud" ? 166 : 232}
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                className="border-0 block w-full"
+                title={`Play ${trackTitle}`}
+                scrolling={platform === "soundcloud" ? "no" : undefined}
+                onLoad={() => setIframeLoaded(true)}
+              />
+            </div>
+          </div>
 
+          {/* Song info overlay at bottom — will sit under the card's bottom scrim */}
+          {!iframeLoaded && albumArtUrl && (
+            <div className="absolute bottom-8 left-6 right-6 z-[8]">
+              <p className="text-sm font-bold text-white drop-shadow-md truncate">
+                {trackTitle}
+              </p>
+              {artistName && (
+                <p className="text-xs text-white/70 drop-shadow-sm truncate">
+                  {artistName}
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Full-bleed album art poster — sits behind iframe */}
+          <div className="absolute inset-0 w-full h-full z-[6] pointer-events-none">
+            {albumArtUrl ? (
+              <>
+                <img
+                  src={albumArtUrl}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <div className="absolute bottom-3 left-3 right-3 z-10 flex items-end gap-3">
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-sm font-bold text-white drop-shadow-md line-clamp-1">
+                      {trackTitle}
+                    </span>
+                    {artistName && (
+                      <span className="text-xs text-white/70 drop-shadow-sm line-clamp-1">
+                        {artistName}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="absolute inset-0 w-full h-full animate-pulse bg-muted" />
+            )}
+          </div>
+
+          {/* Iframe */}
+          <iframe
+            src={embedSrc}
+            width="100%"
+            height={platform === "soundcloud" ? 166 : 232}
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            className={`absolute inset-0 border-0 block w-full transition-opacity duration-700 ${iframeLoaded ? "z-[8]" : "z-[5]"}`}
+            style={{ opacity: iframeLoaded ? 1 : 0 }}
+            title={`Play ${trackTitle}`}
+            scrolling={platform === "soundcloud" ? "no" : undefined}
+            onLoad={() => setIframeLoaded(true)}
+          />
+        </>
+      )}
     </div>
   );
 }
