@@ -12,8 +12,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
-
-
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
@@ -669,13 +668,16 @@ export default function ShareableLyricDance() {
               className="flex items-center gap-2.5 cursor-pointer"
               onClick={() => data?.user_id && navigate(`/u/${data.user_id}`)}
             >
-              <div className="shrink-0">
+              <div className="relative shrink-0">
                 {coverAvatarUrl ? (
-                  <img src={coverAvatarUrl} alt="" className={`w-8 h-8 rounded-full object-cover border ${profile?.is_verified ? "border-green-400" : "border-white/[0.06]"}`} />
+                  <img src={coverAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
                 ) : (
-                  <div className={`w-8 h-8 rounded-full bg-white/10 flex items-center justify-center border ${profile?.is_verified ? "border-green-400" : "border-transparent"}`}>
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
                     <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
                   </div>
+                )}
+                {profile?.is_verified && (
+                  <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={10} /></span>
                 )}
               </div>
               <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400">

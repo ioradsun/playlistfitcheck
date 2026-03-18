@@ -6,6 +6,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { User, MoreHorizontal, Trash2, ExternalLink } from "lucide-react";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -114,7 +115,6 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
       }
     };
     checkVote();
-
 
   }, [post.battle_id, votedSide]);
 
@@ -298,14 +298,17 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <ProfileHoverCard userId={post.user_id}>
             <div className="flex items-center gap-3 cursor-pointer min-w-0" onClick={handleProfileClick}>
-              <div className="shrink-0">
-                <div className={`h-10 w-10 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ${post.profiles?.is_verified ? "ring-green-400" : "ring-primary/20"}`}>
+              <div className="relative shrink-0">
+                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
                   {post.profiles?.avatar_url ? (
                     <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <User size={16} className="text-muted-foreground" />
                   )}
                 </div>
+                {post.profiles?.is_verified && (
+                  <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={13} /></span>
+                )}
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold leading-tight truncate text-muted-foreground">{displayName}</p>

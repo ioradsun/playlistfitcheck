@@ -14,8 +14,7 @@ import {
   Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle, BarChart2, Sparkles, Zap,
 } from "lucide-react";
 import { FmlyBadge } from "@/components/FmlyBadge";
-
-
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -301,10 +300,13 @@ const PublicProfile = () => {
 
         <div className="flex items-start gap-4">
           <div className="relative group">
-            <Avatar className={`h-20 w-20 border-2 ${profile.is_verified ? "border-green-400" : "border-border"}`}>
+            <Avatar className="h-20 w-20 border-2 border-border">
               <AvatarImage src={avatarSrc} />
               <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">{initials}</AvatarFallback>
             </Avatar>
+            {profile.is_verified && (
+              <span className="absolute -bottom-1 -right-1"><VerifiedBadge size={18} /></span>
+            )}
             {isOwner && (
               <>
                 <button
