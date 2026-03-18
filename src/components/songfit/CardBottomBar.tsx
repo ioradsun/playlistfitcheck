@@ -32,6 +32,24 @@ export function CardBottomBar({
   trackTitle,
   variant = "embedded",
 }: CardBottomBarProps) {
+  const [showNudge, setShowNudge] = useState(false);
+  const prevVotedSide = useRef<"a" | "b" | null>(null);
+
+  useEffect(() => {
+    if (votedSide !== null && prevVotedSide.current === null) {
+      setShowNudge(true);
+      const t = setTimeout(() => setShowNudge(false), 3000);
+      prevVotedSide.current = votedSide;
+      return () => clearTimeout(t);
+    }
+    if (votedSide === null) {
+      prevVotedSide.current = null;
+      setShowNudge(false);
+    } else {
+      prevVotedSide.current = votedSide;
+    }
+  }, [votedSide]);
+
   const py = variant === "embedded" ? "py-3" : "py-2.5";
 
   const wrapperClass =
