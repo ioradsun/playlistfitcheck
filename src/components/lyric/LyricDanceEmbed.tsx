@@ -200,6 +200,8 @@ export function LyricDanceEmbed({
 
   // ── Data fetch ─────────────────────────────────────────────────────
   useEffect(() => {
+    let cancelled = false;
+
     if (!lyricDanceId) return;
     if (prefetchedData) {
       setFetchedData(prefetchedData);
@@ -213,6 +215,7 @@ export function LyricDanceEmbed({
       .eq("id", lyricDanceId)
       .maybeSingle()
       .then(({ data: row, error }) => {
+        if (cancelled) return;
         if (error || !row) {
           setLoading(false);
           return;
@@ -220,6 +223,10 @@ export function LyricDanceEmbed({
         setFetchedData(row as unknown as LyricDanceData);
         setLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [lyricDanceId, prefetchedData]);
 
   const preloadedCoverRef = useRef<string | null>(null);
@@ -285,7 +292,7 @@ export function LyricDanceEmbed({
       visibilityListeners.delete(el);
       sharedIO?.unobserve(el);
     };
-  }, [isFeedEmbed, data]);
+  }, [isFeedEmbed]);
 
   useEffect(() => {
     if (!player || !playerReady) return;
