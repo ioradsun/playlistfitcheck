@@ -33,6 +33,44 @@ import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
 const FEED_MAX_POSTS = 200;
+const COMPOSER_CACHE_KEY = "tfm:composer_state";
+const COMPOSER_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+type ComposerCache = {
+  hasEverPosted?: boolean;
+  composerUnlocked?: boolean;
+  ts?: number;
+};
+
+const readComposerCache = (): ComposerCache | null => {
+  try {
+    const cached = JSON.parse(localStorage.getItem(COMPOSER_CACHE_KEY) || "null") as ComposerCache | null;
+    if (!cached?.ts || Date.now() - cached.ts >= COMPOSER_CACHE_TTL_MS) return null;
+    return cached;
+  } catch {
+    return null;
+  }
+};
+
+const writeComposerCache = (value: ComposerCache) => {
+  try {
+    const previous = readComposerCache() ?? {};
+    localStorage.setItem(
+      COMPOSER_CACHE_KEY,
+      JSON.stringify({
+        ...previous,
+        ...value,
+        ts: Date.now(),
+      }),
+    );
+  } catch {}
+};
+
+const clearComposerCache = () => {
+  try {
+    localStorage.removeItem(COMPOSER_CACHE_KEY);
+  } catch {}
+};
 
 const sharedResizeObserver = (() => {
   let observer: ResizeObserver | null = null;
@@ -271,10 +309,16 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const [billboardMode, setBillboardMode] =
     useState<BillboardMode>("this_week");
   const [userVoteCount, setUserVoteCount] = useState<number | null>(null);
-  const [composerUnlocked, setComposerUnlocked] = useState(false);
+  const [composerUnlocked, setComposerUnlocked] = useState(() => {
+    const cached = readComposerCache();
+    return cached?.composerUnlocked ?? false;
+  });
   const [showFloatingAnchor, setShowFloatingAnchor] = useState(false);
   const [hasPosted, setHasPosted] = useState(false);
-  const [hasEverPosted, setHasEverPosted] = useState<boolean | null>(null);
+  const [hasEverPosted, setHasEverPosted] = useState<boolean | null>(() => {
+    const cached = readComposerCache();
+    return cached?.hasEverPosted ?? null;
+  });
   const [signalMap, setSignalMap] = useState<
     Record<
       string,
@@ -301,6 +345,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     return map;
   });
   const centerIndexRef = useRef(0);
+  const lastUserIdRef = useRef<string | null>(user?.id ?? null);
   const postsRef = useRef(posts);
   const isLoadingMoreRef = useRef(isLoadingMore);
   const hasMoreRef = useRef(hasMore);
@@ -660,6 +705,22 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     void fetchPosts();
   }, [fetchPosts]);
 
+  // Clear composer cache when user changes (login/logout/switch)
+  useEffect(() => {
+    if (lastUserIdRef.current && lastUserIdRef.current !== (user?.id ?? null)) {
+      clearComposerCache();
+      setComposerUnlocked(false);
+      setHasEverPosted(null);
+      setUserVoteCount(null);
+      setHasPosted(false);
+    }
+    lastUserIdRef.current = user?.id ?? null;
+
+    if (!user) {
+      clearComposerCache();
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
     supabase
@@ -668,8 +729,13 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       .eq("user_id", user.id)
       .then(({ count }) => {
         const everPosted = (count ?? 0) > 0;
+        const unlocked = !everPosted || isAdmin;
         setHasEverPosted(everPosted);
-        if (!everPosted || isAdmin) setComposerUnlocked(true);
+        if (unlocked) setComposerUnlocked(true);
+        writeComposerCache({
+          hasEverPosted: everPosted,
+          composerUnlocked: unlocked,
+        });
       });
   }, [isAdmin, user]);
 
@@ -682,7 +748,10 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       .then(({ data }) => {
         const count = (data || []).length;
         setUserVoteCount(count);
-        if (count >= 3) setComposerUnlocked(true);
+        if (count >= 3) {
+          setComposerUnlocked(true);
+          writeComposerCache({ composerUnlocked: true });
+        }
       });
   }, [user]);
 
@@ -690,7 +759,10 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     const handler = () => {
       setUserVoteCount((prev) => {
         const next = (prev ?? 0) + 1;
-        if (next >= 3) setComposerUnlocked(true);
+        if (next >= 3) {
+          setComposerUnlocked(true);
+          writeComposerCache({ composerUnlocked: true });
+        }
         return next;
       });
     };
@@ -705,6 +777,10 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         setComposerUnlocked(false);
         setUserVoteCount(0);
       }
+      writeComposerCache({
+        hasEverPosted: true,
+        composerUnlocked: isAdmin,
+      });
       setHasPosted(true);
     };
     window.addEventListener("crowdfit:post-created", handler);
@@ -755,7 +831,16 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
               <div className="animate-fade-in">
                 <SongFitInlineComposer onPostCreated={fetchPosts} />
               </div>
-            ) : hasEverPosted === null ? null : (
+            ) : hasEverPosted === null ? (
+              <div className="border-b border-border/40">
+                <div className="flex gap-3 px-4 pt-3 pb-3">
+                  <div className="h-10 w-10 rounded-full bg-muted/30 shrink-0 mt-1" />
+                  <div className="flex-1 min-w-0 flex items-center">
+                    <div className="h-4 w-48 rounded bg-muted/20" />
+                  </div>
+                </div>
+              </div>
+            ) : (
               <StagePresence
                 currentVotes={userVoteCount ?? 0}
                 onUnlocked={() => setComposerUnlocked(true)}
