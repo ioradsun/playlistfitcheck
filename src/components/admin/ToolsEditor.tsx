@@ -289,20 +289,6 @@ export function ToolsEditor() {
     }
   };
 
-  const setCrowdfitMode = async (mode: "reactions" | "hook_review") => {
-    const prev = features.crowdfit_mode;
-    setFeatures(f => ({ ...f, crowdfit_mode: mode }));
-    setSavingKey("crowdfit_mode");
-    try {
-      await patchFeatures({ crowdfit_mode: mode });
-      toast.success(mode === "hook_review" ? "Hook Review mode enabled" : "Standard reactions enabled");
-    } catch {
-      setFeatures(f => ({ ...f, crowdfit_mode: prev }));
-      toast.error("Failed to update");
-    } finally {
-      setSavingKey(null);
-    }
-  };
 
   const saveQuotas = async () => {
     setSavingQuotas(true);
