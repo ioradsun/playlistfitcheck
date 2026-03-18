@@ -831,7 +831,7 @@ export function LyricDanceEmbed({
       {/* Reaction panel */}
       {!disableReactionPanel && (
         <ReactionPanel
-          displayMode="embedded"
+          displayMode={reelsMode ? "fullscreen" : "embedded"}
           isOpen={reactionPanelOpen}
           refreshKey={commentRefreshKey}
           onClose={handlePanelClose}
