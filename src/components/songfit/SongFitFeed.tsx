@@ -64,6 +64,7 @@ function MeasuredFeedCard({
   post,
   onHeight,
   reelsMode = false,
+  lyricDanceData,
   ...props
 }: {
   post: SongFitPost;
@@ -81,6 +82,7 @@ function MeasuredFeedCard({
   };
   reelsMode?: boolean;
   isFirst?: boolean;
+  lyricDanceData?: LyricDanceData | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const { state } = useCardState(post.id);
