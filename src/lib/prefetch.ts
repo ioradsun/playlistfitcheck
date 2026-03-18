@@ -19,7 +19,7 @@ interface CacheEntry<T> {
   ts: number; // Date.now() when written
 }
 
-function cacheWrite<T>(key: string, data: T): void {
+export function cacheWrite<T>(key: string, data: T): void {
   try {
     const entry: CacheEntry<T> = { data, ts: Date.now() };
     localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(entry));
@@ -53,6 +53,11 @@ export function getCachedSiteCopy(): Record<string, any> | null {
 /** Returns cached feed posts or null. Sync, no network. */
 export function getCachedFeed(): any[] | null {
   return cacheRead<any[]>("feed_posts");
+}
+
+/** Returns cached lyric dance data keyed by ID, or null. Sync, no network. */
+export function getCachedLyricData(): Record<string, any> | null {
+  return cacheRead<Record<string, any>>("lyric_data");
 }
 
 // ── Auth session prefetch — consumed by AuthProvider ─────────────────────────

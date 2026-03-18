@@ -25,7 +25,7 @@ import {
 import { useFeedWindow } from "./useFeedWindow";
 import { logImpression } from "@/lib/engagementTracking";
 import { RealtimeFeedHubProvider } from "./RealtimeFeedHub";
-import { consumeFeedPrefetch, getCachedFeed } from "@/lib/prefetch";
+import { consumeFeedPrefetch, getCachedFeed, getCachedLyricData, cacheWrite } from "@/lib/prefetch";
 import { cn } from "@/lib/utils";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -291,7 +291,15 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const [newestCreatedAt, setNewestCreatedAt] = useState<string | null>(null);
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null);
   const [hasTrimmedNewer, setHasTrimmedNewer] = useState(false);
-  const [lyricDataMap, setLyricDataMap] = useState<Map<string, LyricDanceData>>(new Map());
+  const [lyricDataMap, setLyricDataMap] = useState<Map<string, LyricDanceData>>(() => {
+    const cached = getCachedLyricData();
+    if (!cached) return new Map();
+    const map = new Map<string, LyricDanceData>();
+    for (const [id, row] of Object.entries(cached)) {
+      map.set(id, row as LyricDanceData);
+    }
+    return map;
+  });
   const centerIndexRef = useRef(0);
   const postsRef = useRef(posts);
   const isLoadingMoreRef = useRef(isLoadingMore);
@@ -394,10 +402,13 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           .in("id", lyricIds)
           .then(({ data: lyricRows }) => {
             const map = new Map<string, LyricDanceData>();
+            const cacheObj: Record<string, any> = {};
             for (const row of (lyricRows ?? []) as any[]) {
               map.set(row.id, row as LyricDanceData);
+              cacheObj[row.id] = row;
             }
             setLyricDataMap(map);
+            cacheWrite("lyric_data", cacheObj);
           });
       } else {
         setLyricDataMap(new Map());
