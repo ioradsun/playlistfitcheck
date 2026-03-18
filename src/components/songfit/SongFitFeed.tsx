@@ -362,6 +362,24 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       setHasTrimmedNewer(false);
       hasMoreRef.current = enriched.length === FEED_PAGE_SIZE;
       setHasMore(enriched.length === FEED_PAGE_SIZE);
+
+      // Batch-fetch lyric dance data for all studio posts
+      const lyricIds = enriched
+        .filter(p => p.lyric_dance_id)
+        .map(p => p.lyric_dance_id as string);
+      if (lyricIds.length > 0) {
+        const { data: lyricRows } = await supabase
+          .from("shareable_lyric_dances" as any)
+          .select(LYRIC_DANCE_COLUMNS)
+          .in("id", lyricIds);
+        const map = new Map<string, LyricDanceData>();
+        for (const row of (lyricRows ?? []) as any[]) {
+          map.set(row.id, row as LyricDanceData);
+        }
+        setLyricDataMap(map);
+      } else {
+        setLyricDataMap(new Map());
+      }
     } else {
       let cutoff: string | null = null;
       let ceiling: string | null = null;
