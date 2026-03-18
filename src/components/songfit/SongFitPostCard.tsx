@@ -474,7 +474,7 @@ export function SongFitPostCard({
                   score={score}
                   onVoteYes={() => handleVote(true)}
                   onVoteNo={() => handleVote(false)}
-                  hideInput={crowdfitMode === "hook_review"}
+                  hideInput={false}
                   refreshKey={commentRefreshKey}
                   variant={reelsMode ? "reels" : "embedded"}
                 />
