@@ -335,7 +335,7 @@ export function SongFitPostCard({
             </ProfileHoverCard>
 
             {(hasLyricDancePost || isSpotifyEmbed) && (
-              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 border border-green-400/40 rounded px-1.5 py-0.5 shrink-0">
+              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 rounded px-1.5 py-0.5 shrink-0">
                 {hasLyricDancePost ? `In Studio · ${displayName}` : `Now Streaming · ${displayName}`}
               </span>
             )}
@@ -642,7 +642,7 @@ export function SongFitPostCard({
                   )}
                 </div>
                 {(hasLyricDancePost || isSpotifyEmbed) && (
-                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 border border-green-400/40 rounded px-1.5 py-0.5 shrink-0">
+                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 rounded px-1.5 py-0.5 shrink-0">
                     {hasLyricDancePost ? `In Studio · ${displayName}` : `Now Streaming · ${displayName}`}
                   </span>
                 )}
