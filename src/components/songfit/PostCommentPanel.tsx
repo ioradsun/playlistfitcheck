@@ -458,50 +458,50 @@ export function PostCommentPanel({
               )}
             </div>
 
-            {/* Vote strip — Run it back / Not For Me / Close */}
+            {/* Vote strip — pixel-identical to CardBottomBar pre-vote */}
             <div
-              className="flex items-center shrink-0 border-t border-white/[0.06]"
-              style={{ height: 40, background: '#0a0a0a' }}
+              className="shrink-0 flex items-stretch"
+              style={{
+                height: variant === 'reels' ? 44 : 48,
+                background: '#0a0a0a',
+                borderTop: '0.5px solid rgba(255,255,255,0.06)',
+              }}
             >
               <button
                 onClick={() => handleVote(true)}
-                className="flex-1 flex items-center justify-center gap-2 h-full px-3 hover:bg-white/[0.03] transition-colors focus:outline-none"
+                className={`flex-1 flex items-center justify-center gap-2 ${variant === 'reels' ? 'py-2.5' : 'py-3'} hover:bg-white/[0.04] transition-colors focus:outline-none`}
               >
                 <span
-                  className="text-[11px] font-mono tracking-[0.12em] uppercase transition-colors pb-px"
-                  style={activeStyle(votedSide === 'a')}
+                  className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
+                  style={{ color: votedSide === null ? 'rgba(255,255,255,1)' : votedSide === 'a' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.22)' }}
                 >
                   Run it back
                 </span>
-                {replayCount > 0 && (
-                  <span className="text-[9px] font-mono text-white/20">{replayCount}</span>
-                )}
+                {(score?.replay_yes ?? 0) > 0 && <span className="text-[9px] font-mono text-white/25">{score!.replay_yes}</span>}
               </button>
 
-              <div className="w-px self-stretch my-2 bg-white/10 shrink-0" />
+              <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
 
               <button
                 onClick={() => handleVote(false)}
-                className="flex-1 flex items-center justify-center gap-2 h-full px-3 hover:bg-white/[0.03] transition-colors focus:outline-none"
+                className={`flex-1 flex items-center justify-center gap-2 ${variant === 'reels' ? 'py-2.5' : 'py-3'} hover:bg-white/[0.04] transition-colors focus:outline-none`}
               >
                 <span
-                  className="text-[11px] font-mono tracking-[0.12em] uppercase transition-colors pb-px"
-                  style={activeStyle(votedSide === 'b')}
+                  className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
+                  style={{ color: votedSide === null ? 'rgba(255,255,255,1)' : votedSide === 'b' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.22)' }}
                 >
                   Not For Me
                 </span>
-                {skipCount > 0 && (
-                  <span className="text-[9px] font-mono text-white/20">{skipCount}</span>
-                )}
+                {score != null && score.total - score.replay_yes > 0 && <span className="text-[9px] font-mono text-white/25">{score.total - score.replay_yes}</span>}
               </button>
 
-              <div className="w-px self-stretch my-2 bg-white/10 shrink-0" />
+              <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
 
               <button
                 onClick={onClose}
-                className="flex items-center justify-center px-3 h-full text-white/25 hover:text-white/60 transition-colors focus:outline-none shrink-0"
+                className={`flex items-center justify-center min-w-[56px] px-4 ${variant === 'reels' ? 'py-2.5' : 'py-3'} hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0`}
               >
-                <X size={14} />
+                <X size={14} className="text-white/30 hover:text-white/60 transition-colors" />
               </button>
             </div>
           </motion.div>
