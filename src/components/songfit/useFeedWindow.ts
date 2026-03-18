@@ -74,8 +74,8 @@ export function useFeedWindow(
         center,
         visibleStart,
         visibleEnd,
-        windowStart: Math.max(0, center - WINDOW_RADIUS),
-        windowEnd: Math.min(posts.length - 1, center + WINDOW_RADIUS),
+        windowStart: Math.max(0, center - radius),
+        windowEnd: Math.min(posts.length - 1, center + radius),
       };
     },
     [getHeight, posts],

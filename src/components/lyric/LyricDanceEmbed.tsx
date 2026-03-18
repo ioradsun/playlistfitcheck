@@ -169,8 +169,12 @@ export function LyricDanceEmbed({
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
+    if (reelsMode && (cardState === "warm" || cardState === "active")) {
+      player.scheduleFullModeUpgrade();
+      return;
+    }
     if (visibility === "near" || visibility === "visible") player.scheduleFullModeUpgrade();
-  }, [player, playerReady, visibility, isFeedEmbed]);
+  }, [player, playerReady, visibility, isFeedEmbed, reelsMode, cardState]);
 
   // Full-mode upgrade for non-feed embeds now handled by useLyricDanceCore
 
