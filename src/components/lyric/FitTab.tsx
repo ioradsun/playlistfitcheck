@@ -27,9 +27,8 @@ import type { LyricLine, LyricData, LyricHook, SavedCustomHook } from "./LyricDi
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 // FrameRenderState import removed — V3 derives from cinematicDirection
 import type { HeaderProjectSetter } from "./LyricsTab";
-import type { GenerationStatus, PipelineStages, PipelineStageTimes } from "./LyricFitTab";
+import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
-import { PipelineDebugPanel } from "./PipelineDebugPanel";
 
 const PEAK_SAMPLES = 200;
 
@@ -69,8 +68,6 @@ interface Props {
   onBack?: () => void;
   onImageGenerationStatusChange?: (status: "idle" | "running" | "done" | "error") => void;
   pipelineStages?: PipelineStages;
-  stageRestarters?: import("./PipelineDebugPanel").StageRestarters;
-  pipelineStageTimes?: PipelineStageTimes;
   initialDanceId?: string | null;
   initialDanceUrl?: string | null;
 }
@@ -94,8 +91,6 @@ export function FitTab({
   onBack,
   onImageGenerationStatusChange,
   pipelineStages: pipelineStagesProp,
-  pipelineStageTimes,
-  stageRestarters,
   initialDanceId,
   initialDanceUrl,
 }: Props) {
@@ -1270,14 +1265,6 @@ export function FitTab({
           )}
         </div>
     </div>
-    {stageRestarters && (
-      <PipelineDebugPanel
-        generationStatus={generationStatus}
-        pipelineStages={pipelineStages}
-        pipelineStageTimes={pipelineStageTimes}
-        stageRestarters={stageRestarters}
-      />
-    )}
     </>
   );
 }

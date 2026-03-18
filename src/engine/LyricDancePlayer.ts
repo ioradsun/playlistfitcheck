@@ -2125,11 +2125,7 @@ export class LyricDancePlayer {
   private startHealthMonitor(): void {
     if (this.healthCheckInterval) return;
     this.healthCheckInterval = setInterval(() => {
-      const fps = this.frameCount / 5;
       this.frameCount = 0;
-      if (fps > 0 && fps < 20 && this.playing) {
-        
-      }
     }, 5000);
   }
 
@@ -2686,124 +2682,6 @@ export class LyricDancePlayer {
     ds.songProgress = songProgress;
     ds.beatIntensity = beatState?.pulse ?? 0;
 
-    // Heavy debug state — only when debug panel is open
-    if ((this as any)._debugPanelOpen) {
-      // Allocation-free visible count — avoid frame.chunks.filter() creating a temp array
-      let visibleCount = 0;
-      if (frame) {
-        for (let _vi = 0; _vi < frame.chunks.length; _vi++) {
-          if ((frame.chunks[_vi] as any).visible) visibleCount++;
-        }
-      }
-      ds.wordCount = visibleCount;
-      ds.particleCount = this.ambientParticleEngine?.getActiveCount() ?? 0;
-
-      const currentChapter = section;
-      const cdAny = cd as any;
-      ds.cdSceneTone = cdAny?.sceneTone ?? '—';
-      ds.cdAtmosphere = cdAny?.atmosphere ?? '—';
-      ds.cdMotion = cdAny?.motion ?? '—';
-      ds.cdTypography = cdAny?.typography ?? '—';
-      ds.cdTexture = cdAny?.texture ?? '—';
-      ds.cdEmotionalArc = cdAny?.emotionalArc ?? '—';
-      ds.dirThesis = cd?.thesis ?? '—';
-
-      ds.dirChapter = sectionIndex >= 0 ? `${sectionIndex + 1}/${chapters.length}` : '—';
-      const chapterStartR = (currentChapter as any)?.startRatio ?? 0;
-      const chapterEndR = (currentChapter as any)?.endRatio ?? 1;
-      const chapterRange = chapterEndR - chapterStartR;
-      ds.dirChapterProgress = chapterRange > 0 ? Math.max(0, Math.min(1, (songProgress - chapterStartR) / chapterRange)) : 0;
-      ds.dirIntensity = (currentChapter as any)?.emotionalIntensity ?? 0;
-      ds.dirBgDirective = (currentChapter as any)?.bgDirective ?? (currentChapter as any)?.backgroundSystem ?? '—';
-      ds.dirLightBehavior = (currentChapter as any)?.lightBehavior ?? (currentChapter as any)?.atmosphere ?? '—';
-
-      const beatGrid = this.data?.beat_grid;
-      const beatsArr = beatGrid?.beats ?? [];
-      ds.bgBpm = beatGrid?.bpm ?? 0;
-      ds.bgBeatsTotal = beatsArr.length;
-      ds.bgConfidence = beatGrid?.confidence ?? 0;
-      ds.bgNextBeat = beatState?.nextBeat ?? 0;
-      ds.bgBeatPhase = beatState?.phase ?? 0;
-      ds.bgBeatPulse = beatState?.pulse ?? 0;
-
-      const activeWord = this.getActiveWord(clamped);
-      const activeWordClean = normalizeToken(activeWord?.word ?? '');
-      const activeWordDirective = activeWordClean ? this.resolvedState.wordDirectivesMap[activeWordClean] ?? null : null;
-      ds.activeWord = activeWordClean || '—';
-      ds.activeWordEntry = activeWordDirective?.entry ?? '—';
-      ds.activeWordExit = activeWordDirective?.exit ?? '—';
-      ds.activeWordEmphasis = activeWordDirective?.emphasisLevel ?? 0;
-
-      ds.wordDirectiveWord = activeWordClean || '';
-      ds.wordDirectiveBehavior = activeWordDirective?.behavior ?? activeWordDirective?.kineticClass ?? '—';
-      ds.wordDirectiveEntry = activeWordDirective?.entry ?? '—';
-      ds.wordDirectiveExit = activeWordDirective?.exit ?? '—';
-      ds.wordDirectiveEmphasis = activeWordDirective?.emphasisLevel ?? 0;
-      ds.wordDirectiveGhostTrail = activeWordDirective?.ghostTrail ?? false;
-      ds.wordDirectiveGhostDir = activeWordDirective?.ghostDirection ?? '—';
-
-      const lines = this.payload?.lines ?? [];
-      // Allocation-free active line detection — avoid filter() + reduce() temp arrays
-      let activeLine: any = null;
-      for (let _li = 0; _li < lines.length; _li++) {
-        const _l = lines[_li];
-        if (clamped >= (_l.start ?? 0) && clamped < (_l.end ?? 0)) {
-          if (!activeLine || (_l.start ?? 0) > (activeLine.start ?? 0)) activeLine = _l;
-        }
-      }
-      const storyboard = cd?.storyboard ?? [];
-      const activeLineIdx = activeLine ? lines.indexOf(activeLine) : -1;
-      const lineStory = activeLineIdx >= 0 ? (storyboard as any[])[activeLineIdx] : null;
-      ds.lineHeroWord = lineStory?.heroWord ?? '';
-      ds.lineEntry = lineStory?.entryStyle ?? 'fades';
-      ds.lineExit = lineStory?.exitStyle ?? 'fades';
-      ds.lineIntent = lineStory?.intent ?? lineStory?.emotion ?? '—';
-      ds.shotType = lineStory?.shotType ?? 'FloatingInWorld';
-      ds.shotDescription = lineStory?.description ?? '—';
-      const resolvedLine = activeLineIdx >= 0 ? this.resolvedState.lineSettings[activeLineIdx] : null;
-      const resolvedWord = activeWordClean ? this.resolvedState.wordSettings[activeWordClean] ?? null : null;
-      ds.resolvedLineStyle = resolvedLine
-        ? `${resolvedLine.entryStyle}→${resolvedLine.exitStyle} / ${resolvedLine.typography} / ${resolvedLine.atmosphere}`
-        : '—';
-      ds.resolvedWordStyle = resolvedWord
-        ? `${resolvedWord.behavior} e${resolvedWord.emphasisLevel} pulse:${resolvedWord.pulseAmp.toFixed(2)}`
-        : '—';
-      ds.layoutStable = true;
-
-      ds.cameraDistance = ds.cdTypography;
-      ds.cameraMovement = cdAny?.cameraMovement ?? (currentChapter as any)?.cameraMovement ?? '—';
-      ds.tensionStage = currentTension?.stage ?? '—';
-      ds.tensionMotion = currentTension?.motionIntensity ?? 0;
-      ds.tensionParticles = currentTension?.particleDensity ?? 0;
-      ds.tensionTypo = currentTension?.typography ?? '—';
-
-      const symbols = cdAny?.symbolSystem ?? cdAny?.symbols ?? {};
-      ds.symbolPrimary = symbols?.primary ?? '—';
-      ds.symbolSecondary = symbols?.secondary ?? '—';
-      ds.symbolState = symbols?.state ?? '—';
-
-      const physics = cd?.visualWorld?.physicsProfile;
-      ds.heat = physics?.heat ?? 0;
-      ds.velocity = 0;
-      ds.rotation = 0;
-
-      ds.particleSystem = this.activeSectionTexture ?? 'none';
-      ds.particleDensity = this.resolvedState.particleConfig.density ?? 0;
-      ds.particleSpeed = this.resolvedState.particleConfig.speed ?? 0;
-
-      ds.backgroundSystem = cdAny?.backgroundSystem ?? cd?.visualWorld?.backgroundSystem ?? '—';
-      ds.imageLoaded = this.chapterImages.length > 0;
-      ds.zoom = frame?.cameraZoom ?? 1;
-      ds.vignetteIntensity = 0;
-
-      ds.fontScale = this._viewportFontScale ?? 1;
-      ds.scale = frame?.cameraZoom ?? 1;
-      ds.lineColor = this.getResolvedPalette()?.[2] ?? '#ffffff';
-      ds.effectKey = activeLine?.tag ?? '—';
-      const firstVisible = this._solvedBounds[0] as any;
-      ds.entryProgress = firstVisible?.entryProgress ?? 0;
-      ds.exitProgress = firstVisible?.exitProgress ?? 0;
-    } // end debug panel guard
 
     const beatIntensityClamped = Math.max(0, Math.min(1, beatState?.pulse ?? 0));
     if (this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
