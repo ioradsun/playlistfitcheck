@@ -458,7 +458,7 @@ export function SongFitPostCard({
           )}
         </div>
 
-        {reelsMode ? (
+        {reelsMode && !hasLyricDancePost ? (
           <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
             {/* Transparent top area — allows tap-through to canvas/embed */}
             <div className="flex-1" />
