@@ -317,19 +317,14 @@ export function SongFitPostCard({
                 className="flex items-center gap-2 cursor-pointer shrink-0"
                 onClick={handleProfileClick}
               >
-                <div className="relative shrink-0">
-                  <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.06]">
+                <div className="shrink-0">
+                  <div className={cn("h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1", (post.profiles as any)?.is_verified ? "ring-green-400" : "ring-white/[0.06]")}>
                     {post.profiles?.avatar_url ? (
                       <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <User size={13} className="text-white/40" />
                     )}
                   </div>
-                  {(post.profiles as any)?.is_verified && (
-                    <span className="absolute -bottom-0.5 -right-0.5">
-                      <VerifiedBadge size={12} />
-                    </span>
-                  )}
                 </div>
               </div>
             </ProfileHoverCard>
