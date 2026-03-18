@@ -17,7 +17,6 @@ import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
 import { BillboardToggle } from "./BillboardToggle";
 import { StagePresence } from "./StagePresence";
-import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import {
   CardLifecycleProvider,
   CardLifecycleContext,
@@ -363,23 +362,33 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       hasMoreRef.current = enriched.length === FEED_PAGE_SIZE;
       setHasMore(enriched.length === FEED_PAGE_SIZE);
 
-      // Batch-fetch lyric dance data for all studio posts
+      // Show the feed immediately — cards render covers while lyric data loads.
+      // The batch fetch runs in the background; useLyricDanceCore has a per-card
+      // fallback fetch if prefetchedData is null, so nothing breaks on any surface.
+      setLoading(false);
+
+      // Batch-fetch lyric dance data (non-blocking background fill)
       const lyricIds = enriched
-        .filter(p => p.lyric_dance_id)
-        .map(p => p.lyric_dance_id as string);
+        .filter((p) => p.lyric_dance_id)
+        .map((p) => p.lyric_dance_id as string);
       if (lyricIds.length > 0) {
-        const { data: lyricRows } = await supabase
+        supabase
           .from("shareable_lyric_dances" as any)
           .select(LYRIC_DANCE_COLUMNS)
-          .in("id", lyricIds);
-        const map = new Map<string, LyricDanceData>();
-        for (const row of (lyricRows ?? []) as any[]) {
-          map.set(row.id, row as LyricDanceData);
-        }
-        setLyricDataMap(map);
+          .in("id", lyricIds)
+          .then(({ data: lyricRows }) => {
+            const map = new Map<string, LyricDanceData>();
+            for (const row of (lyricRows ?? []) as any[]) {
+              map.set(row.id, row as LyricDanceData);
+            }
+            setLyricDataMap(map);
+          });
       } else {
         setLyricDataMap(new Map());
       }
+
+      // Non-billboard path done — loading already set to false above.
+      return;
     } else {
       let cutoff: string | null = null;
       let ceiling: string | null = null;
@@ -762,44 +771,24 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
             <Loader2 size={24} className="animate-spin text-white/20" />
           </div>
         ) : (
-          <div className="space-y-0 pt-3">
+          <div className="space-y-3 pt-3">
             {[0, 1, 2].map((i) => (
               <div key={i} className="px-2 pb-3">
-                <div
-                  className="rounded-2xl overflow-hidden animate-pulse"
-                  style={{ background: "#121212" }}
-                >
+                <div className="rounded-2xl overflow-hidden border border-border/30 bg-muted/10">
                   <div className="flex items-center gap-2.5 px-3 py-2.5">
-                    <div className="h-8 w-8 rounded-full bg-white/10" />
+                    <div className="h-8 w-8 rounded-full bg-muted/40" />
                     <div className="space-y-1.5 flex-1">
-                      <div className="h-3 w-24 rounded bg-white/10" />
-                      <div className="h-2.5 w-16 rounded bg-white/5" />
+                      <div className="h-3 w-24 rounded bg-muted/30" />
+                      <div className="h-2.5 w-16 rounded bg-muted/20" />
                     </div>
                   </div>
-                  <div
-                    className="relative overflow-hidden"
-                    style={{ height: 320 }}
-                  >
-                    <LyricDanceCover
-                      songName=""
-                      artistName=""
-                      avatarUrl={null}
-                      initial=""
-                      waiting
-                    />
+                  <div className="bg-muted/20" style={{ height: 320 }} />
+                  <div className="px-1 py-1 flex items-center gap-1">
+                    <div className="h-8 w-8 rounded-full bg-muted/20" />
+                    <div className="h-8 w-8 rounded-full bg-muted/20" />
+                    <div className="h-8 w-8 rounded-full bg-muted/20" />
+                    <div className="h-8 w-8 rounded-full bg-muted/20" />
                   </div>
-                  <div className="px-3 pt-2 pb-1 space-y-1">
-                    <div className="h-2.5 w-3/4 rounded bg-white/10" />
-                  </div>
-                  <div className="flex items-center gap-3 px-3 py-2">
-                    {[0, 1, 2, 3].map((j) => (
-                      <div
-                        key={j}
-                        className="h-4 w-4 rounded-full bg-white/10"
-                      />
-                    ))}
-                  </div>
-                  <div className="h-1" />
                 </div>
               </div>
             ))}
@@ -812,26 +801,28 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           </p>
         </div>
       ) : (
-        <CardLifecycleProvider>
-          <RealtimeFeedHubProvider>
-            <_WindowedFeedList
-              posts={posts}
-              feedView={feedView}
-              fetchPosts={fetchPosts}
-              setCommentPostId={setCommentPostId}
-              setLikesPostId={setLikesPostId}
-              signalMap={signalMap}
-              isLoadingMore={isLoadingMore}
-              hasMore={hasMore}
-              hasTrimmedNewer={hasTrimmedNewer}
-              loadMore={loadMore}
-              loadPrevious={loadPrevious}
-              onCenterChange={handleCenterChange}
-              reelsMode={reelsMode}
-              lyricDataMap={lyricDataMap}
-            />
-          </RealtimeFeedHubProvider>
-        </CardLifecycleProvider>
+        <div className="animate-in fade-in duration-300">
+          <CardLifecycleProvider>
+            <RealtimeFeedHubProvider>
+              <_WindowedFeedList
+                posts={posts}
+                feedView={feedView}
+                fetchPosts={fetchPosts}
+                setCommentPostId={setCommentPostId}
+                setLikesPostId={setLikesPostId}
+                signalMap={signalMap}
+                isLoadingMore={isLoadingMore}
+                hasMore={hasMore}
+                hasTrimmedNewer={hasTrimmedNewer}
+                loadMore={loadMore}
+                loadPrevious={loadPrevious}
+                onCenterChange={handleCenterChange}
+                reelsMode={reelsMode}
+                lyricDataMap={lyricDataMap}
+              />
+            </RealtimeFeedHubProvider>
+          </CardLifecycleProvider>
+        </div>
       )}
 
       <SongFitComments
