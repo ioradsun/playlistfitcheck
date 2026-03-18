@@ -90,7 +90,7 @@ export interface SiteCopy {
     };
     tools_enabled?: Record<string, boolean>;
     tools_order?: string[];
-    crowdfit_mode?: "reactions" | "hook_review";
+    
     lyric_video?: boolean;
     hookfit_enabled?: boolean;
     hookfit_hottest_hooks?: boolean;

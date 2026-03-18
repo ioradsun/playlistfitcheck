@@ -355,29 +355,6 @@ export function ToolsEditor() {
         </Reorder.Group>
       </div>
 
-      {/* ── CrowdFit Mode ── */}
-      <div className="glass-card rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <Target size={14} className="text-primary" />
-          <span className="text-sm font-mono font-medium">CrowdFit Mode</span>
-        </div>
-        <div className="divide-y divide-border">
-          <RadioOption
-            active={features.crowdfit_mode === "reactions" || !features.crowdfit_mode}
-            disabled={savingKey === "crowdfit_mode"}
-            onClick={() => setCrowdfitMode("reactions")}
-            title="Standard reactions"
-            desc="🔥 fire, 💬 comments, share, bookmark"
-          />
-          <RadioOption
-            active={features.crowdfit_mode === "hook_review"}
-            disabled={savingKey === "crowdfit_mode"}
-            onClick={() => setCrowdfitMode("hook_review")}
-            title="Hook Review"
-            desc="Structured 2-tap panel — did the hook land?"
-          />
-        </div>
-      </div>
 
       {/* ── LyricFit Pipeline Config ── */}
       <div className="glass-card rounded-xl overflow-hidden">

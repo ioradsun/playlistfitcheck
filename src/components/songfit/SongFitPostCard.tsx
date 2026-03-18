@@ -708,9 +708,8 @@ export function SongFitPostCard({
               </>
             )}
 
-            {/* Action Row — reactions mode only here */}
-            {crowdfitMode !== "hook_review" &&
-              !hasLyricDancePost &&
+            {/* Action Row */}
+            {!hasLyricDancePost &&
               !isBattlePost &&
               !isSpotifyEmbed && (
                 <div className="relative flex items-center justify-between px-1 py-1">

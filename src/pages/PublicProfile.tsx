@@ -474,38 +474,24 @@ const PublicProfile = () => {
                           <p className="text-sm font-medium truncate">{s.track_title}</p>
                           <div className="flex items-center gap-2.5 mt-0.5">
                             <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
-                            {isHookMode ? (
-                              reviewSummaries[s.id] ? (
-                                <>
-                                  <span className="text-[10px] text-muted-foreground font-mono">
-                                    <span className="text-foreground font-semibold">{reviewSummaries[s.id].topRatingPct}%</span> {reviewSummaries[s.id].topRatingLabel}
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground/40">·</span>
-                                  <span className="text-[10px] text-muted-foreground font-mono">
-                                    <span className="text-foreground font-semibold">{reviewSummaries[s.id].replayPct}%</span> replay
-                                  </span>
-                                  <button
-                                    onClick={e => { e.stopPropagation(); setReviewSheetPostId(s.id); }}
-                                    className="text-[10px] text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
-                                  >
-                                    {reviewSummaries[s.id].total} reviews
-                                  </button>
-                                </>
-                              ) : (
-                                <span className="text-[10px] text-muted-foreground/50">no reviews yet</span>
-                              )
-                            ) : (
+                            {reviewSummaries[s.id] ? (
                               <>
-                                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                  <Heart size={9} /> {s.likes_count ?? 0}
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  <span className="text-foreground font-semibold">{reviewSummaries[s.id].topRatingPct}%</span> {reviewSummaries[s.id].topRatingLabel}
                                 </span>
-                                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                  <MessageCircle size={9} /> {s.comments_count ?? 0}
+                                <span className="text-[10px] text-muted-foreground/40">·</span>
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  <span className="text-foreground font-semibold">{reviewSummaries[s.id].replayPct}%</span> replay
                                 </span>
-                                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                  <Bookmark size={9} /> {saveCounts[s.id] ?? 0}
-                                </span>
+                                <button
+                                  onClick={e => { e.stopPropagation(); setReviewSheetPostId(s.id); }}
+                                  className="text-[10px] text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
+                                >
+                                  {reviewSummaries[s.id].total} reviews
+                                </button>
                               </>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground/50">no reviews yet</span>
                             )}
                           </div>
                         </div>
