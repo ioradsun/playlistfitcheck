@@ -36,7 +36,7 @@ import { toast } from "sonner";
 import type { SongFitPost } from "./types";
 
 import { ProfileHoverCard } from "./ProfileHoverCard";
-import { FmlyBadge } from "@/components/FmlyBadge";
+
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent } from "@/lib/engagementTracking";
