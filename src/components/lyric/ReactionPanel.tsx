@@ -279,7 +279,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
         setCommentReactions(counts);
       });
   }, [danceId, isOpen, refreshKey]);
-
+  const lastActiveLineRef = useRef<number | null>(null);
 
 
   const handleLineTap = (line: LyricSectionLine) => {
