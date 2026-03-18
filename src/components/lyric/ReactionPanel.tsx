@@ -709,7 +709,6 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
             <X size={13} className="text-white hover:text-white/70 transition-colors" />
           </button>
         </div>
-        </div>
       </div>
     </PanelShell>
   );
