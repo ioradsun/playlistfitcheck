@@ -12,6 +12,7 @@ interface Props {
 export const LyricDanceProgressBar = React.forwardRef<HTMLDivElement, Props>(
   function LyricDanceProgressBar({ player, data, palette, onSeekStart, onSeekEnd }, _ref) {
     const [progress, setProgress] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
     const barRef = useRef<HTMLDivElement>(null);
     const dragging = useRef(false);
     const wasPlaying = useRef(false);
