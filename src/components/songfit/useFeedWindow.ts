@@ -78,7 +78,7 @@ export function useFeedWindow(
         windowEnd: Math.min(posts.length - 1, center + radius),
       };
     },
-    [getHeight, posts],
+    [getHeight, posts, radius],
   );
 
   useEffect(() => {
