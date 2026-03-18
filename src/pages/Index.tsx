@@ -164,6 +164,7 @@ const Index = () => {
       : rawTabFromPath;
   const [activeTab, setActiveTabState] = useState(tabFromPath);
   const reelsMode = isMobile && activeTab === "songfit" && reelsEnabled;
+  const [reelsScrolled, setReelsScrolled] = useState(false);
   const playlistQuota = useUsageQuota("playlist", {
     enabled: activeTab === "playlist",
   });
@@ -192,6 +193,19 @@ const Index = () => {
     }
 
     return () => document.body.removeAttribute("data-reels-mode");
+  }, [reelsMode]);
+
+  useEffect(() => {
+    if (!reelsMode) {
+      setReelsScrolled(false);
+      return;
+    }
+    const el = document.getElementById("songfit-scroll-container");
+    if (!el) return;
+    const onScroll = () => setReelsScrolled(el.scrollTop > 50);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener("scroll", onScroll);
   }, [reelsMode]);
 
   // ── Unified project-fetch status (replaces lyricLoadingState + loadingProjectType) ──
@@ -1321,8 +1335,9 @@ const Index = () => {
             TAB_SUBTITLES[activeTab] && (
               <span
                 className={cn(
-                  "font-mono text-[11px] tracking-widest",
+                  "font-mono text-[11px] tracking-widest transition-opacity duration-300",
                   reelsMode ? "text-white/80" : "text-primary",
+                  reelsMode && reelsScrolled && "opacity-0 pointer-events-none",
                 )}
               >
                 {TAB_SUBTITLES[activeTab]}

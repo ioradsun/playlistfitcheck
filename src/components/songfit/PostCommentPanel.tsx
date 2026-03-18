@@ -30,6 +30,7 @@ interface Props {
   onVoteNo: () => void;
   hideInput?: boolean;
   refreshKey?: number;
+  variant?: 'embedded' | 'fullscreen';
 }
 
 function CommentReactPicker({
@@ -74,7 +75,7 @@ function CommentReactPicker({
   );
 }
 
-export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0 }: Props) {
+export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0, variant = 'embedded' }: Props) {
   const { user, profile } = useAuth();
   const sessionId = getSessionId();
 
@@ -345,7 +346,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
   };
 
   return (
-    <PanelShell isOpen={isOpen} variant="embedded" topOffset={52}>
+    <PanelShell isOpen={isOpen} variant={variant} topOffset={variant === "embedded" ? 52 : 0}>
       <VoteStrip
         votedSide={votedSide}
         score={score}
