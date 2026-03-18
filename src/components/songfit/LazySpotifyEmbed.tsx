@@ -1,5 +1,6 @@
 import { useState, useEffect, memo } from "react";
 import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { logEngagementEvent } from "@/lib/engagementTracking";
 import type { CardState } from "./useCardLifecycle";
@@ -16,10 +17,6 @@ interface Props {
   reelsMode?: boolean;
 }
 
-// Spotify mini player (compact strip with play controls)
-const SPOTIFY_MINI_HEIGHT = 152;
-const SOUNDCLOUD_HEIGHT = 166;
-
 function LazySpotifyEmbedInner({
   trackId,
   trackTitle,
@@ -32,14 +29,15 @@ function LazySpotifyEmbedInner({
 }: Props) {
   const { user } = useAuth();
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  // Delay reveal 150ms after iframe onload — gives Spotify's internal JS time
+  // to apply dark theme. Without this, the iframe's white default background
+  // flashes through during the poster crossfade.
   const [revealReady, setRevealReady] = useState(false);
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
-  const isSoundCloud = platform === "soundcloud";
-  const embedHeight = isSoundCloud ? SOUNDCLOUD_HEIGHT : SPOTIFY_MINI_HEIGHT;
 
   const embedSrc =
-    isSoundCloud && trackUrl
+    platform === "soundcloud" && trackUrl
       ? toSoundCloudEmbedUrl(trackUrl)
       : `https://open.spotify.com/embed/track/${trackId}?utm_source=generator&theme=0`;
 
@@ -60,122 +58,127 @@ function LazySpotifyEmbedInner({
     }
   };
 
-  if (reelsMode) {
-    return (
-      <div className="w-full h-full overflow-hidden relative" style={{ background: "#000" }} onClick={handleClick}>
-        {/* Blurred album art fills entire viewport */}
-        {albumArtUrl && (
-          <div className="absolute inset-0 z-[1]">
-            <img src={albumArtUrl} alt="" className="w-full h-full object-cover blur-2xl scale-110 opacity-60" />
-            <div className="absolute inset-0 bg-black/40" />
-          </div>
-        )}
-
-        {/* Centered card: album art hero + mini player */}
-        <div className="relative z-[10] flex items-center justify-center h-full px-6">
-          <div className="w-full max-w-[400px] relative overflow-hidden" style={{ borderRadius: 12 }}>
-            {/* Album art hero */}
-            <div className="relative w-full" style={{ aspectRatio: "1 / 1" }}>
-              {albumArtUrl ? (
-                <>
-                  <img src={albumArtUrl} alt="" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                  <div className="absolute bottom-3 left-3 right-3 z-10">
-                    <p className="text-sm font-bold text-white drop-shadow-md truncate">{trackTitle}</p>
-                    {artistName && (
-                      <p className="text-xs text-white/60 drop-shadow-md truncate mt-0.5">{artistName}</p>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="w-full h-full bg-muted/20" />
-              )}
+  return (
+    <div
+      className={cn(
+        "w-full overflow-hidden relative",
+        reelsMode ? "h-full" : "",
+      )}
+      style={
+        reelsMode
+          ? { background: "#000" }
+          : {
+              height: platform === "soundcloud" ? 166 : 232,
+              background: "#0a0a0a",
+              borderRadius: 12,
+              overflow: "hidden",
+              WebkitMaskImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='12' ry='12'/%3E%3C/svg%3E")`,
+              WebkitMaskSize: "100% 100%",
+              maskImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='12' ry='12'/%3E%3C/svg%3E")`,
+              maskSize: "100% 100%",
+            }
+      }
+      onClick={handleClick}
+    >
+      {reelsMode ? (
+        <>
+          {/* Blurred album art fills entire viewport */}
+          {albumArtUrl && (
+            <div className="absolute inset-0 z-[1]">
+              <img
+                src={albumArtUrl}
+                alt=""
+                className="w-full h-full object-cover blur-2xl scale-110 opacity-60"
+              />
+              <div className="absolute inset-0 bg-black/40" />
             </div>
+          )}
 
-            {/* Mini player pinned below art */}
-            <div className="relative" style={{ height: embedHeight, background: "#000" }}>
-              {/* Loading placeholder */}
-              {!revealReady && (
-                <div className="absolute inset-0 z-[2] flex items-center justify-center bg-[#181818]">
-                  <div className="h-3 w-24 rounded bg-white/10 animate-pulse" />
+          {/* Centered iframe with constrained width */}
+          <div className="relative z-[10] flex items-center justify-center h-full px-6">
+            <div
+              className="w-full max-w-[400px]"
+              style={{ borderRadius: 12, overflow: "hidden" }}
+            >
+              {/* Poster visible until iframe dark theme renders */}
+              {albumArtUrl && (
+                <div
+                  className="absolute inset-0 z-[2] pointer-events-none transition-opacity duration-500"
+                  style={{ opacity: revealReady ? 0 : 1 }}
+                >
+                  <img
+                    src={albumArtUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-black/20" />
+                  <div className="absolute bottom-3 left-3 right-3 z-10">
+                    <p className="text-sm font-bold text-white drop-shadow-md truncate">
+                      {trackTitle}
+                    </p>
+                  </div>
                 </div>
               )}
               <iframe
                 src={embedSrc}
                 width="100%"
-                height={embedHeight}
+                height={platform === "soundcloud" ? 166 : 232}
                 allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                className="border-0 block w-full relative z-[1]"
-                style={{
-                  background: "#000",
-                  opacity: revealReady ? 1 : 0,
-                  transition: "opacity 500ms ease",
-                }}
+                className="border-0 block w-full"
+                style={{ background: "#000" }}
                 title={`Play ${trackTitle}`}
-                scrolling={isSoundCloud ? "no" : undefined}
+                scrolling={platform === "soundcloud" ? "no" : undefined}
                 onLoad={() => setIframeLoaded(true)}
               />
             </div>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Non-reels: 320px card with album art hero + mini player at bottom ──
-  return (
-    <div
-      className="w-full overflow-hidden relative"
-      style={{ height: 320, background: "#0a0a0a" }}
-      onClick={handleClick}
-    >
-      {/* Album art hero — fills entire 320px */}
-      <div className="absolute inset-0 z-[1]">
-        {albumArtUrl ? (
-          <>
-            <img src={albumArtUrl} alt="" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-          </>
-        ) : (
-          <div className="w-full h-full animate-pulse bg-muted" />
-        )}
-      </div>
-
-      {/* Song info overlaid on art — positioned above the mini player */}
-      <div className="absolute left-3 right-3 z-[5]" style={{ bottom: embedHeight + 8 }}>
-        <p className="text-sm font-bold text-white drop-shadow-md line-clamp-1">{trackTitle}</p>
-        {artistName && (
-          <p className="text-xs text-white/50 drop-shadow-md truncate mt-0.5">{artistName}</p>
-        )}
-      </div>
-
-      {/* Mini player pinned to bottom */}
-      <div
-        className="absolute bottom-0 left-0 right-0 z-[8]"
-        style={{ height: embedHeight, background: "#000" }}
-      >
-        {/* Loading placeholder — matches Spotify's dark bg */}
-        {!revealReady && (
-          <div className="absolute inset-0 z-[2] flex items-center justify-center bg-[#181818] rounded-b-xl">
-            <div className="h-3 w-24 rounded bg-white/10 animate-pulse" />
+        </>
+      ) : (
+        <>
+          {/* Full-bleed album art poster — sits behind iframe, fades when dark theme is ready */}
+          <div
+            className="absolute inset-0 w-full h-full z-[6] pointer-events-none transition-opacity duration-700"
+            style={{ opacity: revealReady ? 0 : 1 }}
+          >
+            {albumArtUrl ? (
+              <>
+                <img
+                  src={albumArtUrl}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <div className="absolute bottom-3 left-3 right-3 z-10 flex items-end gap-3">
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-sm font-bold text-white drop-shadow-md line-clamp-1">
+                      {trackTitle}
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="absolute inset-0 w-full h-full animate-pulse bg-muted" />
+            )}
           </div>
-        )}
-        <iframe
-          src={embedSrc}
-          width="100%"
-          height={embedHeight}
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-          className="border-0 block w-full relative z-[1]"
-          style={{
-            background: "#000",
-            opacity: revealReady ? 1 : 0,
-            transition: "opacity 700ms ease",
-          }}
-          title={`Play ${trackTitle}`}
-          scrolling={isSoundCloud ? "no" : undefined}
-          onLoad={() => setIframeLoaded(true)}
-        />
-      </div>
+
+          {/* Iframe — dark bg prevents white flash, fades in after dark theme paints */}
+          <iframe
+            src={embedSrc}
+            width="100%"
+            height={platform === "soundcloud" ? 166 : 232}
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            className="absolute inset-0 border-0 block w-full transition-opacity duration-700"
+            style={{
+              background: "#000",
+              opacity: revealReady ? 1 : 0,
+              zIndex: revealReady ? 8 : 5,
+            }}
+            title={`Play ${trackTitle}`}
+            scrolling={platform === "soundcloud" ? "no" : undefined}
+            onLoad={() => setIframeLoaded(true)}
+          />
+        </>
+      )}
     </div>
   );
 }
