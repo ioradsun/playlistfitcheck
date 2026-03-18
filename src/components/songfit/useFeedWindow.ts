@@ -12,6 +12,7 @@ export function useFeedWindow(
   scrollContainerId: string,
   reelsMode = false,
 ) {
+  const radius = reelsMode ? REELS_WINDOW_RADIUS : WINDOW_RADIUS;
   const heightMapRef = useRef(new Map<string, number>());
   const cardMinHeight = reelsMode
     ? typeof window !== "undefined"
@@ -20,7 +21,7 @@ export function useFeedWindow(
     : FEED_CARD_MIN_HEIGHT;
   const [windowRange, setWindowRange] = useState({
     start: 0,
-    end: Math.min(posts.length - 1, WINDOW_RADIUS * 2),
+    end: Math.min(posts.length - 1, radius * 2),
   });
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 0 });
   const [impressions, setImpressions] = useState<string[]>([]);
