@@ -163,9 +163,14 @@ const Index = () => {
   useEffect(() => {
     if (activeTab !== "lyric") return;
     if (projectId && prevProjectIdRef.current !== projectId) {
-      setLoadedLyric(null);
-      setIsFetchingProject(true);
-      setProjectMissing(false);
+      if (projectLoadedRef.current === projectId) {
+        setIsFetchingProject(false);
+        setProjectMissing(false);
+      } else {
+        setLoadedLyric(null);
+        setIsFetchingProject(true);
+        setProjectMissing(false);
+      }
     } else if (!projectId) {
       setIsFetchingProject(false);
       setProjectMissing(false);
