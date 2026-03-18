@@ -88,7 +88,6 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
         .eq("battle_id", battleId)
         .order("battle_position", { ascending: true });
 
-      console.log("[InlineBattle] hooks query:", { battleId, hooks: hooks?.length ?? 0, error: hookErr?.message });
 
       if (!hooks || hooks.length === 0) { setLoading(false); return; }
       if (fetchId !== fetchRef.current) return; // stale
@@ -100,7 +99,6 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       setHookB(b);
       onHooksLoaded?.(a, b);
 
-      console.log("[InlineBattle] hookA:", { id: a.id, start: a.hook_start, end: a.hook_end, artist: a.artist_slug, song: a.song_slug });
 
       // 2. Fetch the lyric dance for this song (match by user + song slug)
       let query = supabase
@@ -118,7 +116,6 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
       const { data: dances, error: danceErr } = await query;
 
-      console.log("[InlineBattle] dance query:", { found: dances?.length ?? 0, error: danceErr?.message, hasCinematic: !!(dances?.[0] as any)?.cinematic_direction });
 
       if (fetchId !== fetchRef.current) return; // stale
       if (dances && dances.length > 0) {
