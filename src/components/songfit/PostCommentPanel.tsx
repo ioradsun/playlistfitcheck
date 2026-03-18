@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { getSessionId } from '@/lib/sessionId';
 import { formatDistanceToNow } from 'date-fns';
 import { EmojiBar } from '@/components/shared/panel/EmojiBar';
 import { EMOJIS, type EmojiKey } from '@/components/shared/panel/panelConstants';
+import { CommentInput } from '@/components/shared/panel/CommentInput';
 import { CardBottomBar } from '@/components/songfit/CardBottomBar';
 import { useCardVote } from '@/hooks/useCardVote';
 import { useTopPostReaction } from '@/hooks/useTopPostReaction';
@@ -103,6 +105,11 @@ export function PostCommentPanel({
   const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
   const [sessionCommentReacted, setSessionCommentReacted] = useState<Set<string>>(new Set());
 
+  // ── Panel comment input state ──
+  const [text, setText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+
   const handleCommentFromBar = useCallback(async () => {
     const content = note.trim();
     if (!content || !user) return;
@@ -116,6 +123,46 @@ export function PostCommentPanel({
     setNote('');
     setCommentRefreshKey((k) => k + 1);
   }, [note, user, postId, setNote]);
+
+  const handleSubmit = useCallback(async () => {
+    const content = text.trim();
+    if (!content || !user || submitting) return;
+    setSubmitting(true);
+    const parentId = replyingTo?.id ?? null;
+    const optimistic: Comment = {
+      id: `optimistic-${Date.now()}`,
+      content,
+      created_at: new Date().toISOString(),
+      user_id: user.id,
+      parent_comment_id: parentId,
+      profiles: { display_name: user.email ?? null, avatar_url: null },
+      replies: [],
+    };
+    if (replyingTo) {
+      setComments(prev =>
+        prev.map(c =>
+          c.id === replyingTo.id
+            ? { ...c, replies: [...(c.replies ?? []), optimistic] }
+            : c,
+        ),
+      );
+    } else {
+      setComments(prev => [...prev, optimistic]);
+    }
+    setText('');
+    setReplyingTo(null);
+    setHasSubmitted(true);
+    setTimeout(() => setHasSubmitted(false), 500);
+    try {
+      await supabase
+        .from('songfit_comments')
+        .insert({ post_id: postId, user_id: user.id, content, parent_comment_id: parentId });
+    } catch {
+      // silent
+    } finally {
+      setSubmitting(false);
+    }
+  }, [text, user, submitting, replyingTo, postId]);
 
   useEffect(() => {
     if (!isOpen || !postId) return;
@@ -239,6 +286,19 @@ export function PostCommentPanel({
     fire: '🔥', dead: '💀', mind_blown: '🤯',
     emotional: '😭', respect: '🙏', accurate: '🎯',
   };
+
+  const accent = palette?.[1] ?? 'rgba(255,255,255,0.7)';
+  const replayCount = score?.replay_yes ?? 0;
+  const skipCount = score != null ? score.total - score.replay_yes : 0;
+
+  const activeStyle = (active: boolean) => ({
+    color:
+      votedSide === null
+        ? 'rgba(255,255,255,1)'
+        : active
+          ? accent
+          : 'rgba(255,255,255,0.25)',
+  });
 
   const renderComment = (comment: Comment, isReply = false) => {
     const name = comment.profiles?.display_name ?? 'anon';
@@ -386,23 +446,61 @@ export function PostCommentPanel({
               )}
             </div>
 
-            {/* CardBottomBar inside panel — acts as input + close */}
-            <div className="shrink-0">
-              <CardBottomBar
-                variant={variant === 'reels' ? 'fullscreen' : 'embedded'}
-                votedSide={votedSide}
-                score={score}
-                note={note}
-                onNoteChange={setNote}
-                onVoteYes={() => handleVote(true)}
-                onVoteNo={() => handleVote(false)}
-                onSubmit={handleCommentFromBar}
-                onOpenReactions={onOpen}
-                onClose={onClose}
-                panelOpen={true}
-                topReaction={topPostReaction}
-                trackTitle={trackTitle}
-              />
+            {/* Comment input */}
+            <CommentInput
+              value={text}
+              onChange={setText}
+              onSubmit={handleSubmit}
+              onClose={onClose}
+              hasSubmitted={hasSubmitted}
+              size="compact"
+            />
+
+            {/* Vote strip — Run it back / Not For Me / Close */}
+            <div
+              className="flex items-center shrink-0 border-t border-white/[0.06]"
+              style={{ height: 40, background: '#0a0a0a' }}
+            >
+              <button
+                onClick={() => handleVote(true)}
+                className="flex-1 flex items-center justify-center gap-2 h-full px-3 hover:bg-white/[0.03] transition-colors focus:outline-none"
+              >
+                <span
+                  className="text-[11px] font-mono tracking-[0.12em] uppercase transition-colors pb-px"
+                  style={activeStyle(votedSide === 'a')}
+                >
+                  Run it back
+                </span>
+                {replayCount > 0 && (
+                  <span className="text-[9px] font-mono text-white/20">{replayCount}</span>
+                )}
+              </button>
+
+              <div className="w-px self-stretch my-2 bg-white/10 shrink-0" />
+
+              <button
+                onClick={() => handleVote(false)}
+                className="flex-1 flex items-center justify-center gap-2 h-full px-3 hover:bg-white/[0.03] transition-colors focus:outline-none"
+              >
+                <span
+                  className="text-[11px] font-mono tracking-[0.12em] uppercase transition-colors pb-px"
+                  style={activeStyle(votedSide === 'b')}
+                >
+                  Not For Me
+                </span>
+                {skipCount > 0 && (
+                  <span className="text-[9px] font-mono text-white/20">{skipCount}</span>
+                )}
+              </button>
+
+              <div className="w-px self-stretch my-2 bg-white/10 shrink-0" />
+
+              <button
+                onClick={onClose}
+                className="flex items-center justify-center px-3 h-full text-white/25 hover:text-white/60 transition-colors focus:outline-none shrink-0"
+              >
+                <X size={14} />
+              </button>
             </div>
           </motion.div>
         )}
@@ -420,7 +518,7 @@ export function PostCommentPanel({
             onVoteYes={() => handleVote(true)}
             onVoteNo={() => handleVote(false)}
             onSubmit={handleCommentFromBar}
-            onOpenReactions={onOpen}
+            onOpenReactions={onOpen ?? (() => {})}
             onClose={onClose}
             panelOpen={false}
             topReaction={topPostReaction}
