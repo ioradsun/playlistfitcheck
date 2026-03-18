@@ -250,7 +250,7 @@ export function LyricDanceEmbed({
       player.setMuted(true);
       setMuted(true);
     }
-  }, [player, playerReady, cardState, visibility, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted]);
+  }, [player, playerReady, cardState, visibility, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen]);
 
   useEffect(() => {
     if (!player || !playerReady) return;
