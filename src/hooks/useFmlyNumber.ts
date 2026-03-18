@@ -20,10 +20,12 @@ const userNumberPromises = new Map<string, Promise<number | null>>();
 
 function fetchTotalCount() {
   if (!totalCountPromise) {
-    totalCountPromise = supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .not("trailblazer_number", "is", null)
+    totalCountPromise = Promise.resolve(
+      supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .not("trailblazer_number", "is", null)
+    )
       .then(({ count, error }) => {
         if (error) throw error;
         return count ?? 0;
@@ -41,11 +43,13 @@ function fetchUserNumber(userId: string) {
   const cached = userNumberPromises.get(userId);
   if (cached) return cached;
 
-  const request = supabase
-    .from("profiles")
-    .select("trailblazer_number")
-    .eq("id", userId)
-    .single()
+  const request = Promise.resolve(
+    supabase
+      .from("profiles")
+      .select("trailblazer_number")
+      .eq("id", userId)
+      .single()
+  )
     .then(({ data, error }) => {
       if (error) throw error;
       return (data as { trailblazer_number?: number | null } | null)?.trailblazer_number ?? null;
