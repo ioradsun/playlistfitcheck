@@ -37,7 +37,9 @@ export function CardBottomBar({
     variant === "embedded"
       ? "flex items-stretch h-[48px]"
       : "flex items-stretch mx-1 mt-1 rounded-md overflow-hidden h-[44px]";
-  const wrapperStyle = { background: "#0a0a0a" };
+  const wrapperStyle = variant === "fullscreen"
+    ? { background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.07)" }
+    : { background: "#0a0a0a" };
 
   return (
     <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
@@ -97,20 +99,21 @@ export function CardBottomBar({
               const majorityRanItBack = replay_yes > total / 2;
               const isSplit = total > 0 && replay_yes === total / 2;
               const userAgrees = votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
+              const titleLabel = trackTitle ? `"${trackTitle}"` : "IT";
 
               let verdict: string;
               let tally: string;
 
               if (total < 20) {
                 verdict = "FMLY STILL VOTING";
-                tally = `${replay_yes} / ${total} RAN ${trackTitle || "IT"} BACK`;
+                tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
               } else if (isSplit) {
                 verdict = "FMLY IS SPLIT";
-                tally = `${replay_yes} / ${total} RAN ${trackTitle || "IT"} BACK`;
+                tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
               } else {
                 verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
                 tally = majorityRanItBack
-                  ? `${replay_yes} / ${total} RAN ${trackTitle || "IT"} BACK`
+                  ? `${replay_yes} / ${total} RAN ${titleLabel} BACK`
                   : `${notForMeCount} / ${total} NOT FOR ME`;
               }
 
