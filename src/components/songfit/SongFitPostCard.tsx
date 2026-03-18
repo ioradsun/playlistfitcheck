@@ -42,9 +42,6 @@ import { useNavigate } from "react-router-dom";
 import { logEngagementEvent } from "@/lib/engagementTracking";
 import { useCardState, type CardState } from "./useCardLifecycle";
 import { PostCommentPanel } from "./PostCommentPanel";
-import { useCardVote } from "@/hooks/useCardVote";
-import { CardBottomBar } from "@/components/songfit/CardBottomBar";
-import { useTopPostReaction } from "@/hooks/useTopPostReaction";
 import {
   DropdownMenu,
   DropdownMenuContent,
