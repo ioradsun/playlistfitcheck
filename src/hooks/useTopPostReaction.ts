@@ -15,19 +15,28 @@ export interface TopReaction {
   count: number;
 }
 
-export function useTopPostReaction(postId: string): TopReaction | null {
+export function useTopPostReaction(postId: string, enabled = true): TopReaction | null {
   const [top, setTop] = useState<TopReaction | null>(null);
 
   useEffect(() => {
-    if (!postId) return;
-    supabase
-      .from("songfit_post_reactions" as any)
+    if (!postId || !enabled) {
+      setTop(null);
+      return;
+    }
+
+    let cancelled = false;
+    void supabase
+      .from("songfit_post_reactions" as never)
       .select("emoji")
       .eq("post_id", postId)
       .then(({ data }) => {
-        if (!data || data.length === 0) return;
+        if (cancelled) return;
+        if (!data || data.length === 0) {
+          setTop(null);
+          return;
+        }
         const counts: Record<string, number> = {};
-        for (const row of data as any[]) {
+        for (const row of data as Array<{ emoji: string }>) {
           counts[row.emoji] = (counts[row.emoji] ?? 0) + 1;
         }
         let topKey = "";
@@ -42,7 +51,11 @@ export function useTopPostReaction(postId: string): TopReaction | null {
           setTop({ symbol: EMOJI_SYMBOLS[topKey] ?? "🔥", count: topCount });
         }
       });
-  }, [postId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, postId]);
 
   return top;
 }

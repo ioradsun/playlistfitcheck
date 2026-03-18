@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import { memo, useState, useEffect, useCallback, useRef, useContext } from "react";
 import { Loader2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -72,7 +72,7 @@ function MeasuredFeedCard({ post, onHeight, ...props }: {
   );
 }
 
-function WindowedFeedList({
+const _WindowedFeedList = memo(function WindowedFeedList({
   posts,
   feedView,
   fetchPosts,
@@ -159,7 +159,7 @@ function WindowedFeedList({
       )}
     </div>
   );
-}
+});
 
 export function SongFitFeed() {
   const navigate = useNavigate();
@@ -192,6 +192,10 @@ export function SongFitFeed() {
   hasMoreRef.current = hasMore;
 
   const normalizePosts = useCallback((input: SongFitPost[]) => input.map((p) => ({ ...p, user_has_liked: false, user_has_saved: false, saves_count: 0 })), []);
+
+  const handleCenterChange = useCallback((idx: number) => {
+    centerIndexRef.current = idx;
+  }, []);
 
   const capPosts = useCallback((next: SongFitPost[]) => {
     if (next.length <= FEED_MAX_POSTS) return next;
@@ -509,7 +513,7 @@ export function SongFitFeed() {
       ) : (
         <CardLifecycleProvider>
           <RealtimeFeedHubProvider>
-              <WindowedFeedList
+              <_WindowedFeedList
                 posts={posts}
                 feedView={feedView}
                 fetchPosts={fetchPosts}
@@ -521,7 +525,7 @@ export function SongFitFeed() {
                 hasTrimmedNewer={hasTrimmedNewer}
                 loadMore={loadMore}
                 loadPrevious={loadPrevious}
-                onCenterChange={(idx) => { centerIndexRef.current = idx; }}
+                onCenterChange={handleCenterChange}
               />
             </RealtimeFeedHubProvider>
         </CardLifecycleProvider>

@@ -16,6 +16,8 @@ interface Options {
   allowAnonymous?: boolean;
   /** Alias for allowAnonymous */
   anonymous?: boolean;
+  /** When false, skip the initial vote lookup and score fetch */
+  enabled?: boolean;
 }
 
 export interface CardVoteState {
@@ -30,6 +32,7 @@ export interface CardVoteState {
 
 export function useCardVote(postId: string, options: Options = {}): CardVoteState {
   const allowAnonymous = options.allowAnonymous ?? options.anonymous ?? false;
+  const enabled = options.enabled ?? true;
   const { user } = useAuth();
   const sessionId = getSessionId();
   const navigate = useNavigate();
@@ -41,7 +44,9 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
   const [alreadyChecked, setAlreadyChecked] = useState(false);
 
   useEffect(() => {
-    if (!postId) return;
+    if (!postId || !enabled) return;
+
+    let cancelled = false;
     const check = async () => {
       let q = supabase
         .from("songfit_hook_reviews")
@@ -51,6 +56,7 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
         ? q.eq("user_id", user.id)
         : q.eq("session_id", sessionId).is("user_id", null);
       const { data } = await q.maybeSingle();
+      if (cancelled) return;
       if (data) {
         const voted = (data as any).would_replay;
         const side = voted === true ? "a" : voted === false ? "b" : null;
@@ -58,11 +64,15 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
         setVotedSide(side);
       }
       const results = await fetchResults();
+      if (cancelled) return;
       setScore({ total: results.total, replay_yes: results.replay_yes });
       setAlreadyChecked(true);
     };
-    check();
-  }, [postId, user, sessionId]);
+    void check();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, postId, user, sessionId]);
 
   const fetchResults = async () => {
     const { data } = await supabase

@@ -98,8 +98,8 @@ export function SongFitPostCard({
   
   const [panelOpen, setPanelOpen] = useState(false);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
-  const topPostReaction = useTopPostReaction(post.id);
-  const { votedSide, score, note, setNote, handleVote } = useCardVote(post.id);
+  const topPostReaction = useTopPostReaction(post.id, panelOpen || cardState !== "cold");
+  const { votedSide, score, note, setNote, handleVote } = useCardVote(post.id, { enabled: cardState !== "cold" });
 
   const handleCommentFromBar = useCallback(async () => {
     const content = note.trim();
