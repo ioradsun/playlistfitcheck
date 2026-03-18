@@ -125,6 +125,7 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   loadPrevious,
   onCenterChange,
   reelsMode = false,
+  lyricDataMap,
 }: {
   posts: SongFitPost[];
   feedView: FeedView;
@@ -148,6 +149,7 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   onCenterChange: (idx: number) => void;
   reelsMode?: boolean;
   isFirst?: boolean;
+  lyricDataMap: Map<string, LyricDanceData>;
 }) {
   const lifecycle = useContext(CardLifecycleContext);
   const prevMapRef = useRef(new Map<string, boolean>());
