@@ -28,6 +28,8 @@ import { logImpression } from "@/lib/engagementTracking";
 import { RealtimeFeedHubProvider } from "./RealtimeFeedHub";
 import { consumeFeedPrefetch } from "@/lib/prefetch";
 import { cn } from "@/lib/utils";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
