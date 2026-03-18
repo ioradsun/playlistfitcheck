@@ -280,6 +280,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const [newestCreatedAt, setNewestCreatedAt] = useState<string | null>(null);
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null);
   const [hasTrimmedNewer, setHasTrimmedNewer] = useState(false);
+  const [lyricDataMap, setLyricDataMap] = useState<Map<string, LyricDanceData>>(new Map());
   const centerIndexRef = useRef(0);
   const postsRef = useRef(posts);
   const isLoadingMoreRef = useRef(isLoadingMore);
