@@ -24,9 +24,9 @@ interface Comment {
 interface Props {
   postId: string;
   isOpen: boolean;
-  onOpen: () => void;
+  onOpen?: () => void;
   onClose: () => void;
-  cardState: CardState;
+  cardState?: CardState;
   trackTitle?: string;
   reelsMode?: boolean;
   variant?: 'embedded' | 'reels';
