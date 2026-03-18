@@ -43,11 +43,13 @@ function fetchUserNumber(userId: string) {
   const cached = userNumberPromises.get(userId);
   if (cached) return cached;
 
-  const request = supabase
-    .from("profiles")
-    .select("trailblazer_number")
-    .eq("id", userId)
-    .single()
+  const request = Promise.resolve(
+    supabase
+      .from("profiles")
+      .select("trailblazer_number")
+      .eq("id", userId)
+      .single()
+  )
     .then(({ data, error }) => {
       if (error) throw error;
       return (data as { trailblazer_number?: number | null } | null)?.trailblazer_number ?? null;
