@@ -33,6 +33,7 @@ interface Props {
   reelsMode?: boolean;
   variant?: 'embedded' | 'reels';
   palette?: string[];
+  caption?: string;
 }
 
 function CommentReactPicker({
