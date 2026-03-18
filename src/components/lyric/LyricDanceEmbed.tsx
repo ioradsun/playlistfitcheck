@@ -239,6 +239,7 @@ export function LyricDanceEmbed({
     if (!isFeedEmbed) return;
     const coverUp = showCover;
     const isUserEngaged = cardState === "active" || userActivatedRef.current;
+    if (reactionPanelOpen) return;
     const shouldUnmuted = !coverUp && isUserEngaged && visibility === "visible" && !forceDemoted;
     const shouldMuted = !coverUp && !isUserEngaged;
     if (shouldUnmuted) {
