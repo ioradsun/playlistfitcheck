@@ -133,7 +133,7 @@ export function CardBottomBar({
             onOpenReactions();
           }
         }}
-        className={`relative z-[500] flex items-center justify-center gap-1 px-4 min-w-[56px] ${py} hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none`}
+        className={`relative flex items-center justify-center gap-1 px-4 min-w-[56px] ${py} hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none`}
       >
         {panelOpen ? (
           <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
