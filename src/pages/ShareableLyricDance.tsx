@@ -664,18 +664,17 @@ export default function ShareableLyricDance() {
         {/* Persistent top bar */}
         {!isWaitingForPlayer && !isMarketingView && (
           <div className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2.5">
+            <div
+              className="flex items-center cursor-pointer"
+              onClick={() => navigate(`/u/${profile?.id ?? ""}`)}
+            >
               {coverAvatarUrl ? (
-                <img src={coverAvatarUrl} alt={coverArtist || coverSongName} className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
+                <img src={coverAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
                   <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
                 </div>
               )}
-              <div className="flex flex-col">
-                <span className="text-[11px] font-semibold text-white/60 leading-tight truncate max-w-[180px]">{coverSongName}</span>
-                <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/30 leading-tight">{coverArtist}</span>
-              </div>
             </div>
             <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
               <button onClick={(e) => { e.stopPropagation(); handleMuteToggle(); }} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
