@@ -390,7 +390,7 @@ const PublicProfile = () => {
 
         {/* Competitive Summary */}
         {submissions.length > 0 && (
-          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${bestPeakRank ? (isHookMode ? 4 : 5) : (isHookMode ? 3 : 4)}, minmax(0, 1fr))` }}>
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${bestPeakRank ? 4 : 3}, minmax(0, 1fr))` }}>
             {bestPeakRank && (
               <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
                 <Trophy size={14} className="mx-auto mb-1 text-primary" />
