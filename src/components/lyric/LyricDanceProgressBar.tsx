@@ -12,6 +12,7 @@ interface Props {
 export const LyricDanceProgressBar = React.forwardRef<HTMLDivElement, Props>(
   function LyricDanceProgressBar({ player, data, palette, onSeekStart, onSeekEnd }, _ref) {
     const [progress, setProgress] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
     const barRef = useRef<HTMLDivElement>(null);
     const dragging = useRef(false);
     const wasPlaying = useRef(false);
@@ -79,6 +80,7 @@ export const LyricDanceProgressBar = React.forwardRef<HTMLDivElement, Props>(
       if (!player) return;
       e.stopPropagation();
       dragging.current = true;
+      setIsDragging(true);
       wasPlaying.current = !player.audio.paused;
       player.pause();
       onSeekStart?.();
@@ -90,6 +92,7 @@ export const LyricDanceProgressBar = React.forwardRef<HTMLDivElement, Props>(
       };
       const onUp = () => {
         dragging.current = false;
+        setIsDragging(false);
         onSeekEnd?.();
         if (wasPlaying.current) player.play();
         window.removeEventListener("mousemove", onMove);
@@ -109,7 +112,7 @@ export const LyricDanceProgressBar = React.forwardRef<HTMLDivElement, Props>(
         onMouseDown={handleDown}
         onTouchStart={handleDown}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full z-10 h-3 cursor-pointer group"
+        className="relative w-full z-10 h-1 cursor-pointer"
         style={{ touchAction: "none" }}
       >
         <div className="absolute inset-0 bg-white/5" />
@@ -118,8 +121,11 @@ export const LyricDanceProgressBar = React.forwardRef<HTMLDivElement, Props>(
           style={{ width: `${progress * 100}%`, background: palette[1] ?? "rgba(255,255,255,0.35)", opacity: 0.6 }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ left: `calc(${progress * 100}% - 6px)` }}
+          className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-md transition-opacity"
+          style={{
+            left: `calc(${progress * 100}% - 5px)`,
+            opacity: isDragging ? 1 : 0,
+          }}
         />
       </div>
     );
