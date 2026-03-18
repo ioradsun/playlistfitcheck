@@ -65,6 +65,7 @@ interface Props {
     signal_velocity?: number;
   };
   cardState: CardState;
+  reelsMode?: boolean;
 }
 
 export function SongFitPostCard({
@@ -76,6 +77,7 @@ export function SongFitPostCard({
   isBillboard,
   signalData,
   cardState,
+  reelsMode: _reelsMode,
 }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
@@ -95,11 +97,16 @@ export function SongFitPostCard({
   const [localCaption, setLocalCaption] = useState(post.caption || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
-  
+
   const [panelOpen, setPanelOpen] = useState(false);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
-  const topPostReaction = useTopPostReaction(post.id, panelOpen || cardState !== "cold");
-  const { votedSide, score, note, setNote, handleVote } = useCardVote(post.id, { enabled: cardState !== "cold" });
+  const topPostReaction = useTopPostReaction(
+    post.id,
+    panelOpen || cardState !== "cold",
+  );
+  const { votedSide, score, note, setNote, handleVote } = useCardVote(post.id, {
+    enabled: cardState !== "cold",
+  });
 
   const handleCommentFromBar = useCallback(async () => {
     const content = note.trim();
@@ -216,12 +223,10 @@ export function SongFitPostCard({
         setIsFollowing(false);
         toast.success("Unfollowed");
       } else {
-        await supabase
-          .from("songfit_follows")
-          .insert({
-            follower_user_id: user.id,
-            followed_user_id: post.user_id,
-          });
+        await supabase.from("songfit_follows").insert({
+          follower_user_id: user.id,
+          followed_user_id: post.user_id,
+        });
         setIsFollowing(true);
         toast.success("Following!");
         logEngagementEvent(post.id, user.id, "follow_from_post");
@@ -283,7 +288,10 @@ export function SongFitPostCard({
     <div className="px-2 pb-5">
       <div
         className="relative rounded-2xl overflow-hidden"
-        style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.04)" }}
+        style={{
+          background: "#0a0a0a",
+          border: "1px solid rgba(255,255,255,0.04)",
+        }}
       >
         {/* Header */}
         <div className="relative flex items-center justify-between px-3 py-2.5">
@@ -391,11 +399,7 @@ export function SongFitPostCard({
         </div>
 
         {/* Tiered media rendering */}
-        <div
-          className={cn(
-            "relative transition-all duration-500",
-          )}
-        >
+        <div className={cn("relative transition-all duration-500")}>
           {post.lyric_dance_url &&
           post.lyric_dance_id &&
           !post.spotify_track_id ? (
@@ -430,7 +434,10 @@ export function SongFitPostCard({
             </div>
           ) : (
             <>
-              <div className="relative overflow-hidden" style={{ background: "#0a0a0a" }}>
+              <div
+                className="relative overflow-hidden"
+                style={{ background: "#0a0a0a" }}
+              >
                 <LazySpotifyEmbed
                   trackId={post.spotify_track_id}
                   trackTitle={post.track_title}
@@ -457,7 +464,10 @@ export function SongFitPostCard({
 
                 {/* Caption — directly below embed */}
                 {!editing && localCaption && localCaption.trim() && (
-                  <div className="px-3 pt-1.5 pb-1" style={{ background: "#0a0a0a" }}>
+                  <div
+                    className="px-3 pt-1.5 pb-1"
+                    style={{ background: "#0a0a0a" }}
+                  >
                     {localCaption.length <= 100 || captionExpanded ? (
                       <p className="text-[13px] leading-snug text-white/50">
                         {localCaption}
@@ -478,7 +488,9 @@ export function SongFitPostCard({
                 )}
 
                 {isSpotifyEmbed && crowdfitMode === "hook_review" && (
-                  <div className={`relative ${panelOpen ? 'z-[500]' : 'z-[300]'}`}>
+                  <div
+                    className={`relative ${panelOpen ? "z-[500]" : "z-[300]"}`}
+                  >
                     <CardBottomBar
                       variant="fullscreen"
                       votedSide={votedSide}
@@ -589,7 +601,6 @@ export function SongFitPostCard({
                 </div>
               )}
             </>
-
           )}
         </div>
 
@@ -631,7 +642,10 @@ export function SongFitPostCard({
                 </div>
               </div>
             ) : localCaption && localCaption.trim() ? (
-              <div className="relative px-3 pt-1.5 pb-1" style={{ background: "#0a0a0a" }}>
+              <div
+                className="relative px-3 pt-1.5 pb-1"
+                style={{ background: "#0a0a0a" }}
+              >
                 {localCaption.length <= 125 || captionExpanded ? (
                   <p className="text-[13px] leading-snug text-white/50">
                     {localCaption}
