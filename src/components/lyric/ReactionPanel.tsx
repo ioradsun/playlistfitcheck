@@ -405,7 +405,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
   return (
     <PanelShell isOpen={isOpen} variant={displayMode}>
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0" style={{ scrollbarWidth: 'none' }}>
-        <div className="pb-2">
+        <div className="pt-3 pb-32">
           {allLines.map((line, linePosition) => {
             const currentSection = sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
             const previousSection = linePosition > 0
