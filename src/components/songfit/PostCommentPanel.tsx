@@ -355,14 +355,6 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
         onReact={handleReact}
       />
 
-      <VoteStrip
-        votedSide={votedSide}
-        score={score}
-        onVoteYes={onVoteYes}
-        onVoteNo={onVoteNo}
-        palette={palette}
-      />
-
       {replyingTo && (
         <div
           className="flex items-center gap-2 px-4 py-1.5 shrink-0 border-b border-white/[0.04]"
@@ -415,6 +407,14 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
           size="compact"
         />
       )}
+
+      <VoteStrip
+        votedSide={votedSide}
+        score={score}
+        onVoteYes={onVoteYes}
+        onVoteNo={onVoteNo}
+        palette={palette}
+      />
     </PanelShell>
   );
 }
