@@ -466,13 +466,7 @@ export function SongFitPostCard({
                   genre={((post.tags_json as any[]) || [])[0] || null}
                   cardState={cardState}
                 />
-                <PostCommentPanel
-                  postId={post.id}
-                  isOpen={panelOpen}
-                  onClose={() => setPanelOpen(false)}
-                  refreshKey={commentRefreshKey}
-                  variant={reelsMode ? "reels" : "embedded"}
-                />
+              </div>
 
                 {/* Caption — directly below embed (desktop only; reels shows in bottom overlay) */}
                 {!reelsMode && !editing && localCaption && localCaption.trim() && (
@@ -520,7 +514,17 @@ export function SongFitPostCard({
                     />
                   </div>
                 )}
-              </div>
+
+              {/* PostCommentPanel — outside overflow-hidden, positioned relative to outer card wrapper */}
+              {isSpotifyEmbed && (
+                <PostCommentPanel
+                  postId={post.id}
+                  isOpen={panelOpen}
+                  onClose={() => setPanelOpen(false)}
+                  refreshKey={commentRefreshKey}
+                  variant={reelsMode ? "reels" : "embedded"}
+                />
+              )}
 
             </>
           )}

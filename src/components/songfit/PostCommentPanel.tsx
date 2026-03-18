@@ -286,7 +286,7 @@ export function PostCommentPanel({ postId, isOpen, onClose: _onClose, palette, r
   };
 
   return (
-    <PanelShell isOpen={isOpen} variant={variant} topOffset={variant === "embedded" ? 52 : 0}>
+    <PanelShell isOpen={isOpen} variant={variant}>
       <EmojiBar
         variant="strip"
         palette={palette}
