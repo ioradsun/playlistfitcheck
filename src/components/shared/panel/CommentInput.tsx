@@ -17,7 +17,7 @@ export function CommentInput({
   onSubmit,
   onClose,
   onFocus,
-  placeholder = 'What hit',
+  placeholder = 'This line...',
   hasSubmitted = false,
   size = 'compact',
 }: CommentInputProps) {
