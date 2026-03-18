@@ -90,9 +90,9 @@ export function PostCommentPanel({
   const sessionId = getSessionId();
 
   // ── Self-contained voting & reaction state ──
-  const topPostReaction = useTopPostReaction(postId, isOpen || cardState !== 'cold');
+  const topPostReaction = useTopPostReaction(postId, isOpen || (cardState ?? 'cold') !== 'cold');
   const { votedSide, score, note, setNote, handleVote } = useCardVote(postId, {
-    enabled: cardState !== 'cold',
+    enabled: (cardState ?? 'cold') !== 'cold',
   });
 
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);

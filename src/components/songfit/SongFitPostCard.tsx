@@ -99,28 +99,6 @@ export function SongFitPostCard({
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
 
   const [panelOpen, setPanelOpen] = useState(false);
-  const [commentRefreshKey, setCommentRefreshKey] = useState(0);
-  const topPostReaction = useTopPostReaction(
-    post.id,
-    panelOpen || cardState !== "cold",
-  );
-  const { votedSide, score, note, setNote, handleVote } = useCardVote(post.id, {
-    enabled: cardState !== "cold",
-  });
-
-  const handleCommentFromBar = useCallback(async () => {
-    const content = note.trim();
-    if (!content || !user) return;
-    try {
-      await supabase
-        .from("songfit_comments")
-        .insert({ post_id: post.id, user_id: user.id, content });
-    } catch {
-      // silent
-    }
-    setNote("");
-    setCommentRefreshKey((k) => k + 1);
-  }, [note, user, post.id, setNote]);
 
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDancePost = !!(
