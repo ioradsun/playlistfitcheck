@@ -828,6 +828,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
               loadPrevious={loadPrevious}
               onCenterChange={handleCenterChange}
               reelsMode={reelsMode}
+              lyricDataMap={lyricDataMap}
             />
           </RealtimeFeedHubProvider>
         </CardLifecycleProvider>

@@ -402,6 +402,7 @@ export function SongFitPostCard({
                 externalPanelOpen={panelOpen}
                 onExternalPanelOpenChange={setPanelOpen}
                 onOpenReactions={() => setPanelOpen(true)}
+                prefetchedData={lyricDanceData ?? null}
               />
             </div>
           ) : post.lyric_dance_url &&
