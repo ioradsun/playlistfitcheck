@@ -156,7 +156,7 @@ export function LyricDanceEmbed({
   }, [isControlled, externalPanelOpen, openPanel, closePanel]);
 
   useEffect(() => {
-    if (!isFeedEmbed) return;
+    if (!isFeedEmbed || reelsMode) return;
     const el = containerRef.current;
     if (!el) return;
     visibilityListeners.set(el, setVisibility);
@@ -165,7 +165,18 @@ export function LyricDanceEmbed({
       visibilityListeners.delete(el);
       sharedIO?.unobserve(el);
     };
-  }, [isFeedEmbed, containerRef]);
+  }, [isFeedEmbed, reelsMode, containerRef]);
+
+  // In reels mode, derive visibility from cardState instead of IO.
+  // The windowing system is the source of truth; IO fires late on mount.
+  useEffect(() => {
+    if (!reelsMode || !isFeedEmbed) return;
+    if (cardState === "warm" || cardState === "active") {
+      setVisibility("visible");
+    } else {
+      setVisibility("far");
+    }
+  }, [reelsMode, isFeedEmbed, cardState]);
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
