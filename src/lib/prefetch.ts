@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { SongFitTabImport } from "./routePrefetch";
 
 /**
  * Prefetch cache — fires immediately at module evaluation time.
@@ -51,3 +52,8 @@ export function consumeSiteCopyPrefetch() {
   siteCopyPrefetch = null; // one-shot
   return p;
 }
+
+
+// SongFitTab chunk — start downloading in parallel with data prefetches.
+// The lazy() wrapper in Index.tsx will resolve immediately if this finishes first.
+void SongFitTabImport();
