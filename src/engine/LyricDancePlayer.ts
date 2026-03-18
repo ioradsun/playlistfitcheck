@@ -2005,6 +2005,16 @@ export class LyricDancePlayer {
     }
   }
 
+  private _zeroCanvas(canvas: HTMLCanvasElement | null | undefined): void {
+    if (!canvas) return;
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+
+  private _zeroCanvasList(canvases: Array<HTMLCanvasElement | null | undefined>): void {
+    canvases.forEach((canvas) => this._zeroCanvas(canvas));
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -2023,6 +2033,7 @@ export class LyricDancePlayer {
 
     // Only clear local reference, not the global cache
     this.chunks = new Map();
+    this._zeroCanvasList(this.bgCaches);
     this.bgCaches = [];
     this.bgCacheCount = 0;
 
@@ -2036,19 +2047,40 @@ export class LyricDancePlayer {
       this.audioContext = null;
     }
 
+    this._zeroCanvasList(this.currentSimCanvases);
     this.currentSimCanvases = [];
     this.ambientParticleEngine?.clear();
+    this.chapterSims.forEach((sim) => {
+      this._zeroCanvas(sim.fire?.canvas);
+      this._zeroCanvas(sim.water?.canvas);
+      this._zeroCanvas(sim.aurora?.canvas);
+      this._zeroCanvas(sim.rain?.canvas);
+      this._zeroCanvas(sim.beatVis?.canvas);
+    });
+    this._zeroCanvas(this._globalBeatVis?.canvas ?? null);
+    this._zeroCanvas(this._beatVisCanvas);
     this.chapterSims = [];
     this.chapterImages = [];
+    this._zeroCanvasList(this._preBlurredImages);
     this._preBlurredImages = [];
+    this._zeroCanvas(this._lightingOverlayCanvas);
     this._lightingOverlayCanvas = null;
+    this._zeroCanvas(this._grainCanvas);
     this._grainCanvas = null;
     this._grainPool = [];
+    this._zeroCanvas(this._bgSnapshot);
+    this._bgSnapshot = null;
+    this._globalBeatVis = null;
+    this._beatVisCanvas = null;
     this.emojiRisers = [];
     this._emojiSpawnQueue = [];
     this._textMetricsCache.clear();
     this._mlLayoutCache.clear();
     this._watermarkCache = null;
+    this._zeroCanvas(this._measureCanvas);
+    this._zeroCanvas(this.textCanvas);
+    this._zeroCanvas(this.canvas);
+    this._zeroCanvas(this.bgCanvas);
     revokeAnalyzerWorker();          // free blob URL (safe to call multiple times)
     this.ctx = null as any;
     this.canvas = null as any;
