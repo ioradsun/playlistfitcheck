@@ -741,7 +741,7 @@ export function LyricDanceEmbed({
       </AnimatePresence>
 
       {/* Top bar — persistent song + transport controls */}
-      {playerReady && (
+      {playerReady && !reactionPanelOpen && (
         <div
           className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-end p-2"
           onClick={(e) => e.stopPropagation()}
