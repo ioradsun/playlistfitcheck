@@ -470,11 +470,6 @@ export function SongFitPostCard({
                   postId={post.id}
                   isOpen={panelOpen}
                   onClose={() => setPanelOpen(false)}
-                  votedSide={votedSide}
-                  score={score}
-                  onVoteYes={() => handleVote(true)}
-                  onVoteNo={() => handleVote(false)}
-                  hideInput={false}
                   refreshKey={commentRefreshKey}
                   variant={reelsMode ? "reels" : "embedded"}
                 />
