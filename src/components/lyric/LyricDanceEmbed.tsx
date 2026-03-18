@@ -292,7 +292,12 @@ export function LyricDanceEmbed({
       </AnimatePresence>
 
       {playerReady && !reactionPanelOpen && (
-        <div className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-end p-2" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2" onClick={(e) => e.stopPropagation()}>
+          {reelsMode && artistName ? (
+            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 border border-green-400/40 rounded px-1.5 py-0.5 shrink-0">
+              {`In Studio · ${artistName}`}
+            </span>
+          ) : <span />}
           <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
             <button onClick={toggleMute} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? "Unmute" : "Mute"}>
               {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
