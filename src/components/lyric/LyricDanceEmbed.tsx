@@ -239,6 +239,7 @@ export function LyricDanceEmbed({
     if (!isFeedEmbed) return;
     const coverUp = showCover;
     const isUserEngaged = cardState === "active" || userActivatedRef.current;
+    if (reactionPanelOpen) return;
     const shouldUnmuted = !coverUp && isUserEngaged && visibility === "visible" && !forceDemoted;
     const shouldMuted = !coverUp && !isUserEngaged;
     if (shouldUnmuted) {
@@ -250,7 +251,7 @@ export function LyricDanceEmbed({
       player.setMuted(true);
       setMuted(true);
     }
-  }, [player, playerReady, cardState, visibility, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted]);
+  }, [player, playerReady, cardState, visibility, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen]);
 
   useEffect(() => {
     if (!player || !playerReady) return;
