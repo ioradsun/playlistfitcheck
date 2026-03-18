@@ -50,7 +50,7 @@ function CommentReactPicker({
     <span className="relative inline-block">
       <button
         onClick={() => setOpen(o => !o)}
-        className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors focus:outline-none"
+        className="text-[10px] font-mono text-white/30 hover:text-white/55 transition-colors focus:outline-none"
       >
         + react
       </button>
