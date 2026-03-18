@@ -430,7 +430,7 @@ export function SongFitPostCard({
                     ? "h-full flex flex-col items-center justify-center"
                     : "",
                 )}
-                style={reelsMode ? undefined : { background: "#0a0a0a", height: 320 }}
+                style={reelsMode ? undefined : { background: "#0a0a0a" }}
               >
                 <LazySpotifyEmbed
                   reelsMode={reelsMode}
