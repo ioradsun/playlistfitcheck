@@ -178,7 +178,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   };
 
   const publish = async () => {
-    if (!user || !selectedTrack || !caption.trim()) return;
+    if (!user || !selectedTrack) return;
     setPublishing(true);
     try {
       // Check for duplicate submissions
@@ -354,7 +354,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
             </div>
             {/* Control Tier: 13px, font-bold, tracking-[0.15em], bg-foreground, text-background */}
             <button
-              disabled={!selectedTrack || publishing || !!duplicateWarning || !caption.trim()}
+              disabled={!selectedTrack || publishing || !!duplicateWarning}
               onClick={publish}
               className="text-[11px] font-mono uppercase tracking-[0.2em] border border-foreground/20 text-foreground/60 h-9 px-5 rounded-full hover:border-foreground/50 hover:text-foreground/90 disabled:opacity-25 transition-all shrink-0"
             >
