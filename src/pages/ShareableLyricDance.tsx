@@ -644,7 +644,7 @@ export default function ShareableLyricDance() {
                 waiting={isWaitingForPlayer}
                 coverImageUrl={data?.section_images?.[0] ?? (data as any)?.album_art_url ?? null}
                 hideBackground={playerReady}
-                badge={coverArtist ? `In Studio · ${coverArtist}` : "In Studio"}
+                badge={null}
                 onExpand={undefined}
                 onListen={(e) => {
                   e.stopPropagation();
@@ -665,7 +665,7 @@ export default function ShareableLyricDance() {
         {!isWaitingForPlayer && !isMarketingView && (
           <div className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
             <div
-              className="flex items-center cursor-pointer"
+              className="flex items-center gap-2.5 cursor-pointer"
               onClick={() => data?.user_id && navigate(`/u/${data.user_id}`)}
             >
               {coverAvatarUrl ? (
@@ -675,6 +675,9 @@ export default function ShareableLyricDance() {
                   <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
                 </div>
               )}
+              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400">
+                {coverArtist ? `In Studio · ${coverArtist}` : "In Studio"}
+              </span>
             </div>
             <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
               <button onClick={(e) => { e.stopPropagation(); handleMuteToggle(); }} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
