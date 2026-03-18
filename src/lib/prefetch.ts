@@ -124,3 +124,7 @@ export function consumeSiteCopyPrefetch() {
 // (added by prior optimization — keep this)
 import { SongFitTabImport } from "./routePrefetch";
 void SongFitTabImport();
+
+// Lyric engine chunk — download in parallel so it's cached before first InStudio card boots.
+// This resolves from Vite's "lyric-engine" manualChunk created in vite.config.ts.
+void import("@/engine/LyricDancePlayer");

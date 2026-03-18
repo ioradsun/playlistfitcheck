@@ -22,6 +22,18 @@ export default defineConfig(({ mode }) => ({
   define: {
     "global": "globalThis",
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Lyric engine — stable across deploys, cached independently.
+          if (id.includes("/src/engine/")) {
+            return "lyric-engine";
+          }
+        },
+      },
+    },
+  },
   optimizeDeps: {
     esbuildOptions: {
       define: {
