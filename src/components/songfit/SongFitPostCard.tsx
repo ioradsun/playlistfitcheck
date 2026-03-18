@@ -77,7 +77,7 @@ export function SongFitPostCard({
   isBillboard,
   signalData,
   cardState,
-  reelsMode: _reelsMode,
+  reelsMode = false,
 }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
@@ -285,16 +285,29 @@ export function SongFitPostCard({
   });
 
   return (
-    <div className="px-2 pb-5">
+    <div className={reelsMode ? "h-full" : "px-2 pb-3"}>
       <div
-        className="relative rounded-2xl overflow-hidden"
-        style={{
-          background: "#0a0a0a",
-          border: "1px solid rgba(255,255,255,0.04)",
-        }}
+        className={cn(
+          "relative overflow-hidden",
+          reelsMode ? "h-full bg-black" : "rounded-2xl",
+        )}
+        style={
+          reelsMode
+            ? undefined
+            : {
+                background: "#0a0a0a",
+                border: "1px solid rgba(255,255,255,0.04)",
+              }
+        }
       >
         {/* Header */}
-        <div className="relative flex items-center justify-between px-3 py-2.5">
+        <div
+          className={cn(
+            "relative flex items-center justify-between px-3 py-2.5",
+            reelsMode &&
+              "absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/70 via-black/30 to-transparent pb-8",
+          )}
+        >
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <ProfileHoverCard userId={post.user_id}>
               <div
@@ -399,11 +412,19 @@ export function SongFitPostCard({
         </div>
 
         {/* Tiered media rendering */}
-        <div className={cn("relative transition-all duration-500")}>
+        <div
+          className={cn(
+            "relative transition-all duration-500",
+            reelsMode && "absolute inset-0",
+          )}
+        >
           {post.lyric_dance_url &&
           post.lyric_dance_id &&
           !post.spotify_track_id ? (
-            <div className="relative" style={{ height: 320 }}>
+            <div
+              className="relative"
+              style={reelsMode ? { height: "100%" } : { height: 320 }}
+            >
               <LyricDanceEmbed
                 lyricDanceId={post.lyric_dance_id}
                 lyricDanceUrl={post.lyric_dance_url}
@@ -422,7 +443,10 @@ export function SongFitPostCard({
           ) : post.lyric_dance_url &&
             !post.lyric_dance_id &&
             !post.spotify_track_id ? (
-            <div className="relative overflow-hidden" style={{ height: 320 }}>
+            <div
+              className="relative overflow-hidden"
+              style={reelsMode ? { height: "100%" } : { height: 320 }}
+            >
               <BattleEmbed
                 battleUrl={post.lyric_dance_url}
                 songTitle={post.track_title}
@@ -435,8 +459,13 @@ export function SongFitPostCard({
           ) : (
             <>
               <div
-                className="relative overflow-hidden"
-                style={{ background: "#0a0a0a" }}
+                className={cn(
+                  "relative overflow-hidden",
+                  reelsMode
+                    ? "h-full flex flex-col items-center justify-center"
+                    : "",
+                )}
+                style={reelsMode ? undefined : { background: "#0a0a0a" }}
               >
                 <LazySpotifyEmbed
                   trackId={post.spotify_track_id}
@@ -604,115 +633,81 @@ export function SongFitPostCard({
           )}
         </div>
 
-        {/* Caption - Instagram style */}
-        {!isSpotifyEmbed && (
-          <>
-            {editing ? (
-              <div className="relative px-3 pt-2 pb-1 space-y-2">
-                <textarea
-                  value={editCaption}
-                  onChange={(e) =>
-                    setEditCaption(e.target.value.slice(0, CAPTION_MAX))
-                  }
-                  rows={3}
-                  className="w-full bg-white/5 text-sm text-white/90 placeholder:text-white/20 outline-none resize-none rounded-lg p-2 border border-white/10 focus:border-white/20"
-                  autoFocus
-                />
-                <div className="flex items-center justify-between">
-                  <span
-                    className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-white/60" : "text-white/20"}`}
-                  >
-                    {editCaption.length}/{CAPTION_MAX}
-                  </span>
-                  <div className="flex gap-1.5">
-                    <button
-                      onClick={() => setEditing(false)}
-                      className="p-1.5 rounded-full hover:bg-white/5 text-white/40"
-                    >
-                      <X size={14} />
-                    </button>
-                    <button
-                      onClick={handleSaveEdit}
-                      disabled={saving}
-                      className="p-1.5 rounded-full hover:bg-white/5 text-white/60"
-                    >
-                      <Check size={14} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : localCaption && localCaption.trim() ? (
-              <div
-                className="relative px-3 pt-1.5 pb-1"
-                style={{ background: "#0a0a0a" }}
-              >
-                {localCaption.length <= 125 || captionExpanded ? (
-                  <p className="text-[13px] leading-snug text-white/50">
-                    {localCaption}
-                  </p>
-                ) : (
-                  <p className="text-[13px] leading-snug text-white/50">
-                    {localCaption.slice(0, 125).trimEnd()}
-                    <span className="text-white/20">… </span>
-                    <button
-                      onClick={() => setCaptionExpanded(true)}
-                      className="text-white/20 hover:text-white/40 text-[13px]"
-                    >
-                      more
-                    </button>
-                  </p>
-                )}
-              </div>
-            ) : null}
-          </>
-        )}
+        {reelsMode ? (
+          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-16 px-4 pb-6">
+            {!isSpotifyEmbed &&
+              localCaption &&
+              localCaption.trim() &&
+              !editing && (
+                <p className="text-[13px] leading-snug text-white/70 mb-3">
+                  {localCaption.length <= 100 ? (
+                    localCaption
+                  ) : (
+                    <>
+                      {captionExpanded
+                        ? localCaption
+                        : localCaption.slice(0, 100).trimEnd()}
+                      {!captionExpanded && (
+                        <>
+                          <span className="text-white/30">… </span>
+                          <button
+                            onClick={() => setCaptionExpanded(true)}
+                            className="text-white/30 hover:text-white/50 text-[13px]"
+                          >
+                            more
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </p>
+              )}
 
-        {/* Action Row — reactions mode only here */}
-        {crowdfitMode !== "hook_review" &&
-          !hasLyricDancePost &&
-          !isBattlePost &&
-          !isSpotifyEmbed && (
-            <div className="relative flex items-center justify-between px-1 py-1">
-              {/* Left group: comment, share, like, bookmark */}
-              <div className="flex items-center">
+            <div className="mb-3">
+              <p className="text-sm font-semibold text-white/90 truncate">
+                {post.track_title}
+              </p>
+              <p className="text-xs text-white/50 truncate">{displayName}</p>
+            </div>
+
+            {!isSpotifyEmbed && (
+              <div className="flex items-center gap-1">
                 <button
                   onClick={() => {
                     onOpenComments(post.id);
                     if (user) logEngagementEvent(post.id, user.id, "comment");
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/10 transition-colors group"
                 >
                   <MessageCircle
-                    size={17}
-                    className="text-white/25 group-hover:text-white/60 transition-colors"
+                    size={18}
+                    className="text-white/60 group-hover:text-white/90"
                   />
                   {post.comments_count > 0 && (
-                    <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
+                    <span className="text-[11px] text-white/40 font-mono">
                       {post.comments_count}
                     </span>
                   )}
                 </button>
-
                 <button
                   onClick={handleShare}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/10 transition-colors group"
                 >
                   <Share2
-                    size={17}
-                    className="text-white/25 group-hover:text-white/60 transition-colors"
+                    size={18}
+                    className="text-white/60 group-hover:text-white/90"
                   />
                 </button>
-
                 <button
                   onClick={toggleLike}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/10 transition-colors group"
                 >
                   <Flame
-                    size={17}
+                    size={18}
                     className={
                       liked
-                        ? "fill-white/80 text-white/80"
-                        : "text-white/25 group-hover:text-white/60 transition-colors"
+                        ? "fill-white/90 text-white/90"
+                        : "text-white/60 group-hover:text-white/90"
                     }
                   />
                   {likesCount > 0 && (
@@ -721,125 +716,273 @@ export function SongFitPostCard({
                         e.stopPropagation();
                         onOpenLikes(post.id);
                       }}
-                      className="text-[11px] text-white/20 font-mono group-hover:text-white/50 focus:outline-none"
+                      className="text-[11px] text-white/40 font-mono"
                     >
                       {likesCount}
                     </button>
                   )}
                 </button>
-
                 <button
                   onClick={toggleSave}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/10 transition-colors group"
                 >
                   <Bookmark
-                    size={17}
+                    size={18}
                     className={
                       saved
-                        ? "fill-white/80 text-white/80"
-                        : "text-white/25 group-hover:text-white/60 transition-colors"
+                        ? "fill-white/90 text-white/90"
+                        : "text-white/60 group-hover:text-white/90"
                     }
                   />
-                  {(post as any).saves_count > 0 && (
-                    <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
-                      {(post as any).saves_count}
-                    </span>
-                  )}
                 </button>
-
-                {cryptoEnabled && (
-                  <div className="flex items-center">
-                    <TipButton
-                      recipientAddress={(post.profiles as any)?.wallet_address}
-                      recipientName={displayName}
-                      postId={post.id}
-                      recipientUserId={post.user_id}
-                      onTipLogged={(amount) => setTipsTotal((t) => t + amount)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Caption - Instagram style */}
+            {!isSpotifyEmbed && (
+              <>
+                {editing ? (
+                  <div className="relative px-3 pt-2 pb-1 space-y-2">
+                    <textarea
+                      value={editCaption}
+                      onChange={(e) =>
+                        setEditCaption(e.target.value.slice(0, CAPTION_MAX))
+                      }
+                      rows={3}
+                      className="w-full bg-white/5 text-sm text-white/90 placeholder:text-white/20 outline-none resize-none rounded-lg p-2 border border-white/10 focus:border-white/20"
+                      autoFocus
                     />
-                    {tipsTotal > 0 && (
-                      <span className="text-[11px] text-white/35 font-mono -ml-1">
-                        {tipsTotal.toLocaleString()}
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-[10px] ${editCaption.length >= CAPTION_MAX ? "text-white/60" : "text-white/20"}`}
+                      >
+                        {editCaption.length}/{CAPTION_MAX}
                       </span>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => setEditing(false)}
+                          className="p-1.5 rounded-full hover:bg-white/5 text-white/40"
+                        >
+                          <X size={14} />
+                        </button>
+                        <button
+                          onClick={handleSaveEdit}
+                          disabled={saving}
+                          className="p-1.5 rounded-full hover:bg-white/5 text-white/60"
+                        >
+                          <Check size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : localCaption && localCaption.trim() ? (
+                  <div
+                    className="relative px-3 pt-1.5 pb-1"
+                    style={{ background: "#0a0a0a" }}
+                  >
+                    {localCaption.length <= 125 || captionExpanded ? (
+                      <p className="text-[13px] leading-snug text-white/50">
+                        {localCaption}
+                      </p>
+                    ) : (
+                      <p className="text-[13px] leading-snug text-white/50">
+                        {localCaption.slice(0, 125).trimEnd()}
+                        <span className="text-white/20">… </span>
+                        <button
+                          onClick={() => setCaptionExpanded(true)}
+                          className="text-white/20 hover:text-white/40 text-[13px]"
+                        >
+                          more
+                        </button>
+                      </p>
                     )}
                   </div>
-                )}
-              </div>
+                ) : null}
+              </>
+            )}
 
-              {/* Right: game mechanics */}
-              <TooltipProvider delayDuration={350}>
-                <div className="flex items-center gap-2 text-white/20">
-                  {post.engagement_score > 0 && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
+            {/* Action Row — reactions mode only here */}
+            {crowdfitMode !== "hook_review" &&
+              !hasLyricDancePost &&
+              !isBattlePost &&
+              !isSpotifyEmbed && (
+                <div className="relative flex items-center justify-between px-1 py-1">
+                  {/* Left group: comment, share, like, bookmark */}
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => {
+                        onOpenComments(post.id);
+                        if (user)
+                          logEngagementEvent(post.id, user.id, "comment");
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                    >
+                      <MessageCircle
+                        size={17}
+                        className="text-white/25 group-hover:text-white/60 transition-colors"
+                      />
+                      {post.comments_count > 0 && (
+                        <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
+                          {post.comments_count}
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={handleShare}
+                      className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                    >
+                      <Share2
+                        size={17}
+                        className="text-white/25 group-hover:text-white/60 transition-colors"
+                      />
+                    </button>
+
+                    <button
+                      onClick={toggleLike}
+                      className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                    >
+                      <Flame
+                        size={17}
+                        className={
+                          liked
+                            ? "fill-white/80 text-white/80"
+                            : "text-white/25 group-hover:text-white/60 transition-colors"
+                        }
+                      />
+                      {likesCount > 0 && (
                         <button
-                          type="button"
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenLikes(post.id);
+                          }}
+                          className="text-[11px] text-white/20 font-mono group-hover:text-white/50 focus:outline-none"
                         >
-                          <Trophy size={13} />
-                          <span className="text-[11px] font-mono">
-                            {Math.round(post.engagement_score)}
+                          {likesCount}
+                        </button>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={toggleSave}
+                      className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                    >
+                      <Bookmark
+                        size={17}
+                        className={
+                          saved
+                            ? "fill-white/80 text-white/80"
+                            : "text-white/25 group-hover:text-white/60 transition-colors"
+                        }
+                      />
+                      {(post as any).saves_count > 0 && (
+                        <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
+                          {(post as any).saves_count}
+                        </span>
+                      )}
+                    </button>
+
+                    {cryptoEnabled && (
+                      <div className="flex items-center">
+                        <TipButton
+                          recipientAddress={
+                            (post.profiles as any)?.wallet_address
+                          }
+                          recipientName={displayName}
+                          postId={post.id}
+                          recipientUserId={post.user_id}
+                          onTipLogged={(amount) =>
+                            setTipsTotal((t) => t + amount)
+                          }
+                        />
+                        {tipsTotal > 0 && (
+                          <span className="text-[11px] text-white/35 font-mono -ml-1">
+                            {tipsTotal.toLocaleString()}
                           </span>
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="bottom"
-                        className="text-xs max-w-48"
-                      >
-                        Engagement score — weighted total of likes, comments,
-                        saves, shares &amp; clicks
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {post.status === "live" && post.expires_at && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
-                        >
-                          <Clock size={13} />
-                          <span className="text-[11px] font-mono">
-                            {Math.max(
-                              0,
-                              Math.ceil(
-                                (new Date(post.expires_at).getTime() -
-                                  Date.now()) /
-                                  (1000 * 60 * 60 * 24),
-                              ),
-                            )}
-                            d
-                          </span>
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="bottom"
-                        className="text-xs max-w-48"
-                      >
-                        Days remaining in this submission cycle
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {rank && rank <= 50 && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          className="text-[11px] font-bold text-white/50 font-mono px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
-                        >
-                          #{rank}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="text-xs">
-                        Billboard rank
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: game mechanics */}
+                  <TooltipProvider delayDuration={350}>
+                    <div className="flex items-center gap-2 text-white/20">
+                      {post.engagement_score > 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
+                            >
+                              <Trophy size={13} />
+                              <span className="text-[11px] font-mono">
+                                {Math.round(post.engagement_score)}
+                              </span>
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="bottom"
+                            className="text-xs max-w-48"
+                          >
+                            Engagement score — weighted total of likes,
+                            comments, saves, shares &amp; clicks
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {post.status === "live" && post.expires_at && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
+                            >
+                              <Clock size={13} />
+                              <span className="text-[11px] font-mono">
+                                {Math.max(
+                                  0,
+                                  Math.ceil(
+                                    (new Date(post.expires_at).getTime() -
+                                      Date.now()) /
+                                      (1000 * 60 * 60 * 24),
+                                  ),
+                                )}
+                                d
+                              </span>
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="bottom"
+                            className="text-xs max-w-48"
+                          >
+                            Days remaining in this submission cycle
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {rank && rank <= 50 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="text-[11px] font-bold text-white/50 font-mono px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
+                            >
+                              #{rank}
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="text-xs">
+                            Billboard rank
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  </TooltipProvider>
                 </div>
-              </TooltipProvider>
-            </div>
-          )}
+              )}
 
-        <div className="h-px" />
+            <div className="h-px" />
+          </>
+        )}
       </div>
     </div>
   );
