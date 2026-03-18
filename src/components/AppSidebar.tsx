@@ -482,7 +482,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                       <span>{sidebarCopy.toolLabels[tool.value] || tool.label}</span>
                     </SidebarMenuButton>
 
-                    {isActive && recents.length > 0 && (
+                    {recents.length > 0 && (
                       <ul className="mt-1 space-y-0.5 max-h-[40vh] overflow-y-auto">
                         {recents.map((item) => {
                           const isItemSelected = location.pathname.includes(item.id);
