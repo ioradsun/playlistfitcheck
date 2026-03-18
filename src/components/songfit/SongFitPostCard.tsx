@@ -66,6 +66,7 @@ interface Props {
   cardState: CardState;
   reelsMode?: boolean;
   isFirst?: boolean;
+  lyricDanceData?: LyricDanceData | null;
 }
 
 export function SongFitPostCard({
