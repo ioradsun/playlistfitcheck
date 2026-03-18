@@ -722,11 +722,6 @@ export function LyricDanceEmbed({
               waiting={isWaiting}
               coverImageUrl={fetchedData?.section_images?.[0] ?? coverImageUrl}
               hideBackground={playerReady}
-              onExpand={
-                showExpandButton
-                  ? () => window.open(lyricDanceUrl, "_blank")
-                  : undefined
-              }
               onListen={(e) => {
                 e.stopPropagation();
                 userActivatedRef.current = true;
@@ -747,7 +742,7 @@ export function LyricDanceEmbed({
       {/* Top bar — persistent song + transport controls */}
       {playerReady && (
         <div
-          className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2"
+          className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-end p-2"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
