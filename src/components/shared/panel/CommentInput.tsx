@@ -27,11 +27,6 @@ export function CommentInput({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!hasSubmitted) {
-      inputRef.current?.focus();
-    }
-  }, [hasSubmitted]);
 
   return (
     <div
