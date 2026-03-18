@@ -115,6 +115,7 @@ export function useLyricDanceCore({
   useEffect(() => {
     if (!playerReady || !player) return;
     player.setMuted(true);
+    player.scheduleFullModeUpgrade();
   }, [playerReady, player]);
 
   const durationSec = useMemo(() => {
