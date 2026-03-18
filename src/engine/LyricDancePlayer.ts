@@ -919,6 +919,18 @@ interface CommentChunk {
   _cachedTrailGrad?: { grad: CanvasGradient; x1: number; x2: number; alphaHex: string };
 }
 
+interface EmojiRiser {
+  emoji: string;
+  spawnTime: number;
+  lifetime: number;
+  spawnX: number;
+  spawnY: number;
+  size: number;
+  driftAmplitude: number;
+  driftPhase: number;
+  opacity: number;
+}
+
 
 
 // ──────────────────────────────────────────────────────────────
@@ -929,6 +941,15 @@ export class LyricDancePlayer {
   static RESOLUTIONS = {
     "16:9": { width: 1920, height: 1080 },
     "9:16": { width: 1080, height: 1920 },
+  };
+
+  private static readonly EMOJI_MAP: Record<string, string> = {
+    fire: "🔥",
+    dead: "💀",
+    mind_blown: "🤯",
+    emotional: "😭",
+    respect: "🙏",
+    accurate: "🎯",
   };
 
   // DOM (React passes these in; engine owns them after construction)
@@ -1136,6 +1157,11 @@ export class LyricDancePlayer {
   private activeComments: CommentChunk[] = [];
   private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
   private commentColorIdx = 0;
+  private emojiRisers: EmojiRiser[] = [];
+  private emojiReactionData: Record<string, { line: Record<number, number>; total: number }> = {};
+  private emojiStreamEnabled = false;
+  private _lastEmojiLineIndex = -1;
+  private _emojiSpawnQueue: Array<{ emoji: string; spawnAtSec: number }> = [];
 
   // Hero word decomposition bursts
   private _heroDecompBursts: HeroDecompBurst[] = [];
@@ -1845,6 +1871,16 @@ export class LyricDancePlayer {
     this._textVerticalBias = px;
   }
 
+  /** Set per-line reaction data for the emoji stream. Called by parent surfaces. */
+  setReactionData(data: Record<string, { line: Record<number, number>; total: number }>): void {
+    this.emojiReactionData = data;
+  }
+
+  /** Enable/disable the emoji stream overlay. Disabled when reaction panel is open. */
+  setEmojiStreamEnabled(enabled: boolean): void {
+    this.emojiStreamEnabled = enabled;
+  }
+
   updateCinematicDirection(direction: CinematicDirection): void {
     // Direct pass-through — new schema consumed directly by resolvers
     this.data = { ...this.data, cinematic_direction: direction };
@@ -2008,6 +2044,8 @@ export class LyricDancePlayer {
     this._lightingOverlayCanvas = null;
     this._grainCanvas = null;
     this._grainPool = [];
+    this.emojiRisers = [];
+    this._emojiSpawnQueue = [];
     this._textMetricsCache.clear();
     this._mlLayoutCache.clear();
     this._watermarkCache = null;
@@ -2182,6 +2220,16 @@ export class LyricDancePlayer {
       }
 
       const smoothedTime = this.smoothAudioTime(this.audio.currentTime);
+
+      // ── Emoji stream: detect line changes and populate spawn queue ──
+      if (this.emojiStreamEnabled && !this.audio.paused) {
+        const currentLineIdx = this.resolveCurrentLineIndex(smoothedTime);
+        if (currentLineIdx !== this._lastEmojiLineIndex && currentLineIdx >= 0) {
+          this._lastEmojiLineIndex = currentLineIdx;
+          this.scheduleEmojiSpawns(currentLineIdx, smoothedTime);
+        }
+        this.processEmojiSpawnQueue();
+      }
 
       // ═══ V2: Get beat state ONCE from conductor ═══
       const beatState = this.conductor?.getState(smoothedTime) ?? null;
@@ -3323,12 +3371,112 @@ export class LyricDancePlayer {
     // Comment comets — after text, before watermark
     this.drawComments(frameNowSec);
 
+    // Emoji stream — community reactions rising from bottom-right
+    this.drawEmojiRisers();
+
     // ═══ Hero decomposition particles — shatter effect on hero word exit ═══
     this.updateAndDrawDecomp(frameNowSec);
 
     if (this.isExporting) this.drawWatermark();
     if (this.perfDebugEnabled) this.drawPerfOverlay();
     this.debugState.drawCalls = drawCalls;
+  }
+
+  private resolveCurrentLineIndex(timeSec: number): number {
+    const lines = this.data.lyrics ?? [];
+    for (let i = 0; i < lines.length; i++) {
+      if (timeSec >= lines[i].start && timeSec < lines[i].end + 0.05) return i;
+    }
+    return -1;
+  }
+
+  private scheduleEmojiSpawns(lineIndex: number, lineStartTimeSec: number): void {
+    this._emojiSpawnQueue = [];
+    const line = this.data.lyrics?.[lineIndex];
+    if (!line) return;
+
+    const emojiCounts: Array<{ emoji: string; count: number }> = [];
+    let totalCount = 0;
+    for (const [key, data] of Object.entries(this.emojiReactionData)) {
+      const count = data.line[lineIndex] ?? 0;
+      if (count > 0) {
+        const symbol = LyricDancePlayer.EMOJI_MAP[key] ?? "🔥";
+        emojiCounts.push({ emoji: symbol, count });
+        totalCount += count;
+      }
+    }
+    if (totalCount === 0) return;
+
+    const spawnCount = Math.min(totalCount, 25);
+    const lineDuration = Math.max(0.5, line.end - line.start);
+
+    const pool: string[] = [];
+    for (const { emoji, count } of emojiCounts) {
+      const slots = Math.max(1, Math.round((count / totalCount) * spawnCount));
+      for (let i = 0; i < slots; i++) pool.push(emoji);
+    }
+
+    for (let i = 0; i < spawnCount; i++) {
+      const offset = (i / spawnCount) * lineDuration;
+      const emoji = pool[Math.floor(Math.random() * pool.length)];
+      this._emojiSpawnQueue.push({
+        emoji,
+        spawnAtSec: lineStartTimeSec + offset,
+      });
+    }
+  }
+
+  private processEmojiSpawnQueue(): void {
+    const nowSec = performance.now() / 1000;
+    while (this._emojiSpawnQueue.length > 0) {
+      if (this._emojiSpawnQueue[0].spawnAtSec > this.audio.currentTime) break;
+      const item = this._emojiSpawnQueue.shift()!;
+      this.emojiRisers.push({
+        emoji: item.emoji,
+        spawnTime: nowSec,
+        lifetime: 3,
+        spawnX: this.width - 48,
+        spawnY: this.height - 70,
+        size: 16 + Math.random() * 12,
+        driftAmplitude: 8 + Math.random() * 12,
+        driftPhase: Math.random() * Math.PI * 2,
+        opacity: 0.7,
+      });
+    }
+
+    this.emojiRisers = this.emojiRisers.filter((r) => {
+      const elapsed = nowSec - r.spawnTime;
+      return elapsed < r.lifetime;
+    });
+
+    if (this.emojiRisers.length > 40) {
+      this.emojiRisers = this.emojiRisers.slice(-40);
+    }
+  }
+
+  private drawEmojiRisers(): void {
+    if (this.emojiRisers.length === 0) return;
+    const nowSec = performance.now() / 1000;
+
+    this.ctx.save();
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+
+    for (const riser of this.emojiRisers) {
+      const elapsed = nowSec - riser.spawnTime;
+      const t = elapsed / riser.lifetime;
+      if (t >= 1) continue;
+
+      const y = riser.spawnY - (riser.spawnY + 40) * t;
+      const x = riser.spawnX + riser.driftAmplitude * Math.sin(elapsed * 1.5 + riser.driftPhase);
+      const alpha = riser.opacity * (1 - t);
+
+      this.ctx.globalAlpha = alpha;
+      this.ctx.font = `${Math.round(riser.size)}px serif`;
+      this.ctx.fillText(riser.emoji, x, y);
+    }
+
+    this.ctx.restore();
   }
 
   private drawPerfOverlay(): void {
