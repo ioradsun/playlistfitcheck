@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { getSessionId } from '@/lib/sessionId';
 import { formatDistanceToNow } from 'date-fns';
-import { PanelShell } from '@/components/shared/panel/PanelShell';
 import { EmojiBar } from '@/components/shared/panel/EmojiBar';
 import { EMOJIS, type EmojiKey } from '@/components/shared/panel/panelConstants';
+import { CardBottomBar } from '@/components/songfit/CardBottomBar';
+import { useCardVote } from '@/hooks/useCardVote';
+import { useTopPostReaction } from '@/hooks/useTopPostReaction';
+import type { CardState } from './useCardLifecycle';
 
 interface Comment {
   id: string;
@@ -20,10 +24,13 @@ interface Comment {
 interface Props {
   postId: string;
   isOpen: boolean;
+  onOpen?: () => void;
   onClose: () => void;
+  cardState?: CardState;
+  trackTitle?: string;
+  reelsMode?: boolean;
+  variant?: 'embedded' | 'reels';
   palette?: string[];
-  refreshKey?: number;
-  variant?: 'embedded' | 'fullscreen' | 'reels';
 }
 
 function CommentReactPicker({
@@ -68,16 +75,47 @@ function CommentReactPicker({
   );
 }
 
-export function PostCommentPanel({ postId, isOpen, onClose: _onClose, palette, refreshKey = 0, variant = 'embedded' }: Props) {
+export function PostCommentPanel({
+  postId,
+  isOpen,
+  onOpen,
+  onClose,
+  cardState,
+  trackTitle,
+  reelsMode = false,
+  variant = 'embedded',
+  palette,
+}: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
 
+  // ── Self-contained voting & reaction state ──
+  const topPostReaction = useTopPostReaction(postId, isOpen || (cardState ?? 'cold') !== 'cold');
+  const { votedSide, score, note, setNote, handleVote } = useCardVote(postId, {
+    enabled: (cardState ?? 'cold') !== 'cold',
+  });
+
+  const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
   const [reactionCounts, setReactionCounts] = useState<Partial<Record<EmojiKey, number>>>({});
   const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
   const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
   const [sessionCommentReacted, setSessionCommentReacted] = useState<Set<string>>(new Set());
+
+  const handleCommentFromBar = useCallback(async () => {
+    const content = note.trim();
+    if (!content || !user) return;
+    try {
+      await supabase
+        .from('songfit_comments')
+        .insert({ post_id: postId, user_id: user.id, content });
+    } catch {
+      // silent
+    }
+    setNote('');
+    setCommentRefreshKey((k) => k + 1);
+  }, [note, user, postId, setNote]);
 
   useEffect(() => {
     if (!isOpen || !postId) return;
@@ -164,10 +202,7 @@ export function PostCommentPanel({ postId, isOpen, onClose: _onClose, palette, r
     loadReactions();
     loadCommentReactions();
     setReplyingTo(null);
-  }, [isOpen, postId, refreshKey]);
-
-
-
+  }, [isOpen, postId, commentRefreshKey]);
 
   const handleReact = async (key: EmojiKey) => {
     if (sessionReacted.has(key)) return;
@@ -286,55 +321,113 @@ export function PostCommentPanel({ postId, isOpen, onClose: _onClose, palette, r
   };
 
   return (
-    <PanelShell isOpen={isOpen} variant={variant}>
-      <EmojiBar
-        variant="strip"
-        palette={palette}
-        counts={reactionCounts}
-        reacted={sessionReacted}
-        onReact={handleReact}
-      />
-
-      {replyingTo && (
-        <div
-          className="flex items-center gap-2 px-4 py-1.5 shrink-0 border-b border-white/[0.04]"
-          style={{ background: 'rgba(255,255,255,0.02)' }}
-        >
-          <span className="text-[10px] font-mono text-white/35 truncate flex-1">
-            replying to{' '}
-            <span className="text-white/50">
-              {replyingTo.profiles?.display_name ?? 'anon'}
-            </span>
-          </span>
-          <button
-            onClick={() => setReplyingTo(null)}
-            className="text-white/20 hover:text-white/50 transition-colors shrink-0 focus:outline-none"
+    <div className="absolute inset-0 z-[300] pointer-events-none flex flex-col justify-end">
+      {/* ── Panel overlay (animated) ── */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ y: '100%', opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+            className="absolute inset-0 flex flex-col pointer-events-auto overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'rgba(10,10,10,0.97)',
+              backdropFilter: 'blur(12px)',
+            }}
           >
-            <svg
-              width="10" height="10" viewBox="0 0 10 10"
-              fill="none" stroke="currentColor" strokeWidth="1.5"
+            <EmojiBar
+              variant="strip"
+              palette={palette}
+              counts={reactionCounts}
+              reacted={sessionReacted}
+              onReact={handleReact}
+            />
+
+            {replyingTo && (
+              <div
+                className="flex items-center gap-2 px-4 py-1.5 shrink-0 border-b border-white/[0.04]"
+                style={{ background: 'rgba(255,255,255,0.02)' }}
+              >
+                <span className="text-[10px] font-mono text-white/35 truncate flex-1">
+                  replying to{' '}
+                  <span className="text-white/50">
+                    {replyingTo.profiles?.display_name ?? 'anon'}
+                  </span>
+                </span>
+                <button
+                  onClick={() => setReplyingTo(null)}
+                  className="text-white/20 hover:text-white/50 transition-colors shrink-0 focus:outline-none"
+                >
+                  <svg
+                    width="10" height="10" viewBox="0 0 10 10"
+                    fill="none" stroke="currentColor" strokeWidth="1.5"
+                  >
+                    <line x1="2" y1="2" x2="8" y2="8" />
+                    <line x1="8" y1="2" x2="2" y2="8" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            <div
+              className="flex-1 overflow-y-auto min-h-0"
+              style={{ scrollbarWidth: 'none' }}
             >
-              <line x1="2" y1="2" x2="8" y2="8" />
-              <line x1="8" y1="2" x2="2" y2="8" />
-            </svg>
-          </button>
+              {comments.length === 0 ? (
+                <p className="text-[11px] font-mono text-white/20 text-center pt-8 px-4">
+                  No takes yet. Drop the first one.
+                </p>
+              ) : (
+                <div className="pb-2">
+                  {comments.map((c) => renderComment(c))}
+                </div>
+              )}
+            </div>
+
+            {/* CardBottomBar inside panel — acts as input + close */}
+            <div className="shrink-0">
+              <CardBottomBar
+                variant={variant === 'reels' ? 'fullscreen' : 'embedded'}
+                votedSide={votedSide}
+                score={score}
+                note={note}
+                onNoteChange={setNote}
+                onVoteYes={() => handleVote(true)}
+                onVoteNo={() => handleVote(false)}
+                onSubmit={handleCommentFromBar}
+                onOpenReactions={onOpen}
+                onClose={onClose}
+                panelOpen={true}
+                topReaction={topPostReaction}
+                trackTitle={trackTitle}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── CardBottomBar — always visible at bottom, always interactive ── */}
+      {!isOpen && (
+        <div className="pointer-events-auto">
+          <CardBottomBar
+            variant={variant === 'reels' ? 'fullscreen' : 'embedded'}
+            votedSide={votedSide}
+            score={score}
+            note={note}
+            onNoteChange={setNote}
+            onVoteYes={() => handleVote(true)}
+            onVoteNo={() => handleVote(false)}
+            onSubmit={handleCommentFromBar}
+            onOpenReactions={onOpen}
+            onClose={onClose}
+            panelOpen={false}
+            topReaction={topPostReaction}
+            trackTitle={trackTitle}
+          />
         </div>
       )}
-
-      <div
-        className="flex-1 overflow-y-auto min-h-0"
-        style={{ scrollbarWidth: 'none' }}
-      >
-        {comments.length === 0 ? (
-          <p className="text-[11px] font-mono text-white/20 text-center pt-8 px-4">
-            No takes yet. Drop the first one.
-          </p>
-        ) : (
-          <div className="pb-2">
-            {comments.map((c) => renderComment(c))}
-          </div>
-        )}
-      </div>
-    </PanelShell>
+    </div>
   );
 }
