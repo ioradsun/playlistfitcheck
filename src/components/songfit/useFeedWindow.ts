@@ -6,9 +6,21 @@ const WINDOW_RADIUS = 4;
 
 type WindowedPost = { post: SongFitPost; shouldRender: boolean };
 
-export function useFeedWindow(posts: SongFitPost[], scrollContainerId: string) {
+export function useFeedWindow(
+  posts: SongFitPost[],
+  scrollContainerId: string,
+  reelsMode = false,
+) {
   const heightMapRef = useRef(new Map<string, number>());
-  const [windowRange, setWindowRange] = useState({ start: 0, end: Math.min(posts.length - 1, WINDOW_RADIUS * 2) });
+  const cardMinHeight = reelsMode
+    ? typeof window !== "undefined"
+      ? window.innerHeight
+      : 844
+    : FEED_CARD_MIN_HEIGHT;
+  const [windowRange, setWindowRange] = useState({
+    start: 0,
+    end: Math.min(posts.length - 1, WINDOW_RADIUS * 2),
+  });
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 0 });
   const [impressions, setImpressions] = useState<string[]>([]);
   const seenImpressions = useRef(new Set<string>());
@@ -21,39 +33,51 @@ export function useFeedWindow(posts: SongFitPost[], scrollContainerId: string) {
     heightMapRef.current.set(postId, height);
   }, []);
 
-  const getHeight = useCallback((post: SongFitPost) => heightMapRef.current.get(post.id) ?? FEED_CARD_MIN_HEIGHT, []);
+  const getHeight = useCallback(
+    (post: SongFitPost) => heightMapRef.current.get(post.id) ?? cardMinHeight,
+    [cardMinHeight],
+  );
 
-  const calculateRanges = useCallback((scrollTop: number, viewportHeight: number) => {
-    if (posts.length === 0) {
-      return { center: 0, visibleStart: 0, visibleEnd: 0, windowStart: 0, windowEnd: -1 };
-    }
+  const calculateRanges = useCallback(
+    (scrollTop: number, viewportHeight: number) => {
+      if (posts.length === 0) {
+        return {
+          center: 0,
+          visibleStart: 0,
+          visibleEnd: 0,
+          windowStart: 0,
+          windowEnd: -1,
+        };
+      }
 
-    const centerY = scrollTop + viewportHeight / 2;
-    const viewportBottom = scrollTop + viewportHeight;
-    let acc = 0;
-    let visibleStart = 0;
-    let visibleEnd = posts.length - 1;
-    let center = posts.length - 1;
+      const centerY = scrollTop + viewportHeight / 2;
+      const viewportBottom = scrollTop + viewportHeight;
+      let acc = 0;
+      let visibleStart = 0;
+      let visibleEnd = posts.length - 1;
+      let center = posts.length - 1;
 
-    for (let i = 0; i < posts.length; i++) {
-      const h = getHeight(posts[i]);
-      const top = acc;
-      const bottom = acc + h;
+      for (let i = 0; i < posts.length; i++) {
+        const h = getHeight(posts[i]);
+        const top = acc;
+        const bottom = acc + h;
 
-      if (top <= scrollTop && scrollTop < bottom) visibleStart = i;
-      if (top <= centerY && centerY < bottom) center = i;
-      if (top < viewportBottom) visibleEnd = i;
-      acc = bottom;
-    }
+        if (top <= scrollTop && scrollTop < bottom) visibleStart = i;
+        if (top <= centerY && centerY < bottom) center = i;
+        if (top < viewportBottom) visibleEnd = i;
+        acc = bottom;
+      }
 
-    return {
-      center,
-      visibleStart,
-      visibleEnd,
-      windowStart: Math.max(0, center - WINDOW_RADIUS),
-      windowEnd: Math.min(posts.length - 1, center + WINDOW_RADIUS),
-    };
-  }, [getHeight, posts]);
+      return {
+        center,
+        visibleStart,
+        visibleEnd,
+        windowStart: Math.max(0, center - WINDOW_RADIUS),
+        windowEnd: Math.min(posts.length - 1, center + WINDOW_RADIUS),
+      };
+    },
+    [getHeight, posts],
+  );
 
   useEffect(() => {
     const container = document.getElementById(scrollContainerId);
@@ -61,7 +85,8 @@ export function useFeedWindow(posts: SongFitPost[], scrollContainerId: string) {
 
     const run = () => {
       rafRef.current = null;
-      const { center, visibleStart, visibleEnd, windowStart, windowEnd } = calculateRanges(container.scrollTop, container.clientHeight);
+      const { center, visibleStart, visibleEnd, windowStart, windowEnd } =
+        calculateRanges(container.scrollTop, container.clientHeight);
       setCenterIndex(center);
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
       debounceRef.current = window.setTimeout(() => {
@@ -85,12 +110,24 @@ export function useFeedWindow(posts: SongFitPost[], scrollContainerId: string) {
     };
   }, [calculateRanges, scrollContainerId]);
 
-  const windowedPosts = useMemo<WindowedPost[]>(() => posts.map((post, idx) => ({ post, shouldRender: idx >= windowRange.start && idx <= windowRange.end })), [posts, windowRange.end, windowRange.start]);
+  const windowedPosts = useMemo<WindowedPost[]>(
+    () =>
+      posts.map((post, idx) => ({
+        post,
+        shouldRender: idx >= windowRange.start && idx <= windowRange.end,
+      })),
+    [posts, windowRange.end, windowRange.start],
+  );
 
   useEffect(() => {
     const nextImpressions: string[] = [];
     windowedPosts.forEach(({ post, shouldRender }, idx) => {
-      if (shouldRender && idx >= visibleRange.start && idx <= visibleRange.end && !seenImpressions.current.has(post.id)) {
+      if (
+        shouldRender &&
+        idx >= visibleRange.start &&
+        idx <= visibleRange.end &&
+        !seenImpressions.current.has(post.id)
+      ) {
         seenImpressions.current.add(post.id);
         nextImpressions.push(post.id);
       }

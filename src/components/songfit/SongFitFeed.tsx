@@ -1,4 +1,11 @@
-import { memo, useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+  memo,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useContext,
+} from "react";
 import { Loader2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,11 +18,16 @@ import { SongFitInlineComposer } from "./SongFitInlineComposer";
 import { BillboardToggle } from "./BillboardToggle";
 import { StagePresence } from "./StagePresence";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
-import { CardLifecycleProvider, CardLifecycleContext, useCardState } from "./useCardLifecycle";
+import {
+  CardLifecycleProvider,
+  CardLifecycleContext,
+  useCardState,
+} from "./useCardLifecycle";
 import { useFeedWindow } from "./useFeedWindow";
 import { logImpression } from "@/lib/engagementTracking";
 import { RealtimeFeedHubProvider } from "./RealtimeFeedHub";
 import { consumeFeedPrefetch } from "@/lib/prefetch";
+import { cn } from "@/lib/utils";
 
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
@@ -27,7 +39,9 @@ const sharedResizeObserver = (() => {
   const getObserver = () => {
     if (!observer) {
       observer = new ResizeObserver((entries) => {
-        entries.forEach((entry) => handlers.get(entry.target)?.(entry.contentRect.height));
+        entries.forEach((entry) =>
+          handlers.get(entry.target)?.(entry.contentRect.height),
+        );
       });
     }
     return observer;
@@ -44,7 +58,12 @@ const sharedResizeObserver = (() => {
   };
 })();
 
-function MeasuredFeedCard({ post, onHeight, ...props }: {
+function MeasuredFeedCard({
+  post,
+  onHeight,
+  reelsMode = false,
+  ...props
+}: {
   post: SongFitPost;
   onHeight: (height: number) => void;
   rank?: number;
@@ -52,7 +71,13 @@ function MeasuredFeedCard({ post, onHeight, ...props }: {
   onOpenLikes: (postId: string) => void;
   onRefresh: () => void;
   isBillboard?: boolean;
-  signalData?: { total: number; replay_yes: number; saves_count?: number; signal_velocity?: number };
+  signalData?: {
+    total: number;
+    replay_yes: number;
+    saves_count?: number;
+    signal_velocity?: number;
+  };
+  reelsMode?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const { state } = useCardState(post.id);
@@ -66,8 +91,16 @@ function MeasuredFeedCard({ post, onHeight, ...props }: {
   }, [onHeight]);
 
   return (
-    <div ref={ref} className="shrink-0">
-      <SongFitPostCard post={post} cardState={state} {...props} />
+    <div
+      ref={ref}
+      className={cn("shrink-0", reelsMode && "h-[100dvh] snap-start")}
+    >
+      <SongFitPostCard
+        post={post}
+        cardState={state}
+        reelsMode={reelsMode}
+        {...props}
+      />
     </div>
   );
 }
@@ -85,23 +118,40 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   loadMore,
   loadPrevious,
   onCenterChange,
+  reelsMode = false,
 }: {
   posts: SongFitPost[];
   feedView: FeedView;
   fetchPosts: () => void;
   setCommentPostId: (v: string | null) => void;
   setLikesPostId: (v: string | null) => void;
-  signalMap: Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }>;
+  signalMap: Record<
+    string,
+    {
+      total: number;
+      replay_yes: number;
+      saves_count: number;
+      signal_velocity: number;
+    }
+  >;
   isLoadingMore: boolean;
   hasMore: boolean;
   hasTrimmedNewer: boolean;
   loadMore: () => Promise<void>;
   loadPrevious: () => Promise<void>;
   onCenterChange: (idx: number) => void;
+  reelsMode?: boolean;
 }) {
   const lifecycle = useContext(CardLifecycleContext);
   const prevMapRef = useRef(new Map<string, boolean>());
-  const { windowedPosts, heightMap, registerHeight, impressions, windowRange, centerIndex } = useFeedWindow(posts, "songfit-scroll-container");
+  const {
+    windowedPosts,
+    heightMap,
+    registerHeight,
+    impressions,
+    windowRange,
+    centerIndex,
+  } = useFeedWindow(posts, "songfit-scroll-container", reelsMode);
 
   useEffect(() => {
     onCenterChange(centerIndex);
@@ -131,11 +181,21 @@ const _WindowedFeedList = memo(function WindowedFeedList({
     if (windowRange.start <= 0 && hasTrimmedNewer && !isLoadingMore) {
       void loadPrevious();
     }
-  }, [feedView, hasMore, hasTrimmedNewer, isLoadingMore, loadMore, loadPrevious, posts.length, windowRange.end, windowRange.start]);
+  }, [
+    feedView,
+    hasMore,
+    hasTrimmedNewer,
+    isLoadingMore,
+    loadMore,
+    loadPrevious,
+    posts.length,
+    windowRange.end,
+    windowRange.start,
+  ]);
 
   return (
-    <div className="pb-24">
-      {windowedPosts.map(({ post, shouldRender }, idx) => (
+    <div className={reelsMode ? "" : "pb-24"}>
+      {windowedPosts.map(({ post, shouldRender }, idx) =>
         shouldRender ? (
           <MeasuredFeedCard
             key={post.id}
@@ -146,12 +206,23 @@ const _WindowedFeedList = memo(function WindowedFeedList({
             onOpenLikes={(id) => setLikesPostId(id)}
             onRefresh={fetchPosts}
             isBillboard={feedView === "billboard"}
-            signalData={feedView === "billboard" ? signalMap[post.id] : undefined}
+            signalData={
+              feedView === "billboard" ? signalMap[post.id] : undefined
+            }
+            reelsMode={reelsMode}
           />
         ) : (
-          <div key={post.id} style={{ height: heightMap.get(post.id) ?? FEED_CARD_MIN_HEIGHT }} className="shrink-0" />
-        )
-      ))}
+          <div
+            key={post.id}
+            style={
+              reelsMode
+                ? undefined
+                : { height: heightMap.get(post.id) ?? FEED_CARD_MIN_HEIGHT }
+            }
+            className={cn("shrink-0", reelsMode && "h-[100dvh]")}
+          />
+        ),
+      )}
       {isLoadingMore && (
         <div className="flex justify-center py-5">
           <Loader2 size={18} className="animate-spin text-muted-foreground" />
@@ -161,22 +232,38 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   );
 });
 
-export function SongFitFeed() {
+interface SongFitFeedProps {
+  reelsMode?: boolean;
+}
+
+export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isAdmin = user?.email === "sunpatel@gmail.com" || user?.email === "spatel@iorad.com";
+  const isAdmin =
+    user?.email === "sunpatel@gmail.com" || user?.email === "spatel@iorad.com";
   const [posts, setPosts] = useState<SongFitPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [likesPostId, setLikesPostId] = useState<string | null>(null);
   const [feedView, setFeedView] = useState<FeedView>("all");
-  const [billboardMode, setBillboardMode] = useState<BillboardMode>("this_week");
+  const [billboardMode, setBillboardMode] =
+    useState<BillboardMode>("this_week");
   const [userVoteCount, setUserVoteCount] = useState<number | null>(null);
   const [composerUnlocked, setComposerUnlocked] = useState(false);
   const [showFloatingAnchor, setShowFloatingAnchor] = useState(false);
   const [hasPosted, setHasPosted] = useState(false);
   const [hasEverPosted, setHasEverPosted] = useState<boolean | null>(null);
-  const [signalMap, setSignalMap] = useState<Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }>>({});
+  const [signalMap, setSignalMap] = useState<
+    Record<
+      string,
+      {
+        total: number;
+        replay_yes: number;
+        saves_count: number;
+        signal_velocity: number;
+      }
+    >
+  >({});
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [newestCreatedAt, setNewestCreatedAt] = useState<string | null>(null);
@@ -191,7 +278,16 @@ export function SongFitFeed() {
   isLoadingMoreRef.current = isLoadingMore;
   hasMoreRef.current = hasMore;
 
-  const normalizePosts = useCallback((input: SongFitPost[]) => input.map((p) => ({ ...p, user_has_liked: false, user_has_saved: false, saves_count: 0 })), []);
+  const normalizePosts = useCallback(
+    (input: SongFitPost[]) =>
+      input.map((p) => ({
+        ...p,
+        user_has_liked: false,
+        user_has_saved: false,
+        saves_count: 0,
+      })),
+    [],
+  );
 
   const handleCenterChange = useCallback((idx: number) => {
     centerIndexRef.current = idx;
@@ -199,8 +295,17 @@ export function SongFitFeed() {
 
   const capPosts = useCallback((next: SongFitPost[]) => {
     if (next.length <= FEED_MAX_POSTS) return next;
-    const center = Math.min(Math.max(centerIndexRef.current, 0), next.length - 1);
-    const start = Math.max(0, Math.min(center - Math.floor(FEED_MAX_POSTS / 2), next.length - FEED_MAX_POSTS));
+    const center = Math.min(
+      Math.max(centerIndexRef.current, 0),
+      next.length - 1,
+    );
+    const start = Math.max(
+      0,
+      Math.min(
+        center - Math.floor(FEED_MAX_POSTS / 2),
+        next.length - FEED_MAX_POSTS,
+      ),
+    );
     const end = start + FEED_MAX_POSTS;
     if (start > 0) setHasTrimmedNewer(true);
     return next.slice(start, end);
@@ -217,15 +322,25 @@ export function SongFitFeed() {
         ? await prefetched
         : await supabase
             .from("songfit_posts")
-            .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
+            .select(
+              "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)",
+            )
             .eq("status", "live")
             .limit(FEED_PAGE_SIZE)
             .order("created_at", { ascending: false });
 
       let enriched = (allPosts || []) as unknown as SongFitPost[];
-      if (feedView === "now_streaming") enriched = enriched.filter((p) => !!p.spotify_track_id);
-      else if (feedView === "in_studio") enriched = enriched.filter((p) => !!p.lyric_dance_url && !!p.lyric_dance_id);
-      else if (feedView === "in_battle") enriched = enriched.filter((p) => !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id);
+      if (feedView === "now_streaming")
+        enriched = enriched.filter((p) => !!p.spotify_track_id);
+      else if (feedView === "in_studio")
+        enriched = enriched.filter(
+          (p) => !!p.lyric_dance_url && !!p.lyric_dance_id,
+        );
+      else if (feedView === "in_battle")
+        enriched = enriched.filter(
+          (p) =>
+            !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id,
+        );
 
       const normalized = normalizePosts(enriched);
       postsRef.current = normalized;
@@ -238,7 +353,8 @@ export function SongFitFeed() {
     } else {
       let cutoff: string | null = null;
       let ceiling: string | null = null;
-      if (billboardMode === "this_week") cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      if (billboardMode === "this_week")
+        cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       else if (billboardMode === "last_week") {
         cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
         ceiling = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -246,7 +362,9 @@ export function SongFitFeed() {
 
       const { data: poolData } = await supabase
         .from("songfit_posts")
-        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
+        .select(
+          "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)",
+        )
         .eq("status", "live")
         .limit(100)
         .order("created_at", { ascending: false });
@@ -268,16 +386,47 @@ export function SongFitFeed() {
         return q;
       };
 
-      const [reviewsRes, commentsRes, followsRes, savesRes] = await Promise.all([
-        applyWindow(supabase.from("songfit_hook_reviews").select("post_id, would_replay").in("post_id", postIds)),
-        applyWindow(supabase.from("songfit_comments").select("post_id").in("post_id", postIds)),
-        applyWindow(supabase.from("songfit_follows").select("followed_user_id").in("followed_user_id", ownerIds)),
-        applyWindow(supabase.from("songfit_saves").select("post_id").in("post_id", postIds)),
-      ]);
+      const [reviewsRes, commentsRes, followsRes, savesRes] = await Promise.all(
+        [
+          applyWindow(
+            supabase
+              .from("songfit_hook_reviews")
+              .select("post_id, would_replay")
+              .in("post_id", postIds),
+          ),
+          applyWindow(
+            supabase
+              .from("songfit_comments")
+              .select("post_id")
+              .in("post_id", postIds),
+          ),
+          applyWindow(
+            supabase
+              .from("songfit_follows")
+              .select("followed_user_id")
+              .in("followed_user_id", ownerIds),
+          ),
+          applyWindow(
+            supabase
+              .from("songfit_saves")
+              .select("post_id")
+              .in("post_id", postIds),
+          ),
+        ],
+      );
 
-      const hookMap: Record<string, { run_it_back: number; skip: number; total: number; replay_yes: number }> = {};
+      const hookMap: Record<
+        string,
+        { run_it_back: number; skip: number; total: number; replay_yes: number }
+      > = {};
       for (const r of reviewsRes.data || []) {
-        if (!hookMap[r.post_id]) hookMap[r.post_id] = { run_it_back: 0, skip: 0, total: 0, replay_yes: 0 };
+        if (!hookMap[r.post_id])
+          hookMap[r.post_id] = {
+            run_it_back: 0,
+            skip: 0,
+            total: 0,
+            replay_yes: 0,
+          };
         hookMap[r.post_id].total++;
         if (r.would_replay) {
           hookMap[r.post_id].run_it_back++;
@@ -285,27 +434,58 @@ export function SongFitFeed() {
         } else hookMap[r.post_id].skip++;
       }
       const commentMap: Record<string, number> = {};
-      for (const c of commentsRes.data || []) commentMap[c.post_id] = (commentMap[c.post_id] || 0) + 1;
+      for (const c of commentsRes.data || [])
+        commentMap[c.post_id] = (commentMap[c.post_id] || 0) + 1;
       const followByOwner: Record<string, number> = {};
-      for (const f of followsRes.data || []) followByOwner[f.followed_user_id] = (followByOwner[f.followed_user_id] || 0) + 1;
+      for (const f of followsRes.data || [])
+        followByOwner[f.followed_user_id] =
+          (followByOwner[f.followed_user_id] || 0) + 1;
       const savesMap: Record<string, number> = {};
-      for (const s of savesRes.data || []) savesMap[s.post_id] = (savesMap[s.post_id] || 0) + 1;
+      for (const s of savesRes.data || [])
+        savesMap[s.post_id] = (savesMap[s.post_id] || 0) + 1;
 
       const scored = pool.map((p) => {
-        const h = hookMap[p.id] || { run_it_back: 0, skip: 0, total: 0, replay_yes: 0 };
-        const velocity = h.run_it_back + 3 * (commentMap[p.id] || 0) + 8 * (followByOwner[p.user_id] || 0) + 12 * (savesMap[p.id] || 0) - 2 * h.skip;
+        const h = hookMap[p.id] || {
+          run_it_back: 0,
+          skip: 0,
+          total: 0,
+          replay_yes: 0,
+        };
+        const velocity =
+          h.run_it_back +
+          3 * (commentMap[p.id] || 0) +
+          8 * (followByOwner[p.user_id] || 0) +
+          12 * (savesMap[p.id] || 0) -
+          2 * h.skip;
         return { post: p, velocity, h, saves: savesMap[p.id] || 0 };
       });
 
       scored.sort((a, b) => b.velocity - a.velocity);
       const top40 = scored.slice(0, 40);
-      const rankedPosts = top40.map((s, i) => ({ ...s.post, current_rank: i + 1 }));
+      const rankedPosts = top40.map((s, i) => ({
+        ...s.post,
+        current_rank: i + 1,
+      }));
       postsRef.current = rankedPosts;
       setPosts(rankedPosts);
       hasMoreRef.current = false;
       setHasMore(false);
-      const newSignalMap: Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }> = {};
-      for (const s of top40) newSignalMap[s.post.id] = { total: s.h.total, replay_yes: s.h.replay_yes, saves_count: s.saves, signal_velocity: s.velocity };
+      const newSignalMap: Record<
+        string,
+        {
+          total: number;
+          replay_yes: number;
+          saves_count: number;
+          signal_velocity: number;
+        }
+      > = {};
+      for (const s of top40)
+        newSignalMap[s.post.id] = {
+          total: s.h.total,
+          replay_yes: s.h.replay_yes,
+          saves_count: s.saves,
+          signal_velocity: s.velocity,
+        };
       setSignalMap(newSignalMap);
     }
 
@@ -313,27 +493,44 @@ export function SongFitFeed() {
   }, [billboardMode, feedView, normalizePosts]);
 
   const loadMore = useCallback(async () => {
-    if (feedView === "billboard" || isLoadingMoreRef.current || !hasMoreRef.current || postsRef.current.length === 0) return;
+    if (
+      feedView === "billboard" ||
+      isLoadingMoreRef.current ||
+      !hasMoreRef.current ||
+      postsRef.current.length === 0
+    )
+      return;
     isLoadingMoreRef.current = true;
     setIsLoadingMore(true);
 
     try {
       const currentPosts = postsRef.current;
-      const cursor = oldestCreatedAt ?? currentPosts[currentPosts.length - 1]?.created_at;
+      const cursor =
+        oldestCreatedAt ?? currentPosts[currentPosts.length - 1]?.created_at;
       if (!cursor) return;
 
       const { data } = await supabase
         .from("songfit_posts")
-        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
+        .select(
+          "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)",
+        )
         .eq("status", "live")
         .lt("created_at", cursor)
         .order("created_at", { ascending: false })
         .limit(FEED_PAGE_SIZE);
 
       let nextPosts = (data || []) as unknown as SongFitPost[];
-      if (feedView === "now_streaming") nextPosts = nextPosts.filter((p) => !!p.spotify_track_id);
-      else if (feedView === "in_studio") nextPosts = nextPosts.filter((p) => !!p.lyric_dance_url && !!p.lyric_dance_id);
-      else if (feedView === "in_battle") nextPosts = nextPosts.filter((p) => !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id);
+      if (feedView === "now_streaming")
+        nextPosts = nextPosts.filter((p) => !!p.spotify_track_id);
+      else if (feedView === "in_studio")
+        nextPosts = nextPosts.filter(
+          (p) => !!p.lyric_dance_url && !!p.lyric_dance_id,
+        );
+      else if (feedView === "in_battle")
+        nextPosts = nextPosts.filter(
+          (p) =>
+            !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id,
+        );
 
       if (nextPosts.length > 0) {
         setPosts((prev) => {
@@ -354,14 +551,21 @@ export function SongFitFeed() {
   }, [capPosts, feedView, normalizePosts, oldestCreatedAt]);
 
   const loadPrevious = useCallback(async () => {
-    if (feedView === "billboard" || isLoadingMoreRef.current || !newestCreatedAt) return;
+    if (
+      feedView === "billboard" ||
+      isLoadingMoreRef.current ||
+      !newestCreatedAt
+    )
+      return;
     isLoadingMoreRef.current = true;
     setIsLoadingMore(true);
 
     try {
       const { data } = await supabase
         .from("songfit_posts")
-        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
+        .select(
+          "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)",
+        )
         .eq("status", "live")
         .gt("created_at", newestCreatedAt)
         .order("created_at", { ascending: false })
@@ -392,20 +596,28 @@ export function SongFitFeed() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("songfit_posts").select("id", { count: "exact", head: true }).eq("user_id", user.id).then(({ count }) => {
-      const everPosted = (count ?? 0) > 0;
-      setHasEverPosted(everPosted);
-      if (!everPosted || isAdmin) setComposerUnlocked(true);
-    });
+    supabase
+      .from("songfit_posts")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .then(({ count }) => {
+        const everPosted = (count ?? 0) > 0;
+        setHasEverPosted(everPosted);
+        if (!everPosted || isAdmin) setComposerUnlocked(true);
+      });
   }, [isAdmin, user]);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("songfit_hook_reviews").select("id").eq("user_id", user.id).then(({ data }) => {
-      const count = (data || []).length;
-      setUserVoteCount(count);
-      if (count >= 3) setComposerUnlocked(true);
-    });
+    supabase
+      .from("songfit_hook_reviews")
+      .select("id")
+      .eq("user_id", user.id)
+      .then(({ data }) => {
+        const count = (data || []).length;
+        setUserVoteCount(count);
+        if (count >= 3) setComposerUnlocked(true);
+      });
   }, [user]);
 
   useEffect(() => {
@@ -456,35 +668,61 @@ export function SongFitFeed() {
   }, [composerUnlocked]);
 
   return (
-    <div className="w-full max-w-[470px] mx-auto">
-      {user ? (
-        composerUnlocked ? (
-          <div className="animate-fade-in">
-            <SongFitInlineComposer onPostCreated={fetchPosts} />
-          </div>
-        ) : hasEverPosted === null ? null : (
-          <StagePresence currentVotes={userVoteCount ?? 0} onUnlocked={() => setComposerUnlocked(true)} hasPosted={hasPosted} />
-        )
-      ) : (
-        <div className="border-b border-border/40 cursor-pointer" onClick={() => navigate("/auth?mode=signup", { state: { returnTab: "songfit" } })}>
-          <div className="flex gap-3 px-4 pt-3 pb-3">
-            <div className="h-10 w-10 rounded-full bg-muted border border-border shrink-0 mt-1 flex items-center justify-center">
-              <User size={16} className="text-muted-foreground" />
+    <div className={reelsMode ? "w-full" : "w-full max-w-[470px] mx-auto"}>
+      {!reelsMode && (
+        <>
+          {user ? (
+            composerUnlocked ? (
+              <div className="animate-fade-in">
+                <SongFitInlineComposer onPostCreated={fetchPosts} />
+              </div>
+            ) : hasEverPosted === null ? null : (
+              <StagePresence
+                currentVotes={userVoteCount ?? 0}
+                onUnlocked={() => setComposerUnlocked(true)}
+                hasPosted={hasPosted}
+              />
+            )
+          ) : (
+            <div
+              className="border-b border-border/40 cursor-pointer"
+              onClick={() =>
+                navigate("/auth?mode=signup", {
+                  state: { returnTab: "songfit" },
+                })
+              }
+            >
+              <div className="flex gap-3 px-4 pt-3 pb-3">
+                <div className="h-10 w-10 rounded-full bg-muted border border-border shrink-0 mt-1 flex items-center justify-center">
+                  <User size={16} className="text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0 flex items-center">
+                  <span className="text-base text-muted-foreground/60">
+                    Drop your song and get signals
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="flex-1 min-w-0 flex items-center">
-              <span className="text-base text-muted-foreground/60">Drop your song and get signals</span>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      <BillboardToggle view={feedView} onViewChange={setFeedView} billboardMode={billboardMode} onModeChange={setBillboardMode} isLoggedIn={!!user} />
+          <BillboardToggle
+            view={feedView}
+            onViewChange={setFeedView}
+            billboardMode={billboardMode}
+            onModeChange={setBillboardMode}
+            isLoggedIn={!!user}
+          />
+        </>
+      )}
 
       {loading ? (
         <div className="space-y-0 pt-3">
           {[0, 1, 2].map((i) => (
             <div key={i} className="px-2 pb-3">
-              <div className="rounded-2xl overflow-hidden animate-pulse" style={{ background: "#121212" }}>
+              <div
+                className="rounded-2xl overflow-hidden animate-pulse"
+                style={{ background: "#121212" }}
+              >
                 <div className="flex items-center gap-2.5 px-3 py-2.5">
                   <div className="h-8 w-8 rounded-full bg-white/10" />
                   <div className="space-y-1.5 flex-1">
@@ -492,8 +730,17 @@ export function SongFitFeed() {
                     <div className="h-2.5 w-16 rounded bg-white/5" />
                   </div>
                 </div>
-                <div className="relative overflow-hidden" style={{ height: 320 }}>
-                  <LyricDanceCover songName="" artistName="" avatarUrl={null} initial="" waiting />
+                <div
+                  className="relative overflow-hidden"
+                  style={{ height: 320 }}
+                >
+                  <LyricDanceCover
+                    songName=""
+                    artistName=""
+                    avatarUrl={null}
+                    initial=""
+                    waiting
+                  />
                 </div>
                 <div className="px-3 pt-2 pb-1 space-y-1">
                   <div className="h-2.5 w-3/4 rounded bg-white/10" />
@@ -509,25 +756,30 @@ export function SongFitFeed() {
           ))}
         </div>
       ) : posts.length === 0 ? (
-        <div className="text-center py-16 space-y-3"><p className="text-muted-foreground text-sm">No live submissions yet. Be the first!</p></div>
+        <div className="text-center py-16 space-y-3">
+          <p className="text-muted-foreground text-sm">
+            No live submissions yet. Be the first!
+          </p>
+        </div>
       ) : (
         <CardLifecycleProvider>
           <RealtimeFeedHubProvider>
-              <_WindowedFeedList
-                posts={posts}
-                feedView={feedView}
-                fetchPosts={fetchPosts}
-                setCommentPostId={setCommentPostId}
-                setLikesPostId={setLikesPostId}
-                signalMap={signalMap}
-                isLoadingMore={isLoadingMore}
-                hasMore={hasMore}
-                hasTrimmedNewer={hasTrimmedNewer}
-                loadMore={loadMore}
-                loadPrevious={loadPrevious}
-                onCenterChange={handleCenterChange}
-              />
-            </RealtimeFeedHubProvider>
+            <_WindowedFeedList
+              posts={posts}
+              feedView={feedView}
+              fetchPosts={fetchPosts}
+              setCommentPostId={setCommentPostId}
+              setLikesPostId={setLikesPostId}
+              signalMap={signalMap}
+              isLoadingMore={isLoadingMore}
+              hasMore={hasMore}
+              hasTrimmedNewer={hasTrimmedNewer}
+              loadMore={loadMore}
+              loadPrevious={loadPrevious}
+              onCenterChange={handleCenterChange}
+              reelsMode={reelsMode}
+            />
+          </RealtimeFeedHubProvider>
         </CardLifecycleProvider>
       )}
 
@@ -535,16 +787,32 @@ export function SongFitFeed() {
         postId={commentPostId}
         onClose={() => setCommentPostId(null)}
         onCommentAdded={async (pid) => {
-          const { data } = await supabase.from("songfit_posts").select("comments_count").eq("id", pid).maybeSingle();
-          if (data) setPosts((prev) => prev.map((p) => (p.id === pid ? { ...p, comments_count: data.comments_count } : p)));
+          const { data } = await supabase
+            .from("songfit_posts")
+            .select("comments_count")
+            .eq("id", pid)
+            .maybeSingle();
+          if (data)
+            setPosts((prev) =>
+              prev.map((p) =>
+                p.id === pid
+                  ? { ...p, comments_count: data.comments_count }
+                  : p,
+              ),
+            );
         }}
       />
-      <SongFitLikesList postId={likesPostId} onClose={() => setLikesPostId(null)} />
+      <SongFitLikesList
+        postId={likesPostId}
+        onClose={() => setLikesPostId(null)}
+      />
 
-      {showFloatingAnchor && (
+      {showFloatingAnchor && !reelsMode && (
         <button
           onClick={() => {
-            const scrollEl = document.getElementById("songfit-scroll-container");
+            const scrollEl = document.getElementById(
+              "songfit-scroll-container",
+            );
             if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: "smooth" });
           }}
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 border border-border/50 bg-background text-foreground/70 hover:text-foreground hover:border-border text-[11px] font-mono tracking-wide px-5 py-2 rounded-full shadow-sm transition-all duration-200"
