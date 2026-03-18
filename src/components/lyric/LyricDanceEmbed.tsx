@@ -341,7 +341,7 @@ export function LyricDanceEmbed({
           displayMode={reelsMode ? "fullscreen" : "embedded"}
           isOpen={reactionPanelOpen}
           refreshKey={commentRefreshKey}
-          onClose={handlePanelClose}
+          onClose={handleClosePanelAndSync}
           votedSide={votedSide}
           score={score}
           onVoteYes={() => handleVote(true)}
