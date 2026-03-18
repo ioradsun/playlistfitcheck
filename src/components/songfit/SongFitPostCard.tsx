@@ -537,23 +537,6 @@ export function SongFitPostCard({
                 </p>
               )}
 
-              <div className="mt-3 rounded-lg overflow-hidden">
-                <CardBottomBar
-                  variant="fullscreen"
-                  votedSide={votedSide}
-                  score={score}
-                  note={note}
-                  onNoteChange={setNote}
-                  onVoteYes={() => handleVote(true)}
-                  onVoteNo={() => handleVote(false)}
-                  onSubmit={handleCommentFromBar}
-                  onOpenReactions={() => setPanelOpen(true)}
-                  onClose={() => setPanelOpen(false)}
-                  panelOpen={panelOpen}
-                  topReaction={topPostReaction}
-                  trackTitle={post.track_title}
-                />
-              </div>
 
               {isFirst && (
                 <div className="flex flex-col items-center gap-1 mt-4 animate-bounce">
