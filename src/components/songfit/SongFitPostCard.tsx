@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { cn } from "@/lib/utils";
 import {
   MessageCircle,
