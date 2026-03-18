@@ -366,7 +366,7 @@ export function PostCommentPanel({
           {!isReply && (
             <button
               onClick={() => setReplyingTo(comment)}
-              className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors ml-auto focus:outline-none"
+              className="text-[10px] font-mono text-white/30 hover:text-white/55 transition-colors ml-auto focus:outline-none"
             >
               reply
             </button>
