@@ -848,12 +848,13 @@ export function LyricVideoComposer({
     let audioCtx: AudioContext | null = null;
     let audioDest: MediaStreamAudioDestinationNode | null = null;
     let audioEl: HTMLAudioElement | null = null;
+    let audioUrl: string | null = null;
 
     if (audioFile) {
       try {
         audioCtx = new AudioContext();
         audioDest = audioCtx.createMediaStreamDestination();
-        const audioUrl = URL.createObjectURL(audioFile);
+        audioUrl = URL.createObjectURL(audioFile);
         audioEl = new Audio(audioUrl);
         audioEl.crossOrigin = "anonymous";
         audioEl.currentTime = regionStart;
@@ -917,6 +918,7 @@ export function LyricVideoComposer({
           audioEl.pause();
           audioEl.src = "";
         }
+        if (audioUrl) URL.revokeObjectURL(audioUrl);
         if (audioCtx) audioCtx.close();
         return;
       }

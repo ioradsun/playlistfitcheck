@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 
 export interface WaveformData {
   peaks: number[];
@@ -112,6 +112,23 @@ export function useAudioEngine() {
     const currentTime = offset + elapsed;
     return currentTime;
   }, [playingId]);
+
+  useEffect(() => {
+    return () => {
+      // Stop any playing source before closing the context
+      if (sourceRef.current) {
+        try { sourceRef.current.stop(); } catch {}
+        sourceRef.current.disconnect();
+        sourceRef.current = null;
+      }
+      if (stopTimerRef.current) {
+        clearTimeout(stopTimerRef.current);
+        stopTimerRef.current = null;
+      }
+      ctxRef.current?.close().catch(() => {});
+      ctxRef.current = null;
+    };
+  }, []);
 
   return { decodeFile, play, stop, playingId, getPlayheadPosition };
 }
