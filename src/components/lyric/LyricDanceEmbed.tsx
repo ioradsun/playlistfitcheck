@@ -172,10 +172,7 @@ export function LyricDanceEmbed({
     if (visibility === "near" || visibility === "visible") player.scheduleFullModeUpgrade();
   }, [player, playerReady, visibility, isFeedEmbed]);
 
-  useEffect(() => {
-    if (!player || !playerReady || isFeedEmbed) return;
-    player.scheduleFullModeUpgrade();
-  }, [player, playerReady, isFeedEmbed]);
+  // Full-mode upgrade for non-feed embeds now handled by useLyricDanceCore
 
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) return;
