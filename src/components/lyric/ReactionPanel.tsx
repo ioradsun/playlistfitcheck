@@ -176,7 +176,11 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
   const voteAccent = palette[1] ?? 'rgba(255,255,255,0.7)';
   const playheadLineIndex = activeLine?.lineIndex ?? null;
   const displayLineIndex = playheadLineIndex ?? allLines[0]?.lineIndex ?? null;
-  const effectiveActiveIndex = pinnedLineIndex ?? playheadLineIndex;
+
+  // Keep last known line while audio plays through silence
+  if (playheadLineIndex !== null) lastActiveLineRef.current = playheadLineIndex;
+  const heldLineIndex = (player && !player.audio.paused) ? lastActiveLineRef.current : null;
+  const effectiveActiveIndex = pinnedLineIndex ?? playheadLineIndex ?? heldLineIndex;
 
   const expandedLineComments = useMemo(() => {
     if (expandedLineIndex == null) return [];
