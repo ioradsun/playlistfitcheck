@@ -314,17 +314,13 @@ export function SongFitPostCard({
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <ProfileHoverCard userId={post.user_id}>
               <div
-                className="cursor-pointer shrink-0"
+                className="flex items-center gap-2 cursor-pointer shrink-0"
                 onClick={handleProfileClick}
               >
-                <div className="relative">
+                <div className="relative shrink-0">
                   <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.06]">
                     {post.profiles?.avatar_url ? (
-                      <img
-                        src={post.profiles.avatar_url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <User size={13} className="text-white/40" />
                     )}
@@ -337,14 +333,13 @@ export function SongFitPostCard({
                 </div>
               </div>
             </ProfileHoverCard>
-          </div>
 
-          {/* Card type label */}
-          {(hasLyricDancePost || isSpotifyEmbed) && (
-            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400/40 shrink-0 mr-1">
-              {hasLyricDancePost ? `In Studio · ${displayName}` : `Now Streaming · ${displayName}`}
-            </span>
-          )}
+            {(hasLyricDancePost || isSpotifyEmbed) && (
+              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 border border-green-400/40 rounded px-1.5 py-0.5 shrink-0">
+                {hasLyricDancePost ? `In Studio · ${displayName}` : `Now Streaming · ${displayName}`}
+              </span>
+            )}
+          </div>
 
           {/* 3-dot menu */}
           <DropdownMenu
@@ -635,18 +630,22 @@ export function SongFitPostCard({
             <div className="flex-1" />
             {/* Bottom content with gradient scrim */}
             <div className="pointer-events-auto bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-16 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
-              <div
-                className="flex items-center gap-2 mb-2 cursor-pointer"
-                onClick={handleProfileClick}
-              >
-                <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10 shrink-0">
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10 shrink-0 cursor-pointer"
+                  onClick={handleProfileClick}
+                >
                   {post.profiles?.avatar_url ? (
                     <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <User size={14} className="text-white/40" />
                   )}
                 </div>
-                {(post.profiles as any)?.is_verified && <VerifiedBadge size={12} />}
+                {(hasLyricDancePost || isSpotifyEmbed) && (
+                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 border border-green-400/40 rounded px-1.5 py-0.5 shrink-0">
+                    {hasLyricDancePost ? `In Studio · ${displayName}` : `Now Streaming · ${displayName}`}
+                  </span>
+                )}
               </div>
 
 
