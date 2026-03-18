@@ -441,66 +441,43 @@ export function SongFitPostCard({
                   genre={((post.tags_json as any[]) || [])[0] || null}
                   cardState={cardState}
                 />
-              </div>
 
-                {/* Caption — directly below embed (desktop only; reels shows in bottom overlay) */}
-                {!reelsMode && !editing && localCaption && localCaption.trim() && (
-                  <div
-                    className="px-3 pt-1.5 pb-1"
-                    style={{ background: "#0a0a0a" }}
-                  >
-                    {localCaption.length <= 100 || captionExpanded ? (
-                      <p className="text-[13px] leading-snug text-white/50">
-                        {localCaption}
-                      </p>
-                    ) : (
-                      <p className="text-[13px] leading-snug text-white/50">
-                        {localCaption.slice(0, 100).trimEnd()}
-                        <span className="text-white/20">… </span>
-                        <button
-                          onClick={() => setCaptionExpanded(true)}
-                          className="text-white/20 hover:text-white/40 text-[13px]"
-                        >
-                          more
-                        </button>
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {isSpotifyEmbed && !reelsMode && (
-                  <div
-                    className={`relative ${panelOpen ? "z-[500]" : "z-[300]"}`}
-                  >
-                    <CardBottomBar
-                      variant="fullscreen"
-                      votedSide={votedSide}
-                      score={score}
-                      note={note}
-                      onNoteChange={setNote}
-                      onVoteYes={() => handleVote(true)}
-                      onVoteNo={() => handleVote(false)}
-                      onSubmit={handleCommentFromBar}
-                      onOpenReactions={() => setPanelOpen(true)}
-                      onClose={() => setPanelOpen(false)}
-                      panelOpen={panelOpen}
-                      topReaction={topPostReaction}
-                      trackTitle={post.track_title}
-                    />
-                  </div>
-                )}
-
-              {/* PostCommentPanel — outside overflow-hidden, positioned relative to outer card wrapper */}
-              {isSpotifyEmbed && (
                 <PostCommentPanel
                   postId={post.id}
                   isOpen={panelOpen}
+                  onOpen={() => setPanelOpen(true)}
                   onClose={() => setPanelOpen(false)}
-                  refreshKey={commentRefreshKey}
+                  cardState={cardState}
+                  trackTitle={post.track_title}
+                  reelsMode={reelsMode}
                   variant={reelsMode ? "reels" : "embedded"}
                 />
-              )}
+              </div>
 
+              {/* Caption — desktop only */}
+              {!reelsMode && !editing && localCaption && localCaption.trim() && (
+                <div
+                  className="px-3 pt-1.5 pb-1"
+                  style={{ background: "#0a0a0a" }}
+                >
+                  {localCaption.length <= 100 || captionExpanded ? (
+                    <p className="text-[13px] leading-snug text-white/50">
+                      {localCaption}
+                    </p>
+                  ) : (
+                    <p className="text-[13px] leading-snug text-white/50">
+                      {localCaption.slice(0, 100).trimEnd()}
+                      <span className="text-white/20">… </span>
+                      <button
+                        onClick={() => setCaptionExpanded(true)}
+                        className="text-white/20 hover:text-white/40 text-[13px]"
+                      >
+                        more
+                      </button>
+                    </p>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
