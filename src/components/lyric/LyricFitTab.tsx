@@ -55,7 +55,6 @@ export interface PipelineStages {
   transcript: PipelineStageStatus;
 }
 
-export type PipelineStageTimes = Partial<Record<keyof PipelineStages, { startedAt?: number; durationMs?: number }>>;
 
 interface Props {
   initialLyric?: any;
@@ -878,66 +877,11 @@ export function LyricFitTab({
     }, 100);
   }, [audioFile, lines, persistRenderData]);
 
-  // ── Per-stage restarters (for debug panel) ──
-  const restartSections = useCallback(() => {
-
-    setCinematicDirection(null);
-    cinematicTriggeredRef.current = false;
-    setGenerationStatus(prev => ({ ...prev, cinematicDirection: "idle", sectionImages: "idle" }));
-    if (lines?.length) {
-      void startCinematicDirection(lines, true);
-    }
-  }, [lines, startCinematicDirection]);
-
-  const restartCinematic = useCallback(() => {
-
-    setCinematicDirection(null);
-    cinematicTriggeredRef.current = false;
-    setGenerationStatus(prev => ({ ...prev, cinematicDirection: "idle", sectionImages: "idle" }));
-    // Clear section images in DB
-    if (savedIdRef.current) {
-      void supabase.from("saved_lyrics").update({ section_images: null } as any).eq("id", savedIdRef.current);
-    }
-    // Trigger via startCinematicDirection with force
-    if (lines?.length) {
-      void startCinematicDirection(lines, true);
-    }
-  }, [lines, startCinematicDirection]);
-
-  const restartHooks = useCallback(() => {
-
-    hookDetectionRunRef.current = false;
-    // Clear hooks from renderData
-    setRenderData((prev: any) => {
-      if (!prev) return prev;
-      const { hook, secondHook, hookLabel, secondHookLabel, hookJustification, secondHookJustification, ...rest } = prev;
-      return rest;
-    });
-    void startHookDetection();
-  }, [startHookDetection]);
-
   const handleImageGenerationStatusChange = useCallback((status: "idle" | "running" | "done" | "error") => {
     setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
   }, []);
 
-  const restartImages = useCallback(() => {
 
-    setGenerationStatus(prev => ({ ...prev, sectionImages: "idle" }));
-    if (savedIdRef.current) {
-      void supabase.from("saved_lyrics").update({ section_images: null } as any).eq("id", savedIdRef.current);
-    }
-    handleImageGenerationStatusChange("idle");
-  }, [handleImageGenerationStatusChange]);
-
-  const stageRestarters = useMemo(() => ({
-    fullReset: retryGeneration,
-    restartSections,
-    restartCinematic,
-    restartHooks,
-    restartImages,
-  }), [retryGeneration, restartSections, restartCinematic, restartHooks, restartImages]);
-
-  // Expose on window for PipelineDebugPanel access
   useEffect(() => {
     if (fitUnlocked || fitReadiness === "ready") {
       setFitUnlocked(true);
@@ -1065,7 +1009,6 @@ export function LyricFitTab({
             generationStatus={generationStatus}
             words={words}
             onRetry={undefined}
-            stageRestarters={undefined}
             onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
             onBack={handleBackToLyrics}
             onImageGenerationStatusChange={handleImageGenerationStatusChange}
