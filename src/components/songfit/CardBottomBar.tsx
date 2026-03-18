@@ -99,7 +99,7 @@ export function CardBottomBar({
               const majorityRanItBack = replay_yes > total / 2;
               const isSplit = total > 0 && replay_yes === total / 2;
               const userAgrees = votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
-              const titleLabel = trackTitle ? `"${trackTitle}"` : "IT";
+              const titleLabel = trackTitle || "IT";
 
               let verdict: string;
               let tally: string;
