@@ -34,9 +34,9 @@ import {
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import type { SongFitPost } from "./types";
-import { formatDistanceToNow } from "date-fns";
+
 import { ProfileHoverCard } from "./ProfileHoverCard";
-import { FmlyBadge } from "@/components/FmlyBadge";
+
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent } from "@/lib/engagementTracking";
@@ -283,9 +283,6 @@ export function SongFitPostCard({
   };
 
   const displayName = post.profiles?.display_name || "Anonymous";
-  const timeAgo = formatDistanceToNow(new Date(post.created_at), {
-    addSuffix: true,
-  });
 
   return (
     <div className={reelsMode ? "h-full" : "px-2 pb-3"}>
@@ -317,10 +314,10 @@ export function SongFitPostCard({
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <ProfileHoverCard userId={post.user_id}>
               <div
-                className="flex items-center gap-2.5 cursor-pointer min-w-0"
+                className="cursor-pointer shrink-0"
                 onClick={handleProfileClick}
               >
-                <div className="relative shrink-0">
+                <div className="relative">
                   <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.06]">
                     {post.profiles?.avatar_url ? (
                       <img
@@ -338,17 +335,6 @@ export function SongFitPostCard({
                     </span>
                   )}
                 </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <p className="text-[13px] font-medium leading-tight truncate text-white/60">
-                      {displayName}
-                    </p>
-                    <FmlyBadge userId={post.user_id} compact />
-                  </div>
-                  <p className="font-mono text-[9px] text-white/25 leading-tight">
-                    {timeAgo}
-                  </p>
-                </div>
               </div>
             </ProfileHoverCard>
           </div>
@@ -356,7 +342,7 @@ export function SongFitPostCard({
           {/* Card type label */}
           {(hasLyricDancePost || isSpotifyEmbed) && (
             <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400/40 shrink-0 mr-1">
-              {hasLyricDancePost ? "In Studio" : "Now Streaming"}
+              {hasLyricDancePost ? `In Studio · ${displayName}` : `Now Streaming · ${displayName}`}
             </span>
           )}
 
@@ -649,37 +635,18 @@ export function SongFitPostCard({
             <div className="flex-1" />
             {/* Bottom content with gradient scrim */}
             <div className="pointer-events-auto bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-16 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
-              <div className="flex items-center gap-2.5 mb-2">
-                <div
-                  className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
-                  onClick={handleProfileClick}
-                >
-                  <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10 shrink-0">
-                    {post.profiles?.avatar_url ? (
-                      <img
-                        src={post.profiles.avatar_url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <User size={14} className="text-white/40" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <p className="text-[13px] font-semibold text-white/90 truncate">
-                        {displayName}
-                      </p>
-                      {(post.profiles as any)?.is_verified && (
-                        <VerifiedBadge size={12} />
-                      )}
-                      <FmlyBadge userId={post.user_id} compact />
-                    </div>
-                    <p className="text-[10px] font-mono text-white/30">
-                      {timeAgo}
-                    </p>
-                  </div>
+              <div
+                className="flex items-center gap-2 mb-2 cursor-pointer"
+                onClick={handleProfileClick}
+              >
+                <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10 shrink-0">
+                  {post.profiles?.avatar_url ? (
+                    <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={14} className="text-white/40" />
+                  )}
                 </div>
+                {(post.profiles as any)?.is_verified && <VerifiedBadge size={12} />}
               </div>
 
 
