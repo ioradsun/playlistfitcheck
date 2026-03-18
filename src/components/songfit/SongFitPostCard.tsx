@@ -283,9 +283,6 @@ export function SongFitPostCard({
   };
 
   const displayName = post.profiles?.display_name || "Anonymous";
-  const timeAgo = formatDistanceToNow(new Date(post.created_at), {
-    addSuffix: true,
-  });
 
   return (
     <div className={reelsMode ? "h-full" : "px-2 pb-3"}>
