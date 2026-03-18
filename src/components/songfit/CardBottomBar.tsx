@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 
 interface CardBottomBarProps {
