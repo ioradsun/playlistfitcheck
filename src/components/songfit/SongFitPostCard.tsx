@@ -280,7 +280,7 @@ export function SongFitPostCard({
   });
 
   return (
-    <div className="px-2 pb-3">
+    <div className="px-2 pb-5">
       <div
         className="relative rounded-2xl overflow-hidden"
         style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.04)" }}
