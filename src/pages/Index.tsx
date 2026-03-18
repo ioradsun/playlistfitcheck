@@ -12,6 +12,7 @@ import type { SongFitAnalysis } from "@/components/SongFitCard";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
 import { useScrollRestore } from "@/hooks/useScrollRestore";
@@ -107,6 +108,8 @@ const Index = () => {
     Object.entries(siteCopy.tools).map(([k, v]) => [k, v.pill])
   );
   const hookfitEnabled = siteCopy.features?.tools_enabled?.hookfit !== false;
+  const isMobile = useIsMobile();
+  const reelsEnabled = siteCopy.features?.crowdfit_reels === true;
   const location = useLocation();
   const navigate = useNavigate();
   const transitionNavigate = useCallback((to: string, options?: { replace?: boolean; state?: any }) => {
@@ -123,6 +126,7 @@ const Index = () => {
   const rawTabFromPath = PATH_TO_TAB[basePath] || PATH_TO_TAB[location.pathname] || "songfit";
   const tabFromPath = !hookfitEnabled && rawTabFromPath === "hookfit" ? "songfit" : rawTabFromPath;
   const [activeTab, setActiveTabState] = useState(tabFromPath);
+  const reelsMode = isMobile && activeTab === "songfit" && reelsEnabled;
   const playlistQuota = useUsageQuota("playlist", { enabled: activeTab === "playlist" });
   
   // Sync tab when path changes (e.g. browser back/forward)

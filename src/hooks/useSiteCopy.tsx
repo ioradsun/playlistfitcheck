@@ -94,6 +94,7 @@ export interface SiteCopy {
     lyric_video?: boolean;
     hookfit_enabled?: boolean;
     hookfit_hottest_hooks?: boolean;
+    crowdfit_reels?: boolean;
   };
   signals: {
     resolving_label: string;
