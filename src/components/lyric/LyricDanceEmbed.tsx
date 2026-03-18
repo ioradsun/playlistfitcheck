@@ -1,30 +1,19 @@
 /**
- * LyricDanceEmbed — Single canonical lyric dance player.
- * Used by both ShareableLyricDance (full screen) and the CrowdFit feed (inline).
- *
- * Feed-specific behaviour is controlled by three optional props:
- *   cardState  — warm/active/cold lifecycle from the feed window
- *   regionStart / regionEnd — clip to a hook window (battle mode)
- *   onPlay     — called when user taps Listen Now (feed activates the card)
+ * LyricDanceEmbed — Feed player (inline, reels, battle).
+ * All shared player logic lives in useLyricDanceCore.
+ * This file adds: feed visibility lifecycle, cardState, eviction, battle mode.
  */
-
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Volume2, VolumeX, RotateCcw } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
-import { useLyricSections } from "@/hooks/useLyricSections";
-import { useReactionPanel } from "@/hooks/useReactionPanel";
-import { useCardVote } from "@/hooks/useCardVote";
+import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
+import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
-import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
-import { getSessionId } from "@/lib/sessionId";
-import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
+import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
-// ── Shared IntersectionObserver ────────────────────────────────────────
 type VisibilityState = "visible" | "near" | "far";
 type VisibilityListener = (v: VisibilityState) => void;
 const visibilityListeners = new Map<Element, VisibilityListener>();
@@ -34,11 +23,7 @@ function getSharedIO() {
     sharedIO = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          const v: VisibilityState = !e.isIntersecting
-            ? "far"
-            : e.intersectionRatio > 0.2
-              ? "visible"
-              : "near";
+          const v: VisibilityState = !e.isIntersecting ? "far" : e.intersectionRatio > 0.2 ? "visible" : "near";
           visibilityListeners.get(e.target)?.(v);
         }
       },
@@ -48,74 +33,17 @@ function getSharedIO() {
   return sharedIO;
 }
 
-// ── topReaction — derived from live reactionData ────────────────────
-const EMOJI_SYMBOLS: Record<string, string> = {
-  fire: "🔥",
-  dead: "💀",
-  mind_blown: "🤯",
-  emotional: "😭",
-  respect: "🙏",
-  accurate: "🎯",
-};
-
-function computeTopReaction(
-  reactionData: Record<string, { line: Record<number, number>; total: number }>,
-  lyrics: any[],
-) {
-  const lineTotals = new Map<number, number>();
-  for (const d of Object.values(reactionData)) {
-    for (const [idxStr, count] of Object.entries(d.line)) {
-      const idx = Number(idxStr);
-      lineTotals.set(idx, (lineTotals.get(idx) ?? 0) + count);
-    }
-  }
-  if (lineTotals.size === 0) return null;
-
-  let bestIdx = -1,
-    bestTotal = 0;
-  for (const [idx, total] of lineTotals.entries()) {
-    if (total > bestTotal) {
-      bestTotal = total;
-      bestIdx = idx;
-    }
-  }
-
-  let topKey: string | null = null,
-    topCount = 0;
-  for (const [key, d] of Object.entries(reactionData)) {
-    const count = d.line[bestIdx] ?? 0;
-    if (count > topCount) {
-      topCount = count;
-      topKey = key;
-    }
-  }
-
-  const symbol = topKey ? (EMOJI_SYMBOLS[topKey] ?? "🔥") : "🔥";
-  const lineText = ((lyrics as any[])[bestIdx]?.text ?? "").slice(0, 60);
-  if (!lineText || bestTotal <= 0) return null;
-  return { symbol, count: bestTotal, lineText, lineReactionCount: bestTotal };
-}
-
-// ── Props ───────────────────────────────────────────────────────────
-
 interface LyricDanceEmbedProps {
-  // Data — pass either lyricDanceId (feed fetches) or prefetchedData
   lyricDanceId: string;
   lyricDanceUrl: string;
   songTitle: string;
   artistName?: string;
   coverImageUrl?: string | null;
   prefetchedData?: LyricDanceData | null;
-
-  // Feed lifecycle — omit for fullscreen/shareable usage
-  cardState?: CardState; // warm | active | cold
-  onPlay?: () => void; // called when user taps Listen Now
-
-  // Battle clip windowing — omit for full song
+  cardState?: CardState;
+  onPlay?: () => void;
   regionStart?: number;
   regionEnd?: number;
-
-  // Display
   showExpandButton?: boolean;
   disableReactionPanel?: boolean;
   hideReactButton?: boolean;
@@ -123,12 +51,9 @@ interface LyricDanceEmbedProps {
   postId?: string;
   externalPanelOpen?: boolean;
   onExternalPanelOpenChange?: (open: boolean) => void;
-  /** Skip cover overlay and start playing immediately (muted). */
   autoPlay?: boolean;
   onOpenReactions?: () => void;
 }
-
-// ── Component ────────────────────────────────────────────────────────
 
 export function LyricDanceEmbed({
   lyricDanceId,
@@ -154,137 +79,78 @@ export function LyricDanceEmbed({
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
 
-  // Single cover state — identical to ShareableLyricDance.
-  // Battle tiles never show a cover (sub-regions of a full song).
-  // autoPlay skips the cover entirely for workspace/review embeds.
-  const [showCover, setShowCover] = useState(!isBattleMode && !autoPlay);
-  const effectiveShowCover = showCover;
-
-  const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(
-    prefetchedData ?? null,
-  );
-  const [loading, setLoading] = useState(!prefetchedData);
-  const [muted, setMuted] = useState(true);
-  const [visibility, setVisibility] = useState<VisibilityState>(
-    isFeedEmbed ? "far" : "visible",
-  );
-  const [playerEvicted, setPlayerEvicted] = useState(false);
-  const [internalPanelOpen, setInternalPanelOpen] = useState(false);
-  const isControlled = externalPanelOpen !== undefined;
-  const [commentRefreshKey, setCommentRefreshKey] = useState(0);
-  const [currentTimeSec, setCurrentTimeSec] = useState(0);
-  const [forceDemoted, setForceDemoted] = useState(false);
-
-  const { votedSide, score, note, setNote, handleVote } = useCardVote(postId ?? lyricDanceId);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const textCanvasRef = useRef<HTMLCanvasElement>(null);
-  const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const currentTimeSecRef = useRef(0);
-  const userActivatedRef = useRef(false);
-
-  const openPanel = useCallback(() => {
-    if (isControlled) {
-      onExternalPanelOpenChange?.(true);
-    } else {
-      setInternalPanelOpen(true);
-    }
-  }, [isControlled, onExternalPanelOpenChange]);
-
-  const closePanel = useCallback(() => {
-    if (isControlled) {
-      onExternalPanelOpenChange?.(false);
-    } else {
-      setInternalPanelOpen(false);
-    }
-  }, [isControlled, onExternalPanelOpenChange]);
-
-  // ── Data fetch ─────────────────────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!lyricDanceId) return;
-    if (prefetchedData) {
-      setFetchedData(prefetchedData);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    supabase
-      .from("shareable_lyric_dances" as any)
-      .select(LYRIC_DANCE_COLUMNS)
-      .eq("id", lyricDanceId)
-      .maybeSingle()
-      .then(({ data: row, error }) => {
-        if (cancelled) return;
-        if (error || !row) {
-          setLoading(false);
-          return;
-        }
-        setFetchedData(row as unknown as LyricDanceData);
-        setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [lyricDanceId, prefetchedData]);
-
-  const preloadedCoverRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const url = fetchedData?.section_images?.[0] ?? coverImageUrl;
-    if (!url || url === preloadedCoverRef.current) return;
-    preloadedCoverRef.current = url;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = url;
-  }, [fetchedData?.section_images, coverImageUrl]);
-
-  // ── Player data (apply region constraints) ─────────────────────────
-  const playerData = useMemo(() => {
-    if (playerEvicted) return null;
-    if (!fetchedData) return null;
-    if (regionStart == null && regionEnd == null) return fetchedData;
-    return { ...fetchedData, region_start: regionStart, region_end: regionEnd };
-  }, [fetchedData, regionStart, regionEnd, playerEvicted]);
-
-  // ── Player lifecycle ───────────────────────────────────────────────
-  const { player, playerReady, data } = useLyricDancePlayer(
-    playerData,
+  const {
     canvasRef,
     textCanvasRef,
     containerRef,
-    { bootMode: "minimal" },
-  );
+    player,
+    playerReady,
+    data,
+    fetchedData,
+    muted,
+    setMuted,
+    showCover,
+    setShowCover,
+    currentTimeSec,
+    reactionPanelOpen,
+    openPanel,
+    closePanel,
+    handlePanelClose,
+    reactionData,
+    setReactionData,
+    durationSec,
+    lyricSections,
+    audioSections,
+    activeLine,
+    palette,
+    votedSide,
+    score,
+    note,
+    setNote,
+    handleVote,
+    toggleMute,
+    handleReplay,
+    handleListenNow,
+    handlePauseForInput,
+    handleResumeAfterInput,
+    handleCommentFromBar,
+    topReaction,
+    isWaiting,
+    commentRefreshKey,
+  } = useLyricDanceCore({
+    lyricDanceId,
+    prefetchedData,
+    postId,
+    autoPlay,
+    onPlay,
+  });
 
+  const [visibility, setVisibility] = useState<VisibilityState>(isFeedEmbed ? "far" : "visible");
+  const [playerEvicted, setPlayerEvicted] = useState(false);
+  const [forceDemoted, setForceDemoted] = useState(false);
+  const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userActivatedRef = useRef(false);
+
+  const isControlled = externalPanelOpen !== undefined;
   const handleOpenReactions = useCallback(() => {
     if (hideReactButton) {
       onOpenReactions?.();
       return;
     }
-    openPanel();
+    if (isControlled) onExternalPanelOpenChange?.(true);
+    else openPanel();
     if (showCover) {
       userActivatedRef.current = true;
-      setShowCover(false);
       onPlay?.();
     }
-    if (player) {
-      player.seek(0);
-      player.setMuted(false);
-      player.play();
-      setMuted(false);
-    }
-  }, [hideReactButton, onOpenReactions, openPanel, onPlay, player, showCover]);
+  }, [hideReactButton, onOpenReactions, isControlled, onExternalPanelOpenChange, openPanel, showCover, onPlay]);
 
   useEffect(() => {
-    if (!player || !playerReady) return;
-    // Battle tiles have no bottom bar of their own (BattleEmbed owns that)
-    player.setTextVerticalBias(isBattleMode ? 0 : 60);
-  }, [player, playerReady, isBattleMode]);
+    if (!isControlled) return;
+    if (externalPanelOpen) openPanel();
+    else closePanel();
+  }, [isControlled, externalPanelOpen, openPanel, closePanel]);
 
-  // ── Scroll visibility (feed only) ─────────────────────────────────
   useEffect(() => {
     if (!isFeedEmbed) return;
     const el = containerRef.current;
@@ -295,33 +161,21 @@ export function LyricDanceEmbed({
       visibilityListeners.delete(el);
       sharedIO?.unobserve(el);
     };
-  }, [isFeedEmbed]);
+  }, [isFeedEmbed, containerRef]);
 
   useEffect(() => {
-    if (!player || !playerReady) return;
-    if (!isFeedEmbed) return;
-    // "near" fires ~180px before the card enters the viewport (rootMargin on shared IO).
-    // Start the bake now so it's ready or nearly ready when the card becomes visible.
-    if (visibility === "near" || visibility === "visible") {
-      player.scheduleFullModeUpgrade();
-    }
+    if (!player || !playerReady || !isFeedEmbed) return;
+    if (visibility === "near" || visibility === "visible") player.scheduleFullModeUpgrade();
   }, [player, playerReady, visibility, isFeedEmbed]);
 
   useEffect(() => {
-    if (!player || !playerReady) return;
-    if (isFeedEmbed) return; // feed handled by visibility effect above
-    // Non-feed (FitTab, export preview, etc): one player, already in view.
-    // Kick the bake immediately so animation is ready before Listen Now.
+    if (!player || !playerReady || isFeedEmbed) return;
     player.scheduleFullModeUpgrade();
   }, [player, playerReady, isFeedEmbed]);
 
-
-  // ── Eviction when scrolled far away (feed only) ────────────────────
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) return;
-
     if (visibility === "far") {
-      // Nothing to evict if player hasn't initialized yet — skip timer
       if (!player && !playerReady) return;
       if (farTimerRef.current) return;
       farTimerRef.current = setTimeout(() => {
@@ -330,9 +184,6 @@ export function LyricDanceEmbed({
       }, 3000);
       return;
     }
-    // Card is visible/near — always cancel pending eviction and un-evict.
-    // Must NOT guard on player/playerReady here: after eviction the player is
-    // null and we still need setPlayerEvicted(false) to reinitialize it.
     if (farTimerRef.current) {
       clearTimeout(farTimerRef.current);
       farTimerRef.current = null;
@@ -340,7 +191,6 @@ export function LyricDanceEmbed({
     setPlayerEvicted((prev) => (prev ? false : prev));
   }, [visibility, isFeedEmbed, isBattleMode, player, playerReady]);
 
-  // ── Media deactivate event (feed only) ────────────────────────────
   useEffect(() => {
     if (!isFeedEmbed || !lyricDanceId) return;
     const handler = (e: Event) => {
@@ -350,19 +200,12 @@ export function LyricDanceEmbed({
       setForceDemoted(true);
     };
     window.addEventListener("crowdfit:media-deactivate", handler);
-    return () =>
-      window.removeEventListener("crowdfit:media-deactivate", handler);
+    return () => window.removeEventListener("crowdfit:media-deactivate", handler);
   }, [isFeedEmbed, lyricDanceId]);
 
   useEffect(() => {
     if (cardState === "active") setForceDemoted(false);
   }, [cardState]);
-
-  // ── Reset cover when card scrolls out of view ─────────────────────
-  // When the card goes "far" (fully off-screen), restore the cover so it's
-  // always fresh on scroll-back — animation runs behind it immediately.
-  // Also fire media-deactivate so the parent resets cardState → audio mutes.
-  
 
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) return;
@@ -370,21 +213,14 @@ export function LyricDanceEmbed({
       setShowCover(true);
       userActivatedRef.current = false;
       if (lyricDanceId) {
-        window.dispatchEvent(
-          new CustomEvent("crowdfit:media-deactivate", {
-            detail: { cardId: lyricDanceId },
-          }),
-        );
+        window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", { detail: { cardId: lyricDanceId } }));
       }
     }
-  }, [visibility, isFeedEmbed, isBattleMode, lyricDanceId]);
+  }, [visibility, isFeedEmbed, isBattleMode, lyricDanceId, setShowCover]);
 
-  // ── Play/pause/mute logic ──────────────────────────────────────────
   useEffect(() => {
     if (!player || !playerReady) return;
-
     if (isBattleMode) {
-      // Battle: active side plays, inactive side renders silently
       if (cardState === "active") {
         player.play();
         player.setMuted(false);
@@ -396,302 +232,31 @@ export function LyricDanceEmbed({
       }
       return;
     }
-
-    if (!isFeedEmbed) {
-      // Fullscreen: player always runs, cover controls mute
-      return;
-    }
-
-    // Feed embed:
-    // "near" = partially in viewport — keep playing muted so animation is live when scrolled in.
-    // Only fully pause when "far" (off-screen entirely).
-    // When cover is showing, always mute — audio only starts after "Listen Now".
+    if (!isFeedEmbed) return;
     const coverUp = showCover;
     const isUserEngaged = cardState === "active" || userActivatedRef.current;
-    const shouldUnmuted =
-      !coverUp &&
-      isUserEngaged &&
-      visibility === "visible" &&
-      !forceDemoted;
-    const shouldMuted =
-      !coverUp &&
-      !isUserEngaged &&
-      (visibility === "visible" || visibility === "near" || visibility === "far");
-
+    const shouldUnmuted = !coverUp && isUserEngaged && visibility === "visible" && !forceDemoted;
+    const shouldMuted = !coverUp && !isUserEngaged;
     if (shouldUnmuted) {
       player.play();
       player.setMuted(false);
       setMuted(false);
     } else if (shouldMuted || coverUp) {
-      // Keep animation running (muted) — even when "far", let the eviction timer
-      // handle cleanup. This prevents animation freeze during scroll momentum.
       player.play();
       player.setMuted(true);
       setMuted(true);
     }
-  }, [
-    player,
-    playerReady,
-    cardState,
-    visibility,
-    forceDemoted,
-    isFeedEmbed,
-    isBattleMode,
-    showCover,
-  ]);
-
-  // ── Reactions fetch ────────────────────────────────────────────────
-  useEffect(() => {
-    if (!data?.id) return;
-    supabase
-      .from("lyric_dance_reactions" as any)
-      .select("emoji, line_index")
-      .eq("dance_id", data.id)
-      .then(({ data: rows }) => {
-        if (!rows) return;
-        const agg: Record<
-          string,
-          { line: Record<number, number>; total: number }
-        > = {};
-        for (const row of rows as any[]) {
-          const { emoji, line_index } = row;
-          if (!agg[emoji]) agg[emoji] = { line: {}, total: 0 };
-          agg[emoji].total++;
-          if (line_index != null)
-            agg[emoji].line[line_index] =
-              (agg[emoji].line[line_index] ?? 0) + 1;
-        }
-        setReactionData(agg);
-      });
-  }, [data?.id]);
-
-  // ── Realtime reactions ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!data?.id) return;
-    const channel = supabase
-      .channel(`reactions-embed-${data.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "lyric_dance_reactions",
-          filter: `dance_id=eq.${data.id}`,
-        },
-        (payload: any) => {
-          const { emoji, line_index } = payload.new;
-          setReactionData((prev) => {
-            const next = { ...prev };
-            if (!next[emoji]) next[emoji] = { line: {}, total: 0 };
-            next[emoji] = {
-              ...next[emoji],
-              total: next[emoji].total + 1,
-              line: {
-                ...next[emoji].line,
-                ...(line_index != null
-                  ? { [line_index]: (next[emoji].line[line_index] ?? 0) + 1 }
-                  : {}),
-              },
-            };
-            return next;
-          });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [data?.id]);
-
-  // ── Current time tracking ─────────────────────────────────────────
-  useEffect(() => {
-    if (!player) return;
-    const audio = player.audio;
-    let rafId = 0;
-    const tick = () => {
-      const timeSec = audio.currentTime;
-      if (Math.abs(timeSec - currentTimeSecRef.current) > 0.05) {
-        currentTimeSecRef.current = timeSec;
-        setCurrentTimeSec(timeSec);
-      }
-      if (!audio.paused && !document.hidden) {
-        rafId = requestAnimationFrame(tick);
-      }
-    };
-    const onPlay = () => {
-      if (!rafId) rafId = requestAnimationFrame(tick);
-    };
-    const onPause = () => {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-    };
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    if (!audio.paused) onPlay();
-    return () => {
-      cancelAnimationFrame(rafId);
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-    };
-  }, [player]);
-
-  // ── Derived values ────────────────────────────────────────────────
-  const durationSec = useMemo(() => {
-    const lines = data?.lyrics ?? [];
-    if (!lines.length) return 0;
-    return (lines[lines.length - 1] as any).end ?? 0;
-  }, [data?.lyrics]);
-
-  const lyricSections = useLyricSections(
-    data?.words ?? null,
-    data?.beat_grid ?? null,
-    data?.cinematic_direction ?? null,
-    durationSec,
-  );
-
-  const {
-    reactionPanelOpen: panelFromHook,
-    setReactionPanelOpen,
-    reactionData,
-    setReactionData,
-    activeLine,
-    audioSections,
-    palette,
-    handlePanelClose,
-  } = useReactionPanel({
-    player,
-    lyricSections,
-    currentTimeSec,
-    data,
-    durationSec,
-    onPanelClose: closePanel,
-  });
-
-
-  const handleCommentFromBar = useCallback(async () => {
-    const text = note.trim();
-    if (!text) return;
-    const danceId = fetchedData?.id;
-    if (!danceId) return;
-    try {
-      await supabase
-        .from("lyric_dance_comments" as any)
-        .insert({
-          dance_id: danceId,
-          text,
-          session_id: getSessionId(),
-          line_index: activeLineRef.current?.lineIndex ?? null,
-          parent_comment_id: null,
-        });
-    } catch {
-      // silent
-    }
-    setNote("");
-    setCommentRefreshKey((k) => k + 1);
-  }, [note, fetchedData?.id, setNote]);
+  }, [player, playerReady, cardState, visibility, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted]);
 
   useEffect(() => {
-    if (isControlled) {
-      setReactionPanelOpen(Boolean(externalPanelOpen));
-      return;
-    }
-    setReactionPanelOpen(internalPanelOpen);
-  }, [isControlled, externalPanelOpen, internalPanelOpen, setReactionPanelOpen]);
+    if (!player || !playerReady) return;
+    player.setTextVerticalBias(isBattleMode ? 0 : 60);
+  }, [player, playerReady, isBattleMode]);
 
-  const reactionPanelOpen = panelFromHook;
+  const effectiveShowCover = showCover;
+  void artistName;
+  void playerEvicted;
 
-  useEffect(() => {
-    if (!player) return;
-    player.setReactionData(reactionData);
-  }, [player, reactionData]);
-
-  useEffect(() => {
-    if (!player) return;
-    player.setEmojiStreamEnabled(!reactionPanelOpen && !effectiveShowCover);
-  }, [player, reactionPanelOpen, effectiveShowCover]);
-
-  const activeLineRef = useRef(activeLine);
-  activeLineRef.current = activeLine;
-
-  const topReaction = useMemo(
-    () => computeTopReaction(reactionData, data?.lyrics ?? []),
-    [reactionData, data?.lyrics],
-  );
-
-  const isWaiting = loading || !fetchedData;
-
-  const toggleMute = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (!player) return;
-      const next = !muted;
-      player.setMuted(next);
-      setMuted(next);
-    },
-    [muted, player],
-  );
-
-  const handleReplay = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (!player) return;
-      userActivatedRef.current = true;
-      player.setMuted(false);
-      player.seek(0);
-      player.play();
-      setMuted(false);
-    },
-    [player],
-  );
-
-  const handlePauseForInput = useCallback(() => {
-    if (!player) return;
-    player.pause();
-  }, [player]);
-
-  const handleResumeAfterInput = useCallback(() => {
-    if (!player) return;
-    player.play();
-  }, [player]);
-
-
-  // ── Progress tracking for playbar ─────────────────────────────────
-  const [progress, setProgress] = useState(0);
-  useEffect(() => {
-    if (!player || !playerReady || !data?.lyrics) return;
-    const audio = player.audio;
-    const lines = data.lyrics;
-    const songStart = Math.max(0, (lines[0] as any).start - 0.5);
-    const songEnd = (lines[lines.length - 1] as any).end + 1;
-    const dur = songEnd - songStart;
-    let rafId = 0;
-    let lastP = 0;
-    const tick = () => {
-      const p = Math.max(0, Math.min(1, (audio.currentTime - songStart) / dur));
-      if (Math.abs(p - lastP) > 0.005) {
-        lastP = p;
-        setProgress(p);
-      }
-      if (!audio.paused) rafId = requestAnimationFrame(tick);
-    };
-    const onPlay = () => {
-      if (!rafId) rafId = requestAnimationFrame(tick);
-    };
-    const onPause = () => {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-    };
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    if (!audio.paused) onPlay();
-    return () => {
-      cancelAnimationFrame(rafId);
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-    };
-  }, [player, playerReady, data?.lyrics]);
-
-  // ── Render ────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
@@ -701,22 +266,12 @@ export function LyricDanceEmbed({
         if (!effectiveShowCover && !isWaiting) toggleMute(e);
       }}
     >
-      {/* Canvas — always rendered, player controls content */}
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-      <canvas
-        ref={textCanvasRef}
-        className="absolute inset-0 w-full h-full pointer-events-none"
-      />
+      <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-      {/* Cover overlay */}
       <AnimatePresence>
         {(effectiveShowCover || isWaiting) && (
-          <motion.div
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            className="absolute inset-0"
-          >
+          <motion.div initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: "easeOut" }} className="absolute inset-0">
             <LyricDanceCover
               songName={songTitle}
               waiting={isWaiting}
@@ -724,44 +279,25 @@ export function LyricDanceEmbed({
               hideBackground={playerReady}
               badge={null}
               onListen={(e) => {
-                e.stopPropagation();
                 userActivatedRef.current = true;
-                setShowCover(false);
-                onPlay?.();
-                if (player) {
-                  player.seek(0);
-                  player.setMuted(false);
-                  player.play();
-                }
-                setMuted(false);
+                handleListenNow(e);
               }}
             />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Top bar — persistent song + transport controls */}
       {playerReady && !reactionPanelOpen && (
-        <div
-          className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-end p-2"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-end p-2" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
-            <button onClick={toggleMute} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
+            <button onClick={toggleMute} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? "Unmute" : "Mute"}>
               {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
             </button>
             <button onClick={handleReplay} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
               <RotateCcw size={14} />
             </button>
             {showExpandButton && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.open(lyricDanceUrl, "_blank");
-                }}
-                className="p-1 text-white/40 hover:text-white/70 transition-colors"
-                aria-label="Expand"
-              >
+              <button onClick={(e) => { e.stopPropagation(); window.open(lyricDanceUrl, "_blank"); }} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label="Expand">
                 <Maximize2 size={14} />
               </button>
             )}
@@ -769,41 +305,15 @@ export function LyricDanceEmbed({
         </div>
       )}
 
-      {/* Bottom bar — progress + now-playing chip + React button */}
       {!reactionPanelOpen && !reelsMode && (
-        <div
-          className={`absolute bottom-0 left-0 right-0 ${reactionPanelOpen ? "z-[500]" : "z-[300]"}`}
-          style={{ background: "#0a0a0a" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {!effectiveShowCover && !isWaiting && (
-            <div
-              className="w-full h-1 cursor-pointer"
-              style={{ background: "rgba(255,255,255,0.05)" }}
-              onClick={(e) => {
-                if (!player || !data?.lyrics) return;
-                const rect = e.currentTarget.getBoundingClientRect();
-                const ratio = Math.max(
-                  0,
-                  Math.min(1, (e.clientX - rect.left) / rect.width),
-                );
-                const lines = data.lyrics;
-                const start = Math.max(0, (lines[0] as any).start - 0.5);
-                const end = (lines[lines.length - 1] as any).end + 1;
-                player.seek(start + ratio * (end - start));
-              }}
-            >
-              <div
-                className="h-full transition-none"
-                style={{
-                  width: `${progress * 100}%`,
-                  background: palette[1] ?? "rgba(255,255,255,0.35)",
-                  opacity: 0.5,
-                }}
-              />
-            </div>
+        <div className="absolute bottom-0 left-0 right-0 z-[300]" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
+          {!effectiveShowCover && !isWaiting && data && (
+            <LyricDanceProgressBar
+              player={player}
+              data={data}
+              palette={palette}
+            />
           )}
-
           <CardBottomBar
             variant="embedded"
             votedSide={votedSide}
@@ -822,7 +332,6 @@ export function LyricDanceEmbed({
         </div>
       )}
 
-      {/* Reaction panel */}
       {!disableReactionPanel && (
         <ReactionPanel
           displayMode={reelsMode ? "fullscreen" : "embedded"}
