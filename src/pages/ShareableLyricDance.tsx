@@ -12,6 +12,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
@@ -33,7 +34,7 @@ import type { CinematicDirection } from "@/types/CinematicDirection";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
-interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
+interface ProfileInfo { display_name: string | null; avatar_url: string | null; is_verified: boolean; }
 
 // ─── Progress Bar ───────────────────────────────────────────────────
 
@@ -265,7 +266,7 @@ export default function ShareableLyricDance() {
         // ── PROFILE: fire immediately in parallel — don't wait for direction ──
         // Was inside .finally() of direction chain → avatar arrived AFTER cover
         // was already showing, causing a letter→avatar pop.
-        supabase.from("profiles").select("display_name, avatar_url").eq("id", d.user_id).maybeSingle()
+        supabase.from("profiles").select("display_name, avatar_url, is_verified").eq("id", d.user_id).maybeSingle()
           .then(({ data: pData }) => { if (pData) setProfile(pData as ProfileInfo); }, () => {});
 
         // Phase 2: generate section images or cinematic direction if missing.
@@ -668,13 +669,20 @@ export default function ShareableLyricDance() {
               className="flex items-center gap-2.5 cursor-pointer"
               onClick={() => data?.user_id && navigate(`/u/${data.user_id}`)}
             >
-              {coverAvatarUrl ? (
-                <img src={coverAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                  <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
-                </div>
-              )}
+              <div className="relative shrink-0">
+                {coverAvatarUrl ? (
+                  <img src={coverAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                    <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
+                  </div>
+                )}
+                {profile?.is_verified && (
+                  <span className="absolute -bottom-0.5 -right-0.5">
+                    <VerifiedBadge size={10} />
+                  </span>
+                )}
+              </div>
               <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400">
                 {coverArtist ? `In Studio · ${coverArtist}` : "In Studio"}
               </span>

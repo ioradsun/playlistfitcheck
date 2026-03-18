@@ -632,13 +632,20 @@ export function SongFitPostCard({
             <div className="pointer-events-auto bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-16 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
               <div className="flex items-center gap-2 mb-2">
                 <div
-                  className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10 shrink-0 cursor-pointer"
+                  className="relative h-9 w-9 shrink-0 cursor-pointer"
                   onClick={handleProfileClick}
                 >
-                  {post.profiles?.avatar_url ? (
-                    <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <User size={14} className="text-white/40" />
+                  <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
+                    {post.profiles?.avatar_url ? (
+                      <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={14} className="text-white/40" />
+                    )}
+                  </div>
+                  {(post.profiles as any)?.is_verified && (
+                    <span className="absolute -bottom-0.5 -right-0.5">
+                      <VerifiedBadge size={10} />
+                    </span>
                   )}
                 </div>
                 {(hasLyricDancePost || isSpotifyEmbed) && (
