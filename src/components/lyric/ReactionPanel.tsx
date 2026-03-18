@@ -113,6 +113,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
   const userTookControlRef = useRef(false);
   const [pinnedLineIndex, setPinnedLineIndex] = useState<number | null>(null);
   const pinnedLineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastActiveLineRef = useRef<number | null>(null);
 
   const sectionMeta = useMemo(() => {
     const canonical = sections
