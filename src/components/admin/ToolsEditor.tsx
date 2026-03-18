@@ -34,7 +34,7 @@ interface FeaturesState {
   growth_quotas: { guest: number; limited: number };
   tools_enabled: Record<string, boolean>;
   tools_order: string[];
-  crowdfit_mode: "reactions" | "hook_review";
+  
   lyric_transcription_model: TranscriptionModel;
   lyric_analysis_model: AnalysisModel;
   lyric_video: boolean;
@@ -49,7 +49,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   growth_quotas: { guest: 5, limited: 10 },
   tools_enabled: Object.fromEntries(ALL_TOOLS.map(t => [t.key, true])),
   tools_order: DEFAULT_ORDER,
-  crowdfit_mode: "reactions",
+  
   lyric_transcription_model: "scribe",
   lyric_analysis_model: "google/gemini-3-flash-preview",
   lyric_video: false,
@@ -177,7 +177,7 @@ export function ToolsEditor() {
           growth_quotas: f.growth_quotas ?? { guest: 5, limited: 10 },
           tools_enabled,
           tools_order: merged,
-          crowdfit_mode: f.crowdfit_mode ?? "reactions",
+          
           lyric_transcription_model: (["scribe", "gemini", "assemblyai"].includes(f.lyric_transcription_model)) ? f.lyric_transcription_model : "scribe",
           lyric_analysis_model: f.lyric_analysis_model ?? f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
           lyric_video: f.lyric_video ?? false,
@@ -289,20 +289,6 @@ export function ToolsEditor() {
     }
   };
 
-  const setCrowdfitMode = async (mode: "reactions" | "hook_review") => {
-    const prev = features.crowdfit_mode;
-    setFeatures(f => ({ ...f, crowdfit_mode: mode }));
-    setSavingKey("crowdfit_mode");
-    try {
-      await patchFeatures({ crowdfit_mode: mode });
-      toast.success(mode === "hook_review" ? "Hook Review mode enabled" : "Standard reactions enabled");
-    } catch {
-      setFeatures(f => ({ ...f, crowdfit_mode: prev }));
-      toast.error("Failed to update");
-    } finally {
-      setSavingKey(null);
-    }
-  };
 
   const saveQuotas = async () => {
     setSavingQuotas(true);
@@ -369,29 +355,6 @@ export function ToolsEditor() {
         </Reorder.Group>
       </div>
 
-      {/* ── CrowdFit Mode ── */}
-      <div className="glass-card rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <Target size={14} className="text-primary" />
-          <span className="text-sm font-mono font-medium">CrowdFit Mode</span>
-        </div>
-        <div className="divide-y divide-border">
-          <RadioOption
-            active={features.crowdfit_mode === "reactions" || !features.crowdfit_mode}
-            disabled={savingKey === "crowdfit_mode"}
-            onClick={() => setCrowdfitMode("reactions")}
-            title="Standard reactions"
-            desc="🔥 fire, 💬 comments, share, bookmark"
-          />
-          <RadioOption
-            active={features.crowdfit_mode === "hook_review"}
-            disabled={savingKey === "crowdfit_mode"}
-            onClick={() => setCrowdfitMode("hook_review")}
-            title="Hook Review"
-            desc="Structured 2-tap panel — did the hook land?"
-          />
-        </div>
-      </div>
 
       {/* ── LyricFit Pipeline Config ── */}
       <div className="glass-card rounded-xl overflow-hidden">

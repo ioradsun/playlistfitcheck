@@ -91,12 +91,10 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
     story_link: c.sidebar.story_link,
     tools_order: c.features?.tools_order,
     tools_enabled: c.features?.tools_enabled,
-    crowdfit_mode: c.features?.crowdfit_mode,
     toolLabels: Object.fromEntries(
       Object.entries(c.tools).map(([k, v]) => [k, v.label])
     ),
   }));
-  const isHookMode = sidebarCopy.crowdfit_mode === "hook_review";
   const { user, loading: authLoading, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();

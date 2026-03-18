@@ -58,7 +58,7 @@ const PublicProfile = () => {
   const location = useLocation();
   const { features } = useSiteCopy();
   const fromMenu = !!(location.state as any)?.fromMenu;
-  const isHookMode = features?.crowdfit_mode === "hook_review";
+  
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<SongFitPost[]>([]);
@@ -390,7 +390,7 @@ const PublicProfile = () => {
 
         {/* Competitive Summary */}
         {submissions.length > 0 && (
-          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${bestPeakRank ? (isHookMode ? 4 : 5) : (isHookMode ? 3 : 4)}, minmax(0, 1fr))` }}>
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${bestPeakRank ? 4 : 3}, minmax(0, 1fr))` }}>
             {bestPeakRank && (
               <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
                 <Trophy size={14} className="mx-auto mb-1 text-primary" />
@@ -403,38 +403,16 @@ const PublicProfile = () => {
               <p className="text-base font-bold">{submissions.length}</p>
               <p className="text-[10px] text-muted-foreground">Songs</p>
             </div>
-            {isHookMode ? (
-              <>
-                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-                  <Zap size={14} className="mx-auto mb-1 text-primary" />
-                  <p className="text-base font-bold">{totalReviews}</p>
-                  <p className="text-[10px] text-muted-foreground">Reviews</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-                  <BarChart2 size={14} className="mx-auto mb-1 text-primary" />
-                  <p className="text-base font-bold">{avgReplayPct}%</p>
-                  <p className="text-[10px] text-muted-foreground">Avg Replay</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-                  <Heart size={14} className="mx-auto mb-1 text-primary" />
-                  <p className="text-base font-bold">{totalLikes}</p>
-                  <p className="text-[10px] text-muted-foreground">Likes</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-                  <MessageCircle size={14} className="mx-auto mb-1 text-primary" />
-                  <p className="text-base font-bold">{totalComments}</p>
-                  <p className="text-[10px] text-muted-foreground">Comments</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-                  <Bookmark size={14} className="mx-auto mb-1 text-primary" />
-                  <p className="text-base font-bold">{totalSaves}</p>
-                  <p className="text-[10px] text-muted-foreground">Saves</p>
-                </div>
-              </>
-            )}
+            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
+              <Zap size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{totalReviews}</p>
+              <p className="text-[10px] text-muted-foreground">Reviews</p>
+            </div>
+            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
+              <BarChart2 size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{avgReplayPct}%</p>
+              <p className="text-[10px] text-muted-foreground">Avg Replay</p>
+            </div>
           </div>
         )}
 
@@ -496,38 +474,24 @@ const PublicProfile = () => {
                           <p className="text-sm font-medium truncate">{s.track_title}</p>
                           <div className="flex items-center gap-2.5 mt-0.5">
                             <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
-                            {isHookMode ? (
-                              reviewSummaries[s.id] ? (
-                                <>
-                                  <span className="text-[10px] text-muted-foreground font-mono">
-                                    <span className="text-foreground font-semibold">{reviewSummaries[s.id].topRatingPct}%</span> {reviewSummaries[s.id].topRatingLabel}
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground/40">·</span>
-                                  <span className="text-[10px] text-muted-foreground font-mono">
-                                    <span className="text-foreground font-semibold">{reviewSummaries[s.id].replayPct}%</span> replay
-                                  </span>
-                                  <button
-                                    onClick={e => { e.stopPropagation(); setReviewSheetPostId(s.id); }}
-                                    className="text-[10px] text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
-                                  >
-                                    {reviewSummaries[s.id].total} reviews
-                                  </button>
-                                </>
-                              ) : (
-                                <span className="text-[10px] text-muted-foreground/50">no reviews yet</span>
-                              )
-                            ) : (
+                            {reviewSummaries[s.id] ? (
                               <>
-                                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                  <Heart size={9} /> {s.likes_count ?? 0}
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  <span className="text-foreground font-semibold">{reviewSummaries[s.id].topRatingPct}%</span> {reviewSummaries[s.id].topRatingLabel}
                                 </span>
-                                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                  <MessageCircle size={9} /> {s.comments_count ?? 0}
+                                <span className="text-[10px] text-muted-foreground/40">·</span>
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  <span className="text-foreground font-semibold">{reviewSummaries[s.id].replayPct}%</span> replay
                                 </span>
-                                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                  <Bookmark size={9} /> {saveCounts[s.id] ?? 0}
-                                </span>
+                                <button
+                                  onClick={e => { e.stopPropagation(); setReviewSheetPostId(s.id); }}
+                                  className="text-[10px] text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
+                                >
+                                  {reviewSummaries[s.id].total} reviews
+                                </button>
                               </>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground/50">no reviews yet</span>
                             )}
                           </div>
                         </div>
