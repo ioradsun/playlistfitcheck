@@ -3,6 +3,7 @@ import type { SongFitPost } from "./types";
 
 const FEED_CARD_MIN_HEIGHT = 530;
 const WINDOW_RADIUS = 4;
+const REELS_WINDOW_RADIUS = 1;
 
 type WindowedPost = { post: SongFitPost; shouldRender: boolean };
 
