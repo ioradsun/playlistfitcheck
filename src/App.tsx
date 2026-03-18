@@ -65,6 +65,28 @@ const HookEmbedFallback = () => (
   </div>
 );
 
+/** Skeleton fallback for lyric dance — single fullscreen player */
+const LyricDanceFallback = () => (
+  <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col z-50">
+    {/* Single canvas area */}
+    <div className="flex-1 relative bg-white/[0.02] animate-pulse">
+      {/* Centered song title + button placeholder */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
+        <div className="h-2 w-32 rounded bg-white/[0.06] animate-pulse" />
+        <div className="h-10 w-36 rounded-lg bg-white/[0.04] animate-pulse" />
+      </div>
+    </div>
+    {/* Progress bar */}
+    <div className="h-1 w-full bg-white/[0.04]" />
+    {/* Bottom bar */}
+    <div className="h-12 flex items-center justify-center gap-4 px-4">
+      <div className="flex-1 h-3 rounded bg-white/[0.04] animate-pulse" />
+      <div className="w-px h-6 bg-white/[0.06]" />
+      <div className="w-12 h-3 rounded bg-white/[0.04] animate-pulse" />
+    </div>
+  </div>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="tfm-theme">
@@ -75,7 +97,7 @@ const App = () => (
           <Routes>
             {/* ── Lyric Dance: lightweight path ── */}
             <Route path="/:artistSlug/:songSlug/lyric-dance" element={
-              <Suspense fallback={<HookEmbedFallback />}><ShareableLyricDance /></Suspense>
+              <Suspense fallback={<LyricDanceFallback />}><ShareableLyricDance /></Suspense>
             } />
             <Route path="/artist/:username/claim-page" element={<ArtistClaimPage />} />
             <Route path="/create" element={<CreateArtistPage />} />
