@@ -58,7 +58,7 @@ const PublicProfile = () => {
   const location = useLocation();
   const { features } = useSiteCopy();
   const fromMenu = !!(location.state as any)?.fromMenu;
-  const isHookMode = features?.crowdfit_mode === "hook_review";
+  
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<SongFitPost[]>([]);
