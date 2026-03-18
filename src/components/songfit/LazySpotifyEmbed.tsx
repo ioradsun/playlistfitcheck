@@ -108,11 +108,6 @@ function LazySpotifyEmbedInner({
               <p className="text-sm font-bold text-white drop-shadow-md truncate">
                 {trackTitle}
               </p>
-              {artistName && (
-                <p className="text-xs text-white/70 drop-shadow-sm truncate">
-                  {artistName}
-                </p>
-              )}
             </div>
           )}
         </>
