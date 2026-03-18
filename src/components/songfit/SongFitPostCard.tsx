@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { cn } from "@/lib/utils";
 import {
   MessageCircle,
@@ -65,6 +66,7 @@ interface Props {
   cardState: CardState;
   reelsMode?: boolean;
   isFirst?: boolean;
+  lyricDanceData?: LyricDanceData | null;
 }
 
 export function SongFitPostCard({
@@ -78,6 +80,7 @@ export function SongFitPostCard({
   cardState,
   reelsMode = false,
   isFirst = false,
+  lyricDanceData,
 }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
@@ -399,6 +402,7 @@ export function SongFitPostCard({
                 externalPanelOpen={panelOpen}
                 onExternalPanelOpenChange={setPanelOpen}
                 onOpenReactions={() => setPanelOpen(true)}
+                prefetchedData={lyricDanceData ?? null}
               />
             </div>
           ) : post.lyric_dance_url &&

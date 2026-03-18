@@ -28,6 +28,8 @@ import { logImpression } from "@/lib/engagementTracking";
 import { RealtimeFeedHubProvider } from "./RealtimeFeedHub";
 import { consumeFeedPrefetch } from "@/lib/prefetch";
 import { cn } from "@/lib/utils";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
@@ -62,6 +64,7 @@ function MeasuredFeedCard({
   post,
   onHeight,
   reelsMode = false,
+  lyricDanceData,
   ...props
 }: {
   post: SongFitPost;
@@ -79,6 +82,7 @@ function MeasuredFeedCard({
   };
   reelsMode?: boolean;
   isFirst?: boolean;
+  lyricDanceData?: LyricDanceData | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const { state } = useCardState(post.id);
@@ -100,6 +104,7 @@ function MeasuredFeedCard({
         post={post}
         cardState={state}
         reelsMode={reelsMode}
+        lyricDanceData={lyricDanceData}
         {...props}
       />
     </div>
@@ -120,6 +125,7 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   loadPrevious,
   onCenterChange,
   reelsMode = false,
+  lyricDataMap,
 }: {
   posts: SongFitPost[];
   feedView: FeedView;
@@ -143,6 +149,7 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   onCenterChange: (idx: number) => void;
   reelsMode?: boolean;
   isFirst?: boolean;
+  lyricDataMap: Map<string, LyricDanceData>;
 }) {
   const lifecycle = useContext(CardLifecycleContext);
   const prevMapRef = useRef(new Map<string, boolean>());
@@ -213,6 +220,7 @@ const _WindowedFeedList = memo(function WindowedFeedList({
             }
             reelsMode={reelsMode}
             isFirst={idx === 0}
+            lyricDanceData={post.lyric_dance_id ? lyricDataMap.get(post.lyric_dance_id) ?? null : null}
           />
         ) : (
           <div
@@ -272,6 +280,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const [newestCreatedAt, setNewestCreatedAt] = useState<string | null>(null);
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null);
   const [hasTrimmedNewer, setHasTrimmedNewer] = useState(false);
+  const [lyricDataMap, setLyricDataMap] = useState<Map<string, LyricDanceData>>(new Map());
   const centerIndexRef = useRef(0);
   const postsRef = useRef(posts);
   const isLoadingMoreRef = useRef(isLoadingMore);
@@ -353,6 +362,24 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       setHasTrimmedNewer(false);
       hasMoreRef.current = enriched.length === FEED_PAGE_SIZE;
       setHasMore(enriched.length === FEED_PAGE_SIZE);
+
+      // Batch-fetch lyric dance data for all studio posts
+      const lyricIds = enriched
+        .filter(p => p.lyric_dance_id)
+        .map(p => p.lyric_dance_id as string);
+      if (lyricIds.length > 0) {
+        const { data: lyricRows } = await supabase
+          .from("shareable_lyric_dances" as any)
+          .select(LYRIC_DANCE_COLUMNS)
+          .in("id", lyricIds);
+        const map = new Map<string, LyricDanceData>();
+        for (const row of (lyricRows ?? []) as any[]) {
+          map.set(row.id, row as LyricDanceData);
+        }
+        setLyricDataMap(map);
+      } else {
+        setLyricDataMap(new Map());
+      }
     } else {
       let cutoff: string | null = null;
       let ceiling: string | null = null;
@@ -801,6 +828,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
               loadPrevious={loadPrevious}
               onCenterChange={handleCenterChange}
               reelsMode={reelsMode}
+              lyricDataMap={lyricDataMap}
             />
           </RealtimeFeedHubProvider>
         </CardLifecycleProvider>
