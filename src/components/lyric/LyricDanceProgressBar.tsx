@@ -112,7 +112,7 @@ export const LyricDanceProgressBar = React.forwardRef<HTMLDivElement, Props>(
         onMouseDown={handleDown}
         onTouchStart={handleDown}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full z-10 h-3 cursor-pointer group"
+        className="relative w-full z-10 h-1 cursor-pointer"
         style={{ touchAction: "none" }}
       >
         <div className="absolute inset-0 bg-white/5" />
