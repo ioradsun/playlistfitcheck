@@ -183,6 +183,13 @@ export function SongFitFeed() {
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null);
   const [hasTrimmedNewer, setHasTrimmedNewer] = useState(false);
   const centerIndexRef = useRef(0);
+  const postsRef = useRef(posts);
+  const isLoadingMoreRef = useRef(isLoadingMore);
+  const hasMoreRef = useRef(hasMore);
+
+  postsRef.current = posts;
+  isLoadingMoreRef.current = isLoadingMore;
+  hasMoreRef.current = hasMore;
 
   const normalizePosts = useCallback((input: SongFitPost[]) => input.map((p) => ({ ...p, user_has_liked: false, user_has_saved: false, saves_count: 0 })), []);
 
@@ -217,10 +224,12 @@ export function SongFitFeed() {
       else if (feedView === "in_battle") enriched = enriched.filter((p) => !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id);
 
       const normalized = normalizePosts(enriched);
+      postsRef.current = normalized;
       setPosts(normalized);
       setNewestCreatedAt(normalized[0]?.created_at ?? null);
       setOldestCreatedAt(normalized[normalized.length - 1]?.created_at ?? null);
       setHasTrimmedNewer(false);
+      hasMoreRef.current = enriched.length === FEED_PAGE_SIZE;
       setHasMore(enriched.length === FEED_PAGE_SIZE);
     } else {
       let cutoff: string | null = null;
@@ -240,6 +249,7 @@ export function SongFitFeed() {
 
       const pool = (poolData || []) as unknown as SongFitPost[];
       if (pool.length === 0) {
+        postsRef.current = [];
         setPosts([]);
         setSignalMap({});
         setLoading(false);
@@ -285,7 +295,10 @@ export function SongFitFeed() {
 
       scored.sort((a, b) => b.velocity - a.velocity);
       const top40 = scored.slice(0, 40);
-      setPosts(top40.map((s, i) => ({ ...s.post, current_rank: i + 1 })));
+      const rankedPosts = top40.map((s, i) => ({ ...s.post, current_rank: i + 1 }));
+      postsRef.current = rankedPosts;
+      setPosts(rankedPosts);
+      hasMoreRef.current = false;
       setHasMore(false);
       const newSignalMap: Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }> = {};
       for (const s of top40) newSignalMap[s.post.id] = { total: s.h.total, replay_yes: s.h.replay_yes, saves_count: s.saves, signal_velocity: s.velocity };
@@ -296,60 +309,78 @@ export function SongFitFeed() {
   }, [billboardMode, feedView, normalizePosts]);
 
   const loadMore = useCallback(async () => {
-    if (feedView === "billboard" || isLoadingMore || !hasMore || posts.length === 0) return;
+    if (feedView === "billboard" || isLoadingMoreRef.current || !hasMoreRef.current || postsRef.current.length === 0) return;
+    isLoadingMoreRef.current = true;
     setIsLoadingMore(true);
-    const cursor = oldestCreatedAt ?? posts[posts.length - 1]?.created_at;
-    const { data } = await supabase
-      .from("songfit_posts")
-      .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
-      .eq("status", "live")
-      .lt("created_at", cursor)
-      .order("created_at", { ascending: false })
-      .limit(FEED_PAGE_SIZE);
 
-    let nextPosts = (data || []) as unknown as SongFitPost[];
-    if (feedView === "now_streaming") nextPosts = nextPosts.filter((p) => !!p.spotify_track_id);
-    else if (feedView === "in_studio") nextPosts = nextPosts.filter((p) => !!p.lyric_dance_url && !!p.lyric_dance_id);
-    else if (feedView === "in_battle") nextPosts = nextPosts.filter((p) => !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id);
+    try {
+      const currentPosts = postsRef.current;
+      const cursor = oldestCreatedAt ?? currentPosts[currentPosts.length - 1]?.created_at;
+      if (!cursor) return;
 
-    if (nextPosts.length > 0) {
-      setPosts((prev) => {
-        const merged = [...prev, ...normalizePosts(nextPosts)];
-        const capped = capPosts(merged);
-        setNewestCreatedAt(capped[0]?.created_at ?? null);
-        setOldestCreatedAt(capped[capped.length - 1]?.created_at ?? null);
-        return capped;
-      });
+      const { data } = await supabase
+        .from("songfit_posts")
+        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
+        .eq("status", "live")
+        .lt("created_at", cursor)
+        .order("created_at", { ascending: false })
+        .limit(FEED_PAGE_SIZE);
+
+      let nextPosts = (data || []) as unknown as SongFitPost[];
+      if (feedView === "now_streaming") nextPosts = nextPosts.filter((p) => !!p.spotify_track_id);
+      else if (feedView === "in_studio") nextPosts = nextPosts.filter((p) => !!p.lyric_dance_url && !!p.lyric_dance_id);
+      else if (feedView === "in_battle") nextPosts = nextPosts.filter((p) => !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id);
+
+      if (nextPosts.length > 0) {
+        setPosts((prev) => {
+          const merged = [...prev, ...normalizePosts(nextPosts)];
+          const capped = capPosts(merged);
+          postsRef.current = capped;
+          setNewestCreatedAt(capped[0]?.created_at ?? null);
+          setOldestCreatedAt(capped[capped.length - 1]?.created_at ?? null);
+          return capped;
+        });
+      }
+      hasMoreRef.current = (data || []).length === FEED_PAGE_SIZE;
+      setHasMore((data || []).length === FEED_PAGE_SIZE);
+    } finally {
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
     }
-    setHasMore((data || []).length === FEED_PAGE_SIZE);
-    setIsLoadingMore(false);
-  }, [capPosts, feedView, hasMore, isLoadingMore, normalizePosts, oldestCreatedAt, posts]);
+  }, [capPosts, feedView, normalizePosts, oldestCreatedAt]);
 
   const loadPrevious = useCallback(async () => {
-    if (feedView === "billboard" || isLoadingMore || !newestCreatedAt) return;
+    if (feedView === "billboard" || isLoadingMoreRef.current || !newestCreatedAt) return;
+    isLoadingMoreRef.current = true;
     setIsLoadingMore(true);
-    const { data } = await supabase
-      .from("songfit_posts")
-      .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
-      .eq("status", "live")
-      .gt("created_at", newestCreatedAt)
-      .order("created_at", { ascending: false })
-      .limit(FEED_PAGE_SIZE);
-    const previous = normalizePosts((data || []) as unknown as SongFitPost[]);
-    if (previous.length > 0) {
-      setPosts((prev) => {
-        const merged = [...previous, ...prev];
-        const capped = capPosts(merged);
-        setNewestCreatedAt(capped[0]?.created_at ?? null);
-        setOldestCreatedAt(capped[capped.length - 1]?.created_at ?? null);
-        return capped;
-      });
-      setHasTrimmedNewer((data || []).length === FEED_PAGE_SIZE);
-    } else {
-      setHasTrimmedNewer(false);
+
+    try {
+      const { data } = await supabase
+        .from("songfit_posts")
+        .select("*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)")
+        .eq("status", "live")
+        .gt("created_at", newestCreatedAt)
+        .order("created_at", { ascending: false })
+        .limit(FEED_PAGE_SIZE);
+      const previous = normalizePosts((data || []) as unknown as SongFitPost[]);
+      if (previous.length > 0) {
+        setPosts((prev) => {
+          const merged = [...previous, ...prev];
+          const capped = capPosts(merged);
+          postsRef.current = capped;
+          setNewestCreatedAt(capped[0]?.created_at ?? null);
+          setOldestCreatedAt(capped[capped.length - 1]?.created_at ?? null);
+          return capped;
+        });
+        setHasTrimmedNewer((data || []).length === FEED_PAGE_SIZE);
+      } else {
+        setHasTrimmedNewer(false);
+      }
+    } finally {
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
     }
-    setIsLoadingMore(false);
-  }, [capPosts, feedView, isLoadingMore, newestCreatedAt, normalizePosts]);
+  }, [capPosts, feedView, newestCreatedAt, normalizePosts]);
 
   useEffect(() => {
     void fetchPosts();
