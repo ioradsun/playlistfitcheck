@@ -92,8 +92,32 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
       navigate("/Auth", { state: { returnTab: "crowdfit" } });
       return;
     }
+    const clickedSide = replay ? "a" : "b";
+    if (votedSide === clickedSide) {
+      setVotedSide(null);
+      setWouldReplay(null);
+      setScore((prev) => {
+        if (!prev) return prev;
+        return {
+          total: Math.max(0, prev.total - 1),
+          replay_yes: replay ? Math.max(0, prev.replay_yes - 1) : prev.replay_yes,
+        };
+      });
+      (async () => {
+        try {
+          let q = supabase.from("songfit_hook_reviews").delete().eq("post_id", postId);
+          if (user) q = q.eq("user_id", user.id);
+          else q = q.eq("session_id", sessionId).is("user_id", null);
+          await q;
+        } catch {
+          // ignore
+        }
+        window.dispatchEvent(new CustomEvent("crowdfit:vote"));
+      })();
+      return;
+    }
     setWouldReplay(replay);
-    setVotedSide(replay ? "a" : "b");
+    setVotedSide(clickedSide);
 
     // Optimistically update score so UI never shows "calibrating" after a vote
     setScore((prev) => {

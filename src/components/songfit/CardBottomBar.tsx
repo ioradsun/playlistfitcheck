@@ -12,6 +12,7 @@ interface CardBottomBarProps {
   onClose: () => void;
   panelOpen?: boolean;
   topReaction?: { symbol: string; count: number } | null;
+  trackTitle?: string;
   variant?: "embedded" | "fullscreen";
 }
 
@@ -27,6 +28,7 @@ export function CardBottomBar({
   onClose,
   panelOpen = false,
   topReaction,
+  trackTitle,
   variant = "embedded",
 }: CardBottomBarProps) {
   const py = variant === "embedded" ? "py-3" : "py-2.5";
@@ -101,14 +103,14 @@ export function CardBottomBar({
 
               if (total < 20) {
                 verdict = "FMLY STILL VOTING";
-                tally = `${replay_yes} / ${total} RAN IT BACK`;
+                tally = `${replay_yes} / ${total} RAN "${trackTitle || "IT"}" BACK`;
               } else if (isSplit) {
                 verdict = "FMLY IS SPLIT";
-                tally = `${replay_yes} / ${total} RAN IT BACK`;
+                tally = `${replay_yes} / ${total} RAN "${trackTitle || "IT"}" BACK`;
               } else {
                 verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
                 tally = majorityRanItBack
-                  ? `${replay_yes} / ${total} RAN IT BACK`
+                  ? `${replay_yes} / ${total} RAN "${trackTitle || "IT"}" BACK`
                   : `${notForMeCount} / ${total} NOT FOR ME`;
               }
 
@@ -139,8 +141,7 @@ export function CardBottomBar({
             <span
               className="text-[13px] leading-none transition-all duration-300"
               style={{
-                filter: votedSide !== null ? "none" : "grayscale(1) brightness(0.7)",
-                opacity: votedSide !== null ? 0.85 : 0.3,
+                opacity: 0.7,
               }}
             >
               {topReaction?.symbol ?? "🔥"}

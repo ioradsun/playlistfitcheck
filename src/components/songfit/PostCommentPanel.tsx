@@ -347,20 +347,20 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
 
   return (
     <PanelShell isOpen={isOpen} variant={variant} topOffset={variant === "embedded" ? 52 : 0}>
-      <VoteStrip
-        votedSide={votedSide}
-        score={score}
-        onVoteYes={onVoteYes}
-        onVoteNo={onVoteNo}
-        palette={palette}
-      />
-
       <EmojiBar
         variant="strip"
         palette={palette}
         counts={reactionCounts}
         reacted={sessionReacted}
         onReact={handleReact}
+      />
+
+      <VoteStrip
+        votedSide={votedSide}
+        score={score}
+        onVoteYes={onVoteYes}
+        onVoteNo={onVoteNo}
+        palette={palette}
       />
 
       {replyingTo && (
