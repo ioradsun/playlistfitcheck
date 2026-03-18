@@ -707,8 +707,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
             className={`flex items-center justify-center min-w-[56px] px-4 ${displayMode === 'fullscreen' ? 'py-2.5' : 'py-3'} hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0`}
           >
             <X size={13} className="text-white hover:text-white/70 transition-colors" />
-            </button>
-          </div>
+          </button>
+        </div>
         </div>
       </div>
     </PanelShell>
