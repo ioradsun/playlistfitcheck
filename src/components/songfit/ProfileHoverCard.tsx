@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { User, Loader2 } from "lucide-react";
-
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
