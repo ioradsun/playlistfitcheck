@@ -510,7 +510,7 @@ export function PostCommentPanel({
 
       {/* ── Caption + CardBottomBar — visible when panel closed ── */}
       {!isOpen && (
-        <div className="pointer-events-auto">
+        <div className="pointer-events-auto relative z-[10]">
           {caption && caption.trim() && (
             <div className="px-3 pt-1.5 pb-1" style={{ background: '#0a0a0a' }}>
               <p className="text-[13px] leading-snug text-white/50 line-clamp-2">
