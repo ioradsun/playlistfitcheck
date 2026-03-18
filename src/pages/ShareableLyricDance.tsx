@@ -229,28 +229,30 @@ export default function ShareableLyricDance() {
             )}
           </AnimatePresence>
 
-          {!isWaiting && !isMarketingView && (
+          {!isWaiting && !reactionPanelOpen && (
             <div className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-              <div
-                className="flex items-center gap-2.5 cursor-pointer"
-                onClick={() => renderData?.user_id && navigate(`/u/${renderData.user_id}`)}
-              >
-                <div className="relative shrink-0">
-                  {coverAvatarUrl ? (
-                    <img src={coverAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                      <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
-                    </div>
-                  )}
-                  {profile?.is_verified && (
-                    <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={10} /></span>
-                  )}
+              {!isMarketingView ? (
+                <div
+                  className="flex items-center gap-2.5 cursor-pointer"
+                  onClick={() => renderData?.user_id && navigate(`/u/${renderData.user_id}`)}
+                >
+                  <div className="relative shrink-0">
+                    {coverAvatarUrl ? (
+                      <img src={coverAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                        <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
+                      </div>
+                    )}
+                    {profile?.is_verified && (
+                      <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={10} /></span>
+                    )}
+                  </div>
+                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400">
+                    {coverArtist ? `In Studio · ${coverArtist}` : "In Studio"}
+                  </span>
                 </div>
-                <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400">
-                  {coverArtist ? `In Studio · ${coverArtist}` : "In Studio"}
-                </span>
-              </div>
+              ) : <span />}
               <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
                 <button onClick={toggleMute} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? "Unmute" : "Mute"}>
                   {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
