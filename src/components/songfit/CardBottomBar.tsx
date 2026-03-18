@@ -55,7 +55,7 @@ export function CardBottomBar({
             }
             if (e.key === "Escape") onClose();
           }}
-          placeholder="What hit the most?"
+          placeholder="What hit"
           autoFocus
           className={`flex-1 bg-transparent text-[11px] font-mono text-white/60 placeholder:text-white/25 outline-none px-3 ${py} tracking-wide min-w-0`}
         />

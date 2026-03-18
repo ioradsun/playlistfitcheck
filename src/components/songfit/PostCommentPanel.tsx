@@ -411,7 +411,7 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
           onSubmit={handleSubmit}
           onClose={onClose}
           hasSubmitted={hasSubmitted}
-          placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
+          placeholder={replyingTo ? 'reply...' : 'What hit'}
           size="compact"
         />
       )}
