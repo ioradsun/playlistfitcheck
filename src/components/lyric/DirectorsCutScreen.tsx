@@ -188,11 +188,14 @@ export function DirectorsCutScreen({
 
     let audioReady = false;
     let audioSeeked = false;
-    audio.addEventListener("canplay", () => { audioReady = true; audio.currentTime = hookStart; });
-    audio.addEventListener("seeked", () => {
+    const onCanPlay = () => { audioReady = true; audio.currentTime = hookStart; };
+    const onSeeked = () => {
       if (audioReady) { audioSeeked = true; audio.play().catch(() => {}); }
-    });
-    audio.addEventListener("error", () => {});
+    };
+    const onError = () => {};
+    audio.addEventListener("canplay", onCanPlay);
+    audio.addEventListener("seeked", onSeeked);
+    audio.addEventListener("error", onError);
     audio.src = ownUrl;
     audio.load();
 
@@ -242,6 +245,9 @@ export function DirectorsCutScreen({
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      audio.removeEventListener("canplay", onCanPlay);
+      audio.removeEventListener("seeked", onSeeked);
+      audio.removeEventListener("error", onError);
       audio.pause();
       audio.src = "";
       audioRef.current = null;
