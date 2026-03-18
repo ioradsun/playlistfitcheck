@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { consumeSiteCopyPrefetch } from "@/lib/prefetch";
+import { consumeSiteCopyPrefetch, getCachedSiteCopy } from "@/lib/prefetch";
 
 // Default copy (fallback if DB not loaded yet)
 const DEFAULT_COPY: SiteCopy = {
@@ -110,8 +110,11 @@ const SiteCopyContext = createContext<SiteCopy>(DEFAULT_COPY);
 const SiteCopyLoadedContext = createContext(false);
 
 export function SiteCopyProvider({ children }: { children: ReactNode }) {
-  const [copy, setCopy] = useState<SiteCopy>(DEFAULT_COPY);
-  const [loaded, setLoaded] = useState(false);
+  const [copy, setCopy] = useState<SiteCopy>(() => {
+    const cached = getCachedSiteCopy();
+    return cached ? deepMerge(DEFAULT_COPY, cached) : DEFAULT_COPY;
+  });
+  const [loaded, setLoaded] = useState(() => !!getCachedSiteCopy());
 
   const fetchCopy = useCallback(async () => {
     const prefetched = consumeSiteCopyPrefetch();
