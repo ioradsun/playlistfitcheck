@@ -34,7 +34,7 @@ interface FeaturesState {
   growth_quotas: { guest: number; limited: number };
   tools_enabled: Record<string, boolean>;
   tools_order: string[];
-  crowdfit_mode: "reactions" | "hook_review";
+  
   lyric_transcription_model: TranscriptionModel;
   lyric_analysis_model: AnalysisModel;
   lyric_video: boolean;
