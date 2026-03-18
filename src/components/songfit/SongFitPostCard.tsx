@@ -314,10 +314,10 @@ export function SongFitPostCard({
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <ProfileHoverCard userId={post.user_id}>
               <div
-                className="flex items-center gap-2.5 cursor-pointer min-w-0"
+                className="cursor-pointer shrink-0"
                 onClick={handleProfileClick}
               >
-                <div className="relative shrink-0">
+                <div className="relative">
                   <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.06]">
                     {post.profiles?.avatar_url ? (
                       <img
@@ -334,17 +334,6 @@ export function SongFitPostCard({
                       <VerifiedBadge size={12} />
                     </span>
                   )}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <p className="text-[13px] font-medium leading-tight truncate text-white/60">
-                      {displayName}
-                    </p>
-                    <FmlyBadge userId={post.user_id} compact />
-                  </div>
-                  <p className="font-mono text-[9px] text-white/25 leading-tight">
-                    {timeAgo}
-                  </p>
                 </div>
               </div>
             </ProfileHoverCard>
