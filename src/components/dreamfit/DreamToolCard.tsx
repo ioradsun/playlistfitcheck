@@ -6,7 +6,7 @@ import { Dream } from "./types";
 import { DreamSignal } from "./DreamSignal";
 import { formatDistanceToNow } from "date-fns";
 import { FmlyBadge } from "@/components/FmlyBadge";
-import { VerifiedBadge } from "@/components/VerifiedBadge";
+
 import { ProfileHoverCard } from "@/components/songfit/ProfileHoverCard";
 import {
   DropdownMenu,
@@ -62,19 +62,14 @@ export function DreamToolCard({ dream, onOpenComments, onRefresh }: Props) {
           <ProfileHoverCard userId={dream.user_id}>
             <div className="flex items-center gap-3 cursor-pointer min-w-0">
               {/* h-10 avatar, bg-muted fallback, ring-primary/20 */}
-              <div className="relative shrink-0">
-                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
+              <div className="shrink-0">
+                <div className={`h-10 w-10 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ${dream.profiles?.is_verified ? "ring-green-400" : "ring-primary/20"}`}>
                   {dream.profiles?.avatar_url ? (
                     <img src={dream.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <User size={16} className="text-muted-foreground" />
                   )}
                 </div>
-                {dream.profiles?.is_verified && (
-                  <span className="absolute -bottom-0.5 -right-0.5">
-                    <VerifiedBadge size={14} />
-                  </span>
-                )}
               </div>
               <div className="min-w-0">
                 {/* Content Tier: text-sm (14px), font-semibold, text-muted-foreground */}

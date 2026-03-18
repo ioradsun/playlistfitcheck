@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { VerifiedBadge } from "@/components/VerifiedBadge";
+
 
 // --------------- Types ---------------
 interface ArtistProfile {
@@ -345,7 +345,7 @@ export default function ArtistStage() {
                     >
                       {profile.display_name}
                     </h1>
-                    {profile.is_verified && <VerifiedBadge size={18} />}
+                    {profile.is_verified && <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-green-400">✓ Verified</span>}
                   </div>
                   {page?.sonic_identity && (
                     <p className="text-sm text-white/50 mt-1 leading-snug italic max-w-xs">
