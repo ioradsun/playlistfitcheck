@@ -117,14 +117,17 @@ export function ProfileHoverCard({ userId, children }: Props) {
                   className="flex items-center gap-3 cursor-pointer"
                   onClick={() => navigate(`/u/${userId}`)}
                 >
-                  <div className="shrink-0">
-                    <div className={`w-12 h-12 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ${profile.is_verified ? "ring-green-400" : "ring-primary/20"}`}>
+                  <div className="relative shrink-0">
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center overflow-hidden ring-2 ring-primary/20">
                       {profile.avatar_url ? (
                         <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <User size={20} className="text-muted-foreground" />
                       )}
                     </div>
+                    {profile.is_verified && (
+                      <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={14} /></span>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold truncate leading-tight">{displayName}</p>

@@ -704,7 +704,7 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
               className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors"
             >
               <div className="relative shrink-0">
-                <Avatar className={`h-7 w-7 border ${(profile as any)?.is_verified ? "border-green-400" : "border-sidebar-border"}`}>
+                <Avatar className="h-7 w-7 border border-sidebar-border">
                   <AvatarImage
                     src={profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || undefined}
                     alt={profile?.display_name ?? "Avatar"}
@@ -713,6 +713,9 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
                     {initials}
                   </AvatarFallback>
                 </Avatar>
+                {(profile as any)?.is_verified && (
+                  <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={10} /></span>
+                )}
                 {unreadCount > 0 && (
                   <span className="absolute -top-0.5 -left-0.5 flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full bg-primary text-[9px] font-bold text-primary-foreground ring-2 ring-sidebar">
                     {unreadCount > 9 ? "9+" : unreadCount}
