@@ -6,6 +6,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { User, MoreHorizontal, Trash2, ExternalLink } from "lucide-react";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
