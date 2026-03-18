@@ -30,7 +30,6 @@ import {
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { getMoodGrade, buildGradeFilter, type MoodGrade } from "@/engine/moodGrades";
 // getSectionTones removed — song-level grade model
-// ColorEnhancer removed — single color model handles contrast directly
 // ElementalEffects removed — single color model
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
@@ -1380,27 +1379,31 @@ export class LyricDancePlayer {
   }
 
   scheduleFullModeUpgrade(): void {
-    if (this.destroyed || this.fullModeEnabled || this._bakePromise) return;
-    if (this._pendingUpgradeTimeout != null || this._pendingIdleHandle != null) return;
+    if (
+      this.destroyed
+      || this.fullModeEnabled
+      || this._bakePromise
+      || this._pendingUpgradeTimeout != null
+      || this._pendingIdleHandle != null
+    ) {
+      return;
+    }
 
     const idleApi = window as Window & {
       requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
     };
 
     const run = () => {
       this._pendingIdleHandle = null;
       if (this.destroyed || this.fullModeEnabled) return;
-      this.prepareFullMode().catch(() => {
-        // keep minimal mode alive on upgrade errors
-      });
+      void this.prepareFullMode();
     };
 
     this._pendingUpgradeTimeout = window.setTimeout(() => {
       this._pendingUpgradeTimeout = null;
       if (this.destroyed || this.fullModeEnabled) return;
       if (idleApi.requestIdleCallback) {
-        this._pendingIdleHandle = idleApi.requestIdleCallback(run, { timeout: 800 });
+        this._pendingIdleHandle = idleApi.requestIdleCallback(run, { timeout: 300 });
       } else {
         run();
       }
