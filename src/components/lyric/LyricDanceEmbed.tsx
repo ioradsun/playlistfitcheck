@@ -722,6 +722,7 @@ export function LyricDanceEmbed({
               waiting={isWaiting}
               coverImageUrl={fetchedData?.section_images?.[0] ?? coverImageUrl}
               hideBackground={playerReady}
+              badge={artistName ? `In Studio · ${artistName}` : "In Studio"}
               onListen={(e) => {
                 e.stopPropagation();
                 userActivatedRef.current = true;

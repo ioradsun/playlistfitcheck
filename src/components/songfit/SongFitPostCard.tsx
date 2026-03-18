@@ -635,37 +635,18 @@ export function SongFitPostCard({
             <div className="flex-1" />
             {/* Bottom content with gradient scrim */}
             <div className="pointer-events-auto bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-16 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
-              <div className="flex items-center gap-2.5 mb-2">
-                <div
-                  className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
-                  onClick={handleProfileClick}
-                >
-                  <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10 shrink-0">
-                    {post.profiles?.avatar_url ? (
-                      <img
-                        src={post.profiles.avatar_url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <User size={14} className="text-white/40" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <p className="text-[13px] font-semibold text-white/90 truncate">
-                        {displayName}
-                      </p>
-                      {(post.profiles as any)?.is_verified && (
-                        <VerifiedBadge size={12} />
-                      )}
-                      <FmlyBadge userId={post.user_id} compact />
-                    </div>
-                    <p className="text-[10px] font-mono text-white/30">
-                      {timeAgo}
-                    </p>
-                  </div>
+              <div
+                className="flex items-center gap-2 mb-2 cursor-pointer"
+                onClick={handleProfileClick}
+              >
+                <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10 shrink-0">
+                  {post.profiles?.avatar_url ? (
+                    <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={14} className="text-white/40" />
+                  )}
                 </div>
+                {(post.profiles as any)?.is_verified && <VerifiedBadge size={12} />}
               </div>
 
 
