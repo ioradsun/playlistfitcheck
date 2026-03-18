@@ -6,7 +6,7 @@ interface PanelShellProps {
    * "embedded" — absolute, fills positioned ancestor (InStudio card default)
    * "fullscreen" — fixed, bottom-anchored, 88vh (ShareableLyricDance)
    */
-  variant?: 'embedded' | 'fullscreen';
+  variant?: 'embedded' | 'fullscreen' | 'reels';
   /** Pixels to extend upward beyond the positioned ancestor — covers the card
    *  profile header in embedded mode. Outer overflow:hidden clips cleanly. */
   topOffset?: number;
