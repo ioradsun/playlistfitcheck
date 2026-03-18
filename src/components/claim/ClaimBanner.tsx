@@ -94,19 +94,19 @@ export default function ClaimBanner({
       />
 
       {/* Content — two rows on mobile, single row on sm+ */}
-      <div className="relative z-10 flex flex-col items-center gap-1.5 px-3 sm:px-4 py-2.5 sm:py-0 sm:h-[68px] sm:justify-center">
+      <div className="relative z-10 flex flex-col items-center gap-3 px-4 sm:px-5 py-5 sm:py-4">
 
         {/* Row 1: thumbnail + headline centered as a unit */}
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-3.5">
 
           {/* Cover thumbnail — z-20, above scrim */}
           {coverArtUrl && (
             <div
-              className="flex-shrink-0 rounded-[5px] overflow-hidden shadow-lg z-20"
+              className="flex-shrink-0 rounded-[6px] overflow-hidden shadow-lg z-20"
               style={{
-                width: 42,
-                height: 42,
-                border: "1px solid rgba(255,255,255,0.18)",
+                width: 48,
+                height: 48,
+                border: "1px solid rgba(255,255,255,0.15)",
               }}
             >
               <img
@@ -119,17 +119,17 @@ export default function ClaimBanner({
 
           {/* Headline */}
           <p
-            className="text-[11.5px] sm:text-[12.5px] font-medium leading-snug text-center"
-            style={{ color: "rgba(255,255,255,0.72)" }}
+            className="text-[12.5px] sm:text-[13.5px] font-medium leading-relaxed text-center"
+            style={{ color: "rgba(255,255,255,0.78)" }}
           >
             {headline}
           </p>
         </div>
 
-        {/* Row 2: CTA centered, full-width on mobile */}
+        {/* Row 2: CTA centered */}
         <div
-          className="flex items-center justify-center flex-shrink-0 text-[11px] sm:text-[11.5px] font-semibold text-white/90 border border-white/20 rounded-lg px-3 py-1.5 backdrop-blur-sm w-auto"
-          style={{ background: "transparent" }}
+          className="flex items-center justify-center flex-shrink-0 text-[11.5px] sm:text-[12px] font-semibold text-white/90 border border-white/[0.18] rounded-lg px-5 py-2 backdrop-blur-sm w-auto"
+          style={{ background: "rgba(255,255,255,0.06)" }}
         >
           Claim Your Free Artist Account
         </div>
