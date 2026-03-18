@@ -356,7 +356,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
             <button
               disabled={!selectedTrack || publishing || !!duplicateWarning || !caption.trim()}
               onClick={publish}
-              className="text-[13px] font-bold uppercase tracking-[0.15em] bg-foreground text-background h-9 px-5 rounded-full hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0"
+              className="text-[11px] font-mono uppercase tracking-[0.2em] border border-foreground/20 text-foreground/60 h-9 px-5 rounded-full hover:border-foreground/50 hover:text-foreground/90 disabled:opacity-25 transition-all shrink-0"
             >
               {publishing ? "Dropping…" : "Drop"}
             </button>
