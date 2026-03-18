@@ -105,14 +105,14 @@ export function CardBottomBar({
 
               if (total < 20) {
                 verdict = "FMLY STILL VOTING";
-                tally = `${replay_yes} / ${total} RAN "${trackTitle || "IT"}" BACK`;
+                tally = `${replay_yes} / ${total} RAN ${trackTitle || "IT"} BACK`;
               } else if (isSplit) {
                 verdict = "FMLY IS SPLIT";
-                tally = `${replay_yes} / ${total} RAN "${trackTitle || "IT"}" BACK`;
+                tally = `${replay_yes} / ${total} RAN ${trackTitle || "IT"} BACK`;
               } else {
                 verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
                 tally = majorityRanItBack
-                  ? `${replay_yes} / ${total} RAN "${trackTitle || "IT"}" BACK`
+                  ? `${replay_yes} / ${total} RAN ${trackTitle || "IT"} BACK`
                   : `${notForMeCount} / ${total} NOT FOR ME`;
               }
 
