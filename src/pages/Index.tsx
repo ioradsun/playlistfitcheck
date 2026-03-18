@@ -10,7 +10,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { useSiteCopy } from "@/hooks/useSiteCopy";
+import { useSiteCopy, useSiteCopyLoaded } from "@/hooks/useSiteCopy";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
 import { ResultsDashboard } from "@/components/ResultsDashboard";
 import {
@@ -130,6 +130,7 @@ const PATH_TO_TAB: Record<string, string> = {
 const Index = () => {
   const { user, loading: authLoading, profile } = useAuth();
   const siteCopy = useSiteCopy();
+  const siteCopyLoaded = useSiteCopyLoaded();
   const { projectId } = useParams<{ projectId?: string }>();
   const TAB_LABELS: Record<string, string> = Object.fromEntries(
     Object.entries(siteCopy.tools).map(([k, v]) => [k, v.label]),
@@ -1095,6 +1096,14 @@ const Index = () => {
     // the "new project flashes before existing loads" bug and avoids per-tool
     // isHydrating* booleans scattered through the switch below.
     if (screen.status === "loading") {
+      return <PageSkeleton tool={screen.tool} mode={screen.mode} />;
+    }
+    // Hold the skeleton until site_copy is loaded so every feature-flag-driven
+    // layout decision (reelsMode, tool ordering, gating, UI variants) uses real
+    // values on first render. The prefetch fires at module-eval time so this is
+    // near-zero latency on all surfaces — it just prevents the DEFAULT_COPY →
+    // real config layout shift that causes the page to visibly rebuild.
+    if (!siteCopyLoaded) {
       return <PageSkeleton tool={screen.tool} mode={screen.mode} />;
     }
 

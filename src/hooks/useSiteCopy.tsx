@@ -107,11 +107,13 @@ export interface SiteCopy {
 }
 
 const SiteCopyContext = createContext<SiteCopy>(DEFAULT_COPY);
+const SiteCopyLoadedContext = createContext(false);
 
 export function SiteCopyProvider({ children }: { children: ReactNode }) {
   const [copy, setCopy] = useState<SiteCopy>(DEFAULT_COPY);
+  const [loaded, setLoaded] = useState(false);
 
-  const fetchCopy = async () => {
+  const fetchCopy = useCallback(async () => {
     const prefetched = consumeSiteCopyPrefetch();
     const { data } = prefetched
       ? await prefetched
@@ -124,25 +126,34 @@ export function SiteCopyProvider({ children }: { children: ReactNode }) {
       const merged = deepMerge(DEFAULT_COPY, data.copy_json as any);
       setCopy(merged);
     }
-  };
+    setLoaded(true);
+  }, []);
 
   useEffect(() => {
     fetchCopy();
     // Listen for admin updates
-    const handler = () => fetchCopy();
+    const handler = () => {
+      void fetchCopy();
+    };
     window.addEventListener("site-copy-updated", handler);
     return () => window.removeEventListener("site-copy-updated", handler);
-  }, []);
+  }, [fetchCopy]);
 
   return (
     <SiteCopyContext.Provider value={copy}>
-      {children}
+      <SiteCopyLoadedContext.Provider value={loaded}>
+        {children}
+      </SiteCopyLoadedContext.Provider>
     </SiteCopyContext.Provider>
   );
 }
 
 export function useSiteCopy() {
   return useContext(SiteCopyContext);
+}
+
+export function useSiteCopyLoaded() {
+  return useContext(SiteCopyLoadedContext);
 }
 
 /**
