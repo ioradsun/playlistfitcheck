@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef } from 'react';
 
 interface CommentInputProps {
   value: string;
@@ -27,11 +27,6 @@ export function CommentInput({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!hasSubmitted) {
-      inputRef.current?.focus();
-    }
-  }, [hasSubmitted]);
 
   return (
     <div
