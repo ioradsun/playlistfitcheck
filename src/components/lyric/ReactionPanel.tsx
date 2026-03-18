@@ -542,7 +542,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
                       >
                         <input
                           className="w-full bg-transparent text-[11px] font-mono text-white placeholder:text-white/35 outline-none"
-                          placeholder={replyingTo ? 'write your reply...' : 'What hit the hardest?'}
+                          placeholder={replyingTo ? 'reply...' : 'This line'}
                           value={textInput}
                           onChange={(e) => setTextInput(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleTextSubmit(); } }}
