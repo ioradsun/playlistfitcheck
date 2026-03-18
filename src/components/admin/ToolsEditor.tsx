@@ -49,7 +49,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   growth_quotas: { guest: 5, limited: 10 },
   tools_enabled: Object.fromEntries(ALL_TOOLS.map(t => [t.key, true])),
   tools_order: DEFAULT_ORDER,
-  crowdfit_mode: "reactions",
+  
   lyric_transcription_model: "scribe",
   lyric_analysis_model: "google/gemini-3-flash-preview",
   lyric_video: false,
