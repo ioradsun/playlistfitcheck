@@ -184,6 +184,16 @@ const Index = () => {
 
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
 
+  useEffect(() => {
+    if (reelsMode) {
+      document.body.setAttribute("data-reels-mode", "true");
+    } else {
+      document.body.removeAttribute("data-reels-mode");
+    }
+
+    return () => document.body.removeAttribute("data-reels-mode");
+  }, [reelsMode]);
+
   // ── Unified project-fetch status (replaces lyricLoadingState + loadingProjectType) ──
   // isFetchingProject: true while any tool's project data is being fetched from Supabase
   // projectMissing:    true when the last fetch returned no data (404)

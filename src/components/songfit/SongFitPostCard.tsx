@@ -303,12 +303,15 @@ export function SongFitPostCard({
               }
         }
       >
+        {reelsMode && (
+          <div className="absolute top-0 left-0 right-0 h-24 z-[5] bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+        )}
+
         {/* Header */}
         <div
           className={cn(
             "relative flex items-center justify-between px-3 py-2.5",
-            reelsMode &&
-              "absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/70 via-black/30 to-transparent pb-8",
+            reelsMode && "hidden",
           )}
         >
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -638,115 +641,140 @@ export function SongFitPostCard({
         </div>
 
         {reelsMode ? (
-          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-16 px-4 pb-6">
-            {!isSpotifyEmbed &&
-              localCaption &&
-              localCaption.trim() &&
-              !editing && (
-                <p className="text-[13px] leading-snug text-white/70 mb-3">
-                  {localCaption.length <= 100 ? (
-                    localCaption
+          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-20 px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div
+                className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                onClick={handleProfileClick}
+              >
+                <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10 shrink-0">
+                  {post.profiles?.avatar_url ? (
+                    <img
+                      src={post.profiles.avatar_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
-                    <>
-                      {captionExpanded
-                        ? localCaption
-                        : localCaption.slice(0, 100).trimEnd()}
-                      {!captionExpanded && (
-                        <>
-                          <span className="text-white/30">… </span>
-                          <button
-                            onClick={() => setCaptionExpanded(true)}
-                            className="text-white/30 hover:text-white/50 text-[13px]"
-                          >
-                            more
-                          </button>
-                        </>
-                      )}
-                    </>
+                    <User size={14} className="text-white/40" />
                   )}
-                </p>
-              )}
-
-            <div className="mb-3">
-              <p className="text-sm font-semibold text-white/90 truncate">
-                {post.track_title}
-              </p>
-              <p className="text-xs text-white/50 truncate">{displayName}</p>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="text-[13px] font-semibold text-white/90 truncate">
+                      {displayName}
+                    </p>
+                    {(post.profiles as any)?.is_verified && (
+                      <VerifiedBadge size={12} />
+                    )}
+                    <FmlyBadge userId={post.user_id} compact />
+                  </div>
+                  <p className="text-[10px] font-mono text-white/30">
+                    {timeAgo}
+                  </p>
+                </div>
+              </div>
             </div>
 
-            {!isSpotifyEmbed && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => {
-                    onOpenComments(post.id);
-                    if (user) logEngagementEvent(post.id, user.id, "comment");
-                  }}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/10 transition-colors group"
-                >
-                  <MessageCircle
-                    size={18}
-                    className="text-white/60 group-hover:text-white/90"
-                  />
-                  {post.comments_count > 0 && (
-                    <span className="text-[11px] text-white/40 font-mono">
-                      {post.comments_count}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={handleShare}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/10 transition-colors group"
-                >
-                  <Share2
-                    size={18}
-                    className="text-white/60 group-hover:text-white/90"
-                  />
-                </button>
-                <button
-                  onClick={toggleLike}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/10 transition-colors group"
-                >
-                  <Flame
-                    size={18}
-                    className={
-                      liked
-                        ? "fill-white/90 text-white/90"
-                        : "text-white/60 group-hover:text-white/90"
-                    }
-                  />
-                  {likesCount > 0 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenLikes(post.id);
-                      }}
-                      className="text-[11px] text-white/40 font-mono"
-                    >
-                      {likesCount}
-                    </button>
-                  )}
-                </button>
-                <button
-                  onClick={toggleSave}
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/10 transition-colors group"
-                >
-                  <Bookmark
-                    size={18}
-                    className={
-                      saved
-                        ? "fill-white/90 text-white/90"
-                        : "text-white/60 group-hover:text-white/90"
-                    }
-                  />
-                </button>
-              </div>
+            <p className="text-sm font-semibold text-white/90 truncate">
+              {post.track_title}
+            </p>
+
+            {!isSpotifyEmbed && localCaption && localCaption.trim() && !editing && (
+              <p className="text-[12px] leading-snug text-white/50 mt-1">
+                {localCaption.length <= 80 ? (
+                  localCaption
+                ) : (
+                  <>
+                    {captionExpanded
+                      ? localCaption
+                      : localCaption.slice(0, 80).trimEnd()}
+                    {!captionExpanded && (
+                      <>
+                        <span className="text-white/20">… </span>
+                        <button
+                          onClick={() => setCaptionExpanded(true)}
+                          className="text-white/30 hover:text-white/50 text-[12px]"
+                        >
+                          more
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+              </p>
             )}
+
+            <div className="flex items-center gap-0.5 mt-3">
+              <button
+                onClick={() => {
+                  onOpenComments(post.id);
+                  if (user) logEngagementEvent(post.id, user.id, "comment");
+                }}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group"
+              >
+                <MessageCircle
+                  size={17}
+                  className="text-white/50 group-hover:text-white/80"
+                />
+                {post.comments_count > 0 && (
+                  <span className="text-[10px] text-white/30 font-mono">
+                    {post.comments_count}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group"
+              >
+                <Share2
+                  size={17}
+                  className="text-white/50 group-hover:text-white/80"
+                />
+              </button>
+              <button
+                onClick={toggleLike}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group"
+              >
+                <Flame
+                  size={17}
+                  className={
+                    liked
+                      ? "fill-white/80 text-white/80"
+                      : "text-white/50 group-hover:text-white/80"
+                  }
+                />
+                {likesCount > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenLikes(post.id);
+                    }}
+                    className="text-[10px] text-white/30 font-mono"
+                  >
+                    {likesCount}
+                  </button>
+                )}
+              </button>
+              <button
+                onClick={toggleSave}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group"
+              >
+                <Bookmark
+                  size={17}
+                  className={
+                    saved
+                      ? "fill-white/80 text-white/80"
+                      : "text-white/50 group-hover:text-white/80"
+                  }
+                />
+              </button>
+            </div>
 
             {isFirst && (
               <div className="flex flex-col items-center gap-1 mt-4 animate-bounce">
-                <ChevronDown size={16} className="text-white/30 rotate-180" />
-                <span className="text-[10px] text-white/20 font-mono">
-                  swipe up
+                <ChevronDown size={14} className="text-white/20 rotate-180" />
+                <span className="text-[9px] text-white/15 font-mono">
+                  swipe
                 </span>
               </div>
             )}

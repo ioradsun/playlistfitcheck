@@ -52,7 +52,7 @@ export function BillboardToggle({
 
   return (
     <div className={compact ? "" : "border-b border-border/40"}>
-      <div className="flex">
+      <div className={cn("flex", compact && "whitespace-nowrap gap-2")}>
         {/* Recent tab */}
         <div className="flex-1 flex items-center justify-center">
           <DropdownMenu
@@ -73,7 +73,8 @@ export function BillboardToggle({
                   }
                 }}
                 className={cn(
-                  "flex items-center gap-0.5 py-2.5 text-sm transition-all duration-150",
+                  "flex items-center gap-0.5 transition-all duration-150",
+                  compact ? "py-1.5 text-xs px-2" : "py-2.5 text-sm",
                   isRecentActive
                     ? compact
                       ? "font-medium text-white"
@@ -136,7 +137,8 @@ export function BillboardToggle({
                   }
                 }}
                 className={cn(
-                  "flex items-center gap-0.5 py-2.5 text-sm transition-all duration-150",
+                  "flex items-center gap-0.5 transition-all duration-150",
+                  compact ? "py-1.5 text-xs px-2" : "py-2.5 text-sm",
                   isBillboardActive
                     ? compact
                       ? "font-medium text-white"

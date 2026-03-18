@@ -49,6 +49,7 @@ export function FitWidget() {
   const [showInvite, setShowInvite] = useState(false);
   const [socialUnlocked, setSocialUnlocked] = useState(false);
   const [shouldPulse, setShouldPulse] = useState(false);
+  const [reelsHidden, setReelsHidden] = useState(false);
 
   // Draggable state
   const [pos, setPos] = useState({ x: 0, y: 0 });
@@ -61,6 +62,18 @@ export function FitWidget() {
   const inviteCode = (profile as any)?.invite_code ?? null;
   const navigate = useNavigate();
   const { total: pioneerTotal } = useFmlyNumber();
+
+  useEffect(() => {
+    const check = () =>
+      setReelsHidden(document.body.hasAttribute("data-reels-mode"));
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["data-reels-mode"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   // Listen for social share unlock
   useEffect(() => {
@@ -104,6 +117,8 @@ export function FitWidget() {
     if (!wasDrag) setCollapsed((c) => !c);
     setTimeout(() => setDragging(false), 0);
   }, [dragging]);
+
+  if (reelsHidden) return null;
 
   // Don't render if growth flow is disabled, on artist stage pages, or on shareable hook pages
   const pathParts = location.pathname.split("/").filter(Boolean);
