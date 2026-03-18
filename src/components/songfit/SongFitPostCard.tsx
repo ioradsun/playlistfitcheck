@@ -80,6 +80,7 @@ export function SongFitPostCard({
   cardState,
   reelsMode = false,
   isFirst = false,
+  lyricDanceData,
 }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
