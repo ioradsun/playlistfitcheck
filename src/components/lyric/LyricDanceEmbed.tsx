@@ -328,7 +328,7 @@ export function LyricDanceEmbed({
             onVoteNo={() => handleVote(false)}
             onSubmit={handleCommentFromBar}
             onOpenReactions={handleOpenReactions}
-            onClose={closePanel}
+            onClose={handleClosePanelAndSync}
             panelOpen={reactionPanelOpen}
             topReaction={topReaction ? { symbol: topReaction.symbol, count: topReaction.count } : null}
             trackTitle={songTitle}
