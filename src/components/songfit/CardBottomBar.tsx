@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 
 interface CardBottomBarProps {
@@ -31,6 +32,24 @@ export function CardBottomBar({
   trackTitle,
   variant = "embedded",
 }: CardBottomBarProps) {
+  const [showNudge, setShowNudge] = useState(false);
+  const prevVotedSide = useRef<"a" | "b" | null>(null);
+
+  useEffect(() => {
+    if (votedSide !== null && prevVotedSide.current === null) {
+      setShowNudge(true);
+      const t = setTimeout(() => setShowNudge(false), 3000);
+      prevVotedSide.current = votedSide;
+      return () => clearTimeout(t);
+    }
+    if (votedSide === null) {
+      prevVotedSide.current = null;
+      setShowNudge(false);
+    } else {
+      prevVotedSide.current = votedSide;
+    }
+  }, [votedSide]);
+
   const py = variant === "embedded" ? "py-3" : "py-2.5";
 
   const wrapperClass =
@@ -87,37 +106,42 @@ export function CardBottomBar({
           </button>
         </>
       ) : (
-        /* Post-vote: social proof — single line */
+        /* Post-vote: nudge then social proof */
         <div className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}>
-          <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
-            {(() => {
-              const total = score?.total ?? 0;
-              const replay_yes = score?.replay_yes ?? 0;
-              const notForMeCount = total - replay_yes;
-              const majorityRanItBack = replay_yes > total / 2;
-              const isSplit = total > 0 && replay_yes === total / 2;
-              const userAgrees = votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
-              const titleLabel = trackTitle || "IT";
+          {showNudge ? (
+            <span className="text-[9px] font-mono tracking-[0.12em] text-white/50 flex items-center gap-1.5">
+              which line hit?
+              <span className="text-white/30">→</span>
+            </span>
+          ) : (
+            <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
+              {(() => {
+                const total = score?.total ?? 0;
+                const replay_yes = score?.replay_yes ?? 0;
+                const notForMeCount = total - replay_yes;
+                const majorityRanItBack = replay_yes > total / 2;
+                const isSplit = total > 0 && replay_yes === total / 2;
+                const userAgrees = votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
+                const titleLabel = trackTitle || "IT";
 
-              let verdict: string;
-              let tally: string;
-
-              if (total < 20) {
-                verdict = "FMLY STILL VOTING";
-                tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
-              } else if (isSplit) {
-                verdict = "FMLY IS SPLIT";
-                tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
-              } else {
-                verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
-                tally = majorityRanItBack
-                  ? `${replay_yes} / ${total} RAN ${titleLabel} BACK`
-                  : `${notForMeCount} / ${total} NOT FOR ME`;
-              }
-
-              return `${verdict} · ${tally}`;
-            })()}
-          </span>
+                let verdict: string;
+                let tally: string;
+                if (total < 20) {
+                  verdict = "FMLY STILL VOTING";
+                  tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
+                } else if (isSplit) {
+                  verdict = "FMLY IS SPLIT";
+                  tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
+                } else {
+                  verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
+                  tally = majorityRanItBack
+                    ? `${replay_yes} / ${total} RAN ${titleLabel} BACK`
+                    : `${notForMeCount} / ${total} NOT FOR ME`;
+                }
+                return `${verdict} · ${tally}`;
+              })()}
+            </span>
+          )}
         </div>
       )}
 
