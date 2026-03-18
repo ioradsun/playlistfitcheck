@@ -119,6 +119,7 @@ interface LyricDanceEmbedProps {
   showExpandButton?: boolean;
   disableReactionPanel?: boolean;
   hideReactButton?: boolean;
+  reelsMode?: boolean;
   postId?: string;
   externalPanelOpen?: boolean;
   onExternalPanelOpenChange?: (open: boolean) => void;
@@ -143,6 +144,7 @@ export function LyricDanceEmbed({
   showExpandButton = true,
   disableReactionPanel = false,
   hideReactButton = false,
+  reelsMode = false,
   postId,
   externalPanelOpen,
   onExternalPanelOpenChange,
@@ -775,7 +777,7 @@ export function LyricDanceEmbed({
       )}
 
       {/* Bottom bar — progress + now-playing chip + React button */}
-      {!reactionPanelOpen && (
+      {!reactionPanelOpen && !reelsMode && (
         <div
           className={`absolute bottom-0 left-0 right-0 ${reactionPanelOpen ? "z-[500]" : "z-[300]"}`}
           style={{ background: "#0a0a0a" }}
