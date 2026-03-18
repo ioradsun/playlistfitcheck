@@ -113,7 +113,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [showVerify, setShowVerify] = useState(false);
-import { VerifiedBadge } from "@/components/VerifiedBadge";
+
   const fetchRecents = useCallback(async () => {
     if (!user) {
       setRecentItems([]);

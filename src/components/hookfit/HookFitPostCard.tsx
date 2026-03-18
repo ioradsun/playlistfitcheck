@@ -114,7 +114,7 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
       }
     };
     checkVote();
-import { VerifiedBadge } from "@/components/VerifiedBadge";
+
   }, [post.battle_id, votedSide]);
 
   // ── Derive battle mode for InlineBattle ─────────────────────────
