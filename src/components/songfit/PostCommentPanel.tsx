@@ -30,7 +30,7 @@ interface Props {
   onVoteNo: () => void;
   hideInput?: boolean;
   refreshKey?: number;
-  variant?: 'embedded' | 'fullscreen';
+  variant?: 'embedded' | 'fullscreen' | 'reels';
 }
 
 function CommentReactPicker({

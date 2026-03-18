@@ -497,7 +497,7 @@ export function SongFitPostCard({
                   onVoteNo={() => handleVote(false)}
                   hideInput={crowdfitMode === "hook_review"}
                   refreshKey={commentRefreshKey}
-                  variant={reelsMode ? "fullscreen" : "embedded"}
+                  variant={reelsMode ? "reels" : "embedded"}
                 />
 
                 {/* Caption — directly below embed (desktop only; reels shows in bottom overlay) */}
