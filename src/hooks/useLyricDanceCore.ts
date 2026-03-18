@@ -109,12 +109,13 @@ export function useLyricDanceCore({
     canvasRef,
     textCanvasRef,
     containerRef,
-    { bootMode: "full" },
+    { bootMode: "minimal" },
   );
 
   useEffect(() => {
     if (!playerReady || !player) return;
     player.setMuted(true);
+    player.scheduleFullModeUpgrade();
   }, [playerReady, player]);
 
   const durationSec = useMemo(() => {
