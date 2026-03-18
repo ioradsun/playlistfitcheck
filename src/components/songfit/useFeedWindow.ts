@@ -59,20 +59,6 @@ export function useFeedWindow(posts: SongFitPost[], scrollContainerId: string) {
     const container = document.getElementById(scrollContainerId);
     if (!container) return;
 
-    const topSentinel = document.createElement("div");
-    const bottomSentinel = document.createElement("div");
-    topSentinel.style.cssText = "height:1px; width:1px; pointer-events:none;";
-    bottomSentinel.style.cssText = "height:1px; width:1px; pointer-events:none;";
-    container.prepend(topSentinel);
-    container.append(bottomSentinel);
-
-    const io = new IntersectionObserver(
-      () => {},
-      { root: container, threshold: 0 }
-    );
-    io.observe(topSentinel);
-    io.observe(bottomSentinel);
-
     const run = () => {
       rafRef.current = null;
       const { center, visibleStart, visibleEnd, windowStart, windowEnd } = calculateRanges(container.scrollTop, container.clientHeight);
@@ -94,11 +80,8 @@ export function useFeedWindow(posts: SongFitPost[], scrollContainerId: string) {
 
     return () => {
       container.removeEventListener("scroll", onScroll);
-      io.disconnect();
       if (rafRef.current !== null) window.cancelAnimationFrame(rafRef.current);
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
-      topSentinel.remove();
-      bottomSentinel.remove();
     };
   }, [calculateRanges, scrollContainerId]);
 
