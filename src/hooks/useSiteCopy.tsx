@@ -122,7 +122,6 @@ export function SiteCopyProvider({ children }: { children: ReactNode }) {
           .single();
     if (data?.copy_json) {
       const merged = deepMerge(DEFAULT_COPY, data.copy_json as any);
-      // When hook_review mode is active, override songfit label/pill dynamically
       setCopy(merged);
     }
   };
