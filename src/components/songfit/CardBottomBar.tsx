@@ -37,9 +37,7 @@ export function CardBottomBar({
     variant === "embedded"
       ? "flex items-stretch h-[48px]"
       : "flex items-stretch mx-1 mt-1 rounded-md overflow-hidden h-[44px]";
-  const wrapperStyle = variant === "fullscreen"
-    ? { background: "rgba(255,255,255,0.07)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)" }
-    : { background: "#0a0a0a" };
+  const wrapperStyle = { background: "#0a0a0a" };
 
   return (
     <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
