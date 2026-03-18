@@ -32,9 +32,9 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, childr
           className={`${positionClass} flex flex-col overflow-hidden`}
           onClick={(e) => e.stopPropagation()}
           style={{
-            background: variant === 'fullscreen' ? '#0d0d0d' : 'rgba(10,10,10,0.97)',
+            background: variant === 'embedded' ? 'rgba(10,10,10,0.97)' : '#0d0d0d',
             backdropFilter: variant === 'embedded' ? 'blur(12px)' : undefined,
-            borderTop: variant === 'fullscreen' ? '1px solid rgba(255,255,255,0.06)' : undefined,
+            borderTop: variant !== 'embedded' ? '1px solid rgba(255,255,255,0.06)' : undefined,
             top: variant === 'embedded' ? -topOffset : undefined,
           }}
         >
