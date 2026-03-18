@@ -29,8 +29,13 @@ function LazySpotifyEmbedInner({
 }: Props) {
   const { user } = useAuth();
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  // Extra delay after iframe onload — gives Spotify's internal JS time to
+  // apply dark theme before we fade the poster out. Without this, the iframe's
+  // white default background shows through during the crossfade.
+  const [revealReady, setRevealReady] = useState(false);
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
+  const embedHeight = platform === "soundcloud" ? 166 : 232;
 
   const embedSrc =
     platform === "soundcloud" && trackUrl
@@ -39,7 +44,16 @@ function LazySpotifyEmbedInner({
 
   useEffect(() => {
     setIframeLoaded(false);
+    setRevealReady(false);
   }, [embedSrc]);
+
+  useEffect(() => {
+    if (!iframeLoaded) return;
+    // Wait 150ms after iframe onload for Spotify's internal dark theme to paint.
+    // This prevents a white flash during the crossfade.
+    const timer = setTimeout(() => setRevealReady(true), 150);
+    return () => clearTimeout(timer);
+  }, [iframeLoaded]);
 
   const handleClick = () => {
     if (user && postId) {
@@ -57,7 +71,7 @@ function LazySpotifyEmbedInner({
         reelsMode
           ? { background: "#000" }
           : {
-              height: platform === "soundcloud" ? 166 : 232,
+              height: embedHeight,
               background: "#0a0a0a",
               borderRadius: 12,
               overflow: "hidden",
@@ -86,35 +100,49 @@ function LazySpotifyEmbedInner({
           {/* Centered iframe with constrained width */}
           <div className="relative z-[10] flex items-center justify-center h-full px-6">
             <div
-              className="w-full max-w-[400px]"
-              style={{ borderRadius: 12, overflow: "hidden" }}
+              className="w-full max-w-[400px] relative"
+              style={{ borderRadius: 12, overflow: "hidden", height: embedHeight }}
             >
+              {/* Song info poster — visible until iframe fully renders */}
+              {albumArtUrl && (
+                <div
+                  className="absolute inset-0 z-[2] transition-opacity duration-500 pointer-events-none"
+                  style={{ opacity: revealReady ? 0 : 1 }}
+                >
+                  <img
+                    src={albumArtUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-black/20" />
+                  <div className="absolute bottom-3 left-3 right-3 z-10">
+                    <p className="text-sm font-bold text-white drop-shadow-md truncate">
+                      {trackTitle}
+                    </p>
+                  </div>
+                </div>
+              )}
               <iframe
                 src={embedSrc}
                 width="100%"
-                height={platform === "soundcloud" ? 166 : 232}
+                height={embedHeight}
                 allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                className="border-0 block w-full"
+                className="border-0 block w-full relative z-[1]"
+                style={{ background: "#000" }}
                 title={`Play ${trackTitle}`}
                 scrolling={platform === "soundcloud" ? "no" : undefined}
                 onLoad={() => setIframeLoaded(true)}
               />
             </div>
           </div>
-
-          {/* Song info overlay at bottom — will sit under the card's bottom scrim */}
-          {!iframeLoaded && albumArtUrl && (
-            <div className="absolute bottom-8 left-6 right-6 z-[8]">
-              <p className="text-sm font-bold text-white drop-shadow-md truncate">
-                {trackTitle}
-              </p>
-            </div>
-          )}
         </>
       ) : (
         <>
-          {/* Full-bleed album art poster — sits behind iframe */}
-          <div className="absolute inset-0 w-full h-full z-[6] pointer-events-none">
+          {/* Full-bleed album art poster — sits behind iframe, fades out when ready */}
+          <div
+            className="absolute inset-0 w-full h-full z-[6] pointer-events-none transition-opacity duration-700"
+            style={{ opacity: revealReady ? 0 : 1 }}
+          >
             {albumArtUrl ? (
               <>
                 <img
@@ -136,14 +164,19 @@ function LazySpotifyEmbedInner({
             )}
           </div>
 
-          {/* Iframe */}
+          {/* Iframe — pinned to exact embed height, dark bg masks white flash */}
           <iframe
             src={embedSrc}
             width="100%"
-            height={platform === "soundcloud" ? 166 : 232}
+            height={embedHeight}
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            className={`absolute inset-0 border-0 block w-full transition-opacity duration-700 ${iframeLoaded ? "z-[8]" : "z-[5]"}`}
-            style={{ opacity: iframeLoaded ? 1 : 0 }}
+            className="absolute inset-x-0 top-0 border-0 block w-full"
+            style={{
+              height: embedHeight,
+              background: "#000",
+              opacity: revealReady ? 1 : 0,
+              transition: "opacity 700ms ease",
+            }}
             title={`Play ${trackTitle}`}
             scrolling={platform === "soundcloud" ? "no" : undefined}
             onLoad={() => setIframeLoaded(true)}
