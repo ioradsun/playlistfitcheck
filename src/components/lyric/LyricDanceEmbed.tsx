@@ -731,6 +731,7 @@ export function LyricDanceEmbed({
                 setShowCover(false);
                 onPlay?.();
                 if (player) {
+                  player.seek(0);
                   player.setMuted(false);
                   player.play();
                 }
