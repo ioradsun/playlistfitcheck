@@ -33,6 +33,7 @@ interface Props {
   reelsMode?: boolean;
   variant?: 'embedded' | 'reels';
   palette?: string[];
+  caption?: string;
 }
 
 function CommentReactPicker({
@@ -49,7 +50,7 @@ function CommentReactPicker({
     <span className="relative inline-block">
       <button
         onClick={() => setOpen(o => !o)}
-        className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors focus:outline-none"
+        className="text-[10px] font-mono text-white/30 hover:text-white/55 transition-colors focus:outline-none"
       >
         + react
       </button>
@@ -87,6 +88,7 @@ export function PostCommentPanel({
   reelsMode = false,
   variant = 'embedded',
   palette,
+  caption,
 }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
@@ -364,7 +366,7 @@ export function PostCommentPanel({
           {!isReply && (
             <button
               onClick={() => setReplyingTo(comment)}
-              className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors ml-auto focus:outline-none"
+              className="text-[10px] font-mono text-white/30 hover:text-white/55 transition-colors ml-auto focus:outline-none"
             >
               reply
             </button>
@@ -403,6 +405,16 @@ export function PostCommentPanel({
               counts={reactionCounts}
               reacted={sessionReacted}
               onReact={handleReact}
+            />
+
+            {/* Comment input — directly below emoji bar */}
+            <CommentInput
+              value={text}
+              onChange={setText}
+              onSubmit={handleSubmit}
+              onClose={onClose}
+              hasSubmitted={hasSubmitted}
+              size="compact"
             />
 
             {replyingTo && (
@@ -445,16 +457,6 @@ export function PostCommentPanel({
                 </div>
               )}
             </div>
-
-            {/* Comment input */}
-            <CommentInput
-              value={text}
-              onChange={setText}
-              onSubmit={handleSubmit}
-              onClose={onClose}
-              hasSubmitted={hasSubmitted}
-              size="compact"
-            />
 
             {/* Vote strip — Run it back / Not For Me / Close */}
             <div
@@ -506,9 +508,16 @@ export function PostCommentPanel({
         )}
       </AnimatePresence>
 
-      {/* ── CardBottomBar — always visible at bottom, always interactive ── */}
+      {/* ── Caption + CardBottomBar — visible when panel closed ── */}
       {!isOpen && (
         <div className="pointer-events-auto">
+          {caption && caption.trim() && (
+            <div className="px-3 pt-1.5 pb-1" style={{ background: '#0a0a0a' }}>
+              <p className="text-[13px] leading-snug text-white/50 line-clamp-2">
+                {caption}
+              </p>
+            </div>
+          )}
           <CardBottomBar
             variant={variant === 'reels' ? 'fullscreen' : 'embedded'}
             votedSide={votedSide}
