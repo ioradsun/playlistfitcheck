@@ -37,7 +37,7 @@ import type { SongFitPost } from "./types";
 
 import { ProfileHoverCard } from "./ProfileHoverCard";
 
-import { VerifiedBadge } from "@/components/VerifiedBadge";
+
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent } from "@/lib/engagementTracking";
 import { useCardState, type CardState } from "./useCardLifecycle";

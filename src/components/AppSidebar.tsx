@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
 import { VerificationModal } from "@/components/VerificationModal";
-import { VerifiedBadge } from "@/components/VerifiedBadge";
+
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { prefetchNavigationTarget } from "@/lib/routePrefetch";
 

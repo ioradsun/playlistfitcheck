@@ -129,7 +129,7 @@ export function ProfileHoverCard({ userId, children }: Props) {
                   <div className="min-w-0">
                     <p className="text-sm font-bold truncate leading-tight">{displayName}</p>
                     {profile.is_verified ? (
-                      <p className="text-[11px] text-blue-500 font-medium">Verified Artist</p>
+                      <p className="text-[11px] text-green-400 font-medium">Verified Artist</p>
                     ) : profile.spotify_artist_id ? (
                       <p className="text-[11px] text-primary font-medium">Artist</p>
                     ) : null}

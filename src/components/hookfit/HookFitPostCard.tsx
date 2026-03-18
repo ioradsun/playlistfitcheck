@@ -14,7 +14,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { ProfileHoverCard } from "@/components/songfit/ProfileHoverCard";
 import { FmlyBadge } from "@/components/FmlyBadge";
-import { VerifiedBadge } from "@/components/VerifiedBadge";
+
 import {
   DropdownMenu,
   DropdownMenuContent,

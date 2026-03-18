@@ -14,7 +14,7 @@ import {
   Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle, BarChart2, Sparkles, Zap,
 } from "lucide-react";
 import { FmlyBadge } from "@/components/FmlyBadge";
-import { VerifiedBadge } from "@/components/VerifiedBadge";
+
 
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
