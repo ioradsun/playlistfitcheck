@@ -111,6 +111,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const userTookControlRef = useRef(false);
+  const [pinnedLineIndex, setPinnedLineIndex] = useState<number | null>(null);
+  const pinnedLineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sectionMeta = useMemo(() => {
     const canonical = sections
@@ -174,6 +176,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
   const voteAccent = palette[1] ?? 'rgba(255,255,255,0.7)';
   const playheadLineIndex = activeLine?.lineIndex ?? null;
   const displayLineIndex = playheadLineIndex ?? allLines[0]?.lineIndex ?? null;
+  const effectiveActiveIndex = pinnedLineIndex ?? playheadLineIndex;
 
   const expandedLineComments = useMemo(() => {
     if (expandedLineIndex == null) return [];
@@ -284,6 +287,13 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
       onSeekTo(line.startSec);
       return;
     }
+    if (line.lineIndex === playheadLineIndex && !player.audio.paused) {
+      player.pause();
+      return;
+    }
+    setPinnedLineIndex(line.lineIndex);
+    if (pinnedLineTimerRef.current) clearTimeout(pinnedLineTimerRef.current);
+    pinnedLineTimerRef.current = setTimeout(() => setPinnedLineIndex(null), 300);
     player.seek(line.startSec);
     if (player.audio.paused) {
       player.audio.play().catch(() => {});
@@ -415,7 +425,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
             const shouldShowSectionHeader = !!currentSection
               && currentSection.sectionIndex !== previousSection?.sectionIndex
               && !!sectionLabel;
-            const isActive = line.lineIndex === playheadLineIndex;
+            const isActive = line.lineIndex === effectiveActiveIndex;
 
             const lineReactionsByEmoji = EMOJIS
               .map(({ key, symbol }) => ({ key, symbol, count: reactionData[key]?.line[line.lineIndex] ?? 0 }))

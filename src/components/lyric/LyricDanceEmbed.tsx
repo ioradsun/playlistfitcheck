@@ -838,7 +838,7 @@ export function LyricDanceEmbed({
           onVoteYes={() => handleVote(true)}
           onVoteNo={() => handleVote(false)}
           danceId={data?.id ?? ""}
-          activeLine={activeLine}
+          activeLine={muted ? null : activeLine}
           allLines={lyricSections.allLines}
           audioSections={audioSections}
           currentTimeSec={currentTimeSec}
