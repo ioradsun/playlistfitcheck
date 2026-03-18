@@ -80,6 +80,7 @@ export const LyricDanceProgressBar = React.forwardRef<HTMLDivElement, Props>(
       if (!player) return;
       e.stopPropagation();
       dragging.current = true;
+      setIsDragging(true);
       wasPlaying.current = !player.audio.paused;
       player.pause();
       onSeekStart?.();
