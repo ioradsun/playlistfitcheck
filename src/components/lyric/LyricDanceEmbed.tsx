@@ -132,6 +132,10 @@ export function LyricDanceEmbed({
   const userActivatedRef = useRef(false);
 
   const isControlled = externalPanelOpen !== undefined;
+  const handleClosePanelAndSync = useCallback(() => {
+    handlePanelClose();
+    if (isControlled) onExternalPanelOpenChange?.(false);
+  }, [handlePanelClose, isControlled, onExternalPanelOpenChange]);
   const handleOpenReactions = useCallback(() => {
     if (hideReactButton) {
       onOpenReactions?.();
