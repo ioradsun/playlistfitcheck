@@ -403,38 +403,16 @@ const PublicProfile = () => {
               <p className="text-base font-bold">{submissions.length}</p>
               <p className="text-[10px] text-muted-foreground">Songs</p>
             </div>
-            {isHookMode ? (
-              <>
-                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-                  <Zap size={14} className="mx-auto mb-1 text-primary" />
-                  <p className="text-base font-bold">{totalReviews}</p>
-                  <p className="text-[10px] text-muted-foreground">Reviews</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-                  <BarChart2 size={14} className="mx-auto mb-1 text-primary" />
-                  <p className="text-base font-bold">{avgReplayPct}%</p>
-                  <p className="text-[10px] text-muted-foreground">Avg Replay</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-                  <Heart size={14} className="mx-auto mb-1 text-primary" />
-                  <p className="text-base font-bold">{totalLikes}</p>
-                  <p className="text-[10px] text-muted-foreground">Likes</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-                  <MessageCircle size={14} className="mx-auto mb-1 text-primary" />
-                  <p className="text-base font-bold">{totalComments}</p>
-                  <p className="text-[10px] text-muted-foreground">Comments</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-                  <Bookmark size={14} className="mx-auto mb-1 text-primary" />
-                  <p className="text-base font-bold">{totalSaves}</p>
-                  <p className="text-[10px] text-muted-foreground">Saves</p>
-                </div>
-              </>
-            )}
+            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
+              <Zap size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{totalReviews}</p>
+              <p className="text-[10px] text-muted-foreground">Reviews</p>
+            </div>
+            <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
+              <BarChart2 size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{avgReplayPct}%</p>
+              <p className="text-[10px] text-muted-foreground">Avg Replay</p>
+            </div>
           </div>
         )}
 
