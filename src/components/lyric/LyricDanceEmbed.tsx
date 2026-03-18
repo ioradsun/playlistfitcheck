@@ -132,6 +132,10 @@ export function LyricDanceEmbed({
   const userActivatedRef = useRef(false);
 
   const isControlled = externalPanelOpen !== undefined;
+  const handleClosePanelAndSync = useCallback(() => {
+    handlePanelClose();
+    if (isControlled) onExternalPanelOpenChange?.(false);
+  }, [handlePanelClose, isControlled, onExternalPanelOpenChange]);
   const handleOpenReactions = useCallback(() => {
     if (hideReactButton) {
       onOpenReactions?.();
@@ -324,7 +328,7 @@ export function LyricDanceEmbed({
             onVoteNo={() => handleVote(false)}
             onSubmit={handleCommentFromBar}
             onOpenReactions={handleOpenReactions}
-            onClose={closePanel}
+            onClose={handleClosePanelAndSync}
             panelOpen={reactionPanelOpen}
             topReaction={topReaction ? { symbol: topReaction.symbol, count: topReaction.count } : null}
             trackTitle={songTitle}
@@ -337,7 +341,7 @@ export function LyricDanceEmbed({
           displayMode={reelsMode ? "fullscreen" : "embedded"}
           isOpen={reactionPanelOpen}
           refreshKey={commentRefreshKey}
-          onClose={handlePanelClose}
+          onClose={handleClosePanelAndSync}
           votedSide={votedSide}
           score={score}
           onVoteYes={() => handleVote(true)}
