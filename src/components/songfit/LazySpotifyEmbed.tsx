@@ -48,7 +48,7 @@ function LazySpotifyEmbedInner({
 
   useEffect(() => {
     if (!iframeLoaded) return;
-    const timer = setTimeout(() => setRevealReady(true), 150);
+    const timer = setTimeout(() => setRevealReady(true), 300);
     return () => clearTimeout(timer);
   }, [iframeLoaded]);
 
