@@ -690,6 +690,7 @@ const Index = () => {
         }
         case "lyric": {
           if (data) {
+            setActiveTab("lyric");
             setLoadedLyric(data);
             setIsFetchingProject(false);
             if (data.id) { navTarget = `/LyricFit/${data.id}`; projectLoadedRef.current = data.id; }
