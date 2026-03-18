@@ -85,7 +85,7 @@ export function SongFitPostCard({
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
   const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
-  const crowdfitMode = siteCopy.features?.crowdfit_mode ?? "reactions";
+  
   const hottestHooksEnabled =
     siteCopy.features?.hookfit_hottest_hooks !== false;
   const navigate = useNavigate();
