@@ -542,6 +542,7 @@ export function SongFitPostCard({
                       onClose={() => setPanelOpen(false)}
                       panelOpen={panelOpen}
                       topReaction={topPostReaction}
+                      trackTitle={post.track_title}
                     />
                   </div>
                 )}
@@ -681,9 +682,6 @@ export function SongFitPostCard({
                 </div>
               </div>
 
-              <p className="text-sm font-semibold text-white/90 truncate">
-                {post.track_title}
-              </p>
 
               {localCaption && localCaption.trim() && !editing && (
                 <p className="text-[12px] leading-snug text-white/50 mt-1">
@@ -725,6 +723,7 @@ export function SongFitPostCard({
                     onClose={() => setPanelOpen(false)}
                     panelOpen={panelOpen}
                     topReaction={topPostReaction}
+                    trackTitle={post.track_title}
                   />
                 </div>
               ) : (
