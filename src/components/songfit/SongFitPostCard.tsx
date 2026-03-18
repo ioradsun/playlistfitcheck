@@ -377,8 +377,8 @@ export function SongFitPostCard({
         {/* Tiered media rendering */}
         <div
           className={cn(
-            "relative transition-all duration-500",
-            reelsMode && "absolute inset-0",
+            "relative",
+            reelsMode ? "absolute inset-0" : "transition-all duration-500",
           )}
         >
           {post.lyric_dance_url &&

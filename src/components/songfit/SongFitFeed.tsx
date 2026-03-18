@@ -230,7 +230,7 @@ const _WindowedFeedList = memo(function WindowedFeedList({
                 ? undefined
                 : { height: heightMap.get(post.id) ?? FEED_CARD_MIN_HEIGHT }
             }
-            className={cn("shrink-0", reelsMode && "h-[100dvh]")}
+            className={cn("shrink-0", reelsMode && "h-[100dvh] snap-start")}
           />
         ),
       )}
