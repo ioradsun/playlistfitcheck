@@ -13,6 +13,170 @@ let workerBlobUrl: string | null = null;
 let essentiaInstance: any = null;
 let loadPromise: Promise<any> | null = null;
 
+// ── Persistent worker singleton ──────────────────────────────────────────────
+let persistentWorker: Worker | null = null;
+let workerReady = false;
+let workerInitPromise: Promise<void> | null = null;
+let pendingResolve: ((result: EssentiaResult) => void) | null = null;
+let pendingReject: ((err: Error) => void) | null = null;
+let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function getWorkerCode(): string {
+  return `
+    let essentia = null;
+    let initPromise = null;
+
+    async function ensureEssentia() {
+      if (essentia) return essentia;
+      if (initPromise) return initPromise;
+
+      initPromise = (async () => {
+        importScripts(${JSON.stringify(ESSENTIA_UMD_URL)}, ${JSON.stringify(ESSENTIA_CORE_WORKER_URL)});
+
+        let wasmModule = self.EssentiaWASM;
+        if (typeof wasmModule === 'function') {
+          wasmModule = await wasmModule();
+        }
+        essentia = new self.Essentia(wasmModule);
+        return essentia;
+      })();
+
+      return initPromise;
+    }
+
+    self.onmessage = async function (e) {
+      if (e.data.type === 'warmup') {
+        try {
+          await ensureEssentia();
+          self.postMessage({ type: 'ready' });
+        } catch (err) {
+          self.postMessage({ type: 'error', message: (err && err.message) || 'Warmup failed' });
+        }
+        return;
+      }
+
+      const { signal } = e.data;
+      try {
+        const api = await ensureEssentia();
+        const mono = new Float32Array(signal);
+        const vectorSignal = api.arrayToVector(mono);
+        const result = api.RhythmExtractor2013(vectorSignal, 208, 'multifeature', 40);
+
+        const beatsVector = result.ticks;
+        const beats = [];
+        for (let i = 0; i < beatsVector.size(); i++) {
+          beats.push(beatsVector.get(i));
+        }
+
+        const bpm = result.bpm;
+        const confidence = result.confidence;
+
+        vectorSignal.delete();
+        beatsVector.delete();
+
+        self.postMessage({ type: 'result', bpm, beats, confidence });
+      } catch (err) {
+        self.postMessage({ type: 'error', message: (err && err.message) || 'Essentia worker failed' });
+      }
+    };
+  `;
+}
+
+function getWorkerBlobUrl(): string {
+  if (!workerBlobUrl) {
+    const blob = new Blob([getWorkerCode()], { type: 'application/javascript' });
+    workerBlobUrl = URL.createObjectURL(blob);
+  }
+  return workerBlobUrl;
+}
+
+function ensurePersistentWorker(): Promise<void> {
+  if (workerReady && persistentWorker) return Promise.resolve();
+  if (workerInitPromise) return workerInitPromise;
+
+  workerInitPromise = new Promise<void>((resolve, reject) => {
+    try {
+      const worker = new Worker(getWorkerBlobUrl());
+
+      const initTimeout = setTimeout(() => {
+        // Warmup timed out — worker is probably broken
+        worker.terminate();
+        persistentWorker = null;
+        workerInitPromise = null;
+        reject(new Error('Essentia worker warmup timed out'));
+      }, 30000);
+
+      worker.onmessage = (e) => {
+        if (e.data.type === 'ready') {
+          clearTimeout(initTimeout);
+          persistentWorker = worker;
+          workerReady = true;
+
+          // Re-wire onmessage for analysis results
+          worker.onmessage = handleWorkerMessage;
+          worker.onerror = handleWorkerError;
+          resolve();
+          return;
+        }
+        if (e.data.type === 'error') {
+          clearTimeout(initTimeout);
+          worker.terminate();
+          persistentWorker = null;
+          workerInitPromise = null;
+          reject(new Error(e.data.message || 'Essentia worker init failed'));
+          return;
+        }
+      };
+
+      worker.onerror = () => {
+        clearTimeout(initTimeout);
+        worker.terminate();
+        persistentWorker = null;
+        workerInitPromise = null;
+        reject(new Error('Essentia worker errored during init'));
+      };
+
+      // Trigger WASM download + init
+      worker.postMessage({ type: 'warmup' });
+    } catch (err) {
+      workerInitPromise = null;
+      reject(err);
+    }
+  });
+
+  return workerInitPromise;
+}
+
+function handleWorkerMessage(e: MessageEvent): void {
+  if (e.data.type === 'result' && pendingResolve) {
+    if (pendingTimeout) { clearTimeout(pendingTimeout); pendingTimeout = null; }
+    const resolve = pendingResolve;
+    pendingResolve = null;
+    pendingReject = null;
+    resolve({ bpm: e.data.bpm, beats: e.data.beats, confidence: e.data.confidence });
+  } else if (e.data.type === 'error' && pendingReject) {
+    if (pendingTimeout) { clearTimeout(pendingTimeout); pendingTimeout = null; }
+    const reject = pendingReject;
+    pendingResolve = null;
+    pendingReject = null;
+    reject(new Error(e.data.message || 'Essentia analysis failed'));
+  }
+}
+
+function handleWorkerError(): void {
+  if (pendingTimeout) { clearTimeout(pendingTimeout); pendingTimeout = null; }
+  const reject = pendingReject;
+  pendingResolve = null;
+  pendingReject = null;
+  // Worker is dead — reset state so next call creates a new one
+  persistentWorker = null;
+  workerReady = false;
+  workerInitPromise = null;
+  reject?.(new Error('Essentia worker crashed'));
+}
+
+// ── Main thread fallback ─────────────────────────────────────────────────────
+
 function loadScript(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${url}"]`)) {
@@ -67,108 +231,54 @@ async function runEssentiaMainThread(signal: Float32Array): Promise<EssentiaResu
   return { bpm, beats, confidence };
 }
 
-function getWorkerUrl(): string {
-  if (workerBlobUrl) return workerBlobUrl;
-
-  const workerCode = `
-    let essentia = null;
-    let initPromise = null;
-
-    async function ensureEssentia() {
-      if (essentia) return essentia;
-      if (initPromise) return initPromise;
-
-      initPromise = (async () => {
-        importScripts(${JSON.stringify(ESSENTIA_UMD_URL)}, ${JSON.stringify(ESSENTIA_CORE_WORKER_URL)});
-
-        let wasmModule = self.EssentiaWASM;
-        if (typeof wasmModule === 'function') {
-          wasmModule = await wasmModule();
-        }
-        essentia = new self.Essentia(wasmModule);
-        return essentia;
-      })();
-
-      return initPromise;
-    }
-
-    self.onmessage = async function (e) {
-      const { signal } = e.data;
-      try {
-        const api = await ensureEssentia();
-        const mono = new Float32Array(signal);
-        const vectorSignal = api.arrayToVector(mono);
-        const result = api.RhythmExtractor2013(vectorSignal, 208, 'multifeature', 40);
-
-        const beatsVector = result.ticks;
-        const beats = [];
-        for (let i = 0; i < beatsVector.size(); i++) {
-          beats.push(beatsVector.get(i));
-        }
-
-        const bpm = result.bpm;
-        const confidence = result.confidence;
-
-        vectorSignal.delete();
-        beatsVector.delete();
-
-        self.postMessage({ type: 'result', bpm, beats, confidence });
-      } catch (err) {
-        self.postMessage({ type: 'error', message: (err && err.message) || 'Essentia worker failed' });
-      }
-    };
-  `;
-
-  const blob = new Blob([workerCode], { type: 'application/javascript' });
-  workerBlobUrl = URL.createObjectURL(blob);
-  return workerBlobUrl;
-}
+// ── Public API ───────────────────────────────────────────────────────────────
 
 export function runEssentiaAsync(signal: Float32Array): Promise<EssentiaResult> {
   if (typeof Worker === 'undefined') {
     return runEssentiaMainThread(signal);
   }
 
-  return new Promise((resolve, reject) => {
+  return (async () => {
     try {
-      const worker = new Worker(getWorkerUrl());
-      const copy = signal.slice();
+      await ensurePersistentWorker();
+    } catch {
+      // Worker init failed — fall back to main thread
+      console.warn('[beat-grid] Persistent worker failed, falling back to main thread');
+      return runEssentiaMainThread(signal);
+    }
 
-      const timeoutId = setTimeout(() => {
-        worker.terminate();
+    if (!persistentWorker) {
+      return runEssentiaMainThread(signal);
+    }
+
+    return new Promise<EssentiaResult>((resolve, reject) => {
+      // Only one analysis at a time — reject if busy
+      if (pendingResolve) {
+        reject(new Error('Essentia worker busy'));
+        return;
+      }
+
+      pendingResolve = resolve;
+      pendingReject = reject;
+
+      pendingTimeout = setTimeout(() => {
+        pendingTimeout = null;
+        const rej = pendingReject;
+        pendingResolve = null;
+        pendingReject = null;
+        // Worker is stuck — kill and recreate on next call
+        persistentWorker?.terminate();
+        persistentWorker = null;
+        workerReady = false;
+        workerInitPromise = null;
         console.warn('[beat-grid] Essentia worker timed out, falling back to main thread');
-        void runEssentiaMainThread(signal).then(resolve).catch(reject);
+        void runEssentiaMainThread(signal).then(resolve).catch(r => rej?.(r));
       }, 60000);
 
-      worker.onmessage = (e) => {
-        clearTimeout(timeoutId);
-        worker.terminate();
-
-        if (e.data.type === 'result') {
-          resolve({
-            bpm: e.data.bpm as number,
-            beats: e.data.beats as number[],
-            confidence: e.data.confidence as number,
-          });
-          return;
-        }
-
-        console.warn('[beat-grid] Essentia worker failed, falling back to main thread:', e.data.message);
-        void runEssentiaMainThread(signal).then(resolve).catch(reject);
-      };
-
-      worker.onerror = () => {
-        clearTimeout(timeoutId);
-        worker.terminate();
-        console.warn('[beat-grid] Essentia worker errored, falling back to main thread');
-        void runEssentiaMainThread(signal).then(resolve).catch(reject);
-      };
-
-      worker.postMessage({ signal: copy.buffer }, [copy.buffer]);
-    } catch {
-      void runEssentiaMainThread(signal).then(resolve).catch(reject);
-    }
-  });
+      const copy = signal.slice();
+      persistentWorker!.postMessage({ signal: copy.buffer }, [copy.buffer]);
+    });
+  })();
 }
 
 export function preloadEssentia(): void {
@@ -177,31 +287,19 @@ export function preloadEssentia(): void {
     return;
   }
 
-  try {
-    const worker = new Worker(getWorkerUrl());
-    const signal = new Float32Array(1024);
-
-    const timeoutId = setTimeout(() => {
-      worker.terminate();
-    }, 15000);
-
-    worker.onmessage = () => {
-      clearTimeout(timeoutId);
-      worker.terminate();
-    };
-
-    worker.onerror = () => {
-      clearTimeout(timeoutId);
-      worker.terminate();
-    };
-
-    worker.postMessage({ signal: signal.buffer }, [signal.buffer]);
-  } catch {
-    void loadEssentiaMainThread();
-  }
+  // Warm up the persistent worker — downloads WASM + initializes
+  void ensurePersistentWorker().catch(() => {
+    // Warmup failed — will retry on first actual analysis call
+  });
 }
 
 export function revokeEssentiaWorker(): void {
+  if (persistentWorker) {
+    persistentWorker.terminate();
+    persistentWorker = null;
+    workerReady = false;
+    workerInitPromise = null;
+  }
   if (workerBlobUrl) {
     URL.revokeObjectURL(workerBlobUrl);
     workerBlobUrl = null;
