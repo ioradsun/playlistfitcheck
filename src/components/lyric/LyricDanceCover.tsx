@@ -77,11 +77,12 @@ export function LyricDanceCover({
 
       {/* Layer 2 — dark gradient over the image */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 transition-opacity duration-700"
         style={{
           background: isMarketingCover
-            ? "rgba(0,0,0,0.88)"
-            : "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)"
+            ? "rgba(0,0,0,0.75)"
+            : "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)",
+          opacity: hideBackground ? (isMarketingCover ? 0.6 : 0.7) : 1,
         }}
       />
 
