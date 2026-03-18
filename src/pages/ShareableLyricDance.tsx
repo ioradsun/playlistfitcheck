@@ -666,7 +666,7 @@ export default function ShareableLyricDance() {
           <div className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
             <div
               className="flex items-center cursor-pointer"
-              onClick={() => navigate(`/u/${profile?.id ?? ""}`)}
+              onClick={() => data?.user_id && navigate(`/u/${data.user_id}`)}
             >
               {coverAvatarUrl ? (
                 <img src={coverAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
