@@ -12,7 +12,6 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
-import { HotSectionPill } from "@/components/lyric/HotSectionPill";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import ClaimBanner from "@/components/claim/ClaimBanner";
@@ -36,7 +35,6 @@ export default function ShareableLyricDance() {
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [badgeVisible, setBadgeVisible] = useState(false);
-  const [themeMode, setThemeMode] = useState<"auto" | "light" | "dark">("auto");
 
   useEffect(() => {
     if (!artistSlug || !songSlug) return;
@@ -69,65 +67,6 @@ export default function ShareableLyricDance() {
             if (pData) setProfile(pData as ProfileInfo);
           }, () => {});
 
-        (async () => {
-          const existingDir = d.cinematic_direction;
-          const existingImages = (d as any).section_images;
-          const imagesComplete =
-            Array.isArray(existingImages) &&
-            existingImages.length >= 3 &&
-            existingImages.every((url: string) => !!url);
-
-          if (existingDir && !Array.isArray(existingDir) && existingDir.sections?.length > 0) {
-            if (!imagesComplete) {
-              supabase.functions
-                .invoke("generate-section-images", { body: { lyric_dance_id: d.id } })
-                .then(({ data: imgResult }) => {
-                  const urls = imgResult?.section_images ?? imgResult?.urls;
-                  if (urls) setDataRaw((prev) => (prev ? { ...prev, section_images: urls } : prev));
-                })
-                .catch(() => {});
-            }
-            return;
-          }
-
-          if (!d.lyrics?.length) return;
-          const linesForDir = (d.lyrics as any[])
-            .filter((l: any) => l.tag !== "adlib")
-            .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-
-          const { data: dirResult } = await supabase.functions.invoke("cinematic-direction", {
-            body: {
-              title: d.song_name,
-              artist: d.artist_name,
-              lines: linesForDir,
-              beatGrid: d.beat_grid ? { bpm: (d.beat_grid as any).bpm } : undefined,
-              lyricId: d.id,
-              words: d.words ?? undefined,
-            },
-          });
-
-          if (dirResult?.cinematicDirection) {
-            setDataRaw((prev) => (prev ? { ...prev, cinematic_direction: dirResult.cinematicDirection } : prev));
-            const sections = dirResult.cinematicDirection?.sections;
-            if (Array.isArray(sections) && sections.length > 0) {
-              supabase.functions
-                .invoke("generate-section-images", { body: { lyric_dance_id: d.id } })
-                .then(({ data: imgResult }) => {
-                  const urls = imgResult?.section_images ?? imgResult?.urls;
-                  if (urls) setDataRaw((prev) => (prev ? { ...prev, section_images: urls } : prev));
-                })
-                .catch(() => {});
-            }
-          }
-        })().catch(() => {});
-
-        supabase
-          .from("lyric_dance_comments" as any)
-          .select("id, text, submitted_at")
-          .eq("dance_id", d.id)
-          .order("submitted_at", { ascending: true })
-          .limit(100)
-          .then(() => {}, () => {});
       });
   }, [artistSlug, songSlug]);
 
@@ -180,60 +119,6 @@ export default function ShareableLyricDance() {
       setDataRaw(fetchedData);
     }
   }, [fetchedData, data]);
-
-  useEffect(() => {
-    if (!data?.id) return;
-    const channel = supabase
-      .channel(`dance-comments-${data.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "lyric_dance_comments",
-          filter: `dance_id=eq.${data.id}`,
-        },
-        (payload: any) => {
-          const text = payload.new?.text;
-          if (text && player) player.fireComment(text);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [data?.id, player]);
-
-  useEffect(() => {
-    if (!data?.id) return;
-    const channel = supabase
-      .channel(`dance-sections-${data.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "shareable_lyric_dances",
-          filter: `id=eq.${data.id}`,
-        },
-        (payload: any) => {
-          const nextDirection = payload.new?.cinematic_direction;
-          if (nextDirection === undefined) return;
-          setDataRaw((prev) => (prev ? { ...prev, cinematic_direction: nextDirection } : prev));
-          setFetchedData((prev) => (prev ? { ...prev, cinematic_direction: nextDirection } : prev));
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [data?.id, setFetchedData]);
-
-  useEffect(() => {
-    if (player) player.themeOverride = themeMode;
-  }, [themeMode, player]);
 
   const openReactionPanel = useCallback(() => {
     openPanel();
@@ -308,16 +193,6 @@ export default function ShareableLyricDance() {
           <canvas id="bg-canvas" ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
           <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-          {!showCover && !isWaiting && !isMarketingView && (
-            <HotSectionPill
-              sections={lyricSections.sections}
-              currentTimeSec={currentTimeSec}
-              reactionData={reactionData}
-              allLines={lyricSections.allLines}
-              palette={palette}
-              isVisible={!showCover && !isWaiting}
-            />
-          )}
 
           {reactionPanelOpen && (
             <div
