@@ -407,6 +407,16 @@ export function PostCommentPanel({
               onReact={handleReact}
             />
 
+            {/* Comment input — directly below emoji bar */}
+            <CommentInput
+              value={text}
+              onChange={setText}
+              onSubmit={handleSubmit}
+              onClose={onClose}
+              hasSubmitted={hasSubmitted}
+              size="compact"
+            />
+
             {replyingTo && (
               <div
                 className="flex items-center gap-2 px-4 py-1.5 shrink-0 border-b border-white/[0.04]"
@@ -447,16 +457,6 @@ export function PostCommentPanel({
                 </div>
               )}
             </div>
-
-            {/* Comment input */}
-            <CommentInput
-              value={text}
-              onChange={setText}
-              onSubmit={handleSubmit}
-              onClose={onClose}
-              hasSubmitted={hasSubmitted}
-              size="compact"
-            />
 
             {/* Vote strip — Run it back / Not For Me / Close */}
             <div
