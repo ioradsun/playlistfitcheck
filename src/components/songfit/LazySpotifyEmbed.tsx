@@ -35,7 +35,7 @@ function LazySpotifyEmbedInner({
   const [revealReady, setRevealReady] = useState(false);
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
-  const embedHeight = platform === "soundcloud" ? 166 : 232;
+  const embedHeight = platform === "soundcloud" ? 166 : 352;
 
   const embedSrc =
     platform === "soundcloud" && trackUrl

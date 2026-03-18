@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 
-interface PageLayoutProps {
-  children: ReactNode;
+export interface PageLayoutProps {
+  children?: ReactNode;
   title?: string;
   subtitle?: string;
   headerRight?: ReactNode;
