@@ -865,7 +865,16 @@ export function FitTab({
       {/* Dance preview or waveform fallback */}
       {publishedUrl && publishedDanceId ? (
         <div className="space-y-3">
-          {/* Action toolbar — above the player */}
+          <div className="rounded-xl overflow-hidden w-full aspect-video">
+            <LyricDanceEmbed
+              lyricDanceId={publishedDanceId}
+              lyricDanceUrl={publishedUrl}
+              songTitle={lyricData.title || "Untitled"}
+              artistName=""
+              prefetchedData={prefetchedDanceData}
+            />
+          </div>
+          {/* Action toolbar — single row of icon buttons */}
           <div className="flex items-center justify-center gap-1">
             <a
               href={publishedUrl}
@@ -908,16 +917,6 @@ export function FitTab({
               ) : null}
               {crowdfitPostId ? "Live" : "CrowdFit"}
             </button>
-          </div>
-          {/* Dance preview */}
-          <div className="rounded-xl overflow-hidden w-full aspect-video">
-            <LyricDanceEmbed
-              lyricDanceId={publishedDanceId}
-              lyricDanceUrl={publishedUrl}
-              songTitle={lyricData.title || "Untitled"}
-              artistName=""
-              prefetchedData={prefetchedDanceData}
-            />
           </div>
           <FitExportModal
             isOpen={showExportModal}
