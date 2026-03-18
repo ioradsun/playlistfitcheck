@@ -504,7 +504,7 @@ export function SongFitPostCard({
                   </div>
                 )}
 
-                {isSpotifyEmbed && crowdfitMode === "hook_review" && !reelsMode && (
+                {isSpotifyEmbed && !reelsMode && (
                   <div
                     className={`relative ${panelOpen ? "z-[500]" : "z-[300]"}`}
                   >
