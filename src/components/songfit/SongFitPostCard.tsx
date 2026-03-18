@@ -451,33 +451,9 @@ export function SongFitPostCard({
                   trackTitle={post.track_title}
                   reelsMode={reelsMode}
                   variant={reelsMode ? "reels" : "embedded"}
+                  caption={!reelsMode && !editing ? localCaption : undefined}
                 />
               </div>
-
-              {/* Caption — desktop only */}
-              {!reelsMode && !editing && localCaption && localCaption.trim() && (
-                <div
-                  className="px-3 pt-1.5 pb-1"
-                  style={{ background: "#0a0a0a" }}
-                >
-                  {localCaption.length <= 100 || captionExpanded ? (
-                    <p className="text-[13px] leading-snug text-white/50">
-                      {localCaption}
-                    </p>
-                  ) : (
-                    <p className="text-[13px] leading-snug text-white/50">
-                      {localCaption.slice(0, 100).trimEnd()}
-                      <span className="text-white/20">… </span>
-                      <button
-                        onClick={() => setCaptionExpanded(true)}
-                        className="text-white/20 hover:text-white/40 text-[13px]"
-                      >
-                        more
-                      </button>
-                    </p>
-                  )}
-                </div>
-              )}
             </>
           )}
         </div>

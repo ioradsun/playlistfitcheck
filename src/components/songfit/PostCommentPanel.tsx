@@ -508,9 +508,16 @@ export function PostCommentPanel({
         )}
       </AnimatePresence>
 
-      {/* ── CardBottomBar — always visible at bottom, always interactive ── */}
+      {/* ── Caption + CardBottomBar — visible when panel closed ── */}
       {!isOpen && (
         <div className="pointer-events-auto">
+          {caption && caption.trim() && (
+            <div className="px-3 pt-1.5 pb-1" style={{ background: '#0a0a0a' }}>
+              <p className="text-[13px] leading-snug text-white/50 line-clamp-2">
+                {caption}
+              </p>
+            </div>
+          )}
           <CardBottomBar
             variant={variant === 'reels' ? 'fullscreen' : 'embedded'}
             votedSide={votedSide}
