@@ -5,31 +5,32 @@ interface Props {
   className?: string;
 }
 
-export function VerifiedBadge({ size = 12, className = "" }: Props) {
+/**
+ * Verified Artist indicator — a minimal green checkmark with a
+ * translucent dark backing for legibility on any surface.
+ */
+export function VerifiedBadge({ size = 14, className = "" }: Props) {
+  const r = size / 2;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={`inline-flex items-center shrink-0 ${className}`}>
+        <span className={`inline-flex items-center justify-center shrink-0 ${className}`}>
           <svg
             width={size}
             height={size}
-            viewBox="0 0 24 24"
+            viewBox="0 0 16 16"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
           >
-            {/* Badge shape — filled green, no stroke */}
+            {/* Subtle dark disc for contrast */}
+            <circle cx="8" cy="8" r="7.5" fill="rgba(0,0,0,0.6)" />
+            {/* Green checkmark — 2px stroke, rounded caps */}
             <path
-              d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
-              className="fill-green-400"
-            />
-            {/* Checkmark — white stroke, no fill */}
-            <path
-              d="m9 12 2 2 4-4"
-              stroke="white"
-              strokeWidth="2.5"
+              d="M5 8.2 7 10.2 11 6"
+              stroke="#4ade80"
+              strokeWidth="1.8"
               strokeLinecap="round"
               strokeLinejoin="round"
-              fill="none"
             />
           </svg>
         </span>
