@@ -5,8 +5,6 @@ import { getSessionId } from '@/lib/sessionId';
 import { formatDistanceToNow } from 'date-fns';
 import { PanelShell } from '@/components/shared/panel/PanelShell';
 import { EmojiBar } from '@/components/shared/panel/EmojiBar';
-import { CommentInput } from '@/components/shared/panel/CommentInput';
-import { VoteStrip } from '@/components/shared/panel/VoteStrip';
 import { EMOJIS, type EmojiKey } from '@/components/shared/panel/panelConstants';
 
 interface Comment {
@@ -24,11 +22,6 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   palette?: string[];
-  votedSide: 'a' | 'b' | null;
-  score: { total: number; replay_yes: number } | null;
-  onVoteYes: () => void;
-  onVoteNo: () => void;
-  hideInput?: boolean;
   refreshKey?: number;
   variant?: 'embedded' | 'fullscreen' | 'reels';
 }
@@ -75,14 +68,11 @@ function CommentReactPicker({
   );
 }
 
-export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0, variant = 'embedded' }: Props) {
-  const { user, profile } = useAuth();
+export function PostCommentPanel({ postId, isOpen, onClose: _onClose, palette, refreshKey = 0, variant = 'embedded' }: Props) {
+  const { user } = useAuth();
   const sessionId = getSessionId();
 
   const [comments, setComments] = useState<Comment[]>([]);
-  const [text, setText] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [reactionCounts, setReactionCounts] = useState<Partial<Record<EmojiKey, number>>>({});
   const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
@@ -173,61 +163,11 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
     loadComments();
     loadReactions();
     loadCommentReactions();
-    setHasSubmitted(false);
-    setText('');
     setReplyingTo(null);
   }, [isOpen, postId, refreshKey]);
 
-  const handleSubmit = async () => {
-    const content = text.trim();
-    if (!content || !user || submitting) return;
-    setSubmitting(true);
-    const parentCommentId = replyingTo?.id ?? null;
 
-    const optimisticComment: Comment = {
-      id: `optimistic-${Date.now()}`,
-      content,
-      created_at: new Date().toISOString(),
-      user_id: user.id,
-      parent_comment_id: parentCommentId,
-      profiles: {
-        display_name: profile?.display_name ?? null,
-        avatar_url: profile?.avatar_url ?? null,
-      },
-      replies: [],
-    };
 
-    if (replyingTo) {
-      setComments((prev) =>
-        prev.map((c) =>
-          c.id === replyingTo.id
-            ? { ...c, replies: [...(c.replies ?? []), optimisticComment] }
-            : c,
-        ),
-      );
-    } else {
-      setComments((prev) => [...prev, optimisticComment]);
-    }
-    setText('');
-    setReplyingTo(null);
-    setHasSubmitted(true);
-    setTimeout(() => setHasSubmitted(false), 500);
-
-    try {
-      await supabase
-        .from('songfit_comments')
-        .insert({
-          post_id: postId,
-          user_id: user.id,
-          content,
-          parent_comment_id: parentCommentId,
-        });
-    } catch {
-      // no-op — comment already shown optimistically
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleReact = async (key: EmojiKey) => {
     if (sessionReacted.has(key)) return;
@@ -395,26 +335,6 @@ export function PostCommentPanel({ postId, isOpen, onClose, palette, votedSide, 
           </div>
         )}
       </div>
-
-      {!hideInput && (
-        <CommentInput
-          value={text}
-          onChange={setText}
-          onSubmit={handleSubmit}
-          onClose={onClose}
-          hasSubmitted={hasSubmitted}
-          placeholder={replyingTo ? 'reply...' : 'What hit'}
-          size="compact"
-        />
-      )}
-
-      <VoteStrip
-        votedSide={votedSide}
-        score={score}
-        onVoteYes={onVoteYes}
-        onVoteNo={onVoteNo}
-        palette={palette}
-      />
     </PanelShell>
   );
 }
