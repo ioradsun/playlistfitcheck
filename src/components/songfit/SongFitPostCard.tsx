@@ -586,52 +586,23 @@ export function SongFitPostCard({
                 </p>
               )}
 
-              {crowdfitMode === "hook_review" ? (
-                <div className="mt-3 rounded-lg overflow-hidden">
-                  <CardBottomBar
-                    variant="fullscreen"
-                    votedSide={votedSide}
-                    score={score}
-                    note={note}
-                    onNoteChange={setNote}
-                    onVoteYes={() => handleVote(true)}
-                    onVoteNo={() => handleVote(false)}
-                    onSubmit={handleCommentFromBar}
-                    onOpenReactions={() => setPanelOpen(true)}
-                    onClose={() => setPanelOpen(false)}
-                    panelOpen={panelOpen}
-                    topReaction={topPostReaction}
-                    trackTitle={post.track_title}
-                  />
-                </div>
-              ) : (
-                <div className="flex items-center gap-0.5 mt-3">
-                  <button
-                    onClick={() => {
-                      onOpenComments(post.id);
-                      if (user) logEngagementEvent(post.id, user.id, "comment");
-                    }}
-                    className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group"
-                  >
-                    <MessageCircle size={17} className="text-white/50 group-hover:text-white/80" />
-                    {post.comments_count > 0 && (
-                      <span className="text-[10px] text-white/30 font-mono">{post.comments_count}</span>
-                    )}
-                  </button>
-                  <button onClick={handleShare} className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group">
-                    <Share2 size={17} className="text-white/50 group-hover:text-white/80" />
-                  </button>
-                  <button onClick={toggleLike} className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group">
-                    <Flame size={17} className={liked ? "fill-white/80 text-white/80" : "text-white/50 group-hover:text-white/80"} />
-                    {likesCount > 0 && (
-                      <button onClick={(e) => { e.stopPropagation(); onOpenLikes(post.id); }} className="text-[10px] text-white/30 font-mono">{likesCount}</button>
-                    )}
-                  </button>
-                  <button onClick={toggleSave} className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group">
-                    <Bookmark size={17} className={saved ? "fill-white/80 text-white/80" : "text-white/50 group-hover:text-white/80"} />
-                  </button>
-                </div>
-              )}
+              <div className="mt-3 rounded-lg overflow-hidden">
+                <CardBottomBar
+                  variant="fullscreen"
+                  votedSide={votedSide}
+                  score={score}
+                  note={note}
+                  onNoteChange={setNote}
+                  onVoteYes={() => handleVote(true)}
+                  onVoteNo={() => handleVote(false)}
+                  onSubmit={handleCommentFromBar}
+                  onOpenReactions={() => setPanelOpen(true)}
+                  onClose={() => setPanelOpen(false)}
+                  panelOpen={panelOpen}
+                  topReaction={topPostReaction}
+                  trackTitle={post.track_title}
+                />
+              </div>
 
               {isFirst && (
                 <div className="flex flex-col items-center gap-1 mt-4 animate-bounce">
