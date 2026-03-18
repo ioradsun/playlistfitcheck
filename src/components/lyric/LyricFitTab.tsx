@@ -261,18 +261,12 @@ export function LyricFitTab({
     [],
   );
 
+  // Read model overrides from site_copy (already loaded by SiteCopyProvider — no extra query)
   useEffect(() => {
-    supabase
-      .from("site_copy")
-      .select("copy_json")
-      .limit(1)
-      .single()
-      .then(({ data }) => {
-        const f = (data?.copy_json as any)?.features || {};
-        if (f.lyric_analysis_model) setAnalysisModel(f.lyric_analysis_model);
-        if (f.lyric_transcription_model) setTranscriptionModel(f.lyric_transcription_model);
-      });
-  }, []);
+    const f = (siteCopy as any).features || {};
+    if (f.lyric_analysis_model) setAnalysisModel(f.lyric_analysis_model);
+    if (f.lyric_transcription_model) setTranscriptionModel(f.lyric_transcription_model);
+  }, [siteCopy]);
 
   useEffect(() => {
     savedIdRef.current = savedId;

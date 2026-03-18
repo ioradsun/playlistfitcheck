@@ -21,6 +21,59 @@ import { AuthNudge } from "@/components/ui/AuthNudge";
 
 const MAX_RAW_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
+// ── Transcription fingerprint cache ──────────────────────────────────────────
+// Key: hash of file size + name + first 64KB of content
+// Value: { lines, words, title, artist, hooks, metadata, _debug }
+
+async function computeAudioFingerprint(file: File): Promise<string> {
+  const slice = file.slice(0, 65536);
+  const buf = await slice.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  // Simple FNV-1a hash — fast, no crypto needed
+  let hash = 2166136261;
+  for (let i = 0; i < bytes.length; i++) {
+    hash ^= bytes[i];
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${file.size}:${file.name}:${(hash >>> 0).toString(36)}`;
+}
+
+const TRANSCRIPT_CACHE_KEY = "tfm:transcript_cache";
+const TRANSCRIPT_CACHE_MAX = 5; // keep last 5 transcriptions
+const TRANSCRIPT_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+interface TranscriptCacheEntry {
+  fingerprint: string;
+  result: any;
+  ts: number;
+}
+
+function readTranscriptCache(): TranscriptCacheEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem(TRANSCRIPT_CACHE_KEY) || "[]");
+  } catch { return []; }
+}
+
+function writeTranscriptCache(entries: TranscriptCacheEntry[]): void {
+  try {
+    localStorage.setItem(TRANSCRIPT_CACHE_KEY, JSON.stringify(entries));
+  } catch {}
+}
+
+function getCachedTranscript(fingerprint: string): any | null {
+  const entries = readTranscriptCache();
+  const now = Date.now();
+  const entry = entries.find(e => e.fingerprint === fingerprint && now - e.ts < TRANSCRIPT_CACHE_TTL);
+  return entry?.result ?? null;
+}
+
+function setCachedTranscript(fingerprint: string, result: any): void {
+  let entries = readTranscriptCache().filter(e => e.fingerprint !== fingerprint);
+  entries.unshift({ fingerprint, result, ts: Date.now() });
+  if (entries.length > TRANSCRIPT_CACHE_MAX) entries = entries.slice(0, TRANSCRIPT_CACHE_MAX);
+  writeTranscriptCache(entries);
+}
+
 export type HeaderProjectSetter = (
   project: {
     title: string;
@@ -152,8 +205,50 @@ export function LyricsTab({
       onAudioSubmitted?.(file);
 
       try {
+        // Check transcription cache first
+        const fingerprint = await computeAudioFingerprint(file);
+        const cached = getCachedTranscript(fingerprint);
+        if (cached && cached.lines?.length > 0) {
+          // Cache hit — skip the edge function entirely
+          const newLyricData: LyricData = {
+            title: resolveProjectTitle(cached.title, file.name),
+            artist: cached.artist || undefined,
+            lines: cached.lines,
+            hooks: cached.hooks,
+            metadata: cached.metadata,
+          };
+          setLyricData(newLyricData);
+          setLines(cached.lines);
+          setWords?.(cached.words ?? null);
+          setAudioFile(file);
+          setHasRealAudio(true);
+          setSavedId(projectId);
+          setDebugData(cached._debug ?? null);
+
+          if (projectId) {
+            sessionAudio.set("lyric", projectId, file, { ttlMs: 20 * 60 * 1000 });
+            onSavedId?.(projectId);
+            onProjectSaved?.();
+            // Non-blocking DB persist
+            void supabase.from("saved_lyrics").upsert({
+              id: projectId,
+              user_id: user?.id,
+              title: resolveProjectTitle(cached.title, file.name),
+              lines: cached.lines,
+              words: cached.words ?? null,
+              filename: file.name,
+              updated_at: new Date().toISOString(),
+            } as any);
+          } else {
+            sessionAudio.set("lyric", "__unsaved__", file, { ttlMs: 5 * 60 * 1000 });
+          }
+          await quota.increment();
+          setLoading(false);
+          return;
+        }
+
         // Only compress if over 25MB (only needed for fallback multipart path)
-        
+
         let uploadFile: File;
         if (file.size > MAX_RAW_UPLOAD_BYTES) {
           try {
@@ -258,6 +353,17 @@ export function LyricsTab({
         setHasRealAudio(true);
         setSavedId(projectId);
         setDebugData(data._debug ?? null);
+
+        // Cache the transcription for re-uploads of the same file
+        setCachedTranscript(fingerprint, {
+          lines: data.lines,
+          words: data.words ?? null,
+          title: data.title,
+          artist: data.artist,
+          hooks: data.hooks,
+          metadata: data.metadata,
+          _debug: data._debug,
+        });
 
         if (projectId) {
           sessionAudio.set("lyric", projectId, file, { ttlMs: 20 * 60 * 1000 });
