@@ -178,7 +178,7 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
   };
 
   const publish = async () => {
-    if (!user || !selectedTrack || !caption.trim()) return;
+    if (!user || !selectedTrack) return;
     setPublishing(true);
     try {
       // Check for duplicate submissions
