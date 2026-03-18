@@ -1225,6 +1225,9 @@ export class LyricDancePlayer {
   private _fontStabilized = false;
   private _fontLayoutReflowPending = false;
   private _handleVisibilityChange: () => void;
+  private _pendingUpgradeTimeout: number | null = null;
+  private _pendingIdleHandle: number | null = null;
+  private _pendingCanPlayHandler: (() => void) | null = null;
   private options?: { bootMode?: "minimal" | "full"; preloadedImages?: HTMLImageElement[] };
 
   constructor(
@@ -1377,18 +1380,27 @@ export class LyricDancePlayer {
   }
 
   scheduleFullModeUpgrade(): void {
+    if (this.destroyed || this.fullModeEnabled || this._bakePromise) return;
+    if (this._pendingUpgradeTimeout != null || this._pendingIdleHandle != null) return;
+
+    const idleApi = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
     const run = () => {
+      this._pendingIdleHandle = null;
+      if (this.destroyed || this.fullModeEnabled) return;
       this.prepareFullMode().catch(() => {
         // keep minimal mode alive on upgrade errors
       });
     };
 
-    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
-    // 100ms delay (was 400ms) — upgrade starts fast after first play().
-    // rIC timeout 800ms (was 1200ms) — don't wait too long on busy tabs.
-    window.setTimeout(() => {
-      if (idle) {
-        idle(run, { timeout: 800 });
+    this._pendingUpgradeTimeout = window.setTimeout(() => {
+      this._pendingUpgradeTimeout = null;
+      if (this.destroyed || this.fullModeEnabled) return;
+      if (idleApi.requestIdleCallback) {
+        this._pendingIdleHandle = idleApi.requestIdleCallback(run, { timeout: 800 });
       } else {
         run();
       }
@@ -1588,8 +1600,10 @@ export class LyricDancePlayer {
       } else if (this.data.region_start != null) {
         const onReady = () => {
           this.audio.removeEventListener("canplay", onReady);
+          if (this._pendingCanPlayHandler === onReady) this._pendingCanPlayHandler = null;
           if (!this.destroyed) this.audio.currentTime = playStart;
         };
+        this._pendingCanPlayHandler = onReady;
         this.audio.addEventListener("canplay", onReady);
       }
     }
@@ -2036,6 +2050,21 @@ export class LyricDancePlayer {
     this._zeroCanvasList(this.bgCaches);
     this.bgCaches = [];
     this.bgCacheCount = 0;
+
+    // Cancel pending deferred work
+    if (this._pendingUpgradeTimeout != null) {
+      window.clearTimeout(this._pendingUpgradeTimeout);
+      this._pendingUpgradeTimeout = null;
+    }
+    const idleApi = window as Window & { cancelIdleCallback?: (id: number) => void };
+    if (this._pendingIdleHandle != null && idleApi.cancelIdleCallback) {
+      idleApi.cancelIdleCallback(this._pendingIdleHandle);
+    }
+    this._pendingIdleHandle = null;
+    if (this._pendingCanPlayHandler) {
+      this.audio.removeEventListener("canplay", this._pendingCanPlayHandler);
+      this._pendingCanPlayHandler = null;
+    }
 
     this.audio.pause();
     this.audio.src = "";
