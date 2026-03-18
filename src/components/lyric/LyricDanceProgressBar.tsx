@@ -92,6 +92,7 @@ export const LyricDanceProgressBar = React.forwardRef<HTMLDivElement, Props>(
       };
       const onUp = () => {
         dragging.current = false;
+        setIsDragging(false);
         onSeekEnd?.();
         if (wasPlaying.current) player.play();
         window.removeEventListener("mousemove", onMove);
