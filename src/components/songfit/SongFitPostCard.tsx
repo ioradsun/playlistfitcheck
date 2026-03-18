@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import type { SongFitPost } from "./types";
-import { formatDistanceToNow } from "date-fns";
+
 import { ProfileHoverCard } from "./ProfileHoverCard";
 import { FmlyBadge } from "@/components/FmlyBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
