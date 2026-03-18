@@ -265,7 +265,7 @@ export default function ShareableLyricDance() {
         // ── PROFILE: fire immediately in parallel — don't wait for direction ──
         // Was inside .finally() of direction chain → avatar arrived AFTER cover
         // was already showing, causing a letter→avatar pop.
-        supabase.from("profiles").select("display_name, avatar_url").eq("id", d.user_id).maybeSingle()
+        supabase.from("profiles").select("display_name, avatar_url, is_verified").eq("id", d.user_id).maybeSingle()
           .then(({ data: pData }) => { if (pData) setProfile(pData as ProfileInfo); }, () => {});
 
         // Phase 2: generate section images or cinematic direction if missing.
