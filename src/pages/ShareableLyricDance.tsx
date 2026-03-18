@@ -33,7 +33,7 @@ import type { CinematicDirection } from "@/types/CinematicDirection";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
-interface ProfileInfo { display_name: string | null; avatar_url: string | null; }
+interface ProfileInfo { display_name: string | null; avatar_url: string | null; is_verified: boolean; }
 
 // ─── Progress Bar ───────────────────────────────────────────────────
 
