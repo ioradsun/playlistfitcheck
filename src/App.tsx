@@ -12,23 +12,23 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { PageLayout } from "@/components/PageLayout";
 import { lazy, Suspense } from "react";
 import Index from "./pages/Index";
-
-import About from "./pages/About";
-
-import { FitWidget } from "@/components/FitWidget";
-import { SignalsPanel } from "@/components/signals/SignalsPanel";
-import Auth from "./pages/Auth";
-import Profile from "./pages/Profile";
-import PublicProfile from "./pages/PublicProfile";
-import SongDetail from "./pages/SongDetail";
-import ResetPassword from "./pages/ResetPassword";
-import NotFound from "./pages/NotFound";
-import Terms from "./pages/Terms";
-import ArtistStage from "./pages/ArtistStage";
-import SeoPages from "./pages/SeoPages";
-import ArtistClaimPage from "./pages/ArtistClaimPage";
-import CreateArtistPage from "./pages/CreateArtistPage";
 import { AdminPageImport, ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
+
+// ── Lazy-loaded pages — not needed on the CrowdFit critical path ──
+const About = lazy(() => import("./pages/About"));
+const Auth = lazy(() => import("./pages/Auth"));
+const Profile = lazy(() => import("./pages/Profile"));
+const PublicProfile = lazy(() => import("./pages/PublicProfile"));
+const SongDetail = lazy(() => import("./pages/SongDetail"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Terms = lazy(() => import("./pages/Terms"));
+const ArtistStage = lazy(() => import("./pages/ArtistStage"));
+const SeoPages = lazy(() => import("./pages/SeoPages"));
+const ArtistClaimPage = lazy(() => import("./pages/ArtistClaimPage"));
+const CreateArtistPage = lazy(() => import("./pages/CreateArtistPage"));
+const FitWidget = lazy(() => import("@/components/FitWidget").then(m => ({ default: m.FitWidget })));
+const SignalsPanel = lazy(() => import("@/components/signals/SignalsPanel").then(m => ({ default: m.SignalsPanel })));
 
 const Admin = lazy(AdminPageImport);
 // Lazy-load ShareableHook — standalone page, no need in main bundle
@@ -99,8 +99,8 @@ const App = () => (
             <Route path="/:artistSlug/:songSlug/lyric-dance" element={
               <Suspense fallback={<LyricDanceFallback />}><ShareableLyricDance /></Suspense>
             } />
-            <Route path="/artist/:username/claim-page" element={<ArtistClaimPage />} />
-            <Route path="/create" element={<CreateArtistPage />} />
+            <Route path="/artist/:username/claim-page" element={<Suspense fallback={null}><ArtistClaimPage /></Suspense>} />
+            <Route path="/create" element={<Suspense fallback={null}><CreateArtistPage /></Suspense>} />
             {/* ── Hook embed: lightweight path — no Auth/SiteCopy/Wallet/Sidebar overhead ── */}
             <Route path="/:artistSlug/:songSlug/:hookSlug" element={
               <Suspense fallback={<HookEmbedFallback />}><ShareableHook /></Suspense>
@@ -130,16 +130,16 @@ const App = () => (
                     <Route path="/DreamFit" element={<Index />} />
                     <Route path="/VibeFit" element={<Index />} />
                     <Route path="/VibeFit/:projectId" element={<Index />} />
-                    <Route path="/crowdfit" element={<SeoPages />} />
-                    <Route path="/lyricfit" element={<SeoPages />} />
-                    <Route path="/hookfit" element={<SeoPages />} />
-                    <Route path="/mixfit" element={<SeoPages />} />
-                    <Route path="/hitfit" element={<SeoPages />} />
-                    <Route path="/playlistfit" element={<SeoPages />} />
-                    <Route path="/dreamfit" element={<SeoPages />} />
-                    <Route path="/answers/:slug" element={<SeoPages />} />
-                    <Route path="/blog/:slug" element={<SeoPages />} />
-                    <Route path="/about" element={<PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout>} />
+                    <Route path="/crowdfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                    <Route path="/lyricfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                    <Route path="/hookfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                    <Route path="/mixfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                    <Route path="/hitfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                    <Route path="/playlistfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                    <Route path="/dreamfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                    <Route path="/answers/:slug" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                    <Route path="/blog/:slug" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                    <Route path="/about" element={<Suspense fallback={<PageLayout title="toolsFM story" subtitle="What we built and why." />}><PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout></Suspense>} />
                     <Route
                       path="/admin"
                       element={
@@ -148,20 +148,22 @@ const App = () => (
                         </Suspense>
                       }
                     />
-                    <Route path="/auth" element={<PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout>} />
-                    <Route path="/terms" element={<PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout>} />
+                    <Route path="/auth" element={<Suspense fallback={<PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY." />}><PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout></Suspense>} />
+                    <Route path="/terms" element={<Suspense fallback={<PageLayout title="Let's agree" subtitle="Play nice, make music, have fun" />}><PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout></Suspense>} />
                     <Route path="/Signals" element={
-                      <PageLayout title="Signals" subtitle="What your music is doing right now">
-                        <SignalsPanel />
-                      </PageLayout>
+                      <Suspense fallback={<PageLayout title="Signals" subtitle="What your music is doing right now" />}>
+                        <PageLayout title="Signals" subtitle="What your music is doing right now">
+                          <SignalsPanel />
+                        </PageLayout>
+                      </Suspense>
                     } />
-                    <Route path="/profile" element={<PageLayout title="Profile"><Profile /></PageLayout>} />
-                    <Route path="/reset-password" element={<PageLayout title="Reset Password"><ResetPassword /></PageLayout>} />
-                    <Route path="/u/:userId" element={<PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout>} />
-                    <Route path="/song/:postId" element={<PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout>} />
-                    <Route path="/artist/:username" element={<ArtistStage />} />
+                    <Route path="/profile" element={<Suspense fallback={<PageLayout title="Profile" />}><PageLayout title="Profile"><Profile /></PageLayout></Suspense>} />
+                    <Route path="/reset-password" element={<Suspense fallback={<PageLayout title="Reset Password" />}><PageLayout title="Reset Password"><ResetPassword /></PageLayout></Suspense>} />
+                    <Route path="/u/:userId" element={<Suspense fallback={<PageLayout title="Artist Profile" subtitle="Fit for the spotlight" />}><PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout></Suspense>} />
+                    <Route path="/song/:postId" element={<Suspense fallback={<PageLayout title="Song Details" subtitle="Submission stats" />}><PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout></Suspense>} />
+                    <Route path="/artist/:username" element={<Suspense fallback={null}><ArtistStage /></Suspense>} />
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                    <Route path="*" element={<PageLayout><NotFound /></PageLayout>} />
+                    <Route path="*" element={<Suspense fallback={<PageLayout />}><PageLayout><NotFound /></PageLayout></Suspense>} />
                   </Routes>
                 </SidebarProvider>
                 <Suspense fallback={<div aria-hidden className="pointer-events-none fixed bottom-0 right-0 h-12 w-12 opacity-0" />}>

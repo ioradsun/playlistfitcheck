@@ -47,7 +47,73 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!--
+        Static app shell — matches PageSkeleton for CrowdFit.
+        Visible at HTML parse time (~0ms). React replaces this on mount.
+        Uses inline styles with raw dark-theme values so it works before
+        CSS loads. Intentionally minimal — just enough to prevent white flash.
+      -->
+      <style>
+        .shell{display:flex;height:100svh;overflow:hidden;background:#090a10;color-scheme:dark}
+        .shell-main{flex:1;display:flex;flex-direction:column;min-height:0}
+        .shell-header{display:flex;align-items:center;gap:0.75rem;height:3rem;padding:0 0.75rem;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(9,10,16,0.8)}
+        .shell-pill{font-family:monospace;font-size:11px;letter-spacing:0.1em;color:rgba(255,255,255,0.5)}
+        .shell-content{flex:1;padding:1rem 1rem 1.5rem;overflow:hidden}
+        .shell-card{border-bottom:1px solid rgba(255,255,255,0.04);padding-bottom:0.75rem;margin-bottom:0.75rem}
+        .shell-row{display:flex;align-items:center;gap:0.75rem;padding:0.625rem 0.75rem}
+        .shell-circle{border-radius:9999px;background:rgba(255,255,255,0.06)}
+        .shell-rect{border-radius:0.25rem;background:rgba(255,255,255,0.06)}
+        .shell-block{background:rgba(255,255,255,0.04)}
+        @media(min-width:768px){.shell-sidebar{display:block;width:11rem;flex-shrink:0;border-right:1px solid rgba(255,255,255,0.06);background:#090a10}}
+        .shell-sidebar{display:none}
+      </style>
+      <div class="shell">
+        <div class="shell-sidebar"></div>
+        <div class="shell-main">
+          <div class="shell-header">
+            <span class="shell-pill">CROWDFIT</span>
+          </div>
+          <div class="shell-content">
+            <div style="max-width:42rem;margin:0 auto">
+              <!-- Toggle bar -->
+              <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.04);margin-bottom:1rem">
+                <div style="flex:1;display:flex;justify-content:center;padding:0.75rem"><div class="shell-rect" style="height:1rem;width:4rem"></div></div>
+                <div style="flex:1;display:flex;justify-content:center;padding:0.75rem"><div class="shell-rect" style="height:1rem;width:4rem"></div></div>
+              </div>
+              <!-- Card 1 -->
+              <div class="shell-card">
+                <div class="shell-row">
+                  <div class="shell-circle" style="height:2.5rem;width:2.5rem"></div>
+                  <div><div class="shell-rect" style="height:0.875rem;width:7rem;margin-bottom:0.5rem"></div><div class="shell-rect" style="height:0.625rem;width:4rem"></div></div>
+                </div>
+                <div class="shell-block" style="height:310px;width:100%"></div>
+                <div style="display:flex;gap:0.25rem;padding:0.25rem">
+                  <div class="shell-circle" style="height:2rem;width:2rem"></div>
+                  <div class="shell-circle" style="height:2rem;width:2rem"></div>
+                  <div class="shell-circle" style="height:2rem;width:2rem"></div>
+                  <div class="shell-circle" style="height:2rem;width:2rem"></div>
+                </div>
+              </div>
+              <!-- Card 2 -->
+              <div class="shell-card">
+                <div class="shell-row">
+                  <div class="shell-circle" style="height:2.5rem;width:2.5rem"></div>
+                  <div><div class="shell-rect" style="height:0.875rem;width:7rem;margin-bottom:0.5rem"></div><div class="shell-rect" style="height:0.625rem;width:4rem"></div></div>
+                </div>
+                <div class="shell-block" style="height:310px;width:100%"></div>
+                <div style="display:flex;gap:0.25rem;padding:0.25rem">
+                  <div class="shell-circle" style="height:2rem;width:2rem"></div>
+                  <div class="shell-circle" style="height:2rem;width:2rem"></div>
+                  <div class="shell-circle" style="height:2rem;width:2rem"></div>
+                  <div class="shell-circle" style="height:2rem;width:2rem"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
