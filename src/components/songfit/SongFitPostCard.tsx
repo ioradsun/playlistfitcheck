@@ -441,6 +441,7 @@ export function SongFitPostCard({
                 postId={post.id}
                 coverImageUrl={post.album_art_url}
                 hideReactButton
+                reelsMode={reelsMode}
                 externalPanelOpen={panelOpen}
                 onExternalPanelOpenChange={setPanelOpen}
                 onOpenReactions={() => setPanelOpen(true)}
@@ -498,8 +499,8 @@ export function SongFitPostCard({
                   refreshKey={commentRefreshKey}
                 />
 
-                {/* Caption — directly below embed */}
-                {!editing && localCaption && localCaption.trim() && (
+                {/* Caption — directly below embed (desktop only; reels shows in bottom overlay) */}
+                {!reelsMode && !editing && localCaption && localCaption.trim() && (
                   <div
                     className="px-3 pt-1.5 pb-1"
                     style={{ background: "#0a0a0a" }}
@@ -523,7 +524,7 @@ export function SongFitPostCard({
                   </div>
                 )}
 
-                {isSpotifyEmbed && crowdfitMode === "hook_review" && (
+                {isSpotifyEmbed && crowdfitMode === "hook_review" && !reelsMode && (
                   <div
                     className={`relative ${panelOpen ? "z-[500]" : "z-[300]"}`}
                   >
@@ -545,8 +546,8 @@ export function SongFitPostCard({
                 )}
               </div>
 
-              {/* Action row — stacked below caption inside 320px */}
-              {crowdfitMode !== "hook_review" && (
+              {/* Action row — stacked below caption inside 320px (desktop only) */}
+              {crowdfitMode !== "hook_review" && !reelsMode && (
                 <div className="flex items-center justify-between px-1 py-0.5">
                   <div className="flex items-center">
                     <button
@@ -679,7 +680,7 @@ export function SongFitPostCard({
               {post.track_title}
             </p>
 
-            {!isSpotifyEmbed && localCaption && localCaption.trim() && !editing && (
+            {localCaption && localCaption.trim() && !editing && (
               <p className="text-[12px] leading-snug text-white/50 mt-1">
                 {localCaption.length <= 80 ? (
                   localCaption
@@ -704,71 +705,51 @@ export function SongFitPostCard({
               </p>
             )}
 
-            <div className="flex items-center gap-0.5 mt-3">
-              <button
-                onClick={() => {
-                  onOpenComments(post.id);
-                  if (user) logEngagementEvent(post.id, user.id, "comment");
-                }}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group"
-              >
-                <MessageCircle
-                  size={17}
-                  className="text-white/50 group-hover:text-white/80"
+            {crowdfitMode === "hook_review" ? (
+              <div className="mt-3 rounded-lg overflow-hidden">
+                <CardBottomBar
+                  variant="fullscreen"
+                  votedSide={votedSide}
+                  score={score}
+                  note={note}
+                  onNoteChange={setNote}
+                  onVoteYes={() => handleVote(true)}
+                  onVoteNo={() => handleVote(false)}
+                  onSubmit={handleCommentFromBar}
+                  onOpenReactions={() => setPanelOpen(true)}
+                  onClose={() => setPanelOpen(false)}
+                  panelOpen={panelOpen}
+                  topReaction={topPostReaction}
                 />
-                {post.comments_count > 0 && (
-                  <span className="text-[10px] text-white/30 font-mono">
-                    {post.comments_count}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={handleShare}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group"
-              >
-                <Share2
-                  size={17}
-                  className="text-white/50 group-hover:text-white/80"
-                />
-              </button>
-              <button
-                onClick={toggleLike}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group"
-              >
-                <Flame
-                  size={17}
-                  className={
-                    liked
-                      ? "fill-white/80 text-white/80"
-                      : "text-white/50 group-hover:text-white/80"
-                  }
-                />
-                {likesCount > 0 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenLikes(post.id);
-                    }}
-                    className="text-[10px] text-white/30 font-mono"
-                  >
-                    {likesCount}
-                  </button>
-                )}
-              </button>
-              <button
-                onClick={toggleSave}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group"
-              >
-                <Bookmark
-                  size={17}
-                  className={
-                    saved
-                      ? "fill-white/80 text-white/80"
-                      : "text-white/50 group-hover:text-white/80"
-                  }
-                />
-              </button>
-            </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-0.5 mt-3">
+                <button
+                  onClick={() => {
+                    onOpenComments(post.id);
+                    if (user) logEngagementEvent(post.id, user.id, "comment");
+                  }}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group"
+                >
+                  <MessageCircle size={17} className="text-white/50 group-hover:text-white/80" />
+                  {post.comments_count > 0 && (
+                    <span className="text-[10px] text-white/30 font-mono">{post.comments_count}</span>
+                  )}
+                </button>
+                <button onClick={handleShare} className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group">
+                  <Share2 size={17} className="text-white/50 group-hover:text-white/80" />
+                </button>
+                <button onClick={toggleLike} className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group">
+                  <Flame size={17} className={liked ? "fill-white/80 text-white/80" : "text-white/50 group-hover:text-white/80"} />
+                  {likesCount > 0 && (
+                    <button onClick={(e) => { e.stopPropagation(); onOpenLikes(post.id); }} className="text-[10px] text-white/30 font-mono">{likesCount}</button>
+                  )}
+                </button>
+                <button onClick={toggleSave} className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/10 transition-colors group">
+                  <Bookmark size={17} className={saved ? "fill-white/80 text-white/80" : "text-white/50 group-hover:text-white/80"} />
+                </button>
+              </div>
+            )}
 
             {isFirst && (
               <div className="flex flex-col items-center gap-1 mt-4 animate-bounce">
