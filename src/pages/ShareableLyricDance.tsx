@@ -277,7 +277,7 @@ export default function ShareableLyricDance() {
           />
         )}
 
-        {!reactionPanelOpen && !isMarketingView && (
+        {!reactionPanelOpen && (
           <div className="w-full max-w-2xl mx-auto">
             <CardBottomBar
               variant="fullscreen"
@@ -292,14 +292,6 @@ export default function ShareableLyricDance() {
               onClose={closePanel}
               panelOpen={reactionPanelOpen}
             />
-          </div>
-        )}
-
-        {isMarketingView && (
-          <div className="w-full max-w-2xl mx-auto px-4 py-3 flex items-center justify-center gap-2">
-            <span className="text-white text-[11px]">fans react on every line</span>
-            <span className="text-white/40 text-[11px]">→</span>
-            <button onClick={openReactionPanel} className="text-[16px] active:scale-110 transition-transform">🔥</button>
           </div>
         )}
       </div>
