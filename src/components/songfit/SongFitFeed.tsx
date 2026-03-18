@@ -104,6 +104,7 @@ function MeasuredFeedCard({
         post={post}
         cardState={state}
         reelsMode={reelsMode}
+        lyricDanceData={lyricDanceData}
         {...props}
       />
     </div>
