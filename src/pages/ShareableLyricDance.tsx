@@ -228,6 +228,16 @@ export default function ShareableLyricDance() {
     durationSec,
   });
 
+  useEffect(() => {
+    if (!playerInstance) return;
+    playerInstance.setReactionData(reactionData);
+  }, [playerInstance, reactionData]);
+
+  useEffect(() => {
+    if (!playerInstance) return;
+    playerInstance.setEmojiStreamEnabled(!reactionPanelOpen && !showCover);
+  }, [playerInstance, reactionPanelOpen, showCover]);
+
   // Sync theme override to player engine
   useEffect(() => {
     if (playerInstance) playerInstance.themeOverride = themeMode;

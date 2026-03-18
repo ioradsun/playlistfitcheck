@@ -590,6 +590,16 @@ export function LyricDanceEmbed({
 
   const reactionPanelOpen = panelFromHook;
 
+  useEffect(() => {
+    if (!player) return;
+    player.setReactionData(reactionData);
+  }, [player, reactionData]);
+
+  useEffect(() => {
+    if (!player) return;
+    player.setEmojiStreamEnabled(!reactionPanelOpen && !effectiveShowCover);
+  }, [player, reactionPanelOpen, effectiveShowCover]);
+
   const activeLineRef = useRef(activeLine);
   activeLineRef.current = activeLine;
 
