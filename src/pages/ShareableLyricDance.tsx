@@ -182,7 +182,7 @@ export default function ShareableLyricDance() {
         )}
       </AnimatePresence>
 
-      <div className="flex flex-1 overflow-hidden min-h-0">
+      <div className="flex flex-1 overflow-hidden min-h-0 relative">
         <div
           ref={containerRef}
           className="relative flex-1 min-w-0 cursor-pointer overflow-hidden"
