@@ -928,6 +928,7 @@ export function FitTab({
           {/* Video player with profile overlay */}
           <div className="relative rounded-xl overflow-hidden w-full aspect-video">
             <LyricDanceEmbed
+              ref={dancePlayerRef}
               lyricDanceId={publishedDanceId}
               lyricDanceUrl={publishedUrl}
               songTitle={lyricData.title || "Untitled"}
