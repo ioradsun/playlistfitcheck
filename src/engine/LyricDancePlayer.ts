@@ -1744,6 +1744,7 @@ export class LyricDancePlayer {
     this.pause();
     this.displayWidth = this.width;
     this.displayHeight = this.height;
+    this.isExporting = true;
     this.setResolution(width, height);
     // Re-acquire context with willReadFrequently for fast pixel readback
     this.ctx = this.canvas.getContext('2d', {
@@ -1813,6 +1814,7 @@ export class LyricDancePlayer {
   }
 
   teardownExportResolution(): void {
+    this.isExporting = false;
     this.setResolution(this.displayWidth, this.displayHeight);
     // Restore normal GPU-backed context
     this.ctx = this.canvas.getContext('2d')!;
