@@ -444,7 +444,7 @@ export function FitTab({
         return;
       }
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== "adlib");
-      void handle.reloadTranscript?.(mainLines, wordsRef.current ?? undefined);
+      void (handle as any).reloadTranscript?.(mainLines, wordsRef.current ?? undefined);
     }, 300);
 
     return () => { if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current); };
