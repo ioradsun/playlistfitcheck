@@ -1744,6 +1744,7 @@ export class LyricDancePlayer {
     this.pause();
     this.displayWidth = this.width;
     this.displayHeight = this.height;
+    this.isExporting = true;
     this.setResolution(width, height);
     // Re-acquire context with willReadFrequently for fast pixel readback
     this.ctx = this.canvas.getContext('2d', {
