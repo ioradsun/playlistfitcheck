@@ -190,7 +190,7 @@ export function LyricFitTab({
       beatGrid: hasBeatGrid ? "done" : "idle",
       renderData: "done",
       cinematicDirection: hasCinematic ? "done" : "idle",
-      sectionImages: hasImages ? "done" : (hasCinematic ? "done" : "idle"),
+      sectionImages: hasImages ? "done" : "idle",
     };
   });
 
@@ -461,6 +461,120 @@ export function LyricFitTab({
       setHasRealAudio(false);
     }
   }, [initialLyric]);
+
+  // Auto-generate images on remount when cinematic exists but images don't.
+  // startCinematicDirection won't re-run (cinematicTriggeredRef=true), so we
+  // need a separate trigger for the image pipeline.
+  const imageRetriggerRef = useRef(false);
+  useEffect(() => {
+    if (imageRetriggerRef.current) return;
+    if (!user || !cinematicDirection || !lyricData || !audioFile) return;
+    // Only trigger if we have cinematic but no images
+    const hasImages = Array.isArray((initialLyric as any)?.section_images) &&
+      (initialLyric as any).section_images.some(Boolean);
+    if (hasImages) return;
+    if (generationStatus.sectionImages === "running" || generationStatus.sectionImages === "done") return;
+    // Only trigger if cinematic was loaded from DB (not freshly generated — the pipeline handles that)
+    if (!cinematicTriggeredRef.current) return;
+
+    imageRetriggerRef.current = true;
+
+    const dirSections = cinematicDirection?.sections;
+    if (!Array.isArray(dirSections) || dirSections.length === 0) {
+      setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+      return;
+    }
+
+    setGenerationStatus(prev => ({ ...prev, sectionImages: "running" }));
+
+    (async () => {
+      try {
+        const { slugify } = await import("@/lib/slugify");
+        const songSlugVal = slugify(lyricData.title || "untitled");
+        const artistSlugVal = slugify(artistNameRef.current || "artist");
+
+        // Find or create the dance row
+        const { data: existing }: any = await supabase
+          .from("shareable_lyric_dances" as any)
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("song_slug", songSlugVal)
+          .maybeSingle();
+
+        let resolvedDanceId = existing?.id ?? null;
+
+        if (!resolvedDanceId) {
+          // Create a draft row
+          const mainLines = lyricData.lines.filter((l: any) => l.tag !== "adlib");
+          const storagePath = savedIdRef.current
+            ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(user.id, savedIdRef.current, audioFile.name)
+            : `${user.id}/${artistSlugVal}/${songSlugVal}/lyric-dance.${audioFile.name.split(".").pop() || "webm"}`;
+          if (audioFile.size > 0) {
+            await supabase.storage
+              .from("audio-clips")
+              .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
+          }
+          const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+
+          await supabase
+            .from("shareable_lyric_dances" as any)
+            .upsert({
+              user_id: user.id,
+              artist_slug: artistSlugVal,
+              song_slug: songSlugVal,
+              artist_name: artistNameRef.current || "artist",
+              song_name: lyricData.title || "Untitled",
+              audio_url: urlData.publicUrl,
+              lyrics: mainLines,
+              cinematic_direction: cinematicDirection,
+              words: words ?? null,
+              beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : { bpm: 0, beats: [], confidence: 0 },
+              palette: cinematicDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
+              section_images: null,
+            } as any, { onConflict: "artist_slug,song_slug" });
+
+          const { data: newRow }: any = await supabase
+            .from("shareable_lyric_dances" as any)
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("song_slug", songSlugVal)
+            .maybeSingle();
+          resolvedDanceId = newRow?.id ?? null;
+        }
+
+        if (!resolvedDanceId) {
+          setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
+          return;
+        }
+
+        if (resolvedDanceId) {
+          setPipelineDanceId(resolvedDanceId);
+          setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
+        }
+
+        const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
+          body: { lyric_dance_id: resolvedDanceId, force: true },
+        });
+        if (error) throw error;
+        const urls = result?.urls || result?.section_images || [];
+
+        if (savedIdRef.current && urls.length > 0) {
+          void supabase
+            .from("saved_lyrics")
+            .update({ section_images: urls as any })
+            .eq("id", savedIdRef.current);
+        }
+
+        setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+        if (urls.length > 0) {
+          window.dispatchEvent(new CustomEvent("fittab:images-generated", { detail: { urls } }));
+        }
+      } catch (err: any) {
+        console.error("[Pipeline] Image re-generation on remount failed:", err?.message || err);
+        setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
+      }
+    })();
+  }, [user, cinematicDirection, lyricData, audioFile, generationStatus.sectionImages, initialLyric, beatGrid, words]);
 
   const persistRenderData = useCallback(async (id: string, payload: Record<string, unknown>, attempt = 1): Promise<boolean> => {
     try {
@@ -808,6 +922,12 @@ export function LyricFitTab({
           }
 
           setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+
+          // Notify FitTab's CinematicDirectionCard that images are ready —
+          // it has no other way to know since its hydration already ran.
+          if (urls.length > 0) {
+            window.dispatchEvent(new CustomEvent("fittab:images-generated", { detail: { urls } }));
+          }
         } catch (imgErr: any) {
 
           console.error("[Pipeline] Image generation failed:", imgErr?.message || imgErr);
@@ -890,12 +1010,15 @@ export function LyricFitTab({
   }, [transcriptionDone, beatGridDone, words, lines, startHookDetection]);
 
   useEffect(() => {
-    const values = Object.values(generationStatus);
-    const allDone = values.every(v => v === "done");
-    const hasRunning = values.includes("running");
-    const hasError = values.includes("error");
+    // Core pipeline jobs — these must complete for Fit tab to be usable
+    const coreStatuses = [generationStatus.beatGrid, generationStatus.renderData, generationStatus.cinematicDirection];
+    const allCoreDone = coreStatuses.every(v => v === "done");
+    // Images are non-blocking — generated in background, don't prevent "ready" state
+    const allValues = Object.values(generationStatus);
+    const hasRunning = allValues.includes("running");
+    const hasError = coreStatuses.includes("error");
 
-    if (allDone) {
+    if (allCoreDone && !hasRunning) {
       setFitReadiness("ready");
       setFitProgress(100);
       setFitStageLabel("Ready");
