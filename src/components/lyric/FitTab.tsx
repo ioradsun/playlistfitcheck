@@ -955,7 +955,7 @@ export function FitTab({
           <FitExportModal
             isOpen={showExportModal}
             onClose={() => setShowExportModal(false)}
-            getPlayer={dancePlayerRef.current ? () => dancePlayerRef.current?.getPlayer() ?? null : null}
+            getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
             songTitle={lyricData.title || "Untitled"}
             artistName=""
           />
