@@ -335,6 +335,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const [newestCreatedAt, setNewestCreatedAt] = useState<string | null>(null);
   const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null);
   const [hasTrimmedNewer, setHasTrimmedNewer] = useState(false);
+  const [pendingNewCount, setPendingNewCount] = useState(0);
   const [lyricDataMap, setLyricDataMap] = useState<Map<string, LyricDanceData>>(() => {
     const cached = getCachedLyricData();
     if (!cached) return new Map();
@@ -349,10 +350,12 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const postsRef = useRef(posts);
   const isLoadingMoreRef = useRef(isLoadingMore);
   const hasMoreRef = useRef(hasMore);
+  const newestCreatedAtRef = useRef<string | null>(null);
 
   postsRef.current = posts;
   isLoadingMoreRef.current = isLoadingMore;
   hasMoreRef.current = hasMore;
+  newestCreatedAtRef.current = newestCreatedAt;
 
   const normalizePosts = useCallback(
     (input: SongFitPost[]) =>
@@ -435,6 +438,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       // The batch fetch runs in the background; useLyricDanceCore has a per-card
       // fallback fetch if prefetchedData is null, so nothing breaks on any surface.
       setLoading(false);
+      setPendingNewCount(0);
 
       // Batch-fetch lyric dance data (non-blocking background fill)
       const lyricIds = enriched
@@ -603,6 +607,13 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     setLoading(false);
   }, [billboardMode, feedView, normalizePosts]);
 
+  const handleLoadNewDrops = useCallback(() => {
+    setPendingNewCount(0);
+    void fetchPosts();
+    const scrollEl = document.getElementById("songfit-scroll-container");
+    if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: "smooth" });
+  }, [fetchPosts]);
+
   const loadMore = useCallback(async () => {
     if (
       feedView === "billboard" ||
@@ -649,6 +660,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           const capped = capPosts(merged);
           postsRef.current = capped;
           setNewestCreatedAt(capped[0]?.created_at ?? null);
+          setPendingNewCount(0);
           setOldestCreatedAt(capped[capped.length - 1]?.created_at ?? null);
           return capped;
         });
@@ -688,6 +700,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           const capped = capPosts(merged);
           postsRef.current = capped;
           setNewestCreatedAt(capped[0]?.created_at ?? null);
+          setPendingNewCount(0);
           setOldestCreatedAt(capped[capped.length - 1]?.created_at ?? null);
           return capped;
         });
@@ -704,6 +717,29 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   useEffect(() => {
     void fetchPosts();
   }, [fetchPosts]);
+
+  // ── Realtime: count new posts arriving after the current feed head ──
+  useEffect(() => {
+    const channel = supabase
+      .channel("crowdfit-new-posts")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "songfit_posts", filter: "status=eq.live" },
+        (payload) => {
+          const newRow = payload.new as { created_at?: string; user_id?: string };
+          if (!newRow?.created_at) return;
+          if (user?.id && newRow.user_id === user.id) return;
+          const head = newestCreatedAtRef.current;
+          if (head && newRow.created_at <= head) return;
+          setPendingNewCount((c) => c + 1);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   // Clear composer cache when user changes (login/logout/switch)
   useEffect(() => {
@@ -812,18 +848,30 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   return (
     <div className={reelsMode ? "w-full" : "w-full max-w-[470px] mx-auto"}>
       {reelsMode ? (
-        <div className="fixed top-14 left-0 right-0 z-30 flex justify-center pointer-events-none">
-          <div className="pointer-events-auto bg-black/50 backdrop-blur-md rounded-full px-1 border border-white/10">
-            <BillboardToggle
-              view={feedView}
-              onViewChange={setFeedView}
-              billboardMode={billboardMode}
-              onModeChange={setBillboardMode}
-              isLoggedIn={!!user}
-              compact
-            />
+        <>
+          <div className="fixed top-14 left-0 right-0 z-30 flex justify-center pointer-events-none">
+            <div className="pointer-events-auto bg-black/50 backdrop-blur-md rounded-full px-1 border border-white/10">
+              <BillboardToggle
+                view={feedView}
+                onViewChange={setFeedView}
+                billboardMode={billboardMode}
+                onModeChange={setBillboardMode}
+                isLoggedIn={!!user}
+                compact
+              />
+            </div>
           </div>
-        </div>
+          {pendingNewCount > 0 && !loading && (
+            <div className="fixed top-[6.5rem] left-0 right-0 z-30 flex justify-center pointer-events-none">
+              <button
+                onClick={handleLoadNewDrops}
+                className="pointer-events-auto bg-black/60 backdrop-blur-md rounded-full px-4 py-1.5 border border-white/10 text-[10px] font-mono tracking-[0.12em] text-green-400 hover:text-green-300 transition-colors"
+              >
+                {pendingNewCount} New Drop{pendingNewCount !== 1 ? "s" : ""}
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <>
           {user ? (
@@ -877,6 +925,16 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           />
         </>
       )}
+
+      {pendingNewCount > 0 && !loading && !reelsMode && (
+        <button
+          onClick={handleLoadNewDrops}
+          className="w-full py-2 text-center text-[11px] font-mono tracking-[0.1em] text-primary hover:text-primary/80 transition-colors border-b border-border/30"
+        >
+          {pendingNewCount} New Drop{pendingNewCount !== 1 ? "s" : ""}
+        </button>
+      )}
+
       {loading ? (
         reelsMode ? (
           <div className="h-[100dvh] snap-start bg-black flex items-center justify-center">
