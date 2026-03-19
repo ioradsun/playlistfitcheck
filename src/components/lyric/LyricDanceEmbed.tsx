@@ -305,6 +305,11 @@ export function LyricDanceEmbed({
   ]);
 
   useEffect(() => {
+    if (!reelsMode || !isFeedEmbed || cardState !== "active" || !showCover) return;
+    setShowCover(false);
+  }, [reelsMode, isFeedEmbed, cardState, showCover, setShowCover]);
+
+  useEffect(() => {
     if (!player || !playerReady) return;
     player.setTextVerticalBias(isBattleMode ? 0 : 60);
   }, [player, playerReady, isBattleMode]);
@@ -394,7 +399,7 @@ export function LyricDanceEmbed({
           style={{ background: "#0a0a0a" }}
           onClick={(e) => e.stopPropagation()}
         >
-          {reelsMode && artistName && (
+          {reelsMode && artistName && !effectiveShowCover && (
             <div className="flex items-center gap-2 px-3 pt-2 pb-1">
               <div
                 className="relative shrink-0 cursor-pointer"

@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
@@ -38,6 +39,7 @@ export default function ShareableLyricDance() {
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [badgeVisible, setBadgeVisible] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!artistSlug || !songSlug) return;
@@ -281,9 +283,31 @@ export default function ShareableLyricDance() {
 
           {!isWaiting && !reactionPanelOpen && (
             <div
-              className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-end"
+              className={`absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center ${isMobile ? "justify-end" : "justify-between"}`}
               onClick={(e) => e.stopPropagation()}
             >
+              {!isMobile && !isMarketingView ? (
+                <div
+                  className="flex items-center gap-2.5 cursor-pointer"
+                  onClick={() => renderData?.user_id && navigate(`/u/${renderData.user_id}`)}
+                >
+                  <div className="relative shrink-0">
+                    {coverAvatarUrl ? (
+                      <img src={coverAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                        <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
+                      </div>
+                    )}
+                    {profile?.is_verified && (
+                      <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={10} /></span>
+                    )}
+                  </div>
+                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400">
+                    {coverArtist ? `In Studio · ${coverArtist}` : "In Studio"}
+                  </span>
+                </div>
+              ) : <span />}
               <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
                 <button
                   onClick={toggleMute}
@@ -309,10 +333,10 @@ export default function ShareableLyricDance() {
         className="w-full flex-shrink-0"
         style={{
           background: "#0a0a0a",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          ...(isMobile ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
         }}
       >
-        {!reactionPanelOpen && !isMarketingView && coverArtist && (
+        {isMobile && !reactionPanelOpen && !isMarketingView && coverArtist && (
           <div
             className="flex items-center gap-2 px-4 pt-2 pb-1 cursor-pointer"
             onClick={() =>
