@@ -29,6 +29,7 @@ import type { BeatGridData } from "@/hooks/useBeatGrid";
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 
 const PEAK_SAMPLES = 200;
 
@@ -900,7 +901,10 @@ export function FitTab({
             </button>
             <button
               onClick={() => {
-                const url = `${window.location.origin}${publishedUrl}`;
+                const parsed = publishedUrl ? parseLyricDanceUrl(publishedUrl) : null;
+                const url = parsed
+                  ? buildShareUrl(parsed.artistSlug, parsed.songSlug)
+                  : `${window.location.origin}${publishedUrl}`;
                 navigator.clipboard.writeText(url).then(() => toast.success("Link copied!"));
               }}
               className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
