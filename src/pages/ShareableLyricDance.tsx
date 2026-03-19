@@ -25,7 +25,10 @@ interface ProfileInfo {
 }
 
 export default function ShareableLyricDance() {
-  const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
+  const { artistSlug, songSlug } = useParams<{
+    artistSlug: string;
+    songSlug: string;
+  }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isMarketingView = searchParams.get("from") === "claim";
@@ -63,10 +66,12 @@ export default function ShareableLyricDance() {
           .select("display_name, avatar_url, is_verified")
           .eq("id", d.user_id)
           .maybeSingle()
-          .then(({ data: pData }) => {
-            if (pData) setProfile(pData as ProfileInfo);
-          }, () => {});
-
+          .then(
+            ({ data: pData }) => {
+              if (pData) setProfile(pData as ProfileInfo);
+            },
+            () => {},
+          );
       });
   }, [artistSlug, songSlug]);
 
@@ -139,12 +144,18 @@ export default function ShareableLyricDance() {
     };
   }, []);
 
-
   if (notFound) {
     return (
       <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 z-50">
-        <p className="text-white/30 text-lg font-mono">Lyric Dance not found.</p>
-        <button onClick={() => navigate("/")} className="text-white/20 text-sm hover:text-white/40 transition-colors focus:outline-none">tools.fm</button>
+        <p className="text-white/30 text-lg font-mono">
+          Lyric Dance not found.
+        </p>
+        <button
+          onClick={() => navigate("/")}
+          className="text-white/20 text-sm hover:text-white/40 transition-colors focus:outline-none"
+        >
+          tools.fm
+        </button>
       </div>
     );
   }
@@ -153,15 +164,29 @@ export default function ShareableLyricDance() {
   const coverSongName = renderData?.song_name ?? "";
   const coverArtist = profile?.display_name ?? renderData?.artist_name ?? "";
   const coverAvatarUrl = profile?.avatar_url ?? null;
-  const coverInitial = (renderData?.artist_name || renderData?.song_name || "♪")[0].toUpperCase();
+  const coverInitial = (renderData?.artist_name ||
+    renderData?.song_name ||
+    "♪")[0].toUpperCase();
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
+    <div
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: "#0a0a0a" }}
+    >
       {isMarketingView && (
         <ClaimBanner
           artistSlug={artistSlug}
-          accent={palette?.[1] || palette?.[0] || renderData?.palette?.[1] || "#a855f7"}
-          coverArtUrl={(renderData as any)?.album_art_url ?? renderData?.section_images?.[0] ?? null}
+          accent={
+            palette?.[1] ||
+            palette?.[0] ||
+            renderData?.palette?.[1] ||
+            "#a855f7"
+          }
+          coverArtUrl={
+            (renderData as any)?.album_art_url ??
+            renderData?.section_images?.[0] ??
+            null
+          }
           songName={renderData?.song_name}
           artistName={renderData?.artist_name}
         />
@@ -174,10 +199,16 @@ export default function ShareableLyricDance() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4 }}
-            onClick={() => navigate(`/?from=lyric-dance&song=${encodeURIComponent(renderData.song_name)}`)}
+            onClick={() =>
+              navigate(
+                `/?from=lyric-dance&song=${encodeURIComponent(renderData.song_name)}`,
+              )
+            }
             className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/[0.06] hover:border-white/15 hover:bg-black/80 transition-all group focus:outline-none"
           >
-            <span className="text-[9px] font-mono text-white/30 group-hover:text-white/60 tracking-wider transition-colors">Fit by toolsFM</span>
+            <span className="text-[9px] font-mono text-white/30 group-hover:text-white/60 tracking-wider transition-colors">
+              Fit by toolsFM
+            </span>
           </motion.button>
         )}
       </AnimatePresence>
@@ -190,14 +221,24 @@ export default function ShareableLyricDance() {
             if (!showCover) toggleMute();
           }}
         >
-          <canvas id="bg-canvas" ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-          <canvas id="text-canvas" ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-
+          <canvas
+            id="bg-canvas"
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          />
+          <canvas
+            id="text-canvas"
+            ref={textCanvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          />
 
           {reactionPanelOpen && (
             <div
               className="absolute inset-0 z-[15] cursor-pointer"
-              style={{ background: "rgba(0,0,0,0.55)", transition: "opacity 200ms ease" }}
+              style={{
+                background: "rgba(0,0,0,0.55)",
+                transition: "opacity 200ms ease",
+              }}
               onClick={(e) => {
                 e.stopPropagation();
                 handlePanelClose();
@@ -218,8 +259,17 @@ export default function ShareableLyricDance() {
                   claimArtistName={renderData?.artist_name ?? ""}
                   claimSongName={renderData?.song_name ?? ""}
                   isMarketingCover={isMarketingView}
-                  waiting={loading || !renderData || !renderData.cinematic_direction || Array.isArray(renderData.cinematic_direction)}
-                  coverImageUrl={renderData?.section_images?.[0] ?? (renderData as any)?.album_art_url ?? null}
+                  waiting={
+                    loading ||
+                    !renderData ||
+                    !renderData.cinematic_direction ||
+                    Array.isArray(renderData.cinematic_direction)
+                  }
+                  coverImageUrl={
+                    renderData?.section_images?.[0] ??
+                    (renderData as any)?.album_art_url ??
+                    null
+                  }
                   hideBackground={playerReady}
                   badge={null}
                   onExpand={undefined}
@@ -230,34 +280,23 @@ export default function ShareableLyricDance() {
           </AnimatePresence>
 
           {!isWaiting && !reactionPanelOpen && (
-            <div className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-              {!isMarketingView ? (
-                <div
-                  className="flex items-center gap-2.5 cursor-pointer"
-                  onClick={() => renderData?.user_id && navigate(`/u/${renderData.user_id}`)}
-                >
-                  <div className="relative shrink-0">
-                    {coverAvatarUrl ? (
-                      <img src={coverAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                        <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
-                      </div>
-                    )}
-                    {profile?.is_verified && (
-                      <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={10} /></span>
-                    )}
-                  </div>
-                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400">
-                    {coverArtist ? `In Studio · ${coverArtist}` : "In Studio"}
-                  </span>
-                </div>
-              ) : <span />}
+            <div
+              className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-end"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
-                <button onClick={toggleMute} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? "Unmute" : "Mute"}>
+                <button
+                  onClick={toggleMute}
+                  className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                  aria-label={muted ? "Unmute" : "Mute"}
+                >
                   {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
                 </button>
-                <button onClick={handleReplay} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
+                <button
+                  onClick={handleReplay}
+                  className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                  aria-label="Replay"
+                >
                   <RotateCcw size={14} />
                 </button>
               </div>
@@ -266,14 +305,54 @@ export default function ShareableLyricDance() {
         </div>
       </div>
 
-      <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }}>
+      <div
+        className="w-full flex-shrink-0"
+        style={{
+          background: "#0a0a0a",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        }}
+      >
+        {!reactionPanelOpen && !isMarketingView && coverArtist && (
+          <div
+            className="flex items-center gap-2 px-4 pt-2 pb-1 cursor-pointer"
+            onClick={() =>
+              renderData?.user_id && navigate(`/u/${renderData.user_id}`)
+            }
+          >
+            <div className="relative shrink-0">
+              {coverAvatarUrl ? (
+                <img
+                  src={coverAvatarUrl}
+                  alt=""
+                  className="w-8 h-8 rounded-full object-cover border border-white/[0.06]"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                  <span className="text-[11px] font-mono text-white/30">
+                    {coverInitial}
+                  </span>
+                </div>
+              )}
+              {profile?.is_verified && (
+                <span className="absolute -bottom-0.5 -right-0.5">
+                  <VerifiedBadge size={10} />
+                </span>
+              )}
+            </div>
+            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate max-w-[60vw]">
+              {coverArtist ? `In Studio · ${coverArtist}` : "In Studio"}
+            </span>
+          </div>
+        )}
         {!showCover && !isWaiting && renderData && (
           <LyricDanceProgressBar
             player={player}
             data={renderData}
             onSeekStart={() => {}}
             onSeekEnd={() => {}}
-            palette={palette.length ? palette : ["#ffffff", "#ffffff", "#ffffff"]}
+            palette={
+              palette.length ? palette : ["#ffffff", "#ffffff", "#ffffff"]
+            }
           />
         )}
 

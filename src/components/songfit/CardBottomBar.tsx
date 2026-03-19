@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 
 interface CardBottomBarProps {
@@ -50,16 +50,25 @@ export function CardBottomBar({
     }
   }, [votedSide]);
 
-  const py = variant === "embedded" ? "py-3" : "py-2.5";
+  const py = variant === "embedded" ? "py-3" : "py-3.5";
 
   const wrapperClass =
     variant === "embedded"
       ? "flex items-stretch h-[48px]"
-      : "flex items-stretch mx-1 mt-1 rounded-md overflow-hidden h-[44px]";
-  const wrapperStyle = { background: "#0a0a0a" };
+      : "flex items-stretch mx-1 mt-1 rounded-md overflow-hidden h-[52px]";
+  const wrapperStyle: React.CSSProperties = {
+    background: "#0a0a0a",
+    ...(variant === "fullscreen"
+      ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" }
+      : {}),
+  };
 
   return (
-    <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
+    <div
+      className={wrapperClass}
+      style={wrapperStyle}
+      onClick={(e) => e.stopPropagation()}
+    >
       {/* ── Left side ── */}
       {panelOpen ? (
         /* Panel open: comment input */
@@ -84,29 +93,42 @@ export function CardBottomBar({
             onClick={onVoteYes}
             className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
-            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors">
+            <span
+              className={`${variant === "fullscreen" ? "text-[12px]" : "text-[11px]"} font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors`}
+            >
               Run it back
             </span>
             {(score?.replay_yes ?? 0) > 0 && (
-              <span className="text-[9px] font-mono text-white/15">{score!.replay_yes}</span>
+              <span className="text-[9px] font-mono text-white/15">
+                {score!.replay_yes}
+              </span>
             )}
           </button>
-          <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+          <div
+            style={{ width: "0.5px" }}
+            className="bg-white/[0.06] self-stretch my-2"
+          />
           <button
             onClick={onVoteNo}
             className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
           >
-            <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors">
+            <span
+              className={`${variant === "fullscreen" ? "text-[12px]" : "text-[11px]"} font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors`}
+            >
               Not For Me
             </span>
             {score != null && score.total - score.replay_yes > 0 && (
-              <span className="text-[9px] font-mono text-white/15">{score.total - score.replay_yes}</span>
+              <span className="text-[9px] font-mono text-white/15">
+                {score.total - score.replay_yes}
+              </span>
             )}
           </button>
         </>
       ) : (
         /* Post-vote: nudge then social proof */
-        <div className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}>
+        <div
+          className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}
+        >
           {showNudge ? (
             <span className="text-[9px] font-mono tracking-[0.12em] text-white/50 flex items-center gap-1.5">
               which line hit?
@@ -120,7 +142,8 @@ export function CardBottomBar({
                 const notForMeCount = total - replay_yes;
                 const majorityRanItBack = replay_yes > total / 2;
                 const isSplit = total > 0 && replay_yes === total / 2;
-                const userAgrees = votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
+                const userAgrees =
+                  votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
                 const titleLabel = trackTitle || "IT";
 
                 let verdict: string;
@@ -145,7 +168,10 @@ export function CardBottomBar({
       )}
 
       {/* ── Divider — always present ── */}
-      <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+      <div
+        style={{ width: "0.5px" }}
+        className="bg-white/[0.06] self-stretch my-2"
+      />
 
       {/* ── Right side: 🔥 / ✕ — always in the same position ── */}
       <button
@@ -156,10 +182,13 @@ export function CardBottomBar({
             onOpenReactions();
           }
         }}
-        className={`relative flex items-center justify-center gap-1 px-4 min-w-[56px] ${py} hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none`}
+        className={`relative flex items-center justify-center gap-1 px-4 min-w-[64px] ${py} hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none`}
       >
         {panelOpen ? (
-          <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+          <X
+            size={14}
+            className="text-white/30 group-hover:text-white/60 transition-colors"
+          />
         ) : (
           <>
             <span

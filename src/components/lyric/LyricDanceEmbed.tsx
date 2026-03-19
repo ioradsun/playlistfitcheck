@@ -5,7 +5,8 @@
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Maximize2, Volume2, VolumeX, RotateCcw } from "lucide-react";
+import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
@@ -23,7 +24,11 @@ function getSharedIO() {
     sharedIO = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          const v: VisibilityState = !e.isIntersecting ? "far" : e.intersectionRatio > 0.2 ? "visible" : "near";
+          const v: VisibilityState = !e.isIntersecting
+            ? "far"
+            : e.intersectionRatio > 0.2
+              ? "visible"
+              : "near";
           visibilityListeners.get(e.target)?.(v);
         }
       },
@@ -53,6 +58,9 @@ interface LyricDanceEmbedProps {
   onExternalPanelOpenChange?: (open: boolean) => void;
   autoPlay?: boolean;
   onOpenReactions?: () => void;
+  avatarUrl?: string | null;
+  isVerified?: boolean;
+  onProfileClick?: () => void;
 }
 
 export function LyricDanceEmbed({
@@ -75,6 +83,9 @@ export function LyricDanceEmbed({
   onExternalPanelOpenChange,
   autoPlay = false,
   onOpenReactions,
+  avatarUrl,
+  isVerified,
+  onProfileClick,
 }: LyricDanceEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
@@ -125,7 +136,9 @@ export function LyricDanceEmbed({
     onPlay,
   });
 
-  const [visibility, setVisibility] = useState<VisibilityState>(isFeedEmbed ? "far" : "visible");
+  const [visibility, setVisibility] = useState<VisibilityState>(
+    isFeedEmbed ? "far" : "visible",
+  );
   const [playerEvicted, setPlayerEvicted] = useState(false);
   const [forceDemoted, setForceDemoted] = useState(false);
   const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -147,7 +160,15 @@ export function LyricDanceEmbed({
       userActivatedRef.current = true;
       onPlay?.();
     }
-  }, [hideReactButton, onOpenReactions, isControlled, onExternalPanelOpenChange, openPanel, showCover, onPlay]);
+  }, [
+    hideReactButton,
+    onOpenReactions,
+    isControlled,
+    onExternalPanelOpenChange,
+    openPanel,
+    showCover,
+    onPlay,
+  ]);
 
   useEffect(() => {
     if (!isControlled) return;
@@ -184,7 +205,8 @@ export function LyricDanceEmbed({
       player.scheduleFullModeUpgrade();
       return;
     }
-    if (visibility === "near" || visibility === "visible") player.scheduleFullModeUpgrade();
+    if (visibility === "near" || visibility === "visible")
+      player.scheduleFullModeUpgrade();
   }, [player, playerReady, visibility, isFeedEmbed, reelsMode, cardState]);
 
   // Full-mode upgrade for non-feed embeds now handled by useLyricDanceCore
@@ -216,7 +238,8 @@ export function LyricDanceEmbed({
       setForceDemoted(true);
     };
     window.addEventListener("crowdfit:media-deactivate", handler);
-    return () => window.removeEventListener("crowdfit:media-deactivate", handler);
+    return () =>
+      window.removeEventListener("crowdfit:media-deactivate", handler);
   }, [isFeedEmbed, lyricDanceId]);
 
   useEffect(() => {
@@ -229,7 +252,11 @@ export function LyricDanceEmbed({
       setShowCover(true);
       userActivatedRef.current = false;
       if (lyricDanceId) {
-        window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", { detail: { cardId: lyricDanceId } }));
+        window.dispatchEvent(
+          new CustomEvent("crowdfit:media-deactivate", {
+            detail: { cardId: lyricDanceId },
+          }),
+        );
       }
     }
   }, [visibility, isFeedEmbed, isBattleMode, lyricDanceId, setShowCover]);
@@ -252,7 +279,8 @@ export function LyricDanceEmbed({
     const coverUp = showCover;
     const isUserEngaged = cardState === "active" || userActivatedRef.current;
     if (reactionPanelOpen) return;
-    const shouldUnmuted = !coverUp && isUserEngaged && visibility === "visible" && !forceDemoted;
+    const shouldUnmuted =
+      !coverUp && isUserEngaged && visibility === "visible" && !forceDemoted;
     const shouldMuted = !coverUp && !isUserEngaged;
     if (shouldUnmuted) {
       player.play();
@@ -263,7 +291,18 @@ export function LyricDanceEmbed({
       player.setMuted(true);
       setMuted(true);
     }
-  }, [player, playerReady, cardState, visibility, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen]);
+  }, [
+    player,
+    playerReady,
+    cardState,
+    visibility,
+    forceDemoted,
+    isFeedEmbed,
+    isBattleMode,
+    showCover,
+    setMuted,
+    reactionPanelOpen,
+  ]);
 
   useEffect(() => {
     if (!player || !playerReady) return;
@@ -284,11 +323,19 @@ export function LyricDanceEmbed({
       }}
     >
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-      <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+      <canvas
+        ref={textCanvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+      />
 
       <AnimatePresence>
         {(effectiveShowCover || isWaiting) && (
-          <motion.div initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: "easeOut" }} className="absolute inset-0">
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="absolute inset-0"
+          >
             <LyricDanceCover
               songName={songTitle}
               waiting={isWaiting}
@@ -305,21 +352,35 @@ export function LyricDanceEmbed({
       </AnimatePresence>
 
       {playerReady && !reactionPanelOpen && (
-        <div className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2" onClick={(e) => e.stopPropagation()}>
-          {reelsMode && artistName ? (
-            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 border border-green-400/40 rounded px-1.5 py-0.5 shrink-0">
-              {`In Studio · ${artistName}`}
-            </span>
-          ) : <span />}
+        <div
+          className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span />
           <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
-            <button onClick={toggleMute} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? "Unmute" : "Mute"}>
+            <button
+              onClick={toggleMute}
+              className="p-1 text-white/40 hover:text-white/70 transition-colors"
+              aria-label={muted ? "Unmute" : "Mute"}
+            >
               {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
             </button>
-            <button onClick={handleReplay} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
+            <button
+              onClick={handleReplay}
+              className="p-1 text-white/40 hover:text-white/70 transition-colors"
+              aria-label="Replay"
+            >
               <RotateCcw size={14} />
             </button>
             {showExpandButton && (
-              <button onClick={(e) => { e.stopPropagation(); window.open(lyricDanceUrl, "_blank"); }} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label="Expand">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(lyricDanceUrl, "_blank");
+                }}
+                className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                aria-label="Expand"
+              >
                 <Maximize2 size={14} />
               </button>
             )}
@@ -328,7 +389,42 @@ export function LyricDanceEmbed({
       )}
 
       {!reactionPanelOpen && (
-        <div className="absolute bottom-0 left-0 right-0 z-[450]" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
+        <div
+          className="absolute bottom-0 left-0 right-0 z-[450]"
+          style={{ background: "#0a0a0a" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {reelsMode && artistName && (
+            <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+              <div
+                className="relative shrink-0 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onProfileClick?.();
+                }}
+              >
+                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User size={13} className="text-white/40" />
+                  )}
+                </div>
+                {isVerified && (
+                  <span className="absolute -bottom-0.5 -right-0.5">
+                    <VerifiedBadge size={11} />
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate max-w-[60vw]">
+                {`In Studio · ${artistName}`}
+              </span>
+            </div>
+          )}
           {!effectiveShowCover && !isWaiting && data && (
             <LyricDanceProgressBar
               player={player}
@@ -348,7 +444,11 @@ export function LyricDanceEmbed({
             onOpenReactions={handleOpenReactions}
             onClose={handleClosePanelAndSync}
             panelOpen={reactionPanelOpen}
-            topReaction={topReaction ? { symbol: topReaction.symbol, count: topReaction.count } : null}
+            topReaction={
+              topReaction
+                ? { symbol: topReaction.symbol, count: topReaction.count }
+                : null
+            }
             trackTitle={songTitle}
           />
         </div>
