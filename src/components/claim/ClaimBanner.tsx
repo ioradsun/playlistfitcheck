@@ -117,7 +117,7 @@ export default function ClaimBanner({
         {/* Headline + CTA inline */}
         <div className="min-w-0 flex-1">
           <p
-            className="text-[11px] sm:text-[12.5px] font-medium leading-snug"
+            className="truncate text-[11px] sm:text-[12.5px] font-medium leading-snug"
             style={{ color: "rgba(255,255,255,0.78)" }}
           >
             {headline}
