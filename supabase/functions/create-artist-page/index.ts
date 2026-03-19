@@ -35,6 +35,43 @@ async function fetchSpotifyTrack(trackId: string, token: string) {
   return resp.json();
 }
 
+// ── Fetch Spotify audio features (BPM, duration) ─────────────────────────────
+async function fetchSpotifyAudioFeatures(
+  trackId: string,
+  token: string,
+): Promise<{ tempo: number; durationMs: number } | null> {
+  try {
+    const resp = await fetch(`https://api.spotify.com/v1/audio-features/${trackId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return {
+      tempo: typeof data.tempo === "number" ? data.tempo : 0,
+      durationMs: typeof data.duration_ms === "number" ? data.duration_ms : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── Generate synthetic beat grid from BPM ─────────────────────────────────────
+function buildBeatGrid(
+  bpm: number,
+  durationSec: number,
+): { bpm: number; beats: number[]; confidence: number } {
+  if (bpm <= 0 || durationSec <= 0) {
+    return { bpm: 120, beats: [], confidence: 0 };
+  }
+  const period = 60 / bpm;
+  const beats: number[] = [];
+  for (let t = 0; t < durationSec; t += period) {
+    beats.push(Math.round(t * 1000) / 1000);
+  }
+  return { bpm: Math.round(bpm), beats, confidence: 0.7 };
+}
+
 // ── Scrape preview URL from embed page ───────────────────────────────────────
 async function scrapePreviewFromEmbed(trackId: string): Promise<string | null> {
   try {
@@ -266,7 +303,10 @@ serve(async (req) => {
     // ── STEP 1: Spotify fetch ──
     await logStep("spotify_fetch", "running", null, trackId);
     const token = await getSpotifyToken(clientId, clientSecret);
-    const track = await fetchSpotifyTrack(trackId, token);
+    const [track, audioFeatures] = await Promise.all([
+      fetchSpotifyTrack(trackId, token),
+      fetchSpotifyAudioFeatures(trackId, token),
+    ]);
 
     const trackTitle = track.name;
     const artistName = track.artists[0].name;
@@ -276,11 +316,17 @@ serve(async (req) => {
 
     if (!previewUrl) previewUrl = await scrapePreviewFromEmbed(trackId);
 
+    const previewDurationSec = 30;
+    const beatGrid = buildBeatGrid(
+      audioFeatures?.tempo ?? 0,
+      previewDurationSec,
+    );
+
     const slug = artistName.toLowerCase()
       .replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
     await logStep("spotify_fetch", "done",
-      `${artistName} — "${trackTitle}" | preview: ${previewUrl ? (track.preview_url ? "api" : "embed") : "none"}`,
+      `${artistName} — "${trackTitle}" | preview: ${previewUrl ? (track.preview_url ? "api" : "embed") : "none"} | ${beatGrid.bpm}bpm`,
       slug);
 
     // ── STEP 2: Ghost profile + lrclib IN PARALLEL ──
@@ -505,10 +551,10 @@ serve(async (req) => {
               lyrics,
               words: transcriptWords.length > 0 ? transcriptWords : null,
               cinematic_direction: cinematicDirection,
-              beat_grid: { bpm: 0, beats: [], confidence: 0 },
+              beat_grid: beatGrid,
               palette: cinematicDirection?.defaults?.palette ??
                 ["#ffffff", "#a855f7", "#ec4899"],
-               section_images: null,
+              section_images: null,
               auto_palettes: null,
               album_art_url: albumArtUrl,
             }, { onConflict: "artist_slug,song_slug" });
@@ -534,16 +580,31 @@ serve(async (req) => {
 
           await logStep("lyric_dance_save", "done", `Live at ${lyricDanceUrl}`, slug);
 
-          // Trigger section image generation (fire and forget — non-blocking)
+          // Trigger section image generation — await with timeout
           if (danceRow?.id) {
-            fetch(`${supabaseUrl}/functions/v1/generate-section-images`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-              },
-              body: JSON.stringify({ lyric_dance_id: danceRow.id }),
-            }).catch(() => {}); // fire and forget
+            await logStep("section_images", "running", "Generating section images…", slug);
+            try {
+              const imgRes = await fetch(`${supabaseUrl}/functions/v1/generate-section-images`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+                },
+                body: JSON.stringify({ lyric_dance_id: danceRow.id }),
+                signal: AbortSignal.timeout(120_000),
+              });
+              if (imgRes.ok) {
+                const imgData = await imgRes.json();
+                const count = imgData.generated ?? 0;
+                await logStep("section_images", "done", `${count} images generated`, slug);
+              } else {
+                const errText = await imgRes.text().catch(() => String(imgRes.status));
+                await logStep("section_images", "error", `HTTP ${imgRes.status}: ${errText.slice(0, 100)}`, slug);
+              }
+            } catch (e: any) {
+              const msg = e.name === "TimeoutError" ? "Timed out after 120s" : (e.message ?? "Image gen failed");
+              await logStep("section_images", "error", msg, slug);
+            }
           }
         } catch (e: any) {
           await logStep("lyric_dance_save", "error", e.message ?? "Dance save failed", slug);
