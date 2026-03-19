@@ -17,7 +17,7 @@ type ExportStage = "config" | "preparing" | "rendering" | "encoding" | "finalizi
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  getPlayer: (() => LyricDancePlayer | null) | null;
+  getPlayer: () => LyricDancePlayer | null;
   songTitle: string;
   artistName: string;
 }
