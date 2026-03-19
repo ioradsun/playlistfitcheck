@@ -272,29 +272,37 @@ const Index = () => {
     setProjectMissing(false);
 
     (async () => {
-      const { data, error } = await supabase
-        .from("saved_lyrics")
-        .select("*")
-        .eq("id", projectId)
-        .eq("user_id", user.id)
-        .maybeSingle();
+      try {
+        const { data, error } = await supabase
+          .from("saved_lyrics")
+          .select("*")
+          .eq("id", projectId)
+          .eq("user_id", user.id)
+          .maybeSingle();
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      if (error || !data) {
-        setLoadedLyric(null);
-        setIsFetchingProject(false);
-        setProjectMissing(true);
-        return;
+        if (error || !data) {
+          setLoadedLyric(null);
+          setIsFetchingProject(false);
+          setProjectMissing(true);
+          return;
+        }
+
+        projectLoadedRef.current = projectId;
+        // Commit atomically to avoid intermediate "ready + null" frames.
+        flushSync(() => {
+          setLoadedLyric(data);
+          setIsFetchingProject(false);
+          setProjectMissing(false);
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[LyricLoader] fetch failed:", err);
+          setIsFetchingProject(false);
+          setProjectMissing(true);
+        }
       }
-
-      projectLoadedRef.current = projectId;
-      // Commit atomically to avoid intermediate "ready + null" frames.
-      flushSync(() => {
-        setLoadedLyric(data);
-        setIsFetchingProject(false);
-        setProjectMissing(false);
-      });
     })();
 
     return () => {
@@ -354,78 +362,100 @@ const Index = () => {
       playlist: "/PlaylistFit",
     };
 
+    let cancelled = false;
+
     (async () => {
-      let data: any = null;
-      let error: any = null;
-      if (tab === "mix") {
-        const r = await supabase
-          .from("mix_projects")
-          .select("*")
-          .eq("id", projectId)
-          .maybeSingle();
-        data = r.data;
-        error = r.error;
-      } else if (tab === "hitfit") {
-        const r = await supabase
-          .from("saved_hitfit")
-          .select("*")
-          .eq("id", projectId)
-          .maybeSingle();
-        data = r.data;
-        error = r.error;
-      } else if (tab === "profit") {
-        const r = await supabase
-          .from("profit_reports")
-          .select("*, profit_artists(*)")
-          .eq("id", projectId)
-          .maybeSingle();
-        data = r.data;
-        error = r.error;
-      } else if (tab === "vibefit") {
-        const r = await supabase
-          .from("saved_vibefit")
-          .select("*")
-          .eq("id", projectId)
-          .maybeSingle();
-        data = r.data;
-        error = r.error;
-      } else if (tab === "playlist") {
-        const r = await supabase
-          .from("saved_searches")
-          .select("*")
-          .eq("id", projectId)
-          .maybeSingle();
-        data = r.data;
-        error = r.error;
-      }
-      if (error || !data) {
+      try {
+        let data: any = null;
+        let error: any = null;
+        if (tab === "mix") {
+          const r = await supabase
+            .from("mix_projects")
+            .select("*")
+            .eq("id", projectId)
+            .maybeSingle();
+          data = r.data;
+          error = r.error;
+        } else if (tab === "hitfit") {
+          const r = await supabase
+            .from("saved_hitfit")
+            .select("*")
+            .eq("id", projectId)
+            .maybeSingle();
+          data = r.data;
+          error = r.error;
+        } else if (tab === "profit") {
+          const r = await supabase
+            .from("profit_reports")
+            .select("*, profit_artists(*)")
+            .eq("id", projectId)
+            .maybeSingle();
+          data = r.data;
+          error = r.error;
+        } else if (tab === "vibefit") {
+          const r = await supabase
+            .from("saved_vibefit")
+            .select("*")
+            .eq("id", projectId)
+            .maybeSingle();
+          data = r.data;
+          error = r.error;
+        } else if (tab === "playlist") {
+          const r = await supabase
+            .from("saved_searches")
+            .select("*")
+            .eq("id", projectId)
+            .maybeSingle();
+          data = r.data;
+          error = r.error;
+        } else {
+          // Tabs without project DB (songfit, hookfit, dreamfit) — nothing to fetch
+          setIsFetchingProject(false);
+          return;
+        }
+
+        if (cancelled) return;
+
+        if (error || !data) {
+          setIsFetchingProject(false);
+          setProjectMissing(true);
+          toast.error("Project not found");
+          navigate(pathMap[tab] || "/CrowdFit", { replace: true });
+          return;
+        }
+        projectLoadedRef.current = projectId;
         setIsFetchingProject(false);
-        setProjectMissing(true);
-        toast.error("Project not found");
-        navigate(pathMap[tab] || "/CrowdFit", { replace: true });
-        return;
-      }
-      projectLoadedRef.current = projectId;
-      setIsFetchingProject(false);
-      // For profit, reshape data to match expected format
-      if (tab === "profit" && data.blueprint_json) {
-        const artist = (data as any).profit_artists;
-        handleLoadProject("profit", {
-          reportId: data.id,
-          shareToken: data.share_token,
-          blueprint: data.blueprint_json,
-          artist,
-        });
-      } else if (tab === "hitfit" && data.analysis_json) {
-        handleLoadProject("hitfit", {
-          id: data.id,
-          analysis: data.analysis_json,
-          filename: data.filename,
-        });
-      } else {
-        handleLoadProject(tab, data);
+        // For profit, reshape data to match expected format
+        if (tab === "profit" && data.blueprint_json) {
+          const artist = (data as any).profit_artists;
+          handleLoadProject("profit", {
+            reportId: data.id,
+            shareToken: data.share_token,
+            blueprint: data.blueprint_json,
+            artist,
+          });
+        } else if (tab === "hitfit" && data.analysis_json) {
+          handleLoadProject("hitfit", {
+            id: data.id,
+            analysis: data.analysis_json,
+            filename: data.filename,
+          });
+        } else {
+          handleLoadProject(tab, data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[ProjectLoader] fetch failed:", err);
+          setIsFetchingProject(false);
+          setProjectMissing(true);
+          toast.error("Failed to load project");
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, activeTab, authLoading, user?.id, location.pathname]);
 
   const setActiveTab = useCallback((tab: string) => {
@@ -861,6 +891,7 @@ const Index = () => {
           setLoadedVibeFitResult(null);
           setVibeFitLoadKey((k) => k + 1);
         }
+        projectLoadedRef.current = null;
         setActiveTab(tab);
       });
 
