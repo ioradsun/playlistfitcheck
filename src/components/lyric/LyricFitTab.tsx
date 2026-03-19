@@ -1045,7 +1045,7 @@ export function LyricFitTab({
       setPipelineStages(prev => ({ ...prev, transcript: "pending" }));
       return;
     }
-    if (values.some(v => v === "done")) {
+    if (allValues.some(v => v === "done")) {
       setFitReadiness("running");
       setFitStageLabel("Finalizing background jobs…");
       return;
