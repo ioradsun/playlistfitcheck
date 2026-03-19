@@ -970,7 +970,7 @@ async function callScene(
   if (!resp.ok) {
     const text = await resp.text();
     console.error("[cinematic-direction] scene AI error", resp.status, text);
-    throw { status: resp.status, message: resp.status === 429 ? "Rate limited" : "Scene direction AI request failed" };
+    throw { status: resp.status, message: resp.status === 429 ? "Rate limited" : `Scene direction AI failed (HTTP ${resp.status})` };
   }
 
   const completion = await resp.json();
