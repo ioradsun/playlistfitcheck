@@ -4,7 +4,7 @@
  * Route: /:artistSlug/:songSlug/lyric-dance
  */
 import React, { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,6 +18,7 @@ import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar"
 import ClaimBanner from "@/components/claim/ClaimBanner";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { SeoHead } from "@/components/SeoHead";
 
 interface ProfileInfo {
   display_name: string | null;
@@ -31,6 +32,7 @@ export default function ShareableLyricDance() {
     songSlug: string;
   }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const isMarketingView = searchParams.get("from") === "claim";
 
@@ -169,12 +171,31 @@ export default function ShareableLyricDance() {
   const coverInitial = (renderData?.artist_name ||
     renderData?.song_name ||
     "♪")[0].toUpperCase();
+  const ogImage = renderData?.section_images?.find((u: string | null) => !!u)
+    ?? (renderData as any)?.album_art_url
+    ?? "https://tools.fm/og/homepage.png";
+  const ogTitle = isMarketingView
+    ? `${coverArtist} — watch "${coverSongName.toUpperCase()}" come alive`
+    : coverSongName
+      ? `"${coverSongName.toUpperCase()}" — ${coverArtist}`
+      : "Lyric Dance — tools.fm";
+  const ogDescription = isMarketingView
+    ? "Your song. One click. AI lyric video. Claim your free artist page on tools.fm"
+    : "Interactive lyric video on tools.fm · Run it back or skip";
 
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col"
       style={{ background: "#0a0a0a" }}
     >
+      <SeoHead
+        title={ogTitle}
+        description={ogDescription}
+        canonical={`https://tools.fm${location.pathname}${location.search}`}
+        ogTitle={ogTitle}
+        ogDescription={ogDescription}
+        ogImage={ogImage}
+      />
       {isMarketingView && (
         <ClaimBanner
           artistSlug={artistSlug}

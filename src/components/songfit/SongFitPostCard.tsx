@@ -41,6 +41,7 @@ import { ProfileHoverCard } from "./ProfileHoverCard";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent } from "@/lib/engagementTracking";
+import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useCardState, type CardState } from "./useCardLifecycle";
 import { PostCommentPanel } from "./PostCommentPanel";
 import {
@@ -250,7 +251,16 @@ export function SongFitPostCard({
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/song/${post.id}`;
+    let url: string;
+    if (post.lyric_dance_url) {
+      const parsed = parseLyricDanceUrl(post.lyric_dance_url);
+      url = parsed
+        ? buildShareUrl(parsed.artistSlug, parsed.songSlug)
+        : `${window.location.origin}/song/${post.id}`;
+    } else {
+      url = `${window.location.origin}/song/${post.id}`;
+    }
+
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Link copied!");
