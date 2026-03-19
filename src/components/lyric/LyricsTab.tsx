@@ -265,6 +265,9 @@ export function LyricsTab({
         }
 
 
+        const transcribeAbort = new AbortController();
+        const transcribeTimeout = setTimeout(() => transcribeAbort.abort(), 120_000); // 2 min for large files
+
         let response: Response;
         if (storageAudioUrl) {
           // Fast path: send URL, edge function fetches from same datacenter
@@ -285,6 +288,7 @@ export function LyricsTab({
                 transcriptionModel,
                 ...(referenceLyrics?.trim() ? { referenceLyrics: referenceLyrics.trim() } : {}),
               }),
+              signal: transcribeAbort.signal,
             },
           );
         } else {
@@ -306,6 +310,7 @@ export function LyricsTab({
                 Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
               },
               body: formData,
+              signal: transcribeAbort.signal,
             },
           );
         }
@@ -317,6 +322,7 @@ export function LyricsTab({
         }
 
         const data = await response.json();
+        clearTimeout(transcribeTimeout);
         
 
         if (data.error) throw new Error(data.error);
@@ -374,7 +380,11 @@ export function LyricsTab({
         }
         await quota.increment();
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to transcribe lyrics");
+        clearTimeout(transcribeTimeout);
+        const msg = e instanceof Error
+          ? (e.name === "AbortError" ? "Transcription timed out — try a shorter file or try again" : e.message)
+          : "Failed to transcribe lyrics";
+        toast.error(msg);
       } finally {
         setLoading(false);
       }

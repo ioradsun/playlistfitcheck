@@ -18,6 +18,22 @@ import { FitTab } from "./FitTab";
 import type { SceneContextResult } from "@/lib/sceneContexts";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
+/** Invoke a Supabase edge function with a timeout. If the timeout fires,
+ *  the returned promise rejects but the server-side call continues to completion. */
+function invokeWithTimeout<T = any>(
+  fnName: string,
+  body: Record<string, unknown>,
+  timeoutMs = 45_000,
+): Promise<{ data: T | null; error: any }> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Edge function "${fnName}" timed out after ${timeoutMs / 1000}s`)), timeoutMs),
+  );
+  return Promise.race([
+    supabase.functions.invoke(fnName, { body }) as Promise<{ data: T | null; error: any }>,
+    timeout,
+  ]);
+}
+
 const WAVEFORM_PEAK_COUNT = 200;
 
 function extractPeaksFromBuffer(buf: AudioBuffer): WaveformData {
@@ -183,6 +199,7 @@ export function LyricFitTab({
   const [transcriptionDone, setTranscriptionDone] = useState(
     () => !!(initialLyric?.lines && Array.isArray(initialLyric.lines) && initialLyric.lines.length > 0)
   );
+  const mountedRef = useRef(true);
   const [beatGridDone, setBeatGridDone] = useState(
     () => !!(initialLyric as any)?.beat_grid
   );
@@ -213,6 +230,12 @@ export function LyricFitTab({
   }, [timestampedLines]);
 
   useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!user) return;
     supabase.from("profiles").select("display_name").eq("id", user.id).single()
       .then(({ data }) => { if (data?.display_name) artistNameRef.current = data.display_name; });
@@ -224,9 +247,7 @@ export function LyricFitTab({
     const timer = setTimeout(async () => {
       setResolvingScene(true);
       try {
-        const { data } = await supabase.functions.invoke('resolve-scene-context', {
-          body: { description: sceneDescription.trim() },
-        });
+        const { data } = await invokeWithTimeout('resolve-scene-context', { description: sceneDescription.trim() }, 15_000);
         if (data && !data.error) setResolvedScene(data);
       } catch (e) {
         console.error('Scene resolve failed:', e);
@@ -416,15 +437,20 @@ export function LyricFitTab({
       setHasRealAudio(true);
     } else if ((initialLyric as any).audio_url) {
       const audioUrl = (initialLyric as any).audio_url as string;
-      fetch(audioUrl)
+      const audioAbort = new AbortController();
+      const audioTimeout = setTimeout(() => audioAbort.abort(), 15_000);
+      fetch(audioUrl, { signal: audioAbort.signal })
         .then((res) => res.blob())
         .then((blob) => {
+          clearTimeout(audioTimeout);
           const file = new File([blob], filename, { type: blob.type || "audio/mpeg" });
           setAudioFile(file);
           setHasRealAudio(true);
           if (initialLyric.id) sessionAudio.set("lyric", initialLyric.id, file, { ttlMs: 20 * 60 * 1000 });
         })
         .catch(() => {
+          clearTimeout(audioTimeout);
+          console.warn("[Pipeline] Audio fetch failed or timed out — using dummy file");
           const dummyFile = new File([], filename, { type: "audio/mpeg" });
           setAudioFile(dummyFile);
           setHasRealAudio(false);
@@ -530,8 +556,7 @@ export function LyricFitTab({
         .filter((l: any) => l.tag !== "adlib")
         .map((l: any) => ({ text: l.text, start: Number(l.start ?? 0), end: Number(l.end ?? 0) }));
 
-      const { data: hookResult, error } = await supabase.functions.invoke("detect-hooks", {
-        body: {
+      const { data: hookResult, error } = await invokeWithTimeout("detect-hooks", {
           lyrics: linesForHook.map((l: { text: string }) => l.text).join("\n"),
           lines: linesForHook,
           words,
@@ -540,8 +565,7 @@ export function LyricFitTab({
             : { bpm: 120, beats: [], confidence: 0 },
           beatEnergies: beatGrid?.beatEnergies ?? undefined,
           durationSec: audioDurationSec,
-        },
-      });
+        }, 30_000);
 
       if (error) throw error;
       if (!hookResult?.hook) return;
@@ -605,15 +629,15 @@ export function LyricFitTab({
         scene_context: sceneContext,
       };
 
-      const { data: sceneResult } = await supabase.functions.invoke("cinematic-direction", {
-        body: { ...sharedBody, mode: "scene" },
-      });
+      const { data: sceneResult } = await invokeWithTimeout("cinematic-direction", { ...sharedBody, mode: "scene" }, 45_000);
 
       if (!sceneResult?.cinematicDirection) {
         throw new Error("Scene direction returned no data");
       }
 
       const sceneDirection = sceneResult.cinematicDirection;
+
+      if (!mountedRef.current) return;
 
       const enrichedScene = beatGrid
         ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
@@ -648,15 +672,15 @@ export function LyricFitTab({
       const wordPromise = (async () => {
         const wt0 = performance.now();
 
+        if (!mountedRef.current) return;
+
         try {
-          const { data: wordResult } = await supabase.functions.invoke("cinematic-direction", {
-            body: {
-              ...sharedBody,
-              mode: "words",
-              sceneDirection: enrichedScene,
-              words: words ?? undefined,
-            },
-          });
+          const { data: wordResult } = await invokeWithTimeout("cinematic-direction", {
+            ...sharedBody,
+            mode: "words",
+            sceneDirection: enrichedScene,
+            words: words ?? undefined,
+          }, 45_000);
 
           if (wordResult?.cinematicDirection) {
             const { storyboard, wordDirectives } = wordResult.cinematicDirection;
@@ -685,6 +709,7 @@ export function LyricFitTab({
 
       const imagePromise = (async () => {
         const dirSections = enrichedScene?.sections;
+        if (!mountedRef.current) return;
         if (!Array.isArray(dirSections) || dirSections.length === 0 || !user) {
 
           setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
@@ -771,9 +796,7 @@ export function LyricFitTab({
             return;
           }
 
-          const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
-            body: { lyric_dance_id: resolvedDanceId, force: true },
-          });
+          const { data: result, error } = await invokeWithTimeout("generate-section-images", { lyric_dance_id: resolvedDanceId, force: true }, 90_000);
           if (error) throw error;
           const urls = result?.urls || result?.section_images || [];
 
@@ -794,6 +817,7 @@ export function LyricFitTab({
 
       await Promise.allSettled([wordPromise, imagePromise]);
 
+      if (!mountedRef.current) return;
       setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
       setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
       setFitProgress(prev => Math.max(prev, 85));
