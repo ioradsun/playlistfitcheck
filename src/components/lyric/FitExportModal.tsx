@@ -17,7 +17,7 @@ type ExportStage = "config" | "preparing" | "rendering" | "encoding" | "finalizi
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  getPlayer: (() => LyricDancePlayer | null) | null;
+  getPlayer: () => LyricDancePlayer | null;
   songTitle: string;
   artistName: string;
 }
@@ -271,7 +271,7 @@ export function FitExportModal({ isOpen, onClose, getPlayer, songTitle, artistNa
               {/* Start button */}
               <button
                 onClick={handleStart}
-                disabled={!browserSupported || !getPlayer}
+                disabled={!browserSupported}
                 className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 py-3 text-sm font-semibold uppercase tracking-wide text-primary hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Download size={14} />
