@@ -204,6 +204,7 @@ export function LyricsTab({
       // Start beat grid analysis in parallel with transcription
       onAudioSubmitted?.(file);
 
+      let transcribeTimeout: ReturnType<typeof setTimeout> | undefined;
       try {
         // Check transcription cache first
         const fingerprint = await computeAudioFingerprint(file);
