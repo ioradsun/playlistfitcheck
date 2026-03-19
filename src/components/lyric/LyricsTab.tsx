@@ -265,7 +265,6 @@ export function LyricsTab({
           uploadFile = file;
         }
 
-        let transcribeTimeout: ReturnType<typeof setTimeout> | undefined;
         const transcribeAbort = new AbortController();
         transcribeTimeout = setTimeout(() => transcribeAbort.abort(), 120_000); // 2 min for large files
 
