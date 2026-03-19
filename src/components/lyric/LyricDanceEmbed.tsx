@@ -3,7 +3,7 @@
  * All shared player logic lives in useLyricDanceCore.
  * This file adds: feed visibility lifecycle, cardState, eviction, battle mode.
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
