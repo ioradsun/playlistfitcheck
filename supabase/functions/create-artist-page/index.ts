@@ -425,38 +425,64 @@ serve(async (req) => {
         await logStep("lyric_dance_mp3", "error", e.message ?? "MP3 fetch/upload failed", slug);
       }
 
-      // 5b: Cinematic direction
+      // 5b: Cinematic direction (with retry)
       let cinematicDirection: any = null;
       await logStep("lyric_dance_cinematic", "running", "Generating cinematic direction…", slug);
-      try {
-        const lyrics = lrcToLyricsJson(syncedLrc);
-        const cdRes = await fetch(`${supabaseUrl}/functions/v1/cinematic-direction`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-          },
-          body: JSON.stringify({
-            title: trackTitle,
-            artist: artistName,
-            lines: lyrics,
-            lyrics: lyrics.map((l: any) => l.text).join("\n"),
-            mode: "scene",
-          }),
-          signal: AbortSignal.timeout(30000),
-        });
-        if (cdRes.ok) {
-          const cdData = await cdRes.json();
-          cinematicDirection = cdData.cinematicDirection ?? null;
-          await logStep("lyric_dance_cinematic", "done",
-            `Theme: ${cinematicDirection?.defaults?.scene_tone ?? "generated"}`, slug);
-        } else {
-          const errText = await cdRes.text().catch(() => String(cdRes.status));
-          await logStep("lyric_dance_cinematic", "error", errText.slice(0, 150), slug);
+      const lyrics = lrcToLyricsJson(syncedLrc);
+      const cdBody = JSON.stringify({
+        title: trackTitle,
+        artist: artistName,
+        lines: lyrics,
+        lyrics: lyrics.map((l: any) => l.text).join("\n"),
+        mode: "scene",
+      });
+      const cdHeaders = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+      };
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const cdRes = await fetch(`${supabaseUrl}/functions/v1/cinematic-direction`, {
+            method: "POST",
+            headers: cdHeaders,
+            body: cdBody,
+            signal: AbortSignal.timeout(45000),
+          });
+          if (cdRes.ok) {
+            const cdData = await cdRes.json();
+            cinematicDirection = cdData.cinematicDirection ?? null;
+            await logStep("lyric_dance_cinematic", "done",
+              `Theme: ${cinematicDirection?.defaults?.scene_tone ?? "generated"}${attempt > 1 ? ` (attempt ${attempt})` : ""}`, slug);
+            break;
+          } else {
+            const errText = await cdRes.text().catch(() => "");
+            const errMsg = `HTTP ${cdRes.status}: ${errText.slice(0, 120)}`;
+            if (attempt < 3 && (cdRes.status === 429 || cdRes.status >= 500)) {
+              // Retryable error — wait and try again
+              const delay = attempt === 1 ? 3000 : 8000;
+              await logStep("lyric_dance_cinematic", "running",
+                `Attempt ${attempt} failed (${cdRes.status}), retrying in ${delay / 1000}s…`, slug);
+              await new Promise(r => setTimeout(r, delay));
+              continue;
+            }
+            // Non-retryable or final attempt
+            await logStep("lyric_dance_cinematic", "error", errMsg, slug);
+            break;
+          }
+        } catch (e: any) {
+          const errMsg = e.name === "TimeoutError"
+            ? `Timeout after 45s (attempt ${attempt})`
+            : (e.message ?? "Cinematic direction failed");
+          if (attempt < 3) {
+            await logStep("lyric_dance_cinematic", "running",
+              `Attempt ${attempt} failed: ${errMsg}, retrying…`, slug);
+            await new Promise(r => setTimeout(r, 3000));
+            continue;
+          }
+          await logStep("lyric_dance_cinematic", "error", errMsg, slug);
+          break;
         }
-      } catch (e: any) {
-        await logStep("lyric_dance_cinematic", "error",
-          e.message ?? "Cinematic direction failed", slug);
       }
 
       // 5c: Upsert shareable_lyric_dances
