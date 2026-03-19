@@ -102,6 +102,21 @@ export function FitTab({
   const [publishStatus, setPublishStatus] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(initialDanceUrl ?? null);
   const [publishedDanceId, setPublishedDanceId] = useState<string | null>(initialDanceId ?? null);
+
+  // Sync dance ID/URL from parent when pipeline resolves after mount.
+  // useState only reads initialDanceId on mount — this effect picks up later updates.
+  useEffect(() => {
+    if (initialDanceId && initialDanceId !== publishedDanceId) {
+      setPublishedDanceId(initialDanceId);
+    }
+  }, [initialDanceId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (initialDanceUrl && initialDanceUrl !== publishedUrl) {
+      setPublishedUrl(initialDanceUrl);
+    }
+  }, [initialDanceUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);

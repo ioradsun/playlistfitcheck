@@ -121,8 +121,12 @@ export function LyricFitTab({
   const [renderData, setRenderData] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
-  const [pipelineDanceId, setPipelineDanceId] = useState<string | null>(null);
-  const [pipelineDanceUrl, setPipelineDanceUrl] = useState<string | null>(null);
+  const [pipelineDanceId, setPipelineDanceId] = useState<string | null>(
+    (initialLyric as any)?.render_data?.pipelineDanceId ?? null
+  );
+  const [pipelineDanceUrl, setPipelineDanceUrl] = useState<string | null>(
+    (initialLyric as any)?.render_data?.pipelineDanceUrl ?? null
+  );
   const cinematicDirectionRef = useRef(cinematicDirection);
   cinematicDirectionRef.current = cinematicDirection;
   // bgImageUrl and frameState removed — V3 derives from cinematicDirection
@@ -477,9 +481,11 @@ export function LyricFitTab({
       payload.waveformPeaks = waveformData.peaks;
       payload.waveformDuration = waveformData.duration;
     }
+    if (pipelineDanceId) payload.pipelineDanceId = pipelineDanceId;
+    if (pipelineDanceUrl) payload.pipelineDanceUrl = pipelineDanceUrl;
     persistRenderData(savedIdRef.current, payload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedId, renderData, waveformData, persistRenderData]);
+  }, [savedId, renderData, waveformData, persistRenderData, pipelineDanceId, pipelineDanceUrl]);
 
   const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
     if (!targetAudioFile || targetAudioFile.size === 0) return;
