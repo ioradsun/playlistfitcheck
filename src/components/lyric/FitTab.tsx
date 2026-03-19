@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Loader2, RefreshCw, Music, Sparkles, Eye, Zap, Image, ExternalLink, Download, Link, Users, Check } from "lucide-react";
+import { Loader2, RefreshCw, Music, Sparkles, Eye, Zap, Image, ExternalLink, Download, Link, Users, User, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
@@ -94,7 +94,7 @@ export function FitTab({
   initialDanceId,
   initialDanceUrl,
 }: Props) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   
   const defaultStages: PipelineStages = { rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" };
   const pipelineStages = pipelineStagesProp ?? defaultStages;
@@ -880,16 +880,7 @@ export function FitTab({
       {/* Dance preview or waveform fallback */}
       {publishedUrl && publishedDanceId ? (
         <div className="space-y-3">
-          <div className="rounded-xl overflow-hidden w-full aspect-video">
-            <LyricDanceEmbed
-              lyricDanceId={publishedDanceId}
-              lyricDanceUrl={publishedUrl}
-              songTitle={lyricData.title || "Untitled"}
-              artistName=""
-              prefetchedData={prefetchedDanceData}
-            />
-          </div>
-          {/* Action toolbar — single row of icon buttons */}
+          {/* Action toolbar — above the player */}
           <div className="flex items-center justify-center gap-1">
             <a
               href={publishedUrl}
@@ -933,6 +924,34 @@ export function FitTab({
               {crowdfitPostId ? "Live" : "CrowdFit"}
             </button>
           </div>
+
+          {/* Video player with profile overlay */}
+          <div className="relative rounded-xl overflow-hidden w-full aspect-video">
+            <LyricDanceEmbed
+              lyricDanceId={publishedDanceId}
+              lyricDanceUrl={publishedUrl}
+              songTitle={lyricData.title || "Untitled"}
+              artistName=""
+              prefetchedData={prefetchedDanceData}
+            />
+            {profile && (
+              <div className="absolute top-0 left-0 right-0 z-[460] flex items-center gap-2 px-3 py-2.5 pointer-events-none">
+                <div className="relative shrink-0">
+                  <div className="h-7 w-7 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.08]">
+                    {profile.avatar_url ? (
+                      <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={12} className="text-white/40" />
+                    )}
+                  </div>
+                </div>
+                <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate">
+                  {profile.display_name ? `In Studio · ${profile.display_name}` : "In Studio"}
+                </span>
+              </div>
+            )}
+          </div>
+
           <FitExportModal
             isOpen={showExportModal}
             onClose={() => setShowExportModal(false)}
