@@ -79,6 +79,38 @@ export default function ShareableLyricDance() {
       });
   }, [artistSlug, songSlug]);
 
+  // Poll for section images if missing on initial load (claim pipeline generates async)
+  useEffect(() => {
+    if (!data) return;
+    const images = (data as any).section_images;
+    if (Array.isArray(images) && images.some(Boolean)) return;
+
+    let attempts = 0;
+    const maxAttempts = 12;
+    const timer = setInterval(async () => {
+      attempts += 1;
+      if (attempts > maxAttempts) {
+        clearInterval(timer);
+        return;
+      }
+      const { data: fresh } = await supabase
+        .from("shareable_lyric_dances" as any)
+        .select("section_images")
+        .eq("id", (data as any).id)
+        .maybeSingle();
+      if (fresh && Array.isArray(fresh.section_images) && fresh.section_images.some(Boolean)) {
+        setDataRaw((prev: LyricDanceData | null) => (
+          prev
+            ? { ...prev, section_images: fresh.section_images }
+            : prev
+        ));
+        clearInterval(timer);
+      }
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, [data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const core = useLyricDanceCore({
     lyricDanceId: data?.id ?? "",
     prefetchedData: data,
