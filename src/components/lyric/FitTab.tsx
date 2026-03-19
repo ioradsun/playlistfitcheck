@@ -120,7 +120,7 @@ export function FitTab({
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
-  const dancePlayerRef = useRef<any>(null);
+  const dancePlayerRef = useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(null);
   const siteCopy = useSiteCopy();
   const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
 
@@ -444,7 +444,7 @@ export function FitTab({
         return;
       }
       const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== "adlib");
-      void handle.reloadTranscript?.(mainLines, wordsRef.current ?? undefined);
+      void (handle as any).reloadTranscript?.(mainLines, wordsRef.current ?? undefined);
     }, 300);
 
     return () => { if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current); };
@@ -928,6 +928,7 @@ export function FitTab({
           {/* Video player with profile overlay */}
           <div className="relative rounded-xl overflow-hidden w-full aspect-video">
             <LyricDanceEmbed
+              ref={dancePlayerRef}
               lyricDanceId={publishedDanceId}
               lyricDanceUrl={publishedUrl}
               songTitle={lyricData.title || "Untitled"}

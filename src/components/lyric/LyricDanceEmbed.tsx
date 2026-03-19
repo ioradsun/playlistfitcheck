@@ -3,7 +3,7 @@
  * All shared player logic lives in useLyricDanceCore.
  * This file adds: feed visibility lifecycle, cardState, eviction, battle mode.
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -63,7 +63,11 @@ interface LyricDanceEmbedProps {
   onProfileClick?: () => void;
 }
 
-export function LyricDanceEmbed({
+export interface LyricDanceEmbedHandle {
+  getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;
+}
+
+export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed({
   lyricDanceId,
   lyricDanceUrl,
   songTitle,
@@ -86,7 +90,7 @@ export function LyricDanceEmbed({
   avatarUrl,
   isVerified,
   onProfileClick,
-}: LyricDanceEmbedProps) {
+}, ref) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
 
@@ -135,6 +139,9 @@ export function LyricDanceEmbed({
     autoPlay,
     onPlay,
   });
+
+  useImperativeHandle(ref, () => ({ getPlayer: () => player ?? null }), [player]);
+
 
   const [visibility, setVisibility] = useState<VisibilityState>(
     isFeedEmbed ? "far" : "visible",
@@ -487,4 +494,4 @@ export function LyricDanceEmbed({
       )}
     </div>
   );
-}
+});
