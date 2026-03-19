@@ -204,6 +204,7 @@ export function LyricsTab({
       // Start beat grid analysis in parallel with transcription
       onAudioSubmitted?.(file);
 
+      let transcribeTimeout: ReturnType<typeof setTimeout> | undefined;
       try {
         // Check transcription cache first
         const fingerprint = await computeAudioFingerprint(file);
@@ -264,9 +265,8 @@ export function LyricsTab({
           uploadFile = file;
         }
 
-
         const transcribeAbort = new AbortController();
-        const transcribeTimeout = setTimeout(() => transcribeAbort.abort(), 120_000); // 2 min for large files
+        transcribeTimeout = setTimeout(() => transcribeAbort.abort(), 120_000); // 2 min for large files
 
         let response: Response;
         if (storageAudioUrl) {
