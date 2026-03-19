@@ -140,6 +140,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     onPlay,
   });
 
+  useImperativeHandle(ref, () => ({ getPlayer: () => player ?? null }), [player]);
+
+
   const [visibility, setVisibility] = useState<VisibilityState>(
     isFeedEmbed ? "far" : "visible",
   );
