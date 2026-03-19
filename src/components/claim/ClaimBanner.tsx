@@ -93,45 +93,41 @@ export default function ClaimBanner({
         style={{ boxShadow: "inset 0 8px 12px -4px rgba(0,0,0,0.4), inset 0 -8px 12px -4px rgba(0,0,0,0.4)" }}
       />
 
-      {/* Content — two rows on mobile, single row on sm+ */}
-      <div className="relative z-10 flex flex-col items-center gap-3 px-4 sm:px-5 py-5 sm:py-4">
+      {/* Content — compact horizontal strip */}
+      <div className="relative z-10 flex items-center gap-3 px-3 py-2.5">
 
-        {/* Row 1: thumbnail + headline centered as a unit */}
-        <div className="flex items-center justify-center gap-3.5">
+        {/* Cover thumbnail */}
+        {coverArtUrl && (
+          <div
+            className="z-20 flex-shrink-0 overflow-hidden rounded-md shadow-lg"
+            style={{
+              width: 36,
+              height: 36,
+              border: "1px solid rgba(255,255,255,0.15)",
+            }}
+          >
+            <img
+              src={coverArtUrl}
+              alt={songName ?? "cover"}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        )}
 
-          {/* Cover thumbnail — z-20, above scrim */}
-          {coverArtUrl && (
-            <div
-              className="flex-shrink-0 rounded-[6px] overflow-hidden shadow-lg z-20"
-              style={{
-                width: 48,
-                height: 48,
-                border: "1px solid rgba(255,255,255,0.15)",
-              }}
-            >
-              <img
-                src={coverArtUrl}
-                alt={songName ?? "cover"}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          )}
-
-          {/* Headline */}
+        {/* Headline + CTA inline */}
+        <div className="min-w-0 flex-1">
           <p
-            className="text-[12.5px] sm:text-[13.5px] font-medium leading-relaxed text-center"
+            className="text-[11px] sm:text-[12.5px] font-medium leading-snug"
             style={{ color: "rgba(255,255,255,0.78)" }}
           >
             {headline}
           </p>
-        </div>
-
-        {/* Row 2: CTA centered */}
-        <div
-          className="flex items-center justify-center flex-shrink-0 text-[11.5px] sm:text-[12px] font-semibold text-white/90 border border-white/[0.18] rounded-lg px-5 py-2 backdrop-blur-sm w-auto"
-          style={{ background: "rgba(255,255,255,0.06)" }}
-        >
-          Claim Your Free Artist Account
+          <span
+            className="mt-1 inline-block rounded border border-white/[0.18] px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold text-white/90 backdrop-blur-sm"
+            style={{ background: "rgba(255,255,255,0.06)" }}
+          >
+            Claim Free Account
+          </span>
         </div>
       </div>
     </div>
