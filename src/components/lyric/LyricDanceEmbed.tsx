@@ -491,4 +491,4 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       )}
     </div>
   );
-}
+});
