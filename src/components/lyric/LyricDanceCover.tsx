@@ -19,7 +19,6 @@ interface LyricDanceCoverProps {
 
 export function LyricDanceCover({
   songName,
-  claimArtistName = "",
   claimSongName = "",
   isMarketingCover = false,
   waiting,
@@ -111,18 +110,10 @@ export function LyricDanceCover({
       )}
 
       {/* Layer 3 — song title + Listen Now */}
-      <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ marginBottom: 48 }}>
+      <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ marginBottom: 24 }}>
         {isMarketingCover ? (
           <>
-            {/* Personalized hook */}
-            <p className="text-[16px] sm:text-[17px] leading-[1.5] text-white/80 mb-10 max-w-[300px]">
-              <span className="font-medium">{claimArtistName}</span>
-              {" — we turned your song "}
-              <span className="font-medium">"{claimSongName || songName}"</span>
-              {" into this interactive lyric video with one click."}
-            </p>
-
-            {/* Play button */}
+            {/* Play button — no explanatory text, the banner + badge handle context */}
             <button
               onClick={waiting ? undefined : onListen}
               className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
@@ -132,7 +123,7 @@ export function LyricDanceCover({
                 cursor: waiting ? "default" : "pointer",
               }}
             >
-              {waiting ? "Loading…" : "Play Video"}
+              {waiting ? "Loading…" : `${(claimSongName || songName || "Lyric").trim()} Dance`}
             </button>
           </>
         ) : (

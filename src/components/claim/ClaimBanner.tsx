@@ -33,26 +33,23 @@ export default function ClaimBanner({
     if (!loading && nextNumber && displayName) {
       return (
         <>
-          {displayName}, you could be{" "}
-          <span className="text-white">Founding Artist #{nextNumber}</span>
-          {" "}of toolsFM
+          {displayName}, be toolsFM's{" "}
+          <span className="font-semibold text-white">Founding Artist #{nextNumber}</span>
         </>
       );
     }
     if (!loading && nextNumber) {
       return (
         <>
-          You could be{" "}
-          <span className="text-white">Founding Artist #{nextNumber}</span>
-          {" "}of toolsFM
+          Be toolsFM's{" "}
+          <span className="font-semibold text-white">Founding Artist #{nextNumber}</span>
         </>
       );
     }
     return (
       <>
-        Become a{" "}
-        <span className="text-white">Founding Artist</span>
-        {" "}of toolsFM
+        Be a toolsFM{" "}
+        <span className="font-semibold text-white">Founding Artist</span>
       </>
     );
   })();
@@ -93,16 +90,15 @@ export default function ClaimBanner({
         style={{ boxShadow: "inset 0 8px 12px -4px rgba(0,0,0,0.4), inset 0 -8px 12px -4px rgba(0,0,0,0.4)" }}
       />
 
-      {/* Content — compact horizontal strip */}
-      <div className="relative z-10 flex items-center gap-3 px-3 py-2.5">
-
-        {/* Cover thumbnail */}
+      {/* Content — left-aligned on mobile, centered on desktop */}
+      <div className="relative z-10 flex items-center gap-2.5 px-3 py-2 sm:justify-center sm:px-5">
+        {/* Album art thumbnail */}
         {coverArtUrl && (
           <div
-            className="z-20 flex-shrink-0 overflow-hidden rounded-md shadow-lg"
+            className="z-20 flex-shrink-0 overflow-hidden rounded shadow-lg"
             style={{
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               border: "1px solid rgba(255,255,255,0.15)",
             }}
           >
@@ -114,20 +110,20 @@ export default function ClaimBanner({
           </div>
         )}
 
-        {/* Headline + CTA inline */}
-        <div className="min-w-0 flex-1">
-          <p
-            className="truncate text-[11px] sm:text-[12.5px] font-medium leading-snug"
-            style={{ color: "rgba(255,255,255,0.78)" }}
-          >
-            {headline}
-          </p>
-          <span
-            className="mt-1 inline-block rounded border border-white/[0.18] px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold text-white/90 backdrop-blur-sm"
-            style={{ background: "rgba(255,255,255,0.06)" }}
-          >
-            Claim Free Account
-          </span>
+        {/* Headline */}
+        <p
+          className="min-w-0 flex-1 truncate text-[11px] font-medium leading-tight sm:flex-initial sm:text-[12.5px] sm:truncate-none"
+          style={{ color: "rgba(255,255,255,0.7)" }}
+        >
+          {headline}
+        </p>
+
+        {/* Claim CTA */}
+        <div
+          className="flex-shrink-0 rounded-md border border-white/[0.2] px-2.5 py-1.5 text-[10px] font-bold text-white/90 backdrop-blur-sm sm:px-3.5 sm:py-2 sm:text-[11px]"
+          style={{ background: "rgba(255,255,255,0.08)" }}
+        >
+          Claim Spot
         </div>
       </div>
     </div>
