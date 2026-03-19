@@ -94,7 +94,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
 
-  useImperativeHandle(ref, () => ({ getPlayer: () => player ?? null }), [player]);
+  const {
     canvasRef,
     textCanvasRef,
     containerRef,
