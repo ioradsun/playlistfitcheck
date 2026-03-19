@@ -304,7 +304,13 @@ const Index = () => {
 
   useEffect(() => {
     if (!projectId) return;
-    const tab = activeTab;
+
+    // Derive tab from the URL path, not from React state.
+    // handleLoadProject calls navigate() outside startTransition, so the URL
+    // updates before activeTab commits. Reading activeTab here would query
+    // the wrong DB table with the new projectId.
+    const basePath = location.pathname.replace(/\/[0-9a-f-]{36}$/, "");
+    const tab = PATH_TO_TAB[basePath] || PATH_TO_TAB[location.pathname] || activeTab;
 
     // Lyric projects are handled by the dedicated lyric loader effect
     if (tab === "lyric") return;
@@ -420,7 +426,7 @@ const Index = () => {
         handleLoadProject(tab, data);
       }
     })();
-  }, [projectId, activeTab, authLoading, user?.id]);
+  }, [projectId, activeTab, authLoading, user?.id, location.pathname]);
 
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
