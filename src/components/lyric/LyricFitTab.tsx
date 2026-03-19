@@ -93,7 +93,15 @@ export function LyricFitTab({
   const [sceneDescription, setSceneDescription] = useState('');
   const [resolvedScene, setResolvedScene] = useState<SceneContextResult | null>(null);
   const [resolvingScene, setResolvingScene] = useState(false);
-  const [fitUnlocked, setFitUnlocked] = useState(false);
+  const [fitUnlocked, setFitUnlocked] = useState(() => {
+    if (!initialLyric) return false;
+    const rd = (initialLyric as any).render_data;
+    return !!((initialLyric as any).beat_grid && (
+      (initialLyric as any).cinematic_direction ||
+      rd?.cinematicDirection ||
+      rd?.cinematic_direction
+    ));
+  });
   const [lyricData, setLyricData] = useState<LyricData | null>(initLyricData);
   const [audioFile, setAudioFile] = useState<File | null>(() => {
     if (!initialLyric?.id) return null;
@@ -119,23 +127,61 @@ export function LyricFitTab({
   cinematicDirectionRef.current = cinematicDirection;
   // bgImageUrl and frameState removed — V3 derives from cinematicDirection
 
-  const [fitReadiness, setFitReadiness] = useState<FitReadiness>("not_started");
-  const [fitProgress, setFitProgress] = useState(0);
+  const [fitReadiness, setFitReadiness] = useState<FitReadiness>(() => {
+    if (!initialLyric) return "not_started";
+    const rd = (initialLyric as any).render_data;
+    const hasBeatGrid = !!(initialLyric as any).beat_grid;
+    const hasCinematic = !!(
+      (initialLyric as any).cinematic_direction ||
+      rd?.cinematicDirection ||
+      rd?.cinematic_direction
+    );
+    return hasBeatGrid && hasCinematic ? "ready" : "not_started";
+  });
+  const [fitProgress, setFitProgress] = useState(() => {
+    if (!initialLyric) return 0;
+    const rd = (initialLyric as any).render_data;
+    const hasBeatGrid = !!(initialLyric as any).beat_grid;
+    const hasCinematic = !!(
+      (initialLyric as any).cinematic_direction ||
+      rd?.cinematicDirection ||
+      rd?.cinematic_direction
+    );
+    return hasBeatGrid && hasCinematic ? 100 : 0;
+  });
   const [fitStageLabel, setFitStageLabel] = useState("");
   const [pipelineStages, setPipelineStages] = useState<PipelineStages>({
     rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending",
   });
-  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>({
-    beatGrid: "idle",
-    renderData: "done",
-    cinematicDirection: "idle",
-    sectionImages: "idle",
+  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>(() => {
+    if (!initialLyric) {
+      return { beatGrid: "idle", renderData: "done", cinematicDirection: "idle", sectionImages: "idle" };
+    }
+    const rd = (initialLyric as any).render_data;
+    const hasBeatGrid = !!(initialLyric as any).beat_grid;
+    const hasCinematic = !!(
+      (initialLyric as any).cinematic_direction ||
+      rd?.cinematicDirection ||
+      rd?.cinematic_direction
+    );
+    const hasImages = Array.isArray((initialLyric as any).section_images) &&
+      (initialLyric as any).section_images.some(Boolean);
+    return {
+      beatGrid: hasBeatGrid ? "done" : "idle",
+      renderData: "done",
+      cinematicDirection: hasCinematic ? "done" : "idle",
+      sectionImages: hasImages ? "done" : (hasCinematic ? "done" : "idle"),
+    };
   });
 
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [waveformData, setWaveformData] = useState<WaveformData | null>(null);
-  const [transcriptionDone, setTranscriptionDone] = useState(false);
-  const [beatGridDone, setBeatGridDone] = useState(false);
+  const [transcriptionDone, setTranscriptionDone] = useState(
+    () => !!(initialLyric?.lines && Array.isArray(initialLyric.lines) && initialLyric.lines.length > 0)
+  );
+  const [beatGridDone, setBeatGridDone] = useState(
+    () => !!(initialLyric as any)?.beat_grid
+  );
   const [audioBufferReady, setAudioBufferReady] = useState(false);
   const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
 
@@ -569,16 +615,22 @@ export function LyricFitTab({
 
       setCinematicDirection(enrichedScene);
 
-      // Flow song metadata to renderData so FitTab can display it
-      if (enrichedScene.description || enrichedScene.mood || enrichedScene.meaning) {
-
+      // Persist cinematic direction into render_data immediately — don't wait
+      // for word-mode. If word-mode fails, we still have the scene direction
+      // for hydration on remount.
+      {
         const updatedRenderData = {
           ...(renderData || {}),
+          cinematicDirection: enrichedScene,
+          cinematic_direction: enrichedScene,
           description: enrichedScene.description,
           mood: enrichedScene.mood,
           meaning: enrichedScene.meaning,
         };
         setRenderData(updatedRenderData);
+        if (savedIdRef.current) {
+          void persistRenderData(savedIdRef.current, updatedRenderData);
+        }
       }
 
       const { deriveFrameState } = await import("@/engine/presetDerivation");
@@ -746,9 +798,21 @@ export function LyricFitTab({
     }
   }, [lyricData, generationStatus.cinematicDirection, beatGrid, renderData, persistRenderData , words, user, audioFile, initialLyric]);
 
-  const pipelineTriggeredRef = useRef(false);
+  const pipelineTriggeredRef = useRef(
+    !!(initialLyric && (initialLyric as any).beat_grid && (
+      (initialLyric as any).cinematic_direction ||
+      (initialLyric as any).render_data?.cinematicDirection ||
+      (initialLyric as any).render_data?.cinematic_direction
+    ))
+  );
   const [pipelineRetryCount, setPipelineRetryCount] = useState(0);
-  const cinematicTriggeredRef = useRef(false);
+  const cinematicTriggeredRef = useRef(
+    !!(initialLyric && (
+      (initialLyric as any).cinematic_direction ||
+      (initialLyric as any).render_data?.cinematicDirection ||
+      (initialLyric as any).render_data?.cinematic_direction
+    ))
+  );
   useEffect(() => {
     if (!transcriptionDone || !beatGridDone || !lines?.length) return;
     if (cinematicTriggeredRef.current) return;

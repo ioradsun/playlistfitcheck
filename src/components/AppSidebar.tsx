@@ -149,7 +149,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
         .limit(20),
       supabase
         .from("saved_lyrics")
-        .select("id, title, lines, filename, updated_at, audio_url, beat_grid, song_signature, render_data, fmly_lines, version_meta, section_images")
+        .select("id, title, lines, words, filename, updated_at, audio_url, beat_grid, song_signature, render_data, fmly_lines, version_meta, section_images")
         .eq("user_id", user.id)
         .is("deleted_at", null)
         .order("updated_at", { ascending: false })
