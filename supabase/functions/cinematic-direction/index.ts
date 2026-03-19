@@ -6,6 +6,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const PRIMARY_MODEL = "google/gemini-3-flash-preview";
+const FALLBACK_MODEL = "google/gemini-2.5-flash";
+
 const CINEMATIC_DIRECTION_PROMPT = `
 You are a film director designing a cinematic lyric video.
 
@@ -949,23 +952,36 @@ async function callScene(
   userMessage: string,
   sectionCount: number,
 ): Promise<Record<string, any>> {
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
-        { role: "user", content: userMessage },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: 3000,
-    }),
-  });
+  const messages = [
+    { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
+    { role: "user", content: userMessage },
+  ];
+
+  const makeRequest = (model: string) =>
+    fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_tokens: 3000,
+      }),
+    });
+
+  let resp = await makeRequest(PRIMARY_MODEL);
+
+  // If primary model fails with retryable error, try fallback
+  if (!resp.ok && (resp.status === 429 || resp.status >= 500)) {
+    const errText = await resp.text().catch(() => "");
+    console.warn(`[cinematic-direction] scene primary model failed (${resp.status}): ${errText.slice(0, 100)}, trying fallback`);
+    await new Promise(r => setTimeout(r, 2000));
+    resp = await makeRequest(FALLBACK_MODEL);
+  }
 
   if (!resp.ok) {
     const text = await resp.text();
@@ -994,7 +1010,7 @@ async function callScene(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: PRIMARY_MODEL,
         messages: [
           { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
           { role: "user", content: userMessage },
@@ -1045,7 +1061,7 @@ async function callWords(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: PRIMARY_MODEL,
         messages,
         response_format: { type: "json_object" },
         temperature: 0.7,
@@ -1132,7 +1148,7 @@ async function callWithRetry(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: PRIMARY_MODEL,
         messages,
         response_format: { type: "json_object" },
         temperature: 0.7,
