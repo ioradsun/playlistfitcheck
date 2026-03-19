@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, X } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { getSessionId } from '@/lib/sessionId';
-import type { LyricSectionLine } from '@/hooks/useLyricSections';
-import type { LyricDancePlayer } from '@/engine/LyricDancePlayer';
-import { PanelShell } from '@/components/shared/panel/PanelShell';
-import { EMOJIS, type EmojiKey } from '@/components/shared/panel/panelConstants';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { MessageCircle, X } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { getSessionId } from "@/lib/sessionId";
+import type { LyricSectionLine } from "@/hooks/useLyricSections";
+import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
+import { PanelShell } from "@/components/shared/panel/PanelShell";
+import {
+  EMOJIS,
+  type EmojiKey,
+} from "@/components/shared/panel/panelConstants";
 
 export interface CanonicalAudioSection {
   sectionIndex: number;
@@ -26,11 +29,15 @@ interface CommentRow {
 }
 
 interface ReactionPanelProps {
-  displayMode: 'fullscreen' | 'embedded';
+  displayMode: "fullscreen" | "embedded";
   isOpen: boolean;
   onClose: () => void;
   danceId: string;
-  activeLine: { text: string; lineIndex: number; sectionLabel: string | null } | null;
+  activeLine: {
+    text: string;
+    lineIndex: number;
+    sectionLabel: string | null;
+  } | null;
   allLines: LyricSectionLine[];
   audioSections: CanonicalAudioSection[];
   currentTimeSec: number;
@@ -39,11 +46,17 @@ interface ReactionPanelProps {
   player: LyricDancePlayer | null;
   durationSec: number;
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
-  onReactionDataChange: (data: Record<string, { line: Record<number, number>; total: number }> | ((prev: Record<string, { line: Record<number, number>; total: number }>) => Record<string, { line: Record<number, number>; total: number }>)) => void;
+  onReactionDataChange: (
+    data:
+      | Record<string, { line: Record<number, number>; total: number }>
+      | ((
+          prev: Record<string, { line: Record<number, number>; total: number }>,
+        ) => Record<string, { line: Record<number, number>; total: number }>),
+  ) => void;
   onReactionFired: (emoji: string) => void;
   onPause?: () => void;
   onResume?: () => void;
-  votedSide: 'a' | 'b' | null;
+  votedSide: "a" | "b" | null;
   score: { total: number; replay_yes: number } | null;
   onVoteYes: () => void;
   onVoteNo: () => void;
@@ -64,7 +77,7 @@ function CommentReactPicker({
   return (
     <span className="relative inline-block">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         className="text-[10px] font-mono text-white/18 hover:text-white/45 transition-colors"
       >
         + react
@@ -72,7 +85,10 @@ function CommentReactPicker({
       {open && (
         <span
           className="absolute bottom-full left-0 mb-1 flex items-center gap-1 rounded-lg px-1.5 py-1 z-50"
-          style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)' }}
+          style={{
+            background: "#1a1a1a",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
         >
           {EMOJIS.map(({ key, symbol }) => {
             const reacted = sessionReacted.has(`${commentId}-${key}`);
@@ -96,17 +112,48 @@ function CommentReactPicker({
   );
 }
 
-function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allLines, audioSections, currentTimeSec: _currentTimeSec, palette, onSeekTo, player, onReactionFired, reactionData, onReactionDataChange, onPause, onResume, votedSide, score, onVoteYes, onVoteNo, hideInput = false, refreshKey = 0 }: ReactionPanelProps) {
+function ReactionPanel({
+  displayMode,
+  isOpen,
+  onClose,
+  danceId,
+  activeLine,
+  allLines,
+  audioSections,
+  currentTimeSec: _currentTimeSec,
+  palette,
+  onSeekTo,
+  player,
+  onReactionFired,
+  reactionData,
+  onReactionDataChange,
+  onPause,
+  onResume,
+  votedSide,
+  score,
+  onVoteYes,
+  onVoteNo,
+  hideInput = false,
+  refreshKey = 0,
+}: ReactionPanelProps) {
   const sections = audioSections ?? [];
-  const [textInput, setTextInput] = useState('');
+  const [textInput, setTextInput] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
   const [comments, setComments] = useState<CommentRow[]>([]);
-  const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(null);
+  const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(
+    null,
+  );
   const [replyingTo, setReplyingTo] = useState<CommentRow | null>(null);
-  const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(null);
-  const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
-  const [sessionCommentReacted, setSessionCommentReacted] = useState<Set<string>>(new Set());
+  const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(
+    null,
+  );
+  const [commentReactions, setCommentReactions] = useState<
+    Record<string, Record<string, number>>
+  >({});
+  const [sessionCommentReacted, setSessionCommentReacted] = useState<
+    Set<string>
+  >(new Set());
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -117,7 +164,12 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
 
   const sectionMeta = useMemo(() => {
     const canonical = sections
-      .filter((section) => Number.isFinite(section.startSec) && Number.isFinite(section.endSec) && section.endSec > section.startSec)
+      .filter(
+        (section) =>
+          Number.isFinite(section.startSec) &&
+          Number.isFinite(section.endSec) &&
+          section.endSec > section.startSec,
+      )
       .slice()
       .sort((a, b) => a.startSec - b.startSec);
 
@@ -140,7 +192,10 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
       seenByRole.set(role, seenCount);
       const totalCount = totalByRole.get(role) ?? 0;
       const base = role.toUpperCase();
-      labelBySectionIndex.set(section.sectionIndex, totalCount > 1 ? `${base} ${seenCount}` : base);
+      labelBySectionIndex.set(
+        section.sectionIndex,
+        totalCount > 1 ? `${base} ${seenCount}` : base,
+      );
     });
 
     const sectionForLine = new Map<number, CanonicalAudioSection | null>();
@@ -148,16 +203,20 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
 
     allLines.forEach((line) => {
       const lineStart = line.startSec;
-      const matchedSection = canonical.find((section, index) => {
-        const isLast = index === canonical.length - 1;
-        return isLast
-          ? lineStart >= section.startSec && lineStart <= section.endSec + 0.05
-          : lineStart >= section.startSec && lineStart < section.endSec;
-      }) ?? null;
+      const matchedSection =
+        canonical.find((section, index) => {
+          const isLast = index === canonical.length - 1;
+          return isLast
+            ? lineStart >= section.startSec &&
+                lineStart <= section.endSec + 0.05
+            : lineStart >= section.startSec && lineStart < section.endSec;
+        }) ?? null;
       sectionForLine.set(line.lineIndex, matchedSection);
       labelByLineIndex.set(
         line.lineIndex,
-        matchedSection ? (labelBySectionIndex.get(matchedSection.sectionIndex) ?? null) : null,
+        matchedSection
+          ? (labelBySectionIndex.get(matchedSection.sectionIndex) ?? null)
+          : null,
       );
     });
 
@@ -166,7 +225,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
 
   const commentCountByLine = useMemo(() => {
     const counts: Record<number, number> = {};
-    comments.forEach(comment => {
+    comments.forEach((comment) => {
       if (comment.line_index != null && !comment.parent_comment_id) {
         counts[comment.line_index] = (counts[comment.line_index] ?? 0) + 1;
       }
@@ -174,24 +233,28 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     return counts;
   }, [comments]);
 
-  const voteAccent = palette[1] ?? 'rgba(255,255,255,0.7)';
+  const voteAccent = palette[1] ?? "rgba(255,255,255,0.7)";
   const playheadLineIndex = activeLine?.lineIndex ?? null;
   const displayLineIndex = playheadLineIndex ?? allLines[0]?.lineIndex ?? null;
 
   // Keep last known line while audio plays through silence
   if (playheadLineIndex !== null) lastActiveLineRef.current = playheadLineIndex;
-  const heldLineIndex = (player && !player.audio.paused) ? lastActiveLineRef.current : null;
-  const effectiveActiveIndex = pinnedLineIndex ?? playheadLineIndex ?? heldLineIndex;
+  const heldLineIndex =
+    player && !player.audio.paused ? lastActiveLineRef.current : null;
+  const effectiveActiveIndex =
+    pinnedLineIndex ?? playheadLineIndex ?? heldLineIndex;
 
   const expandedLineComments = useMemo(() => {
     if (expandedLineIndex == null) return [];
-    return comments.filter(c => c.line_index === expandedLineIndex && !c.parent_comment_id);
+    return comments.filter(
+      (c) => c.line_index === expandedLineIndex && !c.parent_comment_id,
+    );
   }, [comments, expandedLineIndex]);
 
   useEffect(() => {
     if (!isOpen) return;
     setHasSubmitted(false);
-    setTextInput('');
+    setTextInput("");
     setReplyingTo(null);
     setExpandedLineIndex(null);
   }, [isOpen]);
@@ -220,12 +283,12 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
 
     if (rowVisible && !blockFullyVisible) {
       const nudge = blockBottom - containerBottom + 12;
-      container.scrollBy({ top: nudge, behavior: 'smooth' });
+      container.scrollBy({ top: nudge, behavior: "smooth" });
       return;
     }
 
-    const targetTop = rowTop - container.clientHeight * 0.30;
-    container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+    const targetTop = rowTop - container.clientHeight * 0.3;
+    container.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
   }, [playheadLineIndex, isOpen, player]);
 
   // User scroll → permanently stop auto-scroll for this panel session
@@ -235,9 +298,9 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     const onScroll = () => {
       userTookControlRef.current = true;
     };
-    container.addEventListener('scroll', onScroll, { passive: true });
+    container.addEventListener("scroll", onScroll, { passive: true });
     return () => {
-      container.removeEventListener('scroll', onScroll);
+      container.removeEventListener("scroll", onScroll);
     };
   }, []);
 
@@ -252,39 +315,45 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     if (!danceId) return;
 
     supabase
-      .from('lyric_dance_comments' as any)
-      .select('id, text, line_index, submitted_at, is_pinned, parent_comment_id')
-      .eq('dance_id', danceId)
-      .order('is_pinned', { ascending: false })
-      .order('submitted_at', { ascending: true })
+      .from("lyric_dance_comments" as any)
+      .select(
+        "id, text, line_index, submitted_at, is_pinned, parent_comment_id",
+      )
+      .eq("dance_id", danceId)
+      .order("is_pinned", { ascending: false })
+      .order("submitted_at", { ascending: true })
       .limit(200)
       .then(({ data }) => {
         if (!data) return;
         const rows = data as unknown as CommentRow[];
-        const topLevel = rows.filter(c => !c.parent_comment_id);
+        const topLevel = rows.filter((c) => !c.parent_comment_id);
         const byParent: Record<string, CommentRow[]> = {};
-        rows.filter(c => c.parent_comment_id).forEach(c => {
-          const parentId = c.parent_comment_id!;
-          if (!byParent[parentId]) byParent[parentId] = [];
-          byParent[parentId].push(c);
-        });
-        setComments(topLevel.map(c => ({ ...c, replies: byParent[c.id] ?? [] })));
+        rows
+          .filter((c) => c.parent_comment_id)
+          .forEach((c) => {
+            const parentId = c.parent_comment_id!;
+            if (!byParent[parentId]) byParent[parentId] = [];
+            byParent[parentId].push(c);
+          });
+        setComments(
+          topLevel.map((c) => ({ ...c, replies: byParent[c.id] ?? [] })),
+        );
       });
 
     supabase
-      .from('lyric_dance_comment_reactions' as any)
-      .select('comment_id, emoji')
+      .from("lyric_dance_comment_reactions" as any)
+      .select("comment_id, emoji")
       .then(({ data }) => {
         if (!data) return;
         const counts: Record<string, Record<string, number>> = {};
         for (const row of data as any[]) {
           if (!counts[row.comment_id]) counts[row.comment_id] = {};
-          counts[row.comment_id][row.emoji] = (counts[row.comment_id][row.emoji] ?? 0) + 1;
+          counts[row.comment_id][row.emoji] =
+            (counts[row.comment_id][row.emoji] ?? 0) + 1;
         }
         setCommentReactions(counts);
       });
   }, [danceId, isOpen, refreshKey]);
-
 
   const handleLineTap = (line: LyricSectionLine) => {
     if (!player) {
@@ -297,7 +366,10 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     }
     setPinnedLineIndex(line.lineIndex);
     if (pinnedLineTimerRef.current) clearTimeout(pinnedLineTimerRef.current);
-    pinnedLineTimerRef.current = setTimeout(() => setPinnedLineIndex(null), 300);
+    pinnedLineTimerRef.current = setTimeout(
+      () => setPinnedLineIndex(null),
+      300,
+    );
     player.seek(line.startSec);
     if (player.audio.paused) {
       player.audio.play().catch(() => {});
@@ -310,14 +382,13 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     if (!danceId) return;
     const sessionId = getSessionId();
     const targetLineIndex = lineIndex ?? activeLine?.lineIndex ?? null;
-    const reactionKey = `${emoji}-${targetLineIndex ?? 'song'}`;
+    const reactionKey = `${emoji}-${targetLineIndex ?? "song"}`;
     if (sessionReacted.has(reactionKey)) return;
 
-
-    setSessionReacted(prev => new Set([...prev, reactionKey]));
+    setSessionReacted((prev) => new Set([...prev, reactionKey]));
     onReactionFired(emoji);
 
-    await supabase.from('lyric_dance_reactions' as any).insert({
+    await supabase.from("lyric_dance_reactions" as any).insert({
       dance_id: danceId,
       line_index: targetLineIndex,
       section_index: null,
@@ -325,12 +396,13 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
       session_id: sessionId,
     });
 
-    onReactionDataChange(prev => {
+    onReactionDataChange((prev) => {
       const updated = { ...prev };
       if (!updated[emoji]) updated[emoji] = { line: {}, total: 0 };
       updated[emoji].total++;
       if (targetLineIndex != null) {
-        updated[emoji].line[targetLineIndex] = (updated[emoji].line[targetLineIndex] ?? 0) + 1;
+        updated[emoji].line[targetLineIndex] =
+          (updated[emoji].line[targetLineIndex] ?? 0) + 1;
       }
       return updated;
     });
@@ -341,8 +413,8 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     if (sessionCommentReacted.has(key)) return;
     const sessionId = getSessionId();
 
-    setSessionCommentReacted(prev => new Set([...prev, key]));
-    setCommentReactions(prev => ({
+    setSessionCommentReacted((prev) => new Set([...prev, key]));
+    setCommentReactions((prev) => ({
       ...prev,
       [commentId]: {
         ...(prev[commentId] ?? {}),
@@ -351,7 +423,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     }));
 
     await supabase
-      .from('lyric_dance_comment_reactions' as any)
+      .from("lyric_dance_comment_reactions" as any)
       .insert({ comment_id: commentId, emoji, session_id: sessionId });
   };
 
@@ -361,7 +433,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     const sessionId = getSessionId();
 
     const { data: inserted, error } = await supabase
-      .from('lyric_dance_comments' as any)
+      .from("lyric_dance_comments" as any)
       .insert({
         dance_id: danceId,
         text,
@@ -369,11 +441,13 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
         line_index: displayLineIndex,
         parent_comment_id: replyingTo?.id ?? null,
       })
-      .select('id, text, line_index, submitted_at, is_pinned, parent_comment_id')
+      .select(
+        "id, text, line_index, submitted_at, is_pinned, parent_comment_id",
+      )
       .single();
 
     if (error) {
-      console.error('Comment insert failed:', error);
+      console.error("Comment insert failed:", error);
       return;
     }
 
@@ -381,16 +455,18 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
 
     const newComment = inserted as unknown as CommentRow;
     if (replyingTo) {
-      setComments(prev => prev.map(comment => (
-        comment.id === replyingTo.id
-          ? { ...comment, replies: [...(comment.replies ?? []), newComment] }
-          : comment
-      )));
+      setComments((prev) =>
+        prev.map((comment) =>
+          comment.id === replyingTo.id
+            ? { ...comment, replies: [...(comment.replies ?? []), newComment] }
+            : comment,
+        ),
+      );
     } else {
-      setComments(prev => {
+      setComments((prev) => {
         const withReplies = { ...newComment, replies: [] };
-        const pinned = prev.filter(c => c.is_pinned);
-        const unpinned = prev.filter(c => !c.is_pinned);
+        const pinned = prev.filter((c) => c.is_pinned);
+        const unpinned = prev.filter((c) => !c.is_pinned);
         return [...pinned, withReplies, ...unpinned];
       });
     }
@@ -401,9 +477,9 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
     }
 
     setHasSubmitted(true);
-    setTextInput('');
+    setTextInput("");
     setReplyingTo(null);
-    onReactionFired('fire');
+    onReactionFired("fire");
     onResume?.();
     setTimeout(() => setHasSubmitted(false), 500);
   };
@@ -418,55 +494,81 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
 
   return (
     <PanelShell isOpen={isOpen} variant={displayMode}>
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0" style={{ scrollbarWidth: 'none' }}>
-        <div className="pt-3 pb-32">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto min-h-0"
+        style={{ scrollbarWidth: "none" }}
+      >
+        <div className="pt-[max(1rem,env(safe-area-inset-top,12px))] pb-4">
           {allLines.map((line, linePosition) => {
-            const currentSection = sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
-            const previousSection = linePosition > 0
-              ? (sectionMeta.sectionForLine.get(allLines[linePosition - 1].lineIndex) ?? null)
-              : null;
-            const sectionLabel = sectionMeta.labelByLineIndex.get(line.lineIndex) ?? null;
-            const shouldShowSectionHeader = !!currentSection
-              && currentSection.sectionIndex !== previousSection?.sectionIndex
-              && !!sectionLabel;
+            const currentSection =
+              sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
+            const previousSection =
+              linePosition > 0
+                ? (sectionMeta.sectionForLine.get(
+                    allLines[linePosition - 1].lineIndex,
+                  ) ?? null)
+                : null;
+            const sectionLabel =
+              sectionMeta.labelByLineIndex.get(line.lineIndex) ?? null;
+            const shouldShowSectionHeader =
+              !!currentSection &&
+              currentSection.sectionIndex !== previousSection?.sectionIndex &&
+              !!sectionLabel;
             const isActive = line.lineIndex === effectiveActiveIndex;
 
-            const lineReactionsByEmoji = EMOJIS
-              .map(({ key, symbol }) => ({ key, symbol, count: reactionData[key]?.line[line.lineIndex] ?? 0 }))
-              .filter(item => item.count > 0)
+            const lineReactionsByEmoji = EMOJIS.map(({ key, symbol }) => ({
+              key,
+              symbol,
+              count: reactionData[key]?.line[line.lineIndex] ?? 0,
+            }))
+              .filter((item) => item.count > 0)
               .sort((a, b) => b.count - a.count);
 
             const topReaction = lineReactionsByEmoji[0] ?? null;
-            const totalLineReactions = lineReactionsByEmoji.reduce((sum, item) => sum + item.count, 0);
+            const totalLineReactions = lineReactionsByEmoji.reduce(
+              (sum, item) => sum + item.count,
+              0,
+            );
             const lineCommentCount = commentCountByLine[line.lineIndex] ?? 0;
             const isCommentPulsing = submittedLineIndex === line.lineIndex;
             const isExpanded = expandedLineIndex === line.lineIndex;
 
             return (
-              <div
-                key={line.lineIndex}
-              >
+              <div key={line.lineIndex}>
                 {shouldShowSectionHeader && (
-                  <div className={linePosition === 0 ? 'mb-0.5' : 'mt-2 mb-0.5'}>
+                  <div className={linePosition === 0 ? "mb-1" : "mt-4 mb-1"}>
                     <div className="flex items-center gap-2 px-3">
-                      <span className="text-[7px] font-mono uppercase tracking-[0.2em] text-white/15">{sectionLabel}</span>
+                      <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/18">
+                        {sectionLabel}
+                      </span>
                       <div className="flex-1 h-px bg-white/[0.03]" />
                     </div>
                   </div>
                 )}
                 <div
-                  ref={node => { rowRefs.current[line.lineIndex] = node; }}
+                  ref={(node) => {
+                    rowRefs.current[line.lineIndex] = node;
+                  }}
                   onClick={() => handleLineTap(line)}
-                  className="flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors"
+                  className="flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors"
                   style={{
-                    minHeight: 30,
-                    background: isActive ? 'rgba(255,255,255,0.03)' : 'transparent',
-                    boxShadow: isActive ? `inset 2px 0 0 0 ${palette[1] ?? '#ffffff'}` : 'none',
+                    minHeight: 40,
+                    background: isActive
+                      ? "rgba(255,255,255,0.03)"
+                      : "transparent",
+                    boxShadow: isActive
+                      ? `inset 2px 0 0 0 ${palette[1] ?? "#ffffff"}`
+                      : "none",
                   }}
                 >
                   <span
-                    className="flex-1 text-[11px] font-light leading-relaxed transition-colors duration-100"
-                    style={{ color: isActive ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.28)' }}
+                    className="flex-1 text-[13px] font-light leading-relaxed transition-colors duration-100"
+                    style={{
+                      color: isActive
+                        ? "rgba(255,255,255,0.85)"
+                        : "rgba(255,255,255,0.28)",
+                    }}
                   >
                     {line.text}
                   </span>
@@ -474,14 +576,14 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
                   <div className="flex items-center gap-1.5 shrink-0">
                     {topReaction && (
                       <span
-                        className="text-[9px] font-mono px-1 py-0.5 rounded"
+                        className="text-[8px] font-mono px-1 py-0.5 rounded"
                         style={{
-                          color: 'rgba(255,255,255,0.45)',
-                          background: 'rgba(255,255,255,0.04)',
+                          color: "rgba(255,255,255,0.25)",
+                          background: "rgba(255,255,255,0.025)",
                         }}
                       >
                         {topReaction.symbol}
-                        {totalLineReactions > 1 ? ` ${totalLineReactions}` : ''}
+                        {totalLineReactions > 1 ? ` ${totalLineReactions}` : ""}
                       </span>
                     )}
 
@@ -490,12 +592,13 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
                         event.stopPropagation();
                         if (expandedLineIndex === line.lineIndex) {
                           setExpandedLineIndex(null);
-                          if (replyingTo?.line_index === line.lineIndex) setReplyingTo(null);
+                          if (replyingTo?.line_index === line.lineIndex)
+                            setReplyingTo(null);
                         } else {
                           setExpandedLineIndex(line.lineIndex);
                         }
                       }}
-                      className={`relative transition-all ${lineCommentCount > 0 ? 'opacity-90' : 'opacity-45 hover:opacity-70'} ${isCommentPulsing ? 'scale-110' : ''}`}
+                      className={`relative transition-all ${lineCommentCount > 0 ? "opacity-90" : "opacity-45 hover:opacity-70"} ${isCommentPulsing ? "scale-110" : ""}`}
                       aria-label="Toggle comments"
                     >
                       <MessageCircle size={11} className="text-white/30" />
@@ -511,24 +614,35 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
                 {isActive && (
                   <>
                     {/* Emoji bar — inline under active line */}
-                    <div className="flex items-center justify-center gap-3 px-4 py-2 border-b border-white/[0.04]">
-                      {EMOJIS.map(({ key, symbol, label }) => {
-                        const count = reactionData[key]?.line[line.lineIndex] ?? 0;
-                        const reacted = sessionReacted.has(`${key}-${line.lineIndex}`);
+                    <div className="flex items-center justify-center gap-4 px-4 py-3 border-b border-white/[0.04]">
+                      {EMOJIS.map(({ key, symbol }) => {
+                        const count =
+                          reactionData[key]?.line[line.lineIndex] ?? 0;
+                        const reacted = sessionReacted.has(
+                          `${key}-${line.lineIndex}`,
+                        );
                         return (
                           <button
                             key={key}
                             onClick={() => handleReact(key, line.lineIndex)}
-                            className="flex flex-col items-center gap-0.5 w-9"
-                            style={reacted ? { background: `${palette[1] ?? '#fff'}18`, borderRadius: '8px' } : undefined}
+                            className="flex flex-col items-center gap-0.5 w-11"
+                            style={
+                              reacted
+                                ? {
+                                    background: `${palette[1] ?? "#fff"}18`,
+                                    borderRadius: "10px",
+                                  }
+                                : undefined
+                            }
                           >
-                            <span className="text-[15px]">{symbol}</span>
-                            <span className="text-[7px] font-mono uppercase tracking-wide text-white/20">{label}</span>
+                            <span className="text-[18px]">{symbol}</span>
                             <span
                               className="text-[8px] font-mono min-h-[10px]"
                               style={{
-                                color: reacted ? (palette[1] ?? 'rgba(255,255,255,0.7)') : 'rgba(255,255,255,0.30)',
-                                visibility: count > 0 ? 'visible' : 'hidden',
+                                color: reacted
+                                  ? (palette[1] ?? "rgba(255,255,255,0.7)")
+                                  : "rgba(255,255,255,0.25)",
+                                visibility: count > 0 ? "visible" : "hidden",
                               }}
                             >
                               {count}
@@ -542,14 +656,24 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
                     {!hideInput && (
                       <div
                         className="mx-3 my-2"
-                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: '8px', padding: '8px 12px' }}
+                        style={{
+                          background: "rgba(255,255,255,0.05)",
+                          border: "1px solid rgba(255,255,255,0.09)",
+                          borderRadius: "8px",
+                          padding: "8px 12px",
+                        }}
                       >
                         <input
-                          className="w-full bg-transparent text-[11px] font-mono text-white placeholder:text-white/35 outline-none"
-                          placeholder={replyingTo ? 'reply...' : 'This line'}
+                          className="w-full bg-transparent text-[13px] font-mono text-white placeholder:text-white/35 outline-none"
+                          placeholder={replyingTo ? "reply..." : "This line"}
                           value={textInput}
                           onChange={(e) => setTextInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleTextSubmit(); } }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleTextSubmit();
+                            }
+                          }}
                           onFocus={() => onPause?.()}
                         />
                       </div>
@@ -560,24 +684,33 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
                 {isExpanded && (
                   <div
                     className="mx-3 mb-1 rounded-xl overflow-hidden"
-                    style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}
+                    style={{
+                      background: "rgba(255,255,255,0.025)",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                    }}
                   >
                     {expandedLineComments.length === 0 ? (
-                      <p className="text-[10px] font-mono text-white/20 text-center py-3">no comments yet — be first</p>
+                      <p className="text-[10px] font-mono text-white/20 text-center py-3">
+                        no comments yet — be first
+                      </p>
                     ) : (
                       <div>
                         {(() => {
                           const emojiMap: Record<string, string> = {
-                            fire: '🔥',
-                            dead: '💀',
-                            mind_blown: '🤯',
-                            emotional: '😭',
-                            respect: '🙏',
-                            accurate: '🎯',
+                            fire: "🔥",
+                            dead: "💀",
+                            mind_blown: "🤯",
+                            emotional: "😭",
+                            respect: "🙏",
+                            accurate: "🎯",
                           };
 
-                          const renderComment = (comment: CommentRow, isReply = false) => {
-                            const reactions = commentReactions[comment.id] ?? {};
+                          const renderComment = (
+                            comment: CommentRow,
+                            isReply = false,
+                          ) => {
+                            const reactions =
+                              commentReactions[comment.id] ?? {};
                             const reactionEntries = Object.entries(reactions)
                               .filter(([, count]) => count > 0)
                               .sort((a, b) => b[1] - a[1]);
@@ -585,24 +718,38 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
                             return (
                               <div
                                 key={comment.id}
-                                className={isReply
-                                  ? 'ml-3 border-l border-white/[0.06] pl-2 py-2'
-                                  : 'px-3 py-2.5 border-b border-white/[0.04]'}
+                                className={
+                                  isReply
+                                    ? "ml-3 border-l border-white/[0.06] pl-2 py-2"
+                                    : "px-3 py-2.5 border-b border-white/[0.04]"
+                                }
                               >
                                 {comment.is_pinned && (
-                                  <span className="text-[7px] font-mono uppercase tracking-wider text-white/25 mb-0.5 block">📌 pinned</span>
+                                  <span className="text-[7px] font-mono uppercase tracking-wider text-white/25 mb-0.5 block">
+                                    📌 pinned
+                                  </span>
                                 )}
-                                <p className="text-[11px] font-light leading-relaxed text-white/60">{comment.text}</p>
+                                <p className="text-[11px] font-light leading-relaxed text-white/60">
+                                  {comment.text}
+                                </p>
                                 <div className="mt-1 flex items-center gap-2.5 flex-wrap">
                                   {reactionEntries.map(([emoji, count]) => (
                                     <button
                                       key={emoji}
-                                      onClick={() => handleCommentReact(comment.id, emoji as EmojiKey)}
+                                      onClick={() =>
+                                        handleCommentReact(
+                                          comment.id,
+                                          emoji as EmojiKey,
+                                        )
+                                      }
                                       className="flex items-center gap-0.5 text-[10px] font-mono transition-all active:scale-95 focus:outline-none"
                                       style={{
-                                        color: sessionCommentReacted.has(`${comment.id}-${emoji}`)
-                                          ? (palette[1] ?? 'rgba(255,255,255,0.7)')
-                                          : 'rgba(255,255,255,0.28)',
+                                        color: sessionCommentReacted.has(
+                                          `${comment.id}-${emoji}`,
+                                        )
+                                          ? (palette[1] ??
+                                            "rgba(255,255,255,0.7)")
+                                          : "rgba(255,255,255,0.28)",
                                       }}
                                     >
                                       <span>{emojiMap[emoji] ?? emoji}</span>
@@ -611,7 +758,12 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
                                   ))}
                                   <CommentReactPicker
                                     commentId={comment.id}
-                                    onPick={(emoji) => handleCommentReact(comment.id, emoji as EmojiKey)}
+                                    onPick={(emoji) =>
+                                      handleCommentReact(
+                                        comment.id,
+                                        emoji as EmojiKey,
+                                      )
+                                    }
                                     sessionReacted={sessionCommentReacted}
                                   />
                                   {!isReply && (
@@ -626,14 +778,22 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
                                     </button>
                                   )}
                                 </div>
-                                {!isReply && comment.replies && comment.replies.length > 0 && (
-                                  <div className="mt-1">{comment.replies.map(reply => renderComment(reply, true))}</div>
-                                )}
+                                {!isReply &&
+                                  comment.replies &&
+                                  comment.replies.length > 0 && (
+                                    <div className="mt-1">
+                                      {comment.replies.map((reply) =>
+                                        renderComment(reply, true),
+                                      )}
+                                    </div>
+                                  )}
                               </div>
                             );
                           };
 
-                          return expandedLineComments.map(comment => renderComment(comment));
+                          return expandedLineComments.map((comment) =>
+                            renderComment(comment),
+                          );
                         })()}
                       </div>
                     )}
@@ -644,7 +804,7 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
                   <div
                     className="h-full rounded-full"
                     style={{
-                      background: palette[1] ?? 'rgba(255,255,255,0.4)',
+                      background: palette[1] ?? "rgba(255,255,255,0.4)",
                       opacity: isCommentPulsing ? 0.6 : 0,
                     }}
                   />
@@ -657,60 +817,83 @@ function ReactionPanel({ displayMode, isOpen, onClose, danceId, activeLine, allL
 
       <div
         className="shrink-0 flex"
-        style={{ background: '#0a0a0a', borderTop: '0.5px solid rgba(255,255,255,0.06)' }}
+        style={{
+          background: "#0a0a0a",
+          borderTop: "0.5px solid rgba(255,255,255,0.06)",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        }}
       >
         <div
           className="w-full max-w-2xl mx-auto flex items-stretch"
-          style={{ height: displayMode === 'fullscreen' ? 44 : 48 }}
+          style={{ height: displayMode === "fullscreen" ? 52 : 48 }}
         >
           <button
             onClick={onVoteYes}
-            className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === 'fullscreen' ? 'py-2.5' : 'py-3'}`}
+            className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === "fullscreen" ? "py-3.5" : "py-3"}`}
           >
             <span
-              className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
+              className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
               style={{
-                color: votedSide === null ? 'rgba(255,255,255,1)'
-                  : votedSide === 'a' ? voteAccent
-                  : 'rgba(255,255,255,0.22)',
+                color:
+                  votedSide === null
+                    ? "rgba(255,255,255,1)"
+                    : votedSide === "a"
+                      ? voteAccent
+                      : "rgba(255,255,255,0.22)",
               }}
             >
               Run it back
             </span>
             {runItBackCount > 0 && (
-              <span className="text-[9px] font-mono text-white/25">{runItBackCount}</span>
+              <span className="text-[9px] font-mono text-white/25">
+                {runItBackCount}
+              </span>
             )}
           </button>
 
-          <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
+          <div
+            style={{ width: "0.5px" }}
+            className="bg-white/[0.06] self-stretch my-2"
+          />
 
           <button
             onClick={onVoteNo}
-            className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === 'fullscreen' ? 'py-2.5' : 'py-3'}`}
+            className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === "fullscreen" ? "py-3.5" : "py-3"}`}
           >
             <span
-              className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
+              className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
               style={{
-                color: votedSide === null ? 'rgba(255,255,255,1)'
-                  : votedSide === 'b' ? voteAccent
-                  : 'rgba(255,255,255,0.22)',
+                color:
+                  votedSide === null
+                    ? "rgba(255,255,255,1)"
+                    : votedSide === "b"
+                      ? voteAccent
+                      : "rgba(255,255,255,0.22)",
               }}
             >
               Not for me
             </span>
             {notForMeCount > 0 && (
-              <span className="text-[9px] font-mono text-white/25">{notForMeCount}</span>
+              <span className="text-[9px] font-mono text-white/25">
+                {notForMeCount}
+              </span>
             )}
           </button>
 
-          <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
+          <div
+            style={{ width: "0.5px" }}
+            className="bg-white/[0.06] self-stretch my-2"
+          />
 
           <button
             onClick={handlePanelClose}
             aria-label="Close"
-            className={`group flex items-center justify-center min-w-[56px] px-4 ${displayMode === 'fullscreen' ? 'py-2.5' : 'py-3'} hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0`}
+            className={`group flex items-center justify-center min-w-[56px] px-4 ${displayMode === "fullscreen" ? "py-3.5" : "py-3"} hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0`}
           >
-            <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+            <X
+              size={14}
+              className="text-white/30 group-hover:text-white/60 transition-colors"
+            />
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef } from "react";
 
 interface CommentInputProps {
   value: string;
@@ -8,7 +8,7 @@ interface CommentInputProps {
   onFocus?: () => void;
   placeholder?: string;
   hasSubmitted?: boolean;
-  size?: 'compact' | 'full';
+  size?: "compact" | "full";
 }
 
 export function CommentInput({
@@ -17,26 +17,28 @@ export function CommentInput({
   onSubmit,
   onClose,
   onFocus,
-  placeholder = 'What hit',
+  placeholder = "What hit",
   hasSubmitted = false,
-  size = 'compact',
+  size = "compact",
 }: CommentInputProps) {
-  const heightClass = size === 'full' ? 'h-11' : 'h-8';
-  const textSize = size === 'full' ? 'text-[12px]' : 'text-[11px]';
-  const px = size === 'full' ? 'px-4' : 'px-3';
+  const heightClass = size === "full" ? "h-11" : "h-8";
+  const textSize = size === "full" ? "text-[13px]" : "text-[12px]";
+  const px = size === "full" ? "px-4" : "px-3";
 
   const inputRef = useRef<HTMLInputElement>(null);
-
 
   return (
     <div
       className="relative z-10 shrink-0 px-2 py-1"
-      style={{ background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.08)' }}
+      style={{
+        background: "#0a0a0a",
+        borderTop: "1px solid rgba(255,255,255,0.08)",
+      }}
     >
       <div className={`relative ${heightClass}`}>
         <div
           className={`absolute inset-0 transition-opacity ${
-            hasSubmitted ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            hasSubmitted ? "opacity-0 pointer-events-none" : "opacity-100"
           }`}
         >
           <input
@@ -46,11 +48,11 @@ export function CommentInput({
             onChange={(e) => onChange(e.target.value)}
             onFocus={onFocus}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === "Enter") {
                 e.preventDefault();
                 onSubmit();
               }
-              if (e.key === 'Escape') onClose();
+              if (e.key === "Escape") onClose();
             }}
             placeholder={placeholder}
             maxLength={200}
@@ -59,7 +61,7 @@ export function CommentInput({
         </div>
         <div
           className={`absolute inset-0 flex items-center justify-center text-[10px] font-mono text-white/30 transition-opacity ${
-            hasSubmitted ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            hasSubmitted ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}
         >
           ✓ sent

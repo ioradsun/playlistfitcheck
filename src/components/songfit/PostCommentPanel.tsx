@@ -1,17 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { X } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { getSessionId } from '@/lib/sessionId';
-import { formatDistanceToNow } from 'date-fns';
-import { EmojiBar } from '@/components/shared/panel/EmojiBar';
-import { EMOJIS, type EmojiKey } from '@/components/shared/panel/panelConstants';
-import { CommentInput } from '@/components/shared/panel/CommentInput';
-import { CardBottomBar } from '@/components/songfit/CardBottomBar';
-import { useCardVote } from '@/hooks/useCardVote';
-import { useTopPostReaction } from '@/hooks/useTopPostReaction';
-import type { CardState } from './useCardLifecycle';
+import { useState, useEffect, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { X } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { getSessionId } from "@/lib/sessionId";
+import { formatDistanceToNow } from "date-fns";
+import { EmojiBar } from "@/components/shared/panel/EmojiBar";
+import {
+  EMOJIS,
+  type EmojiKey,
+} from "@/components/shared/panel/panelConstants";
+import { CommentInput } from "@/components/shared/panel/CommentInput";
+import { CardBottomBar } from "@/components/songfit/CardBottomBar";
+import { useCardVote } from "@/hooks/useCardVote";
+import { useTopPostReaction } from "@/hooks/useTopPostReaction";
+import type { CardState } from "./useCardLifecycle";
 
 interface Comment {
   id: string;
@@ -31,7 +34,7 @@ interface Props {
   cardState?: CardState;
   trackTitle?: string;
   reelsMode?: boolean;
-  variant?: 'embedded' | 'reels';
+  variant?: "embedded" | "reels";
   palette?: string[];
   caption?: string;
 }
@@ -49,7 +52,7 @@ function CommentReactPicker({
   return (
     <span className="relative inline-block">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         className="text-[10px] font-mono text-white/30 hover:text-white/55 transition-colors focus:outline-none"
       >
         + react
@@ -57,14 +60,20 @@ function CommentReactPicker({
       {open && (
         <span
           className="absolute bottom-full left-0 mb-1 flex items-center gap-1 rounded-lg px-1.5 py-1 z-50"
-          style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)' }}
+          style={{
+            background: "#1a1a1a",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
         >
           {EMOJIS.map(({ key, symbol }) => {
             const reacted = sessionReacted.has(`${commentId}-${key}`);
             return (
               <button
                 key={key}
-                onClick={() => { onPick(key); setOpen(false); }}
+                onClick={() => {
+                  onPick(key);
+                  setOpen(false);
+                }}
                 className="text-base px-0.5 hover:scale-125 transition-transform active:scale-95"
                 style={{ opacity: reacted ? 0.4 : 1 }}
               >
@@ -86,7 +95,7 @@ export function PostCommentPanel({
   cardState,
   trackTitle,
   reelsMode = false,
-  variant = 'embedded',
+  variant = "embedded",
   palette,
   caption,
 }: Props) {
@@ -94,21 +103,30 @@ export function PostCommentPanel({
   const sessionId = getSessionId();
 
   // ── Self-contained voting & reaction state ──
-  const topPostReaction = useTopPostReaction(postId, isOpen || (cardState ?? 'cold') !== 'cold');
+  const topPostReaction = useTopPostReaction(
+    postId,
+    isOpen || (cardState ?? "cold") !== "cold",
+  );
   const { votedSide, score, note, setNote, handleVote } = useCardVote(postId, {
-    enabled: (cardState ?? 'cold') !== 'cold',
+    enabled: (cardState ?? "cold") !== "cold",
   });
 
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [reactionCounts, setReactionCounts] = useState<Partial<Record<EmojiKey, number>>>({});
+  const [reactionCounts, setReactionCounts] = useState<
+    Partial<Record<EmojiKey, number>>
+  >({});
   const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
-  const [commentReactions, setCommentReactions] = useState<Record<string, Record<string, number>>>({});
-  const [sessionCommentReacted, setSessionCommentReacted] = useState<Set<string>>(new Set());
+  const [commentReactions, setCommentReactions] = useState<
+    Record<string, Record<string, number>>
+  >({});
+  const [sessionCommentReacted, setSessionCommentReacted] = useState<
+    Set<string>
+  >(new Set());
 
   // ── Panel comment input state ──
-  const [text, setText] = useState('');
+  const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
@@ -117,12 +135,12 @@ export function PostCommentPanel({
     if (!content || !user) return;
     try {
       await supabase
-        .from('songfit_comments')
+        .from("songfit_comments")
         .insert({ post_id: postId, user_id: user.id, content });
     } catch {
       // silent
     }
-    setNote('');
+    setNote("");
     setCommentRefreshKey((k) => k + 1);
   }, [note, user, postId, setNote]);
 
@@ -141,24 +159,29 @@ export function PostCommentPanel({
       replies: [],
     };
     if (replyingTo) {
-      setComments(prev =>
-        prev.map(c =>
+      setComments((prev) =>
+        prev.map((c) =>
           c.id === replyingTo.id
             ? { ...c, replies: [...(c.replies ?? []), optimistic] }
             : c,
         ),
       );
     } else {
-      setComments(prev => [...prev, optimistic]);
+      setComments((prev) => [...prev, optimistic]);
     }
-    setText('');
+    setText("");
     setReplyingTo(null);
     setHasSubmitted(true);
     setTimeout(() => setHasSubmitted(false), 500);
     try {
       await supabase
-        .from('songfit_comments')
-        .insert({ post_id: postId, user_id: user.id, content, parent_comment_id: parentId });
+        .from("songfit_comments")
+        .insert({
+          post_id: postId,
+          user_id: user.id,
+          content,
+          parent_comment_id: parentId,
+        });
     } catch {
       // silent
     } finally {
@@ -171,20 +194,25 @@ export function PostCommentPanel({
 
     const loadComments = async () => {
       const { data } = await supabase
-        .from('songfit_comments')
-        .select('id, content, created_at, user_id, parent_comment_id')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true })
+        .from("songfit_comments")
+        .select("id, content, created_at, user_id, parent_comment_id")
+        .eq("post_id", postId)
+        .order("created_at", { ascending: true })
         .limit(200);
 
       const rows = data ?? [];
-      const userIds = [...new Set(rows.filter((r) => r.user_id).map((r) => r.user_id!))];
-      const profileMap: Record<string, { display_name: string | null; avatar_url: string | null }> = {};
+      const userIds = [
+        ...new Set(rows.filter((r) => r.user_id).map((r) => r.user_id!)),
+      ];
+      const profileMap: Record<
+        string,
+        { display_name: string | null; avatar_url: string | null }
+      > = {};
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, display_name, avatar_url')
-          .in('id', userIds);
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .in("id", userIds);
         for (const p of profiles ?? []) profileMap[p.id] = p;
       }
 
@@ -203,14 +231,16 @@ export function PostCommentPanel({
           byParent[pid].push(c);
         });
 
-      setComments(topLevel.map((c) => ({ ...c, replies: byParent[c.id] ?? [] })));
+      setComments(
+        topLevel.map((c) => ({ ...c, replies: byParent[c.id] ?? [] })),
+      );
     };
 
     const loadReactions = async () => {
       const { data } = await supabase
-        .from('songfit_post_reactions' as any)
-        .select('emoji')
-        .eq('post_id', postId);
+        .from("songfit_post_reactions" as any)
+        .select("emoji")
+        .eq("post_id", postId);
       const counts: Partial<Record<EmojiKey, number>> = {};
       for (const row of (data ?? []) as any[]) {
         const key = row.emoji as EmojiKey;
@@ -221,12 +251,13 @@ export function PostCommentPanel({
     };
 
     const loadCommentReactions = async () => {
-      const commentIds = (
-        await supabase
-          .from('songfit_comments')
-          .select('id')
-          .eq('post_id', postId)
-      ).data?.map((r: any) => r.id) ?? [];
+      const commentIds =
+        (
+          await supabase
+            .from("songfit_comments")
+            .select("id")
+            .eq("post_id", postId)
+        ).data?.map((r: any) => r.id) ?? [];
 
       if (commentIds.length === 0) {
         setCommentReactions({});
@@ -234,9 +265,9 @@ export function PostCommentPanel({
       }
 
       const { data } = await supabase
-        .from('songfit_comment_reactions' as any)
-        .select('comment_id, emoji')
-        .in('comment_id', commentIds);
+        .from("songfit_comment_reactions" as any)
+        .select("comment_id, emoji")
+        .in("comment_id", commentIds);
       const counts: Record<string, Record<string, number>> = {};
       for (const row of (data ?? []) as any[]) {
         if (!counts[row.comment_id]) counts[row.comment_id] = {};
@@ -257,7 +288,7 @@ export function PostCommentPanel({
     if (sessionReacted.has(key)) return;
     setSessionReacted((prev) => new Set([...prev, key]));
     setReactionCounts((prev) => ({ ...prev, [key]: (prev[key] ?? 0) + 1 }));
-    await supabase.from('songfit_post_reactions' as any).insert({
+    await supabase.from("songfit_post_reactions" as any).insert({
       post_id: postId,
       emoji: key,
       session_id: sessionId,
@@ -276,7 +307,7 @@ export function PostCommentPanel({
         [emoji]: (prev[commentId]?.[emoji] ?? 0) + 1,
       },
     }));
-    await supabase.from('songfit_comment_reactions' as any).insert({
+    await supabase.from("songfit_comment_reactions" as any).insert({
       comment_id: commentId,
       emoji,
       session_id: sessionId,
@@ -285,25 +316,29 @@ export function PostCommentPanel({
   };
 
   const emojiMap: Record<string, string> = {
-    fire: '🔥', dead: '💀', mind_blown: '🤯',
-    emotional: '😭', respect: '🙏', accurate: '🎯',
+    fire: "🔥",
+    dead: "💀",
+    mind_blown: "🤯",
+    emotional: "😭",
+    respect: "🙏",
+    accurate: "🎯",
   };
 
-  const accent = palette?.[1] ?? 'rgba(255,255,255,0.7)';
+  const accent = palette?.[1] ?? "rgba(255,255,255,0.7)";
   const replayCount = score?.replay_yes ?? 0;
   const skipCount = score != null ? score.total - score.replay_yes : 0;
 
   const activeStyle = (active: boolean) => ({
     color:
       votedSide === null
-        ? 'rgba(255,255,255,1)'
+        ? "rgba(255,255,255,1)"
         : active
           ? accent
-          : 'rgba(255,255,255,0.25)',
+          : "rgba(255,255,255,0.25)",
   });
 
   const renderComment = (comment: Comment, isReply = false) => {
-    const name = comment.profiles?.display_name ?? 'anon';
+    const name = comment.profiles?.display_name ?? "anon";
     const reactions = commentReactions[comment.id] ?? {};
     const reactionEntries = Object.entries(reactions)
       .filter(([, count]) => count > 0)
@@ -314,8 +349,8 @@ export function PostCommentPanel({
         key={comment.id}
         className={
           isReply
-            ? 'ml-4 border-l border-white/[0.06] pl-3 py-2.5'
-            : 'px-4 py-3 border-b border-white/[0.04]'
+            ? "ml-4 border-l border-white/[0.06] pl-3 py-2.5"
+            : "px-4 py-3 border-b border-white/[0.04]"
         }
       >
         <div className="flex items-center gap-2 mb-1.5">
@@ -334,7 +369,9 @@ export function PostCommentPanel({
           </div>
           <span className="text-[10px] font-mono text-white/35">{name}</span>
           <span className="text-[9px] font-mono text-white/20 ml-auto">
-            {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+            {formatDistanceToNow(new Date(comment.created_at), {
+              addSuffix: true,
+            })}
           </span>
         </div>
 
@@ -350,8 +387,8 @@ export function PostCommentPanel({
               className="flex items-center gap-0.5 text-[10px] font-mono transition-all active:scale-95 focus:outline-none"
               style={{
                 color: sessionCommentReacted.has(`${comment.id}-${emoji}`)
-                  ? (palette?.[1] ?? 'rgba(255,255,255,0.7)')
-                  : 'rgba(255,255,255,0.28)',
+                  ? (palette?.[1] ?? "rgba(255,255,255,0.7)")
+                  : "rgba(255,255,255,0.28)",
               }}
             >
               <span>{emojiMap[emoji] ?? emoji}</span>
@@ -360,7 +397,9 @@ export function PostCommentPanel({
           ))}
           <CommentReactPicker
             commentId={comment.id}
-            onPick={(emoji) => handleCommentReact(comment.id, emoji as EmojiKey)}
+            onPick={(emoji) =>
+              handleCommentReact(comment.id, emoji as EmojiKey)
+            }
             sessionReacted={sessionCommentReacted}
           />
           {!isReply && (
@@ -388,15 +427,15 @@ export function PostCommentPanel({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ y: '100%', opacity: 0 }}
+            initial={{ y: "100%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: '100%', opacity: 0 }}
+            exit={{ y: "100%", opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
             className="absolute inset-0 flex flex-col pointer-events-auto overflow-hidden"
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: 'rgba(10,10,10,0.97)',
-              backdropFilter: 'blur(12px)',
+              background: "rgba(10,10,10,0.97)",
+              backdropFilter: "blur(12px)",
             }}
           >
             <EmojiBar
@@ -420,12 +459,12 @@ export function PostCommentPanel({
             {replyingTo && (
               <div
                 className="flex items-center gap-2 px-4 py-1.5 shrink-0 border-b border-white/[0.04]"
-                style={{ background: 'rgba(255,255,255,0.02)' }}
+                style={{ background: "rgba(255,255,255,0.02)" }}
               >
                 <span className="text-[10px] font-mono text-white/35 truncate flex-1">
-                  replying to{' '}
+                  replying to{" "}
                   <span className="text-white/50">
-                    {replyingTo.profiles?.display_name ?? 'anon'}
+                    {replyingTo.profiles?.display_name ?? "anon"}
                   </span>
                 </span>
                 <button
@@ -433,8 +472,12 @@ export function PostCommentPanel({
                   className="text-white/20 hover:text-white/50 transition-colors shrink-0 focus:outline-none"
                 >
                   <svg
-                    width="10" height="10" viewBox="0 0 10 10"
-                    fill="none" stroke="currentColor" strokeWidth="1.5"
+                    width="10"
+                    height="10"
+                    viewBox="0 0 10 10"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
                   >
                     <line x1="2" y1="2" x2="8" y2="8" />
                     <line x1="8" y1="2" x2="2" y2="8" />
@@ -445,7 +488,7 @@ export function PostCommentPanel({
 
             <div
               className="flex-1 overflow-y-auto min-h-0"
-              style={{ scrollbarWidth: 'none' }}
+              style={{ scrollbarWidth: "none" }}
             >
               {comments.length === 0 ? (
                 <p className="text-[11px] font-mono text-white/20 text-center pt-8 px-4">
@@ -462,46 +505,81 @@ export function PostCommentPanel({
             <div
               className="shrink-0 flex items-stretch"
               style={{
-                height: variant === 'reels' ? 44 : 48,
-                background: '#0a0a0a',
-                borderTop: '0.5px solid rgba(255,255,255,0.06)',
+                height: variant === "reels" ? 52 : 48,
+                background: "#0a0a0a",
+                borderTop: "0.5px solid rgba(255,255,255,0.06)",
+                paddingBottom:
+                  variant === "reels"
+                    ? "env(safe-area-inset-bottom, 0px)"
+                    : undefined,
               }}
             >
               <button
                 onClick={() => handleVote(true)}
-                className={`flex-1 flex items-center justify-center gap-2 ${variant === 'reels' ? 'py-2.5' : 'py-3'} hover:bg-white/[0.04] transition-colors focus:outline-none`}
+                className={`flex-1 flex items-center justify-center gap-2 ${variant === "reels" ? "py-3.5" : "py-3"} hover:bg-white/[0.04] transition-colors focus:outline-none`}
               >
                 <span
-                  className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
-                  style={{ color: votedSide === null ? 'rgba(255,255,255,1)' : votedSide === 'a' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.22)' }}
+                  className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
+                  style={{
+                    color:
+                      votedSide === null
+                        ? "rgba(255,255,255,1)"
+                        : votedSide === "a"
+                          ? "rgba(255,255,255,0.9)"
+                          : "rgba(255,255,255,0.22)",
+                  }}
                 >
                   Run it back
                 </span>
-                {(score?.replay_yes ?? 0) > 0 && <span className="text-[9px] font-mono text-white/25">{score!.replay_yes}</span>}
+                {(score?.replay_yes ?? 0) > 0 && (
+                  <span className="text-[9px] font-mono text-white/25">
+                    {score!.replay_yes}
+                  </span>
+                )}
               </button>
 
-              <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
+              <div
+                style={{ width: "0.5px" }}
+                className="bg-white/[0.06] self-stretch my-2"
+              />
 
               <button
                 onClick={() => handleVote(false)}
-                className={`flex-1 flex items-center justify-center gap-2 ${variant === 'reels' ? 'py-2.5' : 'py-3'} hover:bg-white/[0.04] transition-colors focus:outline-none`}
+                className={`flex-1 flex items-center justify-center gap-2 ${variant === "reels" ? "py-3.5" : "py-3"} hover:bg-white/[0.04] transition-colors focus:outline-none`}
               >
                 <span
-                  className="text-[11px] font-mono tracking-[0.15em] uppercase transition-colors"
-                  style={{ color: votedSide === null ? 'rgba(255,255,255,1)' : votedSide === 'b' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.22)' }}
+                  className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
+                  style={{
+                    color:
+                      votedSide === null
+                        ? "rgba(255,255,255,1)"
+                        : votedSide === "b"
+                          ? "rgba(255,255,255,0.9)"
+                          : "rgba(255,255,255,0.22)",
+                  }}
                 >
                   Not For Me
                 </span>
-                {score != null && score.total - score.replay_yes > 0 && <span className="text-[9px] font-mono text-white/25">{score.total - score.replay_yes}</span>}
+                {score != null && score.total - score.replay_yes > 0 && (
+                  <span className="text-[9px] font-mono text-white/25">
+                    {score.total - score.replay_yes}
+                  </span>
+                )}
               </button>
 
-              <div style={{ width: '0.5px' }} className="bg-white/[0.06] self-stretch my-2" />
+              <div
+                style={{ width: "0.5px" }}
+                className="bg-white/[0.06] self-stretch my-2"
+              />
 
               <button
                 onClick={onClose}
-                className={`flex items-center justify-center min-w-[56px] px-4 ${variant === 'reels' ? 'py-2.5' : 'py-3'} hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0`}
+                className={`flex items-center justify-center min-w-[64px] px-4 ${variant === "reels" ? "py-3.5" : "py-3"} hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0`}
               >
-                <X size={14} className="text-white/30 hover:text-white/60 transition-colors" />
+                <X
+                  size={14}
+                  className="text-white/30 hover:text-white/60 transition-colors"
+                />
               </button>
             </div>
           </motion.div>
@@ -512,14 +590,14 @@ export function PostCommentPanel({
       {!isOpen && (
         <div className="pointer-events-auto relative z-[10]">
           {caption && caption.trim() && (
-            <div className="px-3 pt-1.5 pb-1" style={{ background: '#0a0a0a' }}>
+            <div className="px-3 pt-1.5 pb-1" style={{ background: "#0a0a0a" }}>
               <p className="text-[13px] leading-snug text-white/50 line-clamp-2">
                 {caption}
               </p>
             </div>
           )}
           <CardBottomBar
-            variant={variant === 'reels' ? 'fullscreen' : 'embedded'}
+            variant={variant === "reels" ? "fullscreen" : "embedded"}
             votedSide={votedSide}
             score={score}
             note={note}

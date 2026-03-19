@@ -85,7 +85,7 @@ export function SongFitPostCard({
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
   const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
-  
+
   const hottestHooksEnabled =
     siteCopy.features?.hookfit_hottest_hooks !== false;
   const navigate = useNavigate();
@@ -298,21 +298,29 @@ export function SongFitPostCard({
                 <div className="relative shrink-0">
                   <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.06]">
                     {post.profiles?.avatar_url ? (
-                      <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                      <img
+                        src={post.profiles.avatar_url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <User size={13} className="text-white/40" />
                     )}
                   </div>
                   {(post.profiles as any)?.is_verified && (
-                    <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={11} /></span>
+                    <span className="absolute -bottom-0.5 -right-0.5">
+                      <VerifiedBadge size={11} />
+                    </span>
                   )}
                 </div>
               </div>
             </ProfileHoverCard>
 
             {(hasLyricDancePost || isSpotifyEmbed) && (
-              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 rounded px-1.5 py-0.5 shrink-0">
-                {hasLyricDancePost ? `In Studio · ${displayName}` : `Now Streaming · ${displayName}`}
+              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 rounded px-1.5 py-0.5 min-w-0 truncate max-w-[60vw]">
+                {hasLyricDancePost
+                  ? `In Studio · ${displayName}`
+                  : `Now Streaming · ${displayName}`}
               </span>
             )}
           </div>
@@ -403,6 +411,9 @@ export function SongFitPostCard({
                 onExternalPanelOpenChange={setPanelOpen}
                 onOpenReactions={() => setPanelOpen(true)}
                 prefetchedData={lyricDanceData ?? null}
+                avatarUrl={post.profiles?.avatar_url}
+                isVerified={(post.profiles as any)?.is_verified}
+                onProfileClick={handleProfileClick}
               />
             </div>
           ) : post.lyric_dance_url &&
@@ -430,7 +441,9 @@ export function SongFitPostCard({
                     ? "h-full flex flex-col items-center justify-center"
                     : "",
                 )}
-                style={reelsMode ? undefined : { background: "#0a0a0a", height: 320 }}
+                style={
+                  reelsMode ? undefined : { background: "#0a0a0a", height: 320 }
+                }
               >
                 <LazySpotifyEmbed
                   reelsMode={reelsMode}
@@ -475,22 +488,29 @@ export function SongFitPostCard({
                 >
                   <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
                     {post.profiles?.avatar_url ? (
-                      <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                      <img
+                        src={post.profiles.avatar_url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <User size={14} className="text-white/40" />
                     )}
                   </div>
                   {(post.profiles as any)?.is_verified && (
-                    <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={11} /></span>
+                    <span className="absolute -bottom-0.5 -right-0.5">
+                      <VerifiedBadge size={11} />
+                    </span>
                   )}
                 </div>
                 {(hasLyricDancePost || isSpotifyEmbed) && (
-                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 rounded px-1.5 py-0.5 shrink-0">
-                    {hasLyricDancePost ? `In Studio · ${displayName}` : `Now Streaming · ${displayName}`}
+                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 rounded px-1.5 py-0.5 min-w-0 truncate max-w-[60vw]">
+                    {hasLyricDancePost
+                      ? `In Studio · ${displayName}`
+                      : `Now Streaming · ${displayName}`}
                   </span>
                 )}
               </div>
-
 
               {localCaption && localCaption.trim() && !editing && (
                 <p className="text-[12px] leading-snug text-white/50 mt-1">
@@ -516,7 +536,6 @@ export function SongFitPostCard({
                   )}
                 </p>
               )}
-
 
               {isFirst && (
                 <div className="flex flex-col items-center gap-1 mt-4 animate-bounce">
@@ -594,180 +613,177 @@ export function SongFitPostCard({
             )}
 
             {/* Action Row */}
-            {!hasLyricDancePost &&
-              !isBattlePost &&
-              !isSpotifyEmbed && (
-                <div className="relative flex items-center justify-between px-1 py-1">
-                  {/* Left group: comment, share, like, bookmark */}
-                  <div className="flex items-center">
-                    <button
-                      onClick={() => {
-                        onOpenComments(post.id);
-                        if (user)
-                          logEngagementEvent(post.id, user.id, "comment");
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
-                    >
-                      <MessageCircle
-                        size={17}
-                        className="text-white/25 group-hover:text-white/60 transition-colors"
-                      />
-                      {post.comments_count > 0 && (
-                        <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
-                          {post.comments_count}
-                        </span>
-                      )}
-                    </button>
-
-                    <button
-                      onClick={handleShare}
-                      className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
-                    >
-                      <Share2
-                        size={17}
-                        className="text-white/25 group-hover:text-white/60 transition-colors"
-                      />
-                    </button>
-
-                    <button
-                      onClick={toggleLike}
-                      className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
-                    >
-                      <Flame
-                        size={17}
-                        className={
-                          liked
-                            ? "fill-white/80 text-white/80"
-                            : "text-white/25 group-hover:text-white/60 transition-colors"
-                        }
-                      />
-                      {likesCount > 0 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenLikes(post.id);
-                          }}
-                          className="text-[11px] text-white/20 font-mono group-hover:text-white/50 focus:outline-none"
-                        >
-                          {likesCount}
-                        </button>
-                      )}
-                    </button>
-
-                    <button
-                      onClick={toggleSave}
-                      className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
-                    >
-                      <Bookmark
-                        size={17}
-                        className={
-                          saved
-                            ? "fill-white/80 text-white/80"
-                            : "text-white/25 group-hover:text-white/60 transition-colors"
-                        }
-                      />
-                      {(post as any).saves_count > 0 && (
-                        <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
-                          {(post as any).saves_count}
-                        </span>
-                      )}
-                    </button>
-
-                    {cryptoEnabled && (
-                      <div className="flex items-center">
-                        <TipButton
-                          recipientAddress={
-                            (post.profiles as any)?.wallet_address
-                          }
-                          recipientName={displayName}
-                          postId={post.id}
-                          recipientUserId={post.user_id}
-                          onTipLogged={(amount) =>
-                            setTipsTotal((t) => t + amount)
-                          }
-                        />
-                        {tipsTotal > 0 && (
-                          <span className="text-[11px] text-white/35 font-mono -ml-1">
-                            {tipsTotal.toLocaleString()}
-                          </span>
-                        )}
-                      </div>
+            {!hasLyricDancePost && !isBattlePost && !isSpotifyEmbed && (
+              <div className="relative flex items-center justify-between px-1 py-1">
+                {/* Left group: comment, share, like, bookmark */}
+                <div className="flex items-center">
+                  <button
+                    onClick={() => {
+                      onOpenComments(post.id);
+                      if (user) logEngagementEvent(post.id, user.id, "comment");
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                  >
+                    <MessageCircle
+                      size={17}
+                      className="text-white/25 group-hover:text-white/60 transition-colors"
+                    />
+                    {post.comments_count > 0 && (
+                      <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
+                        {post.comments_count}
+                      </span>
                     )}
-                  </div>
+                  </button>
 
-                  {/* Right: game mechanics */}
-                  <TooltipProvider delayDuration={350}>
-                    <div className="flex items-center gap-2 text-white/20">
-                      {post.engagement_score > 0 && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
-                            >
-                              <Trophy size={13} />
-                              <span className="text-[11px] font-mono">
-                                {Math.round(post.engagement_score)}
-                              </span>
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent
-                            side="bottom"
-                            className="text-xs max-w-48"
-                          >
-                            Engagement score — weighted total of likes,
-                            comments, saves, shares &amp; clicks
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                      {post.status === "live" && post.expires_at && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
-                            >
-                              <Clock size={13} />
-                              <span className="text-[11px] font-mono">
-                                {Math.max(
-                                  0,
-                                  Math.ceil(
-                                    (new Date(post.expires_at).getTime() -
-                                      Date.now()) /
-                                      (1000 * 60 * 60 * 24),
-                                  ),
-                                )}
-                                d
-                              </span>
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent
-                            side="bottom"
-                            className="text-xs max-w-48"
-                          >
-                            Days remaining in this submission cycle
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                      {rank && rank <= 50 && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className="text-[11px] font-bold text-white/50 font-mono px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
-                            >
-                              #{rank}
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="text-xs">
-                            Billboard rank
-                          </TooltipContent>
-                        </Tooltip>
+                  <button
+                    onClick={handleShare}
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                  >
+                    <Share2
+                      size={17}
+                      className="text-white/25 group-hover:text-white/60 transition-colors"
+                    />
+                  </button>
+
+                  <button
+                    onClick={toggleLike}
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                  >
+                    <Flame
+                      size={17}
+                      className={
+                        liked
+                          ? "fill-white/80 text-white/80"
+                          : "text-white/25 group-hover:text-white/60 transition-colors"
+                      }
+                    />
+                    {likesCount > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenLikes(post.id);
+                        }}
+                        className="text-[11px] text-white/20 font-mono group-hover:text-white/50 focus:outline-none"
+                      >
+                        {likesCount}
+                      </button>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={toggleSave}
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-full hover:bg-white/5 transition-colors group focus:outline-none"
+                  >
+                    <Bookmark
+                      size={17}
+                      className={
+                        saved
+                          ? "fill-white/80 text-white/80"
+                          : "text-white/25 group-hover:text-white/60 transition-colors"
+                      }
+                    />
+                    {(post as any).saves_count > 0 && (
+                      <span className="text-[11px] text-white/20 font-mono group-hover:text-white/50">
+                        {(post as any).saves_count}
+                      </span>
+                    )}
+                  </button>
+
+                  {cryptoEnabled && (
+                    <div className="flex items-center">
+                      <TipButton
+                        recipientAddress={
+                          (post.profiles as any)?.wallet_address
+                        }
+                        recipientName={displayName}
+                        postId={post.id}
+                        recipientUserId={post.user_id}
+                        onTipLogged={(amount) =>
+                          setTipsTotal((t) => t + amount)
+                        }
+                      />
+                      {tipsTotal > 0 && (
+                        <span className="text-[11px] text-white/35 font-mono -ml-1">
+                          {tipsTotal.toLocaleString()}
+                        </span>
                       )}
                     </div>
-                  </TooltipProvider>
+                  )}
                 </div>
-              )}
+
+                {/* Right: game mechanics */}
+                <TooltipProvider delayDuration={350}>
+                  <div className="flex items-center gap-2 text-white/20">
+                    {post.engagement_score > 0 && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
+                          >
+                            <Trophy size={13} />
+                            <span className="text-[11px] font-mono">
+                              {Math.round(post.engagement_score)}
+                            </span>
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="bottom"
+                          className="text-xs max-w-48"
+                        >
+                          Engagement score — weighted total of likes, comments,
+                          saves, shares &amp; clicks
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    {post.status === "live" && post.expires_at && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
+                          >
+                            <Clock size={13} />
+                            <span className="text-[11px] font-mono">
+                              {Math.max(
+                                0,
+                                Math.ceil(
+                                  (new Date(post.expires_at).getTime() -
+                                    Date.now()) /
+                                    (1000 * 60 * 60 * 24),
+                                ),
+                              )}
+                              d
+                            </span>
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="bottom"
+                          className="text-xs max-w-48"
+                        >
+                          Days remaining in this submission cycle
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    {rank && rank <= 50 && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="text-[11px] font-bold text-white/50 font-mono px-2 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-help focus:outline-none"
+                          >
+                            #{rank}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs">
+                          Billboard rank
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                </TooltipProvider>
+              </div>
+            )}
 
             <div className="h-px" />
           </>
