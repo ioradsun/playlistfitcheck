@@ -120,7 +120,7 @@ export function FitTab({
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
   const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
-  const dancePlayerRef = useRef<any>(null);
+  const dancePlayerRef = useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(null);
   const siteCopy = useSiteCopy();
   const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
 
