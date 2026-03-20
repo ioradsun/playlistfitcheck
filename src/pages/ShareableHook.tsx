@@ -3,6 +3,9 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { BattleEmbed } from "@/components/hookfit/BattleEmbed";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { motion, AnimatePresence } from "framer-motion";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { HookInfo } from "@/components/hookfit/InlineBattle";
@@ -14,7 +17,14 @@ export default function ShareableHook() {
   const [hook, setHook] = useState<(HookInfo & { battle_id?: string }) | null>(null);
   const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<{
+    display_name: string | null;
+    avatar_url: string | null;
+    is_verified: boolean;
+  } | null>(null);
+  const [badgeVisible, setBadgeVisible] = useState(false);
   const userIdRef = useRef<string | null | undefined>(undefined);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -41,6 +51,16 @@ export default function ShareableHook() {
 
       const selectedHook = hookRow as unknown as (HookInfo & { battle_id?: string });
       setHook(selectedHook);
+      if ((selectedHook as any).user_id) {
+        supabase
+          .from("profiles")
+          .select("display_name, avatar_url, is_verified")
+          .eq("id", (selectedHook as any).user_id)
+          .maybeSingle()
+          .then(({ data: pData }) => {
+            if (pData) setProfile(pData as any);
+          });
+      }
 
       const { data: dances } = await supabase
         .from("shareable_lyric_dances" as any)
@@ -58,6 +78,11 @@ export default function ShareableHook() {
   }, [artistSlug, songSlug, hookSlug]);
 
   useEffect(() => {
+    const t = setTimeout(() => setBadgeVisible(true), 1000);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
     if (!hook?.battle_id) return;
     const style = document.createElement("style");
     style.textContent = "html, body { overflow: hidden; height: 100%; }";
@@ -72,6 +97,10 @@ export default function ShareableHook() {
     const song = hook?.song_slug?.replace(/-/g, " ") ?? "";
     return [artist, song].filter(Boolean).join(" — ");
   }, [hook]);
+
+  const displayName = profile?.display_name
+    ?? hook?.artist_slug?.replace(/-/g, " ")
+    ?? "";
 
   const danceUrl = useMemo(() => {
     if (!danceData) return "#";
@@ -89,6 +118,38 @@ export default function ShareableHook() {
   if (hook.battle_id) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
+
+        {/* Desktop top bar — avatar + FMLY Feud pill */}
+        {!isMobile && displayName && (
+          <div className="flex items-center px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <div className="relative shrink-0">
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt=""
+                    className="w-8 h-8 rounded-full object-cover border border-white/[0.06]"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                    <span className="text-[11px] font-mono text-white/30">
+                      {displayName[0]?.toUpperCase() ?? "♪"}
+                    </span>
+                  </div>
+                )}
+                {profile?.is_verified && (
+                  <span className="absolute -bottom-0.5 -right-0.5">
+                    <VerifiedBadge size={10} />
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400">
+                FMLY Feud · {displayName}
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 min-h-0 overflow-hidden relative">
           <BattleEmbed
             battleId={hook.battle_id}
@@ -98,6 +159,25 @@ export default function ShareableHook() {
             showSplitCover={false}
           />
         </div>
+
+        {/* tools.fm floating badge */}
+        <AnimatePresence>
+          {badgeVisible && (
+            <motion.button
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              onClick={() => window.location.href = "/"}
+              className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/[0.06] hover:border-white/15 hover:bg-black/80 transition-all group focus:outline-none"
+            >
+              <span className="text-[9px] font-mono text-white/30 group-hover:text-white/60 tracking-wider transition-colors">
+                Fit by toolsFM
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+
       </div>
     );
   }

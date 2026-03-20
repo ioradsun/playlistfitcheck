@@ -15,6 +15,9 @@ interface CardBottomBarProps {
   topReaction?: { symbol: string; count: number } | null;
   trackTitle?: string;
   variant?: "embedded" | "fullscreen";
+  yesLabel?: string;
+  noLabel?: string;
+  renderVotedContent?: () => React.ReactNode;
 }
 
 export function CardBottomBar({
@@ -31,6 +34,9 @@ export function CardBottomBar({
   topReaction,
   trackTitle,
   variant = "embedded",
+  yesLabel = "Run it back",
+  noLabel = "Not For Me",
+  renderVotedContent,
 }: CardBottomBarProps) {
   const [showNudge, setShowNudge] = useState(false);
   const prevVotedSide = useRef<"a" | "b" | null>(null);
@@ -96,7 +102,7 @@ export function CardBottomBar({
             <span
               className={`${variant === "fullscreen" ? "text-[12px]" : "text-[11px]"} font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors`}
             >
-              Run it back
+              {yesLabel ?? "Run it back"}
             </span>
             {(score?.replay_yes ?? 0) > 0 && (
               <span className="text-[9px] font-mono text-white/15">
@@ -115,7 +121,7 @@ export function CardBottomBar({
             <span
               className={`${variant === "fullscreen" ? "text-[12px]" : "text-[11px]"} font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors`}
             >
-              Not For Me
+              {noLabel ?? "Not For Me"}
             </span>
             {score != null && score.total - score.replay_yes > 0 && (
               <span className="text-[9px] font-mono text-white/15">
@@ -129,40 +135,44 @@ export function CardBottomBar({
         <div
           className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}
         >
-          {showNudge ? (
-            <span className="text-[9px] font-mono tracking-[0.12em] text-white/50 flex items-center gap-1.5">
-              which line hit?
-              <span className="text-white/30">→</span>
-            </span>
-          ) : (
-            <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
-              {(() => {
-                const total = score?.total ?? 0;
-                const replay_yes = score?.replay_yes ?? 0;
-                const notForMeCount = total - replay_yes;
-                const majorityRanItBack = replay_yes > total / 2;
-                const isSplit = total > 0 && replay_yes === total / 2;
-                const userAgrees =
-                  votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
-                const titleLabel = trackTitle || "IT";
+          {renderVotedContent ? renderVotedContent() : (
+            <>
+              {showNudge ? (
+                <span className="text-[9px] font-mono tracking-[0.12em] text-white/50 flex items-center gap-1.5">
+                  which line hit?
+                  <span className="text-white/30">→</span>
+                </span>
+              ) : (
+                <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
+                  {(() => {
+                    const total = score?.total ?? 0;
+                    const replay_yes = score?.replay_yes ?? 0;
+                    const notForMeCount = total - replay_yes;
+                    const majorityRanItBack = replay_yes > total / 2;
+                    const isSplit = total > 0 && replay_yes === total / 2;
+                    const userAgrees =
+                      votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
+                    const titleLabel = trackTitle || "IT";
 
-                let verdict: string;
-                let tally: string;
-                if (total < 20) {
-                  verdict = "FMLY STILL VOTING";
-                  tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
-                } else if (isSplit) {
-                  verdict = "FMLY IS SPLIT";
-                  tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
-                } else {
-                  verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
-                  tally = majorityRanItBack
-                    ? `${replay_yes} / ${total} RAN ${titleLabel} BACK`
-                    : `${notForMeCount} / ${total} NOT FOR ME`;
-                }
-                return `${verdict} · ${tally}`;
-              })()}
-            </span>
+                    let verdict: string;
+                    let tally: string;
+                    if (total < 20) {
+                      verdict = "FMLY STILL VOTING";
+                      tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
+                    } else if (isSplit) {
+                      verdict = "FMLY IS SPLIT";
+                      tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
+                    } else {
+                      verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
+                      tally = majorityRanItBack
+                        ? `${replay_yes} / ${total} RAN ${titleLabel} BACK`
+                        : `${notForMeCount} / ${total} NOT FOR ME`;
+                    }
+                    return `${verdict} · ${tally}`;
+                  })()}
+                </span>
+              )}
+            </>
           )}
         </div>
       )}
