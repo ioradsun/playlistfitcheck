@@ -516,7 +516,7 @@ export function SongFitPostCard({
                   )}
                 </div>
                 {(hasLyricDancePost || isSpotifyEmbed || isBattlePost) && (
-                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 min-w-0 truncate max-w-[60vw]">
+                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 rounded px-1.5 py-0.5 min-w-0 truncate max-w-[60vw]">
                     {isBattlePost
                       ? `FMLY Feud · ${displayName}`
                       : hasLyricDancePost
