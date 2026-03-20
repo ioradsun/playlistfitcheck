@@ -15,48 +15,7 @@ export interface TopReaction {
   count: number;
 }
 
-export function useTopPostReaction(postId: string, enabled = true): TopReaction | null {
-  const [top, setTop] = useState<TopReaction | null>(null);
-
-  useEffect(() => {
-    if (!postId || !enabled) {
-      setTop(null);
-      return;
-    }
-
-    let cancelled = false;
-    void supabase
-      .from("songfit_post_reactions" as never)
-      .select("emoji")
-      .eq("post_id", postId)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        // Table may not exist yet — fail silently
-        if (error || !data || data.length === 0) {
-          setTop(null);
-          return;
-        }
-        const counts: Record<string, number> = {};
-        for (const row of data as Array<{ emoji: string }>) {
-          counts[row.emoji] = (counts[row.emoji] ?? 0) + 1;
-        }
-        let topKey = "";
-        let topCount = 0;
-        for (const [key, count] of Object.entries(counts)) {
-          if (count > topCount) {
-            topCount = count;
-            topKey = key;
-          }
-        }
-        if (topKey) {
-          setTop({ symbol: EMOJI_SYMBOLS[topKey] ?? "🔥", count: topCount });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, postId]);
-
-  return top;
+export function useTopPostReaction(_postId: string, _enabled = true): TopReaction | null {
+  // Table songfit_post_reactions does not exist yet — return null to avoid 404 spam.
+  return null;
 }
