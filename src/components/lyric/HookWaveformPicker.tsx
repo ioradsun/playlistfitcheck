@@ -16,7 +16,7 @@ interface Props {
   loopRegionRef: MutableRefObject<{ start: number; end: number } | null>;
   aiHint?: LyricHook | null;
   initialHook?: LyricHook | null;
-  onSave: (hook: LyricHook) => void;
+  onSave: (hook: LyricHook) => void | Promise<void>;
   isLast?: boolean;
 }
 
@@ -266,11 +266,11 @@ export function HookWaveformPicker({
     updateCursor(e.clientX);
   }, [updateCursor]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (startSec === null || endSec === null) return;
     stopLoop();
     const savedLines = lines.filter(l => l.start < endSec! && l.end > startSec!);
-    onSave({
+    await onSave({
       start: startSec,
       end: endSec,
       score: 0,
