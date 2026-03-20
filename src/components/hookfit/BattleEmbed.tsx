@@ -603,7 +603,7 @@ function BattleEmbedInner({
 
         {/* Pre-vote: Left Hook / Right Hook disabled + 🔥 disabled */}
         {(battleState === "cover" || battleState === "round-1" || battleState === "round-2") && (
-          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md h-[52px]"} opacity-30 pointer-events-none`}>
+          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"} opacity-30 pointer-events-none`}>
             <div className="flex-1 flex items-center justify-center">
               <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">Left Hook</span>
             </div>
@@ -620,7 +620,7 @@ function BattleEmbedInner({
 
         {/* Vote: Left Hook / Right Hook active, 🔥 disabled */}
         {battleState === "vote" && (
-          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
+          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => handleVote("a")}
               className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
@@ -647,7 +647,7 @@ function BattleEmbedInner({
 
         {/* Results panel closed: social proof + 🔥 */}
         {battleState === "results" && !panelOpen && (
-          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
+          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
             <div className="flex-1 flex items-center px-3 overflow-hidden min-w-0">
               <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
                 {(() => {
@@ -679,7 +679,7 @@ function BattleEmbedInner({
 
         {/* Results panel open: Left Hook / Right Hook as tab switchers + ✕ */}
         {battleState === "results" && panelOpen && (
-          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
+          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setResultsTab("a")}
               className={`flex-1 flex items-center justify-center py-3 transition-colors ${
