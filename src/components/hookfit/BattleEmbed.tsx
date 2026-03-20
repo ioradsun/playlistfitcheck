@@ -262,26 +262,6 @@ function BattleEmbedInner({
     })();
   }, [resolvedBattleId, hookPhrase, votedSide]);
 
-  // ── Progress bar timer ──────────────────────────────────────
-  useEffect(() => {
-    if (battleState !== "round-1" && battleState !== "round-2") {
-      setRoundProgress(0);
-      if (progressTimerRef.current) cancelAnimationFrame(progressTimerRef.current);
-      return;
-    }
-    const hookDuration = battleState === "round-1"
-      ? (hookA ? hookA.hook_end - hookA.hook_start : 10)
-      : (hookB ? hookB.hook_end - hookB.hook_start : 10);
-    roundStartRef.current = performance.now();
-    const tick = () => {
-      const p = Math.min(1, (performance.now() - roundStartRef.current) / 1000 / hookDuration);
-      setRoundProgress(p);
-      if (p < 1) progressTimerRef.current = requestAnimationFrame(tick);
-    };
-    progressTimerRef.current = requestAnimationFrame(tick);
-    return () => { if (progressTimerRef.current) cancelAnimationFrame(progressTimerRef.current); };
-  }, [battleState, hookA, hookB]);
-
   // ── Auto-advance after hook ends ────────────────────────────
   useEffect(() => {
     if (battleState !== "round-1" || !hookA || hookEndFiredA.current) return;
@@ -391,6 +371,37 @@ function BattleEmbedInner({
       case "results": return replayingSide;
     }
   }, [isFeedEmbed, cardState, battleState, replayingSide]);
+
+  // ── Progress bar timer ──────────────────────────────────────
+  // Determine which side is actively playing audio (rounds or results focus)
+  const progressSide: "a" | "b" | null = useMemo(() => {
+    if (battleState === "round-1") return "a";
+    if (battleState === "round-2") return "b";
+    if (battleState === "results" && activePlaying) return activePlaying;
+    return null;
+  }, [battleState, activePlaying]);
+
+  useEffect(() => {
+    if (!progressSide) {
+      setRoundProgress(0);
+      if (progressTimerRef.current) cancelAnimationFrame(progressTimerRef.current);
+      return;
+    }
+    const hook = progressSide === "a" ? hookA : hookB;
+    const hookDuration = hook ? hook.hook_end - hook.hook_start : 10;
+    roundStartRef.current = performance.now();
+    const tick = () => {
+      const elapsed = (performance.now() - roundStartRef.current) / 1000;
+      // In results, loop the progress bar; in rounds, clamp at 1
+      const p = battleState === "results"
+        ? (elapsed % hookDuration) / hookDuration
+        : Math.min(1, elapsed / hookDuration);
+      setRoundProgress(p);
+      progressTimerRef.current = requestAnimationFrame(tick);
+    };
+    progressTimerRef.current = requestAnimationFrame(tick);
+    return () => { if (progressTimerRef.current) cancelAnimationFrame(progressTimerRef.current); };
+  }, [progressSide, hookA, hookB, battleState]);
 
   const handleTileTap = useCallback((side: "a" | "b") => {
     if (battleState !== "results") return;
@@ -746,19 +757,25 @@ function BattleEmbedInner({
           ...(!isFeedEmbed ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
         }}
       >
-        {/* Progress bar — always full canvas width, outside constrained wrapper */}
-        {(battleState === "round-1" || battleState === "round-2") && (
-          <div className="w-full h-[2px] bg-white/[0.06]">
+        {/* Progress bar — half-width, aligned to the active tile's side */}
+        {progressSide && (
+          <div className="relative w-full h-[2px] bg-white/[0.06]">
             <motion.div
-              className="h-full"
+              className="absolute top-0 h-full"
               style={{
-                background: battleState === "round-1"
-                  ? (hookA?.palette?.[0] ?? "#22c55e")
-                  : (hookB?.palette?.[0] ?? "#22c55e"),
-                width: `${roundProgress * 100}%`,
+                left: progressSide === "a" ? 0 : "50%",
+                width: "50%",
               }}
               transition={{ duration: 0 }}
-            />
+            >
+              <div
+                className="h-full"
+                style={{
+                  background: (progressSide === "a" ? hookA?.palette?.[0] : hookB?.palette?.[0]) ?? "#22c55e",
+                  width: `${roundProgress * 100}%`,
+                }}
+              />
+            </motion.div>
           </div>
         )}
         <div className={isFeedEmbed ? undefined : "w-full max-w-2xl mx-auto"}>
