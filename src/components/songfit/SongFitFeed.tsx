@@ -29,6 +29,7 @@ import { consumeFeedPrefetch, getCachedFeed, getCachedLyricData, cacheWrite } fr
 import { cn } from "@/lib/utils";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { preloadImage } from "@/lib/imagePreloadCache";
 
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
@@ -457,6 +458,10 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
             for (const row of (lyricRows ?? []) as any[]) {
               map.set(row.id, row as LyricDanceData);
               cacheObj[row.id] = row;
+
+              // Preload first section image — eliminates white flash on cover
+              const firstImg = (row as any).section_images?.[0];
+              if (firstImg) preloadImage(firstImg);
             }
             setLyricDataMap(map);
             cacheWrite("lyric_data", cacheObj);
