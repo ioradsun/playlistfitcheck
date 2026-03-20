@@ -328,7 +328,7 @@ function BattleEmbedInner({
   // ── Results panel ───────────────────────────────────────────
   const ResultsPanel = () => (
     <AnimatePresence>
-      {panelOpen && battleState === "results" && (
+      {panelOpen && !!votedSide && battleState !== "vote" && (
         <>
           <motion.div
             key="take-panel"
@@ -602,7 +602,7 @@ function BattleEmbedInner({
         <div className={isFeedEmbed ? undefined : "w-full max-w-2xl mx-auto"}>
 
         {/* Pre-vote: Left Hook / Right Hook disabled + 🔥 disabled */}
-        {(battleState === "round-1" || battleState === "round-2" || (battleState === "cover" && !votedSide)) && (
+        {!votedSide && (battleState === "round-1" || battleState === "round-2" || battleState === "cover") && (
           <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"} opacity-30 pointer-events-none`}>
             <div className="flex-1 flex items-center justify-center">
               <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">Left Hook</span>
@@ -646,7 +646,7 @@ function BattleEmbedInner({
         )}
 
         {/* Results panel closed: social proof + 🔥 */}
-        {(battleState === "results" || (battleState === "cover" && !!votedSide)) && !panelOpen && (
+        {!!votedSide && battleState !== "vote" && !panelOpen && (
           <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
             <div className="flex-1 flex items-center px-3 overflow-hidden min-w-0">
               <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
@@ -681,7 +681,7 @@ function BattleEmbedInner({
         )}
 
         {/* Results panel open: Left Hook / Right Hook as tab switchers + ✕ */}
-        {(battleState === "results" || (battleState === "cover" && !!votedSide)) && panelOpen && (
+        {!!votedSide && battleState !== "vote" && panelOpen && (
           <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setResultsTab("a")}
