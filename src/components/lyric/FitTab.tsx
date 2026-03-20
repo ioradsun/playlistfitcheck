@@ -676,10 +676,13 @@ export function FitTab({
   }, [user, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection, words, danceNeedsRegeneration, currentLyricsHash]);
 
   // ── Battle publish handler ──────────────────────────────────────────
-  const handleStartBattle = useCallback(async () => {
+  const handleStartBattle = useCallback(async (
+    overrideHooks?: [SavedCustomHook | null, SavedCustomHook | null],
+  ) => {
     if (!user || battlePublishing) return;
-    const activeHook0 = customHooks[0] ?? renderData?.hook;
-    const activeHook1 = customHooks[1] ?? renderData?.secondHook;
+    const hooks = overrideHooks ?? customHooks;
+    const activeHook0 = hooks[0] ?? renderData?.hook;
+    const activeHook1 = hooks[1] ?? renderData?.secondHook;
     if (!activeHook0 || !activeHook1 || !audioFile || !lyricData) return;
     setBattlePublishing(true);
 
@@ -1089,10 +1092,11 @@ export function FitTab({
                         if (idx === 0) {
                           setFeudTab(1);
                         } else {
+                          // Pass next directly — React state may not have flushed yet
                           const hook0 = next[0] ?? renderData?.hook;
                           const hook1 = next[1];
                           if (hook0 && hook1) {
-                            await handleStartBattle();
+                            await handleStartBattle(next);
                           }
                           setFeudSetupOpen(false);
                         }
