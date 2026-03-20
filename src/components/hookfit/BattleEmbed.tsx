@@ -306,7 +306,7 @@ function BattleEmbedInner({
           <div className="relative flex-1 overflow-hidden">
             {hookA && (
               <div className="absolute bottom-16 left-0 right-0 flex justify-center">
-                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">👊 Left Hook</span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Left Hook</span>
               </div>
             )}
           </div>
@@ -314,7 +314,7 @@ function BattleEmbedInner({
           <div className="relative flex-1 overflow-hidden">
             {hookB && (
               <div className="absolute bottom-16 left-0 right-0 flex justify-center">
-                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Right Hook 👊</span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Right Hook</span>
               </div>
             )}
           </div>
@@ -530,7 +530,7 @@ function BattleEmbedInner({
                 </button>
               )}
               <div className="flex flex-col items-center justify-center px-6 text-center">
-                <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">Which hook hits harder?</p>
+                <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">Which {songTitle} hook hits harder?</p>
                 {hookPhrase && (
                   <p className="text-lg sm:text-xl font-semibold text-white/80 max-w-[85%] leading-snug mb-8 italic">
                     &ldquo;{hookPhrase}&rdquo;
@@ -656,11 +656,11 @@ function BattleEmbedInner({
                   className="flex-1 flex items-center justify-center gap-3 opacity-25 pointer-events-none px-3"
                 >
                   <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
-                    👊 Left Hook
+                    Left Hook
                   </span>
                   <span className="text-white/20 text-[9px] font-mono">vs</span>
                   <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
-                    Right Hook 👊
+                    Right Hook
                   </span>
                 </motion.div>
               )}
@@ -688,8 +688,8 @@ function BattleEmbedInner({
         {(battleState === "vote" || battleState === "results") && (
           <CardBottomBar
             variant="embedded"
-            yesLabel="👊 Left Hook"
-            noLabel="Right Hook 👊"
+            yesLabel="Left Hook"
+            noLabel="Right Hook"
             votedSide={battleState === "vote" ? null : votedSide}
             score={{ total: voteCountA + voteCountB, replay_yes: voteCountA }}
             note=""
