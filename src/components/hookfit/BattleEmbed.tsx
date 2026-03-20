@@ -156,8 +156,6 @@ function BattleEmbedInner({
   const [comments, setComments] = useState<Array<{ id: string; text: string; voted_side: string; created_at: string }>>([]);
   const [hookALines, setHookALines] = useState<any[]>([]);
   const [hookBLines, setHookBLines] = useState<any[]>([]);
-  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
-  const [coverImageReady, setCoverImageReady] = useState(false);
 
   const progressTimerRef = useRef<number>(0);
   const roundStartRef = useRef<number>(0);
