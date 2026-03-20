@@ -497,7 +497,7 @@ function BattleEmbedInner({
                   }}
                   className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
                 >
-                  Final Answer...
+                  Settle Feud
                 </button>
                 <p className="text-[9px] font-mono text-white/20 uppercase tracking-wider mt-3">
                   2 rounds · 10 seconds each
