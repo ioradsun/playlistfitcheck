@@ -93,9 +93,7 @@ export default function ShareableHook() {
   }, [hook?.battle_id]);
 
   const songDisplayName = useMemo(() => {
-    const artist = hook?.artist_slug?.replace(/-/g, " ") ?? "";
-    const song = hook?.song_slug?.replace(/-/g, " ") ?? "";
-    return [artist, song].filter(Boolean).join(" — ");
+    return hook?.song_slug?.replace(/-/g, " ") ?? "";
   }, [hook]);
 
   const displayName = profile?.display_name
@@ -108,7 +106,7 @@ export default function ShareableHook() {
   }, [danceData]);
 
   if (loading) {
-    return <div className="fixed inset-0 bg-black animate-pulse" />;
+    return <div className="fixed inset-0" style={{ background: "#0a0a0a" }} />;
   }
 
   if (!hook) {
