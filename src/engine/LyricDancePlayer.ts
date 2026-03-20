@@ -44,6 +44,7 @@ import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage } from "@/lib/imagePreloadCache";
+import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
 
 const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-04-PERF';
 
@@ -1302,21 +1303,20 @@ export class LyricDancePlayer {
   }
 
   private kickFontStabilizationLoad(): void {
-    const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
-    if (!fontsApi) return;
-    Promise.all([
-      fontsApi.load('400 16px Montserrat'),
-      fontsApi.load('500 16px Montserrat'),
-      fontsApi.load('600 16px Montserrat'),
-      fontsApi.load('700 16px Montserrat'),
-      fontsApi.load('800 16px Montserrat'),
-      fontsApi.load('900 16px Montserrat'),
-    ]).then(() => {
+    if (isFontReady('Montserrat')) {
       this._fontStabilized = true;
       this._fontLayoutReflowPending = true;
       performance.mark("engine:fontReady");
-    }).catch(() => {
-      // font preload best-effort
+      return;
+    }
+
+    ensureFontReady('Montserrat').then((ready) => {
+      if (this.destroyed) return;
+      if (ready) {
+        this._fontStabilized = true;
+        this._fontLayoutReflowPending = true;
+        performance.mark("engine:fontReady");
+      }
     });
   }
 
@@ -1879,6 +1879,66 @@ export class LyricDancePlayer {
     this._lightingOverlayKey = '';
     this._bgSnapshotSection = -999; // force rebake at new resolution
     if (this.payload) this.buildBgCache();
+  }
+
+  /**
+   * Swap the render target to a different canvas pair.
+   * Used by battle mode to render one engine to two canvases alternately.
+   * Preserves all compiled state — only the output surface changes.
+   */
+  setRenderTarget(bgCanvas: HTMLCanvasElement, textCanvas: HTMLCanvasElement, container?: HTMLDivElement): void {
+    if (this.destroyed) return;
+    this.bgCanvas = bgCanvas;
+    this.canvas = bgCanvas;
+    this.ctx = bgCanvas.getContext('2d', { alpha: false })!;
+    this.textCanvas = textCanvas;
+    const tctx = textCanvas.getContext('2d', { alpha: true });
+    if (tctx) tctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+    if (container) this.container = container;
+
+    const cw = container?.offsetWidth || bgCanvas.offsetWidth || this.width || 960;
+    const ch = container?.offsetHeight || bgCanvas.offsetHeight || this.height || 540;
+    if (cw > 0 && ch > 0) this.resize(cw, ch);
+  }
+
+  /**
+   * Switch the playback region (hook window) without destroying the engine.
+   * Seeks audio to the new region start and resets beat tracking.
+   */
+  setRegion(regionStart: number | undefined, regionEnd: number | undefined): void {
+    if (this.destroyed) return;
+    this.data = { ...this.data, region_start: regionStart, region_end: regionEnd };
+    if (regionStart != null && regionEnd != null) {
+      this.audio.loop = false;
+    }
+    if (regionStart != null && this.audio.readyState >= 2) {
+      this.audio.currentTime = regionStart;
+    }
+    this.conductor?.resetCursor();
+    this._beatCursor = 0;
+    this._lastBeatIndex = -1;
+    this._springOffset = 0;
+    this._springVelocity = 0;
+    this._timeInitialized = false;
+    this._mlLayoutCache.clear();
+    this.cameraRig.reset();
+    this._heroDecompBursts.length = 0;
+    this._heroDecompSpawned.clear();
+  }
+
+  /**
+   * Capture the current canvas content to an offscreen canvas.
+   * Returns the offscreen canvas (can be drawn onto another canvas via drawImage).
+   */
+  captureSnapshot(): HTMLCanvasElement | null {
+    if (this.destroyed || !this.canvas) return null;
+    const off = document.createElement('canvas');
+    off.width = this.canvas.width;
+    off.height = this.canvas.height;
+    const ctx = off.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(this.canvas, 0, 0);
+    return off;
   }
 
   setMuted(muted: boolean): void {
@@ -2549,42 +2609,9 @@ export class LyricDancePlayer {
       'editorial-light': 'Cormorant Garamond',
     };
     const fontName = fontMap[typoKey] ?? 'Montserrat';
-    
-
-    try {
-      // Inject Google Fonts <link> tag if not already present
-      if (typeof document !== 'undefined') {
-        const encodedFamily = fontName.replace(/\s+/g, '+');
-        const linkId = `gfont-${encodedFamily}`;
-        if (!document.getElementById(linkId)) {
-          const link = document.createElement('link');
-          link.id = linkId;
-          link.rel = 'stylesheet';
-          link.href = `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@400;500;600;700;800;900&display=swap`;
-          document.head.appendChild(link);
-          
-        }
-        // Wait for font to actually load (with timeout)
-        const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
-        if (fontsApi) {
-          const weightsToLoad = [400, 500, 600, 700, 800, 900].map(
-            w => fontsApi.load(`${w} 48px "${fontName}"`),
-          );
-          await Promise.race([
-            Promise.all(weightsToLoad),
-            new Promise<void>(resolve => setTimeout(resolve, 2500)),
-          ]);
-          const compileWeight = 600;
-          const loaded =
-            fontsApi.check(`${compileWeight} 48px "${fontName}"`) ||
-            fontsApi.check(`700 48px "${fontName}"`);
-            if (loaded) {
-            this._fontStabilized = true;
-          }
-        }
-      }
-    } catch (e) {
-      // font load failed
+    const loaded = await ensureFontReady(fontName);
+    if (loaded && !this.destroyed) {
+      this._fontStabilized = true;
     }
   }
 
