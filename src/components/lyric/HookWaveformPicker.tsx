@@ -1,5 +1,5 @@
 import {
-  useRef, useEffect, useCallback, useState,
+  useRef, useEffect, useCallback, useState, useMemo,
   type RefObject, type MutableRefObject,
 } from "react";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -43,11 +43,17 @@ export function HookWaveformPicker({
   const [startSec, setStartSec] = useState<number | null>(null);
   const [endSec, setEndSec] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState<number | null>(null);
+  const [lyricsVisible, setLyricsVisible] = useState(false);
   const draggingRef = useRef(false);
   const loopListenerRef = useRef<(() => void) | null>(null);
   const rafRef = useRef<number | null>(null);
 
   const duration = waveform?.duration ?? 0;
+
+  const hookLines = useMemo(() => {
+    if (startSec === null || endSec === null) return [];
+    return lines.filter(l => l.end > startSec && l.start < endSec);
+  }, [lines, startSec, endSec]);
 
   const draw = useCallback((playheadSec?: number) => {
     const canvas = canvasRef.current;
@@ -161,6 +167,7 @@ export function HookWaveformPicker({
     audio.addEventListener("timeupdate", onTime);
     audio.currentTime = start;
     audio.play().catch(() => {});
+    setTimeout(() => setLyricsVisible(true), 400);
     startTicker();
   }, [audioRef, loopRegionRef, startTicker]);
 
@@ -174,6 +181,7 @@ export function HookWaveformPicker({
     if (audio) audio.pause();
     loopRegionRef.current = null;
     setCurrentTime(null);
+    setLyricsVisible(false);
   }, [audioRef, loopRegionRef, stopTicker]);
 
   useEffect(() => () => { stopLoop(); }, [stopLoop]);
@@ -195,6 +203,7 @@ export function HookWaveformPicker({
   const applyStart = useCallback((sec: number) => {
     const start = Math.max(0, Math.min(sec, duration - MIN_HOOK_SEC));
     const end   = Math.min(start + MAX_HOOK_SEC, duration);
+    setLyricsVisible(false);
     setStartSec(start);
     setEndSec(end);
     startLoop(start, end);
@@ -283,6 +292,30 @@ export function HookWaveformPicker({
           <span className="text-[10px] font-mono text-muted-foreground/25 tracking-wider">
             drag end handle left to shorten
           </span>
+        )}
+      </div>
+
+      <div
+        className="min-h-[3rem] transition-opacity duration-500"
+        style={{ opacity: lyricsVisible ? 1 : 0 }}
+      >
+        {hookLines.length > 0 && (
+          <div className="space-y-0.5 px-1">
+            {hookLines.map((line, i) => (
+              <p
+                key={i}
+                className="text-[11px] leading-snug text-muted-foreground/70 font-mono"
+                style={{
+                  opacity: currentTime != null && currentTime >= line.start && currentTime <= line.end
+                    ? 1
+                    : 0.45,
+                  transition: "opacity 150ms ease",
+                }}
+              >
+                {line.text}
+              </p>
+            ))}
+          </div>
         )}
       </div>
 
