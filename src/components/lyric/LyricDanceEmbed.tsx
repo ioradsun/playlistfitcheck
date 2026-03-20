@@ -282,9 +282,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       if (cardState === "active") {
         player.play();
         player.setMuted(false);
+        player.scheduleFullModeUpgrade();
         setMuted(false);
       } else {
-        player.stopRendering?.();
+        player.play();
         player.setMuted(true);
         setMuted(true);
       }
