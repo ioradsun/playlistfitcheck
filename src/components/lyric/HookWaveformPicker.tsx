@@ -1,10 +1,13 @@
-import { useRef, useEffect, useCallback, useState, type RefObject, type MutableRefObject } from "react";
+import {
+  useRef, useEffect, useCallback, useState,
+  type RefObject, type MutableRefObject,
+} from "react";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricHook, LyricLine } from "./LyricDisplay";
 
 const MAX_HOOK_SEC = 10;
 const MIN_HOOK_SEC = 2;
-const HANDLE_HIT_PX = 36;
+const HANDLE_HIT_PX = 40;
 
 interface Props {
   waveform: WaveformData | null;
@@ -22,10 +25,15 @@ function fmt(sec: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function getCssPrimary(alpha = 1): string {
-  const val = getComputedStyle(document.documentElement)
-    .getPropertyValue("--primary").trim();
-  return val ? `hsla(${val}, ${alpha})` : `rgba(168,85,247,${alpha})`;
+function fillBar(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, color: string,
+) {
+  ctx.fillStyle = color;
+  ctx.fillRect(
+    Math.round(x), Math.round(y),
+    Math.max(1, Math.round(w)), Math.max(1, Math.round(h)),
+  );
 }
 
 export function HookWaveformPicker({
@@ -34,12 +42,14 @@ export function HookWaveformPicker({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [startSec, setStartSec] = useState<number | null>(null);
   const [endSec, setEndSec] = useState<number | null>(null);
+  const [currentTime, setCurrentTime] = useState<number | null>(null);
   const draggingRef = useRef(false);
   const loopListenerRef = useRef<(() => void) | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const duration = waveform?.duration ?? 0;
 
-  const draw = useCallback(() => {
+  const draw = useCallback((playheadSec?: number) => {
     const canvas = canvasRef.current;
     if (!canvas || !waveform) return;
     const dpr = window.devicePixelRatio || 1;
@@ -50,87 +60,112 @@ export function HookWaveformPicker({
     canvas.height = H * dpr;
     const ctx = canvas.getContext("2d")!;
     ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, W, H);
+
+    // Always dark background — visible regardless of modal theme
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(0, 0, W, H);
 
     const peaks = waveform.peaks;
     const n = peaks.length;
-    const barW = Math.max(1, (W - (n - 1)) / n);
+    const barW = Math.max(1, (W - n + 1) / n);
     const hasSelection = startSec !== null && endSec !== null;
-    const selStartX = hasSelection ? (startSec / duration) * W : null;
-    const selEndX = hasSelection ? (endSec / duration) * W : null;
+    const selStartX = hasSelection ? (startSec! / duration) * W : null;
+    const selEndX   = hasSelection ? (endSec!   / duration) * W : null;
 
+    // AI hint tick
     if (aiHint && duration > 0) {
-      const hintX = (aiHint.start / duration) * W;
-      ctx.fillStyle = getCssPrimary(0.2);
-      ctx.fillRect(hintX - 1, 4, 2, H - 8);
+      fillBar(ctx, (aiHint.start / duration) * W - 1, 4, 2, H - 8,
+        "rgba(168,85,247,0.2)");
     }
 
+    // Bars
     for (let i = 0; i < n; i++) {
-      const x = i * (barW + 1);
-      const barH = Math.max(2, peaks[i] * H * 0.8);
-      const y = (H - barH) / 2;
-      const barMidX = x + barW / 2;
-      const inSelection = hasSelection && barMidX >= selStartX! && barMidX <= selEndX!;
+      const x    = i * (barW + 1);
+      const barH = Math.max(2, peaks[i] * H * 0.78);
+      const y    = (H - barH) / 2;
+      const midX = x + barW / 2;
+      const inSel = hasSelection && midX >= selStartX! && midX <= selEndX!;
       let color: string;
-      if (inSelection) {
-        color = getCssPrimary(0.4 + peaks[i] * 0.6);
+      if (inSel) {
+        color = `rgba(168,85,247,${(0.45 + peaks[i] * 0.55).toFixed(2)})`;
       } else if (hasSelection) {
-        color = "rgba(255,255,255,0.08)";
+        color = `rgba(255,255,255,${(0.06 + peaks[i] * 0.08).toFixed(2)})`;
       } else {
-        color = `rgba(255,255,255,${0.12 + peaks[i] * 0.22})`;
+        color = `rgba(255,255,255,${(0.18 + peaks[i] * 0.32).toFixed(2)})`;
       }
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.roundRect(x, y, barW, barH, 1);
-      ctx.fill();
+      fillBar(ctx, x, y, barW, barH, color);
     }
 
+    // Playhead — white hairline
+    if (playheadSec != null && hasSelection &&
+        playheadSec >= startSec! && playheadSec <= endSec!) {
+      fillBar(ctx, (playheadSec / duration) * W, 0, 1, H,
+        "rgba(255,255,255,0.8)");
+    }
+
+    // End handle — purple pill + left-arrow
     if (hasSelection && selEndX !== null) {
-      const handleH = 20;
-      const handleW = 3;
-      ctx.fillStyle = getCssPrimary(0.9);
+      fillBar(ctx, selEndX - 2, (H - 22) / 2, 4, 22, "rgba(168,85,247,1)");
+      ctx.fillStyle = "rgba(168,85,247,0.5)";
       ctx.beginPath();
-      ctx.roundRect(selEndX - handleW / 2, (H - handleH) / 2, handleW, handleH, 2);
-      ctx.fill();
-      ctx.fillStyle = getCssPrimary(0.5);
-      ctx.beginPath();
-      ctx.moveTo(selEndX - 5, H / 2);
-      ctx.lineTo(selEndX - 9, H / 2 - 3);
-      ctx.lineTo(selEndX - 9, H / 2 + 3);
+      ctx.moveTo(selEndX - 6,  H / 2);
+      ctx.lineTo(selEndX - 11, H / 2 - 4);
+      ctx.lineTo(selEndX - 11, H / 2 + 4);
+      ctx.closePath();
       ctx.fill();
     }
   }, [waveform, startSec, endSec, duration, aiHint]);
 
-  // ResizeObserver handles all draws including initial mount inside Dialog
-  // (canvas.clientWidth is 0 until Dialog finishes opening)
+  // ResizeObserver handles initial mount inside Dialog
+  // (canvas.clientWidth = 0 until Dialog CSS transition completes)
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => draw());
+    const ro = new ResizeObserver(() => draw(currentTime ?? undefined));
     ro.observe(el);
-    draw();
     return () => ro.disconnect();
-  }, [draw]);
+  }, [draw, currentTime]);
+
+  useEffect(() => {
+    draw(currentTime ?? undefined);
+  }, [draw, currentTime]);
+
+  // RAF ticker — updates currentTime at ~60fps while audio plays
+  const startTicker = useCallback(() => {
+    const tick = () => {
+      const audio = audioRef.current;
+      if (audio && !audio.paused) setCurrentTime(audio.currentTime);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, [audioRef]);
+
+  const stopTicker = useCallback(() => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
 
   const startLoop = useCallback((start: number, end: number) => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (loopListenerRef.current) {
+    if (loopListenerRef.current)
       audio.removeEventListener("timeupdate", loopListenerRef.current);
-    }
     loopRegionRef.current = { start, end };
     const onTime = () => {
-      if (audio.currentTime >= end || audio.currentTime < start - 0.5) {
+      if (audio.currentTime >= end || audio.currentTime < start - 0.5)
         audio.currentTime = start;
-      }
     };
     loopListenerRef.current = onTime;
     audio.addEventListener("timeupdate", onTime);
     audio.currentTime = start;
     audio.play().catch(() => {});
-  }, [audioRef, loopRegionRef]);
+    startTicker();
+  }, [audioRef, loopRegionRef, startTicker]);
 
   const stopLoop = useCallback(() => {
+    stopTicker();
     const audio = audioRef.current;
     if (audio && loopListenerRef.current) {
       audio.removeEventListener("timeupdate", loopListenerRef.current);
@@ -138,18 +173,19 @@ export function HookWaveformPicker({
     }
     if (audio) audio.pause();
     loopRegionRef.current = null;
-  }, [audioRef, loopRegionRef]);
+    setCurrentTime(null);
+  }, [audioRef, loopRegionRef, stopTicker]);
 
   useEffect(() => () => { stopLoop(); }, [stopLoop]);
 
-  const xToSec = useCallback((clientX: number): number => {
+  const xToSec = useCallback((clientX: number) => {
     const canvas = canvasRef.current;
     if (!canvas || !duration) return 0;
     const rect = canvas.getBoundingClientRect();
     return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * duration;
   }, [duration]);
 
-  const isOnHandle = useCallback((clientX: number): boolean => {
+  const isOnHandle = useCallback((clientX: number) => {
     if (endSec === null || !canvasRef.current || !duration) return false;
     const rect = canvasRef.current.getBoundingClientRect();
     const handleX = (endSec / duration) * rect.width + rect.left;
@@ -158,7 +194,7 @@ export function HookWaveformPicker({
 
   const applyStart = useCallback((sec: number) => {
     const start = Math.max(0, Math.min(sec, duration - MIN_HOOK_SEC));
-    const end = Math.min(start + MAX_HOOK_SEC, duration);
+    const end   = Math.min(start + MAX_HOOK_SEC, duration);
     setStartSec(start);
     setEndSec(end);
     startLoop(start, end);
@@ -166,12 +202,8 @@ export function HookWaveformPicker({
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    if (isOnHandle(e.clientX)) {
-      draggingRef.current = true;
-    } else {
-      draggingRef.current = false;
-      applyStart(xToSec(e.clientX));
-    }
+    if (isOnHandle(e.clientX)) { draggingRef.current = true; }
+    else { draggingRef.current = false; applyStart(xToSec(e.clientX)); }
   }, [applyStart, isOnHandle, xToSec]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -191,68 +223,76 @@ export function HookWaveformPicker({
   const handleSave = () => {
     if (startSec === null || endSec === null) return;
     stopLoop();
-    const hookLines = lines.filter(l => l.start < endSec && l.end > startSec);
+    const hookLines = lines.filter(l => l.start < endSec! && l.end > startSec!);
     onSave({
       start: startSec,
       end: endSec,
       score: 0,
       reasonCodes: ["user_selected"],
-      previewText: hookLines.map(l => l.text).join(" / ") || `${fmt(startSec)} – ${fmt(endSec)}`,
+      previewText: hookLines.map(l => l.text).join(" / ")
+        || `${fmt(startSec)}–${fmt(endSec)}`,
       status: "confirmed",
     });
   };
 
-  const selDuration = startSec !== null && endSec !== null ? endSec - startSec : null;
+  const timeLabel = (() => {
+    if (startSec === null || endSec === null) return null;
+    if (currentTime != null) {
+      const elapsed = Math.max(0, currentTime - startSec);
+      const total   = endSec - startSec;
+      return `${fmt(currentTime)} · ${elapsed.toFixed(1)}s / ${total.toFixed(1)}s`;
+    }
+    return `${fmt(startSec)} – ${fmt(endSec)} · ${(endSec - startSec).toFixed(1)}s`;
+  })();
 
   return (
-    <div className="space-y-4">
-      <div className="relative">
+    <div className="space-y-3">
+      <div className="relative rounded-lg overflow-hidden" style={{ height: 64 }}>
         <canvas
           ref={canvasRef}
-          className="w-full rounded-lg cursor-crosshair touch-none"
-          style={{ height: 64, background: "rgba(255,255,255,0.03)", display: "block" }}
+          className="w-full h-full cursor-crosshair touch-none"
+          style={{ display: "block" }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         />
-        {!waveform && (
+        {waveform && startSec === null && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-[10px] font-mono text-muted-foreground/40 uppercase tracking-wider">
-              Loading…
+            <span className="text-[10px] font-mono text-white/40 uppercase tracking-[0.15em]">
+              Tap to set start
             </span>
           </div>
         )}
-        {waveform && startSec === null && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-[10px] font-mono text-muted-foreground/50 uppercase tracking-[0.15em]">
-              Tap to set start
+        {!waveform && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            style={{ background: "rgba(0,0,0,0.6)" }}>
+            <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider">
+              Loading waveform…
             </span>
           </div>
         )}
       </div>
 
       <div className="h-5 flex items-center justify-center">
-        {selDuration !== null ? (
-          <span className="text-[11px] font-mono text-primary/70 tracking-wider">
-            {fmt(startSec!)} – {fmt(endSec!)} · {selDuration.toFixed(1)}s
+        {timeLabel ? (
+          <span className="text-[11px] font-mono tracking-wider text-primary/70">
+            {timeLabel}
           </span>
         ) : (
-          <span className="text-[10px] font-mono text-muted-foreground/30 tracking-wider">
-            drag end handle to shorten
+          <span className="text-[10px] font-mono text-muted-foreground/25 tracking-wider">
+            drag end handle left to shorten
           </span>
         )}
       </div>
 
-      <div className="flex items-center pt-1">
-        <button
-          onClick={handleSave}
-          disabled={startSec === null}
-          className="w-full rounded-lg py-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          {isLast ? "Start FMLY Feud" : "Use This Hook →"}
-        </button>
-      </div>
+      <button
+        onClick={handleSave}
+        disabled={startSec === null}
+        className="w-full rounded-lg py-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase border transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-primary border-primary/30 hover:bg-primary/10"
+      >
+        {isLast ? "Start FMLY Feud" : "Use This Hook →"}
+      </button>
     </div>
   );
 }
