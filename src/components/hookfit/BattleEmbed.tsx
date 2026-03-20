@@ -15,6 +15,7 @@ import { Loader2, Maximize2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineBattle, type BattleMode, type HookInfo } from "@/components/hookfit/InlineBattle";
+import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { getSessionId } from "@/lib/sessionId";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 
@@ -603,15 +604,18 @@ function BattleEmbedInner({
         )}
       </div>
 
-      {/* Bottom bar — CardBottomBar-style shell */}
+      {/* Bottom bar */}
       <div className="absolute bottom-0 left-0 right-0 z-20" style={{ background: "#0a0a0a" }}>
-        {/* Progress bar */}
+
+        {/* Progress bar — round states only */}
         {(battleState === "round-1" || battleState === "round-2") && (
           <div className="w-full h-[2px] bg-white/[0.06]">
             <motion.div
               className="h-full"
               style={{
-                background: battleState === "round-1" ? (hookA?.palette?.[0] ?? "#a855f7") : (hookB?.palette?.[0] ?? "#a855f7"),
+                background: battleState === "round-1"
+                  ? (hookA?.palette?.[0] ?? "#a855f7")
+                  : (hookB?.palette?.[0] ?? "#a855f7"),
                 width: `${roundProgress * 100}%`,
               }}
               transition={{ duration: 0 }}
@@ -619,98 +623,101 @@ function BattleEmbedInner({
           </div>
         )}
 
-        <div className="flex items-stretch h-[48px]" onClick={(e) => e.stopPropagation()}>
-          <AnimatePresence mode="wait">
+        {/* Cover / Round states — custom bar */}
+        {(battleState === "cover" || battleState === "round-1" || battleState === "round-2") && (
+          <div className="flex items-stretch h-[48px]" onClick={(e) => e.stopPropagation()}>
+            <AnimatePresence mode="wait">
 
-            {/* Cover — greyed preview */}
-            {battleState === "cover" && (
-              <motion.div key="cover-bar" className="flex-1 flex items-center justify-center gap-3 opacity-25 pointer-events-none px-3">
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">👊 Left Hook</span>
-                <span className="text-white/20 text-[9px] font-mono">vs</span>
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">Right Hook 👊</span>
-              </motion.div>
-            )}
-
-            {/* Round 1 / 2 label */}
-            {(battleState === "round-1" || battleState === "round-2") && (
-              <motion.div
-                key={`round-${battleState}`}
-                initial={{ opacity: 0, x: battleState === "round-2" ? 16 : 0 }}
-                animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }}
-                className="flex-1 flex items-center gap-2 px-3"
-              >
-                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/40">
-                  {battleState === "round-1" ? "Round 1" : "Round 2"}
-                </span>
-                <span className="text-white/20">·</span>
-                <span className="font-mono text-[11px] uppercase tracking-wider text-white/70">
-                  {battleState === "round-1" ? "Left Hook" : "Right Hook"}
-                </span>
-                <div className="ml-auto w-1.5 h-1.5 rounded-full animate-pulse"
-                  style={{ background: battleState === "round-1" ? (hookA?.palette?.[0] ?? "#a855f7") : (hookB?.palette?.[0] ?? "#a855f7") }} />
-              </motion.div>
-            )}
-
-            {/* Vote — Left Hook / Right Hook */}
-            {battleState === "vote" && (
-              <motion.div key="vote-bar" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                className="flex-1 flex items-stretch">
-                <button onClick={() => handleVote("a")}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 hover:bg-white/[0.04] transition-colors group">
-                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors">
+              {battleState === "cover" && (
+                <motion.div
+                  key="cover-bar"
+                  className="flex-1 flex items-center justify-center gap-3 opacity-25 pointer-events-none px-3"
+                >
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
                     👊 Left Hook
                   </span>
-                </button>
-                <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-                <button onClick={() => handleVote("b")}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 hover:bg-white/[0.04] transition-colors group">
-                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors">
+                  <span className="text-white/20 text-[9px] font-mono">vs</span>
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
                     Right Hook 👊
                   </span>
-                </button>
-              </motion.div>
-            )}
+                </motion.div>
+              )}
 
-            {/* Results — social proof */}
-            {battleState === "results" && votedSide && (
-              <motion.div key="results-bar" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                className="flex-1 flex items-center px-3 py-3 overflow-hidden min-w-0">
-                <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
-                  {(() => {
-                    const total = totalVotes;
-                    const userPick = votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
-                    const winnerPct = votedSide === "a" ? pctA : pctB;
-                    const loserPct = votedSide === "a" ? pctB : pctA;
-                    const majorityAgrees = (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
-                    const isSplit = pctA === 50 && pctB === 50;
-                    if (total < 10) return `FMLY STILL JUDGING · ${voteCountA + voteCountB} VOTES`;
-                    if (isSplit) return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
-                    return `FMLY ${majorityAgrees ? "AGREES" : "DISAGREES"} · ${userPick} ${winnerPct} / ${loserPct}`;
-                  })()}
-                </span>
-              </motion.div>
-            )}
-
-          </AnimatePresence>
-
-          {/* Right side: 🔥 — always present, opens reaction panel on results */}
-          {(battleState === "vote" || battleState === "results" || battleState === "cover") && (
-            <>
-              <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-              <button
-                onClick={() => { if (battleState === "results") setPanelOpen(true); }}
-                className="relative flex items-center justify-center gap-1 px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
-              >
-                <span className="text-[13px] leading-none" style={{ opacity: battleState === "results" ? 0.7 : 0.25 }}>🔥</span>
-                {battleState === "results" && (voteCountA + voteCountB) > 0 && (
-                  <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
-                    {voteCountA + voteCountB}
+              {(battleState === "round-1" || battleState === "round-2") && (
+                <motion.div
+                  key={`round-${battleState}`}
+                  initial={{ opacity: 0, x: battleState === "round-2" ? 16 : 0 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -16 }}
+                  className="flex-1 flex items-center gap-2 px-3"
+                >
+                  <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/40">
+                    {battleState === "round-1" ? "Round 1" : "Round 2"}
                   </span>
-                )}
-              </button>
-            </>
-          )}
-        </div>
+                  <span className="text-white/20">·</span>
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-white/70">
+                    {battleState === "round-1" ? "Left Hook" : "Right Hook"}
+                  </span>
+                  <div
+                    className="ml-auto w-1.5 h-1.5 rounded-full animate-pulse"
+                    style={{
+                      background: battleState === "round-1"
+                        ? (hookA?.palette?.[0] ?? "#a855f7")
+                        : (hookB?.palette?.[0] ?? "#a855f7"),
+                    }}
+                  />
+                </motion.div>
+              )}
+
+            </AnimatePresence>
+
+            {battleState === "cover" && (
+              <>
+                <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+                <div className="flex items-center justify-center px-4 min-w-[64px]">
+                  <span className="text-[13px] leading-none" style={{ opacity: 0.25 }}>🔥</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Vote / Results states — CardBottomBar */}
+        {(battleState === "vote" || battleState === "results") && (
+          <CardBottomBar
+            variant="embedded"
+            yesLabel="👊 Left Hook"
+            noLabel="Right Hook 👊"
+            votedSide={battleState === "vote" ? null : votedSide}
+            score={{ total: voteCountA + voteCountB, replay_yes: voteCountA }}
+            note=""
+            onNoteChange={() => {}}
+            onVoteYes={() => handleVote("a")}
+            onVoteNo={() => handleVote("b")}
+            onSubmit={() => {}}
+            onOpenReactions={() => setPanelOpen(true)}
+            onClose={() => setPanelOpen(false)}
+            panelOpen={false}
+            renderVotedContent={() => (
+              <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
+                {(() => {
+                  const total = totalVotes;
+                  const userPick = votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
+                  const winnerPct = votedSide === "a" ? pctA : pctB;
+                  const loserPct = votedSide === "a" ? pctB : pctA;
+                  const majorityAgrees =
+                    (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
+                  const isSplit = pctA === 50 && pctB === 50;
+                  if (total < 10)
+                    return `FMLY STILL JUDGING · ${voteCountA + voteCountB} VOTES`;
+                  if (isSplit)
+                    return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
+                  return `FMLY ${majorityAgrees ? "AGREES" : "DISAGREES"} · ${userPick} ${winnerPct} / ${loserPct}`;
+                })()}
+              </span>
+            )}
+          />
+        )}
       </div>
 
       <ResultsPanel />
