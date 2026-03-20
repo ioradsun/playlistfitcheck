@@ -106,7 +106,14 @@ export default function ShareableHook() {
   }, [danceData]);
 
   if (loading) {
-    return <div className="fixed inset-0" style={{ background: "#0a0a0a" }} />;
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={{ background: "#0a0a0a" }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-2 w-32 rounded bg-white/[0.06] animate-pulse" />
+          <div className="h-10 w-36 rounded-lg bg-white/[0.04] animate-pulse" />
+        </div>
+      </div>
+    );
   }
 
   if (!hook) {
