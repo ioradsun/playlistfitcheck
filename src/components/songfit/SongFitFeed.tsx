@@ -391,11 +391,9 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   }, []);
 
   const fetchPosts = useCallback(async () => {
-    console.log("[SongFitFeed] fetchPosts called", { feedView, postsCount: postsRef.current.length });
     // If we already have posts (e.g. from cache), don't flash the skeleton
     // during revalidation. Only show loading state on truly empty first loads.
     if (postsRef.current.length === 0) {
-      console.log("[SongFitFeed] setting loading=true (empty posts)");
       setLoading(true);
     }
 
@@ -428,7 +426,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         );
 
       const normalized = normalizePosts(enriched);
-      console.log("[SongFitFeed] fetched posts", { raw: (allPosts||[]).length, enriched: enriched.length, normalized: normalized.length });
+      
       postsRef.current = normalized;
       setPosts(normalized);
       setNewestCreatedAt(normalized[0]?.created_at ?? null);
@@ -440,7 +438,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       // Show the feed immediately — cards render covers while lyric data loads.
       // The batch fetch runs in the background; useLyricDanceCore has a per-card
       // fallback fetch if prefetchedData is null, so nothing breaks on any surface.
-      console.log("[SongFitFeed] setting loading=false, posts set");
+      
       setLoading(false);
       setPendingNewCount(0);
 
@@ -719,7 +717,6 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   }, [capPosts, feedView, newestCreatedAt, normalizePosts]);
 
   useEffect(() => {
-    console.log("[SongFitFeed] fetchPosts effect triggered (fetchPosts identity changed)");
     void fetchPosts();
   }, [fetchPosts]);
 
@@ -940,7 +937,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         </button>
       )}
 
-      {(() => { console.log("[SongFitFeed] RENDER branch", { loading, postsLength: posts.length }); return null; })()}
+      
       {loading ? (
         reelsMode ? (
           <div className="h-[100dvh] snap-start bg-black flex items-center justify-center">

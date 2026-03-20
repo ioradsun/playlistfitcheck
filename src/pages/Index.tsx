@@ -1127,14 +1127,12 @@ const Index = () => {
   );
 
   const renderTabContent = () => {
-    console.log("[Index] renderTabContent", { activeTab, screenStatus: screen.status, siteCopyLoaded, reelsMode, projectId });
     // ── Universal loading guard ────────────────────────────────────────────
     // When screen.status === "loading", render the correct skeleton for this
     // tool + mode BEFORE any lazy chunk is even attempted. This prevents both
     // the "new project flashes before existing loads" bug and avoids per-tool
     // isHydrating* booleans scattered through the switch below.
     if (screen.status === "loading") {
-      console.log("[Index] SHOWING SKELETON (screen.status=loading)");
       return <PageSkeleton tool={screen.tool} mode={screen.mode} />;
     }
     // Hold the skeleton until site_copy is loaded so every feature-flag-driven
@@ -1143,7 +1141,6 @@ const Index = () => {
     // near-zero latency on all surfaces — it just prevents the DEFAULT_COPY →
     // real config layout shift that causes the page to visibly rebuild.
     if (!siteCopyLoaded) {
-      console.log("[Index] SHOWING SKELETON (siteCopyLoaded=false)");
       return <PageSkeleton tool={screen.tool} mode={screen.mode} />;
     }
 
