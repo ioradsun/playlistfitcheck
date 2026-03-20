@@ -132,13 +132,13 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const getOpacity = useCallback((side: "a" | "b") => {
     switch (mode) {
       case "dark": return 0.2;
-      case "listen-a": return side === "a" ? 1 : 0.4;
-      case "listen-b": return side === "b" ? 1 : 0.4;
-      case "judgment": return 0.7;
+      case "listen-a": return side === "a" ? 1 : 0.2;
+      case "listen-b": return side === "b" ? 1 : 0.2;
+      case "judgment": return 0.2;
       case "scorecard":
       case "results":
-        if (!votedSide) return 0.7;
-        return side === votedSide ? 1 : 0.4;
+        if (!votedSide) return 0.5;
+        return side === votedSide ? 1 : 0.3;
       default: return 1;
     }
   }, [mode, votedSide]);
@@ -271,6 +271,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             regionEnd={hookA.hook_end}
             disableReactionPanel={true}
             showExpandButton={false}
+            forceMuted={forceMuted || activePlaying !== "a"}
           />
           {getBorderStyle("a").boxShadow && (
             <div
@@ -322,6 +323,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
               regionEnd={hookB.hook_end}
               disableReactionPanel={true}
               showExpandButton={false}
+              forceMuted={forceMuted || activePlaying !== "b"}
             />
             {getBorderStyle("b").boxShadow && (
               <div

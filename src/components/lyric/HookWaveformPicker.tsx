@@ -91,7 +91,7 @@ export function HookWaveformPicker({
     if (aiHint && duration > 0) {
       fillBar(ctx,
         (aiHint.start / duration) * W - 1, 4, 2, H - 8,
-        "rgba(168,85,247,0.2)");
+        "rgba(34,197,94,0.2)");
     }
 
     for (let i = 0; i < n; i++) {
@@ -102,7 +102,7 @@ export function HookWaveformPicker({
       const inSel = hasSelection && midX >= selStartX! && midX <= selEndX!;
       let color: string;
       if (inSel) {
-        color = `rgba(168,85,247,${(0.45 + peaks[i] * 0.55).toFixed(2)})`;
+        color = `rgba(34,197,94,${(0.45 + peaks[i] * 0.55).toFixed(2)})`;
       } else if (hasSelection) {
         color = `rgba(255,255,255,${(0.06 + peaks[i] * 0.08).toFixed(2)})`;
       } else {
@@ -119,8 +119,8 @@ export function HookWaveformPicker({
     }
 
     if (hasSelection && selEndX !== null) {
-      fillBar(ctx, selEndX - 2, (H - 22) / 2, 4, 22, "rgba(168,85,247,1)");
-      ctx.fillStyle = "rgba(168,85,247,0.5)";
+      fillBar(ctx, selEndX - 2, (H - 22) / 2, 4, 22, "rgba(34,197,94,1)");
+      ctx.fillStyle = "rgba(34,197,94,0.5)";
       ctx.beginPath();
       ctx.moveTo(selEndX - 6,  H / 2);
       ctx.lineTo(selEndX - 11, H / 2 - 4);
@@ -326,7 +326,7 @@ export function HookWaveformPicker({
       {/* Timestamp */}
       <div className="h-5 flex items-center justify-center">
         {timeLabel ? (
-          <span className="text-[11px] font-mono tracking-wider text-primary/70">
+          <span className="text-[11px] font-mono tracking-wider text-green-400/70">
             {timeLabel}
           </span>
         ) : (
@@ -345,9 +345,9 @@ export function HookWaveformPicker({
           {hookLines.map((line, i) => (
             <p
               key={i}
-              className="text-[11px] leading-snug font-mono"
+              className="text-[11px] leading-snug font-mono text-foreground/80"
               style={{
-                color: "rgba(255,255,255,1)",
+                color: undefined,
                 opacity:
                   currentTime != null &&
                   currentTime >= line.start &&
@@ -367,7 +367,7 @@ export function HookWaveformPicker({
       <button
         onClick={handleSave}
         disabled={startSec === null}
-        className="w-full rounded-lg py-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase border transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-primary border-primary/30 hover:bg-primary/10"
+        className="w-full rounded-lg py-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase border transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-green-400 border-green-400/30 hover:bg-green-400/10"
       >
         {isLast ? "Start FMLY Feud" : "Use This Hook →"}
       </button>

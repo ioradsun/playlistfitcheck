@@ -57,6 +57,7 @@ interface LyricDanceEmbedProps {
   externalPanelOpen?: boolean;
   onExternalPanelOpenChange?: (open: boolean) => void;
   autoPlay?: boolean;
+  forceMuted?: boolean;
   onOpenReactions?: () => void;
   avatarUrl?: string | null;
   isVerified?: boolean;
@@ -86,6 +87,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   externalPanelOpen,
   onExternalPanelOpenChange,
   autoPlay = false,
+  forceMuted = false,
   onOpenReactions,
   avatarUrl,
   isVerified,
@@ -279,7 +281,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   useEffect(() => {
     if (!player || !playerReady) return;
     if (isBattleMode) {
-      if (cardState === "active") {
+      if (cardState === "active" && !forceMuted) {
         player.play();
         player.setMuted(false);
         player.scheduleFullModeUpgrade();
@@ -311,6 +313,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     player,
     playerReady,
     cardState,
+    forceMuted,
     visibility,
     forceDemoted,
     isFeedEmbed,

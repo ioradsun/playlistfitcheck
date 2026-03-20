@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
-import { Loader2, Maximize2, Volume2, VolumeX, RotateCcw } from "lucide-react";
+import { Loader2, Maximize2, Volume2, VolumeX, RotateCcw, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineBattle, type BattleMode, type HookInfo } from "@/components/hookfit/InlineBattle";
@@ -90,6 +90,7 @@ function BattleEmbedInner({
   const [roundProgress, setRoundProgress] = useState(0);
   const [muted, setMuted] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [resultsTab, setResultsTab] = useState<"a" | "b">("a");
   const [lineReactions, setLineReactions] = useState<Record<string, string>>({});
   const [activeEmojiLine, setActiveEmojiLine] = useState<string | null>(null);
   const [commentInput, setCommentInput] = useState("");
@@ -258,7 +259,7 @@ function BattleEmbedInner({
   const totalVotes = voteCountA + voteCountB;
   const pctA = totalVotes > 0 ? Math.round((voteCountA / totalVotes) * 100) : 50;
   const pctB = totalVotes > 0 ? Math.round((voteCountB / totalVotes) * 100) : 50;
-  const canVote = battleState === "vote" || battleState === "results";
+  const canVote = battleState === "vote";
 
   const battleMode: BattleMode = useMemo(() => {
     switch (battleState) {
@@ -341,7 +342,7 @@ function BattleEmbedInner({
             </button>
             <div className="px-4 pb-6 space-y-5 overflow-y-auto" style={{ maxHeight: isFeedEmbed ? "calc(85% - 40px)" : "calc(75vh - 40px)" }}>
               {/* Vote confirmation */}
-              <div className="flex items-center justify-center gap-2">
+              <div className="flex items-center justify-center gap-2 pb-2">
                 <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
                   <path d="M2 6.5L4.5 9L10 3" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -350,24 +351,19 @@ function BattleEmbedInner({
                 </span>
               </div>
 
-              {/* Hook A lines */}
-              {hookALines.length > 0 && (
+              {/* Hook lines for active tab */}
+              {(resultsTab === "a" ? hookALines : hookBLines).length > 0 && (
                 <div className="space-y-0.5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="h-px flex-1 bg-white/[0.06]" />
-                    <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${votedSide === "a" ? "text-green-400/50" : "text-white/25"}`}>
-                      Left Hook {votedSide === "a" ? "✓" : ""}
-                    </span>
-                    <div className="h-px flex-1 bg-white/[0.06]" />
-                  </div>
-                  {hookALines.map((line: any, i: number) => {
-                    const key = `a-${i}`;
+                  {(resultsTab === "a" ? hookALines : hookBLines).map((line: any, i: number) => {
+                    const key = `${resultsTab}-${i}`;
                     const reaction = lineReactions[key];
                     const isActive = activeEmojiLine === key;
                     return (
                       <div key={key}>
-                        <button onClick={() => setActiveEmojiLine(isActive ? null : key)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${isActive ? "bg-white/[0.06] border border-white/[0.1]" : reaction ? "bg-white/[0.03]" : "hover:bg-white/[0.03]"}`}>
+                        <button
+                          onClick={() => setActiveEmojiLine(isActive ? null : key)}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${isActive ? "bg-white/[0.06] border border-white/[0.1]" : reaction ? "bg-white/[0.03]" : "hover:bg-white/[0.03]"}`}
+                        >
                           <span className="text-[11px] text-white/50 leading-relaxed flex-1 min-w-0">{line.text}</span>
                           {reaction && <span className="text-sm ml-2 shrink-0">{reaction}</span>}
                         </button>
@@ -376,7 +372,7 @@ function BattleEmbedInner({
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                               <div className="flex items-center justify-center gap-2 py-2">
                                 {EMOJI_OPTIONS.map(emoji => (
-                                  <button key={emoji} onClick={() => toggleLineReaction("a", i, emoji)}
+                                  <button key={emoji} onClick={() => toggleLineReaction(resultsTab, i, emoji)}
                                     className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all ${reaction === emoji ? "bg-white/15 ring-1 ring-white/25 scale-110" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
                                     {emoji}
                                   </button>
@@ -391,63 +387,21 @@ function BattleEmbedInner({
                 </div>
               )}
 
-              {/* Hook B lines */}
-              {hookBLines.length > 0 && (
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="h-px flex-1 bg-white/[0.06]" />
-                    <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${votedSide === "b" ? "text-green-400/50" : "text-white/25"}`}>
-                      Right Hook {votedSide === "b" ? "✓" : ""}
-                    </span>
-                    <div className="h-px flex-1 bg-white/[0.06]" />
-                  </div>
-                  {hookBLines.map((line: any, i: number) => {
-                    const key = `b-${i}`;
-                    const reaction = lineReactions[key];
-                    const isActive = activeEmojiLine === key;
-                    return (
-                      <div key={key}>
-                        <button onClick={() => setActiveEmojiLine(isActive ? null : key)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${isActive ? "bg-white/[0.06] border border-white/[0.1]" : reaction ? "bg-white/[0.03]" : "hover:bg-white/[0.03]"}`}>
-                          <span className="text-[11px] text-white/50 leading-relaxed flex-1 min-w-0">{line.text}</span>
-                          {reaction && <span className="text-sm ml-2 shrink-0">{reaction}</span>}
-                        </button>
-                        <AnimatePresence>
-                          {isActive && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                              <div className="flex items-center justify-center gap-2 py-2">
-                                {EMOJI_OPTIONS.map(emoji => (
-                                  <button key={emoji} onClick={() => toggleLineReaction("b", i, emoji)}
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all ${reaction === emoji ? "bg-white/15 ring-1 ring-white/25 scale-110" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
-                                    {emoji}
-                                  </button>
-                                ))}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Comments */}
-              <div className="space-y-2">
+              {/* Comments — filtered to active tab's voters */}
+              <div className="space-y-2 pt-2">
                 <div className="flex items-center gap-2">
                   <div className="h-px flex-1 bg-white/[0.06]" />
-                  <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-white/25">Takes ({comments.length})</span>
+                  <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-white/25">
+                    Takes · {resultsTab === "a" ? "Left Hook" : "Right Hook"}
+                  </span>
                   <div className="h-px flex-1 bg-white/[0.06]" />
                 </div>
-                {comments.length === 0 ? (
+                {comments.filter(c => c.voted_side === resultsTab).length === 0 ? (
                   <p className="text-[10px] font-mono text-white/15 text-center py-3">No takes yet — be first</p>
                 ) : (
                   <div className="space-y-2">
-                    {comments.map(c => (
+                    {comments.filter(c => c.voted_side === resultsTab).map(c => (
                       <div key={c.id} className="flex items-start gap-2 px-2">
-                        <span className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 mt-0.5 text-white/40 bg-white/[0.04] border border-white/[0.06]">
-                          {c.voted_side === "a" ? "LEFT HOOK" : "RIGHT HOOK"}
-                        </span>
                         <p className="text-[11px] text-white/45 leading-relaxed flex-1">{c.text}</p>
                         <span className="text-[9px] font-mono text-white/15 shrink-0">
                           {(() => { const m = Math.floor((Date.now() - new Date(c.created_at).getTime()) / 60000); if (m < 1) return "now"; if (m < 60) return `${m}m`; return `${Math.floor(m / 60)}h`; })()}
@@ -632,8 +586,8 @@ function BattleEmbedInner({
               className="h-full"
               style={{
                 background: battleState === "round-1"
-                  ? (hookA?.palette?.[0] ?? "#a855f7")
-                  : (hookB?.palette?.[0] ?? "#a855f7"),
+                  ? (hookA?.palette?.[0] ?? "#22c55e")
+                  : (hookB?.palette?.[0] ?? "#22c55e"),
                 width: `${roundProgress * 100}%`,
               }}
               transition={{ duration: 0 }}
@@ -641,45 +595,115 @@ function BattleEmbedInner({
           </div>
         )}
 
-        {/* Bottom bar — always visible: Left Hook / Right Hook / 🔥 */}
-        <div className="relative">
-          {!canVote && (
-            <div className="absolute inset-0 z-10 pointer-events-auto cursor-not-allowed" />
-          )}
-          <CardBottomBar
-            variant="embedded"
-            yesLabel="Left Hook"
-            noLabel="Right Hook"
-            votedSide={battleState === "results" ? votedSide : null}
-            score={{ total: voteCountA + voteCountB, replay_yes: voteCountA }}
-            note=""
-            onNoteChange={() => {}}
-            onVoteYes={() => handleVote("a")}
-            onVoteNo={() => handleVote("b")}
-            onSubmit={() => {}}
-            onOpenReactions={() => setPanelOpen(true)}
-            onClose={() => setPanelOpen(false)}
-            panelOpen={false}
-            renderVotedContent={() => (
+        {/* Pre-vote: Left Hook / Right Hook disabled + 🔥 disabled */}
+        {(battleState === "cover" || battleState === "round-1" || battleState === "round-2") && (
+          <div className="flex items-stretch h-[48px] opacity-30 pointer-events-none">
+            <div className="flex-1 flex items-center justify-center">
+              <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">Left Hook</span>
+            </div>
+            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+            <div className="flex-1 flex items-center justify-center">
+              <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">Right Hook</span>
+            </div>
+            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+            <div className="flex items-center justify-center px-4 min-w-[64px]">
+              <span className="text-[13px]" style={{ opacity: 0.4 }}>🔥</span>
+            </div>
+          </div>
+        )}
+
+        {/* Vote: Left Hook / Right Hook active, 🔥 disabled */}
+        {battleState === "vote" && (
+          <div className="flex items-stretch h-[48px]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => handleVote("a")}
+              className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+            >
+              <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white">
+                Left Hook
+              </span>
+            </button>
+            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+            <button
+              onClick={() => handleVote("b")}
+              className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+            >
+              <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white">
+                Right Hook
+              </span>
+            </button>
+            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+            <div className="flex items-center justify-center px-4 min-w-[64px] opacity-25 pointer-events-none">
+              <span className="text-[13px]">🔥</span>
+            </div>
+          </div>
+        )}
+
+        {/* Results panel closed: social proof + 🔥 */}
+        {battleState === "results" && !panelOpen && (
+          <div className="flex items-stretch h-[48px]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex-1 flex items-center px-3 overflow-hidden min-w-0">
               <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
                 {(() => {
                   const total = totalVotes;
                   const userPick = votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
                   const winnerPct = votedSide === "a" ? pctA : pctB;
-                  const loserPct = votedSide === "a" ? pctB : pctA;
-                  const majorityAgrees =
-                    (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
+                  const majorityAgrees = (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
                   const isSplit = pctA === 50 && pctB === 50;
-                  if (total < 10)
-                    return `FMLY STILL JUDGING · ${voteCountA + voteCountB} VOTES`;
-                  if (isSplit)
-                    return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
-                  return `FMLY ${majorityAgrees ? "AGREES" : "DISAGREES"} · ${userPick} ${winnerPct} / ${loserPct}`;
+                  if (total < 10) return `FMLY STILL JUDGING · ${voteCountA + voteCountB} VOTES`;
+                  if (isSplit) return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
+                  return `FMLY ${majorityAgrees ? "AGREES" : "DISAGREES"} · ${userPick} ${winnerPct}%`;
                 })()}
               </span>
-            )}
-          />
-        </div>
+            </div>
+            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+            <button
+              onClick={() => setPanelOpen(true)}
+              className="flex items-center justify-center gap-1 px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
+            >
+              <span className="text-[13px] leading-none" style={{ opacity: 0.7 }}>🔥</span>
+              {(voteCountA + voteCountB) > 0 && (
+                <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
+                  {voteCountA + voteCountB}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Results panel open: Left Hook / Right Hook as tab switchers + ✕ */}
+        {battleState === "results" && panelOpen && (
+          <div className="flex items-stretch h-[48px]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setResultsTab("a")}
+              className={`flex-1 flex items-center justify-center py-3 transition-colors ${
+                resultsTab === "a"
+                  ? "text-white border-b-2 border-white/40"
+                  : "text-white/30 hover:text-white/60"
+              }`}
+            >
+              <span className="text-[11px] font-mono tracking-[0.15em] uppercase">Left Hook</span>
+            </button>
+            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+            <button
+              onClick={() => setResultsTab("b")}
+              className={`flex-1 flex items-center justify-center py-3 transition-colors ${
+                resultsTab === "b"
+                  ? "text-white border-b-2 border-white/40"
+                  : "text-white/30 hover:text-white/60"
+              }`}
+            >
+              <span className="text-[11px] font-mono tracking-[0.15em] uppercase">Right Hook</span>
+            </button>
+            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+            <button
+              onClick={() => setPanelOpen(false)}
+              className="flex items-center justify-center px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
+            >
+              <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+            </button>
+          </div>
+        )}
       </div>
 
       <ResultsPanel />
