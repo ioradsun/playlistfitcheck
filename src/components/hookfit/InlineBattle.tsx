@@ -138,11 +138,13 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       case "judgment": return 0.2;
       case "scorecard":
       case "results":
-        if (!votedSide) return 0.5;
-        return side === votedSide ? 1 : 0.3;
+        // No focus (activePlaying is null) → both tiles full opacity
+        if (!activePlaying) return 1;
+        // Focused on one side → focused=1, other=0.3
+        return side === activePlaying ? 1 : 0.3;
       default: return 1;
     }
-  }, [mode, votedSide]);
+  }, [mode, activePlaying]);
 
   const getBorderStyle = useCallback((_side: "a" | "b"): React.CSSProperties => {
     return {};
@@ -236,6 +238,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
   const danceUrl = `/lyric-dance/${danceData.artist_slug}/${danceData.song_slug}`;
   const isActive = mode !== "dark";
+  const isResultsMode = mode === "scorecard" || mode === "results";
   return (
     <div className="w-full h-full">
       <div className="relative flex flex-row h-full">
@@ -247,7 +250,22 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           onClick={() => onTileTap?.("a")}
         >
           <AnimatePresence>
-            {activePlaying === "a" && (
+            {isResultsMode && votedSide === "a" ? (
+              <motion.div
+                key="voted-a-label"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
+              >
+                <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-green-400/70 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6.5L4.5 9L10 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Your Pick
+                </span>
+              </motion.div>
+            ) : activePlaying === "a" && !isResultsMode ? (
               <motion.div
                 key="round-a-label"
                 initial={{ opacity: 0 }}
@@ -259,7 +277,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
                   Round 1
                 </span>
               </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
           <LyricDanceEmbed
             key={`battle-a-${hookA.id}`}
@@ -268,7 +286,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             songTitle={danceData.song_name}
             artistName={danceData.artist_name || ""}
             prefetchedData={danceData}
-            cardState={isActive && activePlaying === "a" ? "active" : "warm"}
+            cardState={isActive && (isResultsMode || activePlaying === "a") ? "active" : "warm"}
             regionStart={hookA.hook_start}
             regionEnd={hookA.hook_end}
             disableReactionPanel={true}
@@ -286,7 +304,22 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             onClick={() => onTileTap?.("b")}
           >
             <AnimatePresence>
-              {activePlaying === "b" && (
+              {isResultsMode && votedSide === "b" ? (
+                <motion.div
+                  key="voted-b-label"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
+                >
+                  <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-green-400/70 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6.5L4.5 9L10 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Your Pick
+                  </span>
+                </motion.div>
+              ) : activePlaying === "b" && !isResultsMode ? (
                 <motion.div
                   key="round-b-label"
                   initial={{ opacity: 0 }}
@@ -298,7 +331,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
                     Round 2
                   </span>
                 </motion.div>
-              )}
+              ) : null}
             </AnimatePresence>
             <LyricDanceEmbed
               key={`battle-b-${hookB.id}`}
@@ -307,7 +340,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
               songTitle={danceData.song_name}
               artistName={danceData.artist_name || ""}
               prefetchedData={danceData}
-              cardState={isActive && activePlaying === "b" ? "active" : "warm"}
+              cardState={isActive && (isResultsMode || activePlaying === "b") ? "active" : "warm"}
               regionStart={hookB.hook_start}
               regionEnd={hookB.hook_end}
               disableReactionPanel={true}
