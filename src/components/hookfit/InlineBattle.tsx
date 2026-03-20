@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
@@ -244,6 +244,21 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           transition={{ duration: 0.4 }}
           onClick={() => onTileTap?.("a")}
         >
+          <AnimatePresence>
+            {activePlaying === "a" && (
+              <motion.div
+                key="round-a-label"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
+              >
+                <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                  Round 1
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <LyricDanceEmbed
             key={`battle-a-${hookA.id}`}
             lyricDanceId={danceData.id}
@@ -280,6 +295,21 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             transition={{ duration: 0.4 }}
             onClick={() => onTileTap?.("b")}
           >
+            <AnimatePresence>
+              {activePlaying === "b" && (
+                <motion.div
+                  key="round-b-label"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
+                >
+                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                    Round 2
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <LyricDanceEmbed
               key={`battle-b-${hookB.id}`}
               lyricDanceId={danceData.id}

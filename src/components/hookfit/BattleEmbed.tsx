@@ -512,7 +512,7 @@ function BattleEmbedInner({
         )}
 
         {/* FMLY Feud badge */}
-        {(hookA || resolvedBattleId) && (
+        {isFeedEmbed && (hookA || resolvedBattleId) && (
           <div className="absolute top-3 left-3 z-30 pointer-events-none">
             <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
               FMLY Feud
@@ -538,7 +538,7 @@ function BattleEmbedInner({
                 </button>
               )}
               <div className="flex flex-col items-center justify-center px-6 text-center">
-                <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">{songTitle}</p>
+                <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">Which hook hits harder?</p>
                 {hookPhrase && (
                   <p className="text-lg sm:text-xl font-semibold text-white/80 max-w-[85%] leading-snug mb-8 italic">
                     &ldquo;{hookPhrase}&rdquo;
@@ -555,7 +555,7 @@ function BattleEmbedInner({
                   }}
                   className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
                 >
-                  Judge Now
+                  Final Answer...
                 </button>
                 <p className="text-[9px] font-mono text-white/20 uppercase tracking-wider mt-3">
                   2 rounds · 10 seconds each
@@ -649,36 +649,16 @@ function BattleEmbedInner({
                   initial={{ opacity: 0, x: battleState === "round-2" ? 16 : 0 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -16 }}
-                  className="flex-1 flex items-center gap-2 px-3"
+                  className="flex-1 flex items-center justify-center px-3"
                 >
-                  <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/40">
-                    {battleState === "round-1" ? "Round 1" : "Round 2"}
-                  </span>
-                  <span className="text-white/20">·</span>
-                  <span className="font-mono text-[11px] uppercase tracking-wider text-white/70">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/25">
                     {battleState === "round-1" ? "Left Hook" : "Right Hook"}
                   </span>
-                  <div
-                    className="ml-auto w-1.5 h-1.5 rounded-full animate-pulse"
-                    style={{
-                      background: battleState === "round-1"
-                        ? (hookA?.palette?.[0] ?? "#a855f7")
-                        : (hookB?.palette?.[0] ?? "#a855f7"),
-                    }}
-                  />
                 </motion.div>
               )}
 
             </AnimatePresence>
 
-            {battleState === "cover" && (
-              <>
-                <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-                <div className="flex items-center justify-center px-4 min-w-[64px]">
-                  <span className="text-[13px] leading-none" style={{ opacity: 0.25 }}>🔥</span>
-                </div>
-              </>
-            )}
           </div>
         )}
 

@@ -348,30 +348,32 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         className="absolute inset-0 w-full h-full pointer-events-none"
       />
 
-      <AnimatePresence>
-        {(effectiveShowCover || isWaiting) && (
-          <motion.div
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            className="absolute inset-0"
-          >
-            <LyricDanceCover
-              songName={songTitle}
-              waiting={isWaiting}
-              coverImageUrl={fetchedData?.section_images?.[0] ?? coverImageUrl}
-              hideBackground={playerReady}
-              badge={null}
-              onListen={(e) => {
-                userActivatedRef.current = true;
-                handleListenNow(e);
-              }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {!isBattleMode && (
+        <AnimatePresence>
+          {(effectiveShowCover || isWaiting) && (
+            <motion.div
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="absolute inset-0"
+            >
+              <LyricDanceCover
+                songName={songTitle}
+                waiting={isWaiting}
+                coverImageUrl={fetchedData?.section_images?.[0] ?? coverImageUrl}
+                hideBackground={playerReady}
+                badge={null}
+                onListen={(e) => {
+                  userActivatedRef.current = true;
+                  handleListenNow(e);
+                }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
 
-      {playerReady && !reactionPanelOpen && (
+      {!isBattleMode && playerReady && !reactionPanelOpen && (
         <div
           className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2"
           onClick={(e) => e.stopPropagation()}
@@ -408,7 +410,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         </div>
       )}
 
-      {!reactionPanelOpen && (
+      {!isBattleMode && !reactionPanelOpen && (
         <div
           className="absolute bottom-0 left-0 right-0 z-[450]"
           style={{ background: "#0a0a0a" }}
