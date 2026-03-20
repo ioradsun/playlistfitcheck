@@ -584,6 +584,7 @@ function BattleEmbedInner({
           ...(!isFeedEmbed ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
         }}
       >
+        <div className={isFeedEmbed ? undefined : "w-full max-w-2xl mx-auto"}>
 
         {/* Progress bar — round states only */}
         {(battleState === "round-1" || battleState === "round-2") && (
@@ -710,6 +711,7 @@ function BattleEmbedInner({
             </button>
           </div>
         )}
+        </div>
       </div>
 
       <ResultsPanel />
