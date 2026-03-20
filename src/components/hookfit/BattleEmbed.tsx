@@ -577,7 +577,13 @@ function BattleEmbedInner({
       </div>
 
       {/* Bottom bar */}
-      <div className="absolute bottom-0 left-0 right-0 z-20" style={{ background: "#0a0a0a" }}>
+      <div
+        className="absolute bottom-0 left-0 right-0 z-20"
+        style={{
+          background: "#0a0a0a",
+          ...(!isFeedEmbed ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
+        }}
+      >
 
         {/* Progress bar — round states only */}
         {(battleState === "round-1" || battleState === "round-2") && (
