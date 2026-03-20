@@ -305,6 +305,7 @@ function BattleEmbedInner({
     setVotedSide(side);
     if (side === "a") setVoteCountA(v => v + 1); else setVoteCountB(v => v + 1);
     setBattleState("results");
+    setMuted(true);
     const sessionId = getSessionId();
     if (userIdRef.current === undefined) {
       const { data: { user: u } } = await supabase.auth.getUser();
@@ -387,13 +388,22 @@ function BattleEmbedInner({
       case "round-1": return "a";
       case "round-2": return "b";
       case "vote": return null;
-      case "results": return replayingSide ?? votedSide;
+      case "results": return replayingSide;
     }
-  }, [isFeedEmbed, cardState, battleState, votedSide, replayingSide]);
+  }, [isFeedEmbed, cardState, battleState, replayingSide]);
 
   const handleTileTap = useCallback((side: "a" | "b") => {
     if (battleState !== "results") return;
-    setReplayingSide(prev => prev === side ? null : side);
+    setReplayingSide(prev => {
+      if (prev === side) {
+        // Unfocus — back to both visible, both muted
+        setMuted(true);
+        return null;
+      }
+      // Focus this side — unmute it
+      setMuted(false);
+      return side;
+    });
   }, [battleState]);
 
   // ── Error fallback ──────────────────────────────────────────
@@ -538,7 +548,7 @@ function BattleEmbedInner({
       <div
         className="absolute inset-0 overflow-hidden"
         onClick={() => {
-          if (battleState === "round-1" || battleState === "round-2" || battleState === "results") {
+          if (battleState === "round-1" || battleState === "round-2") {
             setMuted(prev => !prev);
           }
         }}
@@ -626,7 +636,7 @@ function BattleEmbedInner({
                         e.stopPropagation();
                         onPlay?.();
                         setBattleState("results");
-                        setMuted(false);
+                        setMuted(true);
                       }}
                       className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
                     >

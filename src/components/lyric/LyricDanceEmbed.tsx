@@ -281,11 +281,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   useEffect(() => {
     if (!player || !playerReady) return;
     if (isBattleMode) {
-      if (cardState === "active" && !forceMuted) {
+      if (cardState === "active") {
         player.play();
-        player.setMuted(false);
+        player.setMuted(forceMuted);
         player.scheduleFullModeUpgrade();
-        setMuted(false);
+        setMuted(forceMuted);
       } else {
         player.stopRendering?.();
         player.setMuted(true);
