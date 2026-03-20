@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Loader2, RefreshCw, Music, Sparkles, Eye, Zap, Image, ExternalLink, Download, Link, Users, User, Check } from "lucide-react";
+import { Loader2, RefreshCw, Music, Sparkles, Eye, Zap, Image, ExternalLink, Download, Link, Users, User, Check, Circle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +16,7 @@ import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
 import { CustomHookSelector } from "./CustomHookSelector";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
@@ -152,10 +153,11 @@ export function FitTab({
   // ── Battle publish state ──────────────────────────────────────────────
   const [battlePublishing, setBattlePublishing] = useState(false);
   const [battlePublishedUrl, setBattlePublishedUrl] = useState<string | null>(null);
-  // Which hook slot is in "editing" mode: null | 0 | 1
-  const [editingSlot, setEditingSlot] = useState<number | null>(null);
   // User overrides per slot — null means "use AI hook"
   const [customHooks, setCustomHooks] = useState<[SavedCustomHook | null, SavedCustomHook | null]>([null, null]);
+  const [feudSetupOpen, setFeudSetupOpen] = useState(false);
+  const [feudTab, setFeudTab] = useState<0 | 1>(0);
+  const [feudChangingSlot, setFeudChangingSlot] = useState<0 | 1 | null>(null);
   const [hookClipProgress, setHookClipProgress] = useState(0);
   const hookClipProgressRafRef = useRef<number | null>(null);
   const hookLoopRegionRef = useRef<{ start: number; end: number } | null>(null);
@@ -856,6 +858,21 @@ export function FitTab({
     }
   }, [user, battlePublishing, customHooks, renderData, audioFile, lyricData, beatGrid]);
 
+  const handleRemoveBattle = useCallback(async () => {
+    if (!battlePublishedUrl || !user) return;
+    try {
+      await supabase
+        .from("songfit_posts" as any)
+        .delete()
+        .eq("user_id", user.id)
+        .eq("lyric_dance_url", battlePublishedUrl);
+      setBattlePublishedUrl(null);
+      toast.success("Removed from CrowdFit");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to remove battle");
+    }
+  }, [battlePublishedUrl, user]);
+
   const allReady =
     generationStatus.beatGrid === "done" &&
     generationStatus.renderData === "done" &&
@@ -979,129 +996,210 @@ export function FitTab({
         </div>
       ) : null}
 
-      {/* ── Hottest Hooks ── */}
-      {(() => {
-        if (!hottestHooksEnabled) return null;
-        const aiHooks = [renderData?.hook, renderData?.secondHook].filter(Boolean) as LyricHook[];
-        if (aiHooks.length === 0) return null;
-
-        const rawLabels = [renderData?.hookLabel, renderData?.secondHookLabel];
-        const labelMap: Record<string, string> = { "Main Chorus": "Left Hook", "Outro Hook": "Right Hook" };
-        const labels = rawLabels.map(l => (l && labelMap[l]) ? labelMap[l] : l);
-
-        return (
+      {/* ── FMLY Feud Setup ── */}
+      {hottestHooksEnabled && (
+        <>
           <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
             <div className="flex items-center gap-1.5">
               <Zap size={11} className="text-primary" />
               <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                HOTTEST HOOKS
+                Let the FMLY decide the hottest hook
               </span>
             </div>
 
-            {aiHooks.map((aiHook, idx) => {
-              const activeHook = customHooks[idx] ?? aiHook;
-              const isUserHook = customHooks[idx] !== null;
-              const isEditing = editingSlot === idx;
-
-              return (
-                <div
-                  key={idx}
-                  className={idx > 0 ? "pt-3 border-t border-border/20 space-y-2" : "space-y-2"}
+            {battlePublishedUrl ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => window.open(battlePublishedUrl, "_blank")}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-green-400 border-green-400/40 hover:border-green-400/70"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/15 text-primary font-semibold">
-                        {isUserHook ? "Your Hook" : labels[idx] || `Hook ${idx + 1}`}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        {activeHook.start?.toFixed(1)}s – {activeHook.end?.toFixed(1)}s
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setEditingSlot(isEditing ? null : idx)}
-                      className="text-[10px] font-mono text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
-                    >
-                      {isEditing ? "Cancel" : "Change"}
-                    </button>
-                  </div>
-
-                  {!isUserHook && activeHook.previewText && (
-                    <p className="text-xs text-muted-foreground leading-relaxed italic">
-                      &ldquo;{activeHook.previewText}&rdquo;
-                    </p>
-                  )}
-
-                  {isUserHook && customHooks[idx]?.previewText && (
-                    <p className="text-xs text-muted-foreground leading-relaxed italic">
-                      "{customHooks[idx]!.previewText}"
-                    </p>
-                  )}
-
-                  {isEditing && (
-                    <div className="mt-2 rounded-lg border border-border/40 bg-background/20 p-2">
-                      <CustomHookSelector
-                        lines={lyricData.lines}
-                        aiHooks={aiHooks}
-                        audioRef={hookAudioRef}
-                        loopRegionRef={hookLoopRegionRef}
-                        activeHookIndex={
-                          activeCustomHookIndex !== null ? activeCustomHookIndex + 100 : null
-                        }
-                        setActiveHookIndex={(i) => {
-                          setActiveCustomHookIndex(i === null ? null : i - 100);
-                        }}
-                        clipProgress={hookClipProgress}
-                        setClipProgress={setHookClipProgress}
-                        clipProgressRafRef={hookClipProgressRafRef}
-                        setIsPlaying={() => {}}
-                        onSaveHook={(hook) => {
-                          const colors = ["#f59e0b", "#10b981", "#8b5cf6"];
-                          const saved: SavedCustomHook = {
-                            ...hook,
-                            color: colors[idx] ?? "#f59e0b",
-                          };
-                          setCustomHooks((prev) => {
-                            const next: [SavedCustomHook | null, SavedCustomHook | null] = [...prev] as [SavedCustomHook | null, SavedCustomHook | null];
-                            next[idx] = saved;
-                            return next;
-                          });
-                          setEditingSlot(null);
-                        }}
-                        savedCustomHooks={customHooks.filter(Boolean) as SavedCustomHook[]}
-                        onRemoveHook={() => {}}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {aiHooks.length === 2 && (
-              <div className="pt-1">
-                {battlePublishedUrl ? (
-                  <a
-                    href={battlePublishedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-                  >
-                    <Zap size={10} /> VIEW BATTLE
-                  </a>
-                ) : (
-                  <button
-                    onClick={handleStartBattle}
-                    disabled={!allReady || battlePublishing || aiHooks.length !== 2}
-                    className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40 disabled:opacity-50"
-                  >
-                    <Zap size={10} />
-                    {battlePublishing ? "Publishing..." : "START HOOK BATTLE"}
-                  </button>
-                )}
+                  <Circle size={7} className="fill-green-400 text-green-400" /> Live
+                </button>
+                <button
+                  onClick={handleRemoveBattle}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground/50 border-border/30 hover:text-foreground hover:border-border/60"
+                >
+                  Remove
+                </button>
               </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setFeudTab(0);
+                  setFeudChangingSlot(null);
+                  setFeudSetupOpen(true);
+                }}
+                disabled={!hottestHooksEnabled}
+                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40 disabled:opacity-40"
+              >
+                <Zap size={10} /> Set Up Your Feud
+              </button>
             )}
           </div>
-        );
-      })()}
+
+          {/* ── Feud Setup Modal ── */}
+          <Dialog open={feudSetupOpen} onOpenChange={(open) => {
+            if (!open) {
+              setFeudChangingSlot(null);
+              setFeudSetupOpen(false);
+            }
+          }}>
+            <DialogContent className="max-w-lg w-full p-0 overflow-hidden bg-background border border-border/40">
+              {/* Header */}
+              <div className="px-5 pt-5 pb-3 border-b border-border/30">
+                <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-muted-foreground">
+                  Set Up Your Feud
+                </p>
+                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                  Pick two hooks — the FMLY votes on the hottest one
+                </p>
+              </div>
+
+              {/* Tab switcher */}
+              <div className="flex border-b border-border/30">
+                {(["Left Hook", "Right Hook"] as const).map((label, idx) => {
+                  const slotHook = customHooks[idx] ?? (idx === 0 ? renderData?.hook : renderData?.secondHook);
+                  const isSet = !!slotHook;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => { setFeudTab(idx as 0 | 1); setFeudChangingSlot(null); }}
+                      className={`flex-1 px-4 py-3 text-[11px] font-mono uppercase tracking-[0.12em] transition-colors flex items-center justify-center gap-1.5 ${
+                        feudTab === idx
+                          ? "text-primary border-b-2 border-primary"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {isSet && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tab content */}
+              <div className="px-5 py-4 min-h-[200px]">
+                {([0, 1] as const).map((idx) => {
+                  if (feudTab !== idx) return null;
+                  const aiHook = idx === 0 ? renderData?.hook : renderData?.secondHook;
+                  const activeHook = customHooks[idx] ?? aiHook ?? null;
+                  const isChanging = feudChangingSlot === idx;
+
+                  return (
+                    <div key={idx} className="space-y-3">
+                      {!isChanging ? (
+                        <>
+                          {activeHook ? (
+                            <div className="flex items-center justify-between gap-2 rounded-lg border border-border/30 px-3 py-2.5 bg-background/30">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/15 text-primary font-semibold shrink-0">
+                                  {idx === 0 ? "Left Hook" : "Right Hook"}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground font-mono truncate">
+                                  {activeHook.start?.toFixed(1)}s – {activeHook.end?.toFixed(1)}s
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => setFeudChangingSlot(idx)}
+                                className="text-[10px] font-mono text-primary/70 hover:text-primary underline underline-offset-2 transition-colors shrink-0"
+                              >
+                                Change
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-3 py-6 text-center">
+                              <p className="text-[11px] text-muted-foreground font-mono">
+                                No hook selected for {idx === 0 ? "Left Hook" : "Right Hook"}
+                              </p>
+                              <button
+                                onClick={() => setFeudChangingSlot(idx)}
+                                className="px-4 py-2 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+                              >
+                                Select Hook
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-mono text-muted-foreground">
+                            Tap any line to start your hook selection
+                          </p>
+                          <CustomHookSelector
+                            lines={lyricData.lines}
+                            aiHooks={[renderData?.hook, renderData?.secondHook].filter(Boolean) as LyricHook[]}
+                            audioRef={hookAudioRef}
+                            loopRegionRef={hookLoopRegionRef}
+                            activeHookIndex={
+                              activeCustomHookIndex !== null ? activeCustomHookIndex + 100 : null
+                            }
+                            setActiveHookIndex={(i) => {
+                              setActiveCustomHookIndex(i === null ? null : i - 100);
+                            }}
+                            clipProgress={hookClipProgress}
+                            setClipProgress={setHookClipProgress}
+                            clipProgressRafRef={hookClipProgressRafRef}
+                            setIsPlaying={() => {}}
+                            onSaveHook={(hook) => {
+                              const colors = ["#f59e0b", "#10b981"];
+                              const saved: SavedCustomHook = {
+                                ...hook,
+                                color: colors[idx] ?? "#f59e0b",
+                              };
+                              setCustomHooks((prev) => {
+                                const next: [SavedCustomHook | null, SavedCustomHook | null] = [...prev] as [SavedCustomHook | null, SavedCustomHook | null];
+                                next[idx] = saved;
+                                return next;
+                              });
+                              setFeudChangingSlot(null);
+                            }}
+                            savedCustomHooks={customHooks.filter(Boolean) as SavedCustomHook[]}
+                            onRemoveHook={() => {}}
+                          />
+                          <button
+                            onClick={() => setFeudChangingSlot(null)}
+                            className="w-full text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors py-1"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 pb-5 pt-2 border-t border-border/30 space-y-2">
+                {(() => {
+                  const hook0 = customHooks[0] ?? renderData?.hook;
+                  const hook1 = customHooks[1] ?? renderData?.secondHook;
+                  const bothSet = !!hook0 && !!hook1;
+                  return (
+                    <button
+                      onClick={async () => {
+                        await handleStartBattle();
+                        setFeudSetupOpen(false);
+                      }}
+                      disabled={!bothSet || !allReady || battlePublishing}
+                      className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Zap size={10} />
+                      {battlePublishing ? "Publishing..." : "Start CrowdFit FMLY Feud"}
+                    </button>
+                  );
+                })()}
+                <button
+                  onClick={() => { setFeudChangingSlot(null); setFeudSetupOpen(false); }}
+                  className="w-full text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors py-1"
+                >
+                  Close
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
 
       {/* Single-column report */}
       <div className="space-y-3">

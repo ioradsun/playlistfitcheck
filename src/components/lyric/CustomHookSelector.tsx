@@ -317,33 +317,26 @@ export function CustomHookSelector({
       </div>
 
       {mode === "selecting" && selectionRegion && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-amber-500/30 bg-gradient-to-t from-background via-background/95 to-transparent px-4 py-3">
-          <div className="mx-auto max-w-5xl flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="inline-flex items-end gap-0.5 h-3">
-                <span className="w-[2px] h-1.5 bg-amber-400 animate-pulse" />
-                <span className="w-[2px] h-2.5 bg-amber-400 animate-pulse [animation-delay:80ms]" />
-                <span className="w-[2px] h-2 bg-amber-400 animate-pulse [animation-delay:160ms]" />
-              </span>
-              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 font-mono text-[11px]">
-                {formatDuration(selectionRegion.end - selectionRegion.start)} · {selectedLineCount} lines
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={cancelSelection}
-                className="rounded-md border border-border/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveHook}
-                disabled={savedCustomHooks.length >= 3}
-                className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
-              >
-                Save Hook
-              </button>
-            </div>
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 font-mono text-[11px]">
+              {formatDuration(selectionRegion.end - selectionRegion.start)} · {selectedLineCount} lines
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={cancelSelection}
+              className="rounded-md border border-border/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveHook}
+              disabled={savedCustomHooks.length >= 3}
+              className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
+            >
+              Use This Hook
+            </button>
           </div>
         </div>
       )}
