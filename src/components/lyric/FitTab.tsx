@@ -157,7 +157,6 @@ export function FitTab({
   const [customHooks, setCustomHooks] = useState<[SavedCustomHook | null, SavedCustomHook | null]>([null, null]);
   const [feudSetupOpen, setFeudSetupOpen] = useState(false);
   const [feudTab, setFeudTab] = useState<0 | 1>(0);
-  const [feudChangingSlot, setFeudChangingSlot] = useState<0 | 1 | null>(null);
   const [hookClipProgress, setHookClipProgress] = useState(0);
   const hookClipProgressRafRef = useRef<number | null>(null);
   const hookLoopRegionRef = useRef<{ start: number; end: number } | null>(null);
@@ -1026,7 +1025,6 @@ export function FitTab({
               <button
                 onClick={() => {
                   setFeudTab(0);
-                  setFeudChangingSlot(null);
                   setFeudSetupOpen(true);
                 }}
                 disabled={!hottestHooksEnabled}
@@ -1040,7 +1038,6 @@ export function FitTab({
           {/* ── Feud Setup Modal ── */}
           <Dialog open={feudSetupOpen} onOpenChange={(open) => {
             if (!open) {
-              setFeudChangingSlot(null);
               setFeudSetupOpen(false);
             }
           }}>
@@ -1055,125 +1052,54 @@ export function FitTab({
                 </p>
               </div>
 
-              {/* Tab switcher */}
               <div className="flex border-b border-border/30">
-                {(["Left Hook", "Right Hook"] as const).map((label, idx) => {
-                  const slotHook = customHooks[idx] ?? (idx === 0 ? renderData?.hook : renderData?.secondHook);
-                  const isSet = !!slotHook;
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => { setFeudTab(idx as 0 | 1); setFeudChangingSlot(null); }}
-                      className={`flex-1 px-4 py-3 text-[11px] font-mono uppercase tracking-[0.12em] transition-colors flex items-center justify-center gap-1.5 ${
-                        feudTab === idx
-                          ? "text-primary border-b-2 border-primary"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {isSet && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
-                      {label}
-                    </button>
-                  );
-                })}
+                {(["Left Hook", "Right Hook"] as const).map((label, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setFeudTab(idx as 0 | 1)}
+                    className={`flex-1 px-4 py-3 text-[11px] font-mono uppercase tracking-[0.12em] transition-colors ${
+                      feudTab === idx
+                        ? "text-primary border-b-2 border-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
 
-              {/* Tab content */}
-              <div className="px-5 py-4 min-h-[200px]">
+              <div className="px-5 py-5" style={{ minHeight: 200 }}>
                 {([0, 1] as const).map((idx) => {
                   if (feudTab !== idx) return null;
                   const aiHook = idx === 0 ? renderData?.hook : renderData?.secondHook;
-                  const activeHook = customHooks[idx] ?? aiHook ?? null;
-                  const isChanging = feudChangingSlot === idx;
-
                   return (
-                    <div key={idx} className="space-y-3">
-                      {!isChanging ? (
-                        <>
-                          {activeHook ? (
-                            <div className="flex items-center justify-between gap-2 rounded-lg border border-border/30 px-3 py-2.5 bg-background/30">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/15 text-primary font-semibold shrink-0">
-                                  {idx === 0 ? "Left Hook" : "Right Hook"}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground font-mono truncate">
-                                  {activeHook.start?.toFixed(1)}s – {activeHook.end?.toFixed(1)}s
-                                </span>
-                              </div>
-                              <button
-                                onClick={() => setFeudChangingSlot(idx)}
-                                className="text-[10px] font-mono text-primary/70 hover:text-primary underline underline-offset-2 transition-colors shrink-0"
-                              >
-                                Change
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center gap-3 py-6 text-center">
-                              <p className="text-[11px] text-muted-foreground font-mono">
-                                No hook selected for {idx === 0 ? "Left Hook" : "Right Hook"}
-                              </p>
-                              <button
-                                onClick={() => setFeudChangingSlot(idx)}
-                                className="px-4 py-2 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-                              >
-                                Select Hook
-                              </button>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <HookWaveformPicker
-                          waveform={waveform || parentWaveform || null}
-                          lines={lyricData.lines}
-                          audioRef={hookAudioRef}
-                          loopRegionRef={hookLoopRegionRef}
-                          aiHint={idx === 0 ? renderData?.hook : renderData?.secondHook}
-                          onSave={(hook) => {
-                            const colors = ["#f59e0b", "#10b981"];
-                            const saved: SavedCustomHook = {
-                              ...hook,
-                              color: colors[idx] ?? "#f59e0b",
-                            };
-                            setCustomHooks((prev) => {
-                              const next: [SavedCustomHook | null, SavedCustomHook | null] = [...prev] as [SavedCustomHook | null, SavedCustomHook | null];
-                              next[idx] = saved;
-                              return next;
-                            });
-                            setFeudChangingSlot(null);
-                          }}
-                          onCancel={() => setFeudChangingSlot(null)}
-                        />
-                      )}
-                    </div>
+                    <HookWaveformPicker
+                      key={idx}
+                      waveform={waveform || parentWaveform || null}
+                      lines={lyricData.lines}
+                      audioRef={hookAudioRef}
+                      loopRegionRef={hookLoopRegionRef}
+                      aiHint={aiHook ?? null}
+                      isLast={idx === 1}
+                      onSave={async (hook) => {
+                        const saved: SavedCustomHook = { ...hook, color: "#a855f7" };
+                        const next: [SavedCustomHook | null, SavedCustomHook | null] = [...customHooks] as any;
+                        next[idx] = saved;
+                        setCustomHooks(next);
+                        if (idx === 0) {
+                          setFeudTab(1);
+                        } else {
+                          const hook0 = next[0] ?? renderData?.hook;
+                          const hook1 = next[1];
+                          if (hook0 && hook1) {
+                            await handleStartBattle();
+                          }
+                          setFeudSetupOpen(false);
+                        }
+                      }}
+                    />
                   );
                 })}
-              </div>
-
-              {/* Footer */}
-              <div className="px-5 pb-5 pt-2 border-t border-border/30 space-y-2">
-                {(() => {
-                  const hook0 = customHooks[0] ?? renderData?.hook;
-                  const hook1 = customHooks[1] ?? renderData?.secondHook;
-                  const bothSet = !!hook0 && !!hook1;
-                  return (
-                    <button
-                      onClick={async () => {
-                        await handleStartBattle();
-                        setFeudSetupOpen(false);
-                      }}
-                      disabled={!bothSet || !allReady || battlePublishing}
-                      className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <Zap size={10} />
-                      {battlePublishing ? "Publishing..." : "Start CrowdFit FMLY Feud"}
-                    </button>
-                  );
-                })()}
-                <button
-                  onClick={() => { setFeudChangingSlot(null); setFeudSetupOpen(false); }}
-                  className="w-full text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors py-1"
-                >
-                  Close
-                </button>
               </div>
             </DialogContent>
           </Dialog>
