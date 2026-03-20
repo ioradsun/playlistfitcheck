@@ -258,6 +258,7 @@ function BattleEmbedInner({
   const totalVotes = voteCountA + voteCountB;
   const pctA = totalVotes > 0 ? Math.round((voteCountA / totalVotes) * 100) : 50;
   const pctB = totalVotes > 0 ? Math.round((voteCountB / totalVotes) * 100) : 50;
+  const canVote = battleState === "vote" || battleState === "results";
 
   const battleMode: BattleMode = useMemo(() => {
     switch (battleState) {
@@ -531,11 +532,6 @@ function BattleEmbedInner({
               )}
               <div className="flex flex-col items-center justify-center px-6 text-center">
                 <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">Which {songTitle} hook hits harder?</p>
-                {hookPhrase && (
-                  <p className="text-lg sm:text-xl font-semibold text-white/80 max-w-[85%] leading-snug mb-8 italic">
-                    &ldquo;{hookPhrase}&rdquo;
-                  </p>
-                )}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -646,39 +642,44 @@ function BattleEmbedInner({
         )}
 
         {/* Bottom bar — always visible: Left Hook / Right Hook / 🔥 */}
-        <CardBottomBar
-          variant="embedded"
-          yesLabel="Left Hook"
-          noLabel="Right Hook"
-          votedSide={battleState === "results" ? votedSide : null}
-          score={{ total: voteCountA + voteCountB, replay_yes: voteCountA }}
-          note=""
-          onNoteChange={() => {}}
-          onVoteYes={() => handleVote("a")}
-          onVoteNo={() => handleVote("b")}
-          onSubmit={() => {}}
-          onOpenReactions={() => setPanelOpen(true)}
-          onClose={() => setPanelOpen(false)}
-          panelOpen={false}
-          renderVotedContent={() => (
-            <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
-              {(() => {
-                const total = totalVotes;
-                const userPick = votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
-                const winnerPct = votedSide === "a" ? pctA : pctB;
-                const loserPct = votedSide === "a" ? pctB : pctA;
-                const majorityAgrees =
-                  (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
-                const isSplit = pctA === 50 && pctB === 50;
-                if (total < 10)
-                  return `FMLY STILL JUDGING · ${voteCountA + voteCountB} VOTES`;
-                if (isSplit)
-                  return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
-                return `FMLY ${majorityAgrees ? "AGREES" : "DISAGREES"} · ${userPick} ${winnerPct} / ${loserPct}`;
-              })()}
-            </span>
+        <div className="relative">
+          {!canVote && (
+            <div className="absolute inset-0 z-10 pointer-events-auto cursor-not-allowed" />
           )}
-        />
+          <CardBottomBar
+            variant="embedded"
+            yesLabel="Left Hook"
+            noLabel="Right Hook"
+            votedSide={battleState === "results" ? votedSide : null}
+            score={{ total: voteCountA + voteCountB, replay_yes: voteCountA }}
+            note=""
+            onNoteChange={() => {}}
+            onVoteYes={() => handleVote("a")}
+            onVoteNo={() => handleVote("b")}
+            onSubmit={() => {}}
+            onOpenReactions={() => setPanelOpen(true)}
+            onClose={() => setPanelOpen(false)}
+            panelOpen={false}
+            renderVotedContent={() => (
+              <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
+                {(() => {
+                  const total = totalVotes;
+                  const userPick = votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
+                  const winnerPct = votedSide === "a" ? pctA : pctB;
+                  const loserPct = votedSide === "a" ? pctB : pctA;
+                  const majorityAgrees =
+                    (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
+                  const isSplit = pctA === 50 && pctB === 50;
+                  if (total < 10)
+                    return `FMLY STILL JUDGING · ${voteCountA + voteCountB} VOTES`;
+                  if (isSplit)
+                    return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
+                  return `FMLY ${majorityAgrees ? "AGREES" : "DISAGREES"} · ${userPick} ${winnerPct} / ${loserPct}`;
+                })()}
+              </span>
+            )}
+          />
+        </div>
       </div>
 
       <ResultsPanel />
