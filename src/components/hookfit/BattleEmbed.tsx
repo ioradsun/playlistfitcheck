@@ -106,10 +106,10 @@ function BattleEmbedInner({
   const userIdRef = useRef<string | null | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Reset to cover when feed card is deactivated
+  // Reset to cover when feed card is deactivated (preserve results if voted)
   useEffect(() => {
     if (isFeedEmbed && cardState !== "active") {
-      setBattleState("cover");
+      setBattleState(prev => prev === "results" ? "results" : "cover");
       setReplayingSide(null);
       setPanelOpen(false);
     }
