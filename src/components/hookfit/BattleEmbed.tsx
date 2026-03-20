@@ -208,12 +208,17 @@ function BattleEmbedInner({
       const { data: vote } = await query.maybeSingle();
       if (cancelled || !vote) return;
 
-      // 3. Set voted state — skip cover, show results immediately
+      // 3. Set voted state + counts
       const side: "a" | "b" = (vote as any).hook_id === a.id ? "a" : "b";
       setVotedSide(side);
       setVoteCountA(a.vote_count || 0);
       if (b) setVoteCountB(b.vote_count || 0);
-      setBattleState("results");
+      // For feed embeds, keep cover visible — InlineBattle isn't mounted yet
+      // (it needs cardState === "active" which only happens on user tap).
+      // For fullscreen/shareable, skip cover since InlineBattle is always mounted.
+      if (!isFeedEmbed) {
+        setBattleState("results");
+      }
     })();
 
     return () => { cancelled = true; };
@@ -613,23 +618,42 @@ function BattleEmbedInner({
                 </button>
               )}
               <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center">
-                <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">Which {songTitle} hook hits harder?</p>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPlay?.();
-                    setBattleState("round-1");
-                    setMuted(false);
-                    hookEndFiredA.current = false;
-                    hookEndFiredB.current = false;
-                  }}
-                  className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
-                >
-                  Settle Feud
-                </button>
-                <p className="text-[9px] font-mono text-white/20 uppercase tracking-wider mt-3">
-                  2 rounds · 10 seconds each
-                </p>
+                {votedSide ? (
+                  <>
+                    <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">{songTitle}</p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPlay?.();
+                        setBattleState("results");
+                        setMuted(false);
+                      }}
+                      className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+                    >
+                      Replay Battle
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">Which {songTitle} hook hits harder?</p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPlay?.();
+                        setBattleState("round-1");
+                        setMuted(false);
+                        hookEndFiredA.current = false;
+                        hookEndFiredB.current = false;
+                      }}
+                      className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
+                    >
+                      Settle Feud
+                    </button>
+                    <p className="text-[9px] font-mono text-white/20 uppercase tracking-wider mt-3">
+                      2 rounds · 10 seconds each
+                    </p>
+                  </>
+                )}
               </div>
             </motion.div>
           )}
