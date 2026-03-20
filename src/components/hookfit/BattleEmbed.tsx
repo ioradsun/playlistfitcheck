@@ -603,7 +603,7 @@ function BattleEmbedInner({
 
         {/* Cover overlay — matches In Studio layered style */}
         <AnimatePresence>
-          {battleState === "cover" && (hookA || resolvedBattleId) && (
+          {battleState === "cover" && !error && (
             <motion.div
               key="battle-cover"
               initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}
@@ -640,7 +640,12 @@ function BattleEmbedInner({
                 </button>
               )}
               <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center">
-                {votedSide ? (
+                {loading ? (
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="h-2 w-32 rounded bg-white/[0.06] animate-pulse" />
+                    <div className="h-10 w-36 rounded-lg bg-white/[0.04] animate-pulse" />
+                  </div>
+                ) : votedSide ? (
                   <>
                     <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">{songTitle}</p>
                     <button

@@ -206,26 +206,14 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   }, [danceData?.id, danceData?.section_images]);
 
   // ── Loading / no data ──────────────────────────────────────
-  if (loading || !hookA) {
-    return (
-      <div className="w-full h-full animate-pulse">
-        <div className="flex h-full gap-1 p-1">
-          <div className="flex-1 rounded-lg bg-white/[0.03]" />
-          <div className="flex-1 rounded-lg bg-white/[0.03]" />
+  if (loading || !hookA || !sharedImagesReady) {
+    if (!loading && hookA && !danceData) {
+      return (
+        <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/40 text-xs font-mono">
+          No lyric dance found for this song
         </div>
-      </div>
-    );
-  }
-
-  if (!danceData) {
-    return (
-      <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/40 text-xs font-mono">
-        No lyric dance found for this song
-      </div>
-    );
-  }
-
-  if (!sharedImagesReady) {
+      );
+    }
     return (
       <div className="w-full h-full animate-pulse">
         <div className="flex h-full gap-1 p-1">
