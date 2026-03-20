@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState, type RefObject, type MutableRefObject } from "react";
+import { useRef, useEffect, useCallback, useMemo, useState, type RefObject, type MutableRefObject } from "react";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { LyricHook, LyricLine } from "./LyricDisplay";
 
@@ -34,8 +34,11 @@ export function HookWaveformPicker({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [startSec, setStartSec] = useState<number | null>(null);
   const [endSec, setEndSec] = useState<number | null>(null);
+  const [lyricsVisible, setLyricsVisible] = useState(false);
+  const [currentTime, setCurrentTime] = useState<number | null>(null);
   const draggingRef = useRef(false);
   const loopListenerRef = useRef<(() => void) | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const duration = waveform?.duration ?? 0;
 
@@ -128,6 +131,8 @@ export function HookWaveformPicker({
     audio.addEventListener("timeupdate", onTime);
     audio.currentTime = start;
     audio.play().catch(() => {});
+    setCurrentTime(start);
+    setTimeout(() => setLyricsVisible(true), 400);
   }, [audioRef, loopRegionRef]);
 
   const stopLoop = useCallback(() => {
@@ -138,9 +143,34 @@ export function HookWaveformPicker({
     }
     if (audio) audio.pause();
     loopRegionRef.current = null;
+    setLyricsVisible(false);
+    setCurrentTime(null);
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
   }, [audioRef, loopRegionRef]);
 
   useEffect(() => () => { stopLoop(); }, [stopLoop]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || startSec === null || endSec === null) return;
+
+    const tick = () => {
+      setCurrentTime(audio.currentTime);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [audioRef, startSec, endSec]);
 
   const xToSec = useCallback((clientX: number): number => {
     const canvas = canvasRef.current;
@@ -159,6 +189,7 @@ export function HookWaveformPicker({
   const applyStart = useCallback((sec: number) => {
     const start = Math.max(0, Math.min(sec, duration - MIN_HOOK_SEC));
     const end = Math.min(start + MAX_HOOK_SEC, duration);
+    setLyricsVisible(false);
     setStartSec(start);
     setEndSec(end);
     startLoop(start, end);
@@ -203,6 +234,10 @@ export function HookWaveformPicker({
   };
 
   const selDuration = startSec !== null && endSec !== null ? endSec - startSec : null;
+  const hookLines = useMemo(() => {
+    if (startSec === null || endSec === null) return [];
+    return lines.filter(l => l.end > startSec && l.start < endSec);
+  }, [lines, startSec, endSec]);
 
   return (
     <div className="space-y-4">
@@ -241,6 +276,30 @@ export function HookWaveformPicker({
           <span className="text-[10px] font-mono text-muted-foreground/30 tracking-wider">
             drag end handle to shorten
           </span>
+        )}
+      </div>
+
+      <div
+        className="min-h-[3rem] transition-opacity duration-500"
+        style={{ opacity: lyricsVisible ? 1 : 0 }}
+      >
+        {hookLines.length > 0 && (
+          <div className="space-y-0.5 px-1">
+            {hookLines.map((line, i) => (
+              <p
+                key={i}
+                className="text-[11px] leading-snug text-muted-foreground/70 font-mono"
+                style={{
+                  opacity: currentTime != null && currentTime >= line.start && currentTime <= line.end
+                    ? 1
+                    : 0.45,
+                  transition: "opacity 150ms ease",
+                }}
+              >
+                {line.text}
+              </p>
+            ))}
+          </div>
         )}
       </div>
 
