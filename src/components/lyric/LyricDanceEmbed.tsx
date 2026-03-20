@@ -3,7 +3,7 @@
  * All shared player logic lives in useLyricDanceCore.
  * This file adds: feed visibility lifecycle, cardState, eviction, battle mode.
  */
-import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -94,6 +94,14 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
 
+  // For battle embeds: patch region_start/region_end onto a derived data copy
+  // so LyricDancePlayer knows to window playback to the hook region.
+  // Never mutates the shared prefetchedData object.
+  const prefetchedDataWithRegion = useMemo(() => {
+    if (!isBattleMode || !prefetchedData) return prefetchedData;
+    return { ...prefetchedData, region_start: regionStart, region_end: regionEnd };
+  }, [prefetchedData, isBattleMode, regionStart, regionEnd]);
+
   const {
     canvasRef,
     textCanvasRef,
@@ -134,7 +142,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     commentRefreshKey,
   } = useLyricDanceCore({
     lyricDanceId,
-    prefetchedData,
+    prefetchedData: prefetchedDataWithRegion,
     postId,
     autoPlay,
     onPlay,
