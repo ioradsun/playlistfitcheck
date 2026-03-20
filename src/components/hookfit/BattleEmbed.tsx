@@ -474,7 +474,7 @@ function BattleEmbedInner({
               key="battle-cover"
               initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}
               className="absolute inset-x-0 top-0 z-20 flex flex-col items-center justify-center"
-              style={{ bottom: 65, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)" }}
+              style={{ bottom: isFeedEmbed ? 48 : 52, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)" }}
             >
               {showExpandButton && (
                 <button
