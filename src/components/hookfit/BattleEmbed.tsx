@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
-import { Loader2, Maximize2 } from "lucide-react";
+import { Loader2, Maximize2, Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineBattle, type BattleMode, type HookInfo } from "@/components/hookfit/InlineBattle";
@@ -511,14 +511,6 @@ function BattleEmbedInner({
           </div>
         )}
 
-        {/* FMLY Feud badge */}
-        {isFeedEmbed && (hookA || resolvedBattleId) && (
-          <div className="absolute top-3 left-3 z-30 pointer-events-none">
-            <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
-              FMLY Feud
-            </span>
-          </div>
-        )}
 
         {/* Cover overlay */}
         <AnimatePresence>
@@ -593,14 +585,44 @@ function BattleEmbedInner({
           )}
         </AnimatePresence>
 
-        {/* Expand button — after cover */}
-        {battleState !== "cover" && hookA && showExpandButton && (
-          <button
-            onClick={(e) => { e.stopPropagation(); window.open(battleUrl, "_blank"); }}
-            className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
+        {battleState !== "cover" && hookA && (
+          <div
+            className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-2 pointer-events-none"
+            onClick={(e) => e.stopPropagation()}
           >
-            <Maximize2 size={14} />
-          </button>
+            <span />
+            <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5 pointer-events-auto">
+              <button
+                onClick={() => setMuted(prev => !prev)}
+                className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                aria-label={muted ? "Unmute" : "Mute"}
+              >
+                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBattleState("cover");
+                  setMuted(true);
+                  hookEndFiredA.current = false;
+                  hookEndFiredB.current = false;
+                }}
+                className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                aria-label="Restart"
+              >
+                <RotateCcw size={14} />
+              </button>
+              {showExpandButton && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); window.open(battleUrl, "_blank"); }}
+                  className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                  aria-label="Expand"
+                >
+                  <Maximize2 size={14} />
+                </button>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
