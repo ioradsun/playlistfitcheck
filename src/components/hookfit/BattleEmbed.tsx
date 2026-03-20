@@ -58,6 +58,8 @@ function BattleEmbedInner({
   const [hookPhrase, setHookPhrase] = useState<string | null>(null);
   const [loading, setLoading] = useState(!propBattleId);
   const [error, setError] = useState(false);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [coverImageReady, setCoverImageReady] = useState(false);
 
   // Resolve battleId from battleUrl if not passed directly
   useEffect(() => {
