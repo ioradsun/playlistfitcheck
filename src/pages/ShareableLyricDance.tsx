@@ -98,10 +98,11 @@ export default function ShareableLyricDance() {
         .select("section_images")
         .eq("id", (data as any).id)
         .maybeSingle();
-      if (fresh && Array.isArray(fresh.section_images) && fresh.section_images.some(Boolean)) {
+      const f = fresh as any;
+      if (f && Array.isArray(f.section_images) && f.section_images.some(Boolean)) {
         setDataRaw((prev: LyricDanceData | null) => (
           prev
-            ? { ...prev, section_images: fresh.section_images }
+            ? { ...prev, section_images: f.section_images }
             : prev
         ));
         clearInterval(timer);
