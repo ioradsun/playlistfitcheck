@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { getPreloadedImage, preloadImage } from "@/lib/imagePreloadCache";
 
 interface LyricDanceCoverProps {
   songName: string;
@@ -43,18 +44,25 @@ export function LyricDanceCover({
       return;
     }
 
+    // Check global preload cache — may already be loaded from feed batch
+    const cached = getPreloadedImage(coverImageUrl);
+    if (cached && cached.complete && cached.naturalWidth > 0) {
+      loadedImageRef.current = coverImageUrl;
+      setImageLoaded(true);
+      return;
+    }
+
+    // Not cached yet — preload through shared cache (dedupes with engine)
     setImageLoaded(false);
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
+    let cancelled = false;
+    preloadImage(coverImageUrl).then(() => {
+      if (cancelled) return;
       loadedImageRef.current = coverImageUrl;
       setImageLoaded(true);
+    });
+    return () => {
+      cancelled = true;
     };
-    img.onerror = () => {
-      loadedImageRef.current = coverImageUrl;
-      setImageLoaded(true);
-    };
-    img.src = coverImageUrl;
   }, [coverImageUrl]);
 
   return (

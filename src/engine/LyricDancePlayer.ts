@@ -43,6 +43,7 @@ import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
+import { preloadImage } from "@/lib/imagePreloadCache";
 
 const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-04-PERF';
 
@@ -4063,18 +4064,10 @@ export class LyricDancePlayer {
     const totalChapters = urls.length || 1;
     const chapterSpan = duration / totalChapters;
     this.chapterImages = await Promise.all(
-      urls.map((url: string, i: number) => new Promise<HTMLImageElement>((resolve) => {
-        if (!url) { resolve(new Image()); return; }
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          resolve(img);
-        };
-        img.onerror = () => {
-          resolve(new Image());
-        };
-        img.src = url;
-      }))
+      urls.map((url: string) => {
+        if (!url) return Promise.resolve(new Image());
+        return preloadImage(url);
+      })
     );
 
     // ═══ PRE-BLUR: Bake Gaussian blur into offscreen canvases once ═══

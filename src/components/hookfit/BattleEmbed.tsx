@@ -15,6 +15,7 @@ import { Loader2, Maximize2, Volume2, VolumeX, RotateCcw, X } from "lucide-react
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { InlineBattle, type BattleMode, type HookInfo } from "@/components/hookfit/InlineBattle";
+import { preloadImage } from "@/lib/imagePreloadCache";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { getSessionId } from "@/lib/sessionId";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
@@ -79,6 +80,61 @@ function BattleEmbedInner({
       });
   }, [propBattleId, battleUrl]);
 
+  // ── Early cover image fetch — runs before InlineBattle mounts ──
+  useEffect(() => {
+    if (!resolvedBattleId) return;
+    let cancelled = false;
+    setCoverImageUrl(null);
+    setCoverImageReady(false);
+
+    (async () => {
+      const { data: hooks } = await supabase
+        .from("shareable_hooks" as any)
+        .select("artist_slug, song_slug")
+        .eq("battle_id", resolvedBattleId)
+        .limit(1);
+
+      if (cancelled || !hooks || hooks.length === 0) return;
+      const { artist_slug, song_slug } = hooks[0] as any;
+
+      const { data: dance } = await supabase
+        .from("shareable_lyric_dances" as any)
+        .select("section_images")
+        .eq("artist_slug", artist_slug)
+        .eq("song_slug", song_slug)
+        .limit(1)
+        .maybeSingle();
+
+      if (cancelled) return;
+      const firstImg = (dance as any)?.section_images?.[0];
+      if (firstImg) {
+        setCoverImageUrl(firstImg);
+        preloadImage(firstImg).then(() => {
+          if (!cancelled) setCoverImageReady(true);
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedBattleId]);
+
+  useEffect(() => {
+    if (!coverImageUrl) {
+      setCoverImageReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    preloadImage(coverImageUrl).then(() => {
+      if (!cancelled) setCoverImageReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [coverImageUrl]);
+
   // ── Battle state machine ────────────────────────────────────
   const [battleState, setBattleState] = useState<BattleState>("cover");
   const [hookA, setHookA] = useState<HookInfo | null>(null);
@@ -98,6 +154,8 @@ function BattleEmbedInner({
   const [comments, setComments] = useState<Array<{ id: string; text: string; voted_side: string; created_at: string }>>([]);
   const [hookALines, setHookALines] = useState<any[]>([]);
   const [hookBLines, setHookBLines] = useState<any[]>([]);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [coverImageReady, setCoverImageReady] = useState(false);
 
   const progressTimerRef = useRef<number>(0);
   const roundStartRef = useRef<number>(0);
@@ -507,30 +565,54 @@ function BattleEmbedInner({
               votePct={votedSide === "a" ? pctA : votedSide === "b" ? pctB : undefined}
               onTileTap={handleTileTap}
               onHooksLoaded={handleHooksLoaded}
+              onCoverImage={(url) => {
+                if (!coverImageUrl) setCoverImageUrl(url);
+              }}
               forceMuted={muted}
             />
           </div>
         )}
 
 
-        {/* Cover overlay */}
+        {/* Cover overlay — matches In Studio layered style */}
         <AnimatePresence>
           {battleState === "cover" && (hookA || resolvedBattleId) && (
             <motion.div
               key="battle-cover"
               initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}
-              className="absolute inset-x-0 top-0 z-20 flex flex-col items-center justify-center"
-              style={{ bottom: isFeedEmbed ? 48 : 52, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)" }}
+              className="absolute inset-x-0 top-0 z-20 flex flex-col items-center justify-center overflow-hidden"
+              style={{ bottom: isFeedEmbed ? 48 : 52 }}
             >
+              {coverImageUrl && (
+                <div
+                  className="absolute inset-0 transition-opacity duration-500"
+                  style={{
+                    backgroundImage: `url(${coverImageUrl})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    filter: "blur(8px) saturate(0.5)",
+                    transform: "scale(1.08)",
+                    opacity: coverImageReady ? 1 : 0,
+                  }}
+                />
+              )}
+
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)",
+                }}
+              />
+
               {showExpandButton && (
                 <button
                   onClick={(e) => { e.stopPropagation(); window.open(battleUrl, "_blank"); }}
-                  className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-white/30 hover:text-white/60 transition-colors"
+                  className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-white/30 hover:text-white/60 transition-colors z-10"
                 >
                   <Maximize2 size={12} />
                 </button>
               )}
-              <div className="flex flex-col items-center justify-center px-6 text-center">
+              <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center">
                 <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">Which {songTitle} hook hits harder?</p>
                 <button
                   onClick={(e) => {

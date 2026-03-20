@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { preloadImage } from "@/lib/imagePreloadCache";
 
 export type BattleMode =
   | "dark"
@@ -177,20 +178,24 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       return;
     }
 
-    setSharedImagesReady(false);
     let cancelled = false;
-    Promise.all(
-      urls.map((url) => new Promise<HTMLImageElement>((resolve) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(new Image());
-        img.src = url;
-      })),
-    ).then((images) => {
+
+    // Phase 1: just need first image to unblock rendering
+    preloadImage(urls[0]).then((firstImg) => {
       if (cancelled) return;
-      sharedImagesRef.current = images;
+      // Seed array with placeholders, slot in first image
+      const placeholder = urls.map(() => new Image());
+      placeholder[0] = firstImg;
+      sharedImagesRef.current = placeholder;
       setSharedImagesReady(true);
+
+      // Phase 2: lazy-load remaining images in background (no blocking)
+      if (urls.length > 1) {
+        Promise.all(urls.slice(1).map((url) => preloadImage(url))).then((rest) => {
+          if (cancelled) return;
+          sharedImagesRef.current = [firstImg, ...rest];
+        });
+      }
     });
 
     return () => {
