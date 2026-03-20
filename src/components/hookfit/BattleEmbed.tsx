@@ -115,6 +115,52 @@ function BattleEmbedInner({
     }
   }, [isFeedEmbed, cardState]);
 
+  // ── Early vote check — runs before InlineBattle mounts ────
+  useEffect(() => {
+    if (!resolvedBattleId) return;
+    let cancelled = false;
+
+    (async () => {
+      // 1. Fetch hook IDs + vote counts for this battle
+      const { data: hooks } = await supabase
+        .from("shareable_hooks" as any)
+        .select("id, battle_position, vote_count")
+        .eq("battle_id", resolvedBattleId)
+        .order("battle_position", { ascending: true });
+
+      if (cancelled || !hooks || hooks.length === 0) return;
+
+      const rawHooks = hooks as any[];
+      const a = rawHooks.find((h: any) => h.battle_position === 1) || rawHooks[0];
+      const b = rawHooks.find((h: any) => h.id !== a.id) || null;
+
+      // 2. Check for existing vote
+      const sessionId = getSessionId();
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (cancelled) return;
+      userIdRef.current = u?.id ?? null;
+
+      let query = supabase
+        .from("hook_votes" as any)
+        .select("hook_id")
+        .eq("battle_id", resolvedBattleId);
+      if (u?.id) query = query.eq("user_id", u.id);
+      else query = query.eq("session_id", sessionId);
+
+      const { data: vote } = await query.maybeSingle();
+      if (cancelled || !vote) return;
+
+      // 3. Set voted state — skip cover, show results immediately
+      const side: "a" | "b" = (vote as any).hook_id === a.id ? "a" : "b";
+      setVotedSide(side);
+      setVoteCountA(a.vote_count || 0);
+      if (b) setVoteCountB(b.vote_count || 0);
+      setBattleState("results");
+    })();
+
+    return () => { cancelled = true; };
+  }, [resolvedBattleId]);
+
   // ── Hooks loaded ────────────────────────────────────────────
   const handleHooksLoaded = useCallback((a: HookInfo, b: HookInfo | null) => {
     setHookA(a);
@@ -137,7 +183,7 @@ function BattleEmbedInner({
         if (b) setHookBLines(lyrics.filter((l: any) => l.start >= b.hook_start - 0.3 && l.end <= b.hook_end + 0.3));
       });
 
-    if (!resolvedBattleId) return;
+    if (!resolvedBattleId || votedSide) return;
     (async () => {
       const sessionId = getSessionId();
       const { data: { user: u } } = await supabase.auth.getUser();
@@ -151,7 +197,7 @@ function BattleEmbedInner({
         setBattleState("results");
       }
     })();
-  }, [resolvedBattleId, hookPhrase]);
+  }, [resolvedBattleId, hookPhrase, votedSide]);
 
   // ── Progress bar timer ──────────────────────────────────────
   useEffect(() => {
