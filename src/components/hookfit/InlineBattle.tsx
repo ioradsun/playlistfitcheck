@@ -143,12 +143,9 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     }
   }, [mode, votedSide]);
 
-  const getBorderStyle = useCallback((side: "a" | "b"): React.CSSProperties => {
-    if (votedSide === side) {
-      return { boxShadow: "inset 0 0 0 3px rgba(34,197,94,0.8)" };
-    }
+  const getBorderStyle = useCallback((_side: "a" | "b"): React.CSSProperties => {
     return {};
-  }, [votedSide]);
+  }, []);
 
   // Fire onHookEnd once per side after the hook duration plays through
   useEffect(() => {
@@ -273,19 +270,6 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
             showExpandButton={false}
             forceMuted={forceMuted || activePlaying !== "a"}
           />
-          {getBorderStyle("a").boxShadow && (
-            <div
-              className="absolute top-0 left-0 right-0 bottom-11 z-30 pointer-events-none rounded-sm"
-              style={getBorderStyle("a")}
-            />
-          )}
-          {votedSide === "a" && voteCount != null && (
-            <div className="absolute bottom-14 right-2 z-10 pointer-events-none">
-              <span className="text-[9px] font-mono text-green-400/90 bg-black/60 backdrop-blur-sm border border-green-500/30 rounded-full px-2 py-0.5">
-                ✓ You + {Math.max(0, (voteCount ?? 1) - 1)} FMLY ({votePct ?? 0}%)
-              </span>
-            </div>
-          )}
         </motion.div>
 
         {/* Hook B */}
@@ -325,19 +309,6 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
               showExpandButton={false}
               forceMuted={forceMuted || activePlaying !== "b"}
             />
-            {getBorderStyle("b").boxShadow && (
-              <div
-                className="absolute top-0 left-0 right-0 bottom-11 z-30 pointer-events-none rounded-sm"
-                style={getBorderStyle("b")}
-              />
-            )}
-            {votedSide === "b" && voteCount != null && (
-              <div className="absolute bottom-14 left-2 z-10 pointer-events-none">
-                <span className="text-[9px] font-mono text-green-400/90 bg-black/60 backdrop-blur-sm border border-green-500/30 rounded-full px-2 py-0.5">
-                  ✓ You + {Math.max(0, (voteCount ?? 1) - 1)} FMLY ({votePct ?? 0}%)
-                </span>
-              </div>
-            )}
           </motion.div>
         ) : (
           <div className="relative flex-1 overflow-hidden bg-black/50" />

@@ -584,9 +584,7 @@ function BattleEmbedInner({
           ...(!isFeedEmbed ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
         }}
       >
-        <div className={isFeedEmbed ? undefined : "w-full max-w-2xl mx-auto"}>
-
-        {/* Progress bar — round states only */}
+        {/* Progress bar — always full canvas width, outside constrained wrapper */}
         {(battleState === "round-1" || battleState === "round-2") && (
           <div className="w-full h-[2px] bg-white/[0.06]">
             <motion.div
@@ -601,6 +599,7 @@ function BattleEmbedInner({
             />
           </div>
         )}
+        <div className={isFeedEmbed ? undefined : "w-full max-w-2xl mx-auto"}>
 
         {/* Pre-vote: Left Hook / Right Hook disabled + 🔥 disabled */}
         {(battleState === "cover" || battleState === "round-1" || battleState === "round-2") && (
@@ -654,12 +653,15 @@ function BattleEmbedInner({
                 {(() => {
                   const total = totalVotes;
                   const userPick = votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
-                  const winnerPct = votedSide === "a" ? pctA : pctB;
+                  const winnerCount = votedSide === "a" ? voteCountA : voteCountB;
+                  const loserCount = total - winnerCount;
                   const majorityAgrees = (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
                   const isSplit = pctA === 50 && pctB === 50;
-                  if (total < 10) return `FMLY STILL JUDGING · ${voteCountA + voteCountB} VOTES`;
+                  if (total < 20) return `FMLY STILL VOTING · ${winnerCount} / ${total} ${userPick}`;
                   if (isSplit) return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
-                  return `FMLY ${majorityAgrees ? "AGREES" : "DISAGREES"} · ${userPick} ${winnerPct}%`;
+                  return majorityAgrees
+                    ? `FMLY AGREES · ${winnerCount} / ${total} ${userPick}`
+                    : `FMLY DISAGREES · ${loserCount} / ${total} NOT ${userPick}`;
                 })()}
               </span>
             </div>
