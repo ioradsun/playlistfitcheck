@@ -1153,7 +1153,7 @@ const Index = () => {
               "flex-1",
               reelsMode
                 ? "h-full overflow-y-auto snap-y snap-mandatory overscroll-y-contain"
-                : "px-4 py-6",
+                : "min-h-0 overflow-y-auto px-4 py-6",
             )}
           >
             <Suspense fallback={<PageSkeleton tool="songfit" mode="new" />}>
