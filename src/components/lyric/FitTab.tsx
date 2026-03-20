@@ -1056,19 +1056,26 @@ export function FitTab({
               </div>
 
               <div className="flex border-b border-border/30">
-                {(["Left Hook", "Right Hook"] as const).map((label, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setFeudTab(idx as 0 | 1)}
-                    className={`flex-1 px-4 py-3 text-[11px] font-mono uppercase tracking-[0.12em] transition-colors ${
-                      feudTab === idx
-                        ? "text-primary border-b-2 border-primary"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {(["Left Hook", "Right Hook"] as const).map((label, idx) => {
+                  const isSet = !!(customHooks[idx] ??
+                    (idx === 0 ? renderData?.hook : renderData?.secondHook));
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setFeudTab(idx as 0 | 1)}
+                      className={`flex-1 px-4 py-3 text-[11px] font-mono uppercase tracking-[0.12em] transition-colors flex items-center justify-center gap-1.5 ${
+                        feudTab === idx
+                          ? "text-primary border-b-2 border-primary"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                      {isSet && feudTab !== idx && (
+                        <span className="text-[8px] text-primary/60">✓</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="px-5 py-5" style={{ minHeight: 200 }}>
@@ -1083,6 +1090,7 @@ export function FitTab({
                       audioRef={hookAudioRef}
                       loopRegionRef={hookLoopRegionRef}
                       aiHint={aiHook ?? null}
+                      initialHook={customHooks[idx] ?? aiHook ?? null}
                       isLast={idx === 1}
                       onSave={async (hook) => {
                         const saved: SavedCustomHook = { ...hook, color: "#a855f7" };

@@ -7,7 +7,7 @@ import type { LyricHook, LyricLine } from "./LyricDisplay";
 
 const MAX_HOOK_SEC = 10;
 const MIN_HOOK_SEC = 2;
-const HANDLE_HIT_PX = 40;
+const HANDLE_HIT_PX = 44;
 
 interface Props {
   waveform: WaveformData | null;
@@ -15,6 +15,7 @@ interface Props {
   audioRef: RefObject<HTMLAudioElement>;
   loopRegionRef: MutableRefObject<{ start: number; end: number } | null>;
   aiHint?: LyricHook | null;
+  initialHook?: LyricHook | null;
   onSave: (hook: LyricHook) => void;
   isLast?: boolean;
 }
@@ -37,13 +38,23 @@ function fillBar(
 }
 
 export function HookWaveformPicker({
-  waveform, lines, audioRef, loopRegionRef, aiHint, onSave, isLast = false,
+  waveform, lines, audioRef, loopRegionRef,
+  aiHint, initialHook, onSave, isLast = false,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [startSec, setStartSec] = useState<number | null>(null);
-  const [endSec, setEndSec] = useState<number | null>(null);
+
+  // Seed from initialHook so returning to a tab shows prior selection
+  const [startSec, setStartSec] = useState<number | null>(
+    () => initialHook?.start ?? null,
+  );
+  const [endSec, setEndSec] = useState<number | null>(
+    () => initialHook?.end ?? null,
+  );
   const [currentTime, setCurrentTime] = useState<number | null>(null);
-  const [lyricsVisible, setLyricsVisible] = useState(false);
+  // Show lyrics immediately if we have an initial hook, else wait for audio
+  const [lyricsVisible, setLyricsVisible] = useState(
+    () => initialHook != null,
+  );
   const draggingRef = useRef(false);
   const loopListenerRef = useRef<(() => void) | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -67,7 +78,6 @@ export function HookWaveformPicker({
     const ctx = canvas.getContext("2d")!;
     ctx.scale(dpr, dpr);
 
-    // Always dark background — visible regardless of modal theme
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, 0, W, H);
 
@@ -78,13 +88,12 @@ export function HookWaveformPicker({
     const selStartX = hasSelection ? (startSec! / duration) * W : null;
     const selEndX   = hasSelection ? (endSec!   / duration) * W : null;
 
-    // AI hint tick
     if (aiHint && duration > 0) {
-      fillBar(ctx, (aiHint.start / duration) * W - 1, 4, 2, H - 8,
+      fillBar(ctx,
+        (aiHint.start / duration) * W - 1, 4, 2, H - 8,
         "rgba(168,85,247,0.2)");
     }
 
-    // Bars
     for (let i = 0; i < n; i++) {
       const x    = i * (barW + 1);
       const barH = Math.max(2, peaks[i] * H * 0.78);
@@ -102,14 +111,13 @@ export function HookWaveformPicker({
       fillBar(ctx, x, y, barW, barH, color);
     }
 
-    // Playhead — white hairline
     if (playheadSec != null && hasSelection &&
         playheadSec >= startSec! && playheadSec <= endSec!) {
-      fillBar(ctx, (playheadSec / duration) * W, 0, 1, H,
+      fillBar(ctx,
+        (playheadSec / duration) * W, 0, 1, H,
         "rgba(255,255,255,0.8)");
     }
 
-    // End handle — purple pill + left-arrow
     if (hasSelection && selEndX !== null) {
       fillBar(ctx, selEndX - 2, (H - 22) / 2, 4, 22, "rgba(168,85,247,1)");
       ctx.fillStyle = "rgba(168,85,247,0.5)";
@@ -122,8 +130,6 @@ export function HookWaveformPicker({
     }
   }, [waveform, startSec, endSec, duration, aiHint]);
 
-  // ResizeObserver handles initial mount inside Dialog
-  // (canvas.clientWidth = 0 until Dialog CSS transition completes)
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
@@ -136,8 +142,12 @@ export function HookWaveformPicker({
     draw(currentTime ?? undefined);
   }, [draw, currentTime]);
 
-  // RAF ticker — updates currentTime at ~60fps while audio plays
   const startTicker = useCallback(() => {
+    // Always stop any existing ticker first to prevent leaks
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     const tick = () => {
       const audio = audioRef.current;
       if (audio && !audio.paused) setCurrentTime(audio.currentTime);
@@ -156,12 +166,18 @@ export function HookWaveformPicker({
   const startLoop = useCallback((start: number, end: number) => {
     const audio = audioRef.current;
     if (!audio) return;
+    // Stop any previous ticker before starting new one
+    stopTicker();
     if (loopListenerRef.current)
       audio.removeEventListener("timeupdate", loopListenerRef.current);
     loopRegionRef.current = { start, end };
+    // FIX: read loopRegionRef.current.end dynamically — not captured end —
+    // so dragging the handle updates the loop boundary in real time.
     const onTime = () => {
-      if (audio.currentTime >= end || audio.currentTime < start - 0.5)
-        audio.currentTime = start;
+      const region = loopRegionRef.current;
+      if (!region) return;
+      if (audio.currentTime >= region.end || audio.currentTime < region.start - 0.5)
+        audio.currentTime = region.start;
     };
     loopListenerRef.current = onTime;
     audio.addEventListener("timeupdate", onTime);
@@ -169,7 +185,7 @@ export function HookWaveformPicker({
     audio.play().catch(() => {});
     setTimeout(() => setLyricsVisible(true), 400);
     startTicker();
-  }, [audioRef, loopRegionRef, startTicker]);
+  }, [audioRef, loopRegionRef, stopTicker, startTicker]);
 
   const stopLoop = useCallback(() => {
     stopTicker();
@@ -209,36 +225,57 @@ export function HookWaveformPicker({
     startLoop(start, end);
   }, [duration, startLoop]);
 
+  // Dynamic cursor feedback
+  const updateCursor = useCallback((clientX: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (draggingRef.current) {
+      canvas.style.cursor = "grabbing";
+    } else if (isOnHandle(clientX)) {
+      canvas.style.cursor = "ew-resize";
+    } else {
+      canvas.style.cursor = "pointer";
+    }
+  }, [isOnHandle]);
+
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    if (isOnHandle(e.clientX)) { draggingRef.current = true; }
-    else { draggingRef.current = false; applyStart(xToSec(e.clientX)); }
+    if (isOnHandle(e.clientX)) {
+      draggingRef.current = true;
+      e.currentTarget.style.cursor = "grabbing";
+    } else {
+      draggingRef.current = false;
+      applyStart(xToSec(e.clientX));
+    }
   }, [applyStart, isOnHandle, xToSec]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    updateCursor(e.clientX);
     if (!draggingRef.current || startSec === null) return;
     const newEnd = Math.max(
       startSec + MIN_HOOK_SEC,
       Math.min(xToSec(e.clientX), startSec + MAX_HOOK_SEC, duration),
     );
     setEndSec(newEnd);
+    // Update loopRegionRef — the loop listener reads this dynamically
     if (loopRegionRef.current) loopRegionRef.current.end = newEnd;
-    const audio = audioRef.current;
-    if (audio && audio.currentTime >= newEnd) audio.currentTime = startSec;
-  }, [startSec, duration, loopRegionRef, audioRef, xToSec]);
+  }, [startSec, duration, loopRegionRef, xToSec, updateCursor]);
 
-  const onPointerUp = useCallback(() => { draggingRef.current = false; }, []);
+  const onPointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    draggingRef.current = false;
+    updateCursor(e.clientX);
+  }, [updateCursor]);
 
   const handleSave = () => {
     if (startSec === null || endSec === null) return;
     stopLoop();
-    const hookLines = lines.filter(l => l.start < endSec! && l.end > startSec!);
+    const savedLines = lines.filter(l => l.start < endSec! && l.end > startSec!);
     onSave({
       start: startSec,
       end: endSec,
       score: 0,
       reasonCodes: ["user_selected"],
-      previewText: hookLines.map(l => l.text).join(" / ")
+      previewText: savedLines.map(l => l.text).join(" / ")
         || `${fmt(startSec)}–${fmt(endSec)}`,
       status: "confirmed",
     });
@@ -256,11 +293,12 @@ export function HookWaveformPicker({
 
   return (
     <div className="space-y-3">
+      {/* Waveform canvas */}
       <div className="relative rounded-lg overflow-hidden" style={{ height: 64 }}>
         <canvas
           ref={canvasRef}
-          className="w-full h-full cursor-crosshair touch-none"
-          style={{ display: "block" }}
+          className="w-full h-full touch-none"
+          style={{ display: "block", cursor: "pointer" }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -274,8 +312,10 @@ export function HookWaveformPicker({
           </div>
         )}
         {!waveform && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{ background: "rgba(0,0,0,0.6)" }}>
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            style={{ background: "rgba(0,0,0,0.6)" }}
+          >
             <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider">
               Loading waveform…
             </span>
@@ -283,6 +323,7 @@ export function HookWaveformPicker({
         )}
       </div>
 
+      {/* Timestamp */}
       <div className="h-5 flex items-center justify-center">
         {timeLabel ? (
           <span className="text-[11px] font-mono tracking-wider text-primary/70">
@@ -290,35 +331,39 @@ export function HookWaveformPicker({
           </span>
         ) : (
           <span className="text-[10px] font-mono text-muted-foreground/25 tracking-wider">
-            drag end handle left to shorten
+            tap waveform to set hook start
           </span>
         )}
       </div>
 
+      {/* Lyrics — fixed height, scrollable, fades in */}
       <div
-        className="min-h-[3rem] transition-opacity duration-500"
+        className="h-24 overflow-y-auto transition-opacity duration-500 px-1"
         style={{ opacity: lyricsVisible ? 1 : 0 }}
       >
-        {hookLines.length > 0 && (
-          <div className="space-y-0.5 px-1">
-            {hookLines.map((line, i) => (
-              <p
-                key={i}
-                className="text-[11px] leading-snug text-muted-foreground/70 font-mono"
-                style={{
-                  opacity: currentTime != null && currentTime >= line.start && currentTime <= line.end
+        <div className="space-y-0.5">
+          {hookLines.map((line, i) => (
+            <p
+              key={i}
+              className="text-[11px] leading-snug font-mono"
+              style={{
+                color: "rgba(255,255,255,1)",
+                opacity:
+                  currentTime != null &&
+                  currentTime >= line.start &&
+                  currentTime <= line.end
                     ? 1
-                    : 0.45,
-                  transition: "opacity 150ms ease",
-                }}
-              >
-                {line.text}
-              </p>
-            ))}
-          </div>
-        )}
+                    : 0.35,
+                transition: "opacity 150ms ease",
+              }}
+            >
+              {line.text}
+            </p>
+          ))}
+        </div>
       </div>
 
+      {/* Action */}
       <button
         onClick={handleSave}
         disabled={startSec === null}
