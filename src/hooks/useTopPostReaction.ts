@@ -29,9 +29,10 @@ export function useTopPostReaction(postId: string, enabled = true): TopReaction 
       .from("songfit_post_reactions" as never)
       .select("emoji")
       .eq("post_id", postId)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (cancelled) return;
-        if (!data || data.length === 0) {
+        // Table may not exist yet — fail silently
+        if (error || !data || data.length === 0) {
           setTop(null);
           return;
         }
