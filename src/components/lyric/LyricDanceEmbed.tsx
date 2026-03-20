@@ -287,7 +287,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         player.scheduleFullModeUpgrade();
         setMuted(false);
       } else {
-        player.play();
+        player.stopRendering?.();
         player.setMuted(true);
         setMuted(true);
       }
