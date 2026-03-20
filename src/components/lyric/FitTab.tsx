@@ -18,7 +18,7 @@ import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
-import { CustomHookSelector } from "./CustomHookSelector";
+import { HookWaveformPicker } from "./HookWaveformPicker";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { FitExportModal } from "./FitExportModal";
 
@@ -1121,48 +1121,27 @@ export function FitTab({
                           )}
                         </>
                       ) : (
-                        <div className="space-y-2">
-                          <p className="text-[10px] font-mono text-muted-foreground">
-                            Tap any line to start your hook selection
-                          </p>
-                          <CustomHookSelector
-                            lines={lyricData.lines}
-                            aiHooks={[renderData?.hook, renderData?.secondHook].filter(Boolean) as LyricHook[]}
-                            audioRef={hookAudioRef}
-                            loopRegionRef={hookLoopRegionRef}
-                            activeHookIndex={
-                              activeCustomHookIndex !== null ? activeCustomHookIndex + 100 : null
-                            }
-                            setActiveHookIndex={(i) => {
-                              setActiveCustomHookIndex(i === null ? null : i - 100);
-                            }}
-                            clipProgress={hookClipProgress}
-                            setClipProgress={setHookClipProgress}
-                            clipProgressRafRef={hookClipProgressRafRef}
-                            setIsPlaying={() => {}}
-                            onSaveHook={(hook) => {
-                              const colors = ["#f59e0b", "#10b981"];
-                              const saved: SavedCustomHook = {
-                                ...hook,
-                                color: colors[idx] ?? "#f59e0b",
-                              };
-                              setCustomHooks((prev) => {
-                                const next: [SavedCustomHook | null, SavedCustomHook | null] = [...prev] as [SavedCustomHook | null, SavedCustomHook | null];
-                                next[idx] = saved;
-                                return next;
-                              });
-                              setFeudChangingSlot(null);
-                            }}
-                            savedCustomHooks={customHooks.filter(Boolean) as SavedCustomHook[]}
-                            onRemoveHook={() => {}}
-                          />
-                          <button
-                            onClick={() => setFeudChangingSlot(null)}
-                            className="w-full text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors py-1"
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                        <HookWaveformPicker
+                          waveform={waveform || parentWaveform || null}
+                          lines={lyricData.lines}
+                          audioRef={hookAudioRef}
+                          loopRegionRef={hookLoopRegionRef}
+                          aiHint={idx === 0 ? renderData?.hook : renderData?.secondHook}
+                          onSave={(hook) => {
+                            const colors = ["#f59e0b", "#10b981"];
+                            const saved: SavedCustomHook = {
+                              ...hook,
+                              color: colors[idx] ?? "#f59e0b",
+                            };
+                            setCustomHooks((prev) => {
+                              const next: [SavedCustomHook | null, SavedCustomHook | null] = [...prev] as [SavedCustomHook | null, SavedCustomHook | null];
+                              next[idx] = saved;
+                              return next;
+                            });
+                            setFeudChangingSlot(null);
+                          }}
+                          onCancel={() => setFeudChangingSlot(null)}
+                        />
                       )}
                     </div>
                   );
