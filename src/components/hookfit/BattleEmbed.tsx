@@ -510,11 +510,11 @@ function BattleEmbedInner({
           </div>
         )}
 
-        {/* In Battle badge */}
+        {/* FMLY Feud badge */}
         {(hookA || resolvedBattleId) && (
           <div className="absolute top-3 left-3 z-30 pointer-events-none">
             <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-green-400 border border-green-400/30 rounded px-1.5 py-0.5 bg-green-500/15 backdrop-blur-sm">
-              In Battle
+              FMLY Feud
             </span>
           </div>
         )}
@@ -603,11 +603,11 @@ function BattleEmbedInner({
         )}
       </div>
 
-      {/* Bottom bar */}
-      <div className="absolute bottom-0 left-0 right-0 z-20" style={{ background: "rgba(0,0,0,0.4)" }}>
+      {/* Bottom bar — CardBottomBar-style shell */}
+      <div className="absolute bottom-0 left-0 right-0 z-20" style={{ background: "#0a0a0a" }}>
         {/* Progress bar */}
         {(battleState === "round-1" || battleState === "round-2") && (
-          <div className="w-full h-[3px] bg-white/[0.06]">
+          <div className="w-full h-[2px] bg-white/[0.06]">
             <motion.div
               className="h-full"
               style={{
@@ -619,108 +619,97 @@ function BattleEmbedInner({
           </div>
         )}
 
-        <div className="w-full px-4 pt-2.5 pb-4">
+        <div className="flex items-stretch h-[48px]" onClick={(e) => e.stopPropagation()}>
           <AnimatePresence mode="wait">
 
-            {/* Cover bar */}
+            {/* Cover — greyed preview */}
             {battleState === "cover" && (
-              <motion.div key="cover-bar" className="flex flex-col gap-1.5 pointer-events-none w-full">
-                <div className="flex items-center gap-3 opacity-30">
-                  <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/10">
-                    <span className="text-sm">👊</span>
-                    <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-white/50 font-semibold">Left Hook</span>
-                  </div>
-                  <span className="text-[9px] font-mono text-white/10 shrink-0">vs</span>
-                  <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/10">
-                    <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-white/50 font-semibold">Right Hook</span>
-                    <span className="text-sm">👊</span>
-                  </div>
-                </div>
-                {(voteCountA + voteCountB > 0 || comments.length > 0) && (
-                  <div className="flex items-center justify-center gap-3">
-                    {voteCountA + voteCountB > 0 && (
-                      <span className="text-[10px] font-mono text-white/50">🔥 {voteCountA + voteCountB} voted</span>
-                    )}
-                    {comments.length > 0 && (
-                      <span className="text-[10px] font-mono text-white/35">{comments.length} take{comments.length !== 1 ? "s" : ""}</span>
-                    )}
-                  </div>
-                )}
+              <motion.div key="cover-bar" className="flex-1 flex items-center justify-center gap-3 opacity-25 pointer-events-none px-3">
+                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">👊 Left Hook</span>
+                <span className="text-white/20 text-[9px] font-mono">vs</span>
+                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">Right Hook 👊</span>
               </motion.div>
             )}
 
-            {/* Round label */}
+            {/* Round 1 / 2 label */}
             {(battleState === "round-1" || battleState === "round-2") && (
               <motion.div
                 key={`round-${battleState}`}
-                initial={{ opacity: 0, x: battleState === "round-2" ? 20 : 0 }}
-                animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-                className="flex items-center justify-between"
+                initial={{ opacity: 0, x: battleState === "round-2" ? 16 : 0 }}
+                animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }}
+                className="flex-1 flex items-center gap-2 px-3"
               >
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/50">
-                    {battleState === "round-1" ? "Round 1" : "Round 2"}
-                  </span>
-                  <span className="text-white/20">·</span>
-                  <span className="font-mono text-[11px] uppercase tracking-wider text-white/70">
-                    {battleState === "round-1" ? "Left Hook" : "Right Hook"}
-                  </span>
-                </div>
-                <div className="w-2 h-2 rounded-full animate-pulse"
+                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/40">
+                  {battleState === "round-1" ? "Round 1" : "Round 2"}
+                </span>
+                <span className="text-white/20">·</span>
+                <span className="font-mono text-[11px] uppercase tracking-wider text-white/70">
+                  {battleState === "round-1" ? "Left Hook" : "Right Hook"}
+                </span>
+                <div className="ml-auto w-1.5 h-1.5 rounded-full animate-pulse"
                   style={{ background: battleState === "round-1" ? (hookA?.palette?.[0] ?? "#a855f7") : (hookB?.palette?.[0] ?? "#a855f7") }} />
               </motion.div>
             )}
 
-            {/* Vote buttons */}
+            {/* Vote — Left Hook / Right Hook */}
             {battleState === "vote" && (
-              <motion.div key="vote-bar" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                className="flex items-center gap-3">
+              <motion.div key="vote-bar" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="flex-1 flex items-stretch">
                 <button onClick={() => handleVote("a")}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/20 hover:border-white/40 hover:bg-white/[0.06] active:scale-[0.97] transition-all">
-                  <span className="text-sm">👊</span>
-                  <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-white/80 font-semibold">Left Hook</span>
+                  className="flex-1 flex items-center justify-center gap-2 py-3 hover:bg-white/[0.04] transition-colors group">
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors">
+                    👊 Left Hook
+                  </span>
                 </button>
-                <span className="text-[9px] font-mono text-white/15 shrink-0">vs</span>
+                <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
                 <button onClick={() => handleVote("b")}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-white/20 hover:border-white/40 hover:bg-white/[0.06] active:scale-[0.97] transition-all">
-                  <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-white/80 font-semibold">Right Hook</span>
-                  <span className="text-sm">👊</span>
+                  className="flex-1 flex items-center justify-center gap-2 py-3 hover:bg-white/[0.04] transition-colors group">
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors">
+                    Right Hook 👊
+                  </span>
                 </button>
               </motion.div>
             )}
 
-            {/* Results bar */}
+            {/* Results — social proof */}
             {battleState === "results" && votedSide && (
-              <motion.div key="results-bar" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                className="flex items-center gap-3">
-                <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/[0.07] min-w-0"
-                  style={{ background: "rgba(255,255,255,0.02)" }}>
-                  <input
-                    type="text" value={commentInput}
-                    onChange={(e) => setCommentInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") submitComment(); }}
-                    placeholder="Drop your take..."
-                    className="flex-1 bg-transparent text-[11px] font-mono text-white/60 placeholder:text-white/20 outline-none min-w-0"
-                    disabled={submittingComment}
-                  />
-                  {commentInput.trim() && (
-                    <button onClick={submitComment} disabled={submittingComment}
-                      className="text-[10px] font-mono text-primary/70 hover:text-primary uppercase tracking-wider shrink-0">
-                      Send
-                    </button>
-                  )}
-                </div>
-                <button
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-white/40 hover:text-white/70 hover:border-white/25 hover:bg-white/[0.04] transition-all shrink-0"
-                  onClick={() => setPanelOpen(true)}
-                >
-                  <span className="text-[11px] font-mono uppercase tracking-wider">React</span>
-                  <span className="text-[10px] opacity-60">↑</span>
-                </button>
+              <motion.div key="results-bar" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="flex-1 flex items-center px-3 py-3 overflow-hidden min-w-0">
+                <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
+                  {(() => {
+                    const total = totalVotes;
+                    const userPick = votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
+                    const winnerPct = votedSide === "a" ? pctA : pctB;
+                    const loserPct = votedSide === "a" ? pctB : pctA;
+                    const majorityAgrees = (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
+                    const isSplit = pctA === 50 && pctB === 50;
+                    if (total < 10) return `FMLY STILL JUDGING · ${voteCountA + voteCountB} VOTES`;
+                    if (isSplit) return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
+                    return `FMLY ${majorityAgrees ? "AGREES" : "DISAGREES"} · ${userPick} ${winnerPct} / ${loserPct}`;
+                  })()}
+                </span>
               </motion.div>
             )}
 
           </AnimatePresence>
+
+          {/* Right side: 🔥 — always present, opens reaction panel on results */}
+          {(battleState === "vote" || battleState === "results" || battleState === "cover") && (
+            <>
+              <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
+              <button
+                onClick={() => { if (battleState === "results") setPanelOpen(true); }}
+                className="relative flex items-center justify-center gap-1 px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
+              >
+                <span className="text-[13px] leading-none" style={{ opacity: battleState === "results" ? 0.7 : 0.25 }}>🔥</span>
+                {battleState === "results" && (voteCountA + voteCountB) > 0 && (
+                  <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
+                    {voteCountA + voteCountB}
+                  </span>
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
