@@ -645,81 +645,40 @@ function BattleEmbedInner({
           </div>
         )}
 
-        {/* Cover / Round states — custom bar */}
-        {(battleState === "cover" || battleState === "round-1" || battleState === "round-2") && (
-          <div className="flex items-stretch h-[48px]" onClick={(e) => e.stopPropagation()}>
-            <AnimatePresence mode="wait">
-
-              {battleState === "cover" && (
-                <motion.div
-                  key="cover-bar"
-                  className="flex-1 flex items-center justify-center gap-3 opacity-25 pointer-events-none px-3"
-                >
-                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
-                    Left Hook
-                  </span>
-                  <span className="text-white/20 text-[9px] font-mono">vs</span>
-                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
-                    Right Hook
-                  </span>
-                </motion.div>
-              )}
-
-              {(battleState === "round-1" || battleState === "round-2") && (
-                <motion.div
-                  key={`round-${battleState}`}
-                  initial={{ opacity: 0, x: battleState === "round-2" ? 16 : 0 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -16 }}
-                  className="flex-1 flex items-center justify-center px-3"
-                >
-                  <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/25">
-                    {battleState === "round-1" ? "Left Hook" : "Right Hook"}
-                  </span>
-                </motion.div>
-              )}
-
-            </AnimatePresence>
-
-          </div>
-        )}
-
-        {/* Vote / Results states — CardBottomBar */}
-        {(battleState === "vote" || battleState === "results") && (
-          <CardBottomBar
-            variant="embedded"
-            yesLabel="Left Hook"
-            noLabel="Right Hook"
-            votedSide={battleState === "vote" ? null : votedSide}
-            score={{ total: voteCountA + voteCountB, replay_yes: voteCountA }}
-            note=""
-            onNoteChange={() => {}}
-            onVoteYes={() => handleVote("a")}
-            onVoteNo={() => handleVote("b")}
-            onSubmit={() => {}}
-            onOpenReactions={() => setPanelOpen(true)}
-            onClose={() => setPanelOpen(false)}
-            panelOpen={false}
-            renderVotedContent={() => (
-              <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
-                {(() => {
-                  const total = totalVotes;
-                  const userPick = votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
-                  const winnerPct = votedSide === "a" ? pctA : pctB;
-                  const loserPct = votedSide === "a" ? pctB : pctA;
-                  const majorityAgrees =
-                    (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
-                  const isSplit = pctA === 50 && pctB === 50;
-                  if (total < 10)
-                    return `FMLY STILL JUDGING · ${voteCountA + voteCountB} VOTES`;
-                  if (isSplit)
-                    return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
-                  return `FMLY ${majorityAgrees ? "AGREES" : "DISAGREES"} · ${userPick} ${winnerPct} / ${loserPct}`;
-                })()}
-              </span>
-            )}
-          />
-        )}
+        {/* Bottom bar — always visible: Left Hook / Right Hook / 🔥 */}
+        <CardBottomBar
+          variant="embedded"
+          yesLabel="Left Hook"
+          noLabel="Right Hook"
+          votedSide={battleState === "results" ? votedSide : null}
+          score={{ total: voteCountA + voteCountB, replay_yes: voteCountA }}
+          note=""
+          onNoteChange={() => {}}
+          onVoteYes={() => handleVote("a")}
+          onVoteNo={() => handleVote("b")}
+          onSubmit={() => {}}
+          onOpenReactions={() => setPanelOpen(true)}
+          onClose={() => setPanelOpen(false)}
+          panelOpen={false}
+          renderVotedContent={() => (
+            <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
+              {(() => {
+                const total = totalVotes;
+                const userPick = votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
+                const winnerPct = votedSide === "a" ? pctA : pctB;
+                const loserPct = votedSide === "a" ? pctB : pctA;
+                const majorityAgrees =
+                  (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
+                const isSplit = pctA === 50 && pctB === 50;
+                if (total < 10)
+                  return `FMLY STILL JUDGING · ${voteCountA + voteCountB} VOTES`;
+                if (isSplit)
+                  return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
+                return `FMLY ${majorityAgrees ? "AGREES" : "DISAGREES"} · ${userPick} ${winnerPct} / ${loserPct}`;
+              })()}
+            </span>
+          )}
+        />
       </div>
 
       <ResultsPanel />
