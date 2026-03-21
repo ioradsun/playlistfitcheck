@@ -208,6 +208,7 @@ function BattleEmbedInner({
   const userIdRef = useRef<string | null | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const inlineBattleRef = useRef<InlineBattleHandle>(null);
+  const stopAtSecRef = useRef<number | null>(null);
 
   // Reset to cover when feed card transitions FROM active TO non-active.
   // Only fires on transition — not continuously while warm/cold.
@@ -541,7 +542,15 @@ function BattleEmbedInner({
         lastRef.t = t;
         setCurrentTimeSec(t);
       }
-      if (!audio.paused && !document.hidden) rafId = requestAnimationFrame(tick);
+      // Single-line playback: pause when we reach the stop point
+      if (stopAtSecRef.current !== null && t >= stopAtSecRef.current) {
+        stopAtSecRef.current = null;
+        audio.pause();
+        panelPlayer?.pause?.();
+        return; // don't schedule next tick — audio is paused
+      }
+      if (!audio.paused && !document.hidden)
+        rafId = requestAnimationFrame(tick);
     };
     const onPlay = () => {
       if (!rafId) rafId = requestAnimationFrame(tick);
@@ -564,6 +573,7 @@ function BattleEmbedInner({
   const handleTileTap = useCallback(
     (side: "a" | "b") => {
       if (battleState !== "results") return;
+      stopAtSecRef.current = null; // clear single-line stop
       const currentSide = replayingSide ?? votedSide ?? "a";
       if (side === currentSide) {
         setMuted((prev) => !prev);
@@ -840,7 +850,10 @@ function BattleEmbedInner({
             <span />
             <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5 pointer-events-auto">
               <button
-                onClick={() => setMuted((prev) => !prev)}
+                onClick={() => {
+                  stopAtSecRef.current = null;
+                  setMuted((prev) => !prev);
+                }}
                 className="p-1 text-white/40 hover:text-white/70 transition-colors"
                 aria-label={muted ? "Unmute" : "Mute"}
               >
@@ -877,206 +890,221 @@ function BattleEmbedInner({
       </div>
 
       {/* Bottom bar — hidden when reaction panel is open (matches In Studio) */}
-      {!panelOpen && <div
-        className="absolute bottom-0 left-0 right-0 z-20"
-        style={{
-          background: "#0a0a0a",
-          ...(!isFeedEmbed
-            ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" }
-            : {}),
-        }}
-      >
-        {/* Profile header — reels mode, matches In Studio position */}
-        {reelsMode && displayName && battleState === "cover" && (
-          <div className="flex items-center gap-2 px-3 pt-2 pb-1">
-            <div
-              className="relative shrink-0 cursor-pointer"
-              onClick={(e) => { e.stopPropagation(); onProfileClick?.(); }}
-            >
-              <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <User size={13} className="text-white/40" />
+      {!panelOpen && (
+        <div
+          className="absolute bottom-0 left-0 right-0 z-20"
+          style={{
+            background: "#0a0a0a",
+            ...(!isFeedEmbed
+              ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" }
+              : {}),
+          }}
+        >
+          {/* Profile header — reels mode, matches In Studio position */}
+          {reelsMode && displayName && battleState === "cover" && (
+            <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+              <div
+                className="relative shrink-0 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onProfileClick?.();
+                }}
+              >
+                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User size={13} className="text-white/40" />
+                  )}
+                </div>
+                {isVerified && (
+                  <span className="absolute -bottom-0.5 -right-0.5">
+                    <VerifiedBadge size={11} />
+                  </span>
                 )}
               </div>
-              {isVerified && (
-                <span className="absolute -bottom-0.5 -right-0.5">
-                  <VerifiedBadge size={11} />
-                </span>
-              )}
+              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate max-w-[60vw]">
+                {`FMLY Feud · ${displayName}`}
+              </span>
             </div>
-            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate max-w-[60vw]">
-              {`FMLY Feud · ${displayName}`}
-            </span>
-          </div>
-        )}
+          )}
 
-        {/* Progress bar — half-width, aligned to the active tile's side */}
-        {progressSide && (
-          <div className="relative w-full h-[2px] bg-white/[0.06]">
-            <motion.div
-              className="absolute top-0 h-full"
-              style={{
-                left: progressSide === "a" ? 0 : "50%",
-                width: "50%",
-              }}
-              transition={{ duration: 0 }}
-            >
-              <div
-                className="h-full"
+          {/* Progress bar — half-width, aligned to the active tile's side */}
+          {progressSide && (
+            <div className="relative w-full h-[2px] bg-white/[0.06]">
+              <motion.div
+                className="absolute top-0 h-full"
                 style={{
-                  background:
-                    (progressSide === "a"
-                      ? hookA?.palette?.[0]
-                      : hookB?.palette?.[0]) ?? "#22c55e",
-                  width: `${roundProgress * 100}%`,
+                  left: progressSide === "a" ? 0 : "50%",
+                  width: "50%",
                 }}
-              />
-            </motion.div>
-          </div>
-        )}
-        <div className={isFeedEmbed ? undefined : "w-full max-w-2xl mx-auto"}>
-          {/* Pre-vote: Left Hook / Right Hook disabled + 🔥 disabled */}
-          {!votedSide &&
-            (battleState === "round-1" ||
-              battleState === "round-2" ||
-              battleState === "cover") && (
-              <div
-                className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"} opacity-30 pointer-events-none`}
+                transition={{ duration: 0 }}
               >
-                <div className="flex-1 flex items-center justify-center">
-                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
+                <div
+                  className="h-full"
+                  style={{
+                    background:
+                      (progressSide === "a"
+                        ? hookA?.palette?.[0]
+                        : hookB?.palette?.[0]) ?? "#22c55e",
+                    width: `${roundProgress * 100}%`,
+                  }}
+                />
+              </motion.div>
+            </div>
+          )}
+          <div className={isFeedEmbed ? undefined : "w-full max-w-2xl mx-auto"}>
+            {/* Pre-vote: Left Hook / Right Hook disabled + 🔥 disabled */}
+            {!votedSide &&
+              (battleState === "round-1" ||
+                battleState === "round-2" ||
+                battleState === "cover") && (
+                <div
+                  className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"} opacity-30 pointer-events-none`}
+                >
+                  <div className="flex-1 flex items-center justify-center">
+                    <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
+                      Left Hook
+                    </span>
+                  </div>
+                  <div
+                    style={{ width: "0.5px" }}
+                    className="bg-white/[0.06] self-stretch my-2"
+                  />
+                  <div className="flex-1 flex items-center justify-center">
+                    <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
+                      Right Hook
+                    </span>
+                  </div>
+                  <div
+                    style={{ width: "0.5px" }}
+                    className="bg-white/[0.06] self-stretch my-2"
+                  />
+                  <div className="flex items-center justify-center px-4 min-w-[64px]">
+                    <span className="text-[13px]" style={{ opacity: 0.4 }}>
+                      🔥
+                    </span>
+                  </div>
+                </div>
+              )}
+
+            {/* Vote: Left Hook / Right Hook active, 🔥 disabled */}
+            {battleState === "vote" && (
+              <div
+                className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => handleVote("a")}
+                  className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+                >
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white">
                     Left Hook
                   </span>
-                </div>
+                </button>
                 <div
                   style={{ width: "0.5px" }}
                   className="bg-white/[0.06] self-stretch my-2"
                 />
-                <div className="flex-1 flex items-center justify-center">
-                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
+                <button
+                  onClick={() => handleVote("b")}
+                  className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+                >
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white">
                     Right Hook
                   </span>
-                </div>
+                </button>
                 <div
                   style={{ width: "0.5px" }}
                   className="bg-white/[0.06] self-stretch my-2"
                 />
-                <div className="flex items-center justify-center px-4 min-w-[64px]">
-                  <span className="text-[13px]" style={{ opacity: 0.4 }}>
-                    🔥
-                  </span>
+                <div className="flex items-center justify-center px-4 min-w-[64px] opacity-25 pointer-events-none">
+                  <span className="text-[13px]">🔥</span>
                 </div>
               </div>
             )}
 
-          {/* Vote: Left Hook / Right Hook active, 🔥 disabled */}
-          {battleState === "vote" && (
-            <div
-              className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={() => handleVote("a")}
-                className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
-              >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white">
-                  Left Hook
-                </span>
-              </button>
+            {/* Results panel closed: social proof + 🔥 */}
+            {!!votedSide && battleState !== "vote" && !panelOpen && (
               <div
-                style={{ width: "0.5px" }}
-                className="bg-white/[0.06] self-stretch my-2"
-              />
-              <button
-                onClick={() => handleVote("b")}
-                className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+                className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`}
+                onClick={(e) => e.stopPropagation()}
               >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white">
-                  Right Hook
-                </span>
-              </button>
-              <div
-                style={{ width: "0.5px" }}
-                className="bg-white/[0.06] self-stretch my-2"
-              />
-              <div className="flex items-center justify-center px-4 min-w-[64px] opacity-25 pointer-events-none">
-                <span className="text-[13px]">🔥</span>
-              </div>
-            </div>
-          )}
-
-          {/* Results panel closed: social proof + 🔥 */}
-          {!!votedSide && battleState !== "vote" && !panelOpen && (
-            <div
-              className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex-1 flex items-center px-3 overflow-hidden min-w-0">
-                <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
-                  {(() => {
-                    const total = totalVotes;
-                    const userPick =
-                      votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
-                    const winnerCount =
-                      votedSide === "a" ? voteCountA : voteCountB;
-                    const loserCount = total - winnerCount;
-                    const majorityAgrees =
-                      (votedSide === "a" && pctA >= 50) ||
-                      (votedSide === "b" && pctB >= 50);
-                    const isSplit = pctA === 50 && pctB === 50;
-                    if (total < 20)
-                      return `FMLY STILL VOTING · ${winnerCount} / ${total} ${userPick}`;
-                    if (isSplit)
-                      return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
-                    return majorityAgrees
-                      ? `FMLY AGREES · ${winnerCount} / ${total} ${userPick}`
-                      : `FMLY DISAGREES · ${loserCount} / ${total} NOT ${userPick}`;
-                  })()}
-                </span>
-              </div>
-              <div
-                style={{ width: "0.5px" }}
-                className="bg-white/[0.06] self-stretch my-2"
-              />
-              <button
-                onClick={() => {
-                  const opening = !panelOpen;
-                  setPanelOpen(opening);
-                  if (opening) onPlay?.();
-                }}
-                className="flex items-center justify-center gap-1 px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
-              >
-                {panelOpen ? (
-                  <X
-                    size={14}
-                    className="text-white/30 group-hover:text-white/60 transition-colors"
-                  />
-                ) : (
-                  <>
-                    <span
-                      className="text-[13px] leading-none"
-                      style={{ opacity: 0.7 }}
-                    >
-                      🔥
-                    </span>
-                    {voteCountA + voteCountB > 0 && (
-                      <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
-                        {voteCountA + voteCountB}
+                <div className="flex-1 flex items-center px-3 overflow-hidden min-w-0">
+                  <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
+                    {(() => {
+                      const total = totalVotes;
+                      const userPick =
+                        votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
+                      const winnerCount =
+                        votedSide === "a" ? voteCountA : voteCountB;
+                      const loserCount = total - winnerCount;
+                      const majorityAgrees =
+                        (votedSide === "a" && pctA >= 50) ||
+                        (votedSide === "b" && pctB >= 50);
+                      const isSplit = pctA === 50 && pctB === 50;
+                      if (total < 20)
+                        return `FMLY STILL VOTING · ${winnerCount} / ${total} ${userPick}`;
+                      if (isSplit)
+                        return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
+                      return majorityAgrees
+                        ? `FMLY AGREES · ${winnerCount} / ${total} ${userPick}`
+                        : `FMLY DISAGREES · ${loserCount} / ${total} NOT ${userPick}`;
+                    })()}
+                  </span>
+                </div>
+                <div
+                  style={{ width: "0.5px" }}
+                  className="bg-white/[0.06] self-stretch my-2"
+                />
+                <button
+                  onClick={() => {
+                    const opening = !panelOpen;
+                    setPanelOpen(opening);
+                    if (opening) onPlay?.();
+                  }}
+                  className="flex items-center justify-center gap-1 px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
+                >
+                  {panelOpen ? (
+                    <X
+                      size={14}
+                      className="text-white/30 group-hover:text-white/60 transition-colors"
+                    />
+                  ) : (
+                    <>
+                      <span
+                        className="text-[13px] leading-none"
+                        style={{ opacity: 0.7 }}
+                      >
+                        🔥
                       </span>
-                    )}
-                  </>
-                )}
-              </button>
-            </div>
-          )}
+                      {voteCountA + voteCountB > 0 && (
+                        <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
+                          {voteCountA + voteCountB}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>}
+      )}
 
       <ReactionPanel
         displayMode={isFeedEmbed ? "embedded" : "fullscreen"}
-        maxHeight={reelsMode ? "75vh" : isFeedEmbed ? "75%" : undefined}
+        maxHeight={
+          reelsMode
+            ? "calc(100vh - 44px)"
+            : isFeedEmbed
+              ? "calc(100% - 44px)"
+              : undefined
+        }
         isOpen={panelOpen && !!votedSide && battleState !== "vote"}
         onClose={() => setPanelOpen(false)}
         danceId={danceData?.id ?? ""}
@@ -1099,12 +1127,14 @@ function BattleEmbedInner({
             "#ffffff",
           ]
         }
-        onSeekTo={(sec) => {
+        onSeekTo={(sec, endSec) => {
           const player = inlineBattleRef.current?.getPlayer();
           if (!player) return;
           // Unmute immediately — user tapped a line, they want to hear it
           player.audio.muted = false;
           setMuted(false);
+          // Schedule stop at line end (before seeking, so the RAF loop picks it up)
+          stopAtSecRef.current = endSec ?? null;
           // Seek and play
           player.seek(sec);
           if (player.audio.paused) {
@@ -1146,7 +1176,12 @@ function BattleEmbedInner({
               style={{ height: isFeedEmbed ? 48 : 52 }}
             >
               <button
-                onClick={() => { setResultsTab("a"); setReplayingSide("a"); setMuted(false); }}
+                onClick={() => {
+                  stopAtSecRef.current = null;
+                  setResultsTab("a");
+                  setReplayingSide("a");
+                  setMuted(false);
+                }}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors ${resultsTab === "a" ? "text-white" : "text-white/30 hover:text-white/60"}`}
               >
                 {votedSide === "a" && (
@@ -1174,7 +1209,12 @@ function BattleEmbedInner({
                 className="bg-white/[0.06] self-stretch my-2"
               />
               <button
-                onClick={() => { setResultsTab("b"); setReplayingSide("b"); setMuted(false); }}
+                onClick={() => {
+                  stopAtSecRef.current = null;
+                  setResultsTab("b");
+                  setReplayingSide("b");
+                  setMuted(false);
+                }}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors ${resultsTab === "b" ? "text-white" : "text-white/30 hover:text-white/60"}`}
               >
                 {votedSide === "b" && (
