@@ -321,14 +321,14 @@ function BattleEmbedInner({
           setHookALines(
             indexed.filter(
               (l: any) =>
-                l.start >= a.hook_start - 0.3 && l.end <= a.hook_end + 0.3,
+                l.start < a.hook_end + 0.3 && l.end > a.hook_start - 0.3,
             ),
           );
           if (b)
             setHookBLines(
               indexed.filter(
                 (l: any) =>
-                  l.start >= b.hook_start - 0.3 && l.end <= b.hook_end + 0.3,
+                  l.start < b.hook_end + 0.3 && l.end > b.hook_start - 0.3,
               ),
             );
         });
@@ -1051,22 +1051,21 @@ function BattleEmbedInner({
           ]
         }
         onSeekTo={(sec) => {
-          // Switch engine region to match the active tab before seeking
-          setReplayingSide(resultsTab);
+          const player = inlineBattleRef.current?.getPlayer();
+          if (!player) return;
+          // Unmute immediately — user tapped a line, they want to hear it
+          player.audio.muted = false;
           setMuted(false);
-          // Small delay to let InlineBattle process the region switch
-          requestAnimationFrame(() => {
-            const player = inlineBattleRef.current?.getPlayer();
-            if (player) {
-              player.seek(sec);
-              if (player.audio.paused) {
-                player.audio.play().catch(() => {});
-                player.startRendering();
-              }
-            }
-          });
+          // Seek and play
+          player.seek(sec);
+          if (player.audio.paused) {
+            player.audio.play().catch(() => {});
+            player.startRendering();
+          }
+          // Switch engine to match the active tab
+          setReplayingSide(resultsTab);
         }}
-        player={panelPlayer ?? inlineBattleRef.current?.getPlayer() ?? null}
+        player={null}
         durationSec={
           resultsTab === "a" && hookA
             ? hookA.hook_end - hookA.hook_start
