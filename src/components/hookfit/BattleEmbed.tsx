@@ -579,8 +579,8 @@ function BattleEmbedInner({
           </div>
         )}
 
-        {/* InlineBattle canvas — visible behind semi-transparent cover overlay */}
-        {resolvedBattleId && (!isFeedEmbed || cardState === "active") && (
+        {/* InlineBattle canvas — always mounted when data ready, pauses when inactive */}
+        {resolvedBattleId && (
           <div
             className="absolute inset-0"
             style={{ transition: "opacity 0.4s ease" }}
@@ -599,6 +599,7 @@ function BattleEmbedInner({
               }}
               forceMuted={muted}
               onEngineReady={() => setEngineReady(true)}
+              cardState={isFeedEmbed ? cardState : "active"}
             />
           </div>
         )}
