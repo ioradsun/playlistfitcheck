@@ -143,24 +143,23 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     }
   }, [danceData?.id, danceData?.section_images]);
 
+  // ── Init engine as soon as data is available (during cover) ──
+  // Default to side A canvas + hook A region, muted.
+  // This matches In Studio behavior: engine renders behind the cover overlay.
   useEffect(() => {
-    if (!danceData || !hookA || !activePlaying) return;
+    if (!danceData || !hookA) return;
     if (playerRef.current) return;
     destroyedRef.current = false;
 
-    const isA = activePlaying === "a";
-    const bgCanvas = isA ? canvasARef.current : canvasBRef.current;
-    const textCanvas = isA ? textCanvasARef.current : textCanvasBRef.current;
-    const container = isA ? containerARef.current : containerBRef.current;
+    const bgCanvas = canvasARef.current;
+    const textCanvas = textCanvasARef.current;
+    const container = containerARef.current;
     if (!bgCanvas || !textCanvas || !container) return;
-
-    const hook = isA ? hookA : hookB;
-    if (!hook) return;
 
     const dataWithRegion: LyricDanceData = {
       ...danceData,
-      region_start: hook.hook_start,
-      region_end: hook.hook_end,
+      region_start: hookA.hook_start,
+      region_end: hookA.hook_end,
     };
 
     let cancelled = false;
@@ -182,7 +181,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       }
 
       playerRef.current = p;
-      activeSideRef.current = activePlaying;
+      activeSideRef.current = "a";
 
       await p.init();
       if (cancelled || destroyedRef.current) {
@@ -191,32 +190,30 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
         return;
       }
 
+      // Start rendering immediately (muted) — lyrics animate behind cover
+      p.audio.muted = true;
+      p.play();
+      p.scheduleFullModeUpgrade();
       setReady(true);
     }).catch((err) => console.error("[InlineBattle] init failed:", err));
 
     return () => {
       cancelled = true;
     };
-  }, [danceData, hookA, hookB, activePlaying]);
+  }, [danceData?.id, hookA?.id]);
 
+  // ── Side switching + mute control ───────────────────────────
   useEffect(() => {
     const player = playerRef.current;
     if (!player || !ready || !hookA) return;
 
     const targetSide = activePlaying;
     const currentSide = activeSideRef.current;
+
     if (!targetSide) {
-      const frozen = player.captureSnapshot();
-      const currentCanvas = currentSide === "a" ? canvasARef.current : canvasBRef.current;
-      if (frozen && currentCanvas) {
-        const ctx = currentCanvas.getContext("2d");
-        if (ctx) {
-          ctx.clearRect(0, 0, currentCanvas.width, currentCanvas.height);
-          ctx.drawImage(frozen, 0, 0);
-        }
-      }
-      snapshotRef.current = frozen;
-      player.pause();
+      // No active side (cover, vote, results unfocused)
+      // Keep engine running muted on current canvas — lyrics stay alive behind cover
+      player.play();
       player.setMuted(true);
       return;
     }
@@ -225,16 +222,14 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     if (!hook) return;
 
     if (targetSide === currentSide) {
-      if (forceMuted) {
-        player.setMuted(true);
-      } else {
-        player.play();
-        player.setMuted(false);
-      }
+      // Same side — just update mute/play state
+      player.play();
+      player.setMuted(!!forceMuted);
       player.scheduleFullModeUpgrade();
       return;
     }
 
+    // Switching sides — capture snapshot + swap canvas
     snapshotRef.current = player.captureSnapshot();
 
     const bgCanvas = targetSide === "a" ? canvasARef.current : canvasBRef.current;
@@ -246,6 +241,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     player.setRegion(hook.hook_start, hook.hook_end);
     activeSideRef.current = targetSide;
 
+    // Draw snapshot onto the old side's canvas
     const oldCanvas = targetSide === "a" ? canvasBRef.current : canvasARef.current;
     if (oldCanvas && snapshotRef.current) {
       const ctx = oldCanvas.getContext("2d");
