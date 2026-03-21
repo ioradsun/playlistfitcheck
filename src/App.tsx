@@ -44,7 +44,13 @@ const HookEmbedFallback = () => (
 );
 
 const LyricDanceFallback = () => (
-  <div className="fixed inset-0 bg-[#0a0a0a] z-50" />
+  <div className="fixed inset-0 z-50 flex flex-col items-center justify-end" style={{ background: "#0a0a0a" }}>
+    {/* Matches cover layout: centered button placeholder + bottom bar */}
+    <div className="flex flex-col items-center mb-24">
+      <div className="h-2 w-28 rounded bg-white/[0.03] mb-4" />
+      <div className="h-[44px] w-36 rounded-lg bg-white/[0.02]" />
+    </div>
+  </div>
 );
 
 const App = () => (
