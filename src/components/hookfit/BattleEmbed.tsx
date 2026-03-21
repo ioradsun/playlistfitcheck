@@ -31,6 +31,7 @@ import { preloadImage } from "@/lib/imagePreloadCache";
 import { getSessionId } from "@/lib/sessionId";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
+import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
 
 type BattleState = "cover" | "round-1" | "round-2" | "vote" | "results";
 
@@ -176,7 +177,9 @@ function BattleEmbedInner({
   const [roundProgress, setRoundProgress] = useState(0);
   const [muted, setMuted] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelPlayer, setPanelPlayer] = useState<LyricDancePlayer | null>(null);
   const [resultsTab, setResultsTab] = useState<"a" | "b">("a");
+  const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [reactionData, setReactionData] = useState<
     Record<string, { line: Record<number, number>; total: number }>
   >({});
@@ -208,6 +211,7 @@ function BattleEmbedInner({
     setReplayingSide(null);
     setPanelOpen(false);
     setMuted(true);
+    setPanelPlayer(null);
     if (cardState === "cold") {
       setEngineReady(false);
     }
@@ -463,6 +467,16 @@ function BattleEmbedInner({
     }
   }, [isFeedEmbed, cardState, battleState, replayingSide, votedSide]);
 
+  const panelActiveLine = useMemo(() => {
+    const lines = resultsTab === "a" ? hookALines : hookBLines;
+    const line =
+      lines.find(
+        (l: any) => currentTimeSec >= l.start && currentTimeSec < l.end + 0.1,
+      ) ?? null;
+    if (!line) return null;
+    return { text: line.text, lineIndex: line.lineIndex, sectionLabel: null };
+  }, [currentTimeSec, resultsTab, hookALines, hookBLines]);
+
   // ── Progress bar timer ──────────────────────────────────────
   // Determine which side is actively playing audio (rounds or results focus)
   const progressSide: "a" | "b" | null = useMemo(() => {
@@ -498,6 +512,44 @@ function BattleEmbedInner({
         cancelAnimationFrame(progressTimerRef.current);
     };
   }, [progressSide, hookA, hookB, battleState]);
+
+  // ── Track audio time for reaction panel ──
+  useEffect(() => {
+    if (!panelOpen || !panelPlayer) return;
+    const audio = panelPlayer.audio;
+    let rafId = 0;
+    const lastRef = { t: 0 };
+    const tick = () => {
+      const t = audio.currentTime;
+      if (Math.abs(t - lastRef.t) > 0.05) {
+        lastRef.t = t;
+        setCurrentTimeSec(t);
+      }
+      if (!audio.paused && !document.hidden) rafId = requestAnimationFrame(tick);
+    };
+    const onPlay = () => {
+      if (!rafId) rafId = requestAnimationFrame(tick);
+    };
+    const onPause = () => {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    };
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    setCurrentTimeSec(audio.currentTime);
+    if (!audio.paused) rafId = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(rafId);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+    };
+  }, [panelOpen, panelPlayer]);
+
+  // ── Sync panel tab to engine region ──
+  useEffect(() => {
+    if (!panelOpen || !panelPlayer) return;
+    setReplayingSide(resultsTab);
+  }, [resultsTab, panelOpen, panelPlayer]);
 
   const handleTileTap = useCallback(
     (side: "a" | "b") => {
@@ -611,7 +663,10 @@ function BattleEmbedInner({
                 if (!coverImageUrl) setCoverImageUrl(url);
               }}
               forceMuted={muted}
-              onEngineReady={() => setEngineReady(true)}
+              onEngineReady={() => {
+                setEngineReady(true);
+                setPanelPlayer(inlineBattleRef.current?.getPlayer() ?? null);
+              }}
               cardState={isFeedEmbed ? cardState : "active"}
             />
           </div>
@@ -977,7 +1032,7 @@ function BattleEmbedInner({
         isOpen={panelOpen && !!votedSide && battleState !== "vote"}
         onClose={() => setPanelOpen(false)}
         danceId={danceData?.id ?? ""}
-        activeLine={null}
+        activeLine={panelActiveLine}
         allLines={(resultsTab === "a" ? hookALines : hookBLines).map(
           (l: any) => ({
             text: l.text,
@@ -988,23 +1043,34 @@ function BattleEmbedInner({
           }),
         )}
         audioSections={[]}
-        currentTimeSec={0}
-        palette={hookA?.palette ?? ["#22c55e", "#22c55e", "#ffffff"]}
+        currentTimeSec={currentTimeSec}
+        palette={
+          (resultsTab === "a" ? hookA : hookB)?.palette ?? [
+            "#22c55e",
+            "#22c55e",
+            "#ffffff",
+          ]
+        }
         onSeekTo={(sec) => {
-          const player = inlineBattleRef.current?.getPlayer();
-          if (player) {
-            player.seek(sec);
-            if (player.audio.paused) {
-              player.audio.play().catch(() => {});
-              player.startRendering();
+          if (panelPlayer) {
+            panelPlayer.seek(sec);
+            if (panelPlayer.audio.paused) {
+              panelPlayer.audio.play().catch(() => {});
+              panelPlayer.startRendering();
             }
           }
         }}
-        player={inlineBattleRef.current?.getPlayer() ?? null}
-        durationSec={10}
+        player={panelPlayer}
+        durationSec={
+          resultsTab === "a" && hookA
+            ? hookA.hook_end - hookA.hook_start
+            : hookB
+              ? hookB.hook_end - hookB.hook_start
+              : 10
+        }
         reactionData={reactionData}
         onReactionDataChange={setReactionData}
-        onReactionFired={() => {}}
+        onReactionFired={(emoji) => panelPlayer?.fireComment?.(emoji)}
         renderBottomBar={(onClose) => (
           <div
             className="shrink-0 flex"
