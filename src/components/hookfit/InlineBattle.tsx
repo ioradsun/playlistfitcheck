@@ -234,21 +234,28 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     const player = playerRef.current;
     if (!player || !ready || !hookA) return;
 
-    // ── Rule 1: Off-screen → stop rendering, mute ──
-    if (cardState != null && cardState !== "active") {
+    // ── Rule 1: Cold (out of render window) → stop rendering ──
+    if (cardState === "cold") {
       player.stopRendering?.();
       player.setMuted(true);
       return;
     }
 
-    // ── Rule 2: No active side (cover, vote, results unfocused) → render muted ──
+    // ── Rule 2: Warm (in viewport, not active) → render muted behind cover ──
+    if (cardState === "warm") {
+      player.play();
+      player.setMuted(true);
+      return;
+    }
+
+    // ── Rule 3: No active side (cover, vote, results unfocused) → render muted ──
     if (!activePlaying) {
       player.play();
       player.setMuted(true);
       return;
     }
 
-    // ── Rule 3: Active side matches current canvas → just play ──
+    // ── Rule 4: Active side matches current canvas → just play ──
     const targetSide = activePlaying;
     const currentSide = activeSideRef.current;
     const hook = targetSide === "a" ? hookA : hookB;
@@ -261,7 +268,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       return;
     }
 
-    // ── Rule 4: Switching sides → snapshot + swap canvas + recompile ──
+    // ── Rule 5: Switching sides → snapshot + swap canvas + recompile ──
     snapshotRef.current = player.captureSnapshot();
 
     const bgCanvas = targetSide === "a" ? canvasARef.current : canvasBRef.current;

@@ -176,7 +176,11 @@ function BattleEmbedInner({
       setReplayingSide(null);
       setPanelOpen(false);
       setMuted(true);
-      setEngineReady(false);
+      // Only reset engineReady when cold (out of render window).
+      // When warm (in viewport), engine keeps rendering muted — lyrics peek through cover.
+      if (cardState === "cold") {
+        setEngineReady(false);
+      }
     }
   }, [isFeedEmbed, cardState]);
 
