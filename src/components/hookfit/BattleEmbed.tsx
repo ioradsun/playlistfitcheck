@@ -1036,7 +1036,11 @@ function BattleEmbedInner({
                 className="bg-white/[0.06] self-stretch my-2"
               />
               <button
-                onClick={() => setPanelOpen((prev) => !prev)}
+                onClick={() => {
+                  const opening = !panelOpen;
+                  setPanelOpen(opening);
+                  if (opening) onPlay?.();
+                }}
                 className="flex items-center justify-center gap-1 px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
               >
                 {panelOpen ? (
@@ -1067,6 +1071,7 @@ function BattleEmbedInner({
 
       <ReactionPanel
         displayMode={isFeedEmbed ? "embedded" : "fullscreen"}
+        maxHeight={reelsMode ? "75vh" : isFeedEmbed ? "75%" : undefined}
         isOpen={panelOpen && !!votedSide && battleState !== "vote"}
         onClose={() => setPanelOpen(false)}
         danceId={danceData?.id ?? ""}
