@@ -393,15 +393,17 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
           case "dark":
             return 0.2;
           case "listen-a":
-            return side === "a" ? 1 : 0.2;
+            return side === "a" ? 1 : 0.25;
           case "listen-b":
-            return side === "b" ? 1 : 0.2;
+            return side === "b" ? 1 : 0.25;
           case "judgment":
             return 0.2;
           case "scorecard":
           case "results":
             if (!activePlaying) return 1;
-            return side === activePlaying ? 1 : 0.3;
+            // Non-playing side stays clearly visible — dimmed, not dead.
+            // 0.55 keeps the background art visible while the playing side is prominent.
+            return side === activePlaying ? 1 : 0.55;
           default:
             return 1;
         }

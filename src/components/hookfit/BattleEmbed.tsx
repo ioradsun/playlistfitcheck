@@ -407,7 +407,8 @@ function BattleEmbedInner({
       if (side === "a") setVoteCountA((v) => v + 1);
       else setVoteCountB((v) => v + 1);
       setBattleState("results");
-      setMuted(true);
+      setReplayingSide(side);
+      setMuted(false);
       const sessionId = getSessionId();
       if (userIdRef.current === undefined) {
         const {
@@ -745,11 +746,12 @@ function BattleEmbedInner({
                         e.stopPropagation();
                         onPlay?.();
                         setBattleState("results");
-                        setMuted(true);
+                        setReplayingSide(votedSide ?? "a");
+                        setMuted(false);
                       }}
                       className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
                     >
-                      Replay Battle
+                      Replay Feud
                     </button>
                   </>
                 ) : (
@@ -1141,7 +1143,7 @@ function BattleEmbedInner({
               style={{ height: isFeedEmbed ? 48 : 52 }}
             >
               <button
-                onClick={() => setResultsTab("a")}
+                onClick={() => { setResultsTab("a"); setReplayingSide("a"); setMuted(false); }}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors ${resultsTab === "a" ? "text-white" : "text-white/30 hover:text-white/60"}`}
               >
                 {votedSide === "a" && (
@@ -1169,7 +1171,7 @@ function BattleEmbedInner({
                 className="bg-white/[0.06] self-stretch my-2"
               />
               <button
-                onClick={() => setResultsTab("b")}
+                onClick={() => { setResultsTab("b"); setReplayingSide("b"); setMuted(false); }}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors ${resultsTab === "b" ? "text-white" : "text-white/30 hover:text-white/60"}`}
               >
                 {votedSide === "b" && (
