@@ -65,6 +65,7 @@ interface ReactionPanelProps {
   /** When provided, replaces the default "Run it back / Not for me" bottom bar.
    *  Used by battle cards for Left Hook / Right Hook tab switching. */
   renderBottomBar?: (onClose: () => void) => ReactNode;
+  maxHeight?: string;
 }
 
 function CommentReactPicker({
@@ -139,6 +140,7 @@ function ReactionPanel({
   hideInput = false,
   refreshKey = 0,
   renderBottomBar,
+  maxHeight,
 }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState("");
@@ -497,7 +499,7 @@ function ReactionPanel({
   const notForMeCount = score != null ? score.total - score.replay_yes : 0;
 
   return (
-    <PanelShell isOpen={isOpen} variant={displayMode}>
+    <PanelShell isOpen={isOpen} variant={displayMode} maxHeight={maxHeight}>
       <div
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto min-h-0"

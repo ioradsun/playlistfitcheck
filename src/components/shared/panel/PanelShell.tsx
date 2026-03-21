@@ -10,10 +10,12 @@ interface PanelShellProps {
   /** Pixels to extend upward beyond the positioned ancestor — covers the card
    *  profile header in embedded mode. Outer overflow:hidden clips cleanly. */
   topOffset?: number;
+  /** Maximum height as CSS value. Panel content scrolls within this constraint. */
+  maxHeight?: string;
   children: React.ReactNode;
 }
 
-export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, children }: PanelShellProps) {
+export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHeight, children }: PanelShellProps) {
   const positionClass =
     variant === 'fullscreen'
       ? 'fixed bottom-0 left-0 right-0 z-[70] h-[88vh]'
@@ -36,6 +38,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, childr
             backdropFilter: variant === 'embedded' ? 'blur(12px)' : undefined,
             borderTop: variant !== 'embedded' ? '1px solid rgba(255,255,255,0.06)' : undefined,
             top: variant === 'embedded' ? -topOffset : undefined,
+            maxHeight: maxHeight ?? undefined,
           }}
         >
           {variant === 'embedded' && topOffset > 0 && (
