@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
+import { useVoteGate } from "@/hooks/useVoteGate";
 
 const SESSION_COUNT_KEY = "crowdfit_reviews_this_session";
 
@@ -36,6 +37,7 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
   const { user } = useAuth();
   const sessionId = getSessionId();
   const navigate = useNavigate();
+  const { addCredit } = useVoteGate();
 
   const [votedSide, setVotedSide] = useState<"a" | "b" | null>(null);
   const [wouldReplay, setWouldReplay] = useState<boolean | null>(null);
@@ -118,6 +120,7 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
     }
     setWouldReplay(replay);
     setVotedSide(clickedSide);
+    addCredit();
 
     // Optimistically update score so UI never shows "calibrating" after a vote
     setScore((prev) => {

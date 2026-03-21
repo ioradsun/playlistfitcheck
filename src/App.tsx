@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SiteCopyProvider } from "@/hooks/useSiteCopy";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { VoteGateProvider } from "@/hooks/useVoteGate";
 // WalletProvider disabled — uncomment when crypto features are re-enabled
 // import { WalletProvider } from "@/components/crypto/WalletProvider";
 import { PageLayout } from "@/components/PageLayout";
@@ -71,6 +72,7 @@ const App = () => (
                 <SiteCopyProvider>
                 
                 <SidebarProvider defaultOpen={true}>
+                <VoteGateProvider>
                   <Routes>
                     <Route path="/" element={<Navigate to="/CrowdFit" replace />} />
                     <Route path="/CrowdFit" element={<Index />} />
@@ -124,6 +126,7 @@ const App = () => (
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<Suspense fallback={<PageLayout />}><PageLayout><NotFound /></PageLayout></Suspense>} />
                   </Routes>
+                </VoteGateProvider>
                 </SidebarProvider>
                 <Suspense fallback={<div aria-hidden className="pointer-events-none fixed bottom-0 right-0 h-12 w-12 opacity-0" />}>
                   <FitWidget />

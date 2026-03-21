@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { preloadImage } from "@/lib/imagePreloadCache";
+import { useVoteGate } from "@/hooks/useVoteGate";
 
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
@@ -164,6 +165,7 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   onCenterChange,
   reelsMode = false,
   lyricDataMap,
+  loading,
 }: {
   posts: SongFitPost[];
   feedView: FeedView;
@@ -188,8 +190,10 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   reelsMode?: boolean;
   isFirst?: boolean;
   lyricDataMap: Map<string, LyricDanceData>;
+  loading: boolean;
 }) {
   const lifecycle = useContext(CardLifecycleContext);
+  const { credits, required, canCreate } = useVoteGate();
   const prevMapRef = useRef(new Map<string, boolean>());
   const {
     windowedPosts,
@@ -242,6 +246,26 @@ const _WindowedFeedList = memo(function WindowedFeedList({
 
   return (
     <div className={reelsMode ? "" : "pb-24"}>
+      {!reelsMode && !canCreate && !loading && posts.length > 0 && (
+        <div className="mx-2 mb-3 rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-mono tracking-wide text-white/60">
+              {credits === 0
+                ? "Vote on 3 songs to post your music"
+                : `${credits}/${required} — vote on ${required - credits} more to post`}
+            </p>
+          </div>
+          <div className="flex gap-1 shrink-0">
+            {Array.from({ length: required }).map((_, i) => (
+              <div
+                key={i}
+                className="h-2 w-2 rounded-full"
+                style={{ background: i < credits ? "#22c55e" : "rgba(255,255,255,0.08)" }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
       {windowedPosts.map(({ post, shouldRender }, idx) =>
         shouldRender ? (
           <MeasuredFeedCard
@@ -1002,6 +1026,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                 onCenterChange={handleCenterChange}
                 reelsMode={reelsMode}
                 lyricDataMap={lyricDataMap}
+                loading={loading}
               />
             </RealtimeFeedHubProvider>
           </CardLifecycleProvider>
