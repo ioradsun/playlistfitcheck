@@ -1274,8 +1274,13 @@ export function FitTab({
                         )}
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-foreground">
-                              {section.structuralLabel || `Section ${i + 1}`}
+                            <span className="text-xs font-semibold text-foreground font-mono">
+                              {(() => {
+                                const t = section.startSec ?? 0;
+                                const m = Math.floor(t / 60);
+                                const s = Math.floor(t % 60);
+                                return `${m}:${s.toString().padStart(2, '0')}`;
+                              })()}
                             </span>
                             {section.visualMood && (
                               <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
