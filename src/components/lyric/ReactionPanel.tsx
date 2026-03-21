@@ -42,7 +42,7 @@ interface ReactionPanelProps {
   audioSections: CanonicalAudioSection[];
   currentTimeSec: number;
   palette: string[];
-  onSeekTo: (sec: number) => void;
+  onSeekTo: (sec: number, endSec?: number) => void;
   player: LyricDancePlayer | null;
   durationSec: number;
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
@@ -363,7 +363,7 @@ function ReactionPanel({
 
   const handleLineTap = (line: LyricSectionLine) => {
     if (!player) {
-      onSeekTo(line.startSec);
+      onSeekTo(line.startSec, line.endSec);
       return;
     }
     if (line.lineIndex === playheadLineIndex && !player.audio.paused) {
