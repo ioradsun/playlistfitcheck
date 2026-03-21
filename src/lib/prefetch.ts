@@ -186,7 +186,7 @@ if (segments.length === 3 && segments[2] === "lyric-dance") {
     .eq("artist_slug", artistSlug)
     .eq("song_slug", songSlug)
     .eq("hook_slug", hookSlug)
-    .maybeSingle();
+    .maybeSingle());
 }
 
 export function consumeShareableDancePrefetch() {
