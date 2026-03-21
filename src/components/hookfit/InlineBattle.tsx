@@ -449,7 +449,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
+                  className="absolute top-2 left-2 z-20 pointer-events-none"
                 >
                   <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-green-400/70 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
                     <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
@@ -470,7 +470,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
+                  className="absolute top-2 left-2 z-20 pointer-events-none"
                 >
                   <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
                     Round 1
@@ -505,7 +505,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
+                    className="absolute top-2 left-2 z-20 pointer-events-none"
                   >
                     <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-green-400/70 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
                       <svg
@@ -531,7 +531,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
+                    className="absolute top-2 left-2 z-20 pointer-events-none"
                   >
                     <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
                       Round 2
