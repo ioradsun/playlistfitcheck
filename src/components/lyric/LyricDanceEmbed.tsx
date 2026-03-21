@@ -486,6 +486,14 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           isOpen={reactionPanelOpen}
           refreshKey={commentRefreshKey}
           onClose={handleClosePanelAndSync}
+          onCloseWithPosition={(timeSec) => {
+            if (player && timeSec != null) {
+              player.seek(timeSec);
+              player.setMuted(false);
+              player.play();
+            }
+            setMuted(false);
+          }}
           votedSide={votedSide}
           score={score}
           onVoteYes={() => handleVote(true)}
