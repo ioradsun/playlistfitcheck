@@ -8,10 +8,20 @@
  *   3. Control: ONE unified effect that reacts to activePlaying, cardState, forceMuted
  */
 
-import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
-import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
+import {
+  LyricDancePlayer,
+  type LyricDanceData,
+} from "@/engine/LyricDancePlayer";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { withInitLimit } from "@/engine/initQueue";
@@ -39,7 +49,9 @@ export interface HookInfo {
   palette?: string[];
 }
 
-export interface InlineBattleHandle {}
+export interface InlineBattleHandle {
+  getPlayer: () => LyricDancePlayer | null;
+}
 
 interface Props {
   battleId: string;
@@ -57,374 +69,381 @@ interface Props {
   cardState?: "active" | "warm" | "cold";
 }
 
-const HOOK_SELECT = "id,user_id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,battle_position,artist_slug,song_slug,vote_count,palette";
+const HOOK_SELECT =
+  "id,user_id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,battle_position,artist_slug,song_slug,vote_count,palette";
 
-export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
-  battleId, mode, votedSide, voteCount, votePct, onHookEnd, onHooksLoaded,
-  onTileTap, activePlaying, forceMuted, onCoverImage, onEngineReady, cardState,
-}, ref) {
-  // ── Data state ──────────────────────────────────────────────
-  const [hookA, setHookA] = useState<HookInfo | null>(null);
-  const [hookB, setHookB] = useState<HookInfo | null>(null);
-  const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [ready, setReady] = useState(false);
-  const fetchRef = useRef(0);
-  const hookEndFiredA = useRef(false);
-  const hookEndFiredB = useRef(false);
+export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
+  function InlineBattle(
+    {
+      battleId,
+      mode,
+      votedSide,
+      voteCount,
+      votePct,
+      onHookEnd,
+      onHooksLoaded,
+      onTileTap,
+      activePlaying,
+      forceMuted,
+      onCoverImage,
+      onEngineReady,
+      cardState,
+    },
+    ref,
+  ) {
+    // ── Data state ──────────────────────────────────────────────
+    const [hookA, setHookA] = useState<HookInfo | null>(null);
+    const [hookB, setHookB] = useState<HookInfo | null>(null);
+    const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [ready, setReady] = useState(false);
+    const fetchRef = useRef(0);
+    const hookEndFiredA = useRef(false);
+    const hookEndFiredB = useRef(false);
 
-  // ── Canvas refs ─────────────────────────────────────────────
-  const canvasARef = useRef<HTMLCanvasElement>(null);
-  const textCanvasARef = useRef<HTMLCanvasElement>(null);
-  const containerARef = useRef<HTMLDivElement>(null);
-  const canvasBRef = useRef<HTMLCanvasElement>(null);
-  const textCanvasBRef = useRef<HTMLCanvasElement>(null);
-  const containerBRef = useRef<HTMLDivElement>(null);
+    // ── Canvas refs ─────────────────────────────────────────────
+    const canvasARef = useRef<HTMLCanvasElement>(null);
+    const textCanvasARef = useRef<HTMLCanvasElement>(null);
+    const containerARef = useRef<HTMLDivElement>(null);
+    const canvasBRef = useRef<HTMLCanvasElement>(null);
+    const textCanvasBRef = useRef<HTMLCanvasElement>(null);
+    const containerBRef = useRef<HTMLDivElement>(null);
 
-  // ── Engine state ────────────────────────────────────────────
-  const playerRef = useRef<LyricDancePlayer | null>(null);
-  const snapshotRef = useRef<HTMLCanvasElement | null>(null);
-  const activeSideRef = useRef<"a" | "b">("a");
-  const destroyedRef = useRef(false);
-  const roRef = useRef<ResizeObserver | null>(null);
+    // ── Engine state ────────────────────────────────────────────
+    const playerRef = useRef<LyricDancePlayer | null>(null);
+    const snapshotRef = useRef<HTMLCanvasElement | null>(null);
+    const activeSideRef = useRef<"a" | "b">("a");
+    const destroyedRef = useRef(false);
+    const roRef = useRef<ResizeObserver | null>(null);
 
-  // ── Stable callback refs (never trigger re-fetches) ─────────
-  const onHooksLoadedRef = useRef(onHooksLoaded);
-  onHooksLoadedRef.current = onHooksLoaded;
-  const onCoverImageRef = useRef(onCoverImage);
-  onCoverImageRef.current = onCoverImage;
-  const onEngineReadyRef = useRef(onEngineReady);
-  onEngineReadyRef.current = onEngineReady;
-  const onHookEndRef = useRef(onHookEnd);
-  onHookEndRef.current = onHookEnd;
+    // ── Stable callback refs (never trigger re-fetches) ─────────
+    const onHooksLoadedRef = useRef(onHooksLoaded);
+    onHooksLoadedRef.current = onHooksLoaded;
+    const onCoverImageRef = useRef(onCoverImage);
+    onCoverImageRef.current = onCoverImage;
+    const onEngineReadyRef = useRef(onEngineReady);
+    onEngineReadyRef.current = onEngineReady;
+    const onHookEndRef = useRef(onHookEnd);
+    onHookEndRef.current = onHookEnd;
 
-  useImperativeHandle(ref, () => ({}), []);
+    useImperativeHandle(
+      ref,
+      () => ({
+        getPlayer: () => playerRef.current,
+      }),
+      [],
+    );
 
-  // ═══════════════════════════════════════════════════════════
-  // EFFECT 1: Fetch hooks + dance data (runs once per battleId)
-  // ═══════════════════════════════════════════════════════════
-  useEffect(() => {
-    if (!battleId) return;
-    const fetchId = ++fetchRef.current;
-    setHookA(null);
-    setHookB(null);
-    setDanceData(null);
-    setLoading(true);
-    setReady(false);
-    hookEndFiredA.current = false;
-    hookEndFiredB.current = false;
+    // ═══════════════════════════════════════════════════════════
+    // EFFECT 1: Fetch hooks + dance data (runs once per battleId)
+    // ═══════════════════════════════════════════════════════════
+    useEffect(() => {
+      if (!battleId) return;
+      const fetchId = ++fetchRef.current;
+      setHookA(null);
+      setHookB(null);
+      setDanceData(null);
+      setLoading(true);
+      setReady(false);
+      hookEndFiredA.current = false;
+      hookEndFiredB.current = false;
 
-    (async () => {
-      const { data: hooks } = await supabase
-        .from("shareable_hooks" as any)
-        .select(HOOK_SELECT)
-        .eq("battle_id", battleId)
-        .order("battle_position", { ascending: true });
+      (async () => {
+        const { data: hooks } = await supabase
+          .from("shareable_hooks" as any)
+          .select(HOOK_SELECT)
+          .eq("battle_id", battleId)
+          .order("battle_position", { ascending: true });
 
-      if (!hooks || hooks.length === 0) { setLoading(false); return; }
-      if (fetchId !== fetchRef.current) return;
-
-      const rawHooks = hooks as unknown as (HookInfo & { user_id?: string })[];
-      const a = rawHooks.find(h => h.battle_position === 1) || rawHooks[0];
-      const b = rawHooks.find(h => h.id !== a.id) || null;
-      setHookA(a);
-      setHookB(b);
-      onHooksLoadedRef.current?.(a, b);
-
-      let query = supabase
-        .from("shareable_lyric_dances" as any)
-        .select(LYRIC_DANCE_COLUMNS)
-        .eq("song_slug", a.song_slug)
-        .limit(1);
-      if ((a as any).user_id) query = query.eq("user_id", (a as any).user_id);
-      else query = query.eq("artist_slug", a.artist_slug);
-
-      const { data: dances } = await query;
-      if (fetchId !== fetchRef.current) return;
-      if (dances && dances.length > 0) {
-        const dance = dances[0] as unknown as LyricDanceData;
-        setDanceData(dance);
-        // Preload images
-        const urls = (dance.section_images as string[] | undefined)?.filter(Boolean) ?? [];
-        if (urls.length > 0) {
-          onCoverImageRef.current?.(urls[0]);
-          urls.forEach(u => preloadImage(u));
+        if (!hooks || hooks.length === 0) {
+          setLoading(false);
+          return;
         }
-      }
-      setLoading(false);
-    })();
-  }, [battleId]);
+        if (fetchId !== fetchRef.current) return;
 
-  // ═══════════════════════════════════════════════════════════
-  // EFFECT 2: Init engine once (when data + canvas are ready)
-  // ═══════════════════════════════════════════════════════════
-  const dataReady = !!(danceData && danceData.cinematic_direction && !Array.isArray(danceData.cinematic_direction));
+        const rawHooks = hooks as unknown as (HookInfo & {
+          user_id?: string;
+        })[];
+        const a = rawHooks.find((h) => h.battle_position === 1) || rawHooks[0];
+        const b = rawHooks.find((h) => h.id !== a.id) || null;
+        setHookA(a);
+        setHookB(b);
+        onHooksLoadedRef.current?.(a, b);
 
-  useEffect(() => {
-    if (!dataReady || !hookA) return;
-    if (playerRef.current) return;
-    destroyedRef.current = false;
+        let query = supabase
+          .from("shareable_lyric_dances" as any)
+          .select(LYRIC_DANCE_COLUMNS)
+          .eq("song_slug", a.song_slug)
+          .limit(1);
+        if ((a as any).user_id) query = query.eq("user_id", (a as any).user_id);
+        else query = query.eq("artist_slug", a.artist_slug);
 
-    const bgCanvas = canvasARef.current;
-    const textCanvas = textCanvasARef.current;
-    const container = containerARef.current;
-    if (!bgCanvas || !textCanvas || !container) return;
+        const { data: dances } = await query;
+        if (fetchId !== fetchRef.current) return;
+        if (dances && dances.length > 0) {
+          const dance = dances[0] as unknown as LyricDanceData;
+          setDanceData(dance);
+          // Preload images
+          const urls =
+            (dance.section_images as string[] | undefined)?.filter(Boolean) ??
+            [];
+          if (urls.length > 0) {
+            onCoverImageRef.current?.(urls[0]);
+            urls.forEach((u) => preloadImage(u));
+          }
+        }
+        setLoading(false);
+      })();
+    }, [battleId]);
 
-    let cancelled = false;
+    // ═══════════════════════════════════════════════════════════
+    // EFFECT 2: Init engine once (when data + canvas are ready)
+    // ═══════════════════════════════════════════════════════════
+    const dataReady = !!(
+      danceData &&
+      danceData.cinematic_direction &&
+      !Array.isArray(danceData.cinematic_direction)
+    );
 
-    withInitLimit(async () => {
-      if (cancelled || destroyedRef.current) return;
+    useEffect(() => {
+      if (!dataReady || !hookA) return;
+      if (playerRef.current) return;
+      destroyedRef.current = false;
 
-      const dataWithRegion: LyricDanceData = {
-        ...danceData!,
-        region_start: hookA.hook_start,
-        region_end: hookA.hook_end,
+      const bgCanvas = canvasARef.current;
+      const textCanvas = textCanvasARef.current;
+      const container = containerARef.current;
+      if (!bgCanvas || !textCanvas || !container) return;
+
+      let cancelled = false;
+
+      withInitLimit(async () => {
+        if (cancelled || destroyedRef.current) return;
+
+        const dataWithRegion: LyricDanceData = {
+          ...danceData!,
+          region_start: hookA.hook_start,
+          region_end: hookA.hook_end,
+        };
+
+        const p = new LyricDancePlayer(
+          dataWithRegion,
+          bgCanvas,
+          textCanvas,
+          container,
+          { bootMode: "minimal" },
+        );
+
+        if (cancelled || destroyedRef.current) {
+          p.destroy();
+          return;
+        }
+
+        playerRef.current = p;
+        activeSideRef.current = "a";
+
+        // ResizeObserver — same pattern as useLyricDancePlayer
+        roRef.current = new ResizeObserver((entries) => {
+          const entry = entries[0];
+          if (!entry) return;
+          const { width, height } = entry.contentRect;
+          if (width > 0 && height > 0) p.resize(width, height);
+        });
+        roRef.current.observe(container);
+
+        // Force correct viewport dimensions before init
+        const rect = container.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0)
+          p.resize(rect.width, rect.height);
+
+        await p.init();
+        if (cancelled || destroyedRef.current) {
+          p.destroy();
+          playerRef.current = null;
+          roRef.current?.disconnect();
+          return;
+        }
+
+        // Start muted — Effect 3 will decide what to do next
+        p.audio.muted = true;
+        p.play();
+        p.scheduleFullModeUpgrade();
+        setReady(true);
+        onEngineReadyRef.current?.();
+      }).catch((err) => console.error("[InlineBattle] init failed:", err));
+
+      return () => {
+        cancelled = true;
       };
+    }, [dataReady, danceData?.id, hookA?.id]);
 
-      const p = new LyricDancePlayer(
-        dataWithRegion,
-        bgCanvas,
-        textCanvas,
-        container,
-        { bootMode: "minimal" },
-      );
+    // ═══════════════════════════════════════════════════════════
+    // EFFECT 3: Unified player control
+    // ONE effect, reads ALL inputs, makes ONE decision.
+    // ═══════════════════════════════════════════════════════════
+    useEffect(() => {
+      const player = playerRef.current;
+      if (!player || !ready || !hookA) return;
 
-      if (cancelled || destroyedRef.current) { p.destroy(); return; }
-
-      playerRef.current = p;
-      activeSideRef.current = "a";
-
-      // ResizeObserver — same pattern as useLyricDancePlayer
-      roRef.current = new ResizeObserver((entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-        const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) p.resize(width, height);
-      });
-      roRef.current.observe(container);
-
-      // Force correct viewport dimensions before init
-      const rect = container.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) p.resize(rect.width, rect.height);
-
-      await p.init();
-      if (cancelled || destroyedRef.current) {
-        p.destroy();
-        playerRef.current = null;
-        roRef.current?.disconnect();
+      // ── Rule 1: Cold (out of render window) → stop rendering ──
+      if (cardState === "cold") {
+        player.stopRendering?.();
+        player.setMuted(true);
         return;
       }
 
-      // Start muted — Effect 3 will decide what to do next
-      p.audio.muted = true;
-      p.play();
-      p.scheduleFullModeUpgrade();
-      setReady(true);
-      onEngineReadyRef.current?.();
-    }).catch((err) => console.error("[InlineBattle] init failed:", err));
+      // ── Rule 2: Warm (in viewport, not active) → render muted behind cover ──
+      if (cardState === "warm") {
+        player.play();
+        player.setMuted(true);
+        return;
+      }
 
-    return () => { cancelled = true; };
-  }, [dataReady, danceData?.id, hookA?.id]);
+      // ── Rule 3: No active side (cover, vote, results unfocused) → render muted ──
+      if (!activePlaying) {
+        player.play();
+        player.setMuted(true);
+        return;
+      }
 
-  // ═══════════════════════════════════════════════════════════
-  // EFFECT 3: Unified player control
-  // ONE effect, reads ALL inputs, makes ONE decision.
-  // ═══════════════════════════════════════════════════════════
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player || !ready || !hookA) return;
+      // ── Rule 4: Active side matches current canvas → just play ──
+      const targetSide = activePlaying;
+      const currentSide = activeSideRef.current;
+      const hook = targetSide === "a" ? hookA : hookB;
+      if (!hook) return;
 
-    // ── Rule 1: Cold (out of render window) → stop rendering ──
-    if (cardState === "cold") {
-      player.stopRendering?.();
-      player.setMuted(true);
-      return;
-    }
+      if (targetSide === currentSide) {
+        player.play();
+        player.setMuted(!!forceMuted);
+        player.scheduleFullModeUpgrade();
+        return;
+      }
 
-    // ── Rule 2: Warm (in viewport, not active) → render muted behind cover ──
-    if (cardState === "warm") {
-      player.play();
-      player.setMuted(true);
-      return;
-    }
+      // ── Rule 5: Switching sides → snapshot + swap canvas + recompile ──
+      snapshotRef.current = player.captureSnapshot();
 
-    // ── Rule 3: No active side (cover, vote, results unfocused) → render muted ──
-    if (!activePlaying) {
-      player.play();
-      player.setMuted(true);
-      return;
-    }
+      const bgCanvas =
+        targetSide === "a" ? canvasARef.current : canvasBRef.current;
+      const textCanvas =
+        targetSide === "a" ? textCanvasARef.current : textCanvasBRef.current;
+      const container =
+        targetSide === "a" ? containerARef.current : containerBRef.current;
+      if (!bgCanvas || !textCanvas || !container) return;
 
-    // ── Rule 4: Active side matches current canvas → just play ──
-    const targetSide = activePlaying;
-    const currentSide = activeSideRef.current;
-    const hook = targetSide === "a" ? hookA : hookB;
-    if (!hook) return;
+      // Draw snapshot onto old side's canvas (freeze it)
+      const oldCanvas =
+        currentSide === "a" ? canvasARef.current : canvasBRef.current;
+      if (oldCanvas && snapshotRef.current) {
+        const ctx = oldCanvas.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, oldCanvas.width, oldCanvas.height);
+          ctx.drawImage(snapshotRef.current, 0, 0);
+        }
+      }
 
-    if (targetSide === currentSide) {
+      player.setRenderTarget(bgCanvas, textCanvas, container);
+      player.setRegion(hook.hook_start, hook.hook_end);
+      activeSideRef.current = targetSide;
+
       player.play();
       player.setMuted(!!forceMuted);
       player.scheduleFullModeUpgrade();
-      return;
-    }
+    }, [activePlaying, forceMuted, ready, hookA, hookB, cardState]);
 
-    // ── Rule 5: Switching sides → snapshot + swap canvas + recompile ──
-    snapshotRef.current = player.captureSnapshot();
+    // ═══════════════════════════════════════════════════════════
+    // EFFECT 4: Hook-end timers (simple, independent)
+    // ═══════════════════════════════════════════════════════════
+    useEffect(() => {
+      if (!hookA || activePlaying !== "a" || hookEndFiredA.current) return;
+      const duration = (hookA.hook_end - hookA.hook_start) * 1000 + 500;
+      const timer = setTimeout(() => {
+        hookEndFiredA.current = true;
+        onHookEndRef.current?.("a");
+      }, duration);
+      return () => clearTimeout(timer);
+    }, [activePlaying, hookA]);
 
-    const bgCanvas = targetSide === "a" ? canvasARef.current : canvasBRef.current;
-    const textCanvas = targetSide === "a" ? textCanvasARef.current : textCanvasBRef.current;
-    const container = targetSide === "a" ? containerARef.current : containerBRef.current;
-    if (!bgCanvas || !textCanvas || !container) return;
+    useEffect(() => {
+      if (!hookB || activePlaying !== "b" || hookEndFiredB.current) return;
+      const duration = (hookB.hook_end - hookB.hook_start) * 1000 + 500;
+      const timer = setTimeout(() => {
+        hookEndFiredB.current = true;
+        onHookEndRef.current?.("b");
+      }, duration);
+      return () => clearTimeout(timer);
+    }, [activePlaying, hookB]);
 
-    // Draw snapshot onto old side's canvas (freeze it)
-    const oldCanvas = currentSide === "a" ? canvasARef.current : canvasBRef.current;
-    if (oldCanvas && snapshotRef.current) {
-      const ctx = oldCanvas.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, oldCanvas.width, oldCanvas.height);
-        ctx.drawImage(snapshotRef.current, 0, 0);
+    // ═══════════════════════════════════════════════════════════
+    // Cleanup: destroy engine on unmount
+    // ═══════════════════════════════════════════════════════════
+    useEffect(() => {
+      return () => {
+        destroyedRef.current = true;
+        roRef.current?.disconnect();
+        playerRef.current?.destroy();
+        playerRef.current = null;
+        snapshotRef.current = null;
+      };
+    }, []);
+
+    // ── Opacity ─────────────────────────────────────────────────
+    const getOpacity = useCallback(
+      (side: "a" | "b") => {
+        switch (mode) {
+          case "dark":
+            return 0.2;
+          case "listen-a":
+            return side === "a" ? 1 : 0.2;
+          case "listen-b":
+            return side === "b" ? 1 : 0.2;
+          case "judgment":
+            return 0.2;
+          case "scorecard":
+          case "results":
+            if (!activePlaying) return 1;
+            return side === activePlaying ? 1 : 0.3;
+          default:
+            return 1;
+        }
+      },
+      [mode, activePlaying],
+    );
+
+    // ── Loading states ──────────────────────────────────────────
+    if (loading || !hookA || !danceData) {
+      if (!loading && hookA && !danceData) {
+        return (
+          <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/40 text-xs font-mono">
+            No lyric dance found for this song
+          </div>
+        );
       }
-    }
-
-    player.setRenderTarget(bgCanvas, textCanvas, container);
-    player.setRegion(hook.hook_start, hook.hook_end);
-    activeSideRef.current = targetSide;
-
-    player.play();
-    player.setMuted(!!forceMuted);
-    player.scheduleFullModeUpgrade();
-  }, [activePlaying, forceMuted, ready, hookA, hookB, cardState]);
-
-  // ═══════════════════════════════════════════════════════════
-  // EFFECT 4: Hook-end timers (simple, independent)
-  // ═══════════════════════════════════════════════════════════
-  useEffect(() => {
-    if (!hookA || activePlaying !== "a" || hookEndFiredA.current) return;
-    const duration = (hookA.hook_end - hookA.hook_start) * 1000 + 500;
-    const timer = setTimeout(() => {
-      hookEndFiredA.current = true;
-      onHookEndRef.current?.("a");
-    }, duration);
-    return () => clearTimeout(timer);
-  }, [activePlaying, hookA]);
-
-  useEffect(() => {
-    if (!hookB || activePlaying !== "b" || hookEndFiredB.current) return;
-    const duration = (hookB.hook_end - hookB.hook_start) * 1000 + 500;
-    const timer = setTimeout(() => {
-      hookEndFiredB.current = true;
-      onHookEndRef.current?.("b");
-    }, duration);
-    return () => clearTimeout(timer);
-  }, [activePlaying, hookB]);
-
-  // ═══════════════════════════════════════════════════════════
-  // Cleanup: destroy engine on unmount
-  // ═══════════════════════════════════════════════════════════
-  useEffect(() => {
-    return () => {
-      destroyedRef.current = true;
-      roRef.current?.disconnect();
-      playerRef.current?.destroy();
-      playerRef.current = null;
-      snapshotRef.current = null;
-    };
-  }, []);
-
-  // ── Opacity ─────────────────────────────────────────────────
-  const getOpacity = useCallback((side: "a" | "b") => {
-    switch (mode) {
-      case "dark": return 0.2;
-      case "listen-a": return side === "a" ? 1 : 0.2;
-      case "listen-b": return side === "b" ? 1 : 0.2;
-      case "judgment": return 0.2;
-      case "scorecard":
-      case "results":
-        if (!activePlaying) return 1;
-        return side === activePlaying ? 1 : 0.3;
-      default: return 1;
-    }
-  }, [mode, activePlaying]);
-
-  // ── Loading states ──────────────────────────────────────────
-  if (loading || !hookA || !danceData) {
-    if (!loading && hookA && !danceData) {
       return (
-        <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/40 text-xs font-mono">
-          No lyric dance found for this song
+        <div className="w-full h-full animate-pulse">
+          <div className="flex h-full gap-1 p-1">
+            <div className="flex-1 rounded-lg bg-white/[0.03]" />
+            <div className="flex-1 rounded-lg bg-white/[0.03]" />
+          </div>
         </div>
       );
     }
+
+    const isResultsMode = mode === "scorecard" || mode === "results";
+
     return (
-      <div className="w-full h-full animate-pulse">
-        <div className="flex h-full gap-1 p-1">
-          <div className="flex-1 rounded-lg bg-white/[0.03]" />
-          <div className="flex-1 rounded-lg bg-white/[0.03]" />
-        </div>
-      </div>
-    );
-  }
-
-  const isResultsMode = mode === "scorecard" || mode === "results";
-
-  return (
-    <div className="w-full h-full">
-      <div className="relative flex flex-row h-full">
-        {/* Hook A */}
-        <motion.div
-          className="relative flex-1 overflow-hidden cursor-pointer"
-          animate={{ opacity: getOpacity("a") }}
-          transition={{ duration: 0.4 }}
-          onClick={() => onTileTap?.("a")}
-        >
-          <AnimatePresence>
-            {isResultsMode && votedSide === "a" ? (
-              <motion.div
-                key="voted-a-label"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
-              >
-                <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-green-400/70 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6.5L4.5 9L10 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  Your Pick
-                </span>
-              </motion.div>
-            ) : activePlaying === "a" && !isResultsMode ? (
-              <motion.div
-                key="round-a-label"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
-              >
-                <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                  Round 1
-                </span>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-          <div ref={containerARef} className="absolute inset-0">
-            <canvas ref={canvasARef} className="absolute inset-0 w-full h-full" />
-            <canvas ref={textCanvasARef} className="absolute inset-0 w-full h-full pointer-events-none" />
-          </div>
-        </motion.div>
-
-        {/* Hook B */}
-        {hookB ? (
+      <div className="w-full h-full">
+        <div className="relative flex flex-row h-full">
+          {/* Hook A */}
           <motion.div
             className="relative flex-1 overflow-hidden cursor-pointer"
-            animate={{ opacity: getOpacity("b") }}
+            animate={{ opacity: getOpacity("a") }}
             transition={{ duration: 0.4 }}
-            onClick={() => onTileTap?.("b")}
+            onClick={() => onTileTap?.("a")}
           >
             <AnimatePresence>
-              {isResultsMode && votedSide === "b" ? (
+              {isResultsMode && votedSide === "a" ? (
                 <motion.div
-                  key="voted-b-label"
+                  key="voted-a-label"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -432,34 +451,108 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
                 >
                   <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-green-400/70 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
                     <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 6.5L4.5 9L10 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <path
+                        d="M2 6.5L4.5 9L10 3"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                     Your Pick
                   </span>
                 </motion.div>
-              ) : activePlaying === "b" && !isResultsMode ? (
+              ) : activePlaying === "a" && !isResultsMode ? (
                 <motion.div
-                  key="round-b-label"
+                  key="round-a-label"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
                 >
                   <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                    Round 2
+                    Round 1
                   </span>
                 </motion.div>
               ) : null}
             </AnimatePresence>
-            <div ref={containerBRef} className="absolute inset-0">
-              <canvas ref={canvasBRef} className="absolute inset-0 w-full h-full" />
-              <canvas ref={textCanvasBRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+            <div ref={containerARef} className="absolute inset-0">
+              <canvas
+                ref={canvasARef}
+                className="absolute inset-0 w-full h-full"
+              />
+              <canvas
+                ref={textCanvasARef}
+                className="absolute inset-0 w-full h-full pointer-events-none"
+              />
             </div>
           </motion.div>
-        ) : (
-          <div className="relative flex-1 overflow-hidden bg-black/50" />
-        )}
+
+          {/* Hook B */}
+          {hookB ? (
+            <motion.div
+              className="relative flex-1 overflow-hidden cursor-pointer"
+              animate={{ opacity: getOpacity("b") }}
+              transition={{ duration: 0.4 }}
+              onClick={() => onTileTap?.("b")}
+            >
+              <AnimatePresence>
+                {isResultsMode && votedSide === "b" ? (
+                  <motion.div
+                    key="voted-b-label"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
+                  >
+                    <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-green-400/70 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                      >
+                        <path
+                          d="M2 6.5L4.5 9L10 3"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      Your Pick
+                    </span>
+                  </motion.div>
+                ) : activePlaying === "b" && !isResultsMode ? (
+                  <motion.div
+                    key="round-b-label"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute top-3 left-0 right-0 flex justify-center z-20 pointer-events-none"
+                  >
+                    <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                      Round 2
+                    </span>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+              <div ref={containerBRef} className="absolute inset-0">
+                <canvas
+                  ref={canvasBRef}
+                  className="absolute inset-0 w-full h-full"
+                />
+                <canvas
+                  ref={textCanvasBRef}
+                  className="absolute inset-0 w-full h-full pointer-events-none"
+                />
+              </div>
+            </motion.div>
+          ) : (
+            <div className="relative flex-1 overflow-hidden bg-black/50" />
+          )}
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);

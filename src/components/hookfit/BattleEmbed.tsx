@@ -11,17 +11,33 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
-import { Loader2, Maximize2, Volume2, VolumeX, RotateCcw, X } from "lucide-react";
+import {
+  Loader2,
+  Maximize2,
+  Volume2,
+  VolumeX,
+  RotateCcw,
+  X,
+  MessageCircle,
+} from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
-import { InlineBattle, type BattleMode, type HookInfo } from "@/components/hookfit/InlineBattle";
+import {
+  InlineBattle,
+  type BattleMode,
+  type HookInfo,
+  type InlineBattleHandle,
+} from "@/components/hookfit/InlineBattle";
 import { preloadImage } from "@/lib/imagePreloadCache";
-import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { getSessionId } from "@/lib/sessionId";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
+import { PanelShell } from "@/components/shared/panel/PanelShell";
+import {
+  EMOJIS,
+  type EmojiKey,
+} from "@/components/shared/panel/panelConstants";
 
 type BattleState = "cover" | "round-1" | "round-2" | "vote" | "results";
-const EMOJI_OPTIONS = ["🔥", "💀", "🫠", "👑", "💜", "😤"];
 
 interface BattleEmbedProps {
   // Data — pass battleId directly OR battleUrl for internal resolution
@@ -30,7 +46,7 @@ interface BattleEmbedProps {
 
   // Display
   songTitle: string;
-  showSplitCover?: boolean;   // true = feed split-screen labels; false = fullscreen dark overlay
+  showSplitCover?: boolean; // true = feed split-screen labels; false = fullscreen dark overlay
   showExpandButton?: boolean;
 
   // Feed lifecycle — omit for fullscreen/shareable usage
@@ -58,7 +74,9 @@ function BattleEmbedInner({
   onDeactivateRef.current = onDeactivate;
 
   // ── Resolved IDs ───────────────────────────────────────────
-  const [resolvedBattleId, setResolvedBattleId] = useState<string | null>(propBattleId ?? null);
+  const [resolvedBattleId, setResolvedBattleId] = useState<string | null>(
+    propBattleId ?? null,
+  );
   const [hookPhrase, setHookPhrase] = useState<string | null>(null);
   const [loading, setLoading] = useState(!propBattleId);
   const [error, setError] = useState(false);
@@ -70,7 +88,11 @@ function BattleEmbedInner({
   useEffect(() => {
     if (propBattleId) return;
     const segments = battleUrl.replace(/^\//, "").split("/").filter(Boolean);
-    if (segments.length < 3) { setError(true); setLoading(false); return; }
+    if (segments.length < 3) {
+      setError(true);
+      setLoading(false);
+      return;
+    }
     const [artistSlug, songSlug, hookSlug] = segments;
     supabase
       .from("shareable_hooks" as any)
@@ -80,7 +102,11 @@ function BattleEmbedInner({
       .eq("hook_slug", hookSlug)
       .maybeSingle()
       .then(({ data, error: err }) => {
-        if (err || !data || !(data as any).battle_id) { setError(true); setLoading(false); return; }
+        if (err || !data || !(data as any).battle_id) {
+          setError(true);
+          setLoading(false);
+          return;
+        }
         setResolvedBattleId((data as any).battle_id);
         setHookPhrase((data as any).hook_phrase || null);
         setLoading(false);
@@ -146,7 +172,9 @@ function BattleEmbedInner({
   const [battleState, setBattleState] = useState<BattleState>("cover");
   const [hookA, setHookA] = useState<HookInfo | null>(null);
   const [hookB, setHookB] = useState<HookInfo | null>(null);
-  const [votedSide, setVotedSide] = useState<"a" | "b" | null>(initialVotedSide ?? null);
+  const [votedSide, setVotedSide] = useState<"a" | "b" | null>(
+    initialVotedSide ?? null,
+  );
   const [voteCountA, setVoteCountA] = useState(0);
   const [voteCountB, setVoteCountB] = useState(0);
   const [replayingSide, setReplayingSide] = useState<"a" | "b" | null>(null);
@@ -154,13 +182,34 @@ function BattleEmbedInner({
   const [muted, setMuted] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
   const [resultsTab, setResultsTab] = useState<"a" | "b">("a");
-  const [lineReactions, setLineReactions] = useState<Record<string, string>>({});
-  const [activeEmojiLine, setActiveEmojiLine] = useState<string | null>(null);
-  const [commentInput, setCommentInput] = useState("");
-  const [submittingComment, setSubmittingComment] = useState(false);
-  const [comments, setComments] = useState<Array<{ id: string; text: string; voted_side: string; created_at: string }>>([]);
+  const [reactionData, setReactionData] = useState<
+    Record<string, { line: Record<number, number>; total: number }>
+  >({});
+  const [panelComments, setPanelComments] = useState<
+    Array<{
+      id: string;
+      text: string;
+      line_index: number | null;
+      submitted_at: string;
+      is_pinned: boolean;
+      parent_comment_id: string | null;
+      replies?: any[];
+    }>
+  >([]);
+  const [commentReactions, setCommentReactions] = useState<
+    Record<string, Record<string, number>>
+  >({});
+  const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
+  const [panelTextInput, setPanelTextInput] = useState("");
+  const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(
+    null,
+  );
+  const [activePanelLineIndex, setActivePanelLineIndex] = useState<
+    number | null
+  >(null);
   const [hookALines, setHookALines] = useState<any[]>([]);
   const [hookBLines, setHookBLines] = useState<any[]>([]);
+  const [danceData, setDanceData] = useState<{ id: string } | null>(null);
 
   const progressTimerRef = useRef<number>(0);
   const roundStartRef = useRef<number>(0);
@@ -168,6 +217,7 @@ function BattleEmbedInner({
   const hookEndFiredB = useRef(false);
   const userIdRef = useRef<string | null | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inlineBattleRef = useRef<InlineBattleHandle>(null);
 
   // Reset to cover when feed card transitions FROM active TO non-active.
   // Only fires on transition — not continuously while warm/cold.
@@ -228,12 +278,15 @@ function BattleEmbedInner({
       if (cancelled || !hooks || hooks.length === 0) return;
 
       const rawHooks = hooks as any[];
-      const a = rawHooks.find((h: any) => h.battle_position === 1) || rawHooks[0];
+      const a =
+        rawHooks.find((h: any) => h.battle_position === 1) || rawHooks[0];
       const b = rawHooks.find((h: any) => h.id !== a.id) || null;
 
       // 2. Check for existing vote
       const sessionId = getSessionId();
-      const { data: { user: u } } = await supabase.auth.getUser();
+      const {
+        data: { user: u },
+      } = await supabase.auth.getUser();
       if (cancelled) return;
       userIdRef.current = u?.id ?? null;
 
@@ -260,156 +313,248 @@ function BattleEmbedInner({
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [resolvedBattleId]);
 
   // ── Hooks loaded ────────────────────────────────────────────
-  const handleHooksLoaded = useCallback((a: HookInfo, b: HookInfo | null) => {
-    setHookA(a);
-    setHookB(b);
-    setVoteCountA(a.vote_count || 0);
-    if (b) setVoteCountB(b.vote_count || 0);
-    if (!hookPhrase) setHookPhrase(a.hook_phrase || b?.hook_phrase || null);
+  const handleHooksLoaded = useCallback(
+    (a: HookInfo, b: HookInfo | null) => {
+      setHookA(a);
+      setHookB(b);
+      setVoteCountA(a.vote_count || 0);
+      if (b) setVoteCountB(b.vote_count || 0);
+      if (!hookPhrase) setHookPhrase(a.hook_phrase || b?.hook_phrase || null);
 
-    // Fetch lyrics for results panel
-    supabase
-      .from("shareable_lyric_dances" as any)
-      .select("lyrics")
-      .eq("artist_slug", a.artist_slug)
-      .eq("song_slug", a.song_slug)
-      .maybeSingle()
-      .then(({ data }: { data: any }) => {
-        if (!data?.lyrics) return;
-        const lyrics = data.lyrics as any[];
-        setHookALines(lyrics.filter((l: any) => l.start >= a.hook_start - 0.3 && l.end <= a.hook_end + 0.3));
-        if (b) setHookBLines(lyrics.filter((l: any) => l.start >= b.hook_start - 0.3 && l.end <= b.hook_end + 0.3));
-      });
+      // Fetch lyrics for results panel
+      supabase
+        .from("shareable_lyric_dances" as any)
+        .select("id, lyrics")
+        .eq("artist_slug", a.artist_slug)
+        .eq("song_slug", a.song_slug)
+        .maybeSingle()
+        .then(({ data }: { data: any }) => {
+          if (data?.id) setDanceData({ id: data.id });
+          if (!data?.lyrics) return;
+          const lyrics = data.lyrics as any[];
+          const indexed = lyrics.map((l: any, i: number) => ({
+            ...l,
+            lineIndex: i,
+          }));
+          setHookALines(
+            indexed.filter(
+              (l: any) =>
+                l.start >= a.hook_start - 0.3 && l.end <= a.hook_end + 0.3,
+            ),
+          );
+          if (b)
+            setHookBLines(
+              indexed.filter(
+                (l: any) =>
+                  l.start >= b.hook_start - 0.3 && l.end <= b.hook_end + 0.3,
+              ),
+            );
+        });
 
-    if (!resolvedBattleId || votedSide) return;
-    (async () => {
-      const sessionId = getSessionId();
-      const { data: { user: u } } = await supabase.auth.getUser();
-      userIdRef.current = u?.id ?? null;
-      let query = supabase.from("hook_votes" as any).select("hook_id").eq("battle_id", resolvedBattleId);
-      if (u?.id) query = query.eq("user_id", u.id);
-      else query = query.eq("session_id", sessionId);
-      const { data: vote } = await query.maybeSingle();
-      if (vote) {
-        setVotedSide((vote as any).hook_id === a.id ? "a" : "b");
-        if (!isFeedEmbed) {
-          setBattleState("results");
+      if (!resolvedBattleId || votedSide) return;
+      (async () => {
+        const sessionId = getSessionId();
+        const {
+          data: { user: u },
+        } = await supabase.auth.getUser();
+        userIdRef.current = u?.id ?? null;
+        let query = supabase
+          .from("hook_votes" as any)
+          .select("hook_id")
+          .eq("battle_id", resolvedBattleId);
+        if (u?.id) query = query.eq("user_id", u.id);
+        else query = query.eq("session_id", sessionId);
+        const { data: vote } = await query.maybeSingle();
+        if (vote) {
+          setVotedSide((vote as any).hook_id === a.id ? "a" : "b");
+          if (!isFeedEmbed) {
+            setBattleState("results");
+          }
         }
-      }
-    })();
-  }, [resolvedBattleId, hookPhrase, votedSide]);
+      })();
+    },
+    [resolvedBattleId, hookPhrase, votedSide],
+  );
 
   // ── Auto-advance after hook ends ────────────────────────────
   useEffect(() => {
     if (battleState !== "round-1" || !hookA || hookEndFiredA.current) return;
-    const timer = setTimeout(() => { hookEndFiredA.current = true; setBattleState("round-2"); },
-      (hookA.hook_end - hookA.hook_start) * 1000 + 300);
+    const timer = setTimeout(
+      () => {
+        hookEndFiredA.current = true;
+        setBattleState("round-2");
+      },
+      (hookA.hook_end - hookA.hook_start) * 1000 + 300,
+    );
     return () => clearTimeout(timer);
   }, [battleState, hookA]);
 
   useEffect(() => {
     if (battleState !== "round-2" || !hookB || hookEndFiredB.current) return;
-    const timer = setTimeout(() => { hookEndFiredB.current = true; setBattleState("vote"); },
-      (hookB.hook_end - hookB.hook_start) * 1000 + 300);
+    const timer = setTimeout(
+      () => {
+        hookEndFiredB.current = true;
+        setBattleState("vote");
+      },
+      (hookB.hook_end - hookB.hook_start) * 1000 + 300,
+    );
     return () => clearTimeout(timer);
   }, [battleState, hookB]);
 
   // ── Vote ────────────────────────────────────────────────────
-  const handleVote = useCallback(async (side: "a" | "b") => {
-    if (!hookA || !resolvedBattleId || battleState !== "vote") return;
-    const hookId = side === "a" ? hookA.id : hookB?.id;
-    if (!hookId) return;
-    setVotedSide(side);
-    if (side === "a") setVoteCountA(v => v + 1); else setVoteCountB(v => v + 1);
-    setBattleState("results");
-    setMuted(true);
-    const sessionId = getSessionId();
-    if (userIdRef.current === undefined) {
-      const { data: { user: u } } = await supabase.auth.getUser();
-      userIdRef.current = u?.id ?? null;
-    }
-    await supabase.from("hook_votes" as any).insert({
-      battle_id: resolvedBattleId, hook_id: hookId,
-      user_id: userIdRef.current || null, session_id: sessionId,
-    });
-  }, [hookA, hookB, resolvedBattleId, battleState]);
+  const handleVote = useCallback(
+    async (side: "a" | "b") => {
+      if (!hookA || !resolvedBattleId || battleState !== "vote") return;
+      const hookId = side === "a" ? hookA.id : hookB?.id;
+      if (!hookId) return;
+      setVotedSide(side);
+      if (side === "a") setVoteCountA((v) => v + 1);
+      else setVoteCountB((v) => v + 1);
+      setBattleState("results");
+      setMuted(true);
+      const sessionId = getSessionId();
+      if (userIdRef.current === undefined) {
+        const {
+          data: { user: u },
+        } = await supabase.auth.getUser();
+        userIdRef.current = u?.id ?? null;
+      }
+      await supabase.from("hook_votes" as any).insert({
+        battle_id: resolvedBattleId,
+        hook_id: hookId,
+        user_id: userIdRef.current || null,
+        session_id: sessionId,
+      });
+    },
+    [hookA, hookB, resolvedBattleId, battleState],
+  );
 
   // ── Poll vote counts on results ─────────────────────────────
   useEffect(() => {
     if (battleState !== "results" || !hookA || !resolvedBattleId) return;
     const poll = async () => {
-      const { data } = await supabase.from("hook_votes" as any).select("hook_id").eq("battle_id", resolvedBattleId);
+      const { data } = await supabase
+        .from("hook_votes" as any)
+        .select("hook_id")
+        .eq("battle_id", resolvedBattleId);
       if (!data) return;
       const votes = data as any[];
-      setVoteCountA(votes.filter(v => v.hook_id === hookA.id).length);
-      setVoteCountB(votes.filter(v => v.hook_id === hookB?.id).length);
+      setVoteCountA(votes.filter((v) => v.hook_id === hookA.id).length);
+      setVoteCountB(votes.filter((v) => v.hook_id === hookB?.id).length);
     };
     poll();
     const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
   }, [battleState, hookA, hookB, resolvedBattleId]);
 
-  // ── Comments on results ─────────────────────────────────────
+  // ── Fetch reactions + comments for panel (shared with In Studio) ──
+  const danceIdForPanel = danceData?.id ?? null;
   useEffect(() => {
-    if (battleState !== "results" || !resolvedBattleId) return;
-    const fetch = async () => {
-      const { data } = await supabase.from("battle_comments" as any)
-        .select("id, text, voted_side, created_at")
-        .eq("battle_id", resolvedBattleId)
-        .order("created_at", { ascending: false }).limit(50);
-      if (data) setComments(data as any[]);
-    };
-    fetch();
-    const interval = setInterval(fetch, 8000);
-    return () => clearInterval(interval);
-  }, [battleState, resolvedBattleId]);
+    if (!panelOpen || !danceIdForPanel) return;
 
-  const submitComment = useCallback(async () => {
-    if (!commentInput.trim() || !resolvedBattleId || !votedSide) return;
-    setSubmittingComment(true);
-    const sessionId = getSessionId();
-    const newComment = { battle_id: resolvedBattleId, user_id: userIdRef.current || null, session_id: sessionId, voted_side: votedSide, text: commentInput.trim() };
-    setComments(prev => [{ ...newComment, id: crypto.randomUUID(), created_at: new Date().toISOString() }, ...prev]);
-    setCommentInput("");
-    await supabase.from("battle_comments" as any).insert(newComment);
-    setSubmittingComment(false);
-  }, [commentInput, resolvedBattleId, votedSide]);
+    supabase
+      .from("lyric_dance_reactions" as any)
+      .select("emoji, line_index")
+      .eq("dance_id", danceIdForPanel)
+      .then(({ data }) => {
+        if (!data) return;
+        const result: Record<
+          string,
+          { line: Record<number, number>; total: number }
+        > = {};
+        for (const row of data as any[]) {
+          const key = row.emoji as string;
+          if (!result[key]) result[key] = { line: {}, total: 0 };
+          result[key].total++;
+          if (row.line_index != null) {
+            result[key].line[row.line_index] =
+              (result[key].line[row.line_index] ?? 0) + 1;
+          }
+        }
+        setReactionData(result);
+      });
 
-  // ── Line reactions ──────────────────────────────────────────
-  const toggleLineReaction = useCallback((side: "a" | "b", lineIndex: number, emoji: string) => {
-    const key = `${side}-${lineIndex}`;
-    setLineReactions(prev => { const next = { ...prev }; if (next[key] === emoji) delete next[key]; else next[key] = emoji; return next; });
-    setActiveEmojiLine(null);
-  }, []);
+    supabase
+      .from("lyric_dance_comment_reactions" as any)
+      .select("comment_id, emoji")
+      .then(({ data }) => {
+        if (!data) return;
+        const counts: Record<string, Record<string, number>> = {};
+        for (const row of data as any[]) {
+          if (!counts[row.comment_id]) counts[row.comment_id] = {};
+          counts[row.comment_id][row.emoji] =
+            (counts[row.comment_id][row.emoji] ?? 0) + 1;
+        }
+        setCommentReactions(counts);
+      });
+
+    supabase
+      .from("lyric_dance_comments" as any)
+      .select(
+        "id, text, line_index, submitted_at, is_pinned, parent_comment_id",
+      )
+      .eq("dance_id", danceIdForPanel)
+      .order("is_pinned", { ascending: false })
+      .order("submitted_at", { ascending: true })
+      .limit(200)
+      .then(({ data }) => {
+        if (!data) return;
+        const rows = data as any[];
+        const topLevel = rows.filter((c: any) => !c.parent_comment_id);
+        const byParent: Record<string, any[]> = {};
+        rows
+          .filter((c: any) => c.parent_comment_id)
+          .forEach((c: any) => {
+            if (!byParent[c.parent_comment_id])
+              byParent[c.parent_comment_id] = [];
+            byParent[c.parent_comment_id].push(c);
+          });
+        setPanelComments(
+          topLevel.map((c: any) => ({ ...c, replies: byParent[c.id] ?? [] })),
+        );
+      });
+  }, [panelOpen, danceIdForPanel]);
 
   // ── Derived values ──────────────────────────────────────────
   const totalVotes = voteCountA + voteCountB;
-  const pctA = totalVotes > 0 ? Math.round((voteCountA / totalVotes) * 100) : 50;
-  const pctB = totalVotes > 0 ? Math.round((voteCountB / totalVotes) * 100) : 50;
-  const canVote = battleState === "vote";
-
+  const pctA =
+    totalVotes > 0 ? Math.round((voteCountA / totalVotes) * 100) : 50;
+  const pctB =
+    totalVotes > 0 ? Math.round((voteCountB / totalVotes) * 100) : 50;
   const battleMode: BattleMode = useMemo(() => {
     switch (battleState) {
-      case "cover": return "dark";
-      case "round-1": return "listen-a";
-      case "round-2": return "listen-b";
-      case "vote": return "judgment";
-      case "results": return "scorecard";
+      case "cover":
+        return "dark";
+      case "round-1":
+        return "listen-a";
+      case "round-2":
+        return "listen-b";
+      case "vote":
+        return "judgment";
+      case "results":
+        return "scorecard";
     }
   }, [battleState]);
 
   const activePlaying: "a" | "b" | null = useMemo(() => {
     if (isFeedEmbed && cardState !== "active") return null;
     switch (battleState) {
-      case "cover": return null;
-      case "round-1": return "a";
-      case "round-2": return "b";
-      case "vote": return null;
-      case "results": return replayingSide ?? votedSide ?? "a";
+      case "cover":
+        return null;
+      case "round-1":
+        return "a";
+      case "round-2":
+        return "b";
+      case "vote":
+        return null;
+      case "results":
+        return replayingSide ?? votedSide ?? "a";
     }
   }, [isFeedEmbed, cardState, battleState, replayingSide, votedSide]);
 
@@ -425,7 +570,8 @@ function BattleEmbedInner({
   useEffect(() => {
     if (!progressSide) {
       setRoundProgress(0);
-      if (progressTimerRef.current) cancelAnimationFrame(progressTimerRef.current);
+      if (progressTimerRef.current)
+        cancelAnimationFrame(progressTimerRef.current);
       return;
     }
     const hook = progressSide === "a" ? hookA : hookB;
@@ -434,27 +580,38 @@ function BattleEmbedInner({
     const tick = () => {
       const elapsed = (performance.now() - roundStartRef.current) / 1000;
       // In results, loop the progress bar; in rounds, clamp at 1
-      const p = battleState === "results"
-        ? (elapsed % hookDuration) / hookDuration
-        : Math.min(1, elapsed / hookDuration);
+      const p =
+        battleState === "results"
+          ? (elapsed % hookDuration) / hookDuration
+          : Math.min(1, elapsed / hookDuration);
       setRoundProgress(p);
       progressTimerRef.current = requestAnimationFrame(tick);
     };
     progressTimerRef.current = requestAnimationFrame(tick);
-    return () => { if (progressTimerRef.current) cancelAnimationFrame(progressTimerRef.current); };
+    return () => {
+      if (progressTimerRef.current)
+        cancelAnimationFrame(progressTimerRef.current);
+    };
   }, [progressSide, hookA, hookB, battleState]);
 
-  const handleTileTap = useCallback((side: "a" | "b") => {
-    if (battleState !== "results") return;
-    setReplayingSide(side);
-    setMuted(false);
-  }, [battleState]);
+  const handleTileTap = useCallback(
+    (side: "a" | "b") => {
+      if (battleState !== "results") return;
+      setReplayingSide(side);
+      setMuted(false);
+    },
+    [battleState],
+  );
 
   // ── Error fallback ──────────────────────────────────────────
   if (error) {
     return (
-      <a href={battleUrl} target="_blank" rel="noopener noreferrer"
-        className="block mx-3 my-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors p-4 text-center">
+      <a
+        href={battleUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block mx-3 my-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors p-4 text-center"
+      >
         <p className="text-sm font-semibold text-white/80">{songTitle}</p>
         <p className="text-xs text-white/40 mt-1">Tap to watch hook battle →</p>
       </a>
@@ -471,7 +628,9 @@ function BattleEmbedInner({
           <div className="relative flex-1 overflow-hidden">
             {hookA && (
               <div className="absolute bottom-16 left-0 right-0 flex justify-center">
-                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Left Hook</span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">
+                  Left Hook
+                </span>
               </div>
             )}
           </div>
@@ -479,7 +638,9 @@ function BattleEmbedInner({
           <div className="relative flex-1 overflow-hidden">
             {hookB && (
               <div className="absolute bottom-16 left-0 right-0 flex justify-center">
-                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">Right Hook</span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/35">
+                  Right Hook
+                </span>
               </div>
             )}
           </div>
@@ -488,140 +649,396 @@ function BattleEmbedInner({
     </>
   );
 
-  // ── Results panel ───────────────────────────────────────────
-  const ResultsPanel = () => (
-    <AnimatePresence>
-      {panelOpen && !!votedSide && battleState !== "vote" && (
-        <>
-          <motion.div
-            key="take-panel"
-            initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className={`${isFeedEmbed ? "absolute" : "fixed"} inset-x-0 bottom-0 z-[60] rounded-t-2xl overflow-hidden`}
-            style={{ background: "#111", maxHeight: isFeedEmbed ? "85%" : "75vh" }}
-          >
-            {/* Tab switcher + close button */}
-            <div className="flex items-stretch h-[44px] border-b border-white/[0.06]">
-              <button
-                onClick={() => setResultsTab("a")}
-                className={`flex-1 flex items-center justify-center py-3 transition-colors ${
-                  resultsTab === "a"
-                    ? "text-white border-b-2 border-white/40"
-                    : "text-white/30 hover:text-white/60"
-                }`}
-              >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase">Left Hook</span>
-              </button>
-              <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-              <button
-                onClick={() => setResultsTab("b")}
-                className={`flex-1 flex items-center justify-center py-3 transition-colors ${
-                  resultsTab === "b"
-                    ? "text-white border-b-2 border-white/40"
-                    : "text-white/30 hover:text-white/60"
-                }`}
-              >
-                <span className="text-[11px] font-mono tracking-[0.15em] uppercase">Right Hook</span>
-              </button>
-              <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-              <button
-                onClick={() => setPanelOpen(false)}
-                className="flex items-center justify-center px-4 min-w-[52px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
-              >
-                <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-              </button>
-            </div>
-            <div className="px-4 pb-6 space-y-5 overflow-y-auto" style={{ maxHeight: isFeedEmbed ? "calc(85% - 40px)" : "calc(75vh - 40px)" }}>
-              {/* Vote confirmation */}
-              <div className="flex items-center justify-center gap-2 pb-2">
-                <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
-                  <path d="M2 6.5L4.5 9L10 3" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span className="text-[11px] font-mono text-green-400/70 uppercase tracking-wider">
-                  You picked {votedSide === "a" ? "Left" : "Right"} Hook · {votedSide === "a" ? voteCountA : voteCountB} FMLY ({votedSide === "a" ? pctA : pctB}%)
-                </span>
-              </div>
-
-              {/* Hook lines for active tab */}
-              {(resultsTab === "a" ? hookALines : hookBLines).length > 0 && (
-                <div className="space-y-0.5">
-                  {(resultsTab === "a" ? hookALines : hookBLines).map((line: any, i: number) => {
-                    const key = `${resultsTab}-${i}`;
-                    const reaction = lineReactions[key];
-                    const isActive = activeEmojiLine === key;
-                    return (
-                      <div key={key}>
-                        <button
-                          onClick={() => setActiveEmojiLine(isActive ? null : key)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${isActive ? "bg-white/[0.06] border border-white/[0.1]" : reaction ? "bg-white/[0.03]" : "hover:bg-white/[0.03]"}`}
-                        >
-                          <span className="text-[11px] text-white/50 leading-relaxed flex-1 min-w-0">{line.text}</span>
-                          {reaction && <span className="text-sm ml-2 shrink-0">{reaction}</span>}
-                        </button>
-                        <AnimatePresence>
-                          {isActive && (
-                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                              <div className="flex items-center justify-center gap-2 py-2">
-                                {EMOJI_OPTIONS.map(emoji => (
-                                  <button key={emoji} onClick={() => toggleLineReaction(resultsTab, i, emoji)}
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all ${reaction === emoji ? "bg-white/15 ring-1 ring-white/25 scale-110" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
-                                    {emoji}
-                                  </button>
-                                ))}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Comments — filtered to active tab's voters */}
-              <div className="space-y-2 pt-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-px flex-1 bg-white/[0.06]" />
-                  <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-white/25">
-                    Takes · {resultsTab === "a" ? "Left Hook" : "Right Hook"}
-                  </span>
-                  <div className="h-px flex-1 bg-white/[0.06]" />
-                </div>
-                {comments.filter(c => c.voted_side === resultsTab).length === 0 ? (
-                  <p className="text-[10px] font-mono text-white/15 text-center py-3">No takes yet — be first</p>
-                ) : (
-                  <div className="space-y-2">
-                    {comments.filter(c => c.voted_side === resultsTab).map(c => (
-                      <div key={c.id} className="flex items-start gap-2 px-2">
-                        <p className="text-[11px] text-white/45 leading-relaxed flex-1">{c.text}</p>
-                        <span className="text-[9px] font-mono text-white/15 shrink-0">
-                          {(() => { const m = Math.floor((Date.now() - new Date(c.created_at).getTime()) / 60000); if (m < 1) return "now"; if (m < 60) return `${m}m`; return `${Math.floor(m / 60)}h`; })()}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
-          <motion.div key="backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className={`${isFeedEmbed ? "absolute" : "fixed"} inset-0 z-[55] bg-black/50`}
-            onClick={() => setPanelOpen(false)} />
-        </>
-      )}
-    </AnimatePresence>
+  // ── Reaction handlers (matching In Studio ReactionPanel) ──
+  const handlePanelLineTap = useCallback(
+    (line: any) => {
+      const player = inlineBattleRef.current?.getPlayer();
+      if (!player) return;
+      if (activePanelLineIndex === line.lineIndex && !player.audio.paused) {
+        player.pause();
+        return;
+      }
+      setActivePanelLineIndex(line.lineIndex);
+      player.seek(line.start);
+      if (player.audio.paused) {
+        player.audio.play().catch(() => {});
+        player.startRendering();
+      }
+    },
+    [activePanelLineIndex],
   );
+
+  const handlePanelReact = useCallback(
+    async (emoji: EmojiKey, lineIndex?: number) => {
+      if (!danceIdForPanel) return;
+      const sessionId = getSessionId();
+      const targetLineIndex = lineIndex ?? activePanelLineIndex ?? null;
+      const reactionKey = `${emoji}-${targetLineIndex ?? "song"}`;
+      if (sessionReacted.has(reactionKey)) return;
+
+      setSessionReacted((prev) => new Set([...prev, reactionKey]));
+      await supabase.from("lyric_dance_reactions" as any).insert({
+        dance_id: danceIdForPanel,
+        line_index: targetLineIndex,
+        section_index: null,
+        emoji,
+        session_id: sessionId,
+      });
+
+      setReactionData((prev) => {
+        const updated = { ...prev };
+        if (!updated[emoji]) updated[emoji] = { line: {}, total: 0 };
+        updated[emoji].total++;
+        if (targetLineIndex != null) {
+          updated[emoji].line[targetLineIndex] =
+            (updated[emoji].line[targetLineIndex] ?? 0) + 1;
+        }
+        return updated;
+      });
+    },
+    [danceIdForPanel, activePanelLineIndex, sessionReacted],
+  );
+
+  const handlePanelComment = useCallback(async () => {
+    if (!panelTextInput.trim() || !danceIdForPanel) return;
+    const text = panelTextInput.trim().slice(0, 200);
+    const sessionId = getSessionId();
+
+    const { data: inserted } = await supabase
+      .from("lyric_dance_comments" as any)
+      .insert({
+        dance_id: danceIdForPanel,
+        text,
+        session_id: sessionId,
+        line_index: activePanelLineIndex,
+        parent_comment_id: null,
+      })
+      .select(
+        "id, text, line_index, submitted_at, is_pinned, parent_comment_id",
+      )
+      .single();
+
+    if (inserted) {
+      setPanelComments((prev) => [
+        { ...(inserted as any), replies: [] },
+        ...prev,
+      ]);
+    }
+    setPanelTextInput("");
+  }, [panelTextInput, danceIdForPanel, activePanelLineIndex]);
+
+  // ── Results panel ───────────────────────────────────────────
+  const activeHookLines = resultsTab === "a" ? hookALines : hookBLines;
+  const commentCountByLine = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const c of panelComments) {
+      if (c.line_index != null) {
+        counts[c.line_index] = (counts[c.line_index] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [panelComments]);
+
+  const ResultsPanel = () => {
+    void commentReactions;
+
+    return (
+      <PanelShell
+        isOpen={panelOpen && !!votedSide && battleState !== "vote"}
+        variant={isFeedEmbed ? "embedded" : "fullscreen"}
+      >
+        {/* Scrollable lyric lines — matches In Studio ReactionPanel */}
+        <div
+          className="flex-1 overflow-y-auto min-h-0"
+          style={{ scrollbarWidth: "none" }}
+        >
+          <div className="pt-3 pb-4">
+            {activeHookLines.map((line: any) => {
+              const isActive = activePanelLineIndex === line.lineIndex;
+              const lineReactionsByEmoji = EMOJIS.map(({ key, symbol }) => ({
+                key,
+                symbol,
+                count: reactionData[key]?.line[line.lineIndex] ?? 0,
+              }))
+                .filter((item) => item.count > 0)
+                .sort((a, b) => b.count - a.count);
+              const topReaction = lineReactionsByEmoji[0] ?? null;
+              const totalLineReactions = lineReactionsByEmoji.reduce(
+                (sum, item) => sum + item.count,
+                0,
+              );
+              const lineCommentCount = commentCountByLine[line.lineIndex] ?? 0;
+              const isExpanded = expandedLineIndex === line.lineIndex;
+              const expandedLineComments = panelComments.filter(
+                (c) => c.line_index === line.lineIndex,
+              );
+
+              return (
+                <div key={line.lineIndex}>
+                  <div
+                    onClick={() => handlePanelLineTap(line)}
+                    className="flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors"
+                    style={{
+                      minHeight: 40,
+                      background: isActive
+                        ? "rgba(255,255,255,0.03)"
+                        : "transparent",
+                      boxShadow: isActive
+                        ? `inset 2px 0 0 0 ${hookA?.palette?.[0] ?? "#22c55e"}`
+                        : "none",
+                    }}
+                  >
+                    <span
+                      className="flex-1 text-[13px] font-light leading-relaxed transition-colors duration-100"
+                      style={{
+                        color: isActive
+                          ? "rgba(255,255,255,0.85)"
+                          : "rgba(255,255,255,0.28)",
+                      }}
+                    >
+                      {line.text}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {topReaction && (
+                        <span
+                          className="text-[8px] font-mono px-1 py-0.5 rounded"
+                          style={{
+                            color: "rgba(255,255,255,0.25)",
+                            background: "rgba(255,255,255,0.025)",
+                          }}
+                        >
+                          {topReaction.symbol}
+                          {totalLineReactions > 1
+                            ? ` ${totalLineReactions}`
+                            : ""}
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedLineIndex(
+                            isExpanded ? null : line.lineIndex,
+                          );
+                        }}
+                        className={`relative transition-all ${lineCommentCount > 0 ? "opacity-90" : "opacity-45 hover:opacity-70"}`}
+                      >
+                        <MessageCircle size={11} className="text-white/30" />
+                        {lineCommentCount > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 text-[7px] font-mono text-white/50 min-w-[10px] text-center">
+                            {lineCommentCount}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {isActive && (
+                    <>
+                      {/* Emoji bar under active line */}
+                      <div className="flex items-center justify-center gap-4 px-4 py-3 border-b border-white/[0.04]">
+                        {EMOJIS.map(({ key, symbol }) => {
+                          const count =
+                            reactionData[key]?.line[line.lineIndex] ?? 0;
+                          const reacted = sessionReacted.has(
+                            `${key}-${line.lineIndex}`,
+                          );
+                          return (
+                            <button
+                              key={key}
+                              onClick={() =>
+                                handlePanelReact(key, line.lineIndex)
+                              }
+                              className="flex flex-col items-center gap-0.5 w-11"
+                              style={
+                                reacted
+                                  ? {
+                                      background: `${hookA?.palette?.[0] ?? "#22c55e"}18`,
+                                      borderRadius: "10px",
+                                    }
+                                  : undefined
+                              }
+                            >
+                              <span className="text-[18px]">{symbol}</span>
+                              <span
+                                className="text-[8px] font-mono min-h-[10px]"
+                                style={{
+                                  color: reacted
+                                    ? (hookA?.palette?.[0] ?? "#22c55e")
+                                    : "rgba(255,255,255,0.25)",
+                                  visibility: count > 0 ? "visible" : "hidden",
+                                }}
+                              >
+                                {count}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {/* Comment input under emoji bar */}
+                      <div
+                        className="mx-3 my-2"
+                        style={{
+                          background: "rgba(255,255,255,0.05)",
+                          border: "1px solid rgba(255,255,255,0.09)",
+                          borderRadius: "8px",
+                          padding: "8px 12px",
+                        }}
+                      >
+                        <input
+                          className="w-full bg-transparent text-[13px] font-mono text-white placeholder:text-white/35 outline-none"
+                          placeholder="This line"
+                          value={panelTextInput}
+                          onChange={(e) => setPanelTextInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handlePanelComment();
+                            }
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {isExpanded && (
+                    <div
+                      className="mx-3 mb-1 rounded-xl overflow-hidden"
+                      style={{
+                        background: "rgba(255,255,255,0.025)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      {expandedLineComments.length === 0 ? (
+                        <p className="text-[10px] font-mono text-white/20 text-center py-3">
+                          no comments yet — be first
+                        </p>
+                      ) : (
+                        <div className="py-1">
+                          {expandedLineComments.map((c: any) => (
+                            <div
+                              key={c.id}
+                              className="flex items-start gap-2 px-3 py-1.5"
+                            >
+                              <p className="text-[11px] text-white/45 leading-relaxed flex-1">
+                                {c.text}
+                              </p>
+                              <span className="text-[9px] font-mono text-white/15 shrink-0">
+                                {(() => {
+                                  const m = Math.floor(
+                                    (Date.now() -
+                                      new Date(c.submitted_at).getTime()) /
+                                      60000,
+                                  );
+                                  if (m < 1) return "now";
+                                  if (m < 60) return `${m}m`;
+                                  return `${Math.floor(m / 60)}h`;
+                                })()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Bottom bar — Left Hook / Right Hook tabs + close */}
+        <div
+          className="shrink-0 flex"
+          style={{
+            background: "#0a0a0a",
+            borderTop: "0.5px solid rgba(255,255,255,0.06)",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          }}
+        >
+          <div
+            className={`w-full ${isFeedEmbed ? "" : "max-w-2xl mx-auto"} flex items-stretch`}
+            style={{ height: isFeedEmbed ? 48 : 52 }}
+          >
+            <button
+              onClick={() => setResultsTab("a")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors ${resultsTab === "a" ? "text-white" : "text-white/30 hover:text-white/60"}`}
+            >
+              {votedSide === "a" && (
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M2 6.5L4.5 9L10 3"
+                    stroke="#22c55e"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+              <span className="text-[11px] font-mono tracking-[0.15em] uppercase">
+                Left Hook
+              </span>
+              {voteCountA > 0 && (
+                <span className="text-[9px] font-mono text-white/25">
+                  {voteCountA}
+                </span>
+              )}
+            </button>
+            <div
+              style={{ width: "0.5px" }}
+              className="bg-white/[0.06] self-stretch my-2"
+            />
+            <button
+              onClick={() => setResultsTab("b")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors ${resultsTab === "b" ? "text-white" : "text-white/30 hover:text-white/60"}`}
+            >
+              {votedSide === "b" && (
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M2 6.5L4.5 9L10 3"
+                    stroke="#22c55e"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+              <span className="text-[11px] font-mono tracking-[0.15em] uppercase">
+                Right Hook
+              </span>
+              {voteCountB > 0 && (
+                <span className="text-[9px] font-mono text-white/25">
+                  {voteCountB}
+                </span>
+              )}
+            </button>
+            <div
+              style={{ width: "0.5px" }}
+              className="bg-white/[0.06] self-stretch my-2"
+            />
+            <button
+              onClick={() => setPanelOpen(false)}
+              className="group flex items-center justify-center min-w-[64px] px-4 py-3 hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0"
+            >
+              <X
+                size={14}
+                className="text-white/30 group-hover:text-white/60 transition-colors"
+              />
+            </button>
+          </div>
+        </div>
+      </PanelShell>
+    );
+  };
 
   // ── Render ────────────────────────────────────────────────────
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden">
-
       {/* Canvas area */}
       <div
         className="absolute inset-0 overflow-hidden"
         onClick={() => {
           if (battleState === "round-1" || battleState === "round-2") {
-            setMuted(prev => !prev);
+            setMuted((prev) => !prev);
           }
         }}
       >
@@ -631,8 +1048,13 @@ function BattleEmbedInner({
         {(loading || !resolvedBattleId) && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <div className="text-center space-y-2">
-              <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto" />
-              <p className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">Loading battle…</p>
+              <Loader2
+                size={20}
+                className="animate-spin text-muted-foreground mx-auto"
+              />
+              <p className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">
+                Loading battle…
+              </p>
             </div>
           </div>
         )}
@@ -644,12 +1066,21 @@ function BattleEmbedInner({
             style={{ transition: "opacity 0.4s ease" }}
           >
             <InlineBattle
+              ref={inlineBattleRef}
               battleId={resolvedBattleId}
               mode={battleMode}
               activePlaying={activePlaying}
               votedSide={votedSide}
-              voteCount={votedSide === "a" ? voteCountA : votedSide === "b" ? voteCountB : undefined}
-              votePct={votedSide === "a" ? pctA : votedSide === "b" ? pctB : undefined}
+              voteCount={
+                votedSide === "a"
+                  ? voteCountA
+                  : votedSide === "b"
+                    ? voteCountB
+                    : undefined
+              }
+              votePct={
+                votedSide === "a" ? pctA : votedSide === "b" ? pctB : undefined
+              }
               onTileTap={handleTileTap}
               onHooksLoaded={handleHooksLoaded}
               onCoverImage={(url) => {
@@ -662,13 +1093,14 @@ function BattleEmbedInner({
           </div>
         )}
 
-
         {/* Cover overlay — matches In Studio layered style */}
         <AnimatePresence>
           {battleState === "cover" && !error && (
             <motion.div
               key="battle-cover"
-              initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
               className="absolute inset-x-0 top-0 z-20 flex flex-col items-center justify-center overflow-hidden"
               style={{ bottom: isFeedEmbed ? 48 : 52 }}
             >
@@ -689,14 +1121,18 @@ function BattleEmbedInner({
               <div
                 className="absolute inset-0 transition-opacity duration-700"
                 style={{
-                  background: "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)",
+                  background:
+                    "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)",
                   opacity: engineReady ? 0.7 : 1,
                 }}
               />
 
               {showExpandButton && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); window.open(battleUrl, "_blank"); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(battleUrl, "_blank");
+                  }}
                   className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-white/30 hover:text-white/60 transition-colors z-10"
                 >
                   <Maximize2 size={12} />
@@ -710,7 +1146,9 @@ function BattleEmbedInner({
                   </div>
                 ) : votedSide ? (
                   <>
-                    <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">{songTitle}</p>
+                    <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">
+                      {songTitle}
+                    </p>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -725,7 +1163,9 @@ function BattleEmbedInner({
                   </>
                 ) : (
                   <>
-                    <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">Which {songTitle} hook hits harder?</p>
+                    <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4">
+                      Which {songTitle} hook hits harder?
+                    </p>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -752,15 +1192,29 @@ function BattleEmbedInner({
         {/* Round 2 preview label */}
         <AnimatePresence>
           {battleState === "round-1" && (
-            <motion.div key="r2-preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="absolute top-1/2 -translate-y-1/2 right-[12.5%] z-10 pointer-events-none">
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/15">Round 2</span>
+            <motion.div
+              key="r2-preview"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute top-1/2 -translate-y-1/2 right-[12.5%] z-10 pointer-events-none"
+            >
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/15">
+                Round 2
+              </span>
             </motion.div>
           )}
           {battleState === "round-2" && (
-            <motion.div key="r1-done" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="absolute top-1/2 -translate-y-1/2 left-[12.5%] z-10 pointer-events-none">
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/15">✓</span>
+            <motion.div
+              key="r1-done"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute top-1/2 -translate-y-1/2 left-[12.5%] z-10 pointer-events-none"
+            >
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/15">
+                ✓
+              </span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -768,8 +1222,13 @@ function BattleEmbedInner({
         {/* Vote prompt */}
         <AnimatePresence>
           {battleState === "vote" && (
-            <motion.div key="vote-prompt" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="absolute inset-x-0 top-12 flex justify-center z-20 pointer-events-none">
+            <motion.div
+              key="vote-prompt"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-x-0 top-12 flex justify-center z-20 pointer-events-none"
+            >
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full">
                 Your Verdict
               </span>
@@ -785,7 +1244,7 @@ function BattleEmbedInner({
             <span />
             <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5 pointer-events-auto">
               <button
-                onClick={() => setMuted(prev => !prev)}
+                onClick={() => setMuted((prev) => !prev)}
                 className="p-1 text-white/40 hover:text-white/70 transition-colors"
                 aria-label={muted ? "Unmute" : "Mute"}
               >
@@ -806,7 +1265,10 @@ function BattleEmbedInner({
               </button>
               {showExpandButton && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); window.open(battleUrl, "_blank"); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(battleUrl, "_blank");
+                  }}
                   className="p-1 text-white/40 hover:text-white/70 transition-colors"
                   aria-label="Expand"
                 >
@@ -823,7 +1285,9 @@ function BattleEmbedInner({
         className="absolute bottom-0 left-0 right-0 z-20"
         style={{
           background: "#0a0a0a",
-          ...(!isFeedEmbed ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
+          ...(!isFeedEmbed
+            ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" }
+            : {}),
         }}
       >
         {/* Progress bar — half-width, aligned to the active tile's side */}
@@ -840,7 +1304,10 @@ function BattleEmbedInner({
               <div
                 className="h-full"
                 style={{
-                  background: (progressSide === "a" ? hookA?.palette?.[0] : hookB?.palette?.[0]) ?? "#22c55e",
+                  background:
+                    (progressSide === "a"
+                      ? hookA?.palette?.[0]
+                      : hookB?.palette?.[0]) ?? "#22c55e",
                   width: `${roundProgress * 100}%`,
                 }}
               />
@@ -848,92 +1315,136 @@ function BattleEmbedInner({
           </div>
         )}
         <div className={isFeedEmbed ? undefined : "w-full max-w-2xl mx-auto"}>
+          {/* Pre-vote: Left Hook / Right Hook disabled + 🔥 disabled */}
+          {!votedSide &&
+            (battleState === "round-1" ||
+              battleState === "round-2" ||
+              battleState === "cover") && (
+              <div
+                className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"} opacity-30 pointer-events-none`}
+              >
+                <div className="flex-1 flex items-center justify-center">
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
+                    Left Hook
+                  </span>
+                </div>
+                <div
+                  style={{ width: "0.5px" }}
+                  className="bg-white/[0.06] self-stretch my-2"
+                />
+                <div className="flex-1 flex items-center justify-center">
+                  <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">
+                    Right Hook
+                  </span>
+                </div>
+                <div
+                  style={{ width: "0.5px" }}
+                  className="bg-white/[0.06] self-stretch my-2"
+                />
+                <div className="flex items-center justify-center px-4 min-w-[64px]">
+                  <span className="text-[13px]" style={{ opacity: 0.4 }}>
+                    🔥
+                  </span>
+                </div>
+              </div>
+            )}
 
-        {/* Pre-vote: Left Hook / Right Hook disabled + 🔥 disabled */}
-        {!votedSide && (battleState === "round-1" || battleState === "round-2" || battleState === "cover") && (
-          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"} opacity-30 pointer-events-none`}>
-            <div className="flex-1 flex items-center justify-center">
-              <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">Left Hook</span>
+          {/* Vote: Left Hook / Right Hook active, 🔥 disabled */}
+          {battleState === "vote" && (
+            <div
+              className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => handleVote("a")}
+                className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+              >
+                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white">
+                  Left Hook
+                </span>
+              </button>
+              <div
+                style={{ width: "0.5px" }}
+                className="bg-white/[0.06] self-stretch my-2"
+              />
+              <button
+                onClick={() => handleVote("b")}
+                className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+              >
+                <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white">
+                  Right Hook
+                </span>
+              </button>
+              <div
+                style={{ width: "0.5px" }}
+                className="bg-white/[0.06] self-stretch my-2"
+              />
+              <div className="flex items-center justify-center px-4 min-w-[64px] opacity-25 pointer-events-none">
+                <span className="text-[13px]">🔥</span>
+              </div>
             </div>
-            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-            <div className="flex-1 flex items-center justify-center">
-              <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white">Right Hook</span>
-            </div>
-            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-            <div className="flex items-center justify-center px-4 min-w-[64px]">
-              <span className="text-[13px]" style={{ opacity: 0.4 }}>🔥</span>
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* Vote: Left Hook / Right Hook active, 🔥 disabled */}
-        {battleState === "vote" && (
-          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => handleVote("a")}
-              className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
+          {/* Results panel closed: social proof + 🔥 */}
+          {!!votedSide && battleState !== "vote" && !panelOpen && (
+            <div
+              className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`}
+              onClick={(e) => e.stopPropagation()}
             >
-              <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white">
-                Left Hook
-              </span>
-            </button>
-            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-            <button
-              onClick={() => handleVote("b")}
-              className="flex-1 flex items-center justify-center py-3 hover:bg-white/[0.04] transition-colors group"
-            >
-              <span className="text-[11px] font-mono tracking-[0.15em] uppercase text-white group-hover:text-white">
-                Right Hook
-              </span>
-            </button>
-            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-            <div className="flex items-center justify-center px-4 min-w-[64px] opacity-25 pointer-events-none">
-              <span className="text-[13px]">🔥</span>
-            </div>
-          </div>
-        )}
-
-        {/* Results panel closed: social proof + 🔥 */}
-        {!!votedSide && battleState !== "vote" && !panelOpen && (
-          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
-            <div className="flex-1 flex items-center px-3 overflow-hidden min-w-0">
-              <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
-                {(() => {
-                  const total = totalVotes;
-                  const userPick = votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
-                  const winnerCount = votedSide === "a" ? voteCountA : voteCountB;
-                  const loserCount = total - winnerCount;
-                  const majorityAgrees = (votedSide === "a" && pctA >= 50) || (votedSide === "b" && pctB >= 50);
-                  const isSplit = pctA === 50 && pctB === 50;
-                  if (total < 20) return `FMLY STILL VOTING · ${winnerCount} / ${total} ${userPick}`;
-                  if (isSplit) return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
-                  return majorityAgrees
-                    ? `FMLY AGREES · ${winnerCount} / ${total} ${userPick}`
-                    : `FMLY DISAGREES · ${loserCount} / ${total} NOT ${userPick}`;
-                })()}
-              </span>
-            </div>
-            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-            <button
-              onClick={() => setPanelOpen(prev => !prev)}
-              className="flex items-center justify-center gap-1 px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
-            >
-              {panelOpen ? (
-                <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-              ) : (
-                <>
-                  <span className="text-[13px] leading-none" style={{ opacity: 0.7 }}>🔥</span>
-                  {(voteCountA + voteCountB) > 0 && (
-                    <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
-                      {voteCountA + voteCountB}
+              <div className="flex-1 flex items-center px-3 overflow-hidden min-w-0">
+                <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
+                  {(() => {
+                    const total = totalVotes;
+                    const userPick =
+                      votedSide === "a" ? "LEFT HOOK" : "RIGHT HOOK";
+                    const winnerCount =
+                      votedSide === "a" ? voteCountA : voteCountB;
+                    const loserCount = total - winnerCount;
+                    const majorityAgrees =
+                      (votedSide === "a" && pctA >= 50) ||
+                      (votedSide === "b" && pctB >= 50);
+                    const isSplit = pctA === 50 && pctB === 50;
+                    if (total < 20)
+                      return `FMLY STILL VOTING · ${winnerCount} / ${total} ${userPick}`;
+                    if (isSplit)
+                      return `FMLY IS SPLIT · ${voteCountA} / ${voteCountB}`;
+                    return majorityAgrees
+                      ? `FMLY AGREES · ${winnerCount} / ${total} ${userPick}`
+                      : `FMLY DISAGREES · ${loserCount} / ${total} NOT ${userPick}`;
+                  })()}
+                </span>
+              </div>
+              <div
+                style={{ width: "0.5px" }}
+                className="bg-white/[0.06] self-stretch my-2"
+              />
+              <button
+                onClick={() => setPanelOpen((prev) => !prev)}
+                className="flex items-center justify-center gap-1 px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
+              >
+                {panelOpen ? (
+                  <X
+                    size={14}
+                    className="text-white/30 group-hover:text-white/60 transition-colors"
+                  />
+                ) : (
+                  <>
+                    <span
+                      className="text-[13px] leading-none"
+                      style={{ opacity: 0.7 }}
+                    >
+                      🔥
                     </span>
-                  )}
-                </>
-              )}
-            </button>
-          </div>
-        )}
-
+                    {voteCountA + voteCountB > 0 && (
+                      <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
+                        {voteCountA + voteCountB}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
