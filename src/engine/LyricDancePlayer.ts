@@ -2815,7 +2815,7 @@ export class LyricDancePlayer {
 
         // Draw bg gradient — no parallax needed for a static snapshot
         this._drawBackgroundToCtx(snapCtx, frame);
-        const imgIdx = Math.min(frame.sectionIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
+        const imgIdx = Math.min(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0, Math.max(0, this.chapterImages.length - 1));
         this._drawChapterImageToCtx(snapCtx, imgIdx, imgIdx, 0);
         if (qTier < 2) {
           this._drawSimLayerToCtx(snapCtx, frame);
@@ -2829,8 +2829,10 @@ export class LyricDancePlayer {
       if (qTier === 0) {
         // Full quality path — Ken Burns, crossfade, filter all live. No parallax on bg.
         this.drawBackground(frame);
-        const imgIdx = Math.min(frame.sectionIndex ?? 0, Math.max(0, this.chapterImages.length - 1));
-        const nextImgIdx = Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
+        const imgIdx = Math.min(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0, Math.max(0, this.chapterImages.length - 1));
+        const nextImgIdx = this.data.region_start != null
+          ? imgIdx  // Region mode: no crossfade, single locked image
+          : Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
         const duration = this.audio?.duration || 1;
         const cdForCrossfade = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
         const sectionsForCrossfade = (cdForCrossfade?.sections as any[]) ?? (cdForCrossfade?.chapters as any[]) ?? [];
