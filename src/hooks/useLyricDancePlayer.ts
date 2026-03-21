@@ -15,6 +15,8 @@ import { withInitLimit } from "@/engine/initQueue";
 
 interface Options {
   bootMode?: "minimal" | "full";
+  /** Start full-mode compilation immediately after minimal boot (shareable pages). */
+  eagerUpgrade?: boolean;
   onReady?: (player: LyricDancePlayer) => void;
   preloadedImages?: HTMLImageElement[];
 }
@@ -34,7 +36,7 @@ export function useLyricDancePlayer(
   containerRef: React.RefObject<HTMLDivElement>,
   options: Options = {},
 ): UseLyricDancePlayerReturn {
-  const { bootMode = "minimal", onReady, preloadedImages } = options;
+  const { bootMode = "minimal", eagerUpgrade = false, onReady, preloadedImages } = options;
 
   const [data, setData] = useState<LyricDanceData | null>(initialData);
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
@@ -98,6 +100,11 @@ export function useLyricDancePlayer(
       }
 
       await p.init();
+      // Shareable pages: compile scene NOW while user reads the cover.
+      // By the time they tap "Listen Now", the scene is fully baked.
+      if (eagerUpgrade && bootMode === "minimal") {
+        p.scheduleFullModeUpgrade();
+      }
       if (!destroyed) {
         p.audio.muted = true;
         p.play();
