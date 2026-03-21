@@ -1,9 +1,9 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { lazy, Suspense } from "react";
-import { AdminPageImport, ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
+import { ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
 
 // ── Route detection — skip heavy imports on embed routes ──
 const _segs = typeof window !== "undefined"
@@ -11,36 +11,16 @@ const _segs = typeof window !== "undefined"
   : [];
 const _isEmbed = _segs.length === 3;
 
-// ── Lazy-loaded pages ──
-// Index is lazy so embed routes don't pay for its 1400-line bundle + deps
-const Index = lazy(() => import("./pages/Index"));
-const About = lazy(() => import("./pages/About"));
-const Auth = lazy(() => import("./pages/Auth"));
-const Profile = lazy(() => import("./pages/Profile"));
-const PublicProfile = lazy(() => import("./pages/PublicProfile"));
-const SongDetail = lazy(() => import("./pages/SongDetail"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const Terms = lazy(() => import("./pages/Terms"));
-const ArtistStage = lazy(() => import("./pages/ArtistStage"));
-const SeoPages = lazy(() => import("./pages/SeoPages"));
-const ArtistClaimPage = lazy(() => import("./pages/ArtistClaimPage"));
-const CreateArtistPage = lazy(() => import("./pages/CreateArtistPage"));
-const FitWidget = lazy(() => import("@/components/FitWidget").then(m => ({ default: m.FitWidget })));
-const SignalsPanel = lazy(() => import("@/components/signals/SignalsPanel").then(m => ({ default: m.SignalsPanel })));
-const PageLayout = lazy(() => import("@/components/PageLayout").then(m => ({ default: m.PageLayout })));
-
-const Admin = lazy(AdminPageImport);
+// ── Embed-only lazy pages ──
 const ShareableHook = lazy(ShareableHookImport);
 const ShareableLyricDance = lazy(ShareableLyricDanceImport);
+const ArtistClaimPage = lazy(() => import("./pages/ArtistClaimPage"));
+const CreateArtistPage = lazy(() => import("./pages/CreateArtistPage"));
 
-// ── Providers + Toasters — only eagerly imported on main app routes ──
-// On embed routes these modules are never downloaded.
+// ── Main app shell — lazy so embed routes never download providers, Index, Toasters, etc. ──
 const MainAppShell = _isEmbed
   ? null
-  : lazy(() =>
-      import("./MainAppShell").then(m => ({ default: m.default }))
-    );
+  : lazy(() => import("./MainAppShell"));
 
 const queryClient = new QueryClient();
 
@@ -56,9 +36,6 @@ const LyricDanceFallback = () => (
     </div>
   </div>
 );
-
-// Index uses the HTML shell skeleton as its Suspense fallback (already visible)
-const IndexFallback = () => null;
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
