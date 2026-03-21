@@ -505,7 +505,7 @@ function ReactionPanel({
         className="flex-1 overflow-y-auto min-h-0"
         style={{ scrollbarWidth: "none" }}
       >
-        <div className="pt-[max(1rem,env(safe-area-inset-top,12px))] pb-4">
+        <div className={displayMode === "embedded" ? "pt-2 pb-4" : "pt-[max(1rem,env(safe-area-inset-top,12px))] pb-4"}>
           {allLines.map((line, linePosition) => {
             const currentSection =
               sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
