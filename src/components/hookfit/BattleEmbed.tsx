@@ -887,14 +887,20 @@ function BattleEmbedInner({
             </div>
             <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
             <button
-              onClick={() => setPanelOpen(true)}
+              onClick={() => setPanelOpen(prev => !prev)}
               className="flex items-center justify-center gap-1 px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
             >
-              <span className="text-[13px] leading-none" style={{ opacity: 0.7 }}>🔥</span>
-              {(voteCountA + voteCountB) > 0 && (
-                <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
-                  {voteCountA + voteCountB}
-                </span>
+              {panelOpen ? (
+                <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+              ) : (
+                <>
+                  <span className="text-[13px] leading-none" style={{ opacity: 0.7 }}>🔥</span>
+                  {(voteCountA + voteCountB) > 0 && (
+                    <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
+                      {voteCountA + voteCountB}
+                    </span>
+                  )}
+                </>
               )}
             </button>
           </div>
