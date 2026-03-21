@@ -17,6 +17,7 @@ import {
   Volume2,
   VolumeX,
   RotateCcw,
+  User,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -31,6 +32,7 @@ import { preloadImage } from "@/lib/imagePreloadCache";
 import { getSessionId } from "@/lib/sessionId";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
+import { VerifiedBadge } from "@/components/shared/VerifiedBadge";
 import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
 
 type BattleState = "cover" | "round-1" | "round-2" | "vote" | "results";
@@ -52,6 +54,13 @@ interface BattleEmbedProps {
 
   // Pre-existing vote state (from feed post data)
   initialVotedSide?: "a" | "b" | null;
+
+  // Profile header (reels mode)
+  reelsMode?: boolean;
+  avatarUrl?: string | null;
+  displayName?: string;
+  isVerified?: boolean;
+  onProfileClick?: () => void;
 }
 
 function BattleEmbedInner({
@@ -64,6 +73,11 @@ function BattleEmbedInner({
   onPlay,
   onDeactivate,
   initialVotedSide,
+  reelsMode,
+  avatarUrl,
+  displayName,
+  isVerified,
+  onProfileClick,
 }: BattleEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
   const onDeactivateRef = useRef(onDeactivate);
@@ -857,8 +871,8 @@ function BattleEmbedInner({
         )}
       </div>
 
-      {/* Bottom bar */}
-      <div
+      {/* Bottom bar — hidden when reaction panel is open (matches In Studio) */}
+      {!panelOpen && <div
         className="absolute bottom-0 left-0 right-0 z-20"
         style={{
           background: "#0a0a0a",
@@ -867,6 +881,32 @@ function BattleEmbedInner({
             : {}),
         }}
       >
+        {/* Profile header — reels mode, matches In Studio position */}
+        {reelsMode && displayName && battleState === "cover" && (
+          <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+            <div
+              className="relative shrink-0 cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); onProfileClick?.(); }}
+            >
+              <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <User size={13} className="text-white/40" />
+                )}
+              </div>
+              {isVerified && (
+                <span className="absolute -bottom-0.5 -right-0.5">
+                  <VerifiedBadge size={11} />
+                </span>
+              )}
+            </div>
+            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate max-w-[60vw]">
+              {`FMLY Feud · ${displayName}`}
+            </span>
+          </div>
+        )}
+
         {/* Progress bar — half-width, aligned to the active tile's side */}
         {progressSide && (
           <div className="relative w-full h-[2px] bg-white/[0.06]">
@@ -1023,12 +1063,11 @@ function BattleEmbedInner({
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       <ReactionPanel
         displayMode={isFeedEmbed ? "embedded" : "fullscreen"}
         isOpen={panelOpen && !!votedSide && battleState !== "vote"}
-        maxHeight={isFeedEmbed ? "75%" : undefined}
         onClose={() => setPanelOpen(false)}
         danceId={danceData?.id ?? ""}
         activeLine={panelActiveLine}
