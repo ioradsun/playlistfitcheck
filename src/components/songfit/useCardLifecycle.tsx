@@ -83,8 +83,8 @@ export function useCardState(postId: string): { state: CardState; activate: () =
 
   const state = context.getCardState(postId);
 
-  const activate = () => context.setCardState(postId, "active");
-  const deactivate = () => context.setCardState(postId, "warm");
+  const activate = useCallback(() => context.setCardState(postId, "active"), [context, postId]);
+  const deactivate = useCallback(() => context.setCardState(postId, "warm"), [context, postId]);
 
   return { state, activate, deactivate };
 }
