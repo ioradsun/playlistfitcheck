@@ -50,13 +50,14 @@ interface Props {
   activePlaying: "a" | "b" | null;
   forceMuted?: boolean;
   onCoverImage?: (url: string) => void;
+  onEngineReady?: () => void;
 }
 
 const HOOK_SELECT = "id,user_id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,battle_position,artist_slug,song_slug,vote_count,palette";
 
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
   battleId, mode, votedSide, voteCount, votePct, onHookEnd, onHooksLoaded,
-  onTileTap, activePlaying, forceMuted, onCoverImage,
+  onTileTap, activePlaying, forceMuted, onCoverImage, onEngineReady,
 }, ref) {
   const [hookA, setHookA] = useState<HookInfo | null>(null);
   const [hookB, setHookB] = useState<HookInfo | null>(null);
@@ -83,6 +84,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   onHooksLoadedRef.current = onHooksLoaded;
   const onCoverImageRef = useRef(onCoverImage);
   onCoverImageRef.current = onCoverImage;
+  const onEngineReadyRef = useRef(onEngineReady);
+  onEngineReadyRef.current = onEngineReady;
 
   useImperativeHandle(ref, () => ({}), []);
 
@@ -221,6 +224,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       p.play();
       p.scheduleFullModeUpgrade();
       setReady(true);
+      onEngineReadyRef.current?.();
     }).catch((err) => console.error("[InlineBattle] init failed:", err));
 
     return () => {
