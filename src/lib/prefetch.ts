@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 
 /**
  * Prefetch cache — fires immediately at module evaluation time.
@@ -150,10 +151,7 @@ if (segments.length === 3 && segments[2] === "lyric-dance") {
   const [artistSlug, songSlug] = segments;
   const dataPromise = Promise.resolve(supabase
     .from("shareable_lyric_dances" as any)
-    .select(
-      "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
-      "cinematic_direction,section_images,motion_profile_spec,beat_grid,auto_palettes,scene_context"
-    )
+    .select(LYRIC_DANCE_COLUMNS)
     .eq("artist_slug", artistSlug)
     .eq("song_slug", songSlug)
     .maybeSingle())
