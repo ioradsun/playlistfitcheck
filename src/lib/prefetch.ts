@@ -5,10 +5,15 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
  * Prefetch cache — fires immediately at module evaluation time.
  * Consumed once by the corresponding component, then cleared.
  *
- * Stale-while-revalidate: if localStorage has a recent cache entry,
- * consumers can seed their initial state synchronously. The network
- * fetch still fires every time and writes back to cache on success.
+ * Embed routes (3-segment paths like /:artist/:song/lyric-dance) skip
+ * feed, siteCopy, auth, and SongFitTab prefetches entirely — those
+ * pages never use them.
  */
+
+// ── Route detection (runs once at module eval) ──────────────────────────────
+const _path = typeof window !== "undefined" ? window.location.pathname : "";
+const _segments = _path.replace(/^\//, "").split("/").filter(Boolean);
+const _isEmbedRoute = _segments.length === 3;
 
 // ── Cache helpers ────────────────────────────────────────────────────────────
 
@@ -62,13 +67,14 @@ export function getCachedLyricData(): Record<string, any> | null {
 }
 
 // ── Auth session prefetch — consumed by AuthProvider ─────────────────────────
+// Embed routes don't mount AuthProvider, skip the round-trip.
 
 export let authPrefetch: ReturnType<typeof supabase.auth.getSession> | null =
-  supabase.auth.getSession();
+  _isEmbedRoute ? null : supabase.auth.getSession();
 
 export function consumeAuthPrefetch() {
   const p = authPrefetch;
-  authPrefetch = null; // one-shot — subsequent calls go through normal path
+  authPrefetch = null;
   return p;
 }
 
@@ -79,55 +85,58 @@ const FEED_COLUMNS =
   "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)";
 
 export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
-  Promise.resolve(
-    supabase
-      .from("songfit_posts")
-      .select(FEED_COLUMNS)
-      .eq("status", "live")
-      .limit(FEED_PAGE_SIZE)
-      .order("created_at", { ascending: false })
-  ).then((result) => {
-    if (result.data && result.data.length > 0) {
-      cacheWrite("feed_posts", result.data);
-    }
-    return result;
-  });
+  _isEmbedRoute
+    ? null
+    : Promise.resolve(
+        supabase
+          .from("songfit_posts")
+          .select(FEED_COLUMNS)
+          .eq("status", "live")
+          .limit(FEED_PAGE_SIZE)
+          .order("created_at", { ascending: false })
+      ).then((result) => {
+        if (result.data && result.data.length > 0) {
+          cacheWrite("feed_posts", result.data);
+        }
+        return result;
+      });
 
 export function consumeFeedPrefetch() {
   const p = feedPrefetch;
-  feedPrefetch = null; // one-shot
+  feedPrefetch = null;
   return p;
 }
 
 // ── Site copy prefetch — consumed by SiteCopyProvider ────────────────────────
 
 export let siteCopyPrefetch: Promise<{ data: any; error: any }> | null =
-  Promise.resolve(
-    supabase
-      .from("site_copy")
-      .select("copy_json")
-      .limit(1)
-      .single()
-  ).then((result) => {
-    if (result.data?.copy_json) {
-      cacheWrite("site_copy", result.data.copy_json);
-    }
-    return result;
-  });
+  _isEmbedRoute
+    ? null
+    : Promise.resolve(
+        supabase
+          .from("site_copy")
+          .select("copy_json")
+          .limit(1)
+          .single()
+      ).then((result) => {
+        if (result.data?.copy_json) {
+          cacheWrite("site_copy", result.data.copy_json);
+        }
+        return result;
+      });
 
 export function consumeSiteCopyPrefetch() {
   const p = siteCopyPrefetch;
-  siteCopyPrefetch = null; // one-shot
+  siteCopyPrefetch = null;
   return p;
 }
 
-// ── Chunk prefetch — SongFitTab downloads in parallel with data ──────────────
-// (added by prior optimization — keep this)
-import { SongFitTabImport } from "./routePrefetch";
-void SongFitTabImport();
+// ── Chunk prefetch — only needed for main app routes ─────────────────────────
+if (!_isEmbedRoute) {
+  import("./routePrefetch").then(({ SongFitTabImport }) => void SongFitTabImport());
+}
 
-// Lyric engine chunk — download in parallel so it's cached before first InStudio card boots.
-// This resolves from Vite's "lyric-engine" manualChunk created in vite.config.ts.
+// Lyric engine chunk — always needed (both embed and main app use it)
 void import("@/engine/LyricDancePlayer");
 
 
@@ -143,12 +152,8 @@ interface ShareablePrefetchResult {
 let shareableDancePrefetch: ShareablePrefetchResult | null = null;
 let shareableHookPrefetch: Promise<{ data: any; error: any }> | null = null;
 
-// Match /:artistSlug/:songSlug/lyric-dance or /:artistSlug/:songSlug/:hookSlug (not /CrowdFit etc.)
-const path = typeof window !== "undefined" ? window.location.pathname : "";
-const segments = path.replace(/^\//, "").split("/").filter(Boolean);
-
-if (segments.length === 3 && segments[2] === "lyric-dance") {
-  const [artistSlug, songSlug] = segments;
+if (_segments.length === 3 && _segments[2] === "lyric-dance") {
+  const [artistSlug, songSlug] = _segments;
   const dataPromise = Promise.resolve(supabase
     .from("shareable_lyric_dances" as any)
     .select(LYRIC_DANCE_COLUMNS)
@@ -171,11 +176,11 @@ if (segments.length === 3 && segments[2] === "lyric-dance") {
     });
   shareableDancePrefetch = { data: dataPromise, audioPreloaded: true };
 } else if (
-  segments.length === 3 &&
-  segments[2] !== "lyric-dance" &&
-  segments[2] !== "claim-page"
+  _segments.length === 3 &&
+  _segments[2] !== "lyric-dance" &&
+  _segments[2] !== "claim-page"
 ) {
-  const [artistSlug, songSlug, hookSlug] = segments;
+  const [artistSlug, songSlug, hookSlug] = _segments;
   shareableHookPrefetch = Promise.resolve(supabase
     .from("shareable_hooks" as any)
     .select(
@@ -198,3 +203,6 @@ export function consumeShareableHookPrefetch() {
   shareableHookPrefetch = null;
   return p;
 }
+
+/** True when the current page is a lightweight embed/shareable route. */
+export const isEmbedRoute = _isEmbedRoute;
