@@ -169,18 +169,24 @@ function BattleEmbedInner({
   const userIdRef = useRef<string | null | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Reset to cover when feed card is deactivated (matches In Studio behavior)
+  // Reset to cover when feed card transitions FROM active TO non-active.
+  // Only fires on transition — not continuously while warm/cold.
+  // Without this guard, setPanelOpen(false) runs every render and prevents
+  // the 🔥 reaction panel from opening on warm cards.
+  const prevCardStateRef = useRef(cardState);
   useEffect(() => {
-    if (isFeedEmbed && cardState !== "active") {
-      setBattleState("cover");
-      setReplayingSide(null);
-      setPanelOpen(false);
-      setMuted(true);
-      // Only reset engineReady when cold (out of render window).
-      // When warm (in viewport), engine keeps rendering muted — lyrics peek through cover.
-      if (cardState === "cold") {
-        setEngineReady(false);
-      }
+    const prev = prevCardStateRef.current;
+    prevCardStateRef.current = cardState;
+
+    // Only reset when transitioning away from active
+    if (!isFeedEmbed || cardState === "active" || prev !== "active") return;
+
+    setBattleState("cover");
+    setReplayingSide(null);
+    setPanelOpen(false);
+    setMuted(true);
+    if (cardState === "cold") {
+      setEngineReady(false);
     }
   }, [isFeedEmbed, cardState]);
 
