@@ -352,7 +352,6 @@ export function HookFitPostCard({ post, onRefresh }: Props) {
           mode={getBattleMode()}
           votedSide={votedSide}
           onHookEnd={handleHookEnd}
-          onHooksLoaded={handleHooksLoaded}
           activePlaying={activePlaying}
           onTileTap={(side) => {
             if (cardState === "scorecard" || cardState === "results") {
