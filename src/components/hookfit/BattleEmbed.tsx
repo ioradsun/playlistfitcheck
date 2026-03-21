@@ -390,12 +390,14 @@ function BattleEmbedInner({
     const timer = setTimeout(
       () => {
         hookEndFiredB.current = true;
-        setBattleState("vote");
+        // Already voted → return to cover. Not voted → show vote screen.
+        setBattleState(votedSide ? "cover" : "vote");
+        if (votedSide) setMuted(true);
       },
       (hookB.hook_end - hookB.hook_start) * 1000 + 300,
     );
     return () => clearTimeout(timer);
-  }, [battleState, hookB]);
+  }, [battleState, hookB, votedSide]);
 
   // ── Vote ────────────────────────────────────────────────────
   const handleVote = useCallback(
@@ -745,9 +747,10 @@ function BattleEmbedInner({
                       onClick={(e) => {
                         e.stopPropagation();
                         onPlay?.();
-                        setBattleState("results");
-                        setReplayingSide(votedSide ?? "a");
+                        setBattleState("round-1");
                         setMuted(false);
+                        hookEndFiredA.current = false;
+                        hookEndFiredB.current = false;
                       }}
                       className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors"
                     >
