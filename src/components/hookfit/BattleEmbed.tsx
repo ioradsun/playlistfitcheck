@@ -260,7 +260,9 @@ function BattleEmbedInner({
       const { data: vote } = await query.maybeSingle();
       if (vote) {
         setVotedSide((vote as any).hook_id === a.id ? "a" : "b");
-        setBattleState("results");
+        if (!isFeedEmbed) {
+          setBattleState("results");
+        }
       }
     })();
   }, [resolvedBattleId, hookPhrase, votedSide]);
@@ -371,9 +373,9 @@ function BattleEmbedInner({
       case "round-1": return "a";
       case "round-2": return "b";
       case "vote": return null;
-      case "results": return replayingSide;
+      case "results": return replayingSide ?? votedSide ?? "a";
     }
-  }, [isFeedEmbed, cardState, battleState, replayingSide]);
+  }, [isFeedEmbed, cardState, battleState, replayingSide, votedSide]);
 
   // ── Progress bar timer ──────────────────────────────────────
   // Determine which side is actively playing audio (rounds or results focus)
@@ -408,16 +410,8 @@ function BattleEmbedInner({
 
   const handleTileTap = useCallback((side: "a" | "b") => {
     if (battleState !== "results") return;
-    setReplayingSide(prev => {
-      if (prev === side) {
-        // Unfocus — back to both visible, both muted
-        setMuted(true);
-        return null;
-      }
-      // Focus this side — unmute it
-      setMuted(false);
-      return side;
-    });
+    setReplayingSide(side);
+    setMuted(false);
   }, [battleState]);
 
   // ── Error fallback ──────────────────────────────────────────
