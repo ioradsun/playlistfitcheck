@@ -1035,7 +1035,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
             );
             if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: "smooth" });
           }}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 border border-border/50 bg-background text-foreground/70 hover:text-foreground hover:border-border text-[11px] font-mono tracking-wide px-5 py-2 rounded-full shadow-sm transition-all duration-200"
+          className="sticky bottom-6 left-1/2 -translate-x-1/2 z-50 border border-border/50 bg-background text-foreground/70 hover:text-foreground hover:border-border text-[11px] font-mono tracking-wide px-5 py-2 rounded-full shadow-sm transition-all duration-200"
         >
           + Drop Your Song
         </button>
