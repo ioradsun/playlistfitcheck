@@ -145,9 +145,11 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
   // ── Init engine as soon as data is available (during cover) ──
   // Default to side A canvas + hook A region, muted.
-  // This matches In Studio behavior: engine renders behind the cover overlay.
+  // Matches useLyricDancePlayer init pattern: dataReady gate, force resize, ResizeObserver.
+  const dataReady = !!(danceData && danceData.cinematic_direction && !Array.isArray(danceData.cinematic_direction));
+
   useEffect(() => {
-    if (!danceData || !hookA) return;
+    if (!dataReady || !hookA) return;
     if (playerRef.current) return;
     destroyedRef.current = false;
 
@@ -157,12 +159,13 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     if (!bgCanvas || !textCanvas || !container) return;
 
     const dataWithRegion: LyricDanceData = {
-      ...danceData,
+      ...danceData!,
       region_start: hookA.hook_start,
       region_end: hookA.hook_end,
     };
 
     let cancelled = false;
+    let ro: ResizeObserver | null = null;
 
     withInitLimit(async () => {
       if (cancelled || destroyedRef.current) return;
@@ -183,10 +186,28 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       playerRef.current = p;
       activeSideRef.current = "a";
 
+      // ResizeObserver — keeps engine dimensions in sync with container
+      ro = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) p.resize(width, height);
+      });
+      ro.observe(container);
+
+      // Force correct viewport dimensions before first frame render.
+      // On mobile, canvas.offsetWidth may be 0 before CSS layout completes,
+      // causing init() to fall back to 960×540 and produce tiny fonts.
+      const rect = container.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        p.resize(rect.width, rect.height);
+      }
+
       await p.init();
       if (cancelled || destroyedRef.current) {
         p.destroy();
         playerRef.current = null;
+        ro?.disconnect();
         return;
       }
 
@@ -199,8 +220,9 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
 
     return () => {
       cancelled = true;
+      ro?.disconnect();
     };
-  }, [danceData?.id, hookA?.id]);
+  }, [dataReady, danceData?.id, hookA?.id]);
 
   // ── Side switching + mute control ───────────────────────────
   useEffect(() => {
