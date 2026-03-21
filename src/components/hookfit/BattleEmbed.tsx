@@ -900,7 +900,7 @@ function BattleEmbedInner({
           }}
         >
           {/* Profile header — reels mode, matches In Studio position */}
-          {reelsMode && displayName && battleState === "cover" && (
+          {reelsMode && displayName && battleState === "cover" && !panelOpen && (
             <div className="flex items-center gap-2 px-3 pt-2 pb-1">
               <div
                 className="relative shrink-0 cursor-pointer"
