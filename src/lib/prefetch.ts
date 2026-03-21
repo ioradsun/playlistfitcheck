@@ -128,3 +128,75 @@ void SongFitTabImport();
 // Lyric engine chunk — download in parallel so it's cached before first InStudio card boots.
 // This resolves from Vite's "lyric-engine" manualChunk created in vite.config.ts.
 void import("@/engine/LyricDancePlayer");
+
+
+// ── Shareable page prefetch — fires at module eval for direct navigations ────
+// Reads slugs from window.location.pathname. Only fires on matching routes.
+// Consumed once by ShareableLyricDance / ShareableHook, then cleared.
+
+interface ShareablePrefetchResult {
+  data: Promise<{ data: any; error: any }>;
+  audioPreloaded: boolean;
+}
+
+let shareableDancePrefetch: ShareablePrefetchResult | null = null;
+let shareableHookPrefetch: Promise<{ data: any; error: any }> | null = null;
+
+// Match /:artistSlug/:songSlug/lyric-dance or /:artistSlug/:songSlug/:hookSlug (not /CrowdFit etc.)
+const path = typeof window !== "undefined" ? window.location.pathname : "";
+const segments = path.replace(/^\//, "").split("/").filter(Boolean);
+
+if (segments.length === 3 && segments[2] === "lyric-dance") {
+  const [artistSlug, songSlug] = segments;
+  const dataPromise = supabase
+    .from("shareable_lyric_dances" as any)
+    .select(
+      "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
+      "cinematic_direction,section_images,motion_profile_spec,beat_grid,auto_palettes,scene_context"
+    )
+    .eq("artist_slug", artistSlug)
+    .eq("song_slug", songSlug)
+    .maybeSingle()
+    .then((result: any) => {
+      if (result.data?.audio_url) {
+        const audio = new Audio();
+        audio.preload = "auto";
+        audio.src = result.data.audio_url;
+
+        const firstImg = result.data.section_images?.[0];
+        if (firstImg) {
+          const img = new Image();
+          img.src = firstImg;
+        }
+      }
+      return result;
+    });
+  shareableDancePrefetch = { data: dataPromise, audioPreloaded: true };
+} else if (
+  segments.length === 3 &&
+  segments[2] !== "lyric-dance" &&
+  segments[2] !== "claim-page"
+) {
+  const [artistSlug, songSlug, hookSlug] = segments;
+  shareableHookPrefetch = supabase
+    .from("shareable_hooks" as any)
+    .select(
+      "id,battle_id,hook_start,hook_end,hook_slug,hook_phrase,artist_slug,song_slug,artist_name,song_name,audio_url,palette,vote_count,battle_position,hook_label,user_id"
+    )
+    .eq("artist_slug", artistSlug)
+    .eq("song_slug", songSlug)
+    .eq("hook_slug", hookSlug)
+    .maybeSingle();
+}
+
+export function consumeShareableDancePrefetch() {
+  const p = shareableDancePrefetch;
+  shareableDancePrefetch = null;
+  return p;
+}
+
+export function consumeShareableHookPrefetch() {
+  const p = shareableHookPrefetch;
+  shareableHookPrefetch = null;
+  return p;
+}

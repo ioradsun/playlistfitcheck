@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import { consumeShareableDancePrefetch } from "@/lib/prefetch";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
@@ -47,36 +48,40 @@ export default function ShareableLyricDance() {
     if (!artistSlug || !songSlug) return;
     setLoading(true);
 
-    supabase
-      .from("shareable_lyric_dances" as any)
-      .select(LYRIC_DANCE_COLUMNS)
-      .eq("artist_slug", artistSlug)
-      .eq("song_slug", songSlug)
-      .maybeSingle()
-      .then(async ({ data: row, error }) => {
-        if (error || !row) {
-          setNotFound(true);
-          setLoading(false);
-          return;
-        }
+    const prefetched = consumeShareableDancePrefetch();
+    const dataPromise = prefetched
+      ? prefetched.data
+      : supabase
+          .from("shareable_lyric_dances" as any)
+          .select(LYRIC_DANCE_COLUMNS)
+          .eq("artist_slug", artistSlug)
+          .eq("song_slug", songSlug)
+          .maybeSingle();
 
-        const d = row as any as LyricDanceData;
-        setNotFound(false);
-        setDataRaw(d);
+    dataPromise.then(async ({ data: row, error }: any) => {
+      if (error || !row) {
+        setNotFound(true);
         setLoading(false);
+        return;
+      }
 
-        supabase
-          .from("profiles")
-          .select("display_name, avatar_url, is_verified")
-          .eq("id", d.user_id)
-          .maybeSingle()
-          .then(
-            ({ data: pData }) => {
-              if (pData) setProfile(pData as ProfileInfo);
-            },
-            () => {},
-          );
-      });
+      const d = row as any as LyricDanceData;
+      setNotFound(false);
+      setDataRaw(d);
+      setLoading(false);
+
+      supabase
+        .from("profiles")
+        .select("display_name, avatar_url, is_verified")
+        .eq("id", d.user_id)
+        .maybeSingle()
+        .then(
+          ({ data: pData }) => {
+            if (pData) setProfile(pData as ProfileInfo);
+          },
+          () => {},
+        );
+    });
   }, [artistSlug, songSlug]);
 
   // Poll for section images if missing on initial load (claim pipeline generates async)
