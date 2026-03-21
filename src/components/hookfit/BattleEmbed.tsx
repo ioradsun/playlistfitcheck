@@ -33,6 +33,7 @@ import { getSessionId } from "@/lib/sessionId";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
+import { useVoteGate } from "@/hooks/useVoteGate";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import type { LyricDanceData, LyricDancePlayer } from "@/engine/LyricDancePlayer";
 
@@ -82,6 +83,7 @@ function BattleEmbedInner({
 }: BattleEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
   const onDeactivateRef = useRef(onDeactivate);
+  const { addCredit } = useVoteGate();
   onDeactivateRef.current = onDeactivate;
 
   // ── Resolved IDs ───────────────────────────────────────────
@@ -365,6 +367,7 @@ function BattleEmbedInner({
       const hookId = side === "a" ? hookA.id : hookB?.id;
       if (!hookId) return;
       setVotedSide(side);
+      addCredit();
       if (side === "a") setVoteCountA((v) => v + 1);
       else setVoteCountB((v) => v + 1);
       setBattleState("results");

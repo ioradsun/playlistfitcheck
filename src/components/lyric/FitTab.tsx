@@ -31,6 +31,7 @@ import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
+import { useVoteGate } from "@/hooks/useVoteGate";
 
 const PEAK_SAMPLES = 200;
 
@@ -97,6 +98,7 @@ export function FitTab({
   initialDanceUrl,
 }: Props) {
   const { user, profile } = useAuth();
+  const { canCreate, credits, required, spendCredits } = useVoteGate();
   
   const defaultStages: PipelineStages = { rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" };
   const pipelineStages = pipelineStagesProp ?? defaultStages;
@@ -616,6 +618,7 @@ export function FitTab({
       const url = `/${artistSlug}/${songSlug}/lyric-dance`;
       setPublishedUrl(url);
       setPublishedDanceId(danceRow?.id ?? null);
+      spendCredits();
       setPublishedLyricsHash(currentLyricsHash);
       toast.success("Lyric Dance page published!");
 
@@ -673,13 +676,13 @@ export function FitTab({
       setPublishing(false);
       setPublishStatus("");
     }
-  }, [user, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection, words, danceNeedsRegeneration, currentLyricsHash]);
+  }, [user, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection, words, danceNeedsRegeneration, currentLyricsHash, spendCredits]);
 
   // ── Battle publish handler ──────────────────────────────────────────
   const handleStartBattle = useCallback(async (
     overrideHooks?: [SavedCustomHook | null, SavedCustomHook | null],
   ) => {
-    if (!user || battlePublishing) return;
+    if (!user || battlePublishing || !canCreate) return;
     const hooks = overrideHooks ?? customHooks;
     const activeHook0 = hooks[0] ?? renderData?.hook;
     const activeHook1 = hooks[1] ?? renderData?.secondHook;
@@ -832,6 +835,7 @@ export function FitTab({
 
       const battleUrl = `/${artistSlug}/${songSlug}/${hookSlug}`;
       setBattlePublishedUrl(battleUrl);
+      spendCredits();
 
       // Auto-post to CrowdFit — update existing or create new
       (async () => {
@@ -889,7 +893,7 @@ export function FitTab({
       clearTimeout(slowWarningId2);
       setBattlePublishing(false);
     }
-  }, [user, battlePublishing, customHooks, renderData, audioFile, lyricData, beatGrid]);
+  }, [user, battlePublishing, canCreate, customHooks, renderData, audioFile, lyricData, beatGrid, spendCredits]);
 
   const handleRemoveBattle = useCallback(async () => {
     if (!battlePublishedUrl || !user) return;
@@ -911,7 +915,7 @@ export function FitTab({
     generationStatus.renderData === "done" &&
     generationStatus.cinematicDirection === "done";
   const hasErrors = Object.values(generationStatus).includes("error");
-  const danceDisabled = !cinematicDirection || publishing || !allReady;
+  const danceDisabled = !cinematicDirection || publishing || !allReady || !canCreate;
   // Republish only needs auth + not currently publishing (data already exists on server)
   const republishDisabled = publishing;
 
@@ -964,7 +968,7 @@ export function FitTab({
             </button>
             <button
               onClick={handleCrowdfitToggle}
-              disabled={crowdfitToggling}
+              disabled={crowdfitToggling || (!canCreate && !crowdfitPostId)}
               className={`flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 ${
                 crowdfitPostId
                   ? "text-primary border-primary/40 bg-primary/5"
@@ -975,7 +979,7 @@ export function FitTab({
               {crowdfitToggling ? (
                 <Loader2 size={14} className="animate-spin" />
               ) : null}
-              {crowdfitPostId ? "Live" : "CrowdFit"}
+              {crowdfitPostId ? "Live" : !canCreate ? `${credits}/${required}` : "Post"}
             </button>
           </div>
 
@@ -1061,7 +1065,7 @@ export function FitTab({
                   setFeudTab(0);
                   setFeudSetupOpen(true);
                 }}
-                disabled={!hottestHooksEnabled}
+                disabled={!hottestHooksEnabled || !canCreate}
                 className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40 disabled:opacity-40"
               >
                 <Zap size={10} /> Set Up Your Feud
@@ -1349,7 +1353,9 @@ export function FitTab({
                   <span>{publishStatus || "Publishing…"}</span>
                 </span>
               ) : (
-                publishedUrl ? "Regenerate Dance" : "Dance"
+                !canCreate
+                  ? `Vote on ${required - credits} more to post`
+                  : publishedUrl ? "Regenerate Dance" : "Dance"
               )}
             </button>
           )}
