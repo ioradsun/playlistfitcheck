@@ -65,6 +65,8 @@ interface ReactionPanelProps {
   /** When provided, replaces the default "Run it back / Not for me" bottom bar.
    *  Used by battle cards for Left Hook / Right Hook tab switching. */
   renderBottomBar?: (onClose: () => void) => ReactNode;
+  /** Called when panel closes with the last audio position so the caller can resume there. */
+  onCloseWithPosition?: (timeSec: number | null) => void;
   maxHeight?: string;
 }
 
@@ -140,6 +142,7 @@ function ReactionPanel({
   hideInput = false,
   refreshKey = 0,
   renderBottomBar,
+  onCloseWithPosition,
   maxHeight,
 }: ReactionPanelProps) {
   const sections = audioSections ?? [];
@@ -491,8 +494,13 @@ function ReactionPanel({
   };
 
   const handlePanelClose = () => {
-    if (replyingTo) setReplyingTo(null);
-    else onClose();
+    if (replyingTo) {
+      setReplyingTo(null);
+      return;
+    }
+    const lastTime = player?.audio?.currentTime ?? null;
+    onCloseWithPosition?.(lastTime);
+    onClose();
   };
 
   const runItBackCount = score?.replay_yes ?? 0;

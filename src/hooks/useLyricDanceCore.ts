@@ -305,6 +305,8 @@ export function useLyricDanceCore({
     setShowCover(false);
     onPlay?.();
     if (player) {
+      // Always start from the beginning when releasing cover
+      player.seek(0);
       player.setMuted(false);
       player.play();
     }

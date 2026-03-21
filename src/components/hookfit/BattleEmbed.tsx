@@ -208,7 +208,6 @@ function BattleEmbedInner({
   const userIdRef = useRef<string | null | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const inlineBattleRef = useRef<InlineBattleHandle>(null);
-  const stopAtSecRef = useRef<number | null>(null);
 
   // Reset to cover when feed card transitions FROM active TO non-active.
   // Only fires on transition — not continuously while warm/cold.
@@ -542,13 +541,6 @@ function BattleEmbedInner({
         lastRef.t = t;
         setCurrentTimeSec(t);
       }
-      // Single-line playback: pause when we reach the stop point
-      if (stopAtSecRef.current !== null && t >= stopAtSecRef.current) {
-        stopAtSecRef.current = null;
-        audio.pause();
-        panelPlayer?.pause?.();
-        return; // don't schedule next tick — audio is paused
-      }
       if (!audio.paused && !document.hidden)
         rafId = requestAnimationFrame(tick);
     };
@@ -573,7 +565,6 @@ function BattleEmbedInner({
   const handleTileTap = useCallback(
     (side: "a" | "b") => {
       if (battleState !== "results") return;
-      stopAtSecRef.current = null; // clear single-line stop
       const currentSide = replayingSide ?? votedSide ?? "a";
       if (side === currentSide) {
         setMuted((prev) => !prev);
@@ -757,6 +748,9 @@ function BattleEmbedInner({
                       onClick={(e) => {
                         e.stopPropagation();
                         onPlay?.();
+                        // Seek to hook A start so replay always begins from the top
+                        const p = inlineBattleRef.current?.getPlayer();
+                        if (p && hookA) p.seek(hookA.hook_start);
                         setBattleState("round-1");
                         setMuted(false);
                         hookEndFiredA.current = false;
@@ -776,6 +770,9 @@ function BattleEmbedInner({
                       onClick={(e) => {
                         e.stopPropagation();
                         onPlay?.();
+                        // Seek to hook A start
+                        const p = inlineBattleRef.current?.getPlayer();
+                        if (p && hookA) p.seek(hookA.hook_start);
                         setBattleState("round-1");
                         setMuted(false);
                         hookEndFiredA.current = false;
@@ -821,7 +818,6 @@ function BattleEmbedInner({
             <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5 pointer-events-auto">
               <button
                 onClick={() => {
-                  stopAtSecRef.current = null;
                   setMuted((prev) => !prev);
                 }}
                 className="p-1 text-white/40 hover:text-white/70 transition-colors"
@@ -1075,6 +1071,18 @@ function BattleEmbedInner({
         maxHeight="75%"
         isOpen={panelOpen && !!votedSide && battleState !== "vote"}
         onClose={() => setPanelOpen(false)}
+        onCloseWithPosition={(timeSec) => {
+          const p = inlineBattleRef.current?.getPlayer();
+          if (p && timeSec != null) {
+            p.seek(timeSec);
+            p.audio.muted = false;
+            setMuted(false);
+            if (p.audio.paused) {
+              p.audio.play().catch(() => {});
+              p.startRendering();
+            }
+          }
+        }}
         danceId={danceData?.id ?? ""}
         activeLine={panelActiveLine}
         allLines={(resultsTab === "a" ? hookALines : hookBLines).map(
@@ -1141,7 +1149,6 @@ function BattleEmbedInner({
             >
               <button
                 onClick={() => {
-                  stopAtSecRef.current = null;
                   setResultsTab("a");
                   setReplayingSide("a");
                   setMuted(false);
@@ -1174,7 +1181,6 @@ function BattleEmbedInner({
               />
               <button
                 onClick={() => {
-                  stopAtSecRef.current = null;
                   setResultsTab("b");
                   setReplayingSide("b");
                   setMuted(false);
