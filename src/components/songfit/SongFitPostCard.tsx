@@ -443,6 +443,11 @@ export function SongFitPostCard({
                 onPlay={activate}
                 onDeactivate={deactivate}
                 initialVotedSide={(post as any).voted_side ?? null}
+                reelsMode={reelsMode}
+                avatarUrl={post.profiles?.avatar_url}
+                displayName={displayName}
+                isVerified={(post.profiles as any)?.is_verified}
+                onProfileClick={handleProfileClick}
               />
             </div>
           ) : (
@@ -488,7 +493,7 @@ export function SongFitPostCard({
           )}
         </div>
 
-        {reelsMode && !hasLyricDancePost ? (
+        {reelsMode && !hasLyricDancePost && !isBattlePost ? (
           <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
             {/* Transparent top area — allows tap-through to canvas/embed */}
             <div className="flex-1" />
