@@ -60,6 +60,7 @@ function BattleEmbedInner({
   const [error, setError] = useState(false);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [coverImageReady, setCoverImageReady] = useState(false);
+  const [engineReady, setEngineReady] = useState(false);
 
   // Resolve battleId from battleUrl if not passed directly
   useEffect(() => {
@@ -171,6 +172,7 @@ function BattleEmbedInner({
       setReplayingSide(null);
       setPanelOpen(false);
       setMuted(true);
+      setEngineReady(false);
     }
   }, [isFeedEmbed, cardState]);
 
@@ -596,6 +598,7 @@ function BattleEmbedInner({
                 if (!coverImageUrl) setCoverImageUrl(url);
               }}
               forceMuted={muted}
+              onEngineReady={() => setEngineReady(true)}
             />
           </div>
         )}
@@ -619,7 +622,7 @@ function BattleEmbedInner({
                     backgroundPosition: "center",
                     filter: "blur(8px) saturate(0.5)",
                     transform: "scale(1.08)",
-                    opacity: coverImageReady ? 1 : 0,
+                    opacity: engineReady ? 0 : coverImageReady ? 1 : 0,
                   }}
                 />
               )}
