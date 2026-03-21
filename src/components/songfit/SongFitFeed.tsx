@@ -6,7 +6,7 @@ import {
   useRef,
   useContext,
 } from "react";
-import { Loader2, User } from "lucide-react";
+import { Loader2, Plus, User, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -16,7 +16,6 @@ import { SongFitComments } from "./SongFitComments";
 import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
 import { BillboardToggle } from "./BillboardToggle";
-import { StagePresence } from "./StagePresence";
 import {
   CardLifecycleProvider,
   CardLifecycleContext,
@@ -31,49 +30,11 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { useVoteGate } from "@/hooks/useVoteGate";
+import { PanelShell } from "@/components/shared/panel/PanelShell";
 
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
 const FEED_MAX_POSTS = 200;
-const COMPOSER_CACHE_KEY = "tfm:composer_state";
-const COMPOSER_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-type ComposerCache = {
-  hasEverPosted?: boolean;
-  composerUnlocked?: boolean;
-  ts?: number;
-};
-
-const readComposerCache = (): ComposerCache | null => {
-  try {
-    const cached = JSON.parse(localStorage.getItem(COMPOSER_CACHE_KEY) || "null") as ComposerCache | null;
-    if (!cached?.ts || Date.now() - cached.ts >= COMPOSER_CACHE_TTL_MS) return null;
-    return cached;
-  } catch {
-    return null;
-  }
-};
-
-const writeComposerCache = (value: ComposerCache) => {
-  try {
-    const previous = readComposerCache() ?? {};
-    localStorage.setItem(
-      COMPOSER_CACHE_KEY,
-      JSON.stringify({
-        ...previous,
-        ...value,
-        ts: Date.now(),
-      }),
-    );
-  } catch {}
-};
-
-const clearComposerCache = () => {
-  try {
-    localStorage.removeItem(COMPOSER_CACHE_KEY);
-  } catch {}
-};
-
 const sharedResizeObserver = (() => {
   let observer: ResizeObserver | null = null;
   const handlers = new WeakMap<Element, (height: number) => void>();
@@ -165,7 +126,6 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   onCenterChange,
   reelsMode = false,
   lyricDataMap,
-  loading,
 }: {
   posts: SongFitPost[];
   feedView: FeedView;
@@ -190,10 +150,8 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   reelsMode?: boolean;
   isFirst?: boolean;
   lyricDataMap: Map<string, LyricDanceData>;
-  loading: boolean;
 }) {
   const lifecycle = useContext(CardLifecycleContext);
-  const { credits, required, canCreate } = useVoteGate();
   const prevMapRef = useRef(new Map<string, boolean>());
   const {
     windowedPosts,
@@ -246,26 +204,6 @@ const _WindowedFeedList = memo(function WindowedFeedList({
 
   return (
     <div className={reelsMode ? "" : "pb-24"}>
-      {!reelsMode && !canCreate && !loading && posts.length > 0 && (
-        <div className="mx-2 mb-3 rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-mono tracking-wide text-white/60">
-              {credits === 0
-                ? "Vote on 3 songs to post your music"
-                : `${credits}/${required} — vote on ${required - credits} more to post`}
-            </p>
-          </div>
-          <div className="flex gap-1 shrink-0">
-            {Array.from({ length: required }).map((_, i) => (
-              <div
-                key={i}
-                className="h-2 w-2 rounded-full"
-                style={{ background: i < credits ? "#22c55e" : "rgba(255,255,255,0.08)" }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
       {windowedPosts.map(({ post, shouldRender }, idx) =>
         shouldRender ? (
           <MeasuredFeedCard
@@ -312,8 +250,6 @@ interface SongFitFeedProps {
 export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isAdmin =
-    user?.email === "sunpatel@gmail.com" || user?.email === "spatel@iorad.com";
   const [posts, setPosts] = useState<SongFitPost[]>(() => {
     const cached = getCachedFeed();
     if (!cached || cached.length === 0) return [];
@@ -333,17 +269,8 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const [feedView, setFeedView] = useState<FeedView>("all");
   const [billboardMode, setBillboardMode] =
     useState<BillboardMode>("this_week");
-  const [userVoteCount, setUserVoteCount] = useState<number | null>(null);
-  const [composerUnlocked, setComposerUnlocked] = useState(() => {
-    const cached = readComposerCache();
-    return cached?.composerUnlocked ?? false;
-  });
   const [showFloatingAnchor, setShowFloatingAnchor] = useState(false);
-  const [hasPosted, setHasPosted] = useState(false);
-  const [hasEverPosted, setHasEverPosted] = useState<boolean | null>(() => {
-    const cached = readComposerCache();
-    return cached?.hasEverPosted ?? null;
-  });
+  const [reelsComposerOpen, setReelsComposerOpen] = useState(false);
   const [signalMap, setSignalMap] = useState<
     Record<
       string,
@@ -371,11 +298,11 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     return map;
   });
   const centerIndexRef = useRef(0);
-  const lastUserIdRef = useRef<string | null>(user?.id ?? null);
   const postsRef = useRef(posts);
   const isLoadingMoreRef = useRef(isLoadingMore);
   const hasMoreRef = useRef(hasMore);
   const newestCreatedAtRef = useRef<string | null>(null);
+  const { canCreate, credits, required } = useVoteGate();
 
   postsRef.current = posts;
   isLoadingMoreRef.current = isLoadingMore;
@@ -772,88 +699,6 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     };
   }, [user?.id]);
 
-  // Clear composer cache when user changes (login/logout/switch)
-  useEffect(() => {
-    if (lastUserIdRef.current && lastUserIdRef.current !== (user?.id ?? null)) {
-      clearComposerCache();
-      setComposerUnlocked(false);
-      setHasEverPosted(null);
-      setUserVoteCount(null);
-      setHasPosted(false);
-    }
-    lastUserIdRef.current = user?.id ?? null;
-
-    if (!user) {
-      clearComposerCache();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("songfit_posts")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .then(({ count }) => {
-        const everPosted = (count ?? 0) > 0;
-        const unlocked = !everPosted || isAdmin;
-        setHasEverPosted(everPosted);
-        if (unlocked) setComposerUnlocked(true);
-        writeComposerCache({
-          hasEverPosted: everPosted,
-          composerUnlocked: unlocked,
-        });
-      });
-  }, [isAdmin, user]);
-
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("songfit_hook_reviews")
-      .select("id")
-      .eq("user_id", user.id)
-      .then(({ data }) => {
-        const count = (data || []).length;
-        setUserVoteCount(count);
-        if (count >= 3) {
-          setComposerUnlocked(true);
-          writeComposerCache({ composerUnlocked: true });
-        }
-      });
-  }, [user]);
-
-  useEffect(() => {
-    const handler = () => {
-      setUserVoteCount((prev) => {
-        const next = (prev ?? 0) + 1;
-        if (next >= 3) {
-          setComposerUnlocked(true);
-          writeComposerCache({ composerUnlocked: true });
-        }
-        return next;
-      });
-    };
-    window.addEventListener("crowdfit:vote", handler);
-    return () => window.removeEventListener("crowdfit:vote", handler);
-  }, []);
-
-  useEffect(() => {
-    const handler = () => {
-      setHasEverPosted(true);
-      if (!isAdmin) {
-        setComposerUnlocked(false);
-        setUserVoteCount(0);
-      }
-      writeComposerCache({
-        hasEverPosted: true,
-        composerUnlocked: isAdmin,
-      });
-      setHasPosted(true);
-    };
-    window.addEventListener("crowdfit:post-created", handler);
-    return () => window.removeEventListener("crowdfit:post-created", handler);
-  }, [isAdmin]);
-
   useEffect(() => {
     const handler = () => void fetchPosts();
     window.addEventListener("songfit:dance-published", handler);
@@ -861,7 +706,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   }, [fetchPosts]);
 
   useEffect(() => {
-    if (!composerUnlocked) {
+    if (!canCreate || reelsMode) {
       setShowFloatingAnchor(false);
       return;
     }
@@ -874,7 +719,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     document.addEventListener("scroll", handleScroll, true);
     handleScroll();
     return () => document.removeEventListener("scroll", handleScroll, true);
-  }, [composerUnlocked]);
+  }, [canCreate, reelsMode]);
 
   return (
     <div className={reelsMode ? "w-full" : "w-full max-w-[470px] mx-auto"}>
@@ -906,26 +751,9 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       ) : (
         <>
           {user ? (
-            composerUnlocked ? (
-              <div className="animate-fade-in">
-                <SongFitInlineComposer onPostCreated={fetchPosts} />
-              </div>
-            ) : hasEverPosted === null ? (
-              <div className="border-b border-border/40">
-                <div className="flex gap-3 px-4 pt-3 pb-3">
-                  <div className="h-10 w-10 rounded-full bg-muted/30 shrink-0 mt-1" />
-                  <div className="flex-1 min-w-0 flex items-center">
-                    <div className="h-4 w-48 rounded bg-muted/20" />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <StagePresence
-                currentVotes={userVoteCount ?? 0}
-                onUnlocked={() => setComposerUnlocked(true)}
-                hasPosted={hasPosted}
-              />
-            )
+            <div className="animate-fade-in">
+              <SongFitInlineComposer onPostCreated={fetchPosts} />
+            </div>
           ) : (
             <div
               className="border-b border-border/40 cursor-pointer"
@@ -1026,11 +854,61 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                 onCenterChange={handleCenterChange}
                 reelsMode={reelsMode}
                 lyricDataMap={lyricDataMap}
-                loading={loading}
               />
             </RealtimeFeedHubProvider>
           </CardLifecycleProvider>
         </div>
+      )}
+
+      {reelsMode && (
+        <>
+          <button
+            onClick={() => canCreate && setReelsComposerOpen(true)}
+            className="fixed top-3 right-3 z-[60] flex items-center justify-center rounded-full transition-all"
+            style={{
+              width: 40,
+              height: 40,
+              background: canCreate ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            {canCreate ? (
+              <Plus size={18} className="text-white/80" />
+            ) : (
+              <div className="flex gap-0.5">
+                {Array.from({ length: required }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: i < credits ? "#22c55e" : "rgba(255,255,255,0.2)" }}
+                  />
+                ))}
+              </div>
+            )}
+          </button>
+
+          <div className="fixed inset-x-0 bottom-0 z-[70]">
+            <div className="relative">
+              <PanelShell isOpen={reelsComposerOpen} variant="embedded" maxHeight="60%">
+                <div className="px-4 pt-3 pb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-mono tracking-wide uppercase text-white/40">Post your song</span>
+                    <button onClick={() => setReelsComposerOpen(false)} className="p-1 text-white/30 hover:text-white/60">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <SongFitInlineComposer
+                    onPostCreated={() => {
+                      setReelsComposerOpen(false);
+                      fetchPosts();
+                    }}
+                    onNavigateLyricDance={() => setReelsComposerOpen(false)}
+                  />
+                </div>
+              </PanelShell>
+            </div>
+          </div>
+        </>
       )}
 
       <SongFitComments
