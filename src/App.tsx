@@ -1,21 +1,19 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
-import { AuthProvider } from "@/hooks/useAuth";
-import { SiteCopyProvider } from "@/hooks/useSiteCopy";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { VoteGateProvider } from "@/hooks/useVoteGate";
-// WalletProvider disabled — uncomment when crypto features are re-enabled
-// import { WalletProvider } from "@/components/crypto/WalletProvider";
-import { PageLayout } from "@/components/PageLayout";
 import { lazy, Suspense } from "react";
-import Index from "./pages/Index";
 import { AdminPageImport, ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
 
-// ── Lazy-loaded pages — not needed on the CrowdFit critical path ──
+// ── Route detection — mirrors prefetch.ts embed check ──
+const _segs = typeof window !== "undefined"
+  ? window.location.pathname.replace(/^\//, "").split("/").filter(Boolean)
+  : [];
+const _isEmbed = _segs.length === 3;
+
+// ── Lazy-loaded pages ──
+// Index is lazy so embed routes don't pay for its 1400-line bundle
+const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -30,28 +28,21 @@ const ArtistClaimPage = lazy(() => import("./pages/ArtistClaimPage"));
 const CreateArtistPage = lazy(() => import("./pages/CreateArtistPage"));
 const FitWidget = lazy(() => import("@/components/FitWidget").then(m => ({ default: m.FitWidget })));
 const SignalsPanel = lazy(() => import("@/components/signals/SignalsPanel").then(m => ({ default: m.SignalsPanel })));
+const PageLayout = lazy(() => import("@/components/PageLayout").then(m => ({ default: m.PageLayout })));
 
 const Admin = lazy(AdminPageImport);
-// Lazy-load ShareableHook — standalone page, no need in main bundle
 const ShareableHook = lazy(ShareableHookImport);
-// Lazy-load ShareableLyricDance — standalone page
 const ShareableLyricDance = lazy(ShareableLyricDanceImport);
 
+// ── Providers only needed by main app — lazy-loaded so embed routes skip them ──
+const AuthProvider = lazy(() => import("@/hooks/useAuth").then(m => ({ default: m.AuthProvider })));
+const SiteCopyProvider = lazy(() => import("@/hooks/useSiteCopy").then(m => ({ default: m.SiteCopyProvider })));
+const SidebarProvider = lazy(() => import("@/components/ui/sidebar").then(m => ({ default: m.SidebarProvider })));
+const VoteGateProvider = lazy(() => import("@/hooks/useVoteGate").then(m => ({ default: m.VoteGateProvider })));
+const Toaster = lazy(() => import("@/components/ui/toaster").then(m => ({ default: m.Toaster })));
+const Sonner = lazy(() => import("@/components/ui/sonner").then(m => ({ default: m.Toaster })));
+
 const queryClient = new QueryClient();
-
-const HookEmbedFallback = () => (
-  <div className="fixed inset-0 bg-[#0a0a0a] z-50" />
-);
-
-const LyricDanceFallback = () => (
-  <div className="fixed inset-0 z-50 flex flex-col items-center justify-end" style={{ background: "#0a0a0a" }}>
-    {/* Matches cover layout: centered button placeholder + bottom bar */}
-    <div className="flex flex-col items-center mb-24">
-      <div className="h-2 w-28 rounded bg-white/[0.03] mb-4" />
-      <div className="h-[44px] w-36 rounded-lg bg-white/[0.02]" />
-    </div>
-  </div>
-);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
