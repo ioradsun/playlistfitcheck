@@ -17,12 +17,10 @@ import {
   useImperativeHandle,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 import {
   LyricDancePlayer,
   type LyricDanceData,
 } from "@/engine/LyricDancePlayer";
-import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { withInitLimit } from "@/engine/initQueue";
 
@@ -60,34 +58,36 @@ interface Props {
   voteCount?: number;
   votePct?: number;
   onHookEnd?: (side: "a" | "b") => void;
-  onHooksLoaded?: (hookA: HookInfo, hookB: HookInfo | null) => void;
   onTileTap?: (side: "a" | "b") => void;
   activePlaying: "a" | "b" | null;
   forceMuted?: boolean;
-  onCoverImage?: (url: string) => void;
   onEngineReady?: () => void;
   cardState?: "active" | "warm" | "cold";
+  /** Pre-fetched data from BattleEmbed — eliminates per-card fetch waterfall */
+  prefetchedHookA?: HookInfo | null;
+  prefetchedHookB?: HookInfo | null;
+  prefetchedDanceData?: LyricDanceData | null;
 }
 
-const HOOK_SELECT =
+export const HOOK_SELECT =
   "id,user_id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,battle_position,artist_slug,song_slug,vote_count,palette";
 
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
   function InlineBattle(
     {
-      battleId,
       mode,
       votedSide,
       voteCount,
       votePct,
       onHookEnd,
-      onHooksLoaded,
       onTileTap,
       activePlaying,
       forceMuted,
-      onCoverImage,
       onEngineReady,
       cardState,
+      prefetchedHookA,
+      prefetchedHookB,
+      prefetchedDanceData,
     },
     ref,
   ) {
@@ -97,7 +97,6 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
     const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
     const [loading, setLoading] = useState(true);
     const [ready, setReady] = useState(false);
-    const fetchRef = useRef(0);
     const hookEndFiredA = useRef(false);
     const hookEndFiredB = useRef(false);
 
@@ -117,10 +116,6 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
     const roRef = useRef<ResizeObserver | null>(null);
 
     // ── Stable callback refs (never trigger re-fetches) ─────────
-    const onHooksLoadedRef = useRef(onHooksLoaded);
-    onHooksLoadedRef.current = onHooksLoaded;
-    const onCoverImageRef = useRef(onCoverImage);
-    onCoverImageRef.current = onCoverImage;
     const onEngineReadyRef = useRef(onEngineReady);
     onEngineReadyRef.current = onEngineReady;
     const onHookEndRef = useRef(onHookEnd);
@@ -135,66 +130,25 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
     );
 
     // ═══════════════════════════════════════════════════════════
-    // EFFECT 1: Fetch hooks + dance data (runs once per battleId)
+    // EFFECT 1: Accept prefetched data from BattleEmbed
+    // No per-card Supabase queries — BattleEmbed handles all fetching.
     // ═══════════════════════════════════════════════════════════
     useEffect(() => {
-      if (!battleId) return;
-      const fetchId = ++fetchRef.current;
-      setHookA(null);
-      setHookB(null);
-      setDanceData(null);
-      setLoading(true);
+      setHookA(prefetchedHookA ?? null);
+      setHookB(prefetchedHookB ?? null);
+      setDanceData(prefetchedDanceData ?? null);
+      setLoading(!prefetchedHookA || !prefetchedDanceData);
       setReady(false);
       hookEndFiredA.current = false;
       hookEndFiredB.current = false;
-
-      (async () => {
-        const { data: hooks } = await supabase
-          .from("shareable_hooks" as any)
-          .select(HOOK_SELECT)
-          .eq("battle_id", battleId)
-          .order("battle_position", { ascending: true });
-
-        if (!hooks || hooks.length === 0) {
-          setLoading(false);
-          return;
-        }
-        if (fetchId !== fetchRef.current) return;
-
-        const rawHooks = hooks as unknown as (HookInfo & {
-          user_id?: string;
-        })[];
-        const a = rawHooks.find((h) => h.battle_position === 1) || rawHooks[0];
-        const b = rawHooks.find((h) => h.id !== a.id) || null;
-        setHookA(a);
-        setHookB(b);
-        onHooksLoadedRef.current?.(a, b);
-
-        let query = supabase
-          .from("shareable_lyric_dances" as any)
-          .select(LYRIC_DANCE_COLUMNS)
-          .eq("song_slug", a.song_slug)
-          .limit(1);
-        if ((a as any).user_id) query = query.eq("user_id", (a as any).user_id);
-        else query = query.eq("artist_slug", a.artist_slug);
-
-        const { data: dances } = await query;
-        if (fetchId !== fetchRef.current) return;
-        if (dances && dances.length > 0) {
-          const dance = dances[0] as unknown as LyricDanceData;
-          setDanceData(dance);
-          // Preload images
-          const urls =
-            (dance.section_images as string[] | undefined)?.filter(Boolean) ??
-            [];
-          if (urls.length > 0) {
-            onCoverImageRef.current?.(urls[0]);
-            urls.forEach((u) => preloadImage(u));
-          }
-        }
-        setLoading(false);
-      })();
-    }, [battleId]);
+      if (prefetchedDanceData) {
+        const urls =
+          (prefetchedDanceData.section_images as string[] | undefined)?.filter(
+            Boolean,
+          ) ?? [];
+        urls.forEach((u) => preloadImage(u));
+      }
+    }, [prefetchedHookA?.id, prefetchedHookB?.id, prefetchedDanceData?.id]);
 
     // ═══════════════════════════════════════════════════════════
     // EFFECT 2: Init engine once (when data + canvas are ready)

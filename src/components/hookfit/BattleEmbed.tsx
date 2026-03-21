@@ -22,6 +22,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  HOOK_SELECT,
   InlineBattle,
   type BattleMode,
   type HookInfo,
@@ -29,10 +30,11 @@ import {
 } from "@/components/hookfit/InlineBattle";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { getSessionId } from "@/lib/sessionId";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
-import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
+import type { LyricDanceData, LyricDancePlayer } from "@/engine/LyricDancePlayer";
 
 type BattleState = "cover" | "round-1" | "round-2" | "vote" | "results";
 
@@ -122,65 +124,14 @@ function BattleEmbedInner({
       });
   }, [propBattleId, battleUrl]);
 
-  // ── Early cover image fetch — runs before InlineBattle mounts ──
-  useEffect(() => {
-    if (!resolvedBattleId) return;
-    let cancelled = false;
-    setCoverImageUrl(null);
-    setCoverImageReady(false);
-
-    (async () => {
-      const { data: hooks } = await supabase
-        .from("shareable_hooks" as any)
-        .select("artist_slug, song_slug")
-        .eq("battle_id", resolvedBattleId)
-        .limit(1);
-
-      if (cancelled || !hooks || hooks.length === 0) return;
-      const { artist_slug, song_slug } = hooks[0] as any;
-
-      const { data: dance } = await supabase
-        .from("shareable_lyric_dances" as any)
-        .select("section_images")
-        .eq("artist_slug", artist_slug)
-        .eq("song_slug", song_slug)
-        .limit(1)
-        .maybeSingle();
-
-      if (cancelled) return;
-      const firstImg = (dance as any)?.section_images?.[0];
-      if (firstImg) {
-        setCoverImageUrl(firstImg);
-        preloadImage(firstImg).then(() => {
-          if (!cancelled) setCoverImageReady(true);
-        });
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [resolvedBattleId]);
-
-  useEffect(() => {
-    if (!coverImageUrl) {
-      setCoverImageReady(false);
-      return;
-    }
-
-    let cancelled = false;
-    preloadImage(coverImageUrl).then(() => {
-      if (!cancelled) setCoverImageReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [coverImageUrl]);
-
   // ── Battle state machine ────────────────────────────────────
   const [battleState, setBattleState] = useState<BattleState>("cover");
   const [hookA, setHookA] = useState<HookInfo | null>(null);
   const [hookB, setHookB] = useState<HookInfo | null>(null);
+  const [battleHookA, setBattleHookA] = useState<HookInfo | null>(null);
+  const [battleHookB, setBattleHookB] = useState<HookInfo | null>(null);
+  const [battleDanceData, setBattleDanceData] =
+    useState<LyricDanceData | null>(null);
   const [votedSide, setVotedSide] = useState<"a" | "b" | null>(
     initialVotedSide ?? null,
   );
@@ -251,82 +202,99 @@ function BattleEmbedInner({
     return () => io.disconnect();
   }, [isFeedEmbed]);
 
-  // ── Early vote check — runs before InlineBattle mounts ────
+  // ── Consolidated data fetch — ONE effect replaces 3 separate waterfalls ──
+  // Fetches: hooks (full), dance data (full), auth+vote — in parallel where possible.
+  // Passes everything down to InlineBattle as props (zero per-card fetches).
   useEffect(() => {
     if (!resolvedBattleId) return;
     let cancelled = false;
 
+    setLoading(true);
+    setBattleHookA(null);
+    setBattleHookB(null);
+    setBattleDanceData(null);
+    setCoverImageUrl(null);
+    setCoverImageReady(false);
+    setDanceData(null);
+    setHookALines([]);
+    setHookBLines([]);
+
     (async () => {
-      // 1. Fetch hook IDs + vote counts for this battle
       const { data: hooks } = await supabase
         .from("shareable_hooks" as any)
-        .select("id, battle_position, vote_count")
+        .select(HOOK_SELECT)
         .eq("battle_id", resolvedBattleId)
         .order("battle_position", { ascending: true });
 
-      if (cancelled || !hooks || hooks.length === 0) return;
-
-      const rawHooks = hooks as any[];
-      const a =
-        rawHooks.find((h: any) => h.battle_position === 1) || rawHooks[0];
-      const b = rawHooks.find((h: any) => h.id !== a.id) || null;
-
-      // 2. Check for existing vote
-      const sessionId = getSessionId();
-      const {
-        data: { user: u },
-      } = await supabase.auth.getUser();
-      if (cancelled) return;
-      userIdRef.current = u?.id ?? null;
-
-      let query = supabase
-        .from("hook_votes" as any)
-        .select("hook_id")
-        .eq("battle_id", resolvedBattleId);
-      if (u?.id) query = query.eq("user_id", u.id);
-      else query = query.eq("session_id", sessionId);
-
-      const { data: vote } = await query.maybeSingle();
-      if (cancelled || !vote) return;
-
-      // 3. Set voted state + counts
-      const side: "a" | "b" = (vote as any).hook_id === a.id ? "a" : "b";
-      setVotedSide(side);
-      setVoteCountA(a.vote_count || 0);
-      if (b) setVoteCountB(b.vote_count || 0);
-      // For feed embeds, keep cover visible — InlineBattle isn't mounted yet
-      // (it needs cardState === "active" which only happens on user tap).
-      // For fullscreen/shareable, skip cover since InlineBattle is always mounted.
-      if (!isFeedEmbed) {
-        setBattleState("results");
+      if (cancelled || !hooks || hooks.length === 0) {
+        setLoading(false);
+        return;
       }
-    })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [resolvedBattleId]);
+      const rawHooks = hooks as unknown as (HookInfo & { user_id?: string })[];
+      const a = rawHooks.find((h) => h.battle_position === 1) || rawHooks[0];
+      const b = rawHooks.find((h) => h.id !== a.id) || null;
 
-  // ── Hooks loaded ────────────────────────────────────────────
-  const handleHooksLoaded = useCallback(
-    (a: HookInfo, b: HookInfo | null) => {
+      setBattleHookA(a);
+      setBattleHookB(b);
       setHookA(a);
       setHookB(b);
       setVoteCountA(a.vote_count || 0);
-      if (b) setVoteCountB(b.vote_count || 0);
+      setVoteCountB(b?.vote_count || 0);
       if (!hookPhrase) setHookPhrase(a.hook_phrase || b?.hook_phrase || null);
 
-      // Fetch lyrics for results panel
-      supabase
-        .from("shareable_lyric_dances" as any)
-        .select("id, lyrics")
-        .eq("artist_slug", a.artist_slug)
-        .eq("song_slug", a.song_slug)
-        .maybeSingle()
-        .then(({ data }: { data: any }) => {
-          if (data?.id) setDanceData({ id: data.id });
-          if (!data?.lyrics) return;
-          const lyrics = data.lyrics as any[];
+      const [danceResult, voteResult] = await Promise.all([
+        (async () => {
+          let query = supabase
+            .from("shareable_lyric_dances" as any)
+            .select(LYRIC_DANCE_COLUMNS)
+            .eq("song_slug", a.song_slug)
+            .limit(1);
+          if ((a as any).user_id) {
+            query = query.eq("user_id", (a as any).user_id);
+          } else {
+            query = query.eq("artist_slug", a.artist_slug);
+          }
+          return query;
+        })(),
+        (async () => {
+          if (initialVotedSide) return null;
+          const sessionId = getSessionId();
+          const {
+            data: { user: u },
+          } = await supabase.auth.getUser();
+          if (cancelled) return null;
+          userIdRef.current = u?.id ?? null;
+          let voteQuery = supabase
+            .from("hook_votes" as any)
+            .select("hook_id")
+            .eq("battle_id", resolvedBattleId);
+          if (u?.id) voteQuery = voteQuery.eq("user_id", u.id);
+          else voteQuery = voteQuery.eq("session_id", sessionId);
+          return voteQuery.maybeSingle();
+        })(),
+      ]);
+
+      if (cancelled) return;
+
+      const dances = danceResult.data;
+      if (dances && dances.length > 0) {
+        const dance = dances[0] as unknown as LyricDanceData;
+        setBattleDanceData(dance);
+        setDanceData({ id: (dance as any).id });
+
+        const firstImg = (dance.section_images as string[] | undefined)?.find(
+          Boolean,
+        );
+        if (firstImg) {
+          setCoverImageUrl(firstImg);
+          preloadImage(firstImg).then(() => {
+            if (!cancelled) setCoverImageReady(true);
+          });
+        }
+
+        if ((dance as any).lyrics) {
+          const lyrics = (dance as any).lyrics as any[];
           const indexed = lyrics.map((l: any, i: number) => ({
             ...l,
             lineIndex: i,
@@ -337,39 +305,31 @@ function BattleEmbedInner({
                 l.start < a.hook_end + 0.3 && l.end > a.hook_start - 0.3,
             ),
           );
-          if (b)
-            setHookBLines(
-              indexed.filter(
-                (l: any) =>
-                  l.start < b.hook_end + 0.3 && l.end > b.hook_start - 0.3,
-              ),
-            );
-        });
-
-      if (!resolvedBattleId || votedSide) return;
-      (async () => {
-        const sessionId = getSessionId();
-        const {
-          data: { user: u },
-        } = await supabase.auth.getUser();
-        userIdRef.current = u?.id ?? null;
-        let query = supabase
-          .from("hook_votes" as any)
-          .select("hook_id")
-          .eq("battle_id", resolvedBattleId);
-        if (u?.id) query = query.eq("user_id", u.id);
-        else query = query.eq("session_id", sessionId);
-        const { data: vote } = await query.maybeSingle();
-        if (vote) {
-          setVotedSide((vote as any).hook_id === a.id ? "a" : "b");
-          if (!isFeedEmbed) {
-            setBattleState("results");
-          }
+          setHookBLines(
+            b
+              ? indexed.filter(
+                  (l: any) =>
+                    l.start < b.hook_end + 0.3 && l.end > b.hook_start - 0.3,
+                )
+              : [],
+          );
         }
-      })();
-    },
-    [resolvedBattleId, hookPhrase, votedSide],
-  );
+      }
+
+      if (voteResult?.data) {
+        const vote = voteResult.data as any;
+        const side: "a" | "b" = vote.hook_id === a.id ? "a" : "b";
+        setVotedSide(side);
+        if (!isFeedEmbed) setBattleState("results");
+      }
+
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedBattleId, initialVotedSide, isFeedEmbed]);
 
   // ── Auto-advance after hook ends ────────────────────────────
   useEffect(() => {
@@ -663,16 +623,15 @@ function BattleEmbedInner({
                 votedSide === "a" ? pctA : votedSide === "b" ? pctB : undefined
               }
               onTileTap={handleTileTap}
-              onHooksLoaded={handleHooksLoaded}
-              onCoverImage={(url) => {
-                if (!coverImageUrl) setCoverImageUrl(url);
-              }}
               forceMuted={muted}
               onEngineReady={() => {
                 setEngineReady(true);
                 setPanelPlayer(inlineBattleRef.current?.getPlayer() ?? null);
               }}
               cardState={isFeedEmbed ? cardState : "active"}
+              prefetchedHookA={battleHookA}
+              prefetchedHookB={battleHookB}
+              prefetchedDanceData={battleDanceData}
             />
           </div>
         )}
