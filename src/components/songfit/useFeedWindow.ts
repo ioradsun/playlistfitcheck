@@ -27,7 +27,7 @@ export function useFeedWindow(
   const [impressions, setImpressions] = useState<string[]>([]);
   const seenImpressions = useRef(new Set<string>());
   const rafRef = useRef<number | null>(null);
-  const debounceRef = useRef<number | null>(null);
+  
   const [centerIndex, setCenterIndex] = useState(0);
 
   const registerHeight = useCallback((postId: string, height: number) => {
@@ -107,19 +107,10 @@ export function useFeedWindow(
       const { center, visibleStart, visibleEnd, windowStart, windowEnd } =
         calculateRanges(container.scrollTop, container.clientHeight);
       setCenterIndex(center);
-      if (reelsMode) {
-        // In reels mode with snap-mandatory, apply window immediately.
-        // The 150ms debounce causes placeholder→card swaps after snap commits,
-        // producing visible layout jumps on iOS Safari.
-        setVisibleRange({ start: visibleStart, end: visibleEnd });
-        setWindowRange({ start: windowStart, end: windowEnd });
-      } else {
-        if (debounceRef.current) window.clearTimeout(debounceRef.current);
-        debounceRef.current = window.setTimeout(() => {
-          setVisibleRange({ start: visibleStart, end: visibleEnd });
-          setWindowRange({ start: windowStart, end: windowEnd });
-        }, 150);
-      }
+      // Apply immediately — RAF already throttles to one calc per frame.
+      // A debounce on top of that just causes visible blank gaps on fast scroll.
+      setVisibleRange({ start: visibleStart, end: visibleEnd });
+      setWindowRange({ start: windowStart, end: windowEnd });
     };
 
     const onScroll = () => {
@@ -133,7 +124,7 @@ export function useFeedWindow(
     return () => {
       container.removeEventListener("scroll", onScroll);
       if (rafRef.current !== null) window.cancelAnimationFrame(rafRef.current);
-      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      
     };
   }, [calculateRanges, scrollContainerId]);
 
