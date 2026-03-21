@@ -795,36 +795,6 @@ function BattleEmbedInner({
           )}
         </AnimatePresence>
 
-        {/* Round 2 preview label */}
-        <AnimatePresence>
-          {battleState === "round-1" && (
-            <motion.div
-              key="r2-preview"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute top-1/2 -translate-y-1/2 right-[12.5%] z-10 pointer-events-none"
-            >
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/15">
-                Round 2
-              </span>
-            </motion.div>
-          )}
-          {battleState === "round-2" && (
-            <motion.div
-              key="r1-done"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute top-1/2 -translate-y-1/2 left-[12.5%] z-10 pointer-events-none"
-            >
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/15">
-                ✓
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Vote prompt */}
         <AnimatePresence>
           {battleState === "vote" && (
