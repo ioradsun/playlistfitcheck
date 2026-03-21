@@ -1071,8 +1071,8 @@ function BattleEmbedInner({
         </div>
 
       <ReactionPanel
-        displayMode={reelsMode ? "fullscreen" : isFeedEmbed ? "embedded" : "fullscreen"}
-        maxHeight={undefined}
+        displayMode="embedded"
+        maxHeight="75%"
         isOpen={panelOpen && !!votedSide && battleState !== "vote"}
         onClose={() => setPanelOpen(false)}
         danceId={danceData?.id ?? ""}
