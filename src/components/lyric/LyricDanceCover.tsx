@@ -126,12 +126,13 @@ export function LyricDanceCover({
               onClick={waiting ? undefined : onListen}
               className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
               style={{
-                color: waiting ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,1)",
-                borderColor: waiting ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.20)",
+                color: waiting ? "transparent" : "rgba(255,255,255,1)",
+                borderColor: waiting ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.20)",
                 cursor: waiting ? "default" : "pointer",
+                background: waiting ? "rgba(255,255,255,0.02)" : undefined,
               }}
             >
-              {waiting ? "Loading…" : `${(claimSongName || songName || "Lyric").trim()} Dance`}
+              {`${(claimSongName || songName || "Lyric").trim()} Dance`}
             </button>
           </>
         ) : (
@@ -147,9 +148,10 @@ export function LyricDanceCover({
               onClick={waiting ? undefined : onListen}
               className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
               style={{
-                color: waiting ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,1)",
-                borderColor: waiting ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.20)",
+                color: waiting ? "transparent" : "rgba(255,255,255,1)",
+                borderColor: waiting ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.20)",
                 cursor: waiting ? "default" : "pointer",
+                background: waiting ? "rgba(255,255,255,0.02)" : undefined,
               }}
             >
               Listen Now

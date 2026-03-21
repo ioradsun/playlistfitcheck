@@ -415,19 +415,12 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
     if (loading || !hookA || !danceData) {
       if (!loading && hookA && !danceData) {
         return (
-          <div className="w-full h-full bg-black/20 flex items-center justify-center text-white/40 text-xs font-mono">
-            No lyric dance found for this song
+          <div className="w-full h-full flex items-center justify-center text-white/20 text-xs font-mono">
+            No lyric dance found
           </div>
         );
       }
-      return (
-        <div className="w-full h-full animate-pulse">
-          <div className="flex h-full gap-1 p-1">
-            <div className="flex-1 rounded-lg bg-white/[0.03]" />
-            <div className="flex-1 rounded-lg bg-white/[0.03]" />
-          </div>
-        </div>
-      );
+      return <div className="w-full h-full" style={{ background: "#0a0a0a" }} />;
     }
 
     const isResultsMode = mode === "scorecard" || mode === "results";

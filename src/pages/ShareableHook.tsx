@@ -107,10 +107,23 @@ export default function ShareableHook() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={{ background: "#0a0a0a" }}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-2 w-32 rounded bg-white/[0.06] animate-pulse" />
-          <div className="h-10 w-36 rounded-lg bg-white/[0.04] animate-pulse" />
+      <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
+        {/* Matches final layout: canvas fills screen, bottom bar at 52px */}
+        <div className="flex-1" />
+        <div style={{ height: 52, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+          <div className="flex items-stretch h-full">
+            <div className="flex-1 flex items-center justify-center">
+              <div className="h-3 w-20 rounded bg-white/[0.03]" />
+            </div>
+            <div className="w-px bg-white/[0.04] self-stretch my-2" />
+            <div className="flex-1 flex items-center justify-center">
+              <div className="h-3 w-20 rounded bg-white/[0.03]" />
+            </div>
+            <div className="w-px bg-white/[0.04] self-stretch my-2" />
+            <div className="w-16 flex items-center justify-center">
+              <div className="h-3 w-3 rounded bg-white/[0.03]" />
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -12,7 +12,6 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import {
-  Loader2,
   Maximize2,
   Volume2,
   VolumeX,
@@ -636,19 +635,9 @@ function BattleEmbedInner({
       >
         <CoverBackground />
 
-        {/* Loading spinner */}
+        {/* Loading fill — matches #0a0a0a background until data arrives */}
         {(loading || !resolvedBattleId) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <div className="text-center space-y-2">
-              <Loader2
-                size={20}
-                className="animate-spin text-muted-foreground mx-auto"
-              />
-              <p className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">
-                Loading battle…
-              </p>
-            </div>
-          </div>
+          <div className="absolute inset-0" style={{ background: "#0a0a0a" }} />
         )}
 
         {/* InlineBattle canvas — always mounted when data ready, pauses when inactive */}
@@ -736,8 +725,8 @@ function BattleEmbedInner({
               <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center">
                 {loading ? (
                   <div className="flex flex-col items-center gap-4">
-                    <div className="h-2 w-32 rounded bg-white/[0.06] animate-pulse" />
-                    <div className="h-10 w-36 rounded-lg bg-white/[0.04] animate-pulse" />
+                    <div className="h-2 w-32 rounded bg-white/[0.04]" />
+                    <div className="h-[44px] w-36 rounded-lg bg-white/[0.03]" />
                   </div>
                 ) : votedSide ? (
                   <>

@@ -945,27 +945,32 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       
       {loading ? (
         reelsMode ? (
-          <div className="h-[100dvh] snap-start bg-black flex items-center justify-center">
-            <Loader2 size={24} className="animate-spin text-white/20" />
-          </div>
+          <div className="h-[100dvh] snap-start bg-black" />
         ) : (
           <div className="space-y-3 pt-3">
             {[0, 1, 2].map((i) => (
               <div key={i} className="px-2 pb-3">
-                <div className="rounded-2xl overflow-hidden border border-border/30 bg-muted/10">
-                  <div className="flex items-center gap-2.5 px-3 py-2.5">
-                    <div className="h-8 w-8 rounded-full bg-muted/40" />
-                    <div className="space-y-1.5 flex-1">
-                      <div className="h-3 w-24 rounded bg-muted/30" />
-                      <div className="h-2.5 w-16 rounded bg-muted/20" />
-                    </div>
+                <div className="rounded-2xl overflow-hidden" style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.04)" }}>
+                  {/* Header — px-3 py-2.5, avatar h-8 w-8 + label */}
+                  <div className="flex items-center gap-2 px-3 py-2.5">
+                    <div className="h-8 w-8 rounded-full bg-white/[0.04]" />
+                    <div className="h-3 w-32 rounded bg-white/[0.04]" />
                   </div>
-                  <div className="bg-muted/20" style={{ height: 320 }} />
-                  <div className="px-1 py-1 flex items-center gap-1">
-                    <div className="h-8 w-8 rounded-full bg-muted/20" />
-                    <div className="h-8 w-8 rounded-full bg-muted/20" />
-                    <div className="h-8 w-8 rounded-full bg-muted/20" />
-                    <div className="h-8 w-8 rounded-full bg-muted/20" />
+                  {/* Canvas — 320px, same as style={{ height: 320 }} */}
+                  <div style={{ height: 320 }} />
+                  {/* Bottom bar — h-[48px], 3-section strip */}
+                  <div className="flex items-stretch" style={{ height: 48 }}>
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="h-3 w-16 rounded bg-white/[0.03]" />
+                    </div>
+                    <div className="w-px bg-white/[0.04] self-stretch my-3" />
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="h-3 w-16 rounded bg-white/[0.03]" />
+                    </div>
+                    <div className="w-px bg-white/[0.04] self-stretch my-3" />
+                    <div className="w-16 flex items-center justify-center">
+                      <div className="h-3 w-3 rounded bg-white/[0.03]" />
+                    </div>
                   </div>
                 </div>
               </div>
