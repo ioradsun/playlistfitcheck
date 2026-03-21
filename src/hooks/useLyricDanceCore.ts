@@ -134,7 +134,7 @@ export function useLyricDanceCore({
 
   const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(
     postId ?? lyricDanceId,
-    { anonymous: true },
+    { anonymous: true, enabled: !showCover },
   );
 
   const [panelOpen, setPanelOpen] = useState(false);
