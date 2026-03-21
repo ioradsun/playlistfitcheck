@@ -934,39 +934,6 @@ function BattleEmbedInner({
           </div>
         )}
 
-        {/* Results panel open: Left Hook / Right Hook as tab switchers + ✕ */}
-        {!!votedSide && battleState !== "vote" && panelOpen && (
-          <div className={`flex items-stretch ${isFeedEmbed ? "h-[48px]" : "mx-1 mt-1 rounded-md overflow-hidden h-[52px]"}`} onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setResultsTab("a")}
-              className={`flex-1 flex items-center justify-center py-3 transition-colors ${
-                resultsTab === "a"
-                  ? "text-white border-b-2 border-white/40"
-                  : "text-white/30 hover:text-white/60"
-              }`}
-            >
-              <span className="text-[11px] font-mono tracking-[0.15em] uppercase">Left Hook</span>
-            </button>
-            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-            <button
-              onClick={() => setResultsTab("b")}
-              className={`flex-1 flex items-center justify-center py-3 transition-colors ${
-                resultsTab === "b"
-                  ? "text-white border-b-2 border-white/40"
-                  : "text-white/30 hover:text-white/60"
-              }`}
-            >
-              <span className="text-[11px] font-mono tracking-[0.15em] uppercase">Right Hook</span>
-            </button>
-            <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
-            <button
-              onClick={() => setPanelOpen(false)}
-              className="flex items-center justify-center px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
-            >
-              <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
-            </button>
-          </div>
-        )}
         </div>
       </div>
 
