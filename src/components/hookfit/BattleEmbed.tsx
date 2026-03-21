@@ -577,11 +577,11 @@ function BattleEmbedInner({
           </div>
         )}
 
-        {/* InlineBattle canvas — always mounted when active, hidden on cover */}
+        {/* InlineBattle canvas — visible behind semi-transparent cover overlay */}
         {resolvedBattleId && (!isFeedEmbed || cardState === "active") && (
           <div
             className="absolute inset-0"
-            style={{ opacity: battleState === "cover" ? 0 : 1, transition: "opacity 0.4s ease" }}
+            style={{ transition: "opacity 0.4s ease" }}
           >
             <InlineBattle
               battleId={resolvedBattleId}
