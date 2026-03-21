@@ -36,6 +36,7 @@ interface BattleEmbedProps {
   // Feed lifecycle — omit for fullscreen/shareable usage
   cardState?: CardState;
   onPlay?: () => void;
+  onDeactivate?: () => void;
 
   // Pre-existing vote state (from feed post data)
   initialVotedSide?: "a" | "b" | null;
@@ -49,9 +50,12 @@ function BattleEmbedInner({
   showExpandButton = true,
   cardState,
   onPlay,
+  onDeactivate,
   initialVotedSide,
 }: BattleEmbedProps) {
   const isFeedEmbed = cardState !== undefined;
+  const onDeactivateRef = useRef(onDeactivate);
+  onDeactivateRef.current = onDeactivate;
 
   // ── Resolved IDs ───────────────────────────────────────────
   const [resolvedBattleId, setResolvedBattleId] = useState<string | null>(propBattleId ?? null);
@@ -175,6 +179,28 @@ function BattleEmbedInner({
       setEngineReady(false);
     }
   }, [isFeedEmbed, cardState]);
+
+  // ── Viewport detection: deactivate when scrolled out of view ──
+  // Matches In Studio behavior via IntersectionObserver.
+  // Without this, a battle card can play audio while off-screen.
+  useEffect(() => {
+    if (!isFeedEmbed) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        if (!entry.isIntersecting) {
+          onDeactivateRef.current?.();
+        }
+      },
+      { threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [isFeedEmbed]);
 
   // ── Early vote check — runs before InlineBattle mounts ────
   useEffect(() => {

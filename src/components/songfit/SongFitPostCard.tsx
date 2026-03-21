@@ -117,7 +117,7 @@ export function SongFitPostCard({
     !hasLyricDancePost && !isBattlePost && !!post.spotify_track_id;
   const CAPTION_MAX = 300;
 
-  const { activate } = useCardState(post.id);
+  const { activate, deactivate } = useCardState(post.id);
 
   const handleSaveEdit = async () => {
     setSaving(true);
@@ -441,6 +441,7 @@ export function SongFitPostCard({
                 showSplitCover={true}
                 cardState={cardState}
                 onPlay={activate}
+                onDeactivate={deactivate}
                 initialVotedSide={(post as any).voted_side ?? null}
               />
             </div>
