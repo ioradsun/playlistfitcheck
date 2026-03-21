@@ -1,8 +1,11 @@
 /**
  * InlineBattle — Single-engine battle renderer.
- * ONE LyricDancePlayer renders to one canvas at a time.
- * The inactive side shows a captured snapshot.
- * Same cinematic engine as the full lyric dance, just windowed to 10-second hooks.
+ * ONE LyricDancePlayer, two canvas pairs, snapshot-based side switching.
+ *
+ * Architecture: 3 effects total.
+ *   1. Fetch: loads hooks + dance data from Supabase
+ *   2. Init: creates the engine once when data + canvas are ready
+ *   3. Control: ONE unified effect that reacts to activePlaying, cardState, forceMuted
  */
 
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
@@ -60,6 +63,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   battleId, mode, votedSide, voteCount, votePct, onHookEnd, onHooksLoaded,
   onTileTap, activePlaying, forceMuted, onCoverImage, onEngineReady, cardState,
 }, ref) {
+  // ── Data state ──────────────────────────────────────────────
   const [hookA, setHookA] = useState<HookInfo | null>(null);
   const [hookB, setHookB] = useState<HookInfo | null>(null);
   const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
@@ -69,6 +73,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const hookEndFiredA = useRef(false);
   const hookEndFiredB = useRef(false);
 
+  // ── Canvas refs ─────────────────────────────────────────────
   const canvasARef = useRef<HTMLCanvasElement>(null);
   const textCanvasARef = useRef<HTMLCanvasElement>(null);
   const containerARef = useRef<HTMLDivElement>(null);
@@ -76,20 +81,28 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const textCanvasBRef = useRef<HTMLCanvasElement>(null);
   const containerBRef = useRef<HTMLDivElement>(null);
 
+  // ── Engine state ────────────────────────────────────────────
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const snapshotRef = useRef<HTMLCanvasElement | null>(null);
-  const activeSideRef = useRef<"a" | "b" | null>(null);
+  const activeSideRef = useRef<"a" | "b">("a");
   const destroyedRef = useRef(false);
-  // Stable refs for callbacks — prevents refetch when parent re-renders.
+  const roRef = useRef<ResizeObserver | null>(null);
+
+  // ── Stable callback refs (never trigger re-fetches) ─────────
   const onHooksLoadedRef = useRef(onHooksLoaded);
   onHooksLoadedRef.current = onHooksLoaded;
   const onCoverImageRef = useRef(onCoverImage);
   onCoverImageRef.current = onCoverImage;
   const onEngineReadyRef = useRef(onEngineReady);
   onEngineReadyRef.current = onEngineReady;
+  const onHookEndRef = useRef(onHookEnd);
+  onHookEndRef.current = onHookEnd;
 
   useImperativeHandle(ref, () => ({}), []);
 
+  // ═══════════════════════════════════════════════════════════
+  // EFFECT 1: Fetch hooks + dance data (runs once per battleId)
+  // ═══════════════════════════════════════════════════════════
   useEffect(() => {
     if (!battleId) return;
     const fetchId = ++fetchRef.current;
@@ -123,38 +136,28 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
         .select(LYRIC_DANCE_COLUMNS)
         .eq("song_slug", a.song_slug)
         .limit(1);
-
-      if ((a as any).user_id) {
-        query = query.eq("user_id", (a as any).user_id);
-      } else {
-        query = query.eq("artist_slug", a.artist_slug);
-      }
+      if ((a as any).user_id) query = query.eq("user_id", (a as any).user_id);
+      else query = query.eq("artist_slug", a.artist_slug);
 
       const { data: dances } = await query;
       if (fetchId !== fetchRef.current) return;
       if (dances && dances.length > 0) {
         const dance = dances[0] as unknown as LyricDanceData;
         setDanceData(dance);
-        const firstImage = (dance.section_images as string[] | undefined)?.find(Boolean);
-        if (firstImage) onCoverImageRef.current?.(firstImage);
+        // Preload images
+        const urls = (dance.section_images as string[] | undefined)?.filter(Boolean) ?? [];
+        if (urls.length > 0) {
+          onCoverImageRef.current?.(urls[0]);
+          urls.forEach(u => preloadImage(u));
+        }
       }
       setLoading(false);
     })();
   }, [battleId]);
 
-  useEffect(() => {
-    if (!danceData) return;
-    const urls = danceData.section_images?.filter((url): url is string => Boolean(url)) ?? [];
-    if (urls.length === 0) return;
-    preloadImage(urls[0]);
-    if (urls.length > 1) {
-      urls.slice(1).forEach((url) => preloadImage(url));
-    }
-  }, [danceData?.id, danceData?.section_images]);
-
-  // ── Init engine as soon as data is available (during cover) ──
-  // Default to side A canvas + hook A region, muted.
-  // Matches useLyricDancePlayer init pattern: dataReady gate, force resize, ResizeObserver.
+  // ═══════════════════════════════════════════════════════════
+  // EFFECT 2: Init engine once (when data + canvas are ready)
+  // ═══════════════════════════════════════════════════════════
   const dataReady = !!(danceData && danceData.cinematic_direction && !Array.isArray(danceData.cinematic_direction));
 
   useEffect(() => {
@@ -167,17 +170,16 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     const container = containerARef.current;
     if (!bgCanvas || !textCanvas || !container) return;
 
-    const dataWithRegion: LyricDanceData = {
-      ...danceData!,
-      region_start: hookA.hook_start,
-      region_end: hookA.hook_end,
-    };
-
     let cancelled = false;
-    let ro: ResizeObserver | null = null;
 
     withInitLimit(async () => {
       if (cancelled || destroyedRef.current) return;
+
+      const dataWithRegion: LyricDanceData = {
+        ...danceData!,
+        region_start: hookA.hook_start,
+        region_end: hookA.hook_end,
+      };
 
       const p = new LyricDancePlayer(
         dataWithRegion,
@@ -187,40 +189,33 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
         { bootMode: "minimal" },
       );
 
-      if (cancelled || destroyedRef.current) {
-        p.destroy();
-        return;
-      }
+      if (cancelled || destroyedRef.current) { p.destroy(); return; }
 
       playerRef.current = p;
       activeSideRef.current = "a";
 
-      // ResizeObserver — keeps engine dimensions in sync with container
-      ro = new ResizeObserver((entries) => {
+      // ResizeObserver — same pattern as useLyricDancePlayer
+      roRef.current = new ResizeObserver((entries) => {
         const entry = entries[0];
         if (!entry) return;
         const { width, height } = entry.contentRect;
         if (width > 0 && height > 0) p.resize(width, height);
       });
-      ro.observe(container);
+      roRef.current.observe(container);
 
-      // Force correct viewport dimensions before first frame render.
-      // On mobile, canvas.offsetWidth may be 0 before CSS layout completes,
-      // causing init() to fall back to 960×540 and produce tiny fonts.
+      // Force correct viewport dimensions before init
       const rect = container.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        p.resize(rect.width, rect.height);
-      }
+      if (rect.width > 0 && rect.height > 0) p.resize(rect.width, rect.height);
 
       await p.init();
       if (cancelled || destroyedRef.current) {
         p.destroy();
         playerRef.current = null;
-        ro?.disconnect();
+        roRef.current?.disconnect();
         return;
       }
 
-      // Start rendering immediately (muted) — lyrics animate behind cover
+      // Start muted — Effect 3 will decide what to do next
       p.audio.muted = true;
       p.play();
       p.scheduleFullModeUpgrade();
@@ -228,40 +223,45 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       onEngineReadyRef.current?.();
     }).catch((err) => console.error("[InlineBattle] init failed:", err));
 
-    return () => {
-      cancelled = true;
-      ro?.disconnect();
-    };
+    return () => { cancelled = true; };
   }, [dataReady, danceData?.id, hookA?.id]);
 
-  // ── Side switching + mute control ───────────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // EFFECT 3: Unified player control
+  // ONE effect, reads ALL inputs, makes ONE decision.
+  // ═══════════════════════════════════════════════════════════
   useEffect(() => {
     const player = playerRef.current;
     if (!player || !ready || !hookA) return;
 
-    const targetSide = activePlaying;
-    const currentSide = activeSideRef.current;
+    // ── Rule 1: Off-screen → stop rendering, mute ──
+    if (cardState != null && cardState !== "active") {
+      player.stopRendering?.();
+      player.setMuted(true);
+      return;
+    }
 
-    if (!targetSide) {
-      // No active side (cover, vote, results unfocused)
-      // Keep engine running muted on current canvas — lyrics stay alive behind cover
+    // ── Rule 2: No active side (cover, vote, results unfocused) → render muted ──
+    if (!activePlaying) {
       player.play();
       player.setMuted(true);
       return;
     }
 
+    // ── Rule 3: Active side matches current canvas → just play ──
+    const targetSide = activePlaying;
+    const currentSide = activeSideRef.current;
     const hook = targetSide === "a" ? hookA : hookB;
     if (!hook) return;
 
     if (targetSide === currentSide) {
-      // Same side — just update mute/play state
       player.play();
       player.setMuted(!!forceMuted);
       player.scheduleFullModeUpgrade();
       return;
     }
 
-    // Switching sides — capture snapshot + swap canvas
+    // ── Rule 4: Switching sides → snapshot + swap canvas + recompile ──
     snapshotRef.current = player.captureSnapshot();
 
     const bgCanvas = targetSide === "a" ? canvasARef.current : canvasBRef.current;
@@ -269,12 +269,8 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     const container = targetSide === "a" ? containerARef.current : containerBRef.current;
     if (!bgCanvas || !textCanvas || !container) return;
 
-    player.setRenderTarget(bgCanvas, textCanvas, container);
-    player.setRegion(hook.hook_start, hook.hook_end);
-    activeSideRef.current = targetSide;
-
-    // Draw snapshot onto the old side's canvas
-    const oldCanvas = targetSide === "a" ? canvasBRef.current : canvasARef.current;
+    // Draw snapshot onto old side's canvas (freeze it)
+    const oldCanvas = currentSide === "a" ? canvasARef.current : canvasBRef.current;
     if (oldCanvas && snapshotRef.current) {
       const ctx = oldCanvas.getContext("2d");
       if (ctx) {
@@ -283,64 +279,52 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       }
     }
 
+    player.setRenderTarget(bgCanvas, textCanvas, container);
+    player.setRegion(hook.hook_start, hook.hook_end);
+    activeSideRef.current = targetSide;
+
     player.play();
     player.setMuted(!!forceMuted);
     player.scheduleFullModeUpgrade();
-  }, [activePlaying, forceMuted, ready, hookA, hookB]);
+  }, [activePlaying, forceMuted, ready, hookA, hookB, cardState]);
 
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player || !ready) return;
-    player.setMuted(!!forceMuted || !activePlaying);
-  }, [forceMuted, activePlaying, ready]);
-
-  // ── Feed lifecycle: pause/resume engine based on card visibility ──
-  // Matches In Studio behavior: stop rendering when off-screen, resume when visible.
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player || !ready) return;
-
-    if (cardState === "active") {
-      // Resume rendering — RAF loop restarts
-      player.play();
-      player.setMuted(!!forceMuted || !activePlaying);
-    } else {
-      // Stop rendering to save CPU — engine stays alive for instant resume
-      player.stopRendering?.();
-      player.setMuted(true);
-    }
-  }, [cardState, ready, forceMuted, activePlaying]);
-
-  useEffect(() => {
-    return () => {
-      destroyedRef.current = true;
-      playerRef.current?.destroy();
-      playerRef.current = null;
-      activeSideRef.current = null;
-      snapshotRef.current = null;
-    };
-  }, []);
-
+  // ═══════════════════════════════════════════════════════════
+  // EFFECT 4: Hook-end timers (simple, independent)
+  // ═══════════════════════════════════════════════════════════
   useEffect(() => {
     if (!hookA || activePlaying !== "a" || hookEndFiredA.current) return;
     const duration = (hookA.hook_end - hookA.hook_start) * 1000 + 500;
     const timer = setTimeout(() => {
       hookEndFiredA.current = true;
-      onHookEnd?.("a");
+      onHookEndRef.current?.("a");
     }, duration);
     return () => clearTimeout(timer);
-  }, [activePlaying, hookA, onHookEnd]);
+  }, [activePlaying, hookA]);
 
   useEffect(() => {
     if (!hookB || activePlaying !== "b" || hookEndFiredB.current) return;
     const duration = (hookB.hook_end - hookB.hook_start) * 1000 + 500;
     const timer = setTimeout(() => {
       hookEndFiredB.current = true;
-      onHookEnd?.("b");
+      onHookEndRef.current?.("b");
     }, duration);
     return () => clearTimeout(timer);
-  }, [activePlaying, hookB, onHookEnd]);
+  }, [activePlaying, hookB]);
 
+  // ═══════════════════════════════════════════════════════════
+  // Cleanup: destroy engine on unmount
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    return () => {
+      destroyedRef.current = true;
+      roRef.current?.disconnect();
+      playerRef.current?.destroy();
+      playerRef.current = null;
+      snapshotRef.current = null;
+    };
+  }, []);
+
+  // ── Opacity ─────────────────────────────────────────────────
   const getOpacity = useCallback((side: "a" | "b") => {
     switch (mode) {
       case "dark": return 0.2;
@@ -355,6 +339,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     }
   }, [mode, activePlaying]);
 
+  // ── Loading states ──────────────────────────────────────────
   if (loading || !hookA || !danceData) {
     if (!loading && hookA && !danceData) {
       return (
@@ -378,6 +363,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   return (
     <div className="w-full h-full">
       <div className="relative flex flex-row h-full">
+        {/* Hook A */}
         <motion.div
           className="relative flex-1 overflow-hidden cursor-pointer"
           animate={{ opacity: getOpacity("a") }}
@@ -420,6 +406,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
           </div>
         </motion.div>
 
+        {/* Hook B */}
         {hookB ? (
           <motion.div
             className="relative flex-1 overflow-hidden cursor-pointer"
