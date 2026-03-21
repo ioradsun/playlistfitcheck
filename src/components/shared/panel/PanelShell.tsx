@@ -39,6 +39,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHei
             borderTop: variant !== 'embedded' ? '1px solid rgba(255,255,255,0.06)' : undefined,
             top: variant === 'embedded' ? -topOffset : undefined,
             maxHeight: maxHeight ?? undefined,
+            height: maxHeight ?? undefined,
           }}
         >
           {variant === 'embedded' && topOffset > 0 && (
