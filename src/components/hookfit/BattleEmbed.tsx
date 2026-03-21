@@ -466,7 +466,7 @@ function BattleEmbedInner({
   // Split-screen labels still shown over canvas during cover state.
   const CoverBackground = () => (
     <>
-      {showSplitCover && battleState === "cover" && (
+      {showSplitCover && battleState === "cover" && !votedSide && (
         <div className="absolute inset-0 flex pointer-events-none">
           <div className="relative flex-1 overflow-hidden">
             {hookA && (
