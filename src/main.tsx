@@ -1,10 +1,4 @@
-// Auto-reload on stale chunk errors (after deploy, cached HTML references old hashes)
-window.addEventListener("vite:preloadError", () => {
-  if (!sessionStorage.getItem("chunk-reload")) {
-    sessionStorage.setItem("chunk-reload", "1");
-    window.location.reload();
-  }
-});
+
 
 import "./lib/prefetch"; // side-effect: starts network requests immediately
 // Lazy-load Buffer polyfill — only needed by crypto/wallet features, not on critical path
