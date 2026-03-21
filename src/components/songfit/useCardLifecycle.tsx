@@ -74,17 +74,15 @@ export function CardLifecycleProvider({ children }: { children: ReactNode }) {
   return <CardLifecycleContext.Provider value={value}>{children}</CardLifecycleContext.Provider>;
 }
 
+const NOOP = () => {};
+
 export function useCardState(postId: string): { state: CardState; activate: () => void; deactivate: () => void } {
   const context = useContext(CardLifecycleContext);
 
-  if (!context) {
-    throw new Error("useCardState must be used within CardLifecycleProvider");
-  }
+  const state = context ? context.getCardState(postId) : ("cold" as CardState);
 
-  const state = context.getCardState(postId);
-
-  const activate = useCallback(() => context.setCardState(postId, "active"), [context, postId]);
-  const deactivate = useCallback(() => context.setCardState(postId, "warm"), [context, postId]);
+  const activate = useCallback(() => context?.setCardState(postId, "active"), [context, postId]);
+  const deactivate = useCallback(() => context?.setCardState(postId, "warm"), [context, postId]);
 
   return { state, activate, deactivate };
 }
