@@ -29,7 +29,7 @@ interface CommentRow {
 }
 
 interface ReactionPanelProps {
-  displayMode: "fullscreen" | "embedded";
+  displayMode: "fullscreen" | "embedded" | "reels";
   isOpen: boolean;
   onClose: () => void;
   danceId: string;
