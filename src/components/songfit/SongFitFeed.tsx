@@ -219,7 +219,6 @@ const _WindowedFeedList = memo(function WindowedFeedList({
           reelsMode={reelsMode}
           isFirst={idx === 0}
           lyricDanceData={post.lyric_dance_id ? lyricDataMap.get(post.lyric_dance_id) ?? null : null}
-          hidden={!shouldRender}
         />
       ))}
       {isLoadingMore && (
