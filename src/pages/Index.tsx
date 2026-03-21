@@ -1377,19 +1377,7 @@ const Index = () => {
                 </div>
               )}
             </>
-          ) : (
-            TAB_SUBTITLES[activeTab] && (
-              <span
-                className={cn(
-                  "font-mono text-[11px] tracking-widest transition-opacity duration-300",
-                  reelsMode ? "text-white/80" : "text-primary",
-                  reelsMode && reelsScrolled && "opacity-0 pointer-events-none",
-                )}
-              >
-                {TAB_SUBTITLES[activeTab]}
-              </span>
-            )
-          )}
+          ) : null}
         </header>
         <main
           ref={contentScrollRef}
