@@ -649,9 +649,10 @@ function BattleEmbedInner({
               )}
 
               <div
-                className="absolute inset-0"
+                className="absolute inset-0 transition-opacity duration-700"
                 style={{
                   background: "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)",
+                  opacity: engineReady ? 0.7 : 1,
                 }}
               />
 
