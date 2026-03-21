@@ -155,7 +155,6 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   const prevMapRef = useRef(new Map<string, boolean>());
   const {
     windowedPosts,
-    heightMap,
     registerHeight,
     impressions,
     windowRange,
@@ -204,36 +203,25 @@ const _WindowedFeedList = memo(function WindowedFeedList({
 
   return (
     <div className={reelsMode ? "" : "pb-24"}>
-      {windowedPosts.map(({ post, shouldRender }, idx) =>
-        shouldRender ? (
-          <MeasuredFeedCard
-            key={post.id}
-            post={post}
-            onHeight={(h) => registerHeight(post.id, h)}
-            rank={feedView === "billboard" ? idx + 1 : undefined}
-            onOpenComments={(id) => setCommentPostId(id)}
-            onOpenLikes={(id) => setLikesPostId(id)}
-            onRefresh={fetchPosts}
-            isBillboard={feedView === "billboard"}
-            signalData={
-              feedView === "billboard" ? signalMap[post.id] : undefined
-            }
-            reelsMode={reelsMode}
-            isFirst={idx === 0}
-            lyricDanceData={post.lyric_dance_id ? lyricDataMap.get(post.lyric_dance_id) ?? null : null}
-          />
-        ) : (
-          <div
-            key={post.id}
-            style={
-              reelsMode
-                ? undefined
-                : { height: heightMap.get(post.id) ?? FEED_CARD_MIN_HEIGHT }
-            }
-            className={cn("shrink-0", reelsMode && "h-[100dvh] snap-start")}
-          />
-        ),
-      )}
+      {windowedPosts.map(({ post, shouldRender }, idx) => (
+        <MeasuredFeedCard
+          key={post.id}
+          post={post}
+          onHeight={(h) => registerHeight(post.id, h)}
+          rank={feedView === "billboard" ? idx + 1 : undefined}
+          onOpenComments={(id) => setCommentPostId(id)}
+          onOpenLikes={(id) => setLikesPostId(id)}
+          onRefresh={fetchPosts}
+          isBillboard={feedView === "billboard"}
+          signalData={
+            feedView === "billboard" ? signalMap[post.id] : undefined
+          }
+          reelsMode={reelsMode}
+          isFirst={idx === 0}
+          lyricDanceData={post.lyric_dance_id ? lyricDataMap.get(post.lyric_dance_id) ?? null : null}
+          hidden={!shouldRender}
+        />
+      ))}
       {isLoadingMore && (
         <div className="flex justify-center py-5">
           <Loader2 size={18} className="animate-spin text-muted-foreground" />

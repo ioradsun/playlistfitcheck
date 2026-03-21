@@ -68,6 +68,7 @@ interface Props {
   reelsMode?: boolean;
   isFirst?: boolean;
   lyricDanceData?: LyricDanceData | null;
+  hidden?: boolean;
 }
 
 export function SongFitPostCard({
@@ -82,6 +83,7 @@ export function SongFitPostCard({
   reelsMode = false,
   isFirst = false,
   lyricDanceData,
+  hidden,
 }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
@@ -273,7 +275,17 @@ export function SongFitPostCard({
   const displayName = post.profiles?.display_name || "Anonymous";
 
   return (
-    <div className={reelsMode ? "h-full" : "px-2 pb-3"}>
+    <div
+      className={reelsMode ? "h-full" : "px-2 pb-3"}
+      style={
+        hidden
+          ? ({
+              contentVisibility: "hidden",
+              containIntrinsicSize: reelsMode ? "0 100dvh" : "0 530px",
+            } as React.CSSProperties)
+          : undefined
+      }
+    >
       <div
         className={cn(
           "relative overflow-hidden",
