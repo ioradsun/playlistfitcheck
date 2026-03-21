@@ -1914,7 +1914,6 @@ export class LyricDancePlayer {
     if (regionStart != null && this.audio.readyState >= 2) {
       this.audio.currentTime = regionStart;
     } else if (regionStart != null) {
-      // Audio not ready yet — queue a seek for when it loads
       const onReady = () => {
         this.audio.removeEventListener("canplay", onReady);
         if (!this.destroyed) this.audio.currentTime = regionStart;
@@ -1922,8 +1921,7 @@ export class LyricDancePlayer {
       this.audio.addEventListener("canplay", onReady);
     }
 
-    // Recompile scene for the new time window — without this, evaluateFrame
-    // uses the old hook's songStart/songEnd and all chunks are invisible.
+    // Recompile scene for the new time window
     const payload = this.buildScenePayload();
     this.payload = payload;
     this.songStartSec = payload.songStart;
@@ -1933,7 +1931,7 @@ export class LyricDancePlayer {
     this._buildChunkCacheFromScene(compiled);
     this._markCompiledViewport(this.width || 960, this.height || 540);
 
-    // Reset all per-frame tracking for clean entry into new region
+    // Reset all per-frame tracking
     this.conductor?.resetCursor();
     this._beatCursor = 0;
     this._lastBeatIndex = -1;
@@ -1948,7 +1946,7 @@ export class LyricDancePlayer {
     this.cameraRig.reset();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
-    this._bgSnapshotSection = -1; // force background re-bake
+    this._bgSnapshotSection = -1;
   }
 
   /**
