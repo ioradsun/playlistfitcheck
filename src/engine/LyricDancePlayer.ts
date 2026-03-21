@@ -2342,7 +2342,14 @@ export class LyricDancePlayer {
         }
       }
 
-      const smoothedTime = this.smoothAudioTime(this.audio.currentTime);
+      // In region mode, use region_start as visual time while audio is still loading/seeking.
+      // Without this, evaluateFrame(0) finds no lyrics (they're at e.g. t=30) → black canvas.
+      const effectiveAudioTime = (
+        this.data.region_start != null &&
+        this.audio.currentTime < this.data.region_start - 0.5
+      ) ? this.data.region_start : this.audio.currentTime;
+
+      const smoothedTime = this.smoothAudioTime(effectiveAudioTime);
 
       // ── Emoji stream: detect line changes and populate spawn queue ──
       if (this.emojiStreamEnabled && !this.audio.paused) {
