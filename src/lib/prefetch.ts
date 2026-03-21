@@ -148,7 +148,7 @@ const segments = path.replace(/^\//, "").split("/").filter(Boolean);
 
 if (segments.length === 3 && segments[2] === "lyric-dance") {
   const [artistSlug, songSlug] = segments;
-  const dataPromise = supabase
+  const dataPromise = Promise.resolve(supabase
     .from("shareable_lyric_dances" as any)
     .select(
       "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
@@ -156,7 +156,7 @@ if (segments.length === 3 && segments[2] === "lyric-dance") {
     )
     .eq("artist_slug", artistSlug)
     .eq("song_slug", songSlug)
-    .maybeSingle()
+    .maybeSingle())
     .then((result: any) => {
       if (result.data?.audio_url) {
         const audio = new Audio();
@@ -178,7 +178,7 @@ if (segments.length === 3 && segments[2] === "lyric-dance") {
   segments[2] !== "claim-page"
 ) {
   const [artistSlug, songSlug, hookSlug] = segments;
-  shareableHookPrefetch = supabase
+  shareableHookPrefetch = Promise.resolve(supabase
     .from("shareable_hooks" as any)
     .select(
       "id,battle_id,hook_start,hook_end,hook_slug,hook_phrase,artist_slug,song_slug,artist_name,song_name,audio_url,palette,vote_count,battle_position,hook_label,user_id"
