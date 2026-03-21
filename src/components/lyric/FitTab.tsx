@@ -716,18 +716,22 @@ export function FitTab({
         return;
       }
 
-      // Check for existing hook to reuse audio_url and battle_id
-      const { data: existingHook }: any = await supabase
+      // Look up ANY existing battle for this user + song (not by hookSlug).
+      // This ensures we reuse the same battle_id when hooks change on republish.
+      const { data: existingHooks }: any = await supabase
         .from("shareable_hooks" as any)
-        .select("audio_url, battle_id")
+        .select("id, audio_url, battle_id, hook_slug")
+        .eq("user_id", user.id)
         .eq("artist_slug", artistSlug)
         .eq("song_slug", songSlug)
-        .eq("hook_slug", hookSlug)
-        .maybeSingle();
+        .order("battle_position", { ascending: true });
+
+      const existingBattleId = existingHooks?.[0]?.battle_id ?? null;
+      const existingAudioUrl = existingHooks?.[0]?.audio_url ?? null;
 
       let audioUrl: string;
-      if (existingHook?.audio_url) {
-        audioUrl = existingHook.audio_url;
+      if (existingAudioUrl) {
+        audioUrl = existingAudioUrl;
       } else {
         const fileExt = audioFile.name.split(".").pop() || "webm";
         const storagePath = `${user.id}/${artistSlug}/${songSlug}/${hookSlug}.${fileExt}`;
@@ -740,8 +744,25 @@ export function FitTab({
         audioUrl = urlData.publicUrl;
       }
 
-      // Reuse existing battle_id if hooks were previously published (prevents orphaned hookfit_posts)
-      const battleId = existingHook?.battle_id || crypto.randomUUID();
+      // Reuse existing battle_id — one battle per user+song
+      const battleId = existingBattleId || crypto.randomUUID();
+
+      // Delete old hooks for this battle if they exist (clean slate for new hooks)
+      if (existingHooks && existingHooks.length > 0) {
+        const oldSlugs = existingHooks.map((h: any) => h.hook_slug).filter(Boolean);
+        const newSlugs = [hookSlug, deriveHookSlug(activeHook1) || `${hookSlug}-2`];
+        // Only delete hooks whose slugs differ from the new ones (upsert handles same-slug updates)
+        const orphanedSlugs = oldSlugs.filter((s: string) => !newSlugs.includes(s));
+        if (orphanedSlugs.length > 0) {
+          await supabase
+            .from("shareable_hooks" as any)
+            .delete()
+            .eq("user_id", user.id)
+            .eq("artist_slug", artistSlug)
+            .eq("song_slug", songSlug)
+            .in("hook_slug", orphanedSlugs);
+        }
+      }
       const pSpec = renderData?.motionProfileSpec || {};
       const bg = beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {};
       const palette = pSpec.palette || ["#ffffff", "#a855f7", "#ec4899"];
@@ -812,17 +833,27 @@ export function FitTab({
       const battleUrl = `/${artistSlug}/${songSlug}/${hookSlug}`;
       setBattlePublishedUrl(battleUrl);
 
-      // Auto-post to CrowdFit (fire-and-forget)
+      // Auto-post to CrowdFit — update existing or create new
       (async () => {
         try {
-          const { data: existing }: any = await supabase
+          // Find existing post by battle URL pattern (any hook slug for this user+song)
+          const { data: existingPost }: any = await supabase
             .from("songfit_posts" as any)
-            .select("id")
+            .select("id, lyric_dance_url")
             .eq("user_id", user.id)
-            .eq("lyric_dance_url", battleUrl)
+            .like("lyric_dance_url", `/${artistSlug}/${songSlug}/%`)
+            .is("lyric_dance_id", null)
             .maybeSingle();
 
-          if (!existing) {
+          if (existingPost) {
+            // Update existing post's URL to point to new hooks
+            if (existingPost.lyric_dance_url !== battleUrl) {
+              await supabase
+                .from("songfit_posts" as any)
+                .update({ lyric_dance_url: battleUrl })
+                .eq("id", existingPost.id);
+            }
+          } else {
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + 21);
             await supabase
