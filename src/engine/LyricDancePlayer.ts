@@ -2393,8 +2393,14 @@ export class LyricDancePlayer {
         const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
         const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
         const dur = this.audio?.duration || 1;
+        // In region mode, lock section index to the section at region_start.
+        // A 10-second hook that crosses a section boundary would otherwise
+        // cycle images every loop — distracting flicker instead of stable bg.
+        const sectionTime = this.data.region_start != null
+          ? this.data.region_start
+          : smoothedTime;
         this._frameSectionIdx = sections.length > 0
-          ? this.resolveSectionIndex(sections, smoothedTime, dur)
+          ? this.resolveSectionIndex(sections, sectionTime, dur)
           : -1;
         // Palette: only re-resolve if section changed
         const secIdx = this._frameSectionIdx;
