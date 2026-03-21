@@ -32,7 +32,7 @@ import { preloadImage } from "@/lib/imagePreloadCache";
 import { getSessionId } from "@/lib/sessionId";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
-import { VerifiedBadge } from "@/components/shared/VerifiedBadge";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
 
 type BattleState = "cover" | "round-1" | "round-2" | "vote" | "results";
