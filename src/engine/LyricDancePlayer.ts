@@ -1348,6 +1348,12 @@ export class LyricDancePlayer {
       // ── MINIMAL BOOT ──
       // First frame is already painted. Do NOT start RAF or audio here.
       // Everything waits for play() — user gesture, zero wasted CPU/network.
+      //
+      // Start loading section images immediately (fire-and-forget).
+      // Images are likely already in the preloadImage cache from feed prefetch.
+      // This populates chapterImages so the first rendered frame has a background,
+      // instead of waiting for the full mode upgrade delay (100ms + idle + compile).
+      this.loadSectionImages().catch(() => {});
       return;
     }
 
