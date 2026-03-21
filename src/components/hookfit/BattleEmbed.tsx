@@ -18,7 +18,6 @@ import {
   VolumeX,
   RotateCcw,
   X,
-  MessageCircle,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,11 +30,7 @@ import {
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { getSessionId } from "@/lib/sessionId";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
-import { PanelShell } from "@/components/shared/panel/PanelShell";
-import {
-  EMOJIS,
-  type EmojiKey,
-} from "@/components/shared/panel/panelConstants";
+import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 
 type BattleState = "cover" | "round-1" | "round-2" | "vote" | "results";
 
@@ -185,28 +180,6 @@ function BattleEmbedInner({
   const [reactionData, setReactionData] = useState<
     Record<string, { line: Record<number, number>; total: number }>
   >({});
-  const [panelComments, setPanelComments] = useState<
-    Array<{
-      id: string;
-      text: string;
-      line_index: number | null;
-      submitted_at: string;
-      is_pinned: boolean;
-      parent_comment_id: string | null;
-      replies?: any[];
-    }>
-  >([]);
-  const [commentReactions, setCommentReactions] = useState<
-    Record<string, Record<string, number>>
-  >({});
-  const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
-  const [panelTextInput, setPanelTextInput] = useState("");
-  const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(
-    null,
-  );
-  const [activePanelLineIndex, setActivePanelLineIndex] = useState<
-    number | null
-  >(null);
   const [hookALines, setHookALines] = useState<any[]>([]);
   const [hookBLines, setHookBLines] = useState<any[]>([]);
   const [danceData, setDanceData] = useState<{ id: string } | null>(null);
@@ -453,74 +426,6 @@ function BattleEmbedInner({
     return () => clearInterval(interval);
   }, [battleState, hookA, hookB, resolvedBattleId]);
 
-  // ── Fetch reactions + comments for panel (shared with In Studio) ──
-  const danceIdForPanel = danceData?.id ?? null;
-  useEffect(() => {
-    if (!panelOpen || !danceIdForPanel) return;
-
-    supabase
-      .from("lyric_dance_reactions" as any)
-      .select("emoji, line_index")
-      .eq("dance_id", danceIdForPanel)
-      .then(({ data }) => {
-        if (!data) return;
-        const result: Record<
-          string,
-          { line: Record<number, number>; total: number }
-        > = {};
-        for (const row of data as any[]) {
-          const key = row.emoji as string;
-          if (!result[key]) result[key] = { line: {}, total: 0 };
-          result[key].total++;
-          if (row.line_index != null) {
-            result[key].line[row.line_index] =
-              (result[key].line[row.line_index] ?? 0) + 1;
-          }
-        }
-        setReactionData(result);
-      });
-
-    supabase
-      .from("lyric_dance_comment_reactions" as any)
-      .select("comment_id, emoji")
-      .then(({ data }) => {
-        if (!data) return;
-        const counts: Record<string, Record<string, number>> = {};
-        for (const row of data as any[]) {
-          if (!counts[row.comment_id]) counts[row.comment_id] = {};
-          counts[row.comment_id][row.emoji] =
-            (counts[row.comment_id][row.emoji] ?? 0) + 1;
-        }
-        setCommentReactions(counts);
-      });
-
-    supabase
-      .from("lyric_dance_comments" as any)
-      .select(
-        "id, text, line_index, submitted_at, is_pinned, parent_comment_id",
-      )
-      .eq("dance_id", danceIdForPanel)
-      .order("is_pinned", { ascending: false })
-      .order("submitted_at", { ascending: true })
-      .limit(200)
-      .then(({ data }) => {
-        if (!data) return;
-        const rows = data as any[];
-        const topLevel = rows.filter((c: any) => !c.parent_comment_id);
-        const byParent: Record<string, any[]> = {};
-        rows
-          .filter((c: any) => c.parent_comment_id)
-          .forEach((c: any) => {
-            if (!byParent[c.parent_comment_id])
-              byParent[c.parent_comment_id] = [];
-            byParent[c.parent_comment_id].push(c);
-          });
-        setPanelComments(
-          topLevel.map((c: any) => ({ ...c, replies: byParent[c.id] ?? [] })),
-        );
-      });
-  }, [panelOpen, danceIdForPanel]);
-
   // ── Derived values ──────────────────────────────────────────
   const totalVotes = voteCountA + voteCountB;
   const pctA =
@@ -648,387 +553,6 @@ function BattleEmbedInner({
       )}
     </>
   );
-
-  // ── Reaction handlers (matching In Studio ReactionPanel) ──
-  const handlePanelLineTap = useCallback(
-    (line: any) => {
-      const player = inlineBattleRef.current?.getPlayer();
-      if (!player) return;
-      if (activePanelLineIndex === line.lineIndex && !player.audio.paused) {
-        player.pause();
-        return;
-      }
-      setActivePanelLineIndex(line.lineIndex);
-      player.seek(line.start);
-      if (player.audio.paused) {
-        player.audio.play().catch(() => {});
-        player.startRendering();
-      }
-    },
-    [activePanelLineIndex],
-  );
-
-  const handlePanelReact = useCallback(
-    async (emoji: EmojiKey, lineIndex?: number) => {
-      if (!danceIdForPanel) return;
-      const sessionId = getSessionId();
-      const targetLineIndex = lineIndex ?? activePanelLineIndex ?? null;
-      const reactionKey = `${emoji}-${targetLineIndex ?? "song"}`;
-      if (sessionReacted.has(reactionKey)) return;
-
-      setSessionReacted((prev) => new Set([...prev, reactionKey]));
-      await supabase.from("lyric_dance_reactions" as any).insert({
-        dance_id: danceIdForPanel,
-        line_index: targetLineIndex,
-        section_index: null,
-        emoji,
-        session_id: sessionId,
-      });
-
-      setReactionData((prev) => {
-        const updated = { ...prev };
-        if (!updated[emoji]) updated[emoji] = { line: {}, total: 0 };
-        updated[emoji].total++;
-        if (targetLineIndex != null) {
-          updated[emoji].line[targetLineIndex] =
-            (updated[emoji].line[targetLineIndex] ?? 0) + 1;
-        }
-        return updated;
-      });
-    },
-    [danceIdForPanel, activePanelLineIndex, sessionReacted],
-  );
-
-  const handlePanelComment = useCallback(async () => {
-    if (!panelTextInput.trim() || !danceIdForPanel) return;
-    const text = panelTextInput.trim().slice(0, 200);
-    const sessionId = getSessionId();
-
-    const { data: inserted } = await supabase
-      .from("lyric_dance_comments" as any)
-      .insert({
-        dance_id: danceIdForPanel,
-        text,
-        session_id: sessionId,
-        line_index: activePanelLineIndex,
-        parent_comment_id: null,
-      })
-      .select(
-        "id, text, line_index, submitted_at, is_pinned, parent_comment_id",
-      )
-      .single();
-
-    if (inserted) {
-      setPanelComments((prev) => [
-        { ...(inserted as any), replies: [] },
-        ...prev,
-      ]);
-    }
-    setPanelTextInput("");
-  }, [panelTextInput, danceIdForPanel, activePanelLineIndex]);
-
-  // ── Results panel ───────────────────────────────────────────
-  const activeHookLines = resultsTab === "a" ? hookALines : hookBLines;
-  const commentCountByLine = useMemo(() => {
-    const counts: Record<number, number> = {};
-    for (const c of panelComments) {
-      if (c.line_index != null) {
-        counts[c.line_index] = (counts[c.line_index] ?? 0) + 1;
-      }
-    }
-    return counts;
-  }, [panelComments]);
-
-  const ResultsPanel = () => {
-    void commentReactions;
-
-    return (
-      <PanelShell
-        isOpen={panelOpen && !!votedSide && battleState !== "vote"}
-        variant={isFeedEmbed ? "embedded" : "fullscreen"}
-      >
-        {/* Scrollable lyric lines — matches In Studio ReactionPanel */}
-        <div
-          className="flex-1 overflow-y-auto min-h-0"
-          style={{ scrollbarWidth: "none" }}
-        >
-          <div className="pt-3 pb-4">
-            {activeHookLines.map((line: any) => {
-              const isActive = activePanelLineIndex === line.lineIndex;
-              const lineReactionsByEmoji = EMOJIS.map(({ key, symbol }) => ({
-                key,
-                symbol,
-                count: reactionData[key]?.line[line.lineIndex] ?? 0,
-              }))
-                .filter((item) => item.count > 0)
-                .sort((a, b) => b.count - a.count);
-              const topReaction = lineReactionsByEmoji[0] ?? null;
-              const totalLineReactions = lineReactionsByEmoji.reduce(
-                (sum, item) => sum + item.count,
-                0,
-              );
-              const lineCommentCount = commentCountByLine[line.lineIndex] ?? 0;
-              const isExpanded = expandedLineIndex === line.lineIndex;
-              const expandedLineComments = panelComments.filter(
-                (c) => c.line_index === line.lineIndex,
-              );
-
-              return (
-                <div key={line.lineIndex}>
-                  <div
-                    onClick={() => handlePanelLineTap(line)}
-                    className="flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors"
-                    style={{
-                      minHeight: 40,
-                      background: isActive
-                        ? "rgba(255,255,255,0.03)"
-                        : "transparent",
-                      boxShadow: isActive
-                        ? `inset 2px 0 0 0 ${hookA?.palette?.[0] ?? "#22c55e"}`
-                        : "none",
-                    }}
-                  >
-                    <span
-                      className="flex-1 text-[13px] font-light leading-relaxed transition-colors duration-100"
-                      style={{
-                        color: isActive
-                          ? "rgba(255,255,255,0.85)"
-                          : "rgba(255,255,255,0.28)",
-                      }}
-                    >
-                      {line.text}
-                    </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {topReaction && (
-                        <span
-                          className="text-[8px] font-mono px-1 py-0.5 rounded"
-                          style={{
-                            color: "rgba(255,255,255,0.25)",
-                            background: "rgba(255,255,255,0.025)",
-                          }}
-                        >
-                          {topReaction.symbol}
-                          {totalLineReactions > 1
-                            ? ` ${totalLineReactions}`
-                            : ""}
-                        </span>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setExpandedLineIndex(
-                            isExpanded ? null : line.lineIndex,
-                          );
-                        }}
-                        className={`relative transition-all ${lineCommentCount > 0 ? "opacity-90" : "opacity-45 hover:opacity-70"}`}
-                      >
-                        <MessageCircle size={11} className="text-white/30" />
-                        {lineCommentCount > 0 && (
-                          <span className="absolute -top-1.5 -right-1.5 text-[7px] font-mono text-white/50 min-w-[10px] text-center">
-                            {lineCommentCount}
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {isActive && (
-                    <>
-                      {/* Emoji bar under active line */}
-                      <div className="flex items-center justify-center gap-4 px-4 py-3 border-b border-white/[0.04]">
-                        {EMOJIS.map(({ key, symbol }) => {
-                          const count =
-                            reactionData[key]?.line[line.lineIndex] ?? 0;
-                          const reacted = sessionReacted.has(
-                            `${key}-${line.lineIndex}`,
-                          );
-                          return (
-                            <button
-                              key={key}
-                              onClick={() =>
-                                handlePanelReact(key, line.lineIndex)
-                              }
-                              className="flex flex-col items-center gap-0.5 w-11"
-                              style={
-                                reacted
-                                  ? {
-                                      background: `${hookA?.palette?.[0] ?? "#22c55e"}18`,
-                                      borderRadius: "10px",
-                                    }
-                                  : undefined
-                              }
-                            >
-                              <span className="text-[18px]">{symbol}</span>
-                              <span
-                                className="text-[8px] font-mono min-h-[10px]"
-                                style={{
-                                  color: reacted
-                                    ? (hookA?.palette?.[0] ?? "#22c55e")
-                                    : "rgba(255,255,255,0.25)",
-                                  visibility: count > 0 ? "visible" : "hidden",
-                                }}
-                              >
-                                {count}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {/* Comment input under emoji bar */}
-                      <div
-                        className="mx-3 my-2"
-                        style={{
-                          background: "rgba(255,255,255,0.05)",
-                          border: "1px solid rgba(255,255,255,0.09)",
-                          borderRadius: "8px",
-                          padding: "8px 12px",
-                        }}
-                      >
-                        <input
-                          className="w-full bg-transparent text-[13px] font-mono text-white placeholder:text-white/35 outline-none"
-                          placeholder="This line"
-                          value={panelTextInput}
-                          onChange={(e) => setPanelTextInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handlePanelComment();
-                            }
-                          }}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {isExpanded && (
-                    <div
-                      className="mx-3 mb-1 rounded-xl overflow-hidden"
-                      style={{
-                        background: "rgba(255,255,255,0.025)",
-                        border: "1px solid rgba(255,255,255,0.06)",
-                      }}
-                    >
-                      {expandedLineComments.length === 0 ? (
-                        <p className="text-[10px] font-mono text-white/20 text-center py-3">
-                          no comments yet — be first
-                        </p>
-                      ) : (
-                        <div className="py-1">
-                          {expandedLineComments.map((c: any) => (
-                            <div
-                              key={c.id}
-                              className="flex items-start gap-2 px-3 py-1.5"
-                            >
-                              <p className="text-[11px] text-white/45 leading-relaxed flex-1">
-                                {c.text}
-                              </p>
-                              <span className="text-[9px] font-mono text-white/15 shrink-0">
-                                {(() => {
-                                  const m = Math.floor(
-                                    (Date.now() -
-                                      new Date(c.submitted_at).getTime()) /
-                                      60000,
-                                  );
-                                  if (m < 1) return "now";
-                                  if (m < 60) return `${m}m`;
-                                  return `${Math.floor(m / 60)}h`;
-                                })()}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Bottom bar — Left Hook / Right Hook tabs + close */}
-        <div
-          className="shrink-0 flex"
-          style={{
-            background: "#0a0a0a",
-            borderTop: "0.5px solid rgba(255,255,255,0.06)",
-            paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          }}
-        >
-          <div
-            className={`w-full ${isFeedEmbed ? "" : "max-w-2xl mx-auto"} flex items-stretch`}
-            style={{ height: isFeedEmbed ? 48 : 52 }}
-          >
-            <button
-              onClick={() => setResultsTab("a")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors ${resultsTab === "a" ? "text-white" : "text-white/30 hover:text-white/60"}`}
-            >
-              {votedSide === "a" && (
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M2 6.5L4.5 9L10 3"
-                    stroke="#22c55e"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-              <span className="text-[11px] font-mono tracking-[0.15em] uppercase">
-                Left Hook
-              </span>
-              {voteCountA > 0 && (
-                <span className="text-[9px] font-mono text-white/25">
-                  {voteCountA}
-                </span>
-              )}
-            </button>
-            <div
-              style={{ width: "0.5px" }}
-              className="bg-white/[0.06] self-stretch my-2"
-            />
-            <button
-              onClick={() => setResultsTab("b")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors ${resultsTab === "b" ? "text-white" : "text-white/30 hover:text-white/60"}`}
-            >
-              {votedSide === "b" && (
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M2 6.5L4.5 9L10 3"
-                    stroke="#22c55e"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-              <span className="text-[11px] font-mono tracking-[0.15em] uppercase">
-                Right Hook
-              </span>
-              {voteCountB > 0 && (
-                <span className="text-[9px] font-mono text-white/25">
-                  {voteCountB}
-                </span>
-              )}
-            </button>
-            <div
-              style={{ width: "0.5px" }}
-              className="bg-white/[0.06] self-stretch my-2"
-            />
-            <button
-              onClick={() => setPanelOpen(false)}
-              className="group flex items-center justify-center min-w-[64px] px-4 py-3 hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0"
-            >
-              <X
-                size={14}
-                className="text-white/30 group-hover:text-white/60 transition-colors"
-              />
-            </button>
-          </div>
-        </div>
-      </PanelShell>
-    );
-  };
 
   // ── Render ────────────────────────────────────────────────────
   return (
@@ -1448,7 +972,121 @@ function BattleEmbedInner({
         </div>
       </div>
 
-      <ResultsPanel />
+      <ReactionPanel
+        displayMode={isFeedEmbed ? "embedded" : "fullscreen"}
+        isOpen={panelOpen && !!votedSide && battleState !== "vote"}
+        onClose={() => setPanelOpen(false)}
+        danceId={danceData?.id ?? ""}
+        activeLine={null}
+        allLines={(resultsTab === "a" ? hookALines : hookBLines).map(
+          (l: any) => ({
+            text: l.text,
+            lineIndex: l.lineIndex,
+            startSec: l.start,
+            endSec: l.end,
+            sectionLabel: null,
+          }),
+        )}
+        audioSections={[]}
+        currentTimeSec={0}
+        palette={hookA?.palette ?? ["#22c55e", "#22c55e", "#ffffff"]}
+        onSeekTo={(sec) => {
+          const player = inlineBattleRef.current?.getPlayer();
+          if (player) {
+            player.seek(sec);
+            if (player.audio.paused) {
+              player.audio.play().catch(() => {});
+              player.startRendering();
+            }
+          }
+        }}
+        player={inlineBattleRef.current?.getPlayer() ?? null}
+        durationSec={10}
+        reactionData={reactionData}
+        onReactionDataChange={setReactionData}
+        onReactionFired={() => {}}
+        renderBottomBar={(onClose) => (
+          <div
+            className="shrink-0 flex"
+            style={{
+              background: "#0a0a0a",
+              borderTop: "0.5px solid rgba(255,255,255,0.06)",
+              paddingBottom: "env(safe-area-inset-bottom, 0px)",
+            }}
+          >
+            <div
+              className={`w-full ${isFeedEmbed ? "" : "max-w-2xl mx-auto"} flex items-stretch`}
+              style={{ height: isFeedEmbed ? 48 : 52 }}
+            >
+              <button
+                onClick={() => setResultsTab("a")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors ${resultsTab === "a" ? "text-white" : "text-white/30 hover:text-white/60"}`}
+              >
+                {votedSide === "a" && (
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M2 6.5L4.5 9L10 3"
+                      stroke="#22c55e"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+                <span className="text-[11px] font-mono tracking-[0.15em] uppercase">
+                  Left Hook
+                </span>
+                {voteCountA > 0 && (
+                  <span className="text-[9px] font-mono text-white/25">
+                    {voteCountA}
+                  </span>
+                )}
+              </button>
+              <div
+                style={{ width: "0.5px" }}
+                className="bg-white/[0.06] self-stretch my-2"
+              />
+              <button
+                onClick={() => setResultsTab("b")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-3 transition-colors ${resultsTab === "b" ? "text-white" : "text-white/30 hover:text-white/60"}`}
+              >
+                {votedSide === "b" && (
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M2 6.5L4.5 9L10 3"
+                      stroke="#22c55e"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+                <span className="text-[11px] font-mono tracking-[0.15em] uppercase">
+                  Right Hook
+                </span>
+                {voteCountB > 0 && (
+                  <span className="text-[9px] font-mono text-white/25">
+                    {voteCountB}
+                  </span>
+                )}
+              </button>
+              <div
+                style={{ width: "0.5px" }}
+                className="bg-white/[0.06] self-stretch my-2"
+              />
+              <button
+                onClick={onClose}
+                className="group flex items-center justify-center min-w-[64px] px-4 py-3 hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0"
+              >
+                <X
+                  size={14}
+                  className="text-white/30 group-hover:text-white/60 transition-colors"
+                />
+              </button>
+            </div>
+          </div>
+        )}
+      />
     </div>
   );
 }

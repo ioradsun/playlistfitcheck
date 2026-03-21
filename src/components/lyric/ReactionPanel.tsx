@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MessageCircle, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
@@ -56,12 +56,15 @@ interface ReactionPanelProps {
   onReactionFired: (emoji: string) => void;
   onPause?: () => void;
   onResume?: () => void;
-  votedSide: "a" | "b" | null;
-  score: { total: number; replay_yes: number } | null;
-  onVoteYes: () => void;
-  onVoteNo: () => void;
+  votedSide?: "a" | "b" | null;
+  score?: { total: number; replay_yes: number } | null;
+  onVoteYes?: () => void;
+  onVoteNo?: () => void;
   hideInput?: boolean;
   refreshKey?: number;
+  /** When provided, replaces the default "Run it back / Not for me" bottom bar.
+   *  Used by battle cards for Left Hook / Right Hook tab switching. */
+  renderBottomBar?: (onClose: () => void) => ReactNode;
 }
 
 function CommentReactPicker({
@@ -135,6 +138,7 @@ function ReactionPanel({
   onVoteNo,
   hideInput = false,
   refreshKey = 0,
+  renderBottomBar,
 }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState("");
@@ -815,88 +819,92 @@ function ReactionPanel({
         </div>
       </div>
 
-      <div
-        className="shrink-0 flex"
-        style={{
-          background: "#0a0a0a",
-          borderTop: "0.5px solid rgba(255,255,255,0.06)",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
-        }}
-      >
+      {renderBottomBar ? (
+        renderBottomBar(handlePanelClose)
+      ) : (
         <div
-          className="w-full max-w-2xl mx-auto flex items-stretch"
-          style={{ height: displayMode === "fullscreen" ? 52 : 48 }}
+          className="shrink-0 flex"
+          style={{
+            background: "#0a0a0a",
+            borderTop: "0.5px solid rgba(255,255,255,0.06)",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          }}
         >
-          <button
-            onClick={onVoteYes}
-            className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === "fullscreen" ? "py-3.5" : "py-3"}`}
-          >
-            <span
-              className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
-              style={{
-                color:
-                  votedSide === null
-                    ? "rgba(255,255,255,1)"
-                    : votedSide === "a"
-                      ? voteAccent
-                      : "rgba(255,255,255,0.22)",
-              }}
-            >
-              Run it back
-            </span>
-            {runItBackCount > 0 && (
-              <span className="text-[9px] font-mono text-white/25">
-                {runItBackCount}
-              </span>
-            )}
-          </button>
-
           <div
-            style={{ width: "0.5px" }}
-            className="bg-white/[0.06] self-stretch my-2"
-          />
-
-          <button
-            onClick={onVoteNo}
-            className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === "fullscreen" ? "py-3.5" : "py-3"}`}
+            className="w-full max-w-2xl mx-auto flex items-stretch"
+            style={{ height: displayMode === "fullscreen" ? 52 : 48 }}
           >
-            <span
-              className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
-              style={{
-                color:
-                  votedSide === null
-                    ? "rgba(255,255,255,1)"
-                    : votedSide === "b"
-                      ? voteAccent
-                      : "rgba(255,255,255,0.22)",
-              }}
+            <button
+              onClick={onVoteYes}
+              className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === "fullscreen" ? "py-3.5" : "py-3"}`}
             >
-              Not for me
-            </span>
-            {notForMeCount > 0 && (
-              <span className="text-[9px] font-mono text-white/25">
-                {notForMeCount}
+              <span
+                className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
+                style={{
+                  color:
+                    votedSide === null
+                      ? "rgba(255,255,255,1)"
+                      : votedSide === "a"
+                        ? voteAccent
+                        : "rgba(255,255,255,0.22)",
+                }}
+              >
+                Run it back
               </span>
-            )}
-          </button>
+              {runItBackCount > 0 && (
+                <span className="text-[9px] font-mono text-white/25">
+                  {runItBackCount}
+                </span>
+              )}
+            </button>
 
-          <div
-            style={{ width: "0.5px" }}
-            className="bg-white/[0.06] self-stretch my-2"
-          />
-
-          <button
-            onClick={handlePanelClose}
-            aria-label="Close"
-            className={`group flex items-center justify-center min-w-[64px] px-4 ${displayMode === "fullscreen" ? "py-3.5" : "py-3"} hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0`}
-          >
-            <X
-              size={14}
-              className="text-white/30 group-hover:text-white/60 transition-colors"
+            <div
+              style={{ width: "0.5px" }}
+              className="bg-white/[0.06] self-stretch my-2"
             />
-          </button>
+
+            <button
+              onClick={onVoteNo}
+              className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === "fullscreen" ? "py-3.5" : "py-3"}`}
+            >
+              <span
+                className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
+                style={{
+                  color:
+                    votedSide === null
+                      ? "rgba(255,255,255,1)"
+                      : votedSide === "b"
+                        ? voteAccent
+                        : "rgba(255,255,255,0.22)",
+                }}
+              >
+                Not for me
+              </span>
+              {notForMeCount > 0 && (
+                <span className="text-[9px] font-mono text-white/25">
+                  {notForMeCount}
+                </span>
+              )}
+            </button>
+
+            <div
+              style={{ width: "0.5px" }}
+              className="bg-white/[0.06] self-stretch my-2"
+            />
+
+            <button
+              onClick={handlePanelClose}
+              aria-label="Close"
+              className={`group flex items-center justify-center min-w-[64px] px-4 ${displayMode === "fullscreen" ? "py-3.5" : "py-3"} hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0`}
+            >
+              <X
+                size={14}
+                className="text-white/30 group-hover:text-white/60 transition-colors"
+              />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </PanelShell>
   );
 }
