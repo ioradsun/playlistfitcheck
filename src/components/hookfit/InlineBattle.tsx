@@ -78,6 +78,11 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
   const snapshotRef = useRef<HTMLCanvasElement | null>(null);
   const activeSideRef = useRef<"a" | "b" | null>(null);
   const destroyedRef = useRef(false);
+  // Stable refs for callbacks — prevents refetch when parent re-renders.
+  const onHooksLoadedRef = useRef(onHooksLoaded);
+  onHooksLoadedRef.current = onHooksLoaded;
+  const onCoverImageRef = useRef(onCoverImage);
+  onCoverImageRef.current = onCoverImage;
 
   useImperativeHandle(ref, () => ({}), []);
 
@@ -107,7 +112,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
       const b = rawHooks.find(h => h.id !== a.id) || null;
       setHookA(a);
       setHookB(b);
-      onHooksLoaded?.(a, b);
+      onHooksLoadedRef.current?.(a, b);
 
       let query = supabase
         .from("shareable_lyric_dances" as any)
@@ -127,11 +132,11 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
         const dance = dances[0] as unknown as LyricDanceData;
         setDanceData(dance);
         const firstImage = (dance.section_images as string[] | undefined)?.find(Boolean);
-        if (firstImage) onCoverImage?.(firstImage);
+        if (firstImage) onCoverImageRef.current?.(firstImage);
       }
       setLoading(false);
     })();
-  }, [battleId, onCoverImage, onHooksLoaded]);
+  }, [battleId]);
 
   useEffect(() => {
     if (!danceData) return;
