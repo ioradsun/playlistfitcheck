@@ -889,9 +889,8 @@ function BattleEmbedInner({
         )}
       </div>
 
-      {/* Bottom bar — hidden when reaction panel is open (matches In Studio) */}
-      {!panelOpen && (
-        <div
+      {/* Bottom bar — always rendered for opaque background fill. z-20 sits behind panel's z-400. */}
+      <div
           className="absolute bottom-0 left-0 right-0 z-20"
           style={{
             background: "#0a0a0a",
@@ -1100,7 +1099,6 @@ function BattleEmbedInner({
             )}
           </div>
         </div>
-      )}
 
       <ReactionPanel
         displayMode={isFeedEmbed ? "embedded" : "fullscreen"}
