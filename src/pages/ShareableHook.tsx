@@ -9,6 +9,7 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { HookInfo } from "@/components/hookfit/InlineBattle";
+import { consumeShareableHookPrefetch } from "@/lib/prefetch";
 
 const HOOK_COLUMNS = "id,user_id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,battle_id,battle_position,artist_slug,song_slug,palette,vote_count";
 
@@ -36,13 +37,17 @@ export default function ShareableHook() {
     if (!artistSlug || !songSlug || !hookSlug) return;
     setLoading(true);
     (async () => {
-      const { data: hookRow } = await supabase
-        .from("shareable_hooks" as any)
-        .select(HOOK_COLUMNS)
-        .eq("artist_slug", artistSlug)
-        .eq("song_slug", songSlug)
-        .eq("hook_slug", hookSlug)
-        .maybeSingle();
+      const prefetched = consumeShareableHookPrefetch();
+      const hookPromise = prefetched
+        ? prefetched
+        : supabase
+            .from("shareable_hooks" as any)
+            .select(HOOK_COLUMNS)
+            .eq("artist_slug", artistSlug)
+            .eq("song_slug", songSlug)
+            .eq("hook_slug", hookSlug)
+            .maybeSingle();
+      const { data: hookRow } = await hookPromise;
 
       if (!hookRow) {
         setLoading(false);
