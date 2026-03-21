@@ -487,15 +487,22 @@ export function wrapToMaxLines(
 export function getCinematicLayout(canvasW: number, canvasH: number): CinematicLayout {
   const shortSide = Math.min(canvasW, canvasH);
   const isPortrait = canvasH > canvasW;
-  const safeInset = shortSide * 0.055;
+  const isCompact = canvasW < 250;
+  const insetRatio = isCompact ? 0.08 : 0.055;
+  const safeInset = shortSide * insetRatio;
+  const lineHeight = isCompact ? shortSide * 0.18 : shortSide * 0.14;
+  // Height-proportional maxLines: use 60% of height divided by line height
+  const maxLines = isCompact
+    ? Math.min(3, Math.max(2, Math.floor((canvasH * 0.6) / Math.max(1, lineHeight * 1.3))))
+    : isPortrait ? 2 : 2;
 
   return {
     safeInset,
     textBoxX: safeInset,
     textBoxW: canvasW - safeInset * 2,
-    baselineY: canvasH * (isPortrait ? 0.60 : 0.56),
-    lineHeight: shortSide * 0.14,
-    maxLines: isPortrait ? 1 : 2,
+    baselineY: canvasH * (isCompact ? 0.50 : isPortrait ? 0.55 : 0.56),
+    lineHeight,
+    maxLines,
   };
 }
 
@@ -514,32 +521,43 @@ export function cinematicFontSize(
 
   const shortSide = Math.min(canvasW, canvasH);
   const isPortrait = canvasH > canvasW;
-  const safeInset = options?.safeInset ?? shortSide * 0.055;
+  const isCompact = canvasW < 250;
+  const insetRatio = isCompact ? 0.08 : 0.055;
+  const safeInset = options?.safeInset ?? shortSide * insetRatio;
   const textBoxW = canvasW - safeInset * 2;
   const strokePaddingPx = shortSide * 0.015;
   const effectiveBoxW = textBoxW - strokePaddingPx;
-  const defaultFill = isPortrait ? 0.92 : 0.88;
+  // Less aggressive fill on compact — we WANT overflow to trigger wrapping
+  const defaultFill = isCompact ? 0.78 : isPortrait ? 0.88 : 0.88;
   const targetFill = options?.targetFill ?? defaultFill;
   const wordCount = text.trim().split(/\s+/).length;
-  const shaping = wordCount <= 1 ? 1.2 : wordCount <= 2 ? 1.12 : wordCount <= 6 ? 1.0 : wordCount <= 10 ? 0.88 : 0.78;
+  const shaping = isCompact
+    ? (wordCount <= 1 ? 1.05 : wordCount <= 2 ? 1.0 : wordCount <= 6 ? 0.92 : wordCount <= 10 ? 0.82 : 0.72)
+    : (wordCount <= 1 ? 1.2 : wordCount <= 2 ? 1.12 : wordCount <= 6 ? 1.0 : wordCount <= 10 ? 0.88 : 0.78);
   const shapedFill = Math.min(0.98, targetFill * shaping);
   const targetWidth = effectiveBoxW * shapedFill;
-  const minFs = Math.max(16, shortSide * 0.055);
-  const maxFs = shortSide * 0.30;
+  const minFs = Math.max(isCompact ? 10 : 16, shortSide * 0.055);
+  const maxFs = isCompact ? Math.min(shortSide * 0.22, effectiveBoxW / 3) : shortSide * 0.30;
   const probeSize = 100;
   ctx.font = `${fontWeight} ${probeSize}px ${fontFamily}`;
 
-  if (!isPortrait) {
-    const singleLineWidth = ctx.measureText(text).width;
-    if (singleLineWidth > effectiveBoxW * 1.08) {
-      const { lines, maxLineWidth } = wrapToMaxLines(text, ctx, effectiveBoxW, 2);
-      if (lines.length > 1) {
-        const rawFs = probeSize * (targetWidth / Math.max(1, maxLineWidth));
-        const fs = Math.round(Math.max(minFs, Math.min(maxFs, rawFs)));
-        const result: CinematicFontResult = { fs, letterSpacingEm: 0, lines };
-        cacheSet(cacheKey, result);
-        return result;
-      }
+  // How many wrapped lines can fit vertically? Use 60% of canvas height.
+  const availTextHeight = canvasH * 0.60;
+  const maxWrapLines = isCompact
+    ? Math.min(3, Math.max(1, Math.floor(availTextHeight / (Math.max(minFs, shortSide * 0.15) * 1.3))))
+    : 2;
+
+  // Try wrapping BEFORE shrinking — for both portrait AND landscape when height allows.
+  const singleLineWidth = ctx.measureText(text).width;
+  if (singleLineWidth > effectiveBoxW * 1.08 && maxWrapLines >= 2 && wordCount > 1) {
+    const { lines, maxLineWidth } = wrapToMaxLines(text, ctx, effectiveBoxW, maxWrapLines);
+    if (lines.length > 1) {
+      const rawFs = probeSize * (targetWidth / Math.max(1, maxLineWidth));
+      const heightCapFs = availTextHeight / (lines.length * 1.3);
+      const fs = Math.round(Math.max(minFs, Math.min(maxFs, rawFs, heightCapFs)));
+      const result: CinematicFontResult = { fs, letterSpacingEm: 0, lines };
+      cacheSet(cacheKey, result);
+      return result;
     }
   }
 
@@ -557,6 +575,20 @@ export function cinematicFontSize(
     ctx.font = `${fontWeight} ${fs}px ${fontFamily}`;
     const actualW = ctx.measureText(text).width;
     if (actualW > effectiveBoxW) {
+      // Try wrapping before shrinking — use available height
+      if (maxWrapLines >= 2 && wordCount > 1) {
+        ctx.font = `${fontWeight} ${probeSize}px ${fontFamily}`;
+        const { lines, maxLineWidth } = wrapToMaxLines(text, ctx, effectiveBoxW, maxWrapLines);
+        if (lines.length > 1) {
+          const rawFs = probeSize * (targetWidth / Math.max(1, maxLineWidth));
+          const heightCapFs = availTextHeight / (lines.length * 1.3);
+          fs = Math.round(Math.max(minFs, Math.min(maxFs, rawFs, heightCapFs)));
+          const result: CinematicFontResult = { fs, letterSpacingEm: 0, lines };
+          cacheSet(cacheKey, result);
+          return result;
+        }
+      }
+      // Last resort: shrink to fit one line
       if (fs > minFs) {
         fs = Math.max(minFs, probeSize * (effectiveBoxW / probeW));
       } else {

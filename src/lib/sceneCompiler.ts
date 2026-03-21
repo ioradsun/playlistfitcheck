@@ -221,16 +221,29 @@ export function computeAllLineLayouts(
   measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   isPortrait: boolean = false,
   textTransform: 'none' | 'uppercase' = 'none',
+  targetViewport?: { width: number; height: number },
 ): Map<string, GroupPosition[]> {
-  const margin = 60;
+  // Target viewport = actual screen dimensions. Reference canvas is always 960×540.
+  // Decisions (wrapping, font boost, margins) use target viewport.
+  // Positions are in reference space — runtime scales by width/960.
+  const tw = targetViewport?.width ?? canvasW;
+  const th = targetViewport?.height ?? canvasH;
+  const isCompactTarget = tw < 250;
+  const fontScaleEst = tw / canvasW; // estimated runtime scale factor
+
+  // Adaptive margin in reference space — wider for compact targets.
+  const marginRatio = isCompactTarget ? 0.10 : tw < 500 ? 0.08 : 0.0625;
+  const margin = Math.max(8, Math.round(canvasW * marginRatio));
   const lineY = Math.round(canvasH * 0.5);
   const SPACE_MULT = 1.15;
-  const MIN_SPACE_RATIO = 0.25; // minimum space = 25% of font size (prevents condensed fonts from merging)
+  // Wider inter-word space on compact targets so words don't merge after scaling
+  const MIN_SPACE_RATIO = isCompactTarget ? 0.35 : 0.25;
   const result = new Map<string, GroupPosition[]>();
 
-  // On portrait, use a narrower effective width to trigger wrapping.
-  // This ensures words are bigger and stacked rather than tiny on one line.
-  const effectiveMaxWidth = isPortrait ? canvasW * 0.75 : canvasW - margin * 2;
+  // On compact targets, use a TIGHTER fill threshold to FORCE wrapping —
+  // text stacks into rows using the height instead of squeezing onto one line.
+  const portraitFillRatio = isCompactTarget ? 0.60 : 0.75;
+  const effectiveMaxWidth = isPortrait ? canvasW * portraitFillRatio : canvasW - margin * 2;
 
   const getWordWidth = (word: string, fontSize: number) => {
     const measured = textTransform === 'uppercase' ? word.toUpperCase() : word;
@@ -266,8 +279,21 @@ export function computeAllLineLayouts(
 
   for (const [lineIndex, groups] of lineMap) {
     const rawFontSize = lineFontSizes[lineIndex] ?? 36;
-    // On portrait, boost font size so words are bigger when stacked
-    const baseFontSize = isPortrait ? rawFontSize * 1.5 : rawFontSize;
+    // Height-aware portrait font boost.
+    // Goal: runtime font ≥ 18px. Runtime font = baseFontSize × fontScaleEst.
+    // So baseFontSize needs to be ≥ 18 / fontScaleEst.
+    // Compact (187px): fontScaleEst≈0.195, need baseFontSize≈92 → boost≈1.65×.
+    // The bigger font naturally overflows width → triggers wrapping → uses height.
+    const minRuntimePx = 18;
+    const idealBoost = isPortrait ? minRuntimePx / (Math.max(1, rawFontSize) * Math.max(0.05, fontScaleEst)) : 1.0;
+    const portraitBoost = isPortrait
+      ? (isCompactTarget
+          ? Math.max(1.3, Math.min(2.5, idealBoost))
+          : tw < 500
+            ? Math.max(1.2, Math.min(1.5, idealBoost))
+            : 1.5)
+      : 1.0;
+    const baseFontSize = isPortrait ? rawFontSize * portraitBoost : rawFontSize;
     // Sort groups by their temporal order (groupIndex)
     groups.sort((a, b) => a.groupIndex - b.groupIndex);
 
@@ -301,7 +327,10 @@ export function computeAllLineLayouts(
     const maxLineWidth = canvasW - margin * 2;
     if (!isPortrait && totalWidth > maxLineWidth && totalWidth > 0) {
       const scaleFactor = maxLineWidth / totalWidth;
-      const minFontSize = 24; // floor — don't go below readable
+      // Floor in reference space — ensures runtime font ≥ 12px after scaling.
+      const minFontSize = isCompactTarget
+        ? Math.min(80, Math.max(24, Math.round(12 / Math.max(0.1, fontScaleEst))))
+        : tw < 500 ? 18 : 24;
       // Re-measure all words at scaled font sizes
       for (const fw of flatWords) {
         fw.fontSize = Math.max(minFontSize, fw.fontSize * scaleFactor);
@@ -328,7 +357,12 @@ export function computeAllLineLayouts(
     type RowInfo = { startIdx: number; endIdx: number; width: number; };
     const rows: RowInfo[] = [];
 
-    if (isPortrait && totalWidth > effectiveMaxWidth && flatWords.length > 1) {
+    // Wrap when text overflows AND height is available for rows.
+    // Height check: at least 2 rows of baseFontSize × 1.3 must fit in target viewport.
+    const rowHeightEst = rawFontSize * 1.3 * (th / canvasH);
+    const maxRowsByHeight = Math.max(1, Math.floor((th * 0.70) / Math.max(1, rowHeightEst)));
+    const shouldWrap = totalWidth > effectiveMaxWidth && flatWords.length > 1 && maxRowsByHeight >= 2;
+    if (shouldWrap) {
       // Greedy wrap: fill each row up to effectiveMaxWidth
       let rowStart = 0;
       let rowWidth = 0;
@@ -348,8 +382,15 @@ export function computeAllLineLayouts(
       rows.push({ startIdx: 0, endIdx: flatWords.length - 1, width: totalWidth });
     }
 
-    // Compute row heights for vertical centering
-    const rowSpacing = (isPortrait ? rawFontSize : baseFontSize) * 1.3; // line height (use raw font for portrait to avoid over-spreading)
+    // Compute row heights — use height generously when available.
+    const baseRowSpacing = (isPortrait ? rawFontSize : baseFontSize) * 1.3;
+    const rowCount = rows.length;
+    const availableVSpace = canvasH * 0.70;
+    // Spread rows to fill height when there's room, capped at 2× base
+    const idealRowSpacing = rowCount > 1 ? availableVSpace / rowCount : baseRowSpacing;
+    const rowSpacing = rowCount > 1
+      ? Math.min(baseRowSpacing * 2.0, Math.max(baseRowSpacing, idealRowSpacing))
+      : baseRowSpacing;
     const totalRowHeight = (rows.length - 1) * rowSpacing;
     const firstRowY = lineY - totalRowHeight / 2;
 
@@ -662,7 +703,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const vw = options?.viewportWidth ?? 960;
   const vh = options?.viewportHeight ?? 540;
   const isPortrait = vh > vw;
-  const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx, isPortrait, baseTypography.textTransform);
+  const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx, isPortrait, baseTypography.textTransform, { width: vw, height: vh });
 
   // DIAGNOSTIC: log first 3 lines of layout positions
   let diagCount = 0;

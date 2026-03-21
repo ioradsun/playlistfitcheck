@@ -1545,6 +1545,9 @@ export class LyricDancePlayer {
   setCollisionGridCellSize(nextSize: number): void {
     if (!Number.isFinite(nextSize)) return;
     this._collisionCellSize = Math.max(32, Math.min(512, Math.round(nextSize)));
+    if (this.width < 250) {
+      this._collisionCellSize = Math.min(this._collisionCellSize, 48);
+    }
   }
 
   getBootMetrics(): {
@@ -2949,8 +2952,10 @@ export class LyricDancePlayer {
     }
 
     const isPortraitLocal = this.height > this.width;
-    const viewportMinFont = isPortraitLocal ? 12 : 10;
-    const margin = 4;
+    const isCompact = this.width < 250;
+    const viewportMinFont = isCompact ? 10 : isPortraitLocal ? 12 : 10;
+    // Adaptive wall margin: text needs breathing room on narrow canvases
+    const margin = isCompact ? Math.round(this.width * 0.08) : isPortraitLocal ? Math.round(this.width * 0.04) : 4;
     const wallLeft = -safeCameraX + margin;
     const wallRight = this.width - safeCameraX - margin;
     const wallTop = -safeCameraY + margin;
@@ -4032,16 +4037,19 @@ export class LyricDancePlayer {
     const sy = this.height / 540;
     const baseScale = Math.min(sx, sy);
     const isPortrait = this.height > this.width;
+    const isCompact = this.width < 250;
 
-    // fontScale must stay proportional to POSITION scale (sx).
-    // If fontScale > sx, text is physically wider than the position spacing → overlap.
     let fontScale: number;
     if (isPortrait) {
-      // Portrait: fontScale MUST equal sx so positions and font widths scale identically.
-      // The scene compiler already boosts font sizes 1.5x for portrait readability.
       fontScale = sx;
+      // On compact viewports, the scene compiler uses a height-aware portrait
+      // boost so reference fonts are large enough to survive the ~0.195 scale.
+      // Apply a small legibility floor so text never drops below ~10px.
+      if (isCompact) {
+        const legibilityFloor = 10 / Math.max(36, 72 * sx);
+        fontScale = Math.max(fontScale, legibilityFloor);
+      }
     } else {
-      // Landscape: scale proportionally, slight boost on small screens
       if (this.height >= 1080) {
         fontScale = baseScale;
       } else {
@@ -5332,7 +5340,8 @@ export class LyricDancePlayer {
     wallTop: number,
     wallBottom: number,
   ): void {
-    const MAX_ITERS = 4;
+    const isCompact = (wallRight - wallLeft) < 250;
+    const MAX_ITERS = isCompact ? 8 : 4;
     this._pairsTestedLast = 0;
     this._pairsCollidingLast = 0;
     const cellSize = this._collisionCellSize;

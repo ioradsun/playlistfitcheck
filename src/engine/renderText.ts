@@ -470,6 +470,11 @@ export function renderText(
   const baseWordScale = 0.9 + typoAggression * 0.4;
   const computedFontSize = fs * activeLineAnim.fontScale * baseWordScale;
   const fontSize = computedFontSize;
+  // ── Compound scale budget ──────────────────────────────────────
+  // All per-word scale multipliers compound on top of fontSize.
+  // Clamp the total so words never exceed a predictable rendered size.
+  const isCompactViewport = cw < 250;
+  const maxCompoundScale = isCompactViewport ? 1.15 : cw < 400 ? 1.3 : 1.6;
   frameFontSize = computedFontSize;
 
   // ── Position ──────────────────────────────────────────────────────
@@ -493,11 +498,16 @@ export function renderText(
     targetYBase = ch * 0.54;
   }
 
-  const lineSpacing = visibleLines.length <= 1
+  const rawLineSpacing = visibleLines.length <= 1
     ? ch * 0.12
     : visibleLines.length <= 2
       ? ch * 0.09
       : ch * 0.07;
+  // On tall-narrow canvases, spread lines to use the vertical space
+  const heightBonusSpacing = (ch > cw * 1.3 && visibleLines.length > 1)
+    ? (ch * 0.5) / Math.max(1, visibleLines.length)
+    : 0;
+  const lineSpacing = Math.max(rawLineSpacing, heightBonusSpacing, fontSize * 1.3);
 
   const visibleIndex = Math.max(0, visibleLines.findIndex(l => l.start === activeLine.start && l.end === activeLine.end && l.text === activeLine.text));
   const yLineOffset = (visibleIndex - (visibleLines.length - 1) / 2) * lineSpacing;
@@ -640,10 +650,14 @@ export function renderText(
   };
 
   if (cinematicSizingV2 && resolvedWrappedLines && resolvedWrappedLines.length > 1) {
-    const renderLines = resolvedWrappedLines.slice(0, 2);
-    const yOffsets = renderLines.length === 2
-      ? [-cinematicLayout.lineHeight * 0.55, cinematicLayout.lineHeight * 0.55]
-      : [0];
+    const maxRenderLines = Math.min(resolvedWrappedLines.length, cinematicLayout.maxLines);
+    const renderLines = resolvedWrappedLines.slice(0, maxRenderLines);
+    // Height-proportional spacing — use the larger of lineHeight and fontSize×1.3
+    const effectiveLineSpacing = Math.max(cinematicLayout.lineHeight, fontSize * 1.3);
+    const totalSpan = (renderLines.length - 1) * effectiveLineSpacing;
+    const yOffsets = renderLines.map((_, idx) =>
+      -totalSpan / 2 + idx * effectiveLineSpacing
+    );
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     ctx.font = buildWordFont(fontSize);
@@ -829,8 +843,10 @@ export function renderText(
       ? (renderedIndex === visibleWordIndices.length - 1 ? 1 : 0.4)
       : 1;
 
-    const fragmentationX = useLetterFragmentation ? (rng() - 0.5) * 6 : 0;
-    const fragmentationY = useLetterFragmentation ? (rng() - 0.5) * 4 : 0;
+    const fragAmp = isCompactViewport ? 2 : 6;
+    const fragAmpY = isCompactViewport ? 1.5 : 4;
+    const fragmentationX = useLetterFragmentation ? (rng() - 0.5) * fragAmp : 0;
+    const fragmentationY = useLetterFragmentation ? (rng() - 0.5) * fragAmpY : 0;
     const finalX = wordX + props.xOffset + fragmentationX;
     const finalY = wordY + props.yOffset + fragmentationY;
 
@@ -857,11 +873,11 @@ export function renderText(
 
     ctx.save();
     ctx.translate(finalX, finalY);
-    ctx.scale(props.scale, props.scale);
 
+    // Accumulate all per-word scale factors, then clamp to budget
+    let wordScale = props.scale;
     if (directive?.emphasisLevel) {
-      const emphasisScale = 0.8 + directive.emphasisLevel * 0.5;
-      ctx.scale(emphasisScale, emphasisScale);
+      wordScale *= 0.8 + directive.emphasisLevel * 0.5;
     }
 
     if (isHeroWord) {
@@ -875,7 +891,7 @@ export function renderText(
       ctx.fillStyle = heroGlow;
       ctx.fillRect(-wordRenderWidth * 0.35, -fontSize * 1.6, wordRenderWidth * 1.7, fontSize * 2.7);
       ctx.restore();
-      ctx.scale(1.2, 1.2);
+      wordScale *= 1.2;
     }
 
     // ── Evolution ─────────────────────────────────────────────────
@@ -939,18 +955,23 @@ export function renderText(
     }
 
     if (evolutionScale !== 1) {
-      ctx.scale(evolutionScale, evolutionScale);
+      wordScale *= evolutionScale;
     }
     if (evolutionYOffset !== 0) {
       ctx.translate(0, evolutionYOffset);
     }
+
+    // Apply clamped compound scale — one transform instead of four
+    const clampedScale = Math.min(wordScale, maxCompoundScale);
+    ctx.scale(clampedScale, clampedScale);
 
     ctx.fillStyle = directive?.colorOverride ?? props.color;
     ctx.globalAlpha = props.opacity * compositeAlpha * modeOpacity * evolutionOpacity;
 
     // Glow
     if (props.glowRadius > 0 || evolutionGlow > 0) {
-      const glowRadius = Math.max(props.glowRadius, evolutionGlow, 1);
+      const rawGlowRadius = Math.max(props.glowRadius, evolutionGlow, 1);
+      const glowRadius = isCompactViewport ? Math.min(rawGlowRadius, fontSize * 0.4) : rawGlowRadius;
       const glowColor = directive?.colorOverride ?? props.color;
       const glow = ctx.createRadialGradient(0, -fontSize * 0.3, 0, 0, -fontSize * 0.3, glowRadius * 2.4);
       glow.addColorStop(0, glowColor);
@@ -1023,7 +1044,7 @@ export function renderText(
     ctx.restore();
 
     // Motion trail
-    if (props.showTrail) {
+    if (props.showTrail && !isCompactViewport) {
       for (let t = 1; t <= props.trailCount; t += 1) {
         ctx.globalAlpha = (props.opacity * 0.3) / t;
         if (resolvedLetterSpacingEm !== 0) drawTextWithSpacing(ctx, displayWord, finalX - (t * 4), finalY, fontSize, resolvedLetterSpacingEm, "center");
