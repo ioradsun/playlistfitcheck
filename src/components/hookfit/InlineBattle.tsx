@@ -51,13 +51,14 @@ interface Props {
   forceMuted?: boolean;
   onCoverImage?: (url: string) => void;
   onEngineReady?: () => void;
+  cardState?: "active" | "warm" | "cold";
 }
 
 const HOOK_SELECT = "id,user_id,hook_start,hook_end,hook_label,hook_phrase,hook_slug,battle_position,artist_slug,song_slug,vote_count,palette";
 
 export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function InlineBattle({
   battleId, mode, votedSide, voteCount, votePct, onHookEnd, onHooksLoaded,
-  onTileTap, activePlaying, forceMuted, onCoverImage, onEngineReady,
+  onTileTap, activePlaying, forceMuted, onCoverImage, onEngineReady, cardState,
 }, ref) {
   const [hookA, setHookA] = useState<HookInfo | null>(null);
   const [hookB, setHookB] = useState<HookInfo | null>(null);
@@ -292,6 +293,23 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(function Inlin
     if (!player || !ready) return;
     player.setMuted(!!forceMuted || !activePlaying);
   }, [forceMuted, activePlaying, ready]);
+
+  // ── Feed lifecycle: pause/resume engine based on card visibility ──
+  // Matches In Studio behavior: stop rendering when off-screen, resume when visible.
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player || !ready) return;
+
+    if (cardState === "active") {
+      // Resume rendering — RAF loop restarts
+      player.play();
+      player.setMuted(!!forceMuted || !activePlaying);
+    } else {
+      // Stop rendering to save CPU — engine stays alive for instant resume
+      player.stopRendering?.();
+      player.setMuted(true);
+    }
+  }, [cardState, ready, forceMuted, activePlaying]);
 
   useEffect(() => {
     return () => {
