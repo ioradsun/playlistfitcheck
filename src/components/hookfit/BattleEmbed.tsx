@@ -211,7 +211,6 @@ function BattleEmbedInner({
     setReplayingSide(null);
     setPanelOpen(false);
     setMuted(true);
-    setPanelPlayer(null);
     if (cardState === "cold") {
       setEngineReady(false);
     }
@@ -545,19 +544,18 @@ function BattleEmbedInner({
     };
   }, [panelOpen, panelPlayer]);
 
-  // ── Sync panel tab to engine region ──
-  useEffect(() => {
-    if (!panelOpen || !panelPlayer) return;
-    setReplayingSide(resultsTab);
-  }, [resultsTab, panelOpen, panelPlayer]);
-
   const handleTileTap = useCallback(
     (side: "a" | "b") => {
       if (battleState !== "results") return;
-      setReplayingSide(side);
-      setMuted(false);
+      const currentSide = replayingSide ?? votedSide ?? "a";
+      if (side === currentSide) {
+        setMuted((prev) => !prev);
+      } else {
+        setReplayingSide(side);
+        setMuted(false);
+      }
     },
-    [battleState],
+    [battleState, replayingSide, votedSide],
   );
 
   // ── Error fallback ──────────────────────────────────────────
@@ -1030,6 +1028,7 @@ function BattleEmbedInner({
       <ReactionPanel
         displayMode={isFeedEmbed ? "embedded" : "fullscreen"}
         isOpen={panelOpen && !!votedSide && battleState !== "vote"}
+        maxHeight={isFeedEmbed ? "75%" : undefined}
         onClose={() => setPanelOpen(false)}
         danceId={danceData?.id ?? ""}
         activeLine={panelActiveLine}
@@ -1052,15 +1051,22 @@ function BattleEmbedInner({
           ]
         }
         onSeekTo={(sec) => {
-          if (panelPlayer) {
-            panelPlayer.seek(sec);
-            if (panelPlayer.audio.paused) {
-              panelPlayer.audio.play().catch(() => {});
-              panelPlayer.startRendering();
+          // Switch engine region to match the active tab before seeking
+          setReplayingSide(resultsTab);
+          setMuted(false);
+          // Small delay to let InlineBattle process the region switch
+          requestAnimationFrame(() => {
+            const player = inlineBattleRef.current?.getPlayer();
+            if (player) {
+              player.seek(sec);
+              if (player.audio.paused) {
+                player.audio.play().catch(() => {});
+                player.startRendering();
+              }
             }
-          }
+          });
         }}
-        player={panelPlayer}
+        player={panelPlayer ?? inlineBattleRef.current?.getPlayer() ?? null}
         durationSec={
           resultsTab === "a" && hookA
             ? hookA.hook_end - hookA.hook_start
@@ -1071,6 +1077,13 @@ function BattleEmbedInner({
         reactionData={reactionData}
         onReactionDataChange={setReactionData}
         onReactionFired={(emoji) => panelPlayer?.fireComment?.(emoji)}
+        onPause={() => panelPlayer?.pause?.()}
+        onResume={() => {
+          if (panelPlayer?.audio?.paused) {
+            panelPlayer.audio.play().catch(() => {});
+            panelPlayer.startRendering();
+          }
+        }}
         renderBottomBar={(onClose) => (
           <div
             className="shrink-0 flex"
