@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { checkDuplicateSubmission, checkEligibleForReentry, reenterSubmission } from "@/lib/engagementTracking";
 import { useNavigate } from "react-router-dom";
+import { useVoteGate } from "@/hooks/useVoteGate";
 
 interface TrackResult {
   id: string;
@@ -29,13 +30,15 @@ interface TrackData {
 
 interface Props {
   onPostCreated: () => void;
+  onNavigateLyricDance?: () => void;
 }
 
 const CAPTION_MAX = 500;
 
-export function SongFitInlineComposer({ onPostCreated }: Props) {
+export function SongFitInlineComposer({ onPostCreated, onNavigateLyricDance }: Props) {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const { canCreate, credits, required } = useVoteGate();
   const [query, setQuery] = useState("");
   const [caption, setCaption] = useState("");
   const [results, setResults] = useState<TrackResult[]>([]);
@@ -292,6 +295,29 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
     );
   }
 
+  if (!canCreate) {
+    return (
+      <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-mono tracking-wide text-white/60">
+            {credits === 0
+              ? "Vote on 3 songs to post your music"
+              : `${credits}/${required} — vote on ${required - credits} more to post`}
+          </p>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          {Array.from({ length: required }).map((_, i) => (
+            <div
+              key={i}
+              className="h-2 w-2 rounded-full"
+              style={{ background: i < credits ? "#22c55e" : "rgba(255,255,255,0.08)" }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="border-b border-border/40 transition-colors">
       <div className="flex gap-3 px-4 pt-3 pb-3">
@@ -429,6 +455,17 @@ export function SongFitInlineComposer({ onPostCreated }: Props) {
               ))}
             </div>
           )}
+          <div className="flex items-center gap-2 pt-2 border-t border-white/[0.04] mt-3">
+            <button
+              onClick={() => {
+                onNavigateLyricDance?.();
+                navigate("/LyricFit");
+              }}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[11px] font-mono tracking-wide uppercase transition-colors hover:bg-white/[0.04] text-white/40 hover:text-white/60"
+            >
+              <span>Create Lyric Dance →</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
