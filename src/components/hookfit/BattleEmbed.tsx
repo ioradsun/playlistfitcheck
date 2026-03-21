@@ -1065,7 +1065,13 @@ function BattleEmbedInner({
                   onClick={() => {
                     const opening = !panelOpen;
                     setPanelOpen(opening);
-                    if (opening) onPlay?.();
+                    if (opening) {
+                      onPlay?.();
+                      // Unmute so handleLineTap's player.audio.play() produces sound
+                      const p = inlineBattleRef.current?.getPlayer();
+                      if (p) p.audio.muted = false;
+                      setMuted(false);
+                    }
                   }}
                   className="flex items-center justify-center gap-1 px-4 min-w-[64px] py-3 hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none"
                 >
@@ -1127,24 +1133,20 @@ function BattleEmbedInner({
             "#ffffff",
           ]
         }
-        onSeekTo={(sec, endSec) => {
-          const player = inlineBattleRef.current?.getPlayer();
-          if (!player) return;
-          // Unmute immediately — user tapped a line, they want to hear it
-          player.audio.muted = false;
+        onSeekTo={(sec) => {
+          // Fallback — only called if player prop is null (shouldn't happen in practice)
+          const p = inlineBattleRef.current?.getPlayer();
+          if (!p) return;
+          p.audio.muted = false;
           setMuted(false);
-          // Schedule stop at line end (before seeking, so the RAF loop picks it up)
-          stopAtSecRef.current = endSec ?? null;
-          // Seek and play
-          player.seek(sec);
-          if (player.audio.paused) {
-            player.audio.play().catch(() => {});
-            player.startRendering();
+          p.seek(sec);
+          if (p.audio.paused) {
+            p.audio.play().catch(() => {});
+            p.startRendering();
           }
-          // Switch engine to match the active tab
           setReplayingSide(resultsTab);
         }}
-        player={null}
+        player={panelPlayer}
         durationSec={
           resultsTab === "a" && hookA
             ? hookA.hook_end - hookA.hook_start
