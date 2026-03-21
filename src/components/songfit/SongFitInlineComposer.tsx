@@ -455,13 +455,13 @@ export function SongFitInlineComposer({ onPostCreated, onNavigateLyricDance }: P
               ))}
             </div>
           )}
-          <div className="flex items-center gap-2 pt-2 border-t border-white/[0.04] mt-3">
+<div className="flex items-center gap-2 pt-2 border-t border-border/40 mt-3">
             <button
               onClick={() => {
                 onNavigateLyricDance?.();
                 navigate("/LyricFit");
               }}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[11px] font-mono tracking-wide uppercase transition-colors hover:bg-white/[0.04] text-white/40 hover:text-white/60"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[11px] font-mono tracking-wide uppercase transition-colors hover:bg-accent/40 text-muted-foreground/60 hover:text-foreground"
             >
               <span>Create Lyric Dance →</span>
             </button>
