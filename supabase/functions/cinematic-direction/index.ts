@@ -1027,6 +1027,7 @@ async function callScene(
   scenePrefix: string,
   userMessage: string,
   sectionCount: number,
+  body: RequestBody,
 ): Promise<Record<string, any>> {
   const messages = [
     { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
@@ -1384,7 +1385,7 @@ serve(async (req) => {
 
     if (body.mode === "scene") {
       const userMessage = buildUserMessage(title, artist, lines, listenerScene, body.audioSections, undefined);
-      const sceneResult = await callScene(apiKey, scenePrefix, userMessage, body.audioSections?.length ?? 0);
+      const sceneResult = await callScene(apiKey, scenePrefix, userMessage, body.audioSections?.length ?? 0, body);
 
       return new Response(JSON.stringify({ cinematicDirection: sceneResult }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
