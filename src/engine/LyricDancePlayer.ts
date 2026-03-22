@@ -1575,6 +1575,32 @@ export class LyricDancePlayer {
     }
     this._updateViewportScale();
     this._textMetricsCache.clear();
+
+    // ═══ POST-BAKE DIMENSION RECONCILIATION ═══
+    // The bake is async (~200ms). The container may have reached its final CSS
+    // dimensions DURING the bake (after the initial dim read). If a ResizeObserver
+    // callback already recompiled with correct dims, the bake restore above just
+    // overwrote that correct version with a stale one.
+    //
+    // Fix: read the container's CURRENT dimensions. If they differ from what
+    // the baked scene was compiled with, recompile now. This is the final word.
+    if (this.container && this.compiledScene) {
+      const currentW = this.container.offsetWidth || this.canvas.offsetWidth;
+      const currentH = this.container.offsetHeight || this.canvas.offsetHeight;
+      if (currentW > 0 && currentH > 0) {
+        const compiledW = this._compiledViewportW;
+        const compiledH = this._compiledViewportH;
+        const wDelta = Math.abs(currentW - compiledW) / Math.max(1, compiledW);
+        const hDelta = Math.abs(currentH - compiledH) / Math.max(1, compiledH);
+        const isPortraitNow = currentH > currentW;
+        const wasPortrait = this._compiledWasPortrait;
+        // Recompile if orientation flipped OR dimensions changed by >10%
+        if (isPortraitNow !== wasPortrait || wDelta > 0.1 || hDelta > 0.1) {
+          this.resize(currentW, currentH);
+        }
+      }
+    }
+
     const playStart = this.data.region_start ?? this.songStartSec;
     if (this.audio.currentTime <= 0 || this.data.region_start != null) {
       this.audio.currentTime = playStart;
