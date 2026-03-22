@@ -2495,16 +2495,20 @@ export class LyricDancePlayer {
       this.lastTimestamp = timestamp;
       this.updateFrameBudget(deltaMs);
       if (this._fontLayoutReflowPending) {
-        this._fontLayoutReflowPending = false;
-        this._textMetricsCache.clear();
-        this._mlLayoutCache.clear();
-        this._lastVisibleChunkCount = -1;
-        this._lastVisibleChunkSetHash = 0;
-        this._lastVisibleFirstChunkId = "";
-        this._lastVisibleMidChunkId = "";
-        this._lastVisibleLastChunkId = "";
-        // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
+        // Only consume the flag and clear caches when the recompile can actually run.
+        // On first load (minimal boot), compiledScene may be null while the bake is
+        // still in progress. If we clear the flag now, the recompile is skipped and
+        // the flag is lost — words render with stale layout on the first frame after
+        // the bake finishes. Keep the flag set so the next tick retries.
         if (this.payload && this.compiledScene) {
+          this._fontLayoutReflowPending = false;
+          this._textMetricsCache.clear();
+          this._mlLayoutCache.clear();
+          this._lastVisibleChunkCount = -1;
+          this._lastVisibleChunkSetHash = 0;
+          this._lastVisibleFirstChunkId = "";
+          this._lastVisibleMidChunkId = "";
+          this._lastVisibleLastChunkId = "";
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
           this._buildChunkCacheFromScene(this.compiledScene);
         }
