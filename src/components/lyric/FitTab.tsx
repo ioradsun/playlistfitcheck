@@ -92,9 +92,18 @@ interface Props {
   onImageGenerationStatusChange?: (
     status: "idle" | "running" | "done" | "error",
   ) => void;
+  onSectionImagesGenerated?: (payload: {
+    urls: (string | null)[];
+    total: number;
+    error?: string | null;
+  }) => void;
+  onSectionImagesError?: (error: string | null) => void;
   pipelineStages?: PipelineStages;
   initialDanceId?: string | null;
   initialDanceUrl?: string | null;
+  sectionImageUrls?: (string | null)[];
+  sectionImageProgress?: { done: number; total: number } | null;
+  sectionImageError?: string | null;
 }
 
 export function FitTab({
@@ -115,9 +124,14 @@ export function FitTab({
   onHeaderProject,
   onBack,
   onImageGenerationStatusChange,
+  onSectionImagesGenerated,
+  onSectionImagesError,
   pipelineStages: pipelineStagesProp,
   initialDanceId,
   initialDanceUrl,
+  sectionImageUrls = [],
+  sectionImageProgress = null,
+  sectionImageError = null,
 }: Props) {
   const { user, profile } = useAuth();
   const { canCreate, credits, required, spendCredits } = useVoteGate();
@@ -166,17 +180,6 @@ export function FitTab({
   const hottestHooksEnabled =
     siteCopy.features?.hookfit_hottest_hooks !== false;
 
-  const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
-  const [sectionImagesError, setSectionImagesError] = useState<string | null>(
-    null,
-  );
-  const [sectionImagesGenerating, setSectionImagesGenerating] = useState(false);
-  const [sectionImagesProgress, setSectionImagesProgress] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
-
-  // Refetch helper — used on initial load and when images complete
   const refetchDanceData = useCallback(() => {
     if (!publishedDanceId) {
       setPrefetchedDanceData(null);
@@ -197,16 +200,6 @@ export function FitTab({
     refetchDanceData();
   }, [refetchDanceData]);
 
-  // Refetch when images are generated — ensures player has section_images + auto_palettes
-  useEffect(() => {
-    const handler = () => {
-      if (publishedDanceId) {
-        setTimeout(refetchDanceData, 500);
-      }
-    };
-    window.addEventListener("fittab:images-generated", handler);
-    return () => window.removeEventListener("fittab:images-generated", handler);
-  }, [publishedDanceId, refetchDanceData]);
 
   // ── CrowdFit publish state ─────────────────────────────────────────
   const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
@@ -1157,15 +1150,12 @@ export function FitTab({
     if (!publishedDanceId) return false;
     if (!prefetchedDanceData) return false;
 
-    const images = prefetchedDanceData.section_images;
-    const sections = (prefetchedDanceData.cinematic_direction as any)?.sections;
+    if (generationStatus.beatGrid !== "done") return false;
+    if (generationStatus.cinematicDirection !== "done") return false;
+
+    const sections = (cinematicDirection as any)?.sections;
     if (Array.isArray(sections) && sections.length > 0) {
-      if (
-        !Array.isArray(images) ||
-        images.length === 0 ||
-        !images.every(Boolean)
-      )
-        return false;
+      if (generationStatus.sectionImages !== "done") return false;
     }
 
     if (
@@ -1177,7 +1167,13 @@ export function FitTab({
     if (!fontReady) return false;
 
     return true;
-  }, [publishedDanceId, prefetchedDanceData, fontReady]);
+  }, [
+    publishedDanceId,
+    prefetchedDanceData,
+    generationStatus,
+    cinematicDirection,
+    fontReady,
+  ]);
 
   useEffect(() => {
     if (playerReady || !publishedDanceId) {
@@ -1189,6 +1185,21 @@ export function FitTab({
     const timer = setTimeout(() => setImageWaitExpired(true), 60_000);
     return () => clearTimeout(timer);
   }, [playerReady, publishedDanceId]);
+
+  const allGenDone =
+    generationStatus.beatGrid === "done" &&
+    generationStatus.renderData === "done" &&
+    generationStatus.cinematicDirection === "done" &&
+    (generationStatus.sectionImages === "done" ||
+      generationStatus.sectionImages === "error");
+
+  useEffect(() => {
+    if (!allGenDone || !publishedDanceId) return;
+    const timer = setTimeout(() => {
+      refetchDanceData();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [allGenDone, publishedDanceId, refetchDanceData]);
 
   const allReady =
     generationStatus.beatGrid === "done" &&
@@ -1208,6 +1219,113 @@ export function FitTab({
     const s = Math.floor(sec % 60);
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
+
+  const handleGenerateImages = useCallback(async () => {
+    const sections =
+      cinematicDirection?.sections && Array.isArray(cinematicDirection.sections)
+        ? cinematicDirection.sections
+        : [];
+    if (!sections.length || generationStatus.sectionImages === "running") return;
+
+    if (!publishedDanceId) {
+      const error = "Could not create dance row for image generation";
+      onImageGenerationStatusChange?.("error");
+      onSectionImagesError?.(error);
+      toast.error(error);
+      return;
+    }
+
+    onSectionImagesError?.(null);
+    onImageGenerationStatusChange?.("running");
+    onSectionImagesGenerated?.({
+      urls: sectionImageUrls,
+      total: sections.length,
+      error: null,
+    });
+
+    try {
+      const { data: result, error } = await supabase.functions.invoke(
+        "generate-section-images",
+        {
+          body: { lyric_dance_id: publishedDanceId, force: true },
+        },
+      );
+      if (error) throw error;
+      const urls: (string | null)[] =
+        result?.urls || result?.section_images || [];
+      const doneCount = urls.filter(Boolean).length;
+      const allComplete =
+        result?.success === true ||
+        (urls.length === sections.length && urls.every(Boolean));
+      const nextError = allComplete
+        ? null
+        : `Generated ${doneCount}/${sections.length} images. Retry to fill missing sections.`;
+
+      onSectionImagesGenerated?.({
+        urls,
+        total: sections.length,
+        error: nextError,
+      });
+      onImageGenerationStatusChange?.(allComplete ? "done" : "error");
+
+      if (savedId && urls.length > 0) {
+        void supabase
+          .from("saved_lyrics")
+          .update({ section_images: urls as any })
+          .eq("id", savedId);
+      }
+
+      const validUrls = urls.filter(
+        (url: string | null): url is string => typeof url === "string" && Boolean(url),
+      );
+      if (validUrls.length > 0) {
+        try {
+          const palettes = await computeAutoPalettesFromUrls(validUrls);
+          if (palettes && palettes.length > 0) {
+            void supabase
+              .from("shareable_lyric_dances" as any)
+              .update({
+                section_images: urls as any,
+                auto_palettes: palettes as any,
+              })
+              .eq("id", publishedDanceId);
+          }
+        } catch (paletteErr) {
+          console.error("[FitTab] Auto palette generation failed:", paletteErr);
+          void supabase
+            .from("shareable_lyric_dances" as any)
+            .update({ section_images: urls as any })
+            .eq("id", publishedDanceId);
+        }
+      } else {
+        void supabase
+          .from("shareable_lyric_dances" as any)
+          .update({ section_images: urls as any })
+          .eq("id", publishedDanceId);
+      }
+
+      toast.success(`Generated ${doneCount}/${sections.length} section images`);
+    } catch (e: any) {
+      console.error("[SectionImages] Error:", e);
+      const message = e?.message || "Failed to generate section images";
+      onSectionImagesError?.(message);
+      onImageGenerationStatusChange?.("error");
+      toast.error(message);
+    }
+  }, [
+    cinematicDirection,
+    generationStatus.sectionImages,
+    onImageGenerationStatusChange,
+    onSectionImagesError,
+    onSectionImagesGenerated,
+    publishedDanceId,
+    savedId,
+    sectionImageUrls,
+  ]);
+
+  const handleRetryImages = useCallback(() => {
+    void handleGenerateImages();
+  }, [handleGenerateImages]);
 
   return (
     <>
@@ -1592,31 +1710,27 @@ export function FitTab({
                       {Array.isArray(cinematicDirection.sections) &&
                         cinematicDirection.sections.length > 0 && (
                           <button
-                            onClick={() =>
-                              void window.dispatchEvent(
-                                new Event("fittab:regenerate-images"),
-                              )
-                            }
-                            disabled={sectionImagesGenerating}
+                            onClick={() => void handleRetryImages()}
+                            disabled={generationStatus.sectionImages === "running"}
                             className="text-[9px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1 disabled:opacity-40"
                           >
-                            {sectionImagesGenerating ? (
+                            {generationStatus.sectionImages === "running" ? (
                               <>
                                 <Loader2 size={9} className="animate-spin" />
-                                {sectionImagesProgress
-                                  ? `${sectionImagesProgress.done}/${sectionImagesProgress.total}`
+                                {sectionImageProgress
+                                  ? `${sectionImageProgress.done}/${sectionImageProgress.total}`
                                   : "Generating…"}
                               </>
-                            ) : sectionImagesError ? (
+                            ) : sectionImageError ? (
                               <>
                                 <RefreshCw size={9} />
                                 Retry (
-                                {sectionImagesProgress
-                                  ? `${sectionImagesProgress.done}/${sectionImagesProgress.total}`
+                                {sectionImageProgress
+                                  ? `${sectionImageProgress.done}/${sectionImageProgress.total}`
                                   : "failed"}
                                 )
                               </>
-                            ) : sectionImages.length > 0 ? (
+                            ) : sectionImageUrls.length > 0 ? (
                               <>
                                 <Image size={9} />
                                 Regenerate Images
@@ -1633,7 +1747,7 @@ export function FitTab({
 
                     {cinematicDirection.sections.map(
                       (section: any, i: number) => {
-                        const imageUrl = sectionImages[i] || null;
+                        const imageUrl = sectionImageUrls[i] || null;
                         return (
                           <div
                             key={section.sectionIndex ?? i}
@@ -1687,19 +1801,11 @@ export function FitTab({
               {cinematicDirection && (
                 <CinematicDirectionCard
                   cinematicDirection={cinematicDirection}
-                  songTitle={lyricData.title}
-                  userId={user?.id || ""}
-                  projectId={savedId}
-                  onImageGenerationStatusChange={onImageGenerationStatusChange}
-                  audioFile={audioFile}
-                  beatGrid={beatGrid}
-                  words={words ?? null}
-                  lyricData={lyricData}
-                  sectionImages={sectionImages}
-                  setSectionImages={setSectionImages}
-                  setSectionImagesError={setSectionImagesError}
-                  setSectionImagesGenerating={setSectionImagesGenerating}
-                  setSectionImagesProgress={setSectionImagesProgress}
+                  sectionImages={sectionImageUrls}
+                  imageProgress={sectionImageProgress}
+                  imageError={sectionImageError}
+                  imageGenerating={generationStatus.sectionImages === "running"}
+                  onRetryImages={handleRetryImages}
                 />
               )}
 
@@ -1756,400 +1862,29 @@ export function FitTab({
 // Extracted to top-level to prevent remount on every FitTab render.
 function CinematicDirectionCard({
   cinematicDirection,
-  songTitle,
-  userId,
-  projectId,
-  onImageGenerationStatusChange,
-  audioFile,
-  beatGrid,
-  words,
-  lyricData,
   sectionImages,
-  setSectionImages,
-  setSectionImagesError,
-  setSectionImagesGenerating,
-  setSectionImagesProgress,
+  imageProgress,
+  imageError,
+  imageGenerating,
+  onRetryImages,
 }: {
   cinematicDirection: any;
-  songTitle: string;
-  userId: string;
-  projectId: string | null;
-  onImageGenerationStatusChange?: (
-    status: "idle" | "running" | "done" | "error",
-  ) => void;
-  audioFile: File;
-  beatGrid: BeatGridData | null;
-  words: Array<{ word: string; start: number; end: number }> | null;
-  lyricData: LyricData;
   sectionImages: (string | null)[];
-  setSectionImages: (images: (string | null)[]) => void;
-  setSectionImagesError: (error: string | null) => void;
-  setSectionImagesGenerating: (generating: boolean) => void;
-  setSectionImagesProgress: (
-    progress: { done: number; total: number } | null,
-  ) => void;
+  imageProgress: { done: number; total: number } | null;
+  imageError: string | null;
+  imageGenerating: boolean;
+  onRetryImages: () => void;
 }) {
-  const [generating, setGenerating] = useState(false);
-  const [generationError, setGenerationError] = useState<string | null>(null);
-  const [genProgress, setGenProgress] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
   const [imageTimestamps, setImageTimestamps] = useState<(string | null)[]>([]);
-  const [danceId, setDanceId] = useState<string | null>(null);
-  const [imagesHydrated, setImagesHydrated] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // autoImageTriggered ref removed — auto-trigger now lives in LyricFitTab pipeline
-
-  useEffect(() => {
-    setSectionImagesGenerating(generating);
-  }, [generating, setSectionImagesGenerating]);
-
-  useEffect(() => {
-    setSectionImagesError(generationError);
-  }, [generationError, setSectionImagesError]);
-
-  useEffect(() => {
-    setSectionImagesProgress(genProgress);
-  }, [genProgress, setSectionImagesProgress]);
 
   const sections: any[] =
     cinematicDirection.sections && Array.isArray(cinematicDirection.sections)
       ? cinematicDirection.sections
       : [];
 
-  const formatImageTimestamp = useCallback((raw: unknown): string | null => {
-    if (typeof raw === "number" && Number.isFinite(raw)) {
-      if (raw <= 0) return "just now";
-      return `${raw.toFixed(1)}s`;
-    }
-    if (typeof raw === "string") {
-      const normalized = raw.trim();
-      if (!normalized) return null;
-      if (normalized === "0" || normalized === "0.0" || normalized === "0s")
-        return "just now";
-      if (/^\d+(\.\d+)?$/.test(normalized)) return `${normalized}s`;
-      return normalized;
-    }
-    return null;
-  }, []);
-
-  const songSlug = slugify(songTitle || "untitled");
-
-  // Auto-load existing section images — first from saved_lyrics (projectId),
-  // then fall back to shareable_lyric_dances (published dance row)
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!userId || cancelled) return;
-
-      // 1. Try saved_lyrics first (project-level persistence)
-      if (projectId) {
-        const { data: lyricRow }: any = await supabase
-          .from("saved_lyrics")
-          .select("section_images")
-          .eq("id", projectId)
-          .maybeSingle();
-        if (cancelled) return;
-        const savedImgs = lyricRow?.section_images;
-        if (
-          Array.isArray(savedImgs) &&
-          savedImgs.length > 0 &&
-          savedImgs.some(Boolean)
-        ) {
-          setSectionImages(savedImgs);
-          setImageTimestamps(
-            Array.from({ length: savedImgs.length }, () => null),
-          );
-          setImagesHydrated(true);
-          return;
-        }
-      }
-
-      // 2. Fallback: shareable_lyric_dances (published dance)
-      const { data: dances }: any = await supabase
-        .from("shareable_lyric_dances" as any)
-        .select("id, section_images")
-        .eq("user_id", userId)
-        .eq("song_slug", songSlug)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (cancelled) return;
-      if (!dances?.[0]) {
-        setImagesHydrated(true);
-        return;
-      }
-      setDanceId(dances[0].id);
-
-      const imgs = dances[0].section_images;
-      if (Array.isArray(imgs) && imgs.length > 0) {
-        setSectionImages(imgs);
-        setImageTimestamps(Array.from({ length: imgs.length }, () => null));
-      }
-      setImagesHydrated(true);
-    })();
-    return () => {
-      cancelled = true;
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [songSlug, sections.length, userId, projectId]);
-
-  // Listen for dance-published event to refresh images
-  useEffect(() => {
-    const handler = () => {
-      setSectionImages([]);
-      setGenerating(true);
-      setGenProgress({ done: 0, total: sections.length });
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        if (!userId) return;
-        const { data: dances }: any = await supabase
-          .from("shareable_lyric_dances" as any)
-          .select("id, section_images")
-          .eq("user_id", userId)
-          .eq("song_slug", songSlug)
-          .limit(1);
-        if (!dances?.[0]) return;
-        setDanceId(dances[0].id);
-        const imgs = dances[0].section_images;
-        if (Array.isArray(imgs) && imgs.length > 0) {
-          const doneCount = imgs.filter(Boolean).length;
-          setSectionImages(imgs);
-          setImageTimestamps(Array.from({ length: imgs.length }, () => null));
-          setGenProgress({ done: doneCount, total: sections.length });
-          if (doneCount === sections.length) {
-            setGenerating(false);
-            if (pollRef.current) clearInterval(pollRef.current);
-          }
-        }
-      }, 3000);
-      setTimeout(() => {
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
-          setGenerating(false);
-        }
-      }, 120_000);
-    };
-    window.addEventListener("songfit:dance-published", handler);
-    return () => {
-      window.removeEventListener("songfit:dance-published", handler);
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [sections.length, userId, songSlug]);
-
-  // Listen for images generated by the LyricFitTab pipeline (fresh upload or remount re-gen).
-  // The pipeline saves URLs to DB and dispatches this event — we pick them up directly
-  // without polling.
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (Array.isArray(detail?.urls) && detail.urls.length > 0) {
-        const doneCount = detail.urls.filter(Boolean).length;
-        setSectionImages(detail.urls);
-        setImageTimestamps(
-          Array.from({ length: detail.urls.length }, () => null),
-        );
-        setImagesHydrated(true);
-        setGenProgress({ done: doneCount, total: sections.length });
-        if (doneCount === sections.length) {
-          setGenerating(false);
-          if (pollRef.current) clearInterval(pollRef.current);
-        }
-      }
-    };
-    window.addEventListener("fittab:images-generated", handler);
-    return () => window.removeEventListener("fittab:images-generated", handler);
-  }, [setSectionImages]);
-
-  // Ensure or create a draft dance row for image generation
-  const ensureDanceId = useCallback(async (): Promise<string | null> => {
-    if (danceId) return danceId;
-    if (!userId) return null;
-
-    // Try to find existing
-    const { data: existing }: any = await supabase
-      .from("shareable_lyric_dances" as any)
-      .select("id")
-      .eq("user_id", userId)
-      .eq("song_slug", songSlug)
-      .maybeSingle();
-    if (existing?.id) {
-      setDanceId(existing.id);
-      return existing.id;
-    }
-
-    // Create a draft row with minimal data so edge function can read cinematic_direction
-    const displayName = "artist";
-    const artistSlug = slugify(displayName);
-
-    // Upload audio for the draft row
-    const storagePath = projectId
-      ? getAudioStoragePath(userId, projectId, audioFile.name)
-      : `${userId}/${artistSlug}/${songSlug}/lyric-dance.${audioFile.name.split(".").pop() || "webm"}`;
-    await supabase.storage
-      .from("audio-clips")
-      .upload(storagePath, audioFile, {
-        upsert: true,
-        contentType: audioFile.type || undefined,
-      });
-    const { data: urlData } = supabase.storage
-      .from("audio-clips")
-      .getPublicUrl(storagePath);
-    const audioUrl = urlData.publicUrl;
-
-    const mainLines = lyricData.lines.filter((l) => l.tag !== "adlib");
-    const { error: insertError } = await supabase
-      .from("shareable_lyric_dances" as any)
-      .upsert(
-        {
-          user_id: userId,
-          artist_slug: artistSlug,
-          song_slug: songSlug,
-          artist_name: displayName,
-          song_name: lyricData.title || "Untitled",
-          audio_url: audioUrl,
-          lyrics: mainLines,
-          cinematic_direction: cinematicDirection || null,
-          words: words ?? null,
-          beat_grid: beatGrid
-            ? {
-                bpm: beatGrid.bpm,
-                beats: beatGrid.beats,
-                confidence: beatGrid.confidence,
-              }
-            : {},
-          palette: cinematicDirection?.palette || [
-            "#ffffff",
-            "#a855f7",
-            "#ec4899",
-          ],
-          section_images: null,
-        },
-        { onConflict: "artist_slug,song_slug" },
-      );
-
-    if (insertError) {
-      console.error(
-        "[FitTab Debug] draft dance row creation failed:",
-        insertError.message,
-      );
-      return null;
-    }
-
-    const { data: newRow }: any = await supabase
-      .from("shareable_lyric_dances" as any)
-      .select("id")
-      .eq("user_id", userId)
-      .eq("song_slug", songSlug)
-      .maybeSingle();
-
-    if (newRow?.id) {
-      setDanceId(newRow.id);
-      return newRow.id;
-    }
-    return null;
-  }, [
-    danceId,
-    userId,
-    songSlug,
-    audioFile,
-    beatGrid,
-    cinematicDirection,
-    lyricData,
-    projectId,
-    words,
-  ]);
-
-  const handleGenerateImages = useCallback(async () => {
-    if (generating || !sections.length) return;
-
-    const resolvedDanceId = await ensureDanceId();
-    if (!resolvedDanceId) {
-      toast.error("Could not create dance row for image generation");
-      onImageGenerationStatusChange?.("error");
-      return;
-    }
-
-    setGenerationError(null);
-    setGenerating(true);
-    onImageGenerationStatusChange?.("running");
-    setGenProgress({ done: 0, total: sections.length });
-    try {
-      const { data: result, error } = await supabase.functions.invoke(
-        "generate-section-images",
-        {
-          body: { lyric_dance_id: resolvedDanceId, force: true },
-        },
-      );
-      if (error) throw error;
-      const urls: (string | null)[] =
-        result?.urls || result?.section_images || [];
-      const timingCandidates =
-        result?.image_timestamps || result?.timings || result?.durations || [];
-      const normalizedTimestamps = Array.from(
-        { length: urls.length },
-        (_, idx) => formatImageTimestamp(timingCandidates[idx]),
-      );
-      const allComplete =
-        result?.success === true ||
-        (urls.length === sections.length && urls.every(Boolean));
-      const doneCount = urls.filter(Boolean).length;
-      setSectionImages(urls);
-      setImageTimestamps(normalizedTimestamps);
-      setGenProgress({ done: doneCount, total: sections.length });
-      setGenerationError(
-        allComplete
-          ? null
-          : `Generated ${doneCount}/${sections.length} images. Retry to fill missing sections.`,
-      );
-      onImageGenerationStatusChange?.(allComplete ? "done" : "error");
-
-      if (urls.length > 0) {
-        window.dispatchEvent(
-          new CustomEvent("fittab:images-generated", {
-            detail: { urls, complete: allComplete },
-          }),
-        );
-      }
-
-      // Persist to saved_lyrics so images survive tab switches / remounts
-      if (projectId && urls.length > 0) {
-        void supabase
-          .from("saved_lyrics")
-          .update({ section_images: urls as any })
-          .eq("id", projectId);
-      }
-
-      toast.success(`Generated ${doneCount}/${sections.length} section images`);
-    } catch (e: any) {
-      console.error("[SectionImages] Error:", e);
-      setGenerationError(e?.message || "Failed to generate section images");
-      onImageGenerationStatusChange?.("error");
-      toast.error(e?.message || "Failed to generate section images");
-    } finally {
-      setGenerating(false);
-    }
-  }, [
-    ensureDanceId,
-    formatImageTimestamp,
-    generating,
-    onImageGenerationStatusChange,
-    projectId,
-    sections,
-  ]);
-
-  useEffect(() => {
-    const handler = () => {
-      void handleGenerateImages();
-    };
-    window.addEventListener("fittab:regenerate-images", handler);
-    return () =>
-      window.removeEventListener("fittab:regenerate-images", handler);
-  }, [handleGenerateImages]);
-
-  // Image generation is now auto-triggered by the pipeline in LyricFitTab.
-  // CinematicDirectionCard only provides the manual "Regenerate" button.
+    setImageTimestamps(Array.from({ length: sectionImages.length }, () => null));
+  }, [sectionImages]);
 
   return null;
 }

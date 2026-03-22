@@ -184,6 +184,24 @@ export function LyricFitTab({
   const [pipelineDanceUrl, setPipelineDanceUrl] = useState<string | null>(
     (initialLyric as any)?.render_data?.pipelineDanceUrl ?? null,
   );
+  const [sectionImageUrls, setSectionImageUrls] = useState<(string | null)[]>(
+    Array.isArray((initialLyric as any)?.section_images)
+      ? ((initialLyric as any).section_images as (string | null)[])
+      : [],
+  );
+  const [sectionImageProgress, setSectionImageProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(() => {
+    const savedSectionImages = (initialLyric as any)?.section_images;
+    const total = Array.isArray(savedSectionImages) ? savedSectionImages.length : 0;
+    if (!total) return null;
+    return {
+      done: savedSectionImages.filter(Boolean).length,
+      total,
+    };
+  });
+  const [sectionImageError, setSectionImageError] = useState<string | null>(null);
   const cinematicDirectionRef = useRef(cinematicDirection);
   cinematicDirectionRef.current = cinematicDirection;
   // bgImageUrl and frameState removed — V3 derives from cinematicDirection
@@ -526,6 +544,12 @@ export function LyricFitTab({
       savedSectionImages.length > 0 &&
       savedSectionImages.some(Boolean)
     ) {
+      setSectionImageUrls(savedSectionImages);
+      setSectionImageProgress({
+        done: savedSectionImages.filter(Boolean).length,
+        total: savedSectionImages.length,
+      });
+      setSectionImageError(null);
       setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
     }
 
@@ -593,10 +617,15 @@ export function LyricFitTab({
 
     const dirSections = cinematicDirection?.sections;
     if (!Array.isArray(dirSections) || dirSections.length === 0) {
+      setSectionImageUrls([]);
+      setSectionImageProgress(null);
+      setSectionImageError(null);
       setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
       return;
     }
 
+    setSectionImageError(null);
+    setSectionImageProgress({ done: 0, total: dirSections.length });
     setGenerationStatus((prev) => ({ ...prev, sectionImages: "running" }));
 
     (async () => {
@@ -677,6 +706,7 @@ export function LyricFitTab({
         }
 
         if (!resolvedDanceId) {
+          setSectionImageError("Could not create dance row for image generation");
           setGenerationStatus((prev) => ({ ...prev, sectionImages: "error" }));
           return;
         }
@@ -694,6 +724,12 @@ export function LyricFitTab({
         );
         if (error) throw error;
         const urls = result?.urls || result?.section_images || [];
+        setSectionImageUrls(urls);
+        setSectionImageProgress({
+          done: urls.filter(Boolean).length,
+          total: dirSections.length,
+        });
+        setSectionImageError(null);
 
         if (savedIdRef.current && urls.length > 0) {
           void supabase
@@ -703,11 +739,6 @@ export function LyricFitTab({
         }
 
         setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
-        if (urls.length > 0) {
-          window.dispatchEvent(
-            new CustomEvent("fittab:images-generated", { detail: { urls } }),
-          );
-        }
       } catch (err: any) {
         console.error(
           "[Pipeline] Image re-generation on remount failed:",
@@ -1067,6 +1098,9 @@ export function LyricFitTab({
             dirSections.length === 0 ||
             !user
           ) {
+            setSectionImageUrls([]);
+            setSectionImageProgress(null);
+            setSectionImageError(null);
             setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
             return;
           }
@@ -1077,12 +1111,20 @@ export function LyricFitTab({
             currentSavedImages.length > 0 &&
             currentSavedImages.some(Boolean)
           ) {
+            setSectionImageUrls(currentSavedImages);
+            setSectionImageProgress({
+              done: currentSavedImages.filter(Boolean).length,
+              total: currentSavedImages.length,
+            });
+            setSectionImageError(null);
             setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
             return;
           }
 
           const it0 = performance.now();
 
+          setSectionImageError(null);
+          setSectionImageProgress({ done: 0, total: dirSections.length });
           setGenerationStatus((prev) => ({
             ...prev,
             sectionImages: "running",
@@ -1185,6 +1227,7 @@ export function LyricFitTab({
               console.error(
                 "[Pipeline] Could not create dance row for image generation",
               );
+              setSectionImageError("Could not create dance row for image generation");
               setGenerationStatus((prev) => ({
                 ...prev,
                 sectionImages: "error",
@@ -1192,10 +1235,20 @@ export function LyricFitTab({
               return;
             }
 
-            const persistAndDispatchImages = async (
+            const persistSectionImages = async (
               finalUrls: (string | null)[],
               complete: boolean,
             ) => {
+              setSectionImageUrls(finalUrls);
+              setSectionImageProgress({
+                done: finalUrls.filter(Boolean).length,
+                total: dirSections.length,
+              });
+              setSectionImageError(
+                complete
+                  ? null
+                  : `Generated ${finalUrls.filter(Boolean).length}/${dirSections.length} images. Retry to fill missing sections.`,
+              );
               if (savedIdRef.current && finalUrls.length > 0) {
                 void supabase
                   .from("saved_lyrics")
@@ -1210,13 +1263,6 @@ export function LyricFitTab({
                   .eq("id", resolvedDanceId);
               }
 
-              if (finalUrls.length > 0) {
-                window.dispatchEvent(
-                  new CustomEvent("fittab:images-generated", {
-                    detail: { urls: finalUrls, complete },
-                  }),
-                );
-              }
 
               const validUrls = finalUrls.filter(
                 (url: string | null): url is string =>
@@ -1279,7 +1325,7 @@ export function LyricFitTab({
                   ...prev,
                   sectionImages: retryAllComplete ? "done" : "error",
                 }));
-                await persistAndDispatchImages(mergedUrls, retryAllComplete);
+                await persistSectionImages(mergedUrls, retryAllComplete);
               } catch (retryErr) {
                 console.error("[Pipeline] Image retry failed:", retryErr);
                 setGenerationStatus((prev) => ({
@@ -1287,7 +1333,7 @@ export function LyricFitTab({
                   sectionImages: "error",
                 }));
                 if (urls.some(Boolean)) {
-                  await persistAndDispatchImages(urls, false);
+                  await persistSectionImages(urls, false);
                 }
               }
             } else {
@@ -1295,13 +1341,14 @@ export function LyricFitTab({
                 ...prev,
                 sectionImages: allComplete ? "done" : "error",
               }));
-              await persistAndDispatchImages(urls, allComplete);
+              await persistSectionImages(urls, allComplete);
             }
           } catch (imgErr: any) {
             console.error(
               "[Pipeline] Image generation failed:",
               imgErr?.message || imgErr,
             );
+            setSectionImageError(imgErr?.message || "Failed to generate section images");
             setGenerationStatus((prev) => ({
               ...prev,
               sectionImages: "error",
@@ -1487,6 +1534,9 @@ export function LyricFitTab({
     // Clear cinematicDirection, renderData, images
     setRenderData(null);
     setCinematicDirection(null);
+    setSectionImageUrls([]);
+    setSectionImageProgress(null);
+    setSectionImageError(null);
     setGenerationStatus((prev) => ({
       beatGrid: prev.beatGrid === "done" ? "done" : "idle",
       renderData: "done",
@@ -1514,9 +1564,39 @@ export function LyricFitTab({
   const handleImageGenerationStatusChange = useCallback(
     (status: "idle" | "running" | "done" | "error") => {
       setGenerationStatus((prev) => ({ ...prev, sectionImages: status }));
+      if (status === "running") setSectionImageError(null);
+      if (status === "idle") {
+        setSectionImageUrls([]);
+        setSectionImageProgress(null);
+        setSectionImageError(null);
+      }
     },
     [],
   );
+
+  const handleSectionImagesGenerated = useCallback(
+    ({
+      urls,
+      total,
+      error,
+    }: {
+      urls: (string | null)[];
+      total: number;
+      error?: string | null;
+    }) => {
+      setSectionImageUrls(urls);
+      setSectionImageProgress({
+        done: urls.filter(Boolean).length,
+        total,
+      });
+      setSectionImageError(error ?? null);
+    },
+    [],
+  );
+
+  const handleSectionImagesError = useCallback((error: string | null) => {
+    setSectionImageError(error);
+  }, []);
 
   useEffect(() => {
     if (fitUnlocked || fitReadiness === "ready") {
@@ -1631,6 +1711,9 @@ export function LyricFitTab({
               cinematicDirection: "idle",
               sectionImages: "idle",
             });
+            setSectionImageUrls([]);
+            setSectionImageProgress(null);
+            setSectionImageError(null);
             setFitReadiness("not_started");
             setFitUnlocked(false);
             setPipelineDanceId(null);
@@ -1679,10 +1762,15 @@ export function LyricFitTab({
             onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
             onBack={handleBackToLyrics}
             onImageGenerationStatusChange={handleImageGenerationStatusChange}
+            onSectionImagesGenerated={handleSectionImagesGenerated}
+            onSectionImagesError={handleSectionImagesError}
             pipelineStages={pipelineStages}
             parentWaveform={waveformData}
             initialDanceId={pipelineDanceId}
             initialDanceUrl={pipelineDanceUrl}
+            sectionImageUrls={sectionImageUrls}
+            sectionImageProgress={sectionImageProgress}
+            sectionImageError={sectionImageError}
           />
         </div>
       )}
