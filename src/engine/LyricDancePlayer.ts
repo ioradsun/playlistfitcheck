@@ -41,6 +41,7 @@ import {
 } from "@/engine/cinematicResolver";
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
 import { classifyDance, type DancePattern, type DanceClassification } from "@/engine/DanceClassifier";
+import { computeDanceMotion, type DanceMotion, type GrammarInput } from "@/engine/MotionGrammar";
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
@@ -5019,6 +5020,27 @@ export class LyricDancePlayer {
       }
     }
     const _hasBeatResponses = _beatResponses.length > 0;
+
+    // ═══ DANCE GRAMMAR: compute once per frame, apply per word ═══
+    // Derive bar-level timing from beatState for the grammar functions.
+    const _beatsPerBar = 4; // standard 4/4 assumption (matches BeatConductor)
+    const _barBeat = beatState ? (beatState.beatIndex % _beatsPerBar) : 0;
+    const _barPhase = beatState
+      ? ((_barBeat + beatState.phase) / _beatsPerBar)
+      : 0;
+
+    let _danceMotion: DanceMotion = { dX: 0, dY: 0, dScale: 0 };
+    if (beatState && this._danceClassification) {
+      const grammarInput: GrammarInput = {
+        phase: beatState.phase,
+        barPhase: _barPhase,
+        barBeat: _barBeat,
+        energy: beatState.energy,
+        compileHeight: this._compiledViewportH || 540,
+        isDownbeat: beatState.isDownbeat,
+      };
+      _danceMotion = computeDanceMotion(this._danceClassification.pattern, grammarInput);
+    }
     let ci = 0;
     if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
     const chunks = this._evalChunks;
@@ -5474,12 +5496,12 @@ export class LyricDancePlayer {
         // When multi-line is active, _mlDx already positions words centered at 480.
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
-        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY) * sy;
+        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX) * sx;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale);
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale);
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
