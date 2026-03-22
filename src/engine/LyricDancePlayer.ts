@@ -1202,6 +1202,9 @@ export class LyricDancePlayer {
   /** Pixel offset to shift text UP — compensates for bottom overlay (playbar, battle bar) */
   private _textVerticalBias = 0;
 
+  /** Temporary debug throttle — remove after tiny-font diagnosis */
+  private _tinyFontLogThrottle = 0;
+
   // Comment comets
   private activeComments: CommentChunk[] = [];
   private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
