@@ -5528,7 +5528,8 @@ export class LyricDancePlayer {
         const isExiting = exitProgress > 0;
 
         // ═══ ACTIVE CHUNK ONLY: always dead center, full brightness ═══
-        const roleY = 270; // center of 540px compile space
+        const isPreviewGroup = groupIdx === nextGroupIdx;
+        const roleY = isPreviewGroup ? 430 : 270; // preview below active
 
         // Base animation alpha (entry/exit/behavior)
         const animAlpha = isExiting
@@ -5539,7 +5540,6 @@ export class LyricDancePlayer {
 
         // No previous/next/offscreen. No vocal wave alpha modulation.
         // Active chunk words are at full brightness. Period.
-        const isPreviewGroup = groupIdx === nextGroupIdx;
         let roleAlpha = lineRole === 'current' ? 1.0 : isPreviewGroup ? 0.15 : 0.0;
         let roleScale = 1.0;
 
