@@ -1138,6 +1138,10 @@ export class LyricDancePlayer {
   private _bgParallaxRot = 0;
   private static readonly BG_PARALLAX_DEPTH = 0.12;
   private static readonly BG_PARALLAX_ALPHA = 0.07;
+  // ═══ Breathing vignette — Fincher/Cronenweth eye funnel ═══
+  private _vignetteCanvas: HTMLCanvasElement | null = null;
+  private _vignetteKey = '';        // tracks canvas size for invalidation
+  private _vignetteEnergy = 0.5;    // smoothed energy for vignette breathing
   // ═══ Per-frame caches — computed once in tick(), reused everywhere ═══
   private _frameSectionIdx = -1;
   private _framePalette: string[] | null = null;
@@ -1850,6 +1854,8 @@ export class LyricDancePlayer {
     if (this.payload) this.buildBgCache();
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
+    this._vignetteCanvas = null;
+    this._vignetteKey = '';
     this._preBlurredImages = []; // invalidate — will use runtime blur fallback until reload
     this._watermarkCache = null; // invalidate — dimensions depend on this.width
     this._mlLayoutCache.clear(); // invalidate — viewport scale changed
@@ -2200,6 +2206,8 @@ export class LyricDancePlayer {
     this._preBlurredImages = [];
     this._zeroCanvas(this._lightingOverlayCanvas);
     this._lightingOverlayCanvas = null;
+    this._zeroCanvas(this._vignetteCanvas);
+    this._vignetteCanvas = null;
     this._zeroCanvas(this._grainCanvas);
     this._grainCanvas = null;
     this._grainPool = [];
@@ -2756,12 +2764,20 @@ export class LyricDancePlayer {
     const conductorResponse = beatState ? this.conductor?.getSubsystemResponse(beatState, 2) ?? null : null;
     this._lastSubsystemResponse = conductorResponse;
     const currentTension = this.activeTension;
+    // ═══ Villeneuve's held breath: particles freeze during anticipation ═══
+    // CameraRig ramps anticipation 0→1 over 3-8 bars before section change.
+    // Particles mirror this: speed drops to 10% at full anticipation.
+    // On release (anticipation snaps to 0), particles resume at full speed.
+    // The environment holds its breath before the drop.
+    const anticipation = this.cameraRig?.anticipation ?? 0;
+    const breathFactor = 1 - anticipation * 0.9; // 1.0 at rest, 0.1 at full freeze
+
     if (conductorResponse) {
       this.ambientParticleEngine?.setDensityMultiplier(conductorResponse.particleDensity * 2);
-      this.ambientParticleEngine?.setSpeedMultiplier(conductorResponse.particleSpeed * 2);
+      this.ambientParticleEngine?.setSpeedMultiplier(conductorResponse.particleSpeed * 2 * breathFactor);
     } else {
       this.ambientParticleEngine?.setDensityMultiplier((currentTension?.particleDensity ?? 0.5) * 2);
-      this.ambientParticleEngine?.setSpeedMultiplier((currentTension?.motionIntensity ?? 0.5) * 2);
+      this.ambientParticleEngine?.setSpeedMultiplier((currentTension?.motionIntensity ?? 0.5) * 2 * breathFactor);
     }
 
     // ── Minimal debug state (always cheap) ──
@@ -3438,6 +3454,21 @@ export class LyricDancePlayer {
 
     // ═══ Hero decomposition particles — shatter effect on hero word exit ═══
     this.updateAndDrawDecomp(frameNowSec);
+
+    // ═══ Near-plane particles — Lubezki's envelope ═══
+    // Foreground particles (depth >= 0.5) drawn AFTER text.
+    // Snow, petals, ash, confetti, crystals pass between viewer and words.
+    // Completes the depth sandwich: bg → far particles → text → near particles.
+    if (qTier < 2 && this.ambientParticleEngine?.shouldRenderForeground()) {
+      this.ambientParticleEngine.draw(this.ctx, "near");
+    }
+
+    // ═══ Breathing vignette — Fincher's darkness ═══
+    // Drawn LAST before UI (watermark/perf) — sits on top of everything.
+    // Like a lens: the optics don't exist inside the scene, they shape how you see it.
+    if (this._qualityTier < 3) {
+      this.drawVignette();
+    }
 
     if (this.isExporting) this.drawWatermark();
     if (this.perfDebugEnabled) this.drawPerfOverlay();
@@ -5584,6 +5615,55 @@ export class LyricDancePlayer {
     }
 
     this.ctx.drawImage(this._lightingOverlayCanvas, 0, 0);
+  }
+
+  /**
+   * Breathing vignette — Fincher/Cronenweth eye funnel.
+   * Dark oval that breathes with song energy.
+   * Quiet = heavy vignette (world closes in, intimacy).
+   * Loud = light vignette (world opens up, power).
+   * The audience never sees the vignette. They feel claustrophobia and release.
+   */
+  private drawVignette(): void {
+    // Smoothed energy for gentle breathing (not beat-by-beat, section-level)
+    const targetEnergy = this._lastBeatState?.energy ?? 0.3;
+    this._vignetteEnergy += (targetEnergy - this._vignetteEnergy) * 0.03; // very slow EMA
+
+    const w = this.width;
+    const h = this.height;
+    const key = `${w}-${h}`;
+
+    // Rebuild gradient only on resize
+    if (key !== this._vignetteKey || !this._vignetteCanvas) {
+      const off = document.createElement('canvas');
+      off.width = w;
+      off.height = h;
+      const octx = off.getContext('2d')!;
+
+      // Oval gradient: fully transparent center, dark edges
+      // Aspect-corrected: use the diagonal as the outer radius, center radius at 40%
+      const diag = Math.sqrt(w * w + h * h);
+      const grad = octx.createRadialGradient(w / 2, h / 2, diag * 0.28, w / 2, h / 2, diag * 0.58);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.6, 'rgba(0,0,0,0.15)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+      octx.fillStyle = grad;
+      octx.fillRect(0, 0, w, h);
+
+      this._vignetteCanvas = off;
+      this._vignetteKey = key;
+    }
+
+    // Alpha driven by inverse energy:
+    // Low energy (quiet verse) → higher alpha → heavier vignette → intimate
+    // High energy (loud chorus) → lower alpha → lighter vignette → expansive
+    // Range: 0.35 (loud) to 0.75 (quiet)
+    const alpha = 0.75 - this._vignetteEnergy * 0.40;
+    if (alpha < 0.02) return;
+
+    this.ctx.globalAlpha = alpha;
+    this.ctx.drawImage(this._vignetteCanvas, 0, 0, w, h);
+    this.ctx.globalAlpha = 1;
   }
 
   private checkEmotionalEvents(tSec: number, songProgress: number): void {
