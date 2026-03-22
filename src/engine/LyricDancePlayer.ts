@@ -1063,6 +1063,7 @@ export class LyricDancePlayer {
     dy: number[];
     groupIdx: number;
     resolvedFont: string;
+    maxZoom: number;
   }>();
 
   // ═══ Watermark cache — invalidated on resize ═══
@@ -5033,7 +5034,11 @@ export class LyricDancePlayer {
       // Layout is stable for the lifetime of a group: font, word list, emphasis levels
       // don't change mid-group. We compute it once and cache by groupIdx + resolvedFont.
       // Invalidated on: font reflow, resize, seek, cinematic direction change.
-      const MAX_LINE_WIDTH = 960 * 0.85; // 816px in compile space
+      // Layout must fit at maximum camera zoom — not just at rest.
+      // CameraRig zooms in on beats, narrowing effective viewport.
+      // Add 8% breathing room so words never touch the walls even at peak zoom + shake.
+      const maxCameraZoom = this.cameraRig?.config?.maxZoom ?? 1.18;
+      const MAX_LINE_WIDTH = (960 * 0.85) / maxCameraZoom * 0.92;
       let _isMultiLine = false;
       let _mlDx: number[];
       let _mlDy: number[];
@@ -5047,17 +5052,20 @@ export class LyricDancePlayer {
       // hero word activates, heroOffsetX/Y is applied on top of the cached
       // _mlDx/y — both centering systems compound and the word jumps.
       // Fix: if a solo hero is active, treat as no multi-line layout.
+      let _hasValidMlCache = false;
       if (lineRole === 'current' && !groupHasActiveSoloHero) {
         const _mlCached = this._mlLayoutCache.get(groupIdx);
         if (
           _mlCached &&
           _mlCached.groupIdx === groupIdx &&
-          _mlCached.resolvedFont === _resolvedFontForML
+          _mlCached.resolvedFont === _resolvedFontForML &&
+          _mlCached.maxZoom === maxCameraZoom
         ) {
           // Cache hit — reuse precomputed layout, zero measureText calls
           _isMultiLine = _mlCached.isMultiLine;
           _mlDx = _mlCached.dx;
           _mlDy = _mlCached.dy;
+          _hasValidMlCache = true;
         } else {
           // Cache miss — fall through to compute block below
           _mlDx = [];
@@ -5069,7 +5077,7 @@ export class LyricDancePlayer {
         _mlDy = [];
       }
 
-      if (lineRole === 'current' && !this._mlLayoutCache.has(groupIdx) && !groupHasActiveSoloHero && group.words.length > 1) {
+      if (lineRole === 'current' && !_hasValidMlCache && !groupHasActiveSoloHero && group.words.length > 1) {
           const mCtx = this._measureCtx;
           const resolvedFontML = _resolvedFontForML;
 
@@ -5082,7 +5090,9 @@ export class LyricDancePlayer {
             const fs = Math.round(w.baseFontSize);
             const fontStr = `${w.fontWeight ?? 700} ${fs}px ${w.fontFamily ?? resolvedFontML}`;
             if (mCtx.font !== fontStr) mCtx.font = fontStr;
-            totalLineW += mCtx.measureText(w.text).width;
+            const emp = w.emphasisLevel ?? 0;
+            const emphasisScale = 1.0 + Math.max(0, emp - 1) * 0.25;
+            totalLineW += mCtx.measureText(w.text).width * emphasisScale;
             if (wi < group.words.length - 1) {
               const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
               if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
@@ -5109,7 +5119,11 @@ export class LyricDancePlayer {
               const fs = Math.round(w.baseFontSize);
               const fontStr = `${w.fontWeight ?? 700} ${fs}px ${w.fontFamily ?? resolvedFontML}`;
               if (mCtx.font !== fontStr) mCtx.font = fontStr;
-              return mCtx.measureText(w.text).width;
+              const rawWidth = mCtx.measureText(w.text).width;
+              // Account for runtime emphasis scaling — high-emphasis words render wider
+              const emp = w.emphasisLevel ?? 0;
+              const emphasisScale = 1.0 + Math.max(0, emp - 1) * 0.25;
+              return rawWidth * emphasisScale;
             };
 
             // Measure a space between two words
@@ -5245,6 +5259,7 @@ export class LyricDancePlayer {
             dy: _mlDy.slice(),
             groupIdx,
             resolvedFont: _resolvedFontForML,
+            maxZoom: maxCameraZoom,
           });
         } // end cache-miss
       
