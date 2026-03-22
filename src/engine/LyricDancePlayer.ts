@@ -1195,6 +1195,7 @@ export class LyricDancePlayer {
 
   /** Pixel offset to shift text UP — compensates for bottom overlay (playbar, battle bar) */
   private _textVerticalBias = 0;
+  private _mlDebugThrottle = 0;
 
   // Comment comets
   private activeComments: CommentChunk[] = [];
@@ -5292,6 +5293,21 @@ export class LyricDancePlayer {
         // Offscreen — skip cache entirely, use defaults
         _mlDx = [];
         _mlDy = [];
+      }
+
+      // ═══ TEMPORARY DEBUG: remove after diagnosis ═══
+      if (lineRole === 'current' && group.words.length > 1 && (!this._mlDebugThrottle || performance.now() - this._mlDebugThrottle > 3000)) {
+        this._mlDebugThrottle = performance.now();
+        console.warn('[ML DEBUG]', {
+          groupIdx,
+          wordCount: group.words.length,
+          hasCacheHit: _hasValidMlCache,
+          soloHero: groupHasActiveSoloHero,
+          isMultiLine: _isMultiLine,
+          resolvedFont: _resolvedFontForML,
+          fontStabilized: this._fontStabilized,
+          words: group.words.map(w => w.text).join(' '),
+        });
       }
 
       if (lineRole === 'current' && !_hasValidMlCache && !groupHasActiveSoloHero && group.words.length > 1) {
