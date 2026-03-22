@@ -333,7 +333,7 @@ export default function ShareableLyricDance() {
               className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-between"
               onClick={(e) => e.stopPropagation()}
             >
-              {!reactionPanelOpen && !isMarketingView ? (
+              {!isMarketingView ? (
                 <div
                   className="flex items-center gap-2.5 cursor-pointer"
                   onClick={() => renderData?.user_id && navigate(`/u/${renderData.user_id}`)}
