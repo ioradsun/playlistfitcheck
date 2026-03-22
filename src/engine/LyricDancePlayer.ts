@@ -5118,6 +5118,13 @@ export class LyricDancePlayer {
         }
       }
 
+      // ═══ HERO STAGING: dim particles when a solo hero commands the stage ═══
+      // Reduces visual noise so the hero word is the clear focal point.
+      // Particles drop to 30% density. Recovers automatically when hero exits.
+      if (groupHasActiveSoloHero && this.ambientParticleEngine) {
+        this.ambientParticleEngine.setDensityMultiplier(0.3);
+      }
+
       // ═══ MULTI-LINE LAYOUT — cached per group ═══
       // Layout is stable for the lifetime of a group: font, word list, emphasis levels
       // don't change mid-group. We compute it once and cache by groupIdx + resolvedFont.
@@ -5537,15 +5544,61 @@ export class LyricDancePlayer {
           waveScale = 1.0 + waveProximity * 0.06;
         }
 
+        // ═══ WORD CASTING: per-word dance role amplitude ═══
+        // Each word gets a dance amplitude multiplier based on its role in the performance.
+        // Hero/lead words dance at full amplitude. Filler/anchor words hold still,
+        // creating a stable reference that makes the hero's motion legible.
+        //
+        // Role hierarchy (derived from existing emphasisLevel + isHeroWord):
+        //   Lead    (1.0)  — hero words with emp >= 4: full dance, they ARE the performance
+        //   Support (0.7)  — high-emphasis non-hero (emp 3) or currently-spoken anchor
+        //   Chorus  (0.4)  — normal words (emp 2): follow along, don't compete
+        //   Anchor  (0.12) — filler words (emp 0-1): nearly still, the stable stage
+        //   Ghost   (0.0 → reversed) — exiting words: drift away with inverted motion
+        let danceRoleAmp = 0.4; // default: chorus
+        const isExitingWord = exitProgress > 0.3;
+
+        if (isExitingWord) {
+          // Ghost: exiting words get inverted, fading dance — they drift away
+          const exitFade = Math.max(0, 1 - exitProgress);
+          danceRoleAmp = -0.3 * exitFade; // negative = inverted motion direction
+        } else if (isHeroWord && emp >= 4) {
+          // Lead: hero words dance at full amplitude
+          danceRoleAmp = 1.0;
+        } else if (isSoloHero) {
+          // Solo hero always leads regardless of emp
+          danceRoleAmp = 1.0;
+        } else if (isAnchor && emp >= 2) {
+          // Currently-spoken word: support role — visible but not competing
+          danceRoleAmp = 0.7;
+        } else if (emp >= 3) {
+          // High emphasis non-hero: support
+          danceRoleAmp = 0.7;
+        } else if (emp >= 2) {
+          // Normal word: chorus — follows along at moderate amplitude
+          danceRoleAmp = 0.4;
+        } else {
+          // Filler (emp 0-1): anchor — nearly still, the stable stage
+          danceRoleAmp = 0.12;
+        }
+
+        // ═══ HERO STAGING: when a solo hero is center stage, everyone else steps back ═══
+        // Non-hero words reduce dance amplitude by 60% so the hero has visual space.
+        // This is the opposite of the old behavior where hero words piled on MORE visual
+        // noise while the background stayed at full volume.
+        if (groupHasActiveSoloHero && !isSoloHero && lineRole === 'current') {
+          danceRoleAmp *= 0.4;
+        }
+
         // When multi-line is active, _mlDx already positions words centered at 480.
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
-        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY) * sy;
+        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX * danceRoleAmp) * sx;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale);
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale);
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp));
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp));
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
