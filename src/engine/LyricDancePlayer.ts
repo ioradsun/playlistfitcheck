@@ -445,6 +445,12 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     entryScale?: number;
     exitOffsetY?: number;
     exitScale?: number;
+    /** Dance engine visual offset X (applied at draw time, not in layout) */
+    danceOffX?: number;
+    /** Dance engine visual offset Y (applied at draw time, not in layout) */
+    danceOffY?: number;
+    /** Dance engine scale additive (applied at draw time, not in layout) */
+    danceScale?: number;
   }>;
 };
 
@@ -3505,9 +3511,13 @@ export class LyricDancePlayer {
         const beatPulse = beatState?.pulse ?? 0;
         // PERF: sub-pixel snap draw coordinates to device pixel grid
         // Fractional positions cause shimmer during scale transitions (especially hero pop-in).
+        // Apply dance engine visual offsets AFTER bounds resolution.
+        // These are pure visual effects — they don't affect layout or font sizing.
+        const chunkDanceOffX = chunk.danceOffX ?? 0;
+        const chunkDanceOffY = chunk.danceOffY ?? 0;
         const dpr = this._effectiveDpr;
-        const heroDrawX = Math.round(drawX * dpr) / dpr;
-        const heroDrawY = Math.round(finalDrawY * dpr) / dpr;
+        const heroDrawX = Math.round((drawX + chunkDanceOffX) * dpr) / dpr;
+        const heroDrawY = Math.round((finalDrawY + chunkDanceOffY) * dpr) / dpr;
         // NOTE: beat bounce Y is now handled in evaluateFrame via SubsystemResponse.wordNudgeY
         // so every word (not just heroes) dances to the grid.
 
@@ -3545,6 +3555,10 @@ export class LyricDancePlayer {
           this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
         }
 
+        // Dance scale applied as a visual multiplier on the draw transform.
+        // Does not affect bounds or font sizing — purely visual.
+        const chunkDanceScaleMult = 1 + Math.max(-0.15, Math.min(0.15, chunk.danceScale ?? 0));
+
         if (chunk.ghostTrail && chunk.visible && this._qualityTier === 0) {
           const count = 1; // reduced from ghostCount (typically 3) — one ghost sells the motion, saves 2 fillText calls/frame
           const spacing = chunk.ghostSpacing ?? 8;
@@ -3566,8 +3580,8 @@ export class LyricDancePlayer {
               camShakeY + camCY + ((heroDrawY + gy) - camCY) * camZoom,
               (chunk.rotation ?? 0) + camRotation,
               chunk.skewX ?? 0,
-              sx * camZoom,
-              sy * camZoom,
+              sx * camZoom * chunkDanceScaleMult,
+              sy * camZoom * chunkDanceScaleMult,
             );
             this.ctx.setTransform(ga, gb, gc, gd, ge, gf);
             this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
@@ -3580,8 +3594,8 @@ export class LyricDancePlayer {
           camShakeY + camCY + (heroDrawY - camCY) * camZoom,
           (chunk.rotation ?? 0) + camRotation,
           chunk.skewX ?? 0,
-          sx * camZoom,
-          sy * camZoom,
+          sx * camZoom * chunkDanceScaleMult,
+          sy * camZoom * chunkDanceScaleMult,
         );
         this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
@@ -5746,37 +5760,30 @@ export class LyricDancePlayer {
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
 
-        // ═══ DISPLACEMENT BUDGET: cap total dance Y offset ═══
-        // Three additive Y sources (beatNudgeY + grammar + hit) can compound to
-        // ~160px on a 540px canvas, pushing words offscreen or piling them up.
-        // Cap to ±10% of compile height (~54px at 540p) — still a visible dance,
-        // but words stay in their spatial lane.
-        const _rawDanceY = beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp;
-        const _rawDanceX = _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp;
-        const _maxDisplacement = (this._compiledViewportH || 540) * 0.10;
-        const _clampedDanceY = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceY));
-        const _clampedDanceX = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceX));
-
-        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _clampedDanceX) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + _clampedDanceY) * sy;
+        // ═══ LAYOUT FIELDS: clean positions for bounds/shrink system ═══
+        // Dance offsets (grammar dY, hit dX, dScale) are stored SEPARATELY
+        // and applied at draw time. The bounds system sees the same layout
+        // it saw before the dance engine existed — no shrink from dance scale,
+        // no overlap from dance displacement.
+        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-
-        // ═══ SCALE BUDGET: cap compound scale to prevent shrink-code trigger ═══
-        // The 7-factor scale chain can compound to ~4.3× for hero words on downbeat hits.
-        // The downstream bounds solver (line ~3335) shrinks fontSize when a word's
-        // scaled width exceeds the viewport. Before the dance prompts the peak was ~3.2×
-        // which rarely triggered the shrink. Now it fires constantly.
-        //
-        // Inline words: cap at 1.6× (large enough for beat/emphasis, small enough to
-        //   never trigger the shrink code on a 960px compile canvas).
-        // Solo heroes (alone center screen): cap at 2.5× (they have the full stage).
-        const _rawScaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
-        const _rawScaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
-        const _maxScale = (isSoloHero && groupHasActiveSoloHero) ? 2.5 : 1.6;
-        chunk.scaleX = Math.min(_maxScale, Math.max(0.4, _rawScaleX));
-        chunk.scaleY = Math.min(_maxScale, Math.max(0.4, _rawScaleY));
+        // Scale WITHOUT dance contributions — only entry/exit/behavior/emphasis/beat
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
         chunk.scale = 1;
+
+        // ═══ DANCE FIELDS: visual-only, applied AFTER bounds resolve ═══
+        // Grammar + hit displacement, clamped to prevent extreme motion.
+        // danceRoleAmp and waveModulator shape per-word expression.
+        const _maxDisplacement = (this._compiledViewportH || 540) * 0.07;
+        const _rawDanceX = _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp;
+        const _rawDanceY = _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp;
+        chunk.danceOffX = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceX)) * sx;
+        chunk.danceOffY = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceY)) * sy;
+        chunk.danceScale = _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator
+                         + _hitMotion.dScale * Math.abs(danceRoleAmp);
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
         chunk.fontFamily = word.fontFamily;
