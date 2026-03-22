@@ -118,6 +118,18 @@ REQUIRED:
   "raw"         — unpolished, gritty noise
   "hypnotic"    — trance, tilt-shift, slow zoom
   Pick the ONE that best matches this section's emotional energy.
+- "dominantColor": a single hex color (#RRGGBB) that represents this section's emotional core.
+  Choose based on the section's feeling and lyrics:
+  · Anger, fire, urgency → reds (#D43030, #E8632B, #FF3030)
+  · Sadness, cold, isolation → blues (#4FA4D4, #2255AA, #050A14)
+  · Hope, dawn, growth → greens (#228844, #39FF14, #34D058) or warm yellows (#C9A96E, #FFD700)
+  · Love, vulnerability, intimacy → pinks/roses (#D4618C, #FF69B4, #FF6B9D)
+  · Power, royalty, mysticism → purples (#B088F9, #A855F7, #C49EFF)
+  · Nostalgia, earth, warmth → browns/ambers (#A0845C, #E8632B, #C4A878)
+  · Darkness, void, menace → near-blacks with tint (#0A0A0F, #0F0510, #120505)
+  · Triumph, glory, celebration → golds (#FFD700, #C9A96E, #F0ECE2)
+  · Eeriness, unease → teals/greens (#00BFA5, #0F5F5F)
+  Every section MUST have a DIFFERENT dominantColor. No two sections should share the same hex.
 
 OPTIONAL — override song defaults for this section:
 - "motion": override
@@ -717,7 +729,7 @@ function extractJson(raw: string): Record<string, any> | null {
   }
 }
 
-function validate(raw: Record<string, any>, sectionCount: number): ValidationResult {
+function validate(raw: Record<string, any>, sectionCount: number, body: RequestBody): ValidationResult {
   const errors: string[] = [];
   const v = { ...raw };
 
@@ -739,11 +751,43 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
     for (const s of v.sections) {
       if (typeof s.description !== "string" || !s.description.trim()) {
         errors.push(`Section ${s.sectionIndex}: missing description`);
+        const label = s.structuralLabel || `Section ${(s.sectionIndex ?? 0) + 1}`;
+        const mood = s.visualMood || "cinematic";
+        const sectionLines = (body.lines || []).filter((l: any) => {
+          if (typeof l?.start !== "number") return false;
+          const startSec = typeof s.suggestedStartSec === "number" ? s.suggestedStartSec : s.startSec;
+          const endSec = typeof s.suggestedEndSec === "number" ? s.suggestedEndSec : s.endSec;
+          if (typeof startSec !== "number" || typeof endSec !== "number") return false;
+          return l.start >= startSec - 0.5 && l.start < endSec + 0.5;
+        });
+        const lyricsExcerpt = sectionLines.map((l: any) => l.text || "").join(" ").slice(0, 80);
+        s.description = lyricsExcerpt
+          ? `${mood} scene for ${label}: ${lyricsExcerpt}`
+          : `${mood} cinematic landscape for ${label}`;
       }
       // Validate visualMood — required field, default to "intimate" if missing/invalid
       if (!s.visualMood || !(ENUMS.visualMood as readonly string[]).includes(s.visualMood)) {
         if (s.visualMood) errors.push(`Section ${s.sectionIndex}: invalid visualMood "${s.visualMood}"`);
         s.visualMood = "intimate";
+      }
+      if (typeof s.dominantColor !== "string" || !/^#[0-9a-fA-F]{6}$/.test(s.dominantColor)) {
+        const moodColorMap: Record<string, string> = {
+          intimate: "#C9A96E",
+          anthemic: "#E8632B",
+          dreamy: "#B088F9",
+          aggressive: "#4FA4D4",
+          melancholy: "#2255AA",
+          euphoric: "#FFD700",
+          eerie: "#00BFA5",
+          vulnerable: "#D4618C",
+          triumphant: "#FFD700",
+          nostalgic: "#A0845C",
+          defiant: "#4FA4D4",
+          hopeful: "#34D058",
+          raw: "#A0A4AC",
+          hypnotic: "#B088F9",
+        };
+        s.dominantColor = moodColorMap[s.visualMood] || "#C9A96E";
       }
       if (typeof s.structuralLabel === "string") {
         s.structuralLabel = s.structuralLabel.trim();
@@ -820,7 +864,7 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
   }
 
   const FORBIDDEN = [
-    "dominantColor", "colorHex", "physicsProfile", "cameraLanguage", "tensionCurve", "fontSize", "position",
+    "colorHex", "physicsProfile", "cameraLanguage", "tensionCurve", "fontSize", "position",
     "scaleX", "scaleY", "color", "glow", "kineticClass", "zoom", "driftIntensity", "startRatio", "endRatio",
     "chapters", "visualWorld", "beatAlignment",
   ];
@@ -831,7 +875,7 @@ function validate(raw: Record<string, any>, sectionCount: number): ValidationRes
 
 
 
-function validateScene(raw: Record<string, any>, sectionCount: number): ValidationResult {
+function validateScene(raw: Record<string, any>, sectionCount: number, body: RequestBody): ValidationResult {
   const errors: string[] = [];
   const v = { ...raw };
 
@@ -853,9 +897,41 @@ function validateScene(raw: Record<string, any>, sectionCount: number): Validati
     for (const s of v.sections) {
       if (typeof s.description !== "string" || !s.description.trim()) {
         errors.push(`Section ${s.sectionIndex}: missing description`);
+        const label = s.structuralLabel || `Section ${(s.sectionIndex ?? 0) + 1}`;
+        const mood = s.visualMood || "cinematic";
+        const sectionLines = (body.lines || []).filter((l: any) => {
+          if (typeof l?.start !== "number") return false;
+          const startSec = typeof s.suggestedStartSec === "number" ? s.suggestedStartSec : s.startSec;
+          const endSec = typeof s.suggestedEndSec === "number" ? s.suggestedEndSec : s.endSec;
+          if (typeof startSec !== "number" || typeof endSec !== "number") return false;
+          return l.start >= startSec - 0.5 && l.start < endSec + 0.5;
+        });
+        const lyricsExcerpt = sectionLines.map((l: any) => l.text || "").join(" ").slice(0, 80);
+        s.description = lyricsExcerpt
+          ? `${mood} scene for ${label}: ${lyricsExcerpt}`
+          : `${mood} cinematic landscape for ${label}`;
       }
       if (!s.visualMood || !(ENUMS.visualMood as readonly string[]).includes(s.visualMood)) {
         s.visualMood = "intimate";
+      }
+      if (typeof s.dominantColor !== "string" || !/^#[0-9a-fA-F]{6}$/.test(s.dominantColor)) {
+        const moodColorMap: Record<string, string> = {
+          intimate: "#C9A96E",
+          anthemic: "#E8632B",
+          dreamy: "#B088F9",
+          aggressive: "#4FA4D4",
+          melancholy: "#2255AA",
+          euphoric: "#FFD700",
+          eerie: "#00BFA5",
+          vulnerable: "#D4618C",
+          triumphant: "#FFD700",
+          nostalgic: "#A0845C",
+          defiant: "#4FA4D4",
+          hopeful: "#34D058",
+          raw: "#A0A4AC",
+          hypnotic: "#B088F9",
+        };
+        s.dominantColor = moodColorMap[s.visualMood] || "#C9A96E";
       }
       if (!s.structuralLabel) {
         s.structuralLabel = `Section ${Number.isInteger(s.sectionIndex) ? s.sectionIndex + 1 : 1}`;
@@ -887,7 +963,7 @@ function validateScene(raw: Record<string, any>, sectionCount: number): Validati
   delete v.wordDirectives;
 
   const FORBIDDEN = [
-    "dominantColor", "colorHex", "physicsProfile", "cameraLanguage", "tensionCurve", "fontSize", "position",
+    "colorHex", "physicsProfile", "cameraLanguage", "tensionCurve", "fontSize", "position",
     "scaleX", "scaleY", "color", "glow", "kineticClass", "zoom", "driftIntensity", "startRatio", "endRatio",
     "chapters", "visualWorld", "beatAlignment",
   ];
@@ -1039,7 +1115,7 @@ async function callScene(
 
   if (!parsed) throw { status: 422, message: "Invalid JSON from scene direction AI" };
 
-  const result = validateScene(parsed, sectionCount);
+  const result = validateScene(parsed, sectionCount, body);
   return result.value;
 }
 
@@ -1175,7 +1251,7 @@ async function callWithRetry(
   const first = await callAI(messages);
   if (!first) throw { status: 422, message: "Invalid JSON from AI" };
 
-  const result = validate(first, sectionCount);
+  const result = validate(first, sectionCount, body);
 
   // Only retry if critical creative data is completely absent
   const missingCreative: string[] = [];
@@ -1215,7 +1291,7 @@ async function callWithRetry(
     throw { status: 422, message: `Cinematic direction failed: ${allErrors.join("; ")}` };
   }
 
-  const retryResult = validate(second, sectionCount);
+  const retryResult = validate(second, sectionCount, body);
 
   const retryStoryboard = Array.isArray(retryResult.value.storyboard) ? retryResult.value.storyboard.length : 0;
   const retryDirectives = Array.isArray(retryResult.value.wordDirectives) ? retryResult.value.wordDirectives.length : 0;

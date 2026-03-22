@@ -21,6 +21,7 @@ import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
 import type { SceneContextResult } from "@/lib/sceneContexts";
 import type { WaveformData } from "@/hooks/useAudioEngine";
+import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 
 /** Invoke a Supabase edge function with a timeout. If the timeout fires,
  *  the returned promise rejects but the server-side call continues to completion. */
@@ -686,11 +687,7 @@ export function LyricFitTab({
                     confidence: beatGrid.confidence,
                   }
                 : { bpm: 0, beats: [], confidence: 0 },
-              palette: cinematicDirection?.palette || [
-                "#ffffff",
-                "#a855f7",
-                "#ec4899",
-              ],
+              palette: derivePaletteFromDirection(cinematicDirection),
               section_images: null,
             } as any,
             { onConflict: "artist_slug,song_slug" },
@@ -1198,11 +1195,7 @@ export function LyricFitTab({
                         confidence: beatGrid.confidence,
                       }
                     : { bpm: 0, beats: [], confidence: 0 },
-                  palette: enrichedScene?.palette || [
-                    "#ffffff",
-                    "#a855f7",
-                    "#ec4899",
-                  ],
+                  palette: derivePaletteFromDirection(enrichedScene),
                   section_images: null,
                 } as any,
                 { onConflict: "artist_slug,song_slug" },
@@ -1276,7 +1269,10 @@ export function LyricFitTab({
                   if (palettes && palettes.length > 0) {
                     void supabase
                       .from("shareable_lyric_dances" as any)
-                      .update({ auto_palettes: palettes as any })
+                      .update({
+                        auto_palettes: palettes as any,
+                        palette: palettes[0] ?? undefined,
+                      } as any)
                       .eq("id", resolvedDanceId);
                   }
                 } catch (paletteErr) {
