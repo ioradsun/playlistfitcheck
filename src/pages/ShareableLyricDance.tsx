@@ -294,19 +294,6 @@ export default function ShareableLyricDance() {
             className="absolute inset-0 w-full h-full pointer-events-none"
           />
 
-          {reactionPanelOpen && (
-            <div
-              className="absolute inset-0 z-[15] cursor-pointer"
-              style={{
-                background: "rgba(0,0,0,0.55)",
-                transition: "opacity 200ms ease",
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                handlePanelClose();
-              }}
-            />
-          )}
 
           <AnimatePresence>
             {(showCover || isWaiting) && (
