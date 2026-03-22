@@ -5751,6 +5751,11 @@ export class LyricDancePlayer {
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
         chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
         chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
+        // Cap compound scale to prevent font shrink trigger.
+        // Solo heroes (alone center screen) get more headroom.
+        const _scaleMax = (isSoloHero && groupHasActiveSoloHero) ? 2.0 : 1.5;
+        chunk.scaleX = Math.max(0.5, Math.min(_scaleMax, chunk.scaleX));
+        chunk.scaleY = Math.max(0.5, Math.min(_scaleMax, chunk.scaleY));
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
