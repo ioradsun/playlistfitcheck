@@ -5009,8 +5009,7 @@ export class LyricDancePlayer {
       return { ...frame, chunks: [], particles: frame.particles ?? [] } as any;
     }
 
-    // Single active group — preview disabled.
-    const nextGroupIdx = -1;
+    // Single active group only — no preview.
     if (activeGroupIdx >= 0) {
       activeGroups.length = 1;
       activeGroups[0] = activeGroupIdx;
@@ -5520,8 +5519,7 @@ export class LyricDancePlayer {
 
         // No previous/next/offscreen. No vocal wave alpha modulation.
         // Active chunk words are at full brightness. Period.
-        const isPreviewGroup = groupIdx === nextGroupIdx;
-        let roleAlpha = lineRole === 'current' ? 1.0 : isPreviewGroup ? 0.15 : 0.0;
+        let roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
         let roleScale = 1.0;
 
         // Wave proximity still tracked for emphasis glow, but NOT for alpha
