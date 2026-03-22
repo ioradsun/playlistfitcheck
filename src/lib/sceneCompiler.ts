@@ -323,25 +323,11 @@ export function computeAllLineLayouts(
       }
     }
 
-    // Auto-scale: if line is too wide, shrink fonts proportionally to fit
-    // Skip auto-scale on portrait — wrapping handles overflow with bigger fonts
-    const maxLineWidth = canvasW - margin * 2;
-    if (!isPortrait && totalWidth > maxLineWidth && totalWidth > 0) {
-      const scale = maxLineWidth / totalWidth;
-      totalWidth = 0;
-      for (let i = 0; i < flatWords.length; i++) {
-        flatWords[i].fontSize *= scale;
-        flatWords[i].width = getWordWidth(flatWords[i].wm.word, flatWords[i].fontSize);
-        totalWidth += flatWords[i].width;
-        if (i < flatWords.length - 1) {
-          const sw = getSpaceWidth(Math.min(flatWords[i].fontSize, flatWords[i + 1].fontSize)) * SPACE_MULT;
-          spaceWidths[i] = sw;
-          totalWidth += sw;
-        } else {
-          spaceWidths[i] = 0;
-        }
-      }
-    }
+    // ─── No compile-time auto-scale ───
+    // The runtime multi-line wrapper in LyricDancePlayer._updateChunks handles
+    // overflow by wrapping words onto multiple rows with zoom-aware width budgets.
+    // Compile-time auto-scaling fights this by pre-shrinking fonts, defeating
+    // the cinematic sizing system. Words keep their intended display sizes.
 
     // ─── Portrait word wrapping: split into rows ───
     // On portrait, if line is still wider than the effective max, wrap words into rows.
