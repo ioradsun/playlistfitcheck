@@ -1129,6 +1129,15 @@ export class LyricDancePlayer {
   private _bgSnapshotQTier = -1;     // quality tier when snapshot was last baked
   private _bgLastBakeMs = 0;         // timestamp of last snapshot bake
   private _bgRebakeIntervalMs = 500; // rebake background every 500ms
+  // ═══ Background parallax — smoothed camera following for depth perception ═══
+  // Spatial ratio: background moves 12% of camera (Disney multiplane far-plane).
+  // Temporal inertia: EMA filter makes background resist fast motion (perceived mass).
+  private _bgParallaxX = 0;
+  private _bgParallaxY = 0;
+  private _bgParallaxZoom = 1;
+  private _bgParallaxRot = 0;
+  private static readonly BG_PARALLAX_DEPTH = 0.12;
+  private static readonly BG_PARALLAX_ALPHA = 0.07;
   // ═══ Per-frame caches — computed once in tick(), reused everywhere ═══
   private _frameSectionIdx = -1;
   private _framePalette: string[] | null = null;
@@ -1676,6 +1685,7 @@ export class LyricDancePlayer {
     this._mlLayoutCache.clear(); // group context changes on seek
     this.conductor?.resetCursor();
     this.cameraRig.reset();
+    this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
   }
@@ -1950,6 +1960,7 @@ export class LyricDancePlayer {
     this._lastVisibleChunkSetHash = 0;
     this._lastSortHash = 0;
     this.cameraRig.reset();
+    this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
     this._bgSnapshotSection = -1;
@@ -2284,6 +2295,13 @@ export class LyricDancePlayer {
     }
   }
 
+  private _resetBgParallax(): void {
+    this._bgParallaxX = 0;
+    this._bgParallaxY = 0;
+    this._bgParallaxZoom = 1;
+    this._bgParallaxRot = 0;
+  }
+
   private _handleVisibilityChangeImpl(): void {
     if (document.hidden) return;
 
@@ -2299,6 +2317,7 @@ export class LyricDancePlayer {
     this._timeInitialized = false;
 
     this.cameraRig?.reset();
+    this._resetBgParallax();
     this.ambientParticleEngine?.clear();
 
     if (this._qualityTier > 0) {
@@ -2859,10 +2878,39 @@ export class LyricDancePlayer {
       this._bgLastBakeMs = nowMsBg;
     }
 
-    // Stamp frozen snapshot — one drawImage, zero filters
+    // Stamp frozen snapshot with parallax depth
+    // Background follows camera through EMA filter at 12% depth ratio.
+    // Fast beat impulses filtered out. Slow section drifts pass through.
+    // Disney multiplane principle: far objects have mass.
     if (this._bgSnapshot) {
+      const subjectT = this.cameraRig.getSubjectTransform();
+      const depth = LyricDancePlayer.BG_PARALLAX_DEPTH;
+      const alpha = LyricDancePlayer.BG_PARALLAX_ALPHA;
+
+      const targetX = subjectT.offsetX * depth;
+      const targetY = subjectT.offsetY * depth;
+      const targetZoom = 1 + (subjectT.zoom - 1) * depth;
+      const targetRot = subjectT.rotation * depth;
+
+      this._bgParallaxX += (targetX - this._bgParallaxX) * alpha;
+      this._bgParallaxY += (targetY - this._bgParallaxY) * alpha;
+      this._bgParallaxZoom += (targetZoom - this._bgParallaxZoom) * alpha;
+      this._bgParallaxRot += (targetRot - this._bgParallaxRot) * alpha;
+
+      const dpr = this._effectiveDpr;
+      const cx = (this.width / 2) * dpr;
+      const cy = (this.height / 2) * dpr;
+
       this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      this.ctx.save();
+      this.ctx.translate(cx + this._bgParallaxX * dpr, cy + this._bgParallaxY * dpr);
+      if (Math.abs(this._bgParallaxRot) > 0.0001) {
+        this.ctx.rotate(this._bgParallaxRot);
+      }
+      this.ctx.scale(this._bgParallaxZoom, this._bgParallaxZoom);
+      this.ctx.translate(-cx, -cy);
       this.ctx.drawImage(this._bgSnapshot, 0, 0);
+      this.ctx.restore();
       this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     }
 
