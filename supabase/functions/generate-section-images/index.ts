@@ -37,23 +37,38 @@ const SECTION_COLOR_SEEDS = [
 
 // Visual mood → image generation style hints
 const MOOD_IMAGE_STYLE: Record<string, string> = {
-  intimate: "ultra dark exposure, warm amber lighting, shallow depth of field, soft shadows",
-  anthemic: "vivid colors, dramatic lighting, wide cinematic shot, high contrast",
-  dreamy: "soft focus, warm golden light, ethereal glow, hazy atmosphere, blown highlights",
-  aggressive: "cold blue steel tones, harsh contrast, gritty, sharp shadows, dark",
-  melancholy: "muted desaturated colors, overcast cool light, rain-soaked, foggy",
-  euphoric: "bright warm light, golden hour, lens flare, vivid saturated colors, radiant",
-  eerie: "dark teal green tint, cold fluorescent light, unsettling shadows, fog",
-  vulnerable: "warm soft light, intimate close framing, gentle shadows, dusty film grain",
-  triumphant: "golden dramatic light, bold contrast, wide heroic framing, rich warm tones",
-  nostalgic: "warm sepia tones, vintage film grain, soft sunlight, faded memories",
-  defiant: "cold high contrast, dramatic side lighting, sharp edges, bold shadows",
+  intimate:
+    "ultra dark exposure, warm amber lighting, shallow depth of field, soft shadows",
+  anthemic:
+    "vivid colors, dramatic lighting, wide cinematic shot, high contrast",
+  dreamy:
+    "soft focus, warm golden light, ethereal glow, hazy atmosphere, blown highlights",
+  aggressive:
+    "cold blue steel tones, harsh contrast, gritty, sharp shadows, dark",
+  melancholy:
+    "muted desaturated colors, overcast cool light, rain-soaked, foggy",
+  euphoric:
+    "bright warm light, golden hour, lens flare, vivid saturated colors, radiant",
+  eerie:
+    "dark teal green tint, cold fluorescent light, unsettling shadows, fog",
+  vulnerable:
+    "warm soft light, intimate close framing, gentle shadows, dusty film grain",
+  triumphant:
+    "golden dramatic light, bold contrast, wide heroic framing, rich warm tones",
+  nostalgic:
+    "warm sepia tones, vintage film grain, soft sunlight, faded memories",
+  defiant:
+    "cold high contrast, dramatic side lighting, sharp edges, bold shadows",
   hopeful: "dawn light, warm gradient sky, soft bright exposure, gentle rays",
   raw: "ungraded neutral, harsh direct light, gritty documentary feel, high grain",
-  hypnotic: "deep saturated colors, slow gradient, mysterious lighting, tilt-shift bokeh",
+  hypnotic:
+    "deep saturated colors, slow gradient, mysterious lighting, tilt-shift bokeh",
 };
 
-function buildImagePrompt(section: SectionInput, totalSections: number): string {
+function buildImagePrompt(
+  section: SectionInput,
+  totalSections: number,
+): string {
   const parts: string[] = ["Cinematic background scene"];
 
   // Core description
@@ -82,7 +97,10 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
   // Lyrics excerpt for thematic grounding (first ~60 chars)
   const lyrics = section.lyrics?.trim();
   if (lyrics) {
-    const excerpt = lyrics.length > 60 ? lyrics.slice(0, 60).replace(/\s+\S*$/, '...') : lyrics;
+    const excerpt =
+      lyrics.length > 60
+        ? lyrics.slice(0, 60).replace(/\s+\S*$/, "...")
+        : lyrics;
     parts.push(`evoking the feeling of "${excerpt}"`);
   }
 
@@ -92,7 +110,8 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
   }
 
   // Color seed for guaranteed visual variety
-  const colorSeed = SECTION_COLOR_SEEDS[section.sectionIndex % SECTION_COLOR_SEEDS.length];
+  const colorSeed =
+    SECTION_COLOR_SEEDS[section.sectionIndex % SECTION_COLOR_SEEDS.length];
   parts.push(colorSeed);
 
   // Section position awareness
@@ -103,7 +122,9 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
   }
 
   // Base quality — no longer forcing "ultra dark" on every image
-  parts.push("wide cinematic shot, no people, no text, no faces, photorealistic, film grain, 4k");
+  parts.push(
+    "wide cinematic shot, no people, no text, no faces, photorealistic, film grain, 4k",
+  );
 
   const prompt = parts.join(", ");
   if (!description) {
@@ -112,26 +133,30 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
   return prompt;
 }
 
-async function generateImage(prompt: string, apiKey: string): Promise<string | null> {
-  
-
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+async function generateImage(
+  prompt: string,
+  apiKey: string,
+): Promise<string | null> {
+  const resp = await fetch(
+    "https://ai.gateway.lovable.dev/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-image",
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        modalities: ["image", "text"],
+      }),
     },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      modalities: ["image", "text"],
-    }),
-  });
+  );
 
   if (!resp.ok) {
     const text = await resp.text();
@@ -149,7 +174,11 @@ async function generateImage(prompt: string, apiKey: string): Promise<string | n
   return imageUrl;
 }
 
-async function triggerPreviewPrecompute(sbUrl: string, sbKey: string, lyricDanceId: string): Promise<void> {
+async function triggerPreviewPrecompute(
+  sbUrl: string,
+  sbKey: string,
+  lyricDanceId: string,
+): Promise<void> {
   try {
     const resp = await fetch(`${sbUrl}/functions/v1/precompute-dance-preview`, {
       method: "POST",
@@ -162,10 +191,15 @@ async function triggerPreviewPrecompute(sbUrl: string, sbKey: string, lyricDance
 
     if (!resp.ok) {
       const text = await resp.text();
-      console.error(`[section-images] preview precompute failed ${resp.status}: ${text}`);
+      console.error(
+        `[section-images] preview precompute failed ${resp.status}: ${text}`,
+      );
     }
   } catch (error) {
-    console.error("[section-images] preview precompute invocation failed", error);
+    console.error(
+      "[section-images] preview precompute invocation failed",
+      error,
+    );
   }
 }
 
@@ -174,7 +208,9 @@ async function uploadBase64ToStorage(
   base64DataUri: string,
   path: string,
 ): Promise<string | null> {
-  const match = base64DataUri.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
+  const match = base64DataUri.match(
+    /^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/,
+  );
   if (!match) {
     console.error("[section-images] Invalid base64 data URI format");
     return null;
@@ -189,17 +225,24 @@ async function uploadBase64ToStorage(
     bytes[i] = binaryString.charCodeAt(i);
   }
 
-  const { error } = await supabase.storage.from("lyric-backgrounds").upload(path, bytes, {
-    contentType: mimeType,
-    upsert: true,
-  });
+  const { error } = await supabase.storage
+    .from("lyric-backgrounds")
+    .upload(path, bytes, {
+      contentType: mimeType,
+      upsert: true,
+    });
 
   if (error) {
-    console.error(`[section-images] Storage upload error for ${path}:`, error.message);
+    console.error(
+      `[section-images] Storage upload error for ${path}:`,
+      error.message,
+    );
     return null;
   }
 
-  const { data: urlData } = supabase.storage.from("lyric-backgrounds").getPublicUrl(path);
+  const { data: urlData } = supabase.storage
+    .from("lyric-backgrounds")
+    .getPublicUrl(path);
   return urlData?.publicUrl ?? null;
 }
 
@@ -213,10 +256,13 @@ serve(async (req) => {
     const { lyric_dance_id, force } = body;
 
     if (!lyric_dance_id) {
-      return new Response(JSON.stringify({ error: "lyric_dance_id is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "lyric_dance_id is required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -239,11 +285,24 @@ serve(async (req) => {
     }
 
     const existingImages = danceRow?.section_images;
-    if (!force && Array.isArray(existingImages) && existingImages.length > 0 && existingImages.every((url: string) => !!url)) {
+    if (
+      !force &&
+      Array.isArray(existingImages) &&
+      existingImages.length > 0 &&
+      existingImages.every((url: string) => !!url)
+    ) {
       await triggerPreviewPrecompute(sbUrl, sbKey, lyric_dance_id);
       return new Response(
-        JSON.stringify({ success: true, cached: true, section_images: existingImages, urls: existingImages }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        JSON.stringify({
+          success: true,
+          cached: true,
+          section_images: existingImages,
+          urls: existingImages,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -251,45 +310,106 @@ serve(async (req) => {
     const lines = Array.isArray(danceRow?.lyrics) ? danceRow.lyrics : [];
 
     const rawSections = Array.isArray(cinematicDirection?.sections)
-      ? cinematicDirection.sections : [];
+      ? cinematicDirection.sections
+      : [];
 
     const sections: SectionInput[] = rawSections
       .map((section: any, idx: number) => {
-        const sectionIndex = Number.isFinite(section?.sectionIndex) ? Number(section.sectionIndex) : idx;
+        const sectionIndex = Number.isFinite(section?.sectionIndex)
+          ? Number(section.sectionIndex)
+          : idx;
 
         // Extract lyrics for this section's time range
         let sectionLyrics = "";
         if (section?.startSec != null && section?.endSec != null) {
-          const sectionLines = lines.filter((l: any) =>
-            l?.start != null && l?.end != null &&
-            l.start >= section.startSec - 0.5 && l.start < section.endSec + 0.5
+          const sectionLines = lines.filter(
+            (l: any) =>
+              l?.start != null &&
+              l?.end != null &&
+              l.start >= section.startSec - 0.5 &&
+              l.start < section.endSec + 0.5,
           );
-          sectionLyrics = sectionLines.map((l: any) => l.text || "").join(" ").slice(0, 120);
+          sectionLyrics = sectionLines
+            .map((l: any) => l.text || "")
+            .join(" ")
+            .slice(0, 120);
         }
 
         return {
           sectionIndex,
-          description: typeof section?.description === "string" ? section.description : "",
-          visualMood: typeof section?.visualMood === "string" ? section.visualMood : undefined,
+          description:
+            typeof section?.description === "string" ? section.description : "",
+          visualMood:
+            typeof section?.visualMood === "string"
+              ? section.visualMood
+              : undefined,
           mood: typeof section?.mood === "string" ? section.mood : undefined,
-          atmosphere: typeof section?.atmosphere === "string" ? section.atmosphere : undefined,
-          texture: typeof section?.texture === "string" ? section.texture : undefined,
-          motion: typeof section?.motion === "string" ? section.motion : undefined,
+          atmosphere:
+            typeof section?.atmosphere === "string"
+              ? section.atmosphere
+              : undefined,
+          texture:
+            typeof section?.texture === "string" ? section.texture : undefined,
+          motion:
+            typeof section?.motion === "string" ? section.motion : undefined,
           lyrics: sectionLyrics || undefined,
         };
       })
-      .sort((a: SectionInput, b: SectionInput) => a.sectionIndex - b.sectionIndex);
+      .sort(
+        (a: SectionInput, b: SectionInput) => a.sectionIndex - b.sectionIndex,
+      );
 
     if (sections.length === 0) {
-      return new Response(JSON.stringify({ error: "cinematic_direction.sections[].description is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "cinematic_direction.sections[].description is required",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const prompts = sections.map((section: SectionInput) => buildImagePrompt(section, sections.length));
-    const imageResults = await Promise.all(prompts.map((prompt: string) => generateImage(prompt, apiKey)));
+    const prompts = sections.map((section: SectionInput) =>
+      buildImagePrompt(section, sections.length),
+    );
 
+    // First pass: generate all images in parallel
+    let imageResults = await Promise.all(
+      prompts.map((prompt: string) => generateImage(prompt, apiKey)),
+    );
+
+    // Retry pass: attempt failed images up to 2 more times with staggered delay
+    const MAX_RETRIES = 2;
+    for (let retry = 0; retry < MAX_RETRIES; retry++) {
+      const failedIndices = imageResults
+        .map((result, index) => (result === null ? index : -1))
+        .filter((index) => index >= 0);
+      if (failedIndices.length === 0) break;
+
+      console.log(
+        `[section-images] Retry ${retry + 1}: ${failedIndices.length} failed images`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 2000 * (retry + 1)));
+
+      const retryResults = await Promise.all(
+        failedIndices.map((index) => generateImage(prompts[index], apiKey)),
+      );
+
+      for (
+        let retryResultIndex = 0;
+        retryResultIndex < failedIndices.length;
+        retryResultIndex++
+      ) {
+        if (retryResults[retryResultIndex] !== null) {
+          imageResults[failedIndices[retryResultIndex]] =
+            retryResults[retryResultIndex];
+        }
+      }
+    }
+
+    // Upload all successful images to storage
     const uploadResults = await Promise.all(
       imageResults.map(async (base64, i) => {
         if (!base64) return null;
@@ -301,7 +421,8 @@ serve(async (req) => {
 
     const urls = uploadResults.map((url) => url ?? null);
     const successCount = urls.filter(Boolean).length;
-    
+    const totalCount = sections.length;
+    const allComplete = successCount === totalCount;
 
     if (successCount > 0) {
       const { error: updateError } = await supabase
@@ -310,15 +431,29 @@ serve(async (req) => {
         .eq("id", lyric_dance_id);
 
       if (updateError) {
-        // DB update error
-      } else {
+        console.error("[section-images] DB update error:", updateError.message);
+      } else if (allComplete) {
+        // Only trigger preview precompute if ALL images are ready
         await triggerPreviewPrecompute(sbUrl, sbKey, lyric_dance_id);
       }
     }
 
     return new Response(
-      JSON.stringify({ success: true, urls, section_images: urls, generated: successCount }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({
+        success: allComplete,
+        partial: !allComplete && successCount > 0,
+        urls,
+        section_images: urls,
+        generated: successCount,
+        total: totalCount,
+        failed_indices: urls
+          .map((url, index) => (url === null ? index : -1))
+          .filter((index) => index >= 0),
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (e) {
     console.error("[section-images] Error:", e);
