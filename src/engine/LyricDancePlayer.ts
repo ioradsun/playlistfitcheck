@@ -5006,13 +5006,33 @@ export class LyricDancePlayer {
     // and wrong layout. The custom font IS the creative direction — no fallback.
     // Words will appear slightly later on first load but with correct layout.
     if (!this._fontStabilized) {
-      return { timeMs: 0, beatIndex: 0, chunks: [], particles: [] } as any;
+      return { ...frame, chunks: [], particles: frame.particles ?? [] } as any;
     }
 
-    // Single active group only — no preview.
+    // Keep the active group AND the next upcoming group visible.
+    // Active group: full brightness. Next group: preview at 15% alpha.
+    // This gives viewers context for what's coming and positions words
+    // before they become active — no layout jump on transition.
+    let nextGroupIdx = -1;
     if (activeGroupIdx >= 0) {
-      activeGroups.length = 1;
-      activeGroups[0] = activeGroupIdx;
+      // Find the next group on the SAME line or the next line
+      for (let gi = activeGroupIdx + 1; gi < groups.length; gi++) {
+        const ng = groups[gi];
+        if (ng.start > tSec) {
+          nextGroupIdx = gi;
+          break;
+        }
+      }
+    }
+    if (activeGroupIdx >= 0) {
+      if (nextGroupIdx >= 0) {
+        activeGroups.length = 2;
+        activeGroups[0] = activeGroupIdx;
+        activeGroups[1] = nextGroupIdx;
+      } else {
+        activeGroups.length = 1;
+        activeGroups[0] = activeGroupIdx;
+      }
     } else {
       activeGroups.length = 0;
     }
@@ -5519,7 +5539,8 @@ export class LyricDancePlayer {
 
         // No previous/next/offscreen. No vocal wave alpha modulation.
         // Active chunk words are at full brightness. Period.
-        let roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
+        const isPreviewGroup = groupIdx === nextGroupIdx;
+        let roleAlpha = lineRole === 'current' ? 1.0 : isPreviewGroup ? 0.15 : 0.0;
         let roleScale = 1.0;
 
         // Wave proximity still tracked for emphasis glow, but NOT for alpha
@@ -5538,7 +5559,9 @@ export class LyricDancePlayer {
           waveProximity = Math.exp(-(distance * distance) / (2 * waveWidth * waveWidth));
         }
 
-        let finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
+        let finalAlpha = isPreviewGroup
+          ? Math.min(word.semanticAlphaMax, roleAlpha)
+          : Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
         // ─── NEW HERO MODEL: duration-gated solo OR emphasis-based inline ───
         const isHeroWord = word.isHeroWord === true;
@@ -5549,14 +5572,14 @@ export class LyricDancePlayer {
         let heroOffsetY = 0;
 
         // SOLO hero: ≥500ms, alone center screen
-        if (isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
+        if (isSoloHero && lineRole === 'current' && !isPreviewGroup && groupHasActiveSoloHero) {
           heroOffsetX = 480 - word.layoutX - groupCenterOffsetX; // center, undoing group shift
           heroOffsetY = 270 - roleY;
           heroScaleMult = 1.5;
         }
 
         // Non-hero words: hidden while a SOLO hero is active
-        if (!isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
+        if (!isSoloHero && lineRole === 'current' && !isPreviewGroup && groupHasActiveSoloHero) {
           roleAlpha = 0;
         }
 
@@ -5573,7 +5596,9 @@ export class LyricDancePlayer {
           heroScaleMult = emphasisScale;
         }
 
-        finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
+        finalAlpha = isPreviewGroup
+          ? Math.min(word.semanticAlphaMax, roleAlpha)
+          : Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
 
         const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
@@ -5743,12 +5768,12 @@ export class LyricDancePlayer {
         // Scale: entry × exit × behavior × semantic × intensity × wave × beat × dance
         // Offset: entry + exit + behavior + beat nudge + dance
         // These are visual sugar. They never affect bounds or font sizing.
-        chunk.animScaleX = finalScaleX * intensityScaleMult * waveScale * roleScale * beatScaleMult
+        chunk.animScaleX = isPreviewGroup ? 1 : finalScaleX * intensityScaleMult * waveScale * roleScale * beatScaleMult
                          * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
-        chunk.animScaleY = finalScaleY * intensityScaleMult * waveScale * roleScale * beatScaleMult
+        chunk.animScaleY = isPreviewGroup ? 1 : finalScaleY * intensityScaleMult * waveScale * roleScale * beatScaleMult
                          * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
-        chunk.animOffX = (finalOffsetX + _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp) * sx;
-        chunk.animOffY = (finalOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp) * sy;
+        chunk.animOffX = isPreviewGroup ? 0 : (finalOffsetX + _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp) * sx;
+        chunk.animOffY = isPreviewGroup ? 0 : (finalOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp) * sy;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
         chunk.fontFamily = word.fontFamily;
