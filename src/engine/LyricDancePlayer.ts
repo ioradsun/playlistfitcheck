@@ -428,6 +428,14 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     emphasisLevel?: number;
     entryProgress?: number;
     exitProgress?: number;
+    /** Animation scale multiplier (entry/exit/beat/dance) — draw-time only, not for bounds */
+    animScaleX?: number;
+    /** Animation scale multiplier Y — draw-time only, not for bounds */
+    animScaleY?: number;
+    /** Animation offset X in screen pixels — draw-time only, not for bounds */
+    animOffX?: number;
+    /** Animation offset Y in screen pixels — draw-time only, not for bounds */
+    animOffY?: number;
     iconGlyph?: string;
     iconStyle?: 'outline' | 'filled' | 'ghost';
     iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
@@ -3328,49 +3336,8 @@ export class LyricDancePlayer {
       }
     }
 
-    let shrinkOccurred = false;
-    for (let passPriority = 2; passPriority >= 0; passPriority -= 1) {
-      for (let bi = 0; bi < bounds.length; bi += 1) {
-        const b = bounds[bi];
-        if (b.priority !== passPriority) continue;
-        const availW = wallRight - wallLeft;
-        const availH = wallBottom - wallTop;
-        const tooWide = b.halfW * 2 > availW;
-        const tooTall = b.halfH * 2 > availH;
-        if (!tooWide && !tooTall) continue;
-        const shrinkRatioW = tooWide ? (availW / (b.halfW * 2)) : 1;
-        const shrinkRatioH = tooTall ? (availH / (b.halfH * 2)) : 1;
-        const shrinkRatio = Math.min(shrinkRatioW, shrinkRatioH);
-        b.fontSize = Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio));
-        const newFontStr = `${b.weight} ${b.fontSize}px ${b.family}`;
-        const metrics2 = this.getCachedMetrics(b.text, newFontStr);
-        b.baseTextWidth = metrics2.width;
-        const asc2 = metrics2.ascent;
-        const desc2 = metrics2.descent;
-        const halfTextH2 = (asc2 + desc2) / 2;
-        b.halfW = (b.baseTextWidth * Math.abs(b.scaleX)) / 2 + 6;
-        b.halfH = (halfTextH2 * Math.abs(b.scaleY)) + 3;
-        shrinkOccurred = true;
-      }
-    }
-
-    if (shrinkOccurred) {
-      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
-      // In-place copy — avoid allocating N new objects on every shrink frame.
-      // Only fall back to map() when the array must grow (rare).
-      if (this._solvedBounds.length !== bounds.length) {
-        this._solvedBounds = bounds.map(b => ({ ...b }));
-      } else {
-        for (let si = 0; si < bounds.length; si++) {
-          this._solvedBounds[si].cx = bounds[si].cx;
-          this._solvedBounds[si].cy = bounds[si].cy;
-          this._solvedBounds[si].fontSize = bounds[si].fontSize;
-          this._solvedBounds[si].halfW = bounds[si].halfW;
-          this._solvedBounds[si].halfH = bounds[si].halfH;
-          this._solvedBounds[si].baseTextWidth = bounds[si].baseTextWidth;
-        }
-      }
-    }
+    // Shrink code removed. Layout scale (emphasis only, max 1.75×) is guaranteed
+    // to fit any viewport ≥ 200px wide. Animation scale is draw-time-only.
 
     this.ctx.save();
     // ═══ DIRECTOR'S CAMERA: Pure depth — zoom into the words ═══
@@ -3438,20 +3405,22 @@ export class LyricDancePlayer {
       const centerX = bound ? bound.cx : rawDrawX;
       const centerY = bound ? bound.cy : rawDrawY;
 
-      const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
-      const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
-      const syRaw = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : baseScale;
-      const sx = Number.isFinite(sxRaw) ? sxRaw : 1;
-      const sy = Number.isFinite(syRaw) ? syRaw : 1;
+      // Layout scale (emphasis only) — used for bounds. Stable per word.
+      const layoutSx = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : 1;
+      const layoutSy = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : 1;
+      // Animation scale (entry/exit/beat/dance) — visual only, per frame.
+      const animSx = chunk.animScaleX ?? 1;
+      const animSy = chunk.animScaleY ?? 1;
+      // Total scale for rendering
+      const sx = layoutSx * animSx;
+      const sy = layoutSy * animSy;
+      // Animation offset — visual only, per frame
+      const chunkAnimOffX = chunk.animOffX ?? 0;
+      const chunkAnimOffY = chunk.animOffY ?? 0;
 
-      // drawX: position the text's left edge so that AFTER scaling, it's centered on centerX.
-      // With textAlign='left', fillText draws from x=0 → rightward.
-      // The transform scales by sx, so visual width = textWidth * sx.
-      // We need: tx + textWidth * sx / 2 = visual_center
-      // But tx feeds through computeTransformMatrix as the origin (e = tx * dpr).
-      // So: drawX = centerX - textWidth * sx * 0.5
-      let drawX = centerX - textWidth * sx * 0.5;
-      const drawY = centerY;
+      // drawX: center text using TOTAL scale (layout × animation)
+      let drawX = centerX + chunkAnimOffX - textWidth * sx * 0.5;
+      const drawY = centerY + chunkAnimOffY;
       const finalDrawY = drawY;
 
       const isAnchor = chunk.isAnchor ?? false;
@@ -5032,10 +5001,38 @@ export class LyricDancePlayer {
         }
       }
     }
-    // Replace activeGroups with just the one active group
+    // ═══ FONT GATE: no words until custom font is loaded ═══
+    // Rendering with fallback font produces wrong word widths, wrong spacing,
+    // and wrong layout. The custom font IS the creative direction — no fallback.
+    // Words will appear slightly later on first load but with correct layout.
+    if (!this._fontStabilized) {
+      return { ...frame, chunks: [], particles: frame.particles ?? [] } as any;
+    }
+
+    // Keep the active group AND the next upcoming group visible.
+    // Active group: full brightness. Next group: preview at 15% alpha.
+    // This gives viewers context for what's coming and positions words
+    // before they become active — no layout jump on transition.
+    let nextGroupIdx = -1;
     if (activeGroupIdx >= 0) {
-      activeGroups.length = 1;
-      activeGroups[0] = activeGroupIdx;
+      // Find the next group on the SAME line or the next line
+      for (let gi = activeGroupIdx + 1; gi < groups.length; gi++) {
+        const ng = groups[gi];
+        if (ng.start > tSec) {
+          nextGroupIdx = gi;
+          break;
+        }
+      }
+    }
+    if (activeGroupIdx >= 0) {
+      if (nextGroupIdx >= 0) {
+        activeGroups.length = 2;
+        activeGroups[0] = activeGroupIdx;
+        activeGroups[1] = nextGroupIdx;
+      } else {
+        activeGroups.length = 1;
+        activeGroups[0] = activeGroupIdx;
+      }
     } else {
       activeGroups.length = 0;
     }
@@ -5542,7 +5539,8 @@ export class LyricDancePlayer {
 
         // No previous/next/offscreen. No vocal wave alpha modulation.
         // Active chunk words are at full brightness. Period.
-        let roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
+        const isPreviewGroup = groupIdx === nextGroupIdx;
+        let roleAlpha = lineRole === 'current' ? 1.0 : isPreviewGroup ? 0.15 : 0.0;
         let roleScale = 1.0;
 
         // Wave proximity still tracked for emphasis glow, but NOT for alpha
@@ -5561,7 +5559,9 @@ export class LyricDancePlayer {
           waveProximity = Math.exp(-(distance * distance) / (2 * waveWidth * waveWidth));
         }
 
-        let finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
+        let finalAlpha = isPreviewGroup
+          ? Math.min(word.semanticAlphaMax, roleAlpha)
+          : Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
         // ─── NEW HERO MODEL: duration-gated solo OR emphasis-based inline ───
         const isHeroWord = word.isHeroWord === true;
@@ -5572,14 +5572,14 @@ export class LyricDancePlayer {
         let heroOffsetY = 0;
 
         // SOLO hero: ≥500ms, alone center screen
-        if (isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
+        if (isSoloHero && lineRole === 'current' && !isPreviewGroup && groupHasActiveSoloHero) {
           heroOffsetX = 480 - word.layoutX - groupCenterOffsetX; // center, undoing group shift
           heroOffsetY = 270 - roleY;
           heroScaleMult = 1.5;
         }
 
         // Non-hero words: hidden while a SOLO hero is active
-        if (!isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
+        if (!isSoloHero && lineRole === 'current' && !isPreviewGroup && groupHasActiveSoloHero) {
           roleAlpha = 0;
         }
 
@@ -5596,7 +5596,9 @@ export class LyricDancePlayer {
           heroScaleMult = emphasisScale;
         }
 
-        finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
+        finalAlpha = isPreviewGroup
+          ? Math.min(word.semanticAlphaMax, roleAlpha)
+          : Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
 
         const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
@@ -5749,13 +5751,29 @@ export class LyricDancePlayer {
         // When multi-line is active, _mlDx already positions words centered at 480.
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
-        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp) * sy;
+
+        // ═══ LAYOUT (stable — used by bounds/collision) ═══
+        // Position: compile-time layout + multi-line + hero centering. No animation offsets.
+        // Scale: emphasis only (heroScaleMult). No entry/exit/beat/dance.
+        // These values guarantee the word fits and doesn't overlap.
+        chunk.x = (word.layoutX + xCenterOffset + letterOffsetX + heroOffsetX) * sx;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + heroOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
+        chunk.scaleX = heroScaleMult;
+        chunk.scaleY = heroScaleMult;
         chunk.scale = 1;
+
+        // ═══ ANIMATION (per-frame — applied at draw time only) ═══
+        // Scale: entry × exit × behavior × semantic × intensity × wave × beat × dance
+        // Offset: entry + exit + behavior + beat nudge + dance
+        // These are visual sugar. They never affect bounds or font sizing.
+        chunk.animScaleX = isPreviewGroup ? 1 : finalScaleX * intensityScaleMult * waveScale * roleScale * beatScaleMult
+                         * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
+        chunk.animScaleY = isPreviewGroup ? 1 : finalScaleY * intensityScaleMult * waveScale * roleScale * beatScaleMult
+                         * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
+        chunk.animOffX = isPreviewGroup ? 0 : (finalOffsetX + _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp) * sx;
+        chunk.animOffY = isPreviewGroup ? 0 : (finalOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp) * sy;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
         chunk.fontFamily = word.fontFamily;
