@@ -208,7 +208,9 @@ export function LyricsTab({
       try {
         // Check transcription cache first
         const fingerprint = await computeAudioFingerprint(file);
-        const cached = getCachedTranscript(fingerprint);
+        // DEV: transcript cache disabled for testing — always re-transcribe
+        // const cached = getCachedTranscript(fingerprint);
+        const cached = null as ReturnType<typeof getCachedTranscript>;
         if (cached && cached.lines?.length > 0) {
           // Cache hit — skip the edge function entirely
           const newLyricData: LyricData = {
