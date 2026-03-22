@@ -5006,7 +5006,7 @@ export class LyricDancePlayer {
     // and wrong layout. The custom font IS the creative direction — no fallback.
     // Words will appear slightly later on first load but with correct layout.
     if (!this._fontStabilized) {
-      return { ...frame, chunks: [], particles: frame.particles ?? [] } as any;
+      return { timeMs: 0, beatIndex: 0, chunks: [], particles: [] } as any;
     }
 
     // Keep the active group AND the next upcoming group visible.
