@@ -1690,6 +1690,8 @@ export class LyricDancePlayer {
     this._springVelocity = 0;
     this._timeInitialized = false;
     this._mlLayoutCache.clear(); // group context changes on seek
+    this._lastVisibleChunkCount = -1;
+    this._lastVisibleChunkSetHash = 0;
     this.conductor?.resetCursor();
     this.cameraRig.reset();
     this._resetBgParallax();
@@ -5039,6 +5041,8 @@ export class LyricDancePlayer {
       // Add 8% breathing room so words never touch the walls even at peak zoom + shake.
       const maxCameraZoom = this.cameraRig?.config?.maxZoom ?? 1.18;
       const MAX_LINE_WIDTH = (960 * 0.85) / maxCameraZoom * 0.92;
+      const displaySpaceRatio = (fontSize: number): number =>
+        0.25 + Math.min(0.15, Math.max(0, (fontSize - 24) / 160));
       let _isMultiLine = false;
       let _mlDx: number[];
       let _mlDy: number[];
@@ -5096,7 +5100,7 @@ export class LyricDancePlayer {
             if (wi < group.words.length - 1) {
               const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
               if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-              totalLineW += Math.max(mCtx.measureText(' ').width, fs * 0.25) * 1.15;
+              totalLineW += Math.max(mCtx.measureText(' ').width, fs * displaySpaceRatio(fs)) * 1.15;
             }
           }
 
@@ -5106,7 +5110,7 @@ export class LyricDancePlayer {
           if (needsWrap) {
             _isMultiLine = true;
             const normalFS = group.words[0].baseFontSize;
-            const normalLineH = normalFS * 1.3;
+            const normalLineH = normalFS * 1.5;
 
             // Build line list: scaled words get solo lines, others wrap by measured width
             type LineRange = { words: number[]; isHero: boolean; h: number };
@@ -5132,7 +5136,7 @@ export class LyricDancePlayer {
               const fs = Math.round(w.baseFontSize);
               const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
               if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-              return Math.max(mCtx.measureText(' ').width, fs * 0.25) * 1.15;
+              return Math.max(mCtx.measureText(' ').width, fs * displaySpaceRatio(fs)) * 1.15;
             };
 
             // A word wider than 60% of the line gets its own row
@@ -5149,8 +5153,13 @@ export class LyricDancePlayer {
                 const wi = nonHeroBuf[i];
                 const ww = measureWordWidth(wi);
 
-                // Case 3: big word → gets its own row
-                if (ww > SOLO_WORD_THRESHOLD) {
+                // Case 3: big word → gets its own row.
+                // Two triggers: pixel width exceeds threshold, OR the word has 9+ characters
+                // at display font sizes. Long words at cinematic sizes need visual isolation —
+                // a title designer would never cram "grandiosity" next to three other words.
+                const w = group.words[wi];
+                const isLongDisplayWord = w.text.length >= 9 && w.baseFontSize >= 36;
+                if (ww > SOLO_WORD_THRESHOLD || isLongDisplayWord) {
                   if (rowWords.length > 0) {
                     mlLines.push({ words: rowWords, isHero: false, h: normalLineH });
                     rowWords = [];
@@ -5222,7 +5231,7 @@ export class LyricDancePlayer {
                 if (i < line.words.length - 1) {
                   const spaceStr = `400 ${fs}px ${family}`;
                   if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-                  lineW += Math.max(mCtx.measureText(' ').width, fs * 0.25) * 1.15;
+                  lineW += Math.max(mCtx.measureText(' ').width, fs * displaySpaceRatio(fs)) * 1.15;
                 }
               }
 
@@ -5240,7 +5249,7 @@ export class LyricDancePlayer {
                   const fs = Math.round(w.baseFontSize);
                   const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
                   if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-                  cursor += Math.max(mCtx.measureText(' ').width, fs * 0.25) * 1.15;
+                  cursor += Math.max(mCtx.measureText(' ').width, fs * displaySpaceRatio(fs)) * 1.15;
                 }
               }
 

@@ -236,8 +236,9 @@ export function computeAllLineLayouts(
   const margin = Math.max(8, Math.round(canvasW * marginRatio));
   const lineY = Math.round(canvasH * 0.5);
   const SPACE_MULT = 1.15;
-  // Wider inter-word space on compact targets so words don't merge after scaling
-  const MIN_SPACE_RATIO = isCompactTarget ? 0.35 : 0.25;
+  const displaySpaceRatio = (fontSize: number): number =>
+    0.25 + Math.min(0.15, Math.max(0, (fontSize - 24) / 160));
+  const compactFloor = isCompactTarget ? 0.35 : 0;
   const result = new Map<string, GroupPosition[]>();
 
   // On compact targets, use a TIGHTER fill threshold to FORCE wrapping —
@@ -259,7 +260,7 @@ export function computeAllLineLayouts(
     const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
     if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
     const measured = measureCtx.measureText(' ').width;
-    return Math.max(measured, fontSize * MIN_SPACE_RATIO);
+    return Math.max(measured, fontSize * Math.max(compactFloor, displaySpaceRatio(fontSize)));
   };
   const wordFontSize = (wm: WordMetaEntry, baseFontSize: number) => {
     const isFiller = isFillerWord(wm.word);
@@ -324,7 +325,11 @@ export function computeAllLineLayouts(
 
     // Auto-scale: if line is too wide, shrink fonts proportionally to fit
     // Skip auto-scale on portrait — wrapping handles overflow with bigger fonts
-    const maxLineWidth = canvasW - margin * 2;
+    // Use the same zoom-aware width the runtime wrapping engine uses.
+    // Without this, compile-time shrinks fonts to fit 840px, then runtime
+    // tries to wrap at 636px with the pre-shrunk fonts — they disagree.
+    const maxCameraZoom = 1.18; // matches LyricDancePlayer CameraRig default
+    const maxLineWidth = (canvasW * 0.85) / maxCameraZoom * 0.92;
     if (!isPortrait && totalWidth > maxLineWidth && totalWidth > 0) {
       const scaleFactor = maxLineWidth / totalWidth;
       // Floor in reference space — ensures runtime font ≥ 12px after scaling.
