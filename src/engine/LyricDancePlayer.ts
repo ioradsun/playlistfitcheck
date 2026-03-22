@@ -43,6 +43,7 @@ import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/
 import { classifyDance, classifySection, type DancePattern, type DanceClassification } from "@/engine/DanceClassifier";
 import { computeDanceMotion, crossfadeDanceMotion, type DanceMotion, type GrammarInput } from "@/engine/MotionGrammar";
 import { PhraseMemory, type PhraseState } from "@/engine/PhraseMemory";
+import { HitChoreographer, type HitMotion } from "@/engine/HitChoreographer";
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
@@ -1047,6 +1048,10 @@ export class LyricDancePlayer {
   private _phraseMemory = new PhraseMemory();
   private _lastPhraseState: PhraseState | null = null;
 
+  /** Per-instrument hit response with physics decay */
+  private _hitChoreographer = new HitChoreographer();
+  private _lastHitMotion: HitMotion = { dX: 0, dY: 0, dScale: 0, rotation: 0 };
+
   /** Per-section dance pattern override */
   private _sectionDancePattern: DancePattern = 'bounce';
   private _prevSectionDancePattern: DancePattern = 'bounce';
@@ -1488,6 +1493,7 @@ export class LyricDancePlayer {
         const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
         this.compiledScene = compiled;
         this._markCompiledViewport(this.width || 960, this.height || 540);
+        this._hitChoreographer.setCompileHeight(this.height || 540);
 
         // ═══ V2: Create BeatConductor with full audio analysis ═══
         const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
@@ -1504,6 +1510,7 @@ export class LyricDancePlayer {
           this.conductor.analysis,
         );
         this._phraseMemory.reset();
+        this._hitChoreographer.reset();
         this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
         this._prevSectionDancePattern = this._sectionDancePattern;
         this._sectionCrossfadeProgress = 1.0;
@@ -1728,6 +1735,7 @@ export class LyricDancePlayer {
     this.conductor?.resetCursor();
     this.cameraRig.reset();
     this._phraseMemory.reset();
+    this._hitChoreographer.reset();
     this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
     this._prevSectionDancePattern = this._sectionDancePattern;
     this._sectionCrossfadeProgress = 1.0;
@@ -2081,6 +2089,7 @@ export class LyricDancePlayer {
     this._lastSortHash = 0;
     this.cameraRig.reset();
     this._phraseMemory.reset();
+    this._hitChoreographer.reset();
     this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
     this._prevSectionDancePattern = this._sectionDancePattern;
     this._sectionCrossfadeProgress = 1.0;
@@ -2447,6 +2456,7 @@ export class LyricDancePlayer {
 
     this.cameraRig?.reset();
     this._phraseMemory.reset();
+    this._hitChoreographer.reset();
     this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
     this._prevSectionDancePattern = this._sectionDancePattern;
     this._sectionCrossfadeProgress = 1.0;
@@ -2920,6 +2930,9 @@ export class LyricDancePlayer {
       (ds as any).phraseAmp = _phraseState.amplitudeMultiplier;
     }
     (ds as any).sectionDance = this._sectionDancePattern;
+    (ds as any).hitType = beatState?.hitType ?? 'none';
+    (ds as any).hitDX = Math.round(_hitMotion.dX * 10) / 10;
+    (ds as any).hitDY = Math.round(_hitMotion.dY * 10) / 10;
     (ds as any).crossfade = this._sectionCrossfadeProgress < 1.0
       ? `${this._prevSectionDancePattern}→${this._sectionDancePattern} ${Math.round(this._sectionCrossfadeProgress * 100)}%`
       : null;
@@ -5163,6 +5176,22 @@ export class LyricDancePlayer {
       _danceMotion.dScale *= phraseMult;
     }
 
+    // ═══ HIT CHOREOGRAPHER: per-instrument impulse response ═══
+    // Fires physics-decayed impulses on bass/transient/tonal hits.
+    // Output stacks on top of grammar dance — grammar is the continuous dance,
+    // hit choreographer is the punctuation (the kick, the crack, the bloom).
+    const _hitMotion = beatState
+      ? this._hitChoreographer.tick(
+          beatState.beatIndex,
+          beatState.hitType,
+          beatState.hitStrength,
+          beatState.energy,
+          beatState.isDownbeat,
+          Math.min(0.1, (this._frameDt || 16.67) / 1000),
+        )
+      : this._lastHitMotion;
+    this._lastHitMotion = _hitMotion;
+
     // ═══ WAVE RIPPLE: precompute per-frame constants ═══
     // The ripple is a cosine wave that propagates across the word line.
     // Each word's position (0-1 within the line) shifts its phase, so the
@@ -5715,12 +5744,12 @@ export class LyricDancePlayer {
         // When multi-line is active, _mlDx already positions words centered at 480.
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
-        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX * danceRoleAmp * waveModulator) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator) * sy;
+        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp) * sx;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator);
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator);
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
@@ -5774,7 +5803,7 @@ export class LyricDancePlayer {
         chunk.behavior = usedBehavior;
         chunk.skewX = finalSkewX;
         chunk.blur = Math.max(0, Math.min(1, finalBlur));
-        chunk.rotation = finalRotation;
+        chunk.rotation = finalRotation + _hitMotion.rotation * Math.abs(danceRoleAmp);
         chunk.ghostTrail = resolvedWord?.ghostTrail ?? word.ghostTrail;
         chunk.ghostCount = word.ghostCount;
         chunk.ghostSpacing = word.ghostSpacing;
