@@ -255,7 +255,7 @@ export default function ShareableLyricDance() {
       )}
 
       <AnimatePresence>
-        {badgeVisible && !isMarketingView && renderData && (
+        {badgeVisible && !isMarketingView && !isMobile && renderData && (
           <motion.button
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -341,12 +341,12 @@ export default function ShareableLyricDance() {
             )}
           </AnimatePresence>
 
-          {!isWaiting && !reactionPanelOpen && (
+          {!reactionPanelOpen && (
             <div
-              className={`absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center ${isMobile ? "justify-end" : "justify-between"}`}
+              className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-between"
               onClick={(e) => e.stopPropagation()}
             >
-              {!isMobile && !isMarketingView ? (
+              {!isMarketingView ? (
                 <div
                   className="flex items-center gap-2.5 cursor-pointer"
                   onClick={() => renderData?.user_id && navigate(`/u/${renderData.user_id}`)}
@@ -396,38 +396,6 @@ export default function ShareableLyricDance() {
           ...(isMobile ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
         }}
       >
-        {isMobile && !reactionPanelOpen && !isMarketingView && coverArtist && (
-          <div
-            className="flex items-center gap-2 px-4 pt-2 pb-1 cursor-pointer"
-            onClick={() =>
-              renderData?.user_id && navigate(`/u/${renderData.user_id}`)
-            }
-          >
-            <div className="relative shrink-0">
-              {coverAvatarUrl ? (
-                <img
-                  src={coverAvatarUrl}
-                  alt=""
-                  className="w-8 h-8 rounded-full object-cover border border-white/[0.06]"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                  <span className="text-[11px] font-mono text-white/30">
-                    {coverInitial}
-                  </span>
-                </div>
-              )}
-              {profile?.is_verified && (
-                <span className="absolute -bottom-0.5 -right-0.5">
-                  <VerifiedBadge size={10} />
-                </span>
-              )}
-            </div>
-            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate max-w-[60vw]">
-              {coverArtist ? `In Studio · ${coverArtist}` : "In Studio"}
-            </span>
-          </div>
-        )}
         {!showCover && !isWaiting && renderData && (
           <LyricDanceProgressBar
             player={player}
