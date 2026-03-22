@@ -5006,7 +5006,7 @@ export class LyricDancePlayer {
     // and wrong layout. The custom font IS the creative direction — no fallback.
     // Words will appear slightly later on first load but with correct layout.
     if (!this._fontStabilized) {
-      return { ...frame, chunks: [], particles: frame.particles ?? [] } as any;
+      return { chunks: [], particles: [] } as any;
     }
 
     // Keep the active group AND the next upcoming group visible.
@@ -5528,7 +5528,9 @@ export class LyricDancePlayer {
         const isExiting = exitProgress > 0;
 
         // ═══ ACTIVE CHUNK ONLY: always dead center, full brightness ═══
-        const roleY = 270; // center of 540px compile space
+        // Preview group: positioned in lower third to avoid overlapping active words.
+        const isPreviewGroup = groupIdx === nextGroupIdx;
+        const roleY = isPreviewGroup ? 440 : 270;
 
         // Base animation alpha (entry/exit/behavior)
         const animAlpha = isExiting
@@ -5539,7 +5541,6 @@ export class LyricDancePlayer {
 
         // No previous/next/offscreen. No vocal wave alpha modulation.
         // Active chunk words are at full brightness. Period.
-        const isPreviewGroup = groupIdx === nextGroupIdx;
         let roleAlpha = lineRole === 'current' ? 1.0 : isPreviewGroup ? 0.15 : 0.0;
         let roleScale = 1.0;
 
@@ -5760,8 +5761,8 @@ export class LyricDancePlayer {
         chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + heroOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = heroScaleMult;
-        chunk.scaleY = heroScaleMult;
+        chunk.scaleX = isPreviewGroup ? heroScaleMult * 0.55 : heroScaleMult;
+        chunk.scaleY = isPreviewGroup ? heroScaleMult * 0.55 : heroScaleMult;
         chunk.scale = 1;
 
         // ═══ ANIMATION (per-frame — applied at draw time only) ═══
