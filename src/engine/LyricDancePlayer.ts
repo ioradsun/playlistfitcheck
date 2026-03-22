@@ -445,12 +445,6 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     entryScale?: number;
     exitOffsetY?: number;
     exitScale?: number;
-    /** Dance engine visual offset X (applied at draw time, not in layout) */
-    danceOffX?: number;
-    /** Dance engine visual offset Y (applied at draw time, not in layout) */
-    danceOffY?: number;
-    /** Dance engine scale additive (applied at draw time, not in layout) */
-    danceScale?: number;
   }>;
 };
 
@@ -486,7 +480,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 11;
+const BAKER_VERSION = 4;
 
 const SIM_W = 96;
 const SIM_H = 54;
@@ -1202,10 +1196,6 @@ export class LyricDancePlayer {
   /** Pixel offset to shift text UP — compensates for bottom overlay (playbar, battle bar) */
   private _textVerticalBias = 0;
 
-  /** Temporary debug throttle — remove after tiny-font diagnosis */
-  private _tinyFontLogThrottle = 0;
-  private _camDebugThrottle = 0;
-
   // Comment comets
   private activeComments: CommentChunk[] = [];
   private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
@@ -1484,6 +1474,13 @@ export class LyricDancePlayer {
       this._bakeLock = true;
       const bakeGen = this._bakeGeneration; // snapshot — if updateTranscript() fires mid-bake it increments this
       this._bakePromise = (async () => {
+        // Ensure real viewport dimensions before compiling
+        if (this.width === 0 && this.container) {
+          const cw = this.container.offsetWidth || this.canvas.offsetWidth || 960;
+          const ch = this.container.offsetHeight || this.canvas.offsetHeight || 540;
+          if (cw > 0 && ch > 0) this.resize(cw, ch);
+        }
+
         const payload = this.buildScenePayload();
         this.payload = payload;
         this._songGrade = null; // force recomputation for new song
@@ -1492,25 +1489,9 @@ export class LyricDancePlayer {
         this.songStartSec = payload.songStart;
         this.songEndSec = payload.songEnd;
 
-        // ═══ REFRESH VIEWPORT AFTER FONT LOAD ═══
-        // The font await gave the container time to reach its final CSS dimensions.
-        // Read them now — right before compileScene — so the compile uses fully
-        // initialized state: correct font metrics AND correct viewport size.
-        // This is the single moment when everything is settled.
-        if (this.container) {
-          const cw = this.container.offsetWidth || this.canvas.offsetWidth;
-          const ch = this.container.offsetHeight || this.canvas.offsetHeight;
-          if (cw > 0 && ch > 0 && (cw !== this.width || ch !== this.height)) {
-            this.resize(cw, ch);
-          }
-        }
-
-        // Compile the scene — font loaded, viewport final
-        // NOTE: Do NOT write to this.compiledScene here. The bakeGeneration check
-        // below may discard this result (if font reflow already recompiled in tick).
-        // Writing early would overwrite the reflow's correct scene.
-        // All code below uses the local `compiled` variable, not this.compiledScene.
+        // Compile the scene
         const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
+        this.compiledScene = compiled;
         this._markCompiledViewport(this.width || 960, this.height || 540);
         this._hitChoreographer.setCompileHeight(this.height || 540);
 
@@ -1558,14 +1539,11 @@ export class LyricDancePlayer {
         this._updateViewportScale();
         this._textMetricsCache.clear();
 
-        // Only commit if no one invalidated the bake (font reflow, updateTranscript, etc.)
+        // Only commit to cache if updateTranscript() hasn't fired since we started
         if (this._bakeGeneration !== bakeGen) {
           this._bakeLock = false;
-          return; // stale bake — discard, font reflow or updateTranscript already set compiledScene
+          return; // stale bake — discard, updateTranscript already set compiledScene fresh
         }
-        // Bake is valid — NOW write to compiledScene (after validation, not before)
-        this.compiledScene = compiled;
-        this._fontLayoutReflowPending = false;
         this._bakedScene = compiled;
         this._bakedChunkCache = new Map(this.chunks);
         this._bakedHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
@@ -1584,41 +1562,10 @@ export class LyricDancePlayer {
     }
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    this._mlLayoutCache.clear();
-
-    // ═══ POST-BAKE DIMENSION RECONCILIATION ═══
-    // The bake is async (~200ms). The container may have reached its final CSS
-    // dimensions DURING the bake (after the initial dim read). If a ResizeObserver
-    // callback already recompiled with correct dims, the bake restore above just
-    // overwrote that correct version with a stale one.
-    //
-    // Fix: read the container's CURRENT dimensions. If they differ from what
-    // the baked scene was compiled with, recompile now. This is the final word.
-    if (this.container && this.compiledScene) {
-      const currentW = this.container.offsetWidth || this.canvas.offsetWidth;
-      const currentH = this.container.offsetHeight || this.canvas.offsetHeight;
-      if (currentW > 0 && currentH > 0) {
-        const compiledW = this._compiledViewportW;
-        const compiledH = this._compiledViewportH;
-        const wDelta = Math.abs(currentW - compiledW) / Math.max(1, compiledW);
-        const hDelta = Math.abs(currentH - compiledH) / Math.max(1, compiledH);
-        const isPortraitNow = currentH > currentW;
-        const wasPortrait = this._compiledWasPortrait;
-        // Recompile if orientation flipped OR dimensions changed by >10%
-        if (isPortraitNow !== wasPortrait || wDelta > 0.1 || hDelta > 0.1) {
-          this.resize(currentW, currentH);
-        }
-      }
-    }
-
     const playStart = this.data.region_start ?? this.songStartSec;
-    // ═══ CLEAN SLATE: reset all runtime state after bake ═══
-    // The tick loop was running during the async bake, accumulating camera zoom,
-    // spring offsets, beat state, etc. This drift can affect wall computation
-    // and text sizing on the first visible frame. Reset everything to the same
-    // clean state that seek() produces — this is exactly why replay fixes
-    // the tiny font issue. The compiled scene stays untouched.
-    this.seek(playStart);
+    if (this.audio.currentTime <= 0 || this.data.region_start != null) {
+      this.audio.currentTime = playStart;
+    }
   }
 
   private enableFullVisualMode(): void {
@@ -2548,26 +2495,18 @@ export class LyricDancePlayer {
       this.lastTimestamp = timestamp;
       this.updateFrameBudget(deltaMs);
       if (this._fontLayoutReflowPending) {
+        this._fontLayoutReflowPending = false;
+        this._textMetricsCache.clear();
+        this._mlLayoutCache.clear();
+        this._lastVisibleChunkCount = -1;
+        this._lastVisibleChunkSetHash = 0;
+        this._lastVisibleFirstChunkId = "";
+        this._lastVisibleMidChunkId = "";
+        this._lastVisibleLastChunkId = "";
         // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
-        // Only consume the flag if the recompile actually runs.
-        // On first load (minimal boot), compiledScene may still be null because
-        // the bake hasn't finished yet. Keep the flag set so the next tick retries.
         if (this.payload && this.compiledScene) {
-          this._fontLayoutReflowPending = false;
-          this._textMetricsCache.clear();
-          this._mlLayoutCache.clear();
-          this._lastVisibleChunkCount = -1;
-          this._lastVisibleChunkSetHash = 0;
-          this._lastVisibleFirstChunkId = "";
-          this._lastVisibleMidChunkId = "";
-          this._lastVisibleLastChunkId = "";
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
-          this._markCompiledViewport(this.width || 960, this.height || 540);
           this._buildChunkCacheFromScene(this.compiledScene);
-          this._updateViewportScale();
-          // Increment bake generation so the in-flight bake's post-restore is skipped.
-          // The bake checks `if (this._bakeGeneration !== bakeGen)` and discards stale results.
-          this._bakeGeneration++;
         }
       }
 
@@ -3356,34 +3295,13 @@ export class LyricDancePlayer {
       || firstVisibleId !== this._lastVisibleFirstChunkId
       || midVisibleId !== this._lastVisibleMidChunkId
       || lastVisibleId !== this._lastVisibleLastChunkId;
-    // ═══ OVERFLOW HANDLING: cap SCALE, never crush font size ═══
-    // Font size = legibility (must preserve). Scale = emphasis (can sacrifice).
-    //
-    // When a word's scaled width exceeds the viewport, reduce scaleX/scaleY
-    // to the maximum that fits. Write capped scale back to the chunk.
-    // The font stays readable. Emphasis adapts to what the viewport allows.
-    for (let bi = 0; bi < bounds.length; bi += 1) {
-      const b = bounds[bi];
-      const availW = wallRight - wallLeft;
-      const availH = wallBottom - wallTop;
-      if (availW > 0 && availH > 0) {
-        const scaledW = b.baseTextWidth * Math.abs(b.scaleX) + 12;
-        const scaledH = b.halfH * 2;
-        if (scaledW > availW || scaledH > availH) {
-          const maxScaleW = scaledW > availW ? (availW - 12) / Math.max(1, b.baseTextWidth) : Math.abs(b.scaleX);
-          const maxScaleH = scaledH > availH ? (availH * Math.abs(b.scaleY)) / Math.max(1, scaledH) : Math.abs(b.scaleY);
-          const cappedScale = Math.max(0.5, Math.min(maxScaleW, maxScaleH));
-          b.scaleX = (b.scaleX >= 0 ? 1 : -1) * Math.min(Math.abs(b.scaleX), cappedScale);
-          b.scaleY = (b.scaleY >= 0 ? 1 : -1) * Math.min(Math.abs(b.scaleY), cappedScale);
-          b.halfW = (b.baseTextWidth * Math.abs(b.scaleX)) / 2 + 6;
-          const m = this.getCachedMetrics(b.text, `${b.weight} ${b.fontSize}px ${b.family}`);
-          b.halfH = ((m.ascent + m.descent) / 2) * Math.abs(b.scaleY) + 3;
-          // Write capped scale back to chunk so draw uses it
-          b.chunk.scaleX = b.scaleX;
-          b.chunk.scaleY = b.scaleY;
-        }
-      }
-      // Wall-clamp
+    // Solver disabled — the runtime multi-line wrapper handles layout.
+    // The solver's corrections were ephemeral (lost when bounds are rebuilt
+    // next frame from animated chunk.x/y), causing oscillation with smoothing.
+    // Wall clamping below still prevents words from leaving the viewport.
+    // Wall-clamp ALL bounds every frame (stable, no jitter)
+    for (let i = 0; i < bounds.length; i++) {
+      const b = bounds[i];
       const minX = wallLeft + b.halfW;
       const maxX = wallRight - b.halfW;
       const minY = wallTop + b.halfH;
@@ -3401,7 +3319,52 @@ export class LyricDancePlayer {
       if (!this._solvedBounds[i]) {
         this._solvedBounds[i] = { ...bounds[i] };
       } else {
-        Object.assign(this._solvedBounds[i], bounds[i]);
+        this._solvedBounds[i].cx = bounds[i].cx;
+        this._solvedBounds[i].cy = bounds[i].cy;
+      }
+    }
+
+    let shrinkOccurred = false;
+    for (let passPriority = 2; passPriority >= 0; passPriority -= 1) {
+      for (let bi = 0; bi < bounds.length; bi += 1) {
+        const b = bounds[bi];
+        if (b.priority !== passPriority) continue;
+        const availW = wallRight - wallLeft;
+        const availH = wallBottom - wallTop;
+        const tooWide = b.halfW * 2 > availW;
+        const tooTall = b.halfH * 2 > availH;
+        if (!tooWide && !tooTall) continue;
+        const shrinkRatioW = tooWide ? (availW / (b.halfW * 2)) : 1;
+        const shrinkRatioH = tooTall ? (availH / (b.halfH * 2)) : 1;
+        const shrinkRatio = Math.min(shrinkRatioW, shrinkRatioH);
+        b.fontSize = Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio));
+        const newFontStr = `${b.weight} ${b.fontSize}px ${b.family}`;
+        const metrics2 = this.getCachedMetrics(b.text, newFontStr);
+        b.baseTextWidth = metrics2.width;
+        const asc2 = metrics2.ascent;
+        const desc2 = metrics2.descent;
+        const halfTextH2 = (asc2 + desc2) / 2;
+        b.halfW = (b.baseTextWidth * Math.abs(b.scaleX)) / 2 + 6;
+        b.halfH = (halfTextH2 * Math.abs(b.scaleY)) + 3;
+        shrinkOccurred = true;
+      }
+    }
+
+    if (shrinkOccurred) {
+      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
+      // In-place copy — avoid allocating N new objects on every shrink frame.
+      // Only fall back to map() when the array must grow (rare).
+      if (this._solvedBounds.length !== bounds.length) {
+        this._solvedBounds = bounds.map(b => ({ ...b }));
+      } else {
+        for (let si = 0; si < bounds.length; si++) {
+          this._solvedBounds[si].cx = bounds[si].cx;
+          this._solvedBounds[si].cy = bounds[si].cy;
+          this._solvedBounds[si].fontSize = bounds[si].fontSize;
+          this._solvedBounds[si].halfW = bounds[si].halfW;
+          this._solvedBounds[si].halfH = bounds[si].halfH;
+          this._solvedBounds[si].baseTextWidth = bounds[si].baseTextWidth;
+        }
       }
     }
 
@@ -3417,32 +3380,6 @@ export class LyricDancePlayer {
     const camRotation = camT.rotation;
     const camCX = camCXWall;
     const camCY = camCYWall;
-
-    // ═══ TEMPORARY DEBUG: remove after diagnosis ═══
-    if (!this._camDebugThrottle || performance.now() - this._camDebugThrottle > 3000) {
-      this._camDebugThrottle = performance.now();
-      const wordSizes: string[] = [];
-      for (let di = 0; di < sortBuf.length; di++) {
-        const dc = sortBuf[di];
-        if (!dc.visible || (dc.alpha ?? 0) < 0.3) continue;
-        const dObj = this.chunks.get(dc.id);
-        if (!dObj) continue;
-        const dText = dc.text ?? dObj.text;
-        const dFS = Number.isFinite(dc.fontSize) ? dc.fontSize : 36;
-        const dBaseScale = Number.isFinite(dc.scale) ? dc.scale : 1;
-        const dSX = Number.isFinite(dc.scaleX) ? dc.scaleX : dBaseScale;
-        const dDanceScale = dc.danceScale ?? 0;
-        const dDanceMult = 1 + Math.max(-0.15, Math.min(0.15, dDanceScale));
-        const dVisual = Math.round(dFS * Math.abs(dSX) * dDanceMult * camZoom * 10) / 10;
-        const dEntry = Math.round((dc.entryProgress ?? 0) * 100);
-        const dExit = Math.round((dc.exitProgress ?? 0) * 100);
-        const dHero = dc.isSoloHero ? 'SOLO' : dc.isHeroWord ? 'hero' : '';
-        wordSizes.push(`"${dText}" ${dVisual}px fs=${Math.round(dFS)} sx=${Math.round(dSX*100)/100} dance=${Math.round(dDanceMult*100)/100} e=${dEntry}% ${dHero}`);
-      }
-      if (wordSizes.length > 0) {
-        console.warn(`[WORD SIZES] zoom=${Math.round(camZoom*1000)/1000} viewport=${this.width}x${this.height}`, '\n' + wordSizes.join('\n'));
-      }
-    }
 
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
       const chunk = sortBuf[ci];
@@ -3502,48 +3439,6 @@ export class LyricDancePlayer {
       const syRaw = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : baseScale;
       const sx = Number.isFinite(sxRaw) ? sxRaw : 1;
       const sy = Number.isFinite(syRaw) ? syRaw : 1;
-
-      // ═══ TEMPORARY DEBUG: remove after diagnosis ═══
-      // Log when visual font size is small relative to viewport width.
-      // On a 1280px viewport, a 40px word is only 3% — that looks tiny.
-      // On a 452px viewport, 40px is 9% — that's fine.
-      // Threshold: visual size < 4% of viewport width AND word is fully entered.
-      const _visualSize = safeFontSize * Math.abs(sx);
-      const _viewportPct = this.width > 0 ? (_visualSize / this.width) * 100 : 0;
-      if (_viewportPct < 4 && _viewportPct > 0 && chunk.alpha > 0.3 && (chunk.entryProgress ?? 0) > 0.95 && (chunk.exitProgress ?? 0) < 0.1) {
-        if (!this._tinyFontLogThrottle || performance.now() - this._tinyFontLogThrottle > 2000) {
-          this._tinyFontLogThrottle = performance.now();
-          console.warn('[TINY FONT]', {
-            text,
-            visualSize: Math.round(_visualSize * 10) / 10,
-            viewportPct: Math.round(_viewportPct * 10) / 10,
-            safeFontSize,
-            chunkFontSize: chunk.fontSize,
-            baseFontSizeRaw: chunk.fontSize,
-            scaleX: Math.round(sx * 1000) / 1000,
-            scaleY: Math.round(sy * 1000) / 1000,
-            chunkScaleXRaw: chunk.scaleX,
-            chunkScaleYRaw: chunk.scaleY,
-            chunkScale: chunk.scale,
-            entryScale: chunk.entryScale,
-            exitScale: chunk.exitScale,
-            camZoom: Math.round(camZoom * 1000) / 1000,
-            availW: Math.round(wallRight - wallLeft),
-            availH: Math.round(wallBottom - wallTop),
-            viewport: `${this.width}x${this.height}`,
-            compiledViewport: `${this._compiledViewportW}x${this._compiledViewportH}`,
-            fontScale: Math.round(this._viewportFontScale * 1000) / 1000,
-            boundFontSize: bound?.fontSize,
-            boundScaleX: bound ? Math.round(bound.scaleX * 1000) / 1000 : 'no bound',
-            isHero: chunk.isHeroWord,
-            isSolo: chunk.isSoloHero,
-            emp: chunk.emphasisLevel,
-            entry: Math.round((chunk.entryProgress ?? 0) * 100),
-            exit: Math.round((chunk.exitProgress ?? 0) * 100),
-            fontStabilized: this._fontStabilized,
-          });
-        }
-      }
 
       // drawX: position the text's left edge so that AFTER scaling, it's centered on centerX.
       // With textAlign='left', fillText draws from x=0 → rightward.
@@ -3610,13 +3505,9 @@ export class LyricDancePlayer {
         const beatPulse = beatState?.pulse ?? 0;
         // PERF: sub-pixel snap draw coordinates to device pixel grid
         // Fractional positions cause shimmer during scale transitions (especially hero pop-in).
-        // Apply dance engine visual offsets AFTER bounds resolution.
-        // These are pure visual effects — they don't affect layout or font sizing.
-        const chunkDanceOffX = chunk.danceOffX ?? 0;
-        const chunkDanceOffY = chunk.danceOffY ?? 0;
         const dpr = this._effectiveDpr;
-        const heroDrawX = Math.round((drawX + chunkDanceOffX) * dpr) / dpr;
-        const heroDrawY = Math.round((finalDrawY + chunkDanceOffY) * dpr) / dpr;
+        const heroDrawX = Math.round(drawX * dpr) / dpr;
+        const heroDrawY = Math.round(finalDrawY * dpr) / dpr;
         // NOTE: beat bounce Y is now handled in evaluateFrame via SubsystemResponse.wordNudgeY
         // so every word (not just heroes) dances to the grid.
 
@@ -3654,10 +3545,6 @@ export class LyricDancePlayer {
           this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
         }
 
-        // Dance scale applied as a visual multiplier on the draw transform.
-        // Does not affect bounds or font sizing — purely visual.
-        const chunkDanceScaleMult = 1 + Math.max(-0.15, Math.min(0.15, chunk.danceScale ?? 0));
-
         if (chunk.ghostTrail && chunk.visible && this._qualityTier === 0) {
           const count = 1; // reduced from ghostCount (typically 3) — one ghost sells the motion, saves 2 fillText calls/frame
           const spacing = chunk.ghostSpacing ?? 8;
@@ -3679,8 +3566,8 @@ export class LyricDancePlayer {
               camShakeY + camCY + ((heroDrawY + gy) - camCY) * camZoom,
               (chunk.rotation ?? 0) + camRotation,
               chunk.skewX ?? 0,
-              sx * camZoom * chunkDanceScaleMult,
-              sy * camZoom * chunkDanceScaleMult,
+              sx * camZoom,
+              sy * camZoom,
             );
             this.ctx.setTransform(ga, gb, gc, gd, ge, gf);
             this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
@@ -3693,8 +3580,8 @@ export class LyricDancePlayer {
           camShakeY + camCY + (heroDrawY - camCY) * camZoom,
           (chunk.rotation ?? 0) + camRotation,
           chunk.skewX ?? 0,
-          sx * camZoom * chunkDanceScaleMult,
-          sy * camZoom * chunkDanceScaleMult,
+          sx * camZoom,
+          sy * camZoom,
         );
         this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
@@ -5731,49 +5618,36 @@ export class LyricDancePlayer {
         }
 
         // ═══ BEAT-GRID GLOW, SCALE, NUDGE via SubsystemResponse ═══
-        //
-        // CRITICAL: Emphasis is already applied via heroScaleMult (emphasisScale).
-        // The beat response must be UNIFORM across all words to avoid triple-compounding:
-        //   1. emphasisScale (1.75× at emp 4) — makes hero words BIGGER
-        //   2. EMPHASIS_RESPONSE inside getSubsystemResponse — was amplifying beat pulse too
-        //   3. isHero heroMult inside getSubsystemResponse — was amplifying again
-        // Compound peak was 2.91× → triggered font shrink → tiny fonts.
-        //
-        // Fix: use fixed empBeat=1, isHero=false for scale and nudge (uniform beat pulse).
-        // A bigger word pulsing the same percentage already looks more dramatic.
-        // Per-emphasis glow is kept — glow doesn't affect bounds or font sizing.
+        // Use the pre-computed per-emphasis-level response so every word dances
+        // to the beat proportional to its semantic weight.
         const empBeat = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
-        // Per-emphasis response: used for GLOW only (doesn't affect layout)
-        const beatRespGlow = _hasBeatResponses
+        // Hero words get isHero=true response (1.6× on wordScale/wordGlow/wordNudgeY)
+        const beatResp = _hasBeatResponses
           ? (isHeroWord ? _beatResponsesHero[empBeat] : _beatResponses[empBeat])
           : null;
-        // Uniform response: used for SCALE and NUDGE (affects layout — must be uniform)
-        const beatRespMotion = _hasBeatResponses ? _beatResponses[1] : null;
 
         let wordGlow = 0;
         let beatScaleMult = 1.0;
         let beatNudgeY = 0;
 
         if (lineRole === 'current') {
-          // Scale and nudge: UNIFORM for all words — no emphasis compounding.
-          // emphasisScale already makes hero words bigger. The same beat pulse
-          // on a bigger word is more visually dramatic. No double-counting needed.
-          if (beatRespMotion) {
-            beatScaleMult = beatRespMotion.wordScale;
-            beatNudgeY = beatRespMotion.wordNudgeY;
-          }
+          if (beatResp) {
+            // All active words scale and nudge to the beat — emphasis level controls how much.
+            // Hero words (isHero=true) already got 1.6x multiplier inside getSubsystemResponse.
+            beatScaleMult = beatResp.wordScale;
+            beatNudgeY = beatResp.wordNudgeY;
 
-          // Glow: PER-EMPHASIS — hero words glow more. This is safe because
-          // glow doesn't affect bounds, font sizing, or word positions.
-          if (beatRespGlow) {
+            // Glow: currently-spoken anchor glows brightest, then hero words, then rest.
             if (isAnchor) {
-              wordGlow = Math.min(1, 0.5 + beatRespGlow.wordGlow * 0.8);
+              wordGlow = Math.min(1, 0.5 + beatResp.wordGlow * 0.8);
             } else if (isSoloHero && groupHasActiveSoloHero) {
-              wordGlow = Math.min(1, 0.6 + beatRespGlow.wordGlow * 0.6);
+              wordGlow = Math.min(1, 0.6 + beatResp.wordGlow * 0.6);
             } else if (emp >= 2) {
-              wordGlow = beatRespGlow.wordGlow * 0.5;
+              // High-emphasis non-hero words get subtle glow on hits
+              wordGlow = beatResp.wordGlow * 0.5;
             }
           } else {
+            // Fallback if beat state unavailable
             if (isAnchor) wordGlow = 0.6;
             else if (isSoloHero && groupHasActiveSoloHero) wordGlow = 0.7;
           }
@@ -5871,31 +5745,13 @@ export class LyricDancePlayer {
         // When multi-line is active, _mlDx already positions words centered at 480.
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
-
-        // ═══ LAYOUT FIELDS: clean positions for bounds/shrink system ═══
-        // Dance offsets (grammar dY, hit dX, dScale) are stored SEPARATELY
-        // and applied at draw time. The bounds system sees the same layout
-        // it saw before the dance engine existed — no shrink from dance scale,
-        // no overlap from dance displacement.
-        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY) * sy;
+        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp) * sx;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        // Scale WITHOUT dance contributions — only entry/exit/behavior/emphasis/beat
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
         chunk.scale = 1;
-
-        // ═══ DANCE FIELDS: visual-only, applied AFTER bounds resolve ═══
-        // Grammar + hit displacement, clamped to prevent extreme motion.
-        // danceRoleAmp and waveModulator shape per-word expression.
-        const _maxDisplacement = (this._compiledViewportH || 540) * 0.07;
-        const _rawDanceX = _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp;
-        const _rawDanceY = _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp;
-        chunk.danceOffX = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceX)) * sx;
-        chunk.danceOffY = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceY + beatNudgeY)) * sy;
-        chunk.danceScale = _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator
-                         + _hitMotion.dScale * Math.abs(danceRoleAmp);
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
         chunk.fontFamily = word.fontFamily;
