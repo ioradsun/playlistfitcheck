@@ -5632,36 +5632,49 @@ export class LyricDancePlayer {
         }
 
         // ═══ BEAT-GRID GLOW, SCALE, NUDGE via SubsystemResponse ═══
-        // Use the pre-computed per-emphasis-level response so every word dances
-        // to the beat proportional to its semantic weight.
+        //
+        // CRITICAL: Emphasis is already applied via heroScaleMult (emphasisScale).
+        // The beat response must be UNIFORM across all words to avoid triple-compounding:
+        //   1. emphasisScale (1.75× at emp 4) — makes hero words BIGGER
+        //   2. EMPHASIS_RESPONSE inside getSubsystemResponse — was amplifying beat pulse too
+        //   3. isHero heroMult inside getSubsystemResponse — was amplifying again
+        // Compound peak was 2.91× → triggered font shrink → tiny fonts.
+        //
+        // Fix: use fixed empBeat=1, isHero=false for scale and nudge (uniform beat pulse).
+        // A bigger word pulsing the same percentage already looks more dramatic.
+        // Per-emphasis glow is kept — glow doesn't affect bounds or font sizing.
         const empBeat = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
-        // Hero words get isHero=true response (1.6× on wordScale/wordGlow/wordNudgeY)
-        const beatResp = _hasBeatResponses
+        // Per-emphasis response: used for GLOW only (doesn't affect layout)
+        const beatRespGlow = _hasBeatResponses
           ? (isHeroWord ? _beatResponsesHero[empBeat] : _beatResponses[empBeat])
           : null;
+        // Uniform response: used for SCALE and NUDGE (affects layout — must be uniform)
+        const beatRespMotion = _hasBeatResponses ? _beatResponses[1] : null;
 
         let wordGlow = 0;
         let beatScaleMult = 1.0;
         let beatNudgeY = 0;
 
         if (lineRole === 'current') {
-          if (beatResp) {
-            // All active words scale and nudge to the beat — emphasis level controls how much.
-            // Hero words (isHero=true) already got 1.6x multiplier inside getSubsystemResponse.
-            beatScaleMult = beatResp.wordScale;
-            beatNudgeY = beatResp.wordNudgeY;
+          // Scale and nudge: UNIFORM for all words — no emphasis compounding.
+          // emphasisScale already makes hero words bigger. The same beat pulse
+          // on a bigger word is more visually dramatic. No double-counting needed.
+          if (beatRespMotion) {
+            beatScaleMult = beatRespMotion.wordScale;
+            beatNudgeY = beatRespMotion.wordNudgeY;
+          }
 
-            // Glow: currently-spoken anchor glows brightest, then hero words, then rest.
+          // Glow: PER-EMPHASIS — hero words glow more. This is safe because
+          // glow doesn't affect bounds, font sizing, or word positions.
+          if (beatRespGlow) {
             if (isAnchor) {
-              wordGlow = Math.min(1, 0.5 + beatResp.wordGlow * 0.8);
+              wordGlow = Math.min(1, 0.5 + beatRespGlow.wordGlow * 0.8);
             } else if (isSoloHero && groupHasActiveSoloHero) {
-              wordGlow = Math.min(1, 0.6 + beatResp.wordGlow * 0.6);
+              wordGlow = Math.min(1, 0.6 + beatRespGlow.wordGlow * 0.6);
             } else if (emp >= 2) {
-              // High-emphasis non-hero words get subtle glow on hits
-              wordGlow = beatResp.wordGlow * 0.5;
+              wordGlow = beatRespGlow.wordGlow * 0.5;
             }
           } else {
-            // Fallback if beat state unavailable
             if (isAnchor) wordGlow = 0.6;
             else if (isSoloHero && groupHasActiveSoloHero) wordGlow = 0.7;
           }
@@ -5766,7 +5779,7 @@ export class LyricDancePlayer {
         // it saw before the dance engine existed — no shrink from dance scale,
         // no overlap from dance displacement.
         chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY) * sy;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
         // Scale WITHOUT dance contributions — only entry/exit/behavior/emphasis/beat
@@ -5781,7 +5794,7 @@ export class LyricDancePlayer {
         const _rawDanceX = _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp;
         const _rawDanceY = _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp;
         chunk.danceOffX = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceX)) * sx;
-        chunk.danceOffY = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceY)) * sy;
+        chunk.danceOffY = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceY + beatNudgeY)) * sy;
         chunk.danceScale = _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator
                          + _hitMotion.dScale * Math.abs(danceRoleAmp);
         chunk.visible = finalAlpha > 0.01;
