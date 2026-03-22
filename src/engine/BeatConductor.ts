@@ -513,6 +513,26 @@ export class BeatConductor {
   /** Get beat period in seconds */
   get beatPeriod(): number { return this.period; }
 
+  /** Variance of beat strengths (0 = perfectly uniform, higher = more syncopated) */
+  get beatStrengthVariance(): number {
+    const n = this.beatStrengths.length;
+    if (n < 2) return 0;
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += this.beatStrengths[i];
+    const mean = sum / n;
+    let sumSq = 0;
+    for (let i = 0; i < n; i++) {
+      const d = this.beatStrengths[i] - mean;
+      sumSq += d * d;
+    }
+    return Math.sqrt(sumSq / n);
+  }
+
+  /** Access the audio analysis (if attached), for classifiers and diagnostics */
+  get analysis(): import('@/engine/audioAnalyzer').AudioAnalysis | null {
+    return this._analysis;
+  }
+
   /** Reset cursor (call after seek) */
   resetCursor(): void { this._cursor = 0; this._hitCursor = 0; }
 }

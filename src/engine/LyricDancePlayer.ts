@@ -40,6 +40,7 @@ import {
   type ResolvedWordSettings,
 } from "@/engine/cinematicResolver";
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
+import { classifyDance, type DancePattern, type DanceClassification } from "@/engine/DanceClassifier";
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
@@ -201,6 +202,7 @@ export interface LiveDebugState {
   bgNextBeat: number;
   bgBeatPhase: number;
   bgBeatPulse: number;
+  dancePattern?: string;
 
   // Active word
   activeWord: string;
@@ -1003,6 +1005,9 @@ export class LyricDancePlayer {
 
   /** Read-only accessor — used by auto-save to retrieve reconciled words after updateTranscript */
   get currentData(): LyricDanceData { return this.data; }
+  /** The classified dance pattern for the current song */
+  get dancePattern(): DancePattern { return this._danceClassification?.pattern ?? 'bounce'; }
+  get danceClassification(): DanceClassification | null { return this._danceClassification; }
   private payload: ScenePayload | null = null;
 
   // Runtime chunks
@@ -1034,6 +1039,8 @@ export class LyricDancePlayer {
 
   // ═══ BeatConductor — single rhythmic driver ═══
   private conductor: BeatConductor | null = null;
+  /** Dance pattern classification — set once at song load */
+  private _danceClassification: DanceClassification | null = null;
   private cameraRig: CameraRig = new CameraRig();
   private _lastBeatState: BeatState | null = null;
   private _lastSubsystemResponse: SubsystemResponse | null = null;
@@ -1477,6 +1484,12 @@ export class LyricDancePlayer {
         if ((beatGridData as any)._analysis) {
           this.conductor.setAnalysis((beatGridData as any)._analysis);
         }
+
+        // ═══ Classify dance pattern from audio features ═══
+        this._danceClassification = classifyDance(
+          beatGridData,
+          this.conductor.analysis,
+        );
         
         // ═══ V4: Load song structure into CameraRig ═══
         // CameraRig pre-analyzes beatGrid + cinematic sections to build the song arc:
@@ -2867,6 +2880,7 @@ export class LyricDancePlayer {
     ds.qualityTier = this._qualityTier;
     ds.songProgress = songProgress;
     ds.beatIntensity = beatState?.pulse ?? 0;
+    ds.dancePattern = this._danceClassification?.pattern ?? 'bounce';
 
 
     const beatIntensityClamped = Math.max(0, Math.min(1, beatState?.pulse ?? 0));
