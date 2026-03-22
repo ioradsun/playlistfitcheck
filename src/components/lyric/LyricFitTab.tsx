@@ -10,7 +10,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { sessionAudio } from "@/lib/sessionAudioCache";
-import { useBeatGrid, preloadEssentia, type BeatGridData } from "@/hooks/useBeatGrid";
+import {
+  useBeatGrid,
+  preloadEssentia,
+  type BeatGridData,
+} from "@/hooks/useBeatGrid";
 import type { LyricData, LyricLine } from "./LyricDisplay";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
@@ -26,10 +30,21 @@ function invokeWithTimeout<T = any>(
   timeoutMs = 45_000,
 ): Promise<{ data: T | null; error: any }> {
   const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`Edge function "${fnName}" timed out after ${timeoutMs / 1000}s`)), timeoutMs),
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            `Edge function "${fnName}" timed out after ${timeoutMs / 1000}s`,
+          ),
+        ),
+      timeoutMs,
+    ),
   );
   return Promise.race([
-    supabase.functions.invoke(fnName, { body }) as Promise<{ data: T | null; error: any }>,
+    supabase.functions.invoke(fnName, { body }) as Promise<{
+      data: T | null;
+      error: any;
+    }>,
     timeout,
   ]);
 }
@@ -50,7 +65,7 @@ function extractPeaksFromBuffer(buf: AudioBuffer): WaveformData {
     peaks.push(max);
   }
   const maxPeak = Math.max(...peaks, 0.01);
-  return { peaks: peaks.map(p => p / maxPeak), duration: buf.duration };
+  return { peaks: peaks.map((p) => p / maxPeak), duration: buf.duration };
 }
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
@@ -71,14 +86,17 @@ export interface PipelineStages {
   transcript: PipelineStageStatus;
 }
 
-
 interface Props {
   initialLyric?: any;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onSavedId?: (id: string) => void;
-  onUploadStarted?: (payload: { file: File; projectId: string | null; title: string }) => void;
+  onUploadStarted?: (payload: {
+    file: File;
+    projectId: string | null;
+    title: string;
+  }) => void;
 }
 
 export function LyricFitTab({
@@ -91,7 +109,8 @@ export function LyricFitTab({
 }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
-  const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
+  const hottestHooksEnabled =
+    siteCopy.features?.hookfit_hottest_hooks !== false;
 
   const artistNameRef = useRef<string>("artist");
   // Compute initial values synchronously from initialLyric to avoid flash of uploader
@@ -99,49 +118,71 @@ export function LyricFitTab({
     if (!initialLyric) return null;
     const filename = initialLyric.filename || "saved-lyrics.mp3";
     const normalizedTitle = (initialLyric.title || "").trim();
-    const title = (normalizedTitle && normalizedTitle.toLowerCase() !== "unknown" && normalizedTitle.toLowerCase() !== "untitled")
-      ? normalizedTitle
-      : filename.replace(/\.[^/.]+$/, "").trim() || "Untitled";
+    const title =
+      normalizedTitle &&
+      normalizedTitle.toLowerCase() !== "unknown" &&
+      normalizedTitle.toLowerCase() !== "untitled"
+        ? normalizedTitle
+        : filename.replace(/\.[^/.]+$/, "").trim() || "Untitled";
     return { title, lines: initialLyric.lines as any[] };
   }, [initialLyric]);
 
   const [activeTab, setActiveTab] = useState<LyricFitView>("lyrics");
-  const [sceneDescription, setSceneDescription] = useState('');
-  const [resolvedScene, setResolvedScene] = useState<SceneContextResult | null>(null);
+  const [sceneDescription, setSceneDescription] = useState("");
+  const [resolvedScene, setResolvedScene] = useState<SceneContextResult | null>(
+    null,
+  );
   const [resolvingScene, setResolvingScene] = useState(false);
   const [fitUnlocked, setFitUnlocked] = useState(() => {
     if (!initialLyric) return false;
     const rd = (initialLyric as any).render_data;
-    return !!((initialLyric as any).beat_grid && (
-      (initialLyric as any).cinematic_direction ||
-      rd?.cinematicDirection ||
-      rd?.cinematic_direction
-    ));
+    return !!(
+      (initialLyric as any).beat_grid &&
+      ((initialLyric as any).cinematic_direction ||
+        rd?.cinematicDirection ||
+        rd?.cinematic_direction)
+    );
   });
   const [lyricData, setLyricData] = useState<LyricData | null>(initLyricData);
   const [audioFile, setAudioFile] = useState<File | null>(() => {
     if (!initialLyric?.id) return null;
     return sessionAudio.get("lyric", initialLyric.id) ?? null;
   });
-  useEffect(() => { preloadEssentia(); }, []);
+  useEffect(() => {
+    preloadEssentia();
+  }, []);
 
   const [hasRealAudio, setHasRealAudio] = useState(false);
-  const [savedId, setSavedId] = useState<string | null>(initialLyric?.id ?? null);
+  const [savedId, setSavedId] = useState<string | null>(
+    initialLyric?.id ?? null,
+  );
   const savedIdRef = useRef<string | null>(initialLyric?.id ?? null);
   const renderDataLoadedFromDbRef = useRef(false);
-  const [lines, setLines] = useState<LyricLine[]>(initialLyric?.lines as any[] ?? []);
-  const [fmlyLines, setFmlyLines] = useState<any[] | null>(initialLyric?.fmly_lines ?? null);
-  const [versionMeta, setVersionMeta] = useState<any | null>(initialLyric?.version_meta ?? null);
-  const [words, setWords] = useState<Array<{ word: string; start: number; end: number }> | null>(initialLyric?.words ?? null);
+  const [lines, setLines] = useState<LyricLine[]>(
+    (initialLyric?.lines as any[]) ?? [],
+  );
+  const [fmlyLines, setFmlyLines] = useState<any[] | null>(
+    initialLyric?.fmly_lines ?? null,
+  );
+  const [versionMeta, setVersionMeta] = useState<any | null>(
+    initialLyric?.version_meta ?? null,
+  );
+  const [words, setWords] = useState<Array<{
+    word: string;
+    start: number;
+    end: number;
+  }> | null>(initialLyric?.words ?? null);
 
   const [renderData, setRenderData] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
-  const [cinematicDirection, setCinematicDirection] = useState<any | null>(null);
+  const [cinematicDirection, setCinematicDirection] = useState<any | null>(
+    null,
+  );
   const [pipelineDanceId, setPipelineDanceId] = useState<string | null>(
-    (initialLyric as any)?.render_data?.pipelineDanceId ?? null
+    (initialLyric as any)?.render_data?.pipelineDanceId ?? null,
   );
   const [pipelineDanceUrl, setPipelineDanceUrl] = useState<string | null>(
-    (initialLyric as any)?.render_data?.pipelineDanceUrl ?? null
+    (initialLyric as any)?.render_data?.pipelineDanceUrl ?? null,
   );
   const cinematicDirectionRef = useRef(cinematicDirection);
   cinematicDirectionRef.current = cinematicDirection;
@@ -171,37 +212,53 @@ export function LyricFitTab({
   });
   const [fitStageLabel, setFitStageLabel] = useState("");
   const [pipelineStages, setPipelineStages] = useState<PipelineStages>({
-    rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending",
+    rhythm: "pending",
+    sections: "pending",
+    cinematic: "pending",
+    transcript: "pending",
   });
-  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>(() => {
-    if (!initialLyric) {
-      return { beatGrid: "idle", renderData: "done", cinematicDirection: "idle", sectionImages: "idle" };
-    }
-    const rd = (initialLyric as any).render_data;
-    const hasBeatGrid = !!(initialLyric as any).beat_grid;
-    const hasCinematic = !!(
-      (initialLyric as any).cinematic_direction ||
-      rd?.cinematicDirection ||
-      rd?.cinematic_direction
-    );
-    const hasImages = Array.isArray((initialLyric as any).section_images) &&
-      (initialLyric as any).section_images.some(Boolean);
-    return {
-      beatGrid: hasBeatGrid ? "done" : "idle",
-      renderData: "done",
-      cinematicDirection: hasCinematic ? "done" : "idle",
-      sectionImages: hasImages ? "done" : "idle",
-    };
-  });
+  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>(
+    () => {
+      if (!initialLyric) {
+        return {
+          beatGrid: "idle",
+          renderData: "done",
+          cinematicDirection: "idle",
+          sectionImages: "idle",
+        };
+      }
+      const rd = (initialLyric as any).render_data;
+      const hasBeatGrid = !!(initialLyric as any).beat_grid;
+      const hasCinematic = !!(
+        (initialLyric as any).cinematic_direction ||
+        rd?.cinematicDirection ||
+        rd?.cinematic_direction
+      );
+      const hasImages =
+        Array.isArray((initialLyric as any).section_images) &&
+        (initialLyric as any).section_images.some(Boolean);
+      return {
+        beatGrid: hasBeatGrid ? "done" : "idle",
+        renderData: "done",
+        cinematicDirection: hasCinematic ? "done" : "idle",
+        sectionImages: hasImages ? "done" : "idle",
+      };
+    },
+  );
 
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [waveformData, setWaveformData] = useState<WaveformData | null>(null);
   const [transcriptionDone, setTranscriptionDone] = useState(
-    () => !!(initialLyric?.lines && Array.isArray(initialLyric.lines) && initialLyric.lines.length > 0)
+    () =>
+      !!(
+        initialLyric?.lines &&
+        Array.isArray(initialLyric.lines) &&
+        initialLyric.lines.length > 0
+      ),
   );
   const mountedRef = useRef(true);
   const [beatGridDone, setBeatGridDone] = useState(
-    () => !!(initialLyric as any)?.beat_grid
+    () => !!(initialLyric as any)?.beat_grid,
   );
   const [audioBufferReady, setAudioBufferReady] = useState(false);
   const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
@@ -221,7 +278,8 @@ export function LyricFitTab({
   }, [lines]);
 
   const audioDurationSec = useMemo(() => {
-    const lastLineEnd = timestampedLines[timestampedLines.length - 1]?.endSec ?? 0;
+    const lastLineEnd =
+      timestampedLines[timestampedLines.length - 1]?.endSec ?? 0;
     return Math.max(audioBuffer?.duration ?? 0, lastLineEnd);
   }, [audioBuffer, timestampedLines]);
 
@@ -237,8 +295,14 @@ export function LyricFitTab({
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("display_name").eq("id", user.id).single()
-      .then(({ data }) => { if (data?.display_name) artistNameRef.current = data.display_name; });
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.display_name) artistNameRef.current = data.display_name;
+      });
   }, [user]);
 
   // Debounced scene resolution
@@ -247,10 +311,14 @@ export function LyricFitTab({
     const timer = setTimeout(async () => {
       setResolvingScene(true);
       try {
-        const { data } = await invokeWithTimeout('resolve-scene-context', { description: sceneDescription.trim() }, 15_000);
+        const { data } = await invokeWithTimeout(
+          "resolve-scene-context",
+          { description: sceneDescription.trim() },
+          15_000,
+        );
         if (data && !data.error) setResolvedScene(data);
       } catch (e) {
-        console.error('Scene resolve failed:', e);
+        console.error("Scene resolve failed:", e);
       } finally {
         setResolvingScene(false);
       }
@@ -263,13 +331,14 @@ export function LyricFitTab({
 
     setBeatGrid(detectedGrid);
     setBeatGridDone(true);
-    setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
-    setPipelineStages(prev => ({ ...prev, rhythm: "done" }));
-    setFitProgress(prev => Math.max(prev, 35));
+    setGenerationStatus((prev) => ({ ...prev, beatGrid: "done" }));
+    setPipelineStages((prev) => ({ ...prev, rhythm: "done" }));
+    setFitProgress((prev) => Math.max(prev, 35));
 
     // Persist beat_grid so we skip Essentia on next load
     if (savedIdRef.current) {
-      void supabase.from("saved_lyrics")
+      void supabase
+        .from("saved_lyrics")
         .update({
           beat_grid: {
             bpm: detectedGrid.bpm,
@@ -287,22 +356,30 @@ export function LyricFitTab({
   const allAnalysisLoaded = !!(beatGrid && cinematicDirection);
   useEffect(() => {
     if (audioBuffer || !audioFile || audioFile.size === 0) return;
-    if (allAnalysisLoaded) { return; }
+    if (allAnalysisLoaded) {
+      return;
+    }
 
     let cancelled = false;
     const ctx = new AudioContext();
-    audioFile.arrayBuffer().then((ab) =>
-      ctx.decodeAudioData(ab).then((buf) => {
-        if (!cancelled) {
-
-          setAudioBuffer(buf);
-          setAudioBufferReady(true);
-          setWaveformData(extractPeaksFromBuffer(buf));
-        }
+    audioFile
+      .arrayBuffer()
+      .then((ab) =>
+        ctx.decodeAudioData(ab).then((buf) => {
+          if (!cancelled) {
+            setAudioBuffer(buf);
+            setAudioBufferReady(true);
+            setWaveformData(extractPeaksFromBuffer(buf));
+          }
+          ctx.close();
+        }),
+      )
+      .catch(() => {
         ctx.close();
-      })
-    ).catch(() => { ctx.close(); });
-    return () => { cancelled = true; };
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [audioFile, audioBuffer, allAnalysisLoaded]);
 
   // Lazy decode for playback — called when user hits play but audioBuffer isn't ready
@@ -324,7 +401,11 @@ export function LyricFitTab({
   const resolveProjectTitle = useCallback(
     (title: string | null | undefined, filename: string) => {
       const normalizedTitle = (title || "").trim();
-      if (normalizedTitle && normalizedTitle.toLowerCase() !== "unknown" && normalizedTitle.toLowerCase() !== "untitled") {
+      if (
+        normalizedTitle &&
+        normalizedTitle.toLowerCase() !== "unknown" &&
+        normalizedTitle.toLowerCase() !== "untitled"
+      ) {
         return normalizedTitle;
       }
       return filename.replace(/\.[^/.]+$/, "").trim() || "Untitled";
@@ -336,7 +417,8 @@ export function LyricFitTab({
   useEffect(() => {
     const f = (siteCopy as any).features || {};
     if (f.lyric_analysis_model) setAnalysisModel(f.lyric_analysis_model);
-    if (f.lyric_transcription_model) setTranscriptionModel(f.lyric_transcription_model);
+    if (f.lyric_transcription_model)
+      setTranscriptionModel(f.lyric_transcription_model);
   }, [siteCopy]);
 
   useEffect(() => {
@@ -353,13 +435,15 @@ export function LyricFitTab({
     hydratedRef.current = true;
 
     const filename = initialLyric.filename || "saved-lyrics.mp3";
-    setTranscriptionDone(Array.isArray(initialLyric.lines) && initialLyric.lines.length > 0);
+    setTranscriptionDone(
+      Array.isArray(initialLyric.lines) && initialLyric.lines.length > 0,
+    );
 
     const savedBg = (initialLyric as any).beat_grid;
 
     if (savedBg) {
       setBeatGrid(savedBg as BeatGridData);
-      setGenerationStatus(prev => ({ ...prev, beatGrid: "done" }));
+      setGenerationStatus((prev) => ({ ...prev, beatGrid: "done" }));
       setBeatGridDone(true);
     }
 
@@ -373,18 +457,22 @@ export function LyricFitTab({
     if (loadedRenderData) {
       renderDataLoadedFromDbRef.current = true;
       setRenderData(loadedRenderData);
-      setGenerationStatus(prev => ({ ...prev, renderData: "done" }));
+      setGenerationStatus((prev) => ({ ...prev, renderData: "done" }));
 
       const savedPeaks = (loadedRenderData as any)?.waveformPeaks;
       const savedDuration = (loadedRenderData as any)?.waveformDuration;
-      if (Array.isArray(savedPeaks) && savedPeaks.length > 0 && savedDuration > 0) {
+      if (
+        Array.isArray(savedPeaks) &&
+        savedPeaks.length > 0 &&
+        savedDuration > 0
+      ) {
         setWaveformData({ peaks: savedPeaks, duration: savedDuration });
       }
     }
 
     if (loadedCinematicDirection) {
       setCinematicDirection(loadedCinematicDirection);
-      setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
+      setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "done" }));
     }
 
     if (savedBg && loadedCinematicDirection) {
@@ -412,11 +500,18 @@ export function LyricFitTab({
 
       import("@/engine/presetDerivation").then(({ deriveFrameState }) => {
         import("@/engine/presetDerivation").then(({ getTypography }) => {
-          const typoPreset = loadedCinematicDirection.typography || "clean-modern";
+          const typoPreset =
+            loadedCinematicDirection.typography || "clean-modern";
           const typo = getTypography(typoPreset);
           const bgSystemMap: Record<string, string> = {
-            void: "void", cinematic: "fracture", haze: "breath", split: "static",
-            grain: "static", wash: "breath", glass: "pressure", clean: "void",
+            void: "void",
+            cinematic: "fracture",
+            haze: "breath",
+            split: "static",
+            grain: "static",
+            wash: "breath",
+            glass: "pressure",
+            clean: "void",
           };
           const atm = loadedCinematicDirection.atmosphere || "cinematic";
           deriveFrameState(loadedCinematicDirection, 0, 0.5);
@@ -426,12 +521,17 @@ export function LyricFitTab({
 
     // Hydrate section_images from saved_lyrics — survives tab switches
     const savedSectionImages = (initialLyric as any).section_images;
-    if (Array.isArray(savedSectionImages) && savedSectionImages.length > 0 && savedSectionImages.some(Boolean)) {
-
-      setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+    if (
+      Array.isArray(savedSectionImages) &&
+      savedSectionImages.length > 0 &&
+      savedSectionImages.some(Boolean)
+    ) {
+      setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
     }
 
-    const cachedAudio = initialLyric.id ? sessionAudio.get("lyric", initialLyric.id) : undefined;
+    const cachedAudio = initialLyric.id
+      ? sessionAudio.get("lyric", initialLyric.id)
+      : undefined;
     if (cachedAudio) {
       setAudioFile(cachedAudio);
       setHasRealAudio(true);
@@ -443,14 +543,21 @@ export function LyricFitTab({
         .then((res) => res.blob())
         .then((blob) => {
           clearTimeout(audioTimeout);
-          const file = new File([blob], filename, { type: blob.type || "audio/mpeg" });
+          const file = new File([blob], filename, {
+            type: blob.type || "audio/mpeg",
+          });
           setAudioFile(file);
           setHasRealAudio(true);
-          if (initialLyric.id) sessionAudio.set("lyric", initialLyric.id, file, { ttlMs: 20 * 60 * 1000 });
+          if (initialLyric.id)
+            sessionAudio.set("lyric", initialLyric.id, file, {
+              ttlMs: 20 * 60 * 1000,
+            });
         })
         .catch(() => {
           clearTimeout(audioTimeout);
-          console.warn("[Pipeline] Audio fetch failed or timed out — using dummy file");
+          console.warn(
+            "[Pipeline] Audio fetch failed or timed out — using dummy file",
+          );
           const dummyFile = new File([], filename, { type: "audio/mpeg" });
           setAudioFile(dummyFile);
           setHasRealAudio(false);
@@ -470,10 +577,15 @@ export function LyricFitTab({
     if (imageRetriggerRef.current) return;
     if (!user || !cinematicDirection || !lyricData || !audioFile) return;
     // Only trigger if we have cinematic but no images
-    const hasImages = Array.isArray((initialLyric as any)?.section_images) &&
+    const hasImages =
+      Array.isArray((initialLyric as any)?.section_images) &&
       (initialLyric as any).section_images.some(Boolean);
     if (hasImages) return;
-    if (generationStatus.sectionImages === "running" || generationStatus.sectionImages === "done") return;
+    if (
+      generationStatus.sectionImages === "running" ||
+      generationStatus.sectionImages === "done"
+    )
+      return;
     // Only trigger if cinematic was loaded from DB (not freshly generated — the pipeline handles that)
     if (!cinematicTriggeredRef.current) return;
 
@@ -481,11 +593,11 @@ export function LyricFitTab({
 
     const dirSections = cinematicDirection?.sections;
     if (!Array.isArray(dirSections) || dirSections.length === 0) {
-      setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+      setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
       return;
     }
 
-    setGenerationStatus(prev => ({ ...prev, sectionImages: "running" }));
+    setGenerationStatus((prev) => ({ ...prev, sectionImages: "running" }));
 
     (async () => {
       try {
@@ -505,20 +617,30 @@ export function LyricFitTab({
 
         if (!resolvedDanceId) {
           // Create a draft row
-          const mainLines = lyricData.lines.filter((l: any) => l.tag !== "adlib");
+          const mainLines = lyricData.lines.filter(
+            (l: any) => l.tag !== "adlib",
+          );
           const storagePath = savedIdRef.current
-            ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(user.id, savedIdRef.current, audioFile.name)
+            ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(
+                user.id,
+                savedIdRef.current,
+                audioFile.name,
+              )
             : `${user.id}/${artistSlugVal}/${songSlugVal}/lyric-dance.${audioFile.name.split(".").pop() || "webm"}`;
           if (audioFile.size > 0) {
             await supabase.storage
               .from("audio-clips")
-              .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
+              .upload(storagePath, audioFile, {
+                upsert: true,
+                contentType: audioFile.type || undefined,
+              });
           }
-          const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+          const { data: urlData } = supabase.storage
+            .from("audio-clips")
+            .getPublicUrl(storagePath);
 
-          await supabase
-            .from("shareable_lyric_dances" as any)
-            .upsert({
+          await supabase.from("shareable_lyric_dances" as any).upsert(
+            {
               user_id: user.id,
               artist_slug: artistSlugVal,
               song_slug: songSlugVal,
@@ -528,10 +650,22 @@ export function LyricFitTab({
               lyrics: mainLines,
               cinematic_direction: cinematicDirection,
               words: words ?? null,
-              beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : { bpm: 0, beats: [], confidence: 0 },
-              palette: cinematicDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
+              beat_grid: beatGrid
+                ? {
+                    bpm: beatGrid.bpm,
+                    beats: beatGrid.beats,
+                    confidence: beatGrid.confidence,
+                  }
+                : { bpm: 0, beats: [], confidence: 0 },
+              palette: cinematicDirection?.palette || [
+                "#ffffff",
+                "#a855f7",
+                "#ec4899",
+              ],
               section_images: null,
-            } as any, { onConflict: "artist_slug,song_slug" });
+            } as any,
+            { onConflict: "artist_slug,song_slug" },
+          );
 
           const { data: newRow }: any = await supabase
             .from("shareable_lyric_dances" as any)
@@ -543,7 +677,7 @@ export function LyricFitTab({
         }
 
         if (!resolvedDanceId) {
-          setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
+          setGenerationStatus((prev) => ({ ...prev, sectionImages: "error" }));
           return;
         }
 
@@ -552,9 +686,12 @@ export function LyricFitTab({
           setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
         }
 
-        const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
-          body: { lyric_dance_id: resolvedDanceId, force: true },
-        });
+        const { data: result, error } = await supabase.functions.invoke(
+          "generate-section-images",
+          {
+            body: { lyric_dance_id: resolvedDanceId, force: true },
+          },
+        );
         if (error) throw error;
         const urls = result?.urls || result?.section_images || [];
 
@@ -565,46 +702,78 @@ export function LyricFitTab({
             .eq("id", savedIdRef.current);
         }
 
-        setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
+        setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
         if (urls.length > 0) {
-          window.dispatchEvent(new CustomEvent("fittab:images-generated", { detail: { urls } }));
+          window.dispatchEvent(
+            new CustomEvent("fittab:images-generated", { detail: { urls } }),
+          );
         }
       } catch (err: any) {
-        console.error("[Pipeline] Image re-generation on remount failed:", err?.message || err);
-        setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
+        console.error(
+          "[Pipeline] Image re-generation on remount failed:",
+          err?.message || err,
+        );
+        setGenerationStatus((prev) => ({ ...prev, sectionImages: "error" }));
       }
     })();
-  }, [user, cinematicDirection, lyricData, audioFile, generationStatus.sectionImages, initialLyric, beatGrid, words]);
+  }, [
+    user,
+    cinematicDirection,
+    lyricData,
+    audioFile,
+    generationStatus.sectionImages,
+    initialLyric,
+    beatGrid,
+    words,
+  ]);
 
-  const persistRenderData = useCallback(async (id: string, payload: Record<string, unknown>, attempt = 1): Promise<boolean> => {
-    try {
-      const { data: updated, error } = await supabase
-        .from("saved_lyrics")
-        .update({ render_data: payload as any, updated_at: new Date().toISOString() })
-        .eq("id", id)
-        .select("id")
-        .maybeSingle();
-      if (error) {
-        console.warn("[persistRenderData] error attempt", attempt, error.message);
+  const persistRenderData = useCallback(
+    async (
+      id: string,
+      payload: Record<string, unknown>,
+      attempt = 1,
+    ): Promise<boolean> => {
+      try {
+        const { data: updated, error } = await supabase
+          .from("saved_lyrics")
+          .update({
+            render_data: payload as any,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", id)
+          .select("id")
+          .maybeSingle();
+        if (error) {
+          console.warn(
+            "[persistRenderData] error attempt",
+            attempt,
+            error.message,
+          );
+          if (attempt < 3) return persistRenderData(id, payload, attempt + 1);
+          return false;
+        }
+        if (!updated) {
+          console.warn(
+            "[persistRenderData] no row matched attempt",
+            attempt,
+            id,
+          );
+          if (attempt < 3) {
+            await new Promise((r) => setTimeout(r, 1000));
+            return persistRenderData(id, payload, attempt + 1);
+          }
+          return false;
+        }
+
+        return true;
+      } catch (e) {
+        console.warn("[persistRenderData] exception attempt", attempt, e);
         if (attempt < 3) return persistRenderData(id, payload, attempt + 1);
         return false;
       }
-      if (!updated) {
-        console.warn("[persistRenderData] no row matched attempt", attempt, id);
-        if (attempt < 3) {
-          await new Promise(r => setTimeout(r, 1000));
-          return persistRenderData(id, payload, attempt + 1);
-        }
-        return false;
-      }
-
-      return true;
-    } catch (e) {
-      console.warn("[persistRenderData] exception attempt", attempt, e);
-      if (attempt < 3) return persistRenderData(id, payload, attempt + 1);
-      return false;
-    }
-  }, []);
+    },
+    [],
+  );
 
   // Persist render_data whenever we have both a saved project and computed DNA
   // Only persist when renderData changes (not cinematicDirection alone — that's handled in startCinematicDirection)
@@ -625,34 +794,50 @@ export function LyricFitTab({
     if (pipelineDanceUrl) payload.pipelineDanceUrl = pipelineDanceUrl;
     persistRenderData(savedIdRef.current, payload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedId, renderData, waveformData, persistRenderData, pipelineDanceId, pipelineDanceUrl]);
+  }, [
+    savedId,
+    renderData,
+    waveformData,
+    persistRenderData,
+    pipelineDanceId,
+    pipelineDanceUrl,
+  ]);
 
-  const startBeatAnalysis = useCallback(async (targetAudioFile: File) => {
-    if (!targetAudioFile || targetAudioFile.size === 0) return;
+  const startBeatAnalysis = useCallback(
+    async (targetAudioFile: File) => {
+      if (!targetAudioFile || targetAudioFile.size === 0) return;
 
-    if (!audioBuffer) {
-      try {
-        const ctx = new AudioContext();
-        const ab = await targetAudioFile.arrayBuffer();
-        const buf = await ctx.decodeAudioData(ab);
+      if (!audioBuffer) {
+        try {
+          const ctx = new AudioContext();
+          const ab = await targetAudioFile.arrayBuffer();
+          const buf = await ctx.decodeAudioData(ab);
 
-        setAudioBuffer(buf);
-        setAudioBufferReady(true);
-        setWaveformData(extractPeaksFromBuffer(buf));
-        ctx.close();
-      } catch {}
-    }
+          setAudioBuffer(buf);
+          setAudioBufferReady(true);
+          setWaveformData(extractPeaksFromBuffer(buf));
+          ctx.close();
+        } catch {}
+      }
 
-    if (beatGrid) {
-      setBeatGridDone(true);
-      setGenerationStatus(prev => prev.beatGrid === "done" ? prev : ({ ...prev, beatGrid: "done" }));
-      return;
-    }
-    if (generationStatus.beatGrid === "running" || generationStatus.beatGrid === "done") return;
+      if (beatGrid) {
+        setBeatGridDone(true);
+        setGenerationStatus((prev) =>
+          prev.beatGrid === "done" ? prev : { ...prev, beatGrid: "done" },
+        );
+        return;
+      }
+      if (
+        generationStatus.beatGrid === "running" ||
+        generationStatus.beatGrid === "done"
+      )
+        return;
 
-    setGenerationStatus(prev => ({ ...prev, beatGrid: "running" }));
-    setPipelineStages(prev => ({ ...prev, rhythm: "running" }));
-  }, [beatGrid, generationStatus.beatGrid, audioBuffer]);
+      setGenerationStatus((prev) => ({ ...prev, beatGrid: "running" }));
+      setPipelineStages((prev) => ({ ...prev, rhythm: "running" }));
+    },
+    [beatGrid, generationStatus.beatGrid, audioBuffer],
+  );
 
   // ── Hook Detection (parallel, non-blocking) ──
   const hookDetectionRunRef = useRef(false);
@@ -668,18 +853,30 @@ export function LyricFitTab({
     try {
       const linesForHook = lines
         .filter((l: any) => l.tag !== "adlib")
-        .map((l: any) => ({ text: l.text, start: Number(l.start ?? 0), end: Number(l.end ?? 0) }));
+        .map((l: any) => ({
+          text: l.text,
+          start: Number(l.start ?? 0),
+          end: Number(l.end ?? 0),
+        }));
 
-      const { data: hookResult, error } = await invokeWithTimeout("detect-hooks", {
+      const { data: hookResult, error } = await invokeWithTimeout(
+        "detect-hooks",
+        {
           lyrics: linesForHook.map((l: { text: string }) => l.text).join("\n"),
           lines: linesForHook,
           words,
           beatGrid: beatGrid
-            ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence }
+            ? {
+                bpm: beatGrid.bpm,
+                beats: beatGrid.beats,
+                confidence: beatGrid.confidence,
+              }
             : { bpm: 120, beats: [], confidence: 0 },
           beatEnergies: beatGrid?.beatEnergies ?? undefined,
           durationSec: audioDurationSec,
-        }, 30_000);
+        },
+        30_000,
+      );
 
       if (error) throw error;
       if (!hookResult?.hook) return;
@@ -700,268 +897,466 @@ export function LyricFitTab({
         }
         return updated;
       });
-    } catch (err: any) {
+    } catch (err: any) {}
+  }, [
+    words,
+    lines,
+    beatGrid,
+    audioDurationSec,
+    renderData?.hook,
+    persistRenderData,
+    hottestHooksEnabled,
+  ]);
 
-    }
-  }, [words, lines, beatGrid , audioDurationSec, renderData?.hook, persistRenderData, hottestHooksEnabled]);
-
-  const startCinematicDirection = useCallback(async (sourceLines: LyricLine[], force = false) => {
-    if (!lyricData || !sourceLines.length) return;
-    // Data-existence guard: if we already have cinematicDirection (e.g. loaded from DB), skip
-    if (!force && cinematicDirectionRef.current) {
-
-      setGenerationStatus(prev => {
-        const next = { ...prev };
-        if (next.cinematicDirection !== "done") next.cinematicDirection = "done";
-        // Also resolve sectionImages if still idle — no image pipeline will run on this path
-        if (next.sectionImages === "idle") next.sectionImages = "done";
-        return next;
-      });
-      return;
-    }
-    if (!force && (generationStatus.cinematicDirection === "running" || generationStatus.cinematicDirection === "done")) return;
-
-    setGenerationStatus(prev => ({ ...prev, cinematicDirection: "running", sectionImages: "idle" }));
-    setPipelineStages(prev => ({ ...prev, cinematic: "running" }));
-
-    try {
-      const lyricsForDirection = sourceLines
-        .filter((l: any) => l.tag !== "adlib")
-        .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-
-      const sceneContext = resolvedScene ?? null;
-      const sharedBody = {
-        title: lyricData.title,
-        artist: artistNameRef.current,
-        lines: lyricsForDirection,
-        lyrics: lyricsForDirection.map((line: { text: string }) => line.text).join("\n"),
-        beatGrid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : undefined,
-        beatGridSummary: beatGrid
-          ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence, totalBeats: beatGrid.beats.length }
-          : undefined,
-        lyricId: savedIdRef.current || undefined,
-        scene_context: sceneContext,
-      };
-
-      const { data: sceneResult } = await invokeWithTimeout("cinematic-direction", { ...sharedBody, mode: "scene" }, 45_000);
-
-      if (!sceneResult?.cinematicDirection) {
-        throw new Error("Scene direction returned no data");
+  const startCinematicDirection = useCallback(
+    async (sourceLines: LyricLine[], force = false) => {
+      if (!lyricData || !sourceLines.length) return;
+      // Data-existence guard: if we already have cinematicDirection (e.g. loaded from DB), skip
+      if (!force && cinematicDirectionRef.current) {
+        setGenerationStatus((prev) => {
+          const next = { ...prev };
+          if (next.cinematicDirection !== "done")
+            next.cinematicDirection = "done";
+          // Also resolve sectionImages if still idle — no image pipeline will run on this path
+          if (next.sectionImages === "idle") next.sectionImages = "done";
+          return next;
+        });
+        return;
       }
+      if (
+        !force &&
+        (generationStatus.cinematicDirection === "running" ||
+          generationStatus.cinematicDirection === "done")
+      )
+        return;
 
-      const sceneDirection = sceneResult.cinematicDirection;
+      setGenerationStatus((prev) => ({
+        ...prev,
+        cinematicDirection: "running",
+        sectionImages: "idle",
+      }));
+      setPipelineStages((prev) => ({ ...prev, cinematic: "running" }));
 
-      if (!mountedRef.current) return;
+      try {
+        const lyricsForDirection = sourceLines
+          .filter((l: any) => l.tag !== "adlib")
+          .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
-      const enrichedScene = beatGrid
-        ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
-        : { ...sceneDirection };
-
-      setCinematicDirection(enrichedScene);
-
-      // Persist cinematic direction into render_data immediately — don't wait
-      // for word-mode. If word-mode fails, we still have the scene direction
-      // for hydration on remount.
-      {
-        const updatedRenderData = {
-          ...(renderData || {}),
-          cinematicDirection: enrichedScene,
-          cinematic_direction: enrichedScene,
-          description: enrichedScene.description,
-          mood: enrichedScene.mood,
-          meaning: enrichedScene.meaning,
+        const sceneContext = resolvedScene ?? null;
+        const sharedBody = {
+          title: lyricData.title,
+          artist: artistNameRef.current,
+          lines: lyricsForDirection,
+          lyrics: lyricsForDirection
+            .map((line: { text: string }) => line.text)
+            .join("\n"),
+          beatGrid: beatGrid
+            ? {
+                bpm: beatGrid.bpm,
+                beats: beatGrid.beats,
+                confidence: beatGrid.confidence,
+              }
+            : undefined,
+          beatGridSummary: beatGrid
+            ? {
+                bpm: beatGrid.bpm,
+                confidence: beatGrid.confidence,
+                totalBeats: beatGrid.beats.length,
+              }
+            : undefined,
+          lyricId: savedIdRef.current || undefined,
+          scene_context: sceneContext,
         };
-        setRenderData(updatedRenderData);
-        if (savedIdRef.current) {
-          void persistRenderData(savedIdRef.current, updatedRenderData);
+
+        const { data: sceneResult } = await invokeWithTimeout(
+          "cinematic-direction",
+          { ...sharedBody, mode: "scene" },
+          45_000,
+        );
+
+        if (!sceneResult?.cinematicDirection) {
+          throw new Error("Scene direction returned no data");
         }
-      }
 
-      const { deriveFrameState } = await import("@/engine/presetDerivation");
-      const { getTypography } = await import("@/engine/presetDerivation");
-      const typoPreset = enrichedScene.typography || "clean-modern";
-      getTypography(typoPreset);
-      deriveFrameState(enrichedScene, 0, 0.5);
-
-      const wordPromise = (async () => {
-        const wt0 = performance.now();
+        const sceneDirection = sceneResult.cinematicDirection;
 
         if (!mountedRef.current) return;
 
-        try {
-          const { data: wordResult } = await invokeWithTimeout("cinematic-direction", {
-            ...sharedBody,
-            mode: "words",
-            sceneDirection: enrichedScene,
-            words: words ?? undefined,
-          }, 45_000);
-
-          if (wordResult?.cinematicDirection) {
-            const { storyboard, wordDirectives } = wordResult.cinematicDirection;
-
-            const merged = {
-              ...enrichedScene,
-              storyboard: storyboard || [],
-              wordDirectives: wordDirectives || [],
-            };
-            setCinematicDirection(merged);
-            cinematicDirectionRef.current = merged;
-
-            if (savedIdRef.current) {
-              // Use functional setter to read latest renderData — avoids stale closure
-              setRenderData((prev: any) => {
-                const updated = { ...(prev || {}), cinematicDirection: merged };
-                void persistRenderData(savedIdRef.current!, updated);
-                return updated;
-              });
+        const enrichedScene = beatGrid
+          ? {
+              ...sceneDirection,
+              beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence },
             }
+          : { ...sceneDirection };
+
+        setCinematicDirection(enrichedScene);
+
+        // Persist cinematic direction into render_data immediately — don't wait
+        // for word-mode. If word-mode fails, we still have the scene direction
+        // for hydration on remount.
+        {
+          const updatedRenderData = {
+            ...(renderData || {}),
+            cinematicDirection: enrichedScene,
+            cinematic_direction: enrichedScene,
+            description: enrichedScene.description,
+            mood: enrichedScene.mood,
+            meaning: enrichedScene.meaning,
+          };
+          setRenderData(updatedRenderData);
+          if (savedIdRef.current) {
+            void persistRenderData(savedIdRef.current, updatedRenderData);
           }
-        } catch (wordErr: any) {
-
-        }
-      })();
-
-      const imagePromise = (async () => {
-        const dirSections = enrichedScene?.sections;
-        if (!mountedRef.current) return;
-        if (!Array.isArray(dirSections) || dirSections.length === 0 || !user) {
-
-          setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
-          return;
         }
 
-        const currentSavedImages = initialLyric?.section_images;
-        if (Array.isArray(currentSavedImages) && currentSavedImages.length > 0 && currentSavedImages.some(Boolean)) {
+        const { deriveFrameState } = await import("@/engine/presetDerivation");
+        const { getTypography } = await import("@/engine/presetDerivation");
+        const typoPreset = enrichedScene.typography || "clean-modern";
+        getTypography(typoPreset);
+        deriveFrameState(enrichedScene, 0, 0.5);
 
-          setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
-          return;
-        }
+        const wordPromise = (async () => {
+          const wt0 = performance.now();
 
-        const it0 = performance.now();
+          if (!mountedRef.current) return;
 
-        setGenerationStatus(prev => ({ ...prev, sectionImages: "running" }));
-        setFitProgress(prev => Math.max(prev, 85));
+          try {
+            const { data: wordResult } = await invokeWithTimeout(
+              "cinematic-direction",
+              {
+                ...sharedBody,
+                mode: "words",
+                sceneDirection: enrichedScene,
+                words: words ?? undefined,
+              },
+              45_000,
+            );
 
-        try {
-          const songSlugVal = (await import("@/lib/slugify")).slugify(lyricData!.title || "untitled");
-          const artistSlugVal = (await import("@/lib/slugify")).slugify(artistNameRef.current || "artist");
+            if (wordResult?.cinematicDirection) {
+              const { storyboard, wordDirectives } =
+                wordResult.cinematicDirection;
 
-          let resolvedDanceId: string | null = null;
-          const { data: existing }: any = await supabase
-            .from("shareable_lyric_dances" as any)
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("song_slug", songSlugVal)
-            .maybeSingle();
-          if (existing?.id) {
-            resolvedDanceId = existing.id;
-            setPipelineDanceId(resolvedDanceId);
-            setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
-            await supabase
-              .from("shareable_lyric_dances" as any)
-              .update({ cinematic_direction: enrichedScene } as any)
-              .eq("id", resolvedDanceId);
-          } else {
-            const mainLines = lyricData!.lines.filter((l: any) => l.tag !== "adlib");
-            const audioFileName = audioFile?.name || "audio.webm";
-            const storagePath = savedIdRef.current
-              ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(user.id, savedIdRef.current, audioFileName)
-              : `${user.id}/${artistSlugVal}/${songSlugVal}/lyric-dance.${audioFileName.split(".").pop() || "webm"}`;
-            if (audioFile) {
-              await supabase.storage
-                .from("audio-clips")
-                .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
+              const merged = {
+                ...enrichedScene,
+                storyboard: storyboard || [],
+                wordDirectives: wordDirectives || [],
+              };
+              setCinematicDirection(merged);
+              cinematicDirectionRef.current = merged;
+
+              if (savedIdRef.current) {
+                // Use functional setter to read latest renderData — avoids stale closure
+                setRenderData((prev: any) => {
+                  const updated = {
+                    ...(prev || {}),
+                    cinematicDirection: merged,
+                  };
+                  void persistRenderData(savedIdRef.current!, updated);
+                  return updated;
+                });
+              }
             }
-            const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+          } catch (wordErr: any) {}
+        })();
 
-            await supabase
-              .from("shareable_lyric_dances" as any)
-              .upsert({
-                user_id: user.id,
-                artist_slug: artistSlugVal,
-                song_slug: songSlugVal,
-                artist_name: artistNameRef.current || "artist",
-                song_name: lyricData!.title || "Untitled",
-                audio_url: urlData.publicUrl,
-                lyrics: mainLines,
-                cinematic_direction: enrichedScene,
-                words: words ?? null,
-                beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : { bpm: 0, beats: [], confidence: 0 },
-                palette: enrichedScene?.palette || ["#ffffff", "#a855f7", "#ec4899"],
-                section_images: null,
-              } as any, { onConflict: "artist_slug,song_slug" });
+        const imagePromise = (async () => {
+          const dirSections = enrichedScene?.sections;
+          if (!mountedRef.current) return;
+          if (
+            !Array.isArray(dirSections) ||
+            dirSections.length === 0 ||
+            !user
+          ) {
+            setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
+            return;
+          }
 
-            const { data: newRow }: any = await supabase
+          const currentSavedImages = initialLyric?.section_images;
+          if (
+            Array.isArray(currentSavedImages) &&
+            currentSavedImages.length > 0 &&
+            currentSavedImages.some(Boolean)
+          ) {
+            setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
+            return;
+          }
+
+          const it0 = performance.now();
+
+          setGenerationStatus((prev) => ({
+            ...prev,
+            sectionImages: "running",
+          }));
+          setFitProgress((prev) => Math.max(prev, 85));
+
+          try {
+            const songSlugVal = (await import("@/lib/slugify")).slugify(
+              lyricData!.title || "untitled",
+            );
+            const artistSlugVal = (await import("@/lib/slugify")).slugify(
+              artistNameRef.current || "artist",
+            );
+
+            let resolvedDanceId: string | null = null;
+            const { data: existing }: any = await supabase
               .from("shareable_lyric_dances" as any)
               .select("id")
               .eq("user_id", user.id)
               .eq("song_slug", songSlugVal)
               .maybeSingle();
-            resolvedDanceId = newRow?.id ?? null;
-            if (resolvedDanceId) {
+            if (existing?.id) {
+              resolvedDanceId = existing.id;
               setPipelineDanceId(resolvedDanceId);
-              setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
+              setPipelineDanceUrl(
+                `/${artistSlugVal}/${songSlugVal}/lyric-dance`,
+              );
+              await supabase
+                .from("shareable_lyric_dances" as any)
+                .update({ cinematic_direction: enrichedScene } as any)
+                .eq("id", resolvedDanceId);
+            } else {
+              const mainLines = lyricData!.lines.filter(
+                (l: any) => l.tag !== "adlib",
+              );
+              const audioFileName = audioFile?.name || "audio.webm";
+              const storagePath = savedIdRef.current
+                ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(
+                    user.id,
+                    savedIdRef.current,
+                    audioFileName,
+                  )
+                : `${user.id}/${artistSlugVal}/${songSlugVal}/lyric-dance.${audioFileName.split(".").pop() || "webm"}`;
+              if (audioFile) {
+                await supabase.storage
+                  .from("audio-clips")
+                  .upload(storagePath, audioFile, {
+                    upsert: true,
+                    contentType: audioFile.type || undefined,
+                  });
+              }
+              const { data: urlData } = supabase.storage
+                .from("audio-clips")
+                .getPublicUrl(storagePath);
+
+              await supabase.from("shareable_lyric_dances" as any).upsert(
+                {
+                  user_id: user.id,
+                  artist_slug: artistSlugVal,
+                  song_slug: songSlugVal,
+                  artist_name: artistNameRef.current || "artist",
+                  song_name: lyricData!.title || "Untitled",
+                  audio_url: urlData.publicUrl,
+                  lyrics: mainLines,
+                  cinematic_direction: enrichedScene,
+                  words: words ?? null,
+                  beat_grid: beatGrid
+                    ? {
+                        bpm: beatGrid.bpm,
+                        beats: beatGrid.beats,
+                        confidence: beatGrid.confidence,
+                      }
+                    : { bpm: 0, beats: [], confidence: 0 },
+                  palette: enrichedScene?.palette || [
+                    "#ffffff",
+                    "#a855f7",
+                    "#ec4899",
+                  ],
+                  section_images: null,
+                } as any,
+                { onConflict: "artist_slug,song_slug" },
+              );
+
+              const { data: newRow }: any = await supabase
+                .from("shareable_lyric_dances" as any)
+                .select("id")
+                .eq("user_id", user.id)
+                .eq("song_slug", songSlugVal)
+                .maybeSingle();
+              resolvedDanceId = newRow?.id ?? null;
+              if (resolvedDanceId) {
+                setPipelineDanceId(resolvedDanceId);
+                setPipelineDanceUrl(
+                  `/${artistSlugVal}/${songSlugVal}/lyric-dance`,
+                );
+              }
             }
+
+            if (!resolvedDanceId) {
+              console.error(
+                "[Pipeline] Could not create dance row for image generation",
+              );
+              setGenerationStatus((prev) => ({
+                ...prev,
+                sectionImages: "error",
+              }));
+              return;
+            }
+
+            const persistAndDispatchImages = async (
+              finalUrls: (string | null)[],
+              complete: boolean,
+            ) => {
+              if (savedIdRef.current && finalUrls.length > 0) {
+                void supabase
+                  .from("saved_lyrics")
+                  .update({ section_images: finalUrls as any })
+                  .eq("id", savedIdRef.current);
+              }
+
+              if (resolvedDanceId && finalUrls.some(Boolean)) {
+                void supabase
+                  .from("shareable_lyric_dances" as any)
+                  .update({ section_images: finalUrls as any })
+                  .eq("id", resolvedDanceId);
+              }
+
+              if (finalUrls.length > 0) {
+                window.dispatchEvent(
+                  new CustomEvent("fittab:images-generated", {
+                    detail: { urls: finalUrls, complete },
+                  }),
+                );
+              }
+
+              const validUrls = finalUrls.filter(
+                (url: string | null): url is string =>
+                  typeof url === "string" && Boolean(url),
+              );
+              if (validUrls.length > 0 && resolvedDanceId) {
+                try {
+                  const { computeAutoPalettesFromUrls } =
+                    await import("@/lib/autoPalette");
+                  const palettes = await computeAutoPalettesFromUrls(validUrls);
+                  if (palettes && palettes.length > 0) {
+                    void supabase
+                      .from("shareable_lyric_dances" as any)
+                      .update({ auto_palettes: palettes as any })
+                      .eq("id", resolvedDanceId);
+                  }
+                } catch (paletteErr) {
+                  console.error(
+                    "[Pipeline] Auto palette generation failed:",
+                    paletteErr,
+                  );
+                }
+              }
+            };
+
+            const { data: result, error } = await invokeWithTimeout(
+              "generate-section-images",
+              { lyric_dance_id: resolvedDanceId, force: true },
+              90_000,
+            );
+            if (error) throw error;
+            const urls: (string | null)[] =
+              result?.urls || result?.section_images || [];
+            const allComplete = result?.success === true || urls.every(Boolean);
+            const failedCount = urls.filter(
+              (url: string | null) => !url,
+            ).length;
+
+            // If partial, retry the failed images once more after a delay
+            if (!allComplete && failedCount > 0 && resolvedDanceId) {
+              console.log(
+                `[Pipeline] ${failedCount} images failed, retrying in 5s...`,
+              );
+              await new Promise((resolve) => setTimeout(resolve, 5000));
+              try {
+                const { data: retryResult } = await invokeWithTimeout(
+                  "generate-section-images",
+                  { lyric_dance_id: resolvedDanceId, force: true },
+                  90_000,
+                );
+                const retryUrls: (string | null)[] =
+                  retryResult?.urls || retryResult?.section_images || [];
+                const mergedUrls = urls.map(
+                  (url: string | null, index: number) =>
+                    url || retryUrls[index] || null,
+                );
+                const retryAllComplete = mergedUrls.every(Boolean);
+
+                setGenerationStatus((prev) => ({
+                  ...prev,
+                  sectionImages: retryAllComplete ? "done" : "error",
+                }));
+                await persistAndDispatchImages(mergedUrls, retryAllComplete);
+              } catch (retryErr) {
+                console.error("[Pipeline] Image retry failed:", retryErr);
+                setGenerationStatus((prev) => ({
+                  ...prev,
+                  sectionImages: "error",
+                }));
+                if (urls.some(Boolean)) {
+                  await persistAndDispatchImages(urls, false);
+                }
+              }
+            } else {
+              setGenerationStatus((prev) => ({
+                ...prev,
+                sectionImages: allComplete ? "done" : "error",
+              }));
+              await persistAndDispatchImages(urls, allComplete);
+            }
+          } catch (imgErr: any) {
+            console.error(
+              "[Pipeline] Image generation failed:",
+              imgErr?.message || imgErr,
+            );
+            setGenerationStatus((prev) => ({
+              ...prev,
+              sectionImages: "error",
+            }));
           }
+        })();
 
-          if (!resolvedDanceId) {
-            console.error("[Pipeline] Could not create dance row for image generation");
-            setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
-            return;
-          }
+        await Promise.allSettled([wordPromise, imagePromise]);
 
-          const { data: result, error } = await invokeWithTimeout("generate-section-images", { lyric_dance_id: resolvedDanceId, force: true }, 90_000);
-          if (error) throw error;
-          const urls = result?.urls || result?.section_images || [];
-
-          if (savedIdRef.current && urls.length > 0) {
-            void supabase
-              .from("saved_lyrics")
-              .update({ section_images: urls as any })
-              .eq("id", savedIdRef.current);
-          }
-
-          setGenerationStatus(prev => ({ ...prev, sectionImages: "done" }));
-
-          // Notify FitTab's CinematicDirectionCard that images are ready —
-          // it has no other way to know since its hydration already ran.
-          if (urls.length > 0) {
-            window.dispatchEvent(new CustomEvent("fittab:images-generated", { detail: { urls } }));
-          }
-        } catch (imgErr: any) {
-
-          console.error("[Pipeline] Image generation failed:", imgErr?.message || imgErr);
-          setGenerationStatus(prev => ({ ...prev, sectionImages: "error" }));
-        }
-      })();
-
-      await Promise.allSettled([wordPromise, imagePromise]);
-
-      if (!mountedRef.current) return;
-      setGenerationStatus(prev => ({ ...prev, cinematicDirection: "done" }));
-      setPipelineStages(prev => ({ ...prev, cinematic: "done" }));
-      setFitProgress(prev => Math.max(prev, 85));
-    } catch (err) {
-
-      console.error("[Pipeline] Cinematic direction failed:", err);
-      setGenerationStatus(prev => ({ ...prev, cinematicDirection: "error", sectionImages: "idle" }));
-    }
-  }, [lyricData, generationStatus.cinematicDirection, beatGrid, renderData, persistRenderData , words, user, audioFile, initialLyric]);
+        if (!mountedRef.current) return;
+        setGenerationStatus((prev) => ({
+          ...prev,
+          cinematicDirection: "done",
+        }));
+        setPipelineStages((prev) => ({ ...prev, cinematic: "done" }));
+        setFitProgress((prev) => Math.max(prev, 85));
+      } catch (err) {
+        console.error("[Pipeline] Cinematic direction failed:", err);
+        setGenerationStatus((prev) => ({
+          ...prev,
+          cinematicDirection: "error",
+          sectionImages: "idle",
+        }));
+      }
+    },
+    [
+      lyricData,
+      generationStatus.cinematicDirection,
+      beatGrid,
+      renderData,
+      persistRenderData,
+      words,
+      user,
+      audioFile,
+      initialLyric,
+    ],
+  );
 
   const pipelineTriggeredRef = useRef(
-    !!(initialLyric && (initialLyric as any).beat_grid && (
-      (initialLyric as any).cinematic_direction ||
-      (initialLyric as any).render_data?.cinematicDirection ||
-      (initialLyric as any).render_data?.cinematic_direction
-    ))
+    !!(
+      initialLyric &&
+      (initialLyric as any).beat_grid &&
+      ((initialLyric as any).cinematic_direction ||
+        (initialLyric as any).render_data?.cinematicDirection ||
+        (initialLyric as any).render_data?.cinematic_direction)
+    ),
   );
   const [pipelineRetryCount, setPipelineRetryCount] = useState(0);
   const cinematicTriggeredRef = useRef(
-    !!(initialLyric && (
-      (initialLyric as any).cinematic_direction ||
-      (initialLyric as any).render_data?.cinematicDirection ||
-      (initialLyric as any).render_data?.cinematic_direction
-    ))
+    !!(
+      initialLyric &&
+      ((initialLyric as any).cinematic_direction ||
+        (initialLyric as any).render_data?.cinematicDirection ||
+        (initialLyric as any).render_data?.cinematic_direction)
+    ),
   );
   useEffect(() => {
     if (!transcriptionDone || !beatGridDone || !lines?.length) return;
@@ -970,33 +1365,49 @@ export function LyricFitTab({
     const force = pipelineRetryCount > 0;
 
     void startCinematicDirection(lines, force);
-  }, [transcriptionDone, beatGridDone, lines, pipelineRetryCount, startCinematicDirection]);
+  }, [
+    transcriptionDone,
+    beatGridDone,
+    lines,
+    pipelineRetryCount,
+    startCinematicDirection,
+  ]);
 
   // ── Fork 1: Beat grid starts when audio file is submitted (parallel with transcription) ──
   // Called from onAudioSubmitted callback, not from an effect waiting on lines.
-  const handleAudioSubmitted = useCallback((file: File) => {
-
-    setActiveTab("lyrics");
-    setPipelineStages(prev => ({ ...prev, transcript: "running" }));
-    startBeatAnalysis(file);
-  }, [startBeatAnalysis]);
+  const handleAudioSubmitted = useCallback(
+    (file: File) => {
+      setActiveTab("lyrics");
+      setPipelineStages((prev) => ({ ...prev, transcript: "running" }));
+      startBeatAnalysis(file);
+    },
+    [startBeatAnalysis],
+  );
 
   // ── Fork 2: Initialize renderData when lyrics arrive ──
   useEffect(() => {
     if (!lines?.length) return;
     if (renderData && beatGrid && cinematicDirectionRef.current) {
-
       pipelineTriggeredRef.current = true;
-      setGenerationStatus({ beatGrid: "done", renderData: "done", cinematicDirection: "done", sectionImages: "done" });
+      setGenerationStatus({
+        beatGrid: "done",
+        renderData: "done",
+        cinematicDirection: "done",
+        sectionImages: "done",
+      });
       return;
     }
     if (!pipelineTriggeredRef.current) {
       pipelineTriggeredRef.current = true;
 
       if (!renderData) {
-        const stub = { source: "presetDerivation", generatedAt: new Date().toISOString() };
+        const stub = {
+          source: "presetDerivation",
+          generatedAt: new Date().toISOString(),
+        };
         setRenderData(stub);
-        if (savedIdRef.current) void persistRenderData(savedIdRef.current, stub);
+        if (savedIdRef.current)
+          void persistRenderData(savedIdRef.current, stub);
       }
     }
   }, [lines, pipelineRetryCount, renderData, beatGrid, persistRenderData]);
@@ -1011,8 +1422,12 @@ export function LyricFitTab({
 
   useEffect(() => {
     // Core pipeline jobs — these must complete for Fit tab to be usable
-    const coreStatuses = [generationStatus.beatGrid, generationStatus.renderData, generationStatus.cinematicDirection];
-    const allCoreDone = coreStatuses.every(v => v === "done");
+    const coreStatuses = [
+      generationStatus.beatGrid,
+      generationStatus.renderData,
+      generationStatus.cinematicDirection,
+    ];
+    const allCoreDone = coreStatuses.every((v) => v === "done");
     // Images are non-blocking — generated in background, don't prevent "ready" state
     const allValues = Object.values(generationStatus);
     const hasRunning = allValues.includes("running");
@@ -1022,12 +1437,15 @@ export function LyricFitTab({
       setFitReadiness("ready");
       setFitProgress(100);
       setFitStageLabel("Ready");
-      setPipelineStages(prev => ({ ...prev, transcript: "done" }));
+      setPipelineStages((prev) => ({ ...prev, transcript: "done" }));
       return;
     }
     if (hasRunning) {
       setFitReadiness("running");
-      if (generationStatus.renderData === "running" || generationStatus.beatGrid === "running") {
+      if (
+        generationStatus.renderData === "running" ||
+        generationStatus.beatGrid === "running"
+      ) {
         setFitStageLabel("Analyzing song...");
       } else if (generationStatus.cinematicDirection === "running") {
         setFitStageLabel("Creating cinematic direction...");
@@ -1036,16 +1454,16 @@ export function LyricFitTab({
       } else {
         setFitStageLabel("Building your Fit…");
       }
-      setPipelineStages(prev => ({ ...prev, transcript: "running" }));
+      setPipelineStages((prev) => ({ ...prev, transcript: "running" }));
       return;
     }
     if (hasError) {
       setFitReadiness("error");
       setFitStageLabel("Background generation failed");
-      setPipelineStages(prev => ({ ...prev, transcript: "pending" }));
+      setPipelineStages((prev) => ({ ...prev, transcript: "pending" }));
       return;
     }
-    if (allValues.some(v => v === "done")) {
+    if (allValues.some((v) => v === "done")) {
       setFitReadiness("running");
       setFitStageLabel("Finalizing background jobs…");
       return;
@@ -1054,7 +1472,12 @@ export function LyricFitTab({
     setFitReadiness("not_started");
     setFitProgress(0);
     setFitStageLabel("");
-    setPipelineStages({ rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" });
+    setPipelineStages({
+      rhythm: "pending",
+      sections: "pending",
+      cinematic: "pending",
+      transcript: "pending",
+    });
   }, [generationStatus]);
 
   const retryGeneration = useCallback(() => {
@@ -1064,7 +1487,7 @@ export function LyricFitTab({
     // Clear cinematicDirection, renderData, images
     setRenderData(null);
     setCinematicDirection(null);
-    setGenerationStatus(prev => ({
+    setGenerationStatus((prev) => ({
       beatGrid: prev.beatGrid === "done" ? "done" : "idle",
       renderData: "done",
       cinematicDirection: "idle",
@@ -1084,14 +1507,16 @@ export function LyricFitTab({
 
     // Bump retry counter → re-triggers Fork 2 + section pipeline + cinematic effects
     setTimeout(() => {
-      setPipelineRetryCount(c => c + 1);
+      setPipelineRetryCount((c) => c + 1);
     }, 100);
   }, [audioFile, lines, persistRenderData]);
 
-  const handleImageGenerationStatusChange = useCallback((status: "idle" | "running" | "done" | "error") => {
-    setGenerationStatus(prev => ({ ...prev, sectionImages: status }));
-  }, []);
-
+  const handleImageGenerationStatusChange = useCallback(
+    (status: "idle" | "running" | "done" | "error") => {
+      setGenerationStatus((prev) => ({ ...prev, sectionImages: status }));
+    },
+    [],
+  );
 
   useEffect(() => {
     if (fitUnlocked || fitReadiness === "ready") {
@@ -1099,12 +1524,24 @@ export function LyricFitTab({
     }
   }, [fitUnlocked, fitReadiness]);
 
-  const handleViewChange = useCallback((nextView: LyricFitView) => {
-    if (nextView === "fit" && !fitUnlocked && fitReadiness !== "ready" && fitReadiness !== "not_started") return;
-    setActiveTab(nextView);
-  }, [fitUnlocked, fitReadiness]);
+  const handleViewChange = useCallback(
+    (nextView: LyricFitView) => {
+      if (
+        nextView === "fit" &&
+        !fitUnlocked &&
+        fitReadiness !== "ready" &&
+        fitReadiness !== "not_started"
+      )
+        return;
+      setActiveTab(nextView);
+    },
+    [fitUnlocked, fitReadiness],
+  );
 
-  const handleBackToLyrics = useCallback(() => handleViewChange("lyrics"), [handleViewChange]);
+  const handleBackToLyrics = useCallback(
+    () => handleViewChange("lyrics"),
+    [handleViewChange],
+  );
 
   const fitDisabled = !transcriptionDone;
 
@@ -1114,7 +1551,7 @@ export function LyricFitTab({
         <input
           type="text"
           value={sceneDescription}
-          onChange={e => {
+          onChange={(e) => {
             setSceneDescription(e.target.value);
             setResolvedScene(null);
           }}
@@ -1152,7 +1589,14 @@ export function LyricFitTab({
         />
       )}
 
-      <div style={{ display: activeTab === "lyrics" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          display: activeTab === "lyrics" ? "flex" : "none",
+          flexDirection: "column",
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         <LyricsTab
           lyricData={lyricData}
           setLyricData={setLyricData}
@@ -1174,14 +1618,19 @@ export function LyricFitTab({
           onNewProject={() => {
             setRenderData(null);
             setBeatGrid(null);
-                    setCinematicDirection(null);
+            setCinematicDirection(null);
             setLines([]);
             setAudioBuffer(null);
             setWaveformData(null);
             setTranscriptionDone(false);
             setBeatGridDone(false);
             setAudioBufferReady(false);
-                    setGenerationStatus({ beatGrid: "idle", renderData: "done", cinematicDirection: "idle", sectionImages: "idle" });
+            setGenerationStatus({
+              beatGrid: "idle",
+              renderData: "done",
+              cinematicDirection: "idle",
+              sectionImages: "idle",
+            });
             setFitReadiness("not_started");
             setFitUnlocked(false);
             setPipelineDanceId(null);
@@ -1199,13 +1648,20 @@ export function LyricFitTab({
           onAudioSubmitted={handleAudioSubmitted}
           onUploadStarted={(payload) => {
             setActiveTab("lyrics");
-            setPipelineStages(prev => ({ ...prev, transcript: "running" }));
+            setPipelineStages((prev) => ({ ...prev, transcript: "running" }));
             onUploadStartedProp?.(payload);
           }}
         />
       </div>
       {lyricData && audioFile && (
-        <div style={{ display: activeTab === "fit" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <div
+          style={{
+            display: activeTab === "fit" ? "flex" : "none",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
+          }}
+        >
           <FitTab
             lyricData={lyricData}
             audioFile={audioFile}

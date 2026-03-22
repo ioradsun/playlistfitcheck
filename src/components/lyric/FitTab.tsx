@@ -7,7 +7,22 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Loader2, RefreshCw, Music, Sparkles, Eye, Zap, Image, ExternalLink, Download, Link, Users, User, Check, Circle } from "lucide-react";
+import {
+  Loader2,
+  RefreshCw,
+  Music,
+  Sparkles,
+  Eye,
+  Zap,
+  Image,
+  ExternalLink,
+  Download,
+  Link,
+  Users,
+  User,
+  Check,
+  Circle,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,7 +39,12 @@ import { FitExportModal } from "./FitExportModal";
 
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
-import type { LyricLine, LyricData, LyricHook, SavedCustomHook } from "./LyricDisplay";
+import type {
+  LyricLine,
+  LyricData,
+  LyricHook,
+  SavedCustomHook,
+} from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 // FrameRenderState import removed — V3 derives from cinematicDirection
 import type { HeaderProjectSetter } from "./LyricsTab";
@@ -69,7 +89,9 @@ interface Props {
   onRetry?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
-  onImageGenerationStatusChange?: (status: "idle" | "running" | "done" | "error") => void;
+  onImageGenerationStatusChange?: (
+    status: "idle" | "running" | "done" | "error",
+  ) => void;
   pipelineStages?: PipelineStages;
   initialDanceId?: string | null;
   initialDanceUrl?: string | null;
@@ -99,13 +121,22 @@ export function FitTab({
 }: Props) {
   const { user, profile } = useAuth();
   const { canCreate, credits, required, spendCredits } = useVoteGate();
-  
-  const defaultStages: PipelineStages = { rhythm: "pending", sections: "pending", cinematic: "pending", transcript: "pending" };
+
+  const defaultStages: PipelineStages = {
+    rhythm: "pending",
+    sections: "pending",
+    cinematic: "pending",
+    transcript: "pending",
+  };
   const pipelineStages = pipelineStagesProp ?? defaultStages;
   const [publishing, setPublishing] = useState(false);
   const [publishStatus, setPublishStatus] = useState("");
-  const [publishedUrl, setPublishedUrl] = useState<string | null>(initialDanceUrl ?? null);
-  const [publishedDanceId, setPublishedDanceId] = useState<string | null>(initialDanceId ?? null);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(
+    initialDanceUrl ?? null,
+  );
+  const [publishedDanceId, setPublishedDanceId] = useState<string | null>(
+    initialDanceId ?? null,
+  );
 
   // Sync dance ID/URL from parent when pipeline resolves after mount.
   // useState only reads initialDanceId on mount — this effect picks up later updates.
@@ -121,23 +152,36 @@ export function FitTab({
     }
   }, [initialDanceUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(null);
-  const [prefetchedDanceData, setPrefetchedDanceData] = useState<LyricDanceData | null>(null);
+  const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(
+    null,
+  );
+  const [prefetchedDanceData, setPrefetchedDanceData] =
+    useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
-  const dancePlayerRef = useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(null);
+  const dancePlayerRef =
+    useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(
+      null,
+    );
   const siteCopy = useSiteCopy();
-  const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
+  const hottestHooksEnabled =
+    siteCopy.features?.hookfit_hottest_hooks !== false;
 
   const [sectionImages, setSectionImages] = useState<(string | null)[]>([]);
-  const [sectionImagesError, setSectionImagesError] = useState<string | null>(null);
+  const [sectionImagesError, setSectionImagesError] = useState<string | null>(
+    null,
+  );
   const [sectionImagesGenerating, setSectionImagesGenerating] = useState(false);
-  const [sectionImagesProgress, setSectionImagesProgress] = useState<{ done: number; total: number } | null>(null);
+  const [sectionImagesProgress, setSectionImagesProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
-
-  // Prefetch dance data as soon as we know the ID — so the player is instant
-
-  useEffect(() => {
-    if (!publishedDanceId) { setPrefetchedDanceData(null); return; }
+  // Refetch helper — used on initial load and when images complete
+  const refetchDanceData = useCallback(() => {
+    if (!publishedDanceId) {
+      setPrefetchedDanceData(null);
+      return;
+    }
     supabase
       .from("shareable_lyric_dances" as any)
       .select(LYRIC_DANCE_COLUMNS)
@@ -148,21 +192,43 @@ export function FitTab({
       });
   }, [publishedDanceId]);
 
+  // Initial prefetch
+  useEffect(() => {
+    refetchDanceData();
+  }, [refetchDanceData]);
+
+  // Refetch when images are generated — ensures player has section_images + auto_palettes
+  useEffect(() => {
+    const handler = () => {
+      if (publishedDanceId) {
+        setTimeout(refetchDanceData, 500);
+      }
+    };
+    window.addEventListener("fittab:images-generated", handler);
+    return () => window.removeEventListener("fittab:images-generated", handler);
+  }, [publishedDanceId, refetchDanceData]);
+
   // ── CrowdFit publish state ─────────────────────────────────────────
   const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
   const [crowdfitToggling, setCrowdfitToggling] = useState(false);
 
   // ── Battle publish state ──────────────────────────────────────────────
   const [battlePublishing, setBattlePublishing] = useState(false);
-  const [battlePublishedUrl, setBattlePublishedUrl] = useState<string | null>(null);
+  const [battlePublishedUrl, setBattlePublishedUrl] = useState<string | null>(
+    null,
+  );
   // User overrides per slot — null means "use AI hook"
-  const [customHooks, setCustomHooks] = useState<[SavedCustomHook | null, SavedCustomHook | null]>([null, null]);
+  const [customHooks, setCustomHooks] = useState<
+    [SavedCustomHook | null, SavedCustomHook | null]
+  >([null, null]);
   const [feudSetupOpen, setFeudSetupOpen] = useState(false);
   const [feudTab, setFeudTab] = useState<0 | 1>(0);
   const [hookClipProgress, setHookClipProgress] = useState(0);
   const hookClipProgressRafRef = useRef<number | null>(null);
   const hookLoopRegionRef = useRef<{ start: number; end: number } | null>(null);
-  const [activeCustomHookIndex, setActiveCustomHookIndex] = useState<number | null>(null);
+  const [activeCustomHookIndex, setActiveCustomHookIndex] = useState<
+    number | null
+  >(null);
 
   const hookAudioRef = useRef<HTMLAudioElement>(null);
   const hookAudioUrl = useMemo(
@@ -177,7 +243,10 @@ export function FitTab({
 
   // Simple hash of lyrics to detect transcript changes
   const computeLyricsHash = useCallback((lns: LyricLine[]) => {
-    const text = lns.filter(l => l.tag !== "adlib").map(l => `${l.text}|${l.start}|${l.end}`).join("\n");
+    const text = lns
+      .filter((l) => l.tag !== "adlib")
+      .map((l) => `${l.text}|${l.start}|${l.end}`)
+      .join("\n");
     let hash = 0;
     for (let i = 0; i < text.length; i++) {
       hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
@@ -185,8 +254,12 @@ export function FitTab({
     return String(hash);
   }, []);
 
-  const currentLyricsHash = lyricData?.lines ? computeLyricsHash(lyricData.lines) : null;
-  const danceNeedsRegeneration = !publishedUrl || (publishedLyricsHash !== null && currentLyricsHash !== publishedLyricsHash);
+  const currentLyricsHash = lyricData?.lines
+    ? computeLyricsHash(lyricData.lines)
+    : null;
+  const danceNeedsRegeneration =
+    !publishedUrl ||
+    (publishedLyricsHash !== null && currentLyricsHash !== publishedLyricsHash);
 
   // Check for existing published dance on load
   useEffect(() => {
@@ -226,14 +299,19 @@ export function FitTab({
       .maybeSingle()
       .then(({ data }: any) => {
         if (data?.battle_id && data.hook_slug) {
-          setBattlePublishedUrl(`/${data.artist_slug}/${data.song_slug}/${data.hook_slug}`);
+          setBattlePublishedUrl(
+            `/${data.artist_slug}/${data.song_slug}/${data.hook_slug}`,
+          );
         }
       });
   }, [user, lyricData]);
 
   // Check for existing CrowdFit post when we know the dance ID
   useEffect(() => {
-    if (!publishedDanceId || !user) { setCrowdfitPostId(null); return; }
+    if (!publishedDanceId || !user) {
+      setCrowdfitPostId(null);
+      return;
+    }
     supabase
       .from("songfit_posts" as any)
       .select("id, status")
@@ -309,7 +387,14 @@ export function FitTab({
     } finally {
       setCrowdfitToggling(false);
     }
-  }, [user, publishedDanceId, publishedUrl, crowdfitPostId, crowdfitToggling, lyricData.title]);
+  }, [
+    user,
+    publishedDanceId,
+    publishedUrl,
+    crowdfitPostId,
+    crowdfitToggling,
+    lyricData.title,
+  ]);
 
   // ── Audio playback + waveform ─────────────────────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -331,7 +416,10 @@ export function FitTab({
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
-    const onEnded = () => { setIsPlaying(false); setCurrentTime(0); };
+    const onEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
 
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("play", onPlay);
@@ -341,12 +429,18 @@ export function FitTab({
     // Only decode locally if parent didn't provide waveform
     if (!parentWaveformRef.current) {
       const ctx = new AudioContext();
-      audioFile.arrayBuffer().then((ab) => {
-        ctx.decodeAudioData(ab).then((buf) => {
-          setWaveform({ peaks: extractPeaks(buf, PEAK_SAMPLES), duration: buf.duration });
-          ctx.close();
-        });
-      }).catch(() => {});
+      audioFile
+        .arrayBuffer()
+        .then((ab) => {
+          ctx.decodeAudioData(ab).then((buf) => {
+            setWaveform({
+              peaks: extractPeaks(buf, PEAK_SAMPLES),
+              duration: buf.duration,
+            });
+            ctx.close();
+          });
+        })
+        .catch(() => {});
     }
 
     return () => {
@@ -372,7 +466,9 @@ export function FitTab({
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, [isPlaying]);
 
   const handleSeek = useCallback((time: number) => {
@@ -392,7 +488,9 @@ export function FitTab({
   useEffect(() => {
     if (!onHeaderProject) return;
     const title =
-      lyricData.title && lyricData.title !== "Unknown" && lyricData.title !== "Untitled"
+      lyricData.title &&
+      lyricData.title !== "Unknown" &&
+      lyricData.title !== "Untitled"
         ? lyricData.title
         : audioFile.name.replace(/\.[^.]+$/, "");
     const rightContent = onRetry ? (
@@ -413,13 +511,15 @@ export function FitTab({
     onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent });
     return () => onHeaderProject(null);
   }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onRetry]);
-// CinematicDirectionCard extracted to top-level — see below FitTab
+  // CinematicDirectionCard extracted to top-level — see below FitTab
 
   // ── Live transcript sync ──────────────────────────────────────────────
   // FitTab stays mounted (hidden) while the user edits in LyricsTab.
   // lyricData.lines is live shared state — just watch it and push to the
   // player whenever it changes. No DB comparison needed.
-  const transcriptSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transcriptSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const linesRef = useRef(lyricData?.lines);
   const wordsRef = useRef(words);
   linesRef.current = lyricData?.lines;
@@ -428,30 +528,36 @@ export function FitTab({
   const transcriptInitRef = useRef(false);
   useEffect(() => {
     if (!lyricData?.lines) {
-      
       return;
     }
 
     // Skip first fire — player initializes from prefetchedData already containing these lines
     if (!transcriptInitRef.current) {
       transcriptInitRef.current = true;
-      
+
       return;
     }
 
-    
-
-    if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current);
+    if (transcriptSyncTimerRef.current)
+      clearTimeout(transcriptSyncTimerRef.current);
     transcriptSyncTimerRef.current = setTimeout(() => {
       const handle = dancePlayerRef.current;
       if (!handle) {
         return;
       }
-      const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== "adlib");
-      void (handle as any).reloadTranscript?.(mainLines, wordsRef.current ?? undefined);
+      const mainLines = (linesRef.current || []).filter(
+        (l: any) => l.tag !== "adlib",
+      );
+      void (handle as any).reloadTranscript?.(
+        mainLines,
+        wordsRef.current ?? undefined,
+      );
     }, 300);
 
-    return () => { if (transcriptSyncTimerRef.current) clearTimeout(transcriptSyncTimerRef.current); };
+    return () => {
+      if (transcriptSyncTimerRef.current)
+        clearTimeout(transcriptSyncTimerRef.current);
+    };
   }, [lyricData?.lines, words]);
 
   // ── Auto-save lyrics edits back to DB ────────────────────────────────
@@ -466,7 +572,10 @@ export function FitTab({
   useEffect(() => {
     if (!lyricData?.lines) return;
     // Skip first fire (same pattern as transcript sync — these are the lines we loaded from)
-    if (!autoSaveInitRef.current) { autoSaveInitRef.current = true; return; }
+    if (!autoSaveInitRef.current) {
+      autoSaveInitRef.current = true;
+      return;
+    }
     // Nothing to save to if no dance is published yet
     if (!publishedDanceIdRef.current) return;
 
@@ -474,7 +583,9 @@ export function FitTab({
     autoSaveTimerRef.current = setTimeout(async () => {
       const danceId = publishedDanceIdRef.current;
       if (!danceId) return;
-      const mainLines = (linesRef.current || []).filter((l: any) => l.tag !== 'adlib');
+      const mainLines = (linesRef.current || []).filter(
+        (l: any) => l.tag !== "adlib",
+      );
 
       // Use the reconciled words from the player engine — updateTranscript() maps
       // edited line text back onto word timestamp slots. Those reconciled words
@@ -483,20 +594,24 @@ export function FitTab({
       const reconciledWords = wordsRef.current ?? null;
 
       const { error } = await supabase
-        .from('shareable_lyric_dances' as any)
+        .from("shareable_lyric_dances" as any)
         .update({ lyrics: mainLines, words: reconciledWords })
-        .eq('id', danceId);
+        .eq("id", danceId);
       if (error) {
         // auto-save failed silently
       }
     }, 1500); // 1.5s debounce — wait for user to stop typing
 
-    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
   }, [lyricData?.lines, words]);
 
   const handleDance = useCallback(async () => {
-    
-    if (!user) { toast.error("Sign in to publish your Dance"); return; }
+    if (!user) {
+      toast.error("Sign in to publish your Dance");
+      return;
+    }
     if (!cinematicDirection || !lyricData || !audioFile || publishing) return;
     setPublishing(true);
     setPublishStatus("Preparing…");
@@ -545,10 +660,15 @@ export function FitTab({
           : `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${audioFile.name.split(".").pop() || "webm"}`;
         const { error: uploadError } = await supabase.storage
           .from("audio-clips")
-          .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
+          .upload(storagePath, audioFile, {
+            upsert: true,
+            contentType: audioFile.type || undefined,
+          });
         if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+        const { data: urlData } = supabase.storage
+          .from("audio-clips")
+          .getPublicUrl(storagePath);
         audioUrl = urlData.publicUrl;
       }
 
@@ -559,10 +679,15 @@ export function FitTab({
       let publishAutoPalettes: string[][] | null = null;
       if (!danceNeedsRegeneration) {
         try {
-          if (Array.isArray(existingDance?.auto_palettes) && existingDance.auto_palettes.length > 0) {
+          if (
+            Array.isArray(existingDance?.auto_palettes) &&
+            existingDance.auto_palettes.length > 0
+          ) {
             publishAutoPalettes = existingDance.auto_palettes;
           } else {
-            const urls = (existingDance?.section_images ?? []).filter((u: unknown): u is string => typeof u === "string" && Boolean(u));
+            const urls = (existingDance?.section_images ?? []).filter(
+              (u: unknown): u is string => typeof u === "string" && Boolean(u),
+            );
             if (urls.length > 0) {
               publishAutoPalettes = await computeAutoPalettesFromUrls(urls);
             }
@@ -590,21 +715,38 @@ export function FitTab({
       // section_images     — null if regenerating, preserved if not
       const { error: insertError } = await supabase
         .from("shareable_lyric_dances" as any)
-        .upsert({
-          user_id: user.id,
-          artist_slug: artistSlug,
-          song_slug: songSlug,
-          artist_name: displayName,
-          song_name: lyricData.title || "Untitled",
-          audio_url: audioUrl,
-          lyrics: mainLines,
-          cinematic_direction: cinematicDirection || null,
-          words: words ?? null,
-          auto_palettes: danceNeedsRegeneration ? null : (publishAutoPalettes ?? null),
-          beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : { bpm: 0, beats: [], confidence: 0 },
-          palette: cinematicDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
-          section_images: danceNeedsRegeneration ? null : (existingDance?.section_images ?? null),
-        }, { onConflict: "artist_slug,song_slug" });
+        .upsert(
+          {
+            user_id: user.id,
+            artist_slug: artistSlug,
+            song_slug: songSlug,
+            artist_name: displayName,
+            song_name: lyricData.title || "Untitled",
+            audio_url: audioUrl,
+            lyrics: mainLines,
+            cinematic_direction: cinematicDirection || null,
+            words: words ?? null,
+            auto_palettes: danceNeedsRegeneration
+              ? null
+              : (publishAutoPalettes ?? null),
+            beat_grid: beatGrid
+              ? {
+                  bpm: beatGrid.bpm,
+                  beats: beatGrid.beats,
+                  confidence: beatGrid.confidence,
+                }
+              : { bpm: 0, beats: [], confidence: 0 },
+            palette: cinematicDirection?.palette || [
+              "#ffffff",
+              "#a855f7",
+              "#ec4899",
+            ],
+            section_images: danceNeedsRegeneration
+              ? null
+              : (existingDance?.section_images ?? null),
+          },
+          { onConflict: "artist_slug,song_slug" },
+        );
 
       if (insertError) throw insertError;
 
@@ -644,23 +786,21 @@ export function FitTab({
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + 21);
 
-            await supabase
-              .from("songfit_posts" as any)
-              .insert({
-                user_id: user.id,
-                track_title: lyricData.title || "Untitled",
-                caption: "",
-                lyric_dance_url: url,
-                lyric_dance_id: danceId,
-                spotify_track_url: null,
-                spotify_track_id: null,
-                album_art_url: null,
-                tags_json: [],
-                track_artists_json: [],
-                status: "live",
-                submitted_at: new Date().toISOString(),
-                expires_at: expiresAt.toISOString(),
-              });
+            await supabase.from("songfit_posts" as any).insert({
+              user_id: user.id,
+              track_title: lyricData.title || "Untitled",
+              caption: "",
+              lyric_dance_url: url,
+              lyric_dance_id: danceId,
+              spotify_track_url: null,
+              spotify_track_id: null,
+              album_art_url: null,
+              tags_json: [],
+              track_artists_json: [],
+              status: "live",
+              submitted_at: new Date().toISOString(),
+              expires_at: expiresAt.toISOString(),
+            });
           }
 
           window.dispatchEvent(new Event("songfit:dance-published"));
@@ -669,200 +809,251 @@ export function FitTab({
         }
       })();
     } catch (e: any) {
-      
       toast.error(e.message || "Failed to publish lyric dance");
     } finally {
       clearTimeout(slowWarningId);
       setPublishing(false);
       setPublishStatus("");
     }
-  }, [user, lyricData, audioFile, publishing, renderData, beatGrid, cinematicDirection, words, danceNeedsRegeneration, currentLyricsHash, spendCredits]);
+  }, [
+    user,
+    lyricData,
+    audioFile,
+    publishing,
+    renderData,
+    beatGrid,
+    cinematicDirection,
+    words,
+    danceNeedsRegeneration,
+    currentLyricsHash,
+    spendCredits,
+  ]);
 
   // ── Battle publish handler ──────────────────────────────────────────
-  const handleStartBattle = useCallback(async (
-    overrideHooks?: [SavedCustomHook | null, SavedCustomHook | null],
-  ) => {
-    if (!user || battlePublishing || !canCreate) return;
-    const hooks = overrideHooks ?? customHooks;
-    const activeHook0 = hooks[0] ?? renderData?.hook;
-    const activeHook1 = hooks[1] ?? renderData?.secondHook;
-    if (!activeHook0 || !activeHook1 || !audioFile || !lyricData) return;
-    setBattlePublishing(true);
+  const handleStartBattle = useCallback(
+    async (
+      overrideHooks?: [SavedCustomHook | null, SavedCustomHook | null],
+    ) => {
+      if (!user || battlePublishing || !canCreate) return;
+      const hooks = overrideHooks ?? customHooks;
+      const activeHook0 = hooks[0] ?? renderData?.hook;
+      const activeHook1 = hooks[1] ?? renderData?.secondHook;
+      if (!activeHook0 || !activeHook1 || !audioFile || !lyricData) return;
+      setBattlePublishing(true);
 
-    const slowWarningId2 = setTimeout(() => {
-      toast("Still uploading — large files take longer…");
-    }, 30_000);
+      const slowWarningId2 = setTimeout(() => {
+        toast("Still uploading — large files take longer…");
+      }, 30_000);
 
-    try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", user.id)
-        .single();
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", user.id)
+          .single();
 
-      const displayName = profile?.display_name || "artist";
-      const artistSlug = slugify(displayName);
-      const songSlug = slugify(lyricData.title || "untitled");
+        const displayName = profile?.display_name || "artist";
+        const artistSlug = slugify(displayName);
+        const songSlug = slugify(lyricData.title || "untitled");
 
-      const deriveHookSlug = (h: any): string => {
-        const hookLines = lyricData.lines.filter(l => l.start < h.end && l.end > h.start);
-        const lastLine = hookLines[hookLines.length - 1];
-        const hookPhrase = lastLine?.text || h.previewText || "hook";
-        return slugify(hookPhrase);
-      };
-
-      const hookSlug = deriveHookSlug(activeHook0);
-
-      if (!artistSlug || !songSlug || !hookSlug) {
-        toast.error("Couldn't generate a valid URL — check song/artist name");
-        setBattlePublishing(false);
-        return;
-      }
-
-      // Look up ANY existing battle for this user + song (not by hookSlug).
-      // This ensures we reuse the same battle_id when hooks change on republish.
-      const { data: existingHooks }: any = await supabase
-        .from("shareable_hooks" as any)
-        .select("id, audio_url, battle_id, hook_slug")
-        .eq("user_id", user.id)
-        .eq("artist_slug", artistSlug)
-        .eq("song_slug", songSlug)
-        .order("battle_position", { ascending: true });
-
-      const existingBattleId = existingHooks?.[0]?.battle_id ?? null;
-      const existingAudioUrl = existingHooks?.[0]?.audio_url ?? null;
-
-      let audioUrl: string;
-      if (existingAudioUrl) {
-        audioUrl = existingAudioUrl;
-      } else {
-        const fileExt = audioFile.name.split(".").pop() || "webm";
-        const storagePath = `${user.id}/${artistSlug}/${songSlug}/${hookSlug}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from("audio-clips")
-          .upload(storagePath, audioFile, { upsert: true });
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
-        audioUrl = urlData.publicUrl;
-      }
-
-      // Reuse existing battle_id — one battle per user+song
-      const battleId = existingBattleId || crypto.randomUUID();
-
-      // Delete old hooks for this battle if they exist (clean slate for new hooks)
-      if (existingHooks && existingHooks.length > 0) {
-        const oldSlugs = existingHooks.map((h: any) => h.hook_slug).filter(Boolean);
-        const newSlugs = [hookSlug, deriveHookSlug(activeHook1) || `${hookSlug}-2`];
-        // Only delete hooks whose slugs differ from the new ones (upsert handles same-slug updates)
-        const orphanedSlugs = oldSlugs.filter((s: string) => !newSlugs.includes(s));
-        if (orphanedSlugs.length > 0) {
-          await supabase
-            .from("shareable_hooks" as any)
-            .delete()
-            .eq("user_id", user.id)
-            .eq("artist_slug", artistSlug)
-            .eq("song_slug", songSlug)
-            .in("hook_slug", orphanedSlugs);
-        }
-      }
-      const pSpec = renderData?.motionProfileSpec || {};
-      const bg = beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {};
-      const palette = pSpec.palette || ["#ffffff", "#a855f7", "#ec4899"];
-      const system = pSpec.system || "fracture";
-
-      // Helper to build hook payload — all values explicitly non-undefined
-      const buildHookPayload = (h: any, slug: string, position: number, label: string | null) => {
-        const hookLines = lyricData.lines.filter(l => l.start < h.end && l.end > h.start);
-        const lastLine = hookLines[hookLines.length - 1];
-        const hookPhrase = lastLine?.text || h.previewText || "hook";
-        return {
-          user_id: user.id,
-          artist_slug: artistSlug,
-          song_slug: songSlug,
-          hook_slug: slug,
-          artist_name: displayName,
-          song_name: lyricData.title || "Untitled",
-          hook_phrase: hookPhrase,
-          artist_dna: null,
-          motion_profile_spec: pSpec,
-          beat_grid: bg,
-          hook_start: h.start,
-          hook_end: h.end,
-          lyrics: hookLines,
-          audio_url: audioUrl,
-          system_type: system,
-          palette,
-          signature_line: null,
-          battle_id: battleId,
-          battle_position: position,
-          hook_label: label,
+        const deriveHookSlug = (h: any): string => {
+          const hookLines = lyricData.lines.filter(
+            (l) => l.start < h.end && l.end > h.start,
+          );
+          const lastLine = hookLines[hookLines.length - 1];
+          const hookPhrase = lastLine?.text || h.previewText || "hook";
+          return slugify(hookPhrase);
         };
-      };
 
-      // Upsert hook 1
-      const { error: e1 } = await supabase
-        .from("shareable_hooks" as any)
-        .upsert(buildHookPayload(activeHook0, hookSlug, 1, renderData.hookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
-      if (e1) throw e1;
+        const hookSlug = deriveHookSlug(activeHook0);
 
-      // Upsert hook 2
-      const secondHookSlug = deriveHookSlug(activeHook1);
-      const { error: e2 } = await supabase
-        .from("shareable_hooks" as any)
-        .upsert(buildHookPayload(activeHook1, secondHookSlug || `${hookSlug}-2`, 2, renderData.secondHookLabel || null), { onConflict: "artist_slug,song_slug,hook_slug" });
-      if (e2) throw e2;
+        if (!artistSlug || !songSlug || !hookSlug) {
+          toast.error("Couldn't generate a valid URL — check song/artist name");
+          setBattlePublishing(false);
+          return;
+        }
 
-      // Upsert hookfit_posts
-      const { data: primaryHook } = await supabase
-        .from("shareable_hooks" as any)
-        .select("id")
-        .eq("artist_slug", artistSlug)
-        .eq("song_slug", songSlug)
-        .eq("hook_slug", hookSlug)
-        .maybeSingle();
+        // Look up ANY existing battle for this user + song (not by hookSlug).
+        // This ensures we reuse the same battle_id when hooks change on republish.
+        const { data: existingHooks }: any = await supabase
+          .from("shareable_hooks" as any)
+          .select("id, audio_url, battle_id, hook_slug")
+          .eq("user_id", user.id)
+          .eq("artist_slug", artistSlug)
+          .eq("song_slug", songSlug)
+          .order("battle_position", { ascending: true });
 
-      if (primaryHook) {
-        await supabase
-          .from("hookfit_posts" as any)
-          .upsert({
-            user_id: user.id,
-            battle_id: battleId,
-            hook_id: (primaryHook as any).id,
-            status: "live",
-          }, { onConflict: "battle_id" });
-      }
+        const existingBattleId = existingHooks?.[0]?.battle_id ?? null;
+        const existingAudioUrl = existingHooks?.[0]?.audio_url ?? null;
 
-      const battleUrl = `/${artistSlug}/${songSlug}/${hookSlug}`;
-      setBattlePublishedUrl(battleUrl);
-      spendCredits();
+        let audioUrl: string;
+        if (existingAudioUrl) {
+          audioUrl = existingAudioUrl;
+        } else {
+          const fileExt = audioFile.name.split(".").pop() || "webm";
+          const storagePath = `${user.id}/${artistSlug}/${songSlug}/${hookSlug}.${fileExt}`;
+          const { error: uploadError } = await supabase.storage
+            .from("audio-clips")
+            .upload(storagePath, audioFile, { upsert: true });
+          if (uploadError) throw uploadError;
 
-      // Auto-post to CrowdFit — update existing or create new
-      (async () => {
-        try {
-          // Find existing post by battle URL pattern (any hook slug for this user+song)
-          const { data: existingPost }: any = await supabase
-            .from("songfit_posts" as any)
-            .select("id, lyric_dance_url")
-            .eq("user_id", user.id)
-            .like("lyric_dance_url", `/${artistSlug}/${songSlug}/%`)
-            .is("lyric_dance_id", null)
-            .maybeSingle();
+          const { data: urlData } = supabase.storage
+            .from("audio-clips")
+            .getPublicUrl(storagePath);
+          audioUrl = urlData.publicUrl;
+        }
 
-          if (existingPost) {
-            // Update existing post's URL to point to new hooks
-            if (existingPost.lyric_dance_url !== battleUrl) {
-              await supabase
-                .from("songfit_posts" as any)
-                .update({ lyric_dance_url: battleUrl })
-                .eq("id", existingPost.id);
-            }
-          } else {
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + 21);
+        // Reuse existing battle_id — one battle per user+song
+        const battleId = existingBattleId || crypto.randomUUID();
+
+        // Delete old hooks for this battle if they exist (clean slate for new hooks)
+        if (existingHooks && existingHooks.length > 0) {
+          const oldSlugs = existingHooks
+            .map((h: any) => h.hook_slug)
+            .filter(Boolean);
+          const newSlugs = [
+            hookSlug,
+            deriveHookSlug(activeHook1) || `${hookSlug}-2`,
+          ];
+          // Only delete hooks whose slugs differ from the new ones (upsert handles same-slug updates)
+          const orphanedSlugs = oldSlugs.filter(
+            (s: string) => !newSlugs.includes(s),
+          );
+          if (orphanedSlugs.length > 0) {
             await supabase
+              .from("shareable_hooks" as any)
+              .delete()
+              .eq("user_id", user.id)
+              .eq("artist_slug", artistSlug)
+              .eq("song_slug", songSlug)
+              .in("hook_slug", orphanedSlugs);
+          }
+        }
+        const pSpec = renderData?.motionProfileSpec || {};
+        const bg = beatGrid
+          ? {
+              bpm: beatGrid.bpm,
+              beats: beatGrid.beats,
+              confidence: beatGrid.confidence,
+            }
+          : {};
+        const palette = pSpec.palette || ["#ffffff", "#a855f7", "#ec4899"];
+        const system = pSpec.system || "fracture";
+
+        // Helper to build hook payload — all values explicitly non-undefined
+        const buildHookPayload = (
+          h: any,
+          slug: string,
+          position: number,
+          label: string | null,
+        ) => {
+          const hookLines = lyricData.lines.filter(
+            (l) => l.start < h.end && l.end > h.start,
+          );
+          const lastLine = hookLines[hookLines.length - 1];
+          const hookPhrase = lastLine?.text || h.previewText || "hook";
+          return {
+            user_id: user.id,
+            artist_slug: artistSlug,
+            song_slug: songSlug,
+            hook_slug: slug,
+            artist_name: displayName,
+            song_name: lyricData.title || "Untitled",
+            hook_phrase: hookPhrase,
+            artist_dna: null,
+            motion_profile_spec: pSpec,
+            beat_grid: bg,
+            hook_start: h.start,
+            hook_end: h.end,
+            lyrics: hookLines,
+            audio_url: audioUrl,
+            system_type: system,
+            palette,
+            signature_line: null,
+            battle_id: battleId,
+            battle_position: position,
+            hook_label: label,
+          };
+        };
+
+        // Upsert hook 1
+        const { error: e1 } = await supabase
+          .from("shareable_hooks" as any)
+          .upsert(
+            buildHookPayload(
+              activeHook0,
+              hookSlug,
+              1,
+              renderData.hookLabel || null,
+            ),
+            { onConflict: "artist_slug,song_slug,hook_slug" },
+          );
+        if (e1) throw e1;
+
+        // Upsert hook 2
+        const secondHookSlug = deriveHookSlug(activeHook1);
+        const { error: e2 } = await supabase
+          .from("shareable_hooks" as any)
+          .upsert(
+            buildHookPayload(
+              activeHook1,
+              secondHookSlug || `${hookSlug}-2`,
+              2,
+              renderData.secondHookLabel || null,
+            ),
+            { onConflict: "artist_slug,song_slug,hook_slug" },
+          );
+        if (e2) throw e2;
+
+        // Upsert hookfit_posts
+        const { data: primaryHook } = await supabase
+          .from("shareable_hooks" as any)
+          .select("id")
+          .eq("artist_slug", artistSlug)
+          .eq("song_slug", songSlug)
+          .eq("hook_slug", hookSlug)
+          .maybeSingle();
+
+        if (primaryHook) {
+          await supabase.from("hookfit_posts" as any).upsert(
+            {
+              user_id: user.id,
+              battle_id: battleId,
+              hook_id: (primaryHook as any).id,
+              status: "live",
+            },
+            { onConflict: "battle_id" },
+          );
+        }
+
+        const battleUrl = `/${artistSlug}/${songSlug}/${hookSlug}`;
+        setBattlePublishedUrl(battleUrl);
+        spendCredits();
+
+        // Auto-post to CrowdFit — update existing or create new
+        (async () => {
+          try {
+            // Find existing post by battle URL pattern (any hook slug for this user+song)
+            const { data: existingPost }: any = await supabase
               .from("songfit_posts" as any)
-              .insert({
+              .select("id, lyric_dance_url")
+              .eq("user_id", user.id)
+              .like("lyric_dance_url", `/${artistSlug}/${songSlug}/%`)
+              .is("lyric_dance_id", null)
+              .maybeSingle();
+
+            if (existingPost) {
+              // Update existing post's URL to point to new hooks
+              if (existingPost.lyric_dance_url !== battleUrl) {
+                await supabase
+                  .from("songfit_posts" as any)
+                  .update({ lyric_dance_url: battleUrl })
+                  .eq("id", existingPost.id);
+              }
+            } else {
+              const expiresAt = new Date();
+              expiresAt.setDate(expiresAt.getDate() + 21);
+              await supabase.from("songfit_posts" as any).insert({
                 user_id: user.id,
                 track_title: lyricData.title || "Untitled",
                 caption: "",
@@ -877,23 +1068,38 @@ export function FitTab({
                 submitted_at: new Date().toISOString(),
                 expires_at: expiresAt.toISOString(),
               });
+            }
+            window.dispatchEvent(new Event("songfit:dance-published"));
+          } catch (e: any) {
+            console.warn(
+              "[FitTab] CrowdFit battle auto-post failed:",
+              e?.message,
+            );
           }
-          window.dispatchEvent(new Event("songfit:dance-published"));
-        } catch (e: any) {
-          console.warn("[FitTab] CrowdFit battle auto-post failed:", e?.message);
-        }
-      })();
+        })();
 
-      window.dispatchEvent(new Event("hookfit:battle-published"));
-      toast.success("Hook Battle published to CrowdFit!");
-    } catch (e: any) {
-      console.error("Battle publish error:", e);
-      toast.error(e.message || "Failed to publish battle");
-    } finally {
-      clearTimeout(slowWarningId2);
-      setBattlePublishing(false);
-    }
-  }, [user, battlePublishing, canCreate, customHooks, renderData, audioFile, lyricData, beatGrid, spendCredits]);
+        window.dispatchEvent(new Event("hookfit:battle-published"));
+        toast.success("Hook Battle published to CrowdFit!");
+      } catch (e: any) {
+        console.error("Battle publish error:", e);
+        toast.error(e.message || "Failed to publish battle");
+      } finally {
+        clearTimeout(slowWarningId2);
+        setBattlePublishing(false);
+      }
+    },
+    [
+      user,
+      battlePublishing,
+      canCreate,
+      customHooks,
+      renderData,
+      audioFile,
+      lyricData,
+      beatGrid,
+      spendCredits,
+    ],
+  );
 
   const handleRemoveBattle = useCallback(async () => {
     if (!battlePublishedUrl || !user) return;
@@ -910,12 +1116,87 @@ export function FitTab({
     }
   }, [battlePublishedUrl, user]);
 
+  const [fontReady, setFontReady] = useState(false);
+  const [imageWaitExpired, setImageWaitExpired] = useState(false);
+
+  useEffect(() => {
+    if (!cinematicDirection) {
+      setFontReady(false);
+      return;
+    }
+
+    const fontMap: Record<string, string> = {
+      "bold-impact": "Oswald",
+      "clean-modern": "Montserrat",
+      "elegant-serif": "Playfair Display",
+      "raw-condensed": "Barlow Condensed",
+      "whisper-soft": "Nunito",
+      "tech-mono": "JetBrains Mono",
+      "display-heavy": "Bebas Neue",
+      "editorial-light": "Cormorant Garamond",
+    };
+
+    const typography = cinematicDirection.typography || "clean-modern";
+    const fontName = fontMap[typography] || "Montserrat";
+    const fontsApi = document.fonts;
+
+    if (fontsApi?.check(`600 48px "${fontName}"`)) {
+      setFontReady(true);
+      return;
+    }
+
+    setFontReady(false);
+    import("@/lib/fontReadinessCache").then(({ ensureFontReady }) => {
+      ensureFontReady(fontName).then((loaded) => {
+        setFontReady(loaded || true);
+      });
+    });
+  }, [cinematicDirection]);
+
+  const playerReady = useMemo(() => {
+    if (!publishedDanceId) return false;
+    if (!prefetchedDanceData) return false;
+
+    const images = prefetchedDanceData.section_images;
+    const sections = (prefetchedDanceData.cinematic_direction as any)?.sections;
+    if (Array.isArray(sections) && sections.length > 0) {
+      if (
+        !Array.isArray(images) ||
+        images.length === 0 ||
+        !images.every(Boolean)
+      )
+        return false;
+    }
+
+    if (
+      !prefetchedDanceData.words ||
+      (prefetchedDanceData.words as any[]).length === 0
+    )
+      return false;
+    if (!prefetchedDanceData.beat_grid) return false;
+    if (!fontReady) return false;
+
+    return true;
+  }, [publishedDanceId, prefetchedDanceData, fontReady]);
+
+  useEffect(() => {
+    if (playerReady || !publishedDanceId) {
+      setImageWaitExpired(false);
+      return;
+    }
+
+    setImageWaitExpired(false);
+    const timer = setTimeout(() => setImageWaitExpired(true), 60_000);
+    return () => clearTimeout(timer);
+  }, [playerReady, publishedDanceId]);
+
   const allReady =
     generationStatus.beatGrid === "done" &&
     generationStatus.renderData === "done" &&
     generationStatus.cinematicDirection === "done";
   const hasErrors = Object.values(generationStatus).includes("error");
-  const danceDisabled = !cinematicDirection || publishing || !allReady || !canCreate;
+  const danceDisabled =
+    !cinematicDirection || publishing || !allReady || !canCreate;
   // Republish only needs auth + not currently publishing (data already exists on server)
   const republishDisabled = publishing;
 
@@ -930,240 +1211,299 @@ export function FitTab({
 
   return (
     <>
-      <audio ref={hookAudioRef} src={hookAudioUrl} style={{ display: "none" }} />
+      <audio
+        ref={hookAudioRef}
+        src={hookAudioUrl}
+        style={{ display: "none" }}
+      />
       <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
-      {/* Dance preview or waveform fallback */}
-      {publishedUrl && publishedDanceId ? (
-        <div className="space-y-3">
-          {/* Action toolbar — above the player */}
-          <div className="flex items-center justify-center gap-1">
-            <a
-              href={publishedUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-              title="Watch Dance"
-            >
-              Watch
-            </a>
-            <button
-              onClick={() => setShowExportModal(true)}
-              className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-              title="Download"
-            >
-              Download
-            </button>
-            <button
-              onClick={() => {
-                const parsed = publishedUrl ? parseLyricDanceUrl(publishedUrl) : null;
-                const url = parsed
-                  ? buildShareUrl(parsed.artistSlug, parsed.songSlug)
-                  : `${window.location.origin}${publishedUrl}`;
-                navigator.clipboard.writeText(url).then(() => toast.success("Link copied!"));
-              }}
-              className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-              title="Copy Link"
-            >
-              Link
-            </button>
-            <button
-              onClick={handleCrowdfitToggle}
-              disabled={crowdfitToggling || (!canCreate && !crowdfitPostId)}
-              className={`flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 ${
-                crowdfitPostId
-                  ? "text-primary border-primary/40 bg-primary/5"
-                  : "text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-              } disabled:opacity-50`}
-              title={crowdfitPostId ? "Remove from CrowdFit" : "Publish to CrowdFit"}
-            >
-              {crowdfitToggling ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : null}
-              {crowdfitPostId ? "Live" : !canCreate ? `${credits}/${required}` : "Post"}
-            </button>
-          </div>
-
-          {/* Video player with profile overlay */}
-          <div className="relative rounded-xl overflow-hidden w-full aspect-video">
-            <LyricDanceEmbed
-              ref={dancePlayerRef}
-              lyricDanceId={publishedDanceId}
-              lyricDanceUrl={publishedUrl}
-              songTitle={lyricData.title || "Untitled"}
-              artistName=""
-              prefetchedData={prefetchedDanceData}
-            />
-            {profile && (
-              <div className="absolute top-0 left-0 right-0 z-[460] flex items-center gap-2 px-3 py-2.5 pointer-events-none">
-                <div className="relative shrink-0">
-                  <div className="h-7 w-7 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.08]">
-                    {profile.avatar_url ? (
-                      <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <User size={12} className="text-white/40" />
-                    )}
-                  </div>
-                </div>
-                <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate">
-                  {profile.display_name ? `In Studio · ${profile.display_name}` : "In Studio"}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <FitExportModal
-            isOpen={showExportModal}
-            onClose={() => setShowExportModal(false)}
-            getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
-            songTitle={lyricData.title || "Untitled"}
-            artistName=""
-          />
-        </div>
-      ) : hasRealAudio ? (
-        <div className="glass-card rounded-xl p-3">
-          <LyricWaveform
-            waveform={waveform || parentWaveform || null}
-            isPlaying={isPlaying}
-            currentTime={currentTime}
-            onSeek={handleSeek}
-            onTogglePlay={handleTogglePlay}
-            beats={beatGrid?.beats ?? null}
-            beatGridLoading={false}
-          />
-        </div>
-      ) : null}
-
-      {/* ── FMLY Feud Setup ── */}
-      {hottestHooksEnabled && (
-        <>
-          <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
-            <div className="flex items-center gap-1.5">
-              <Zap size={11} className="text-primary" />
-              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                Let the FMLY decide the hottest hook
-              </span>
-            </div>
-
-            {battlePublishedUrl ? (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => window.open(battlePublishedUrl, "_blank")}
-                  className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-green-400 border-green-400/40 hover:border-green-400/70"
-                >
-                  <Circle size={7} className="fill-green-400 text-green-400" /> Live
-                </button>
-                <button
-                  onClick={handleRemoveBattle}
-                  className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground/50 border-border/30 hover:text-foreground hover:border-border/60"
-                >
-                  Remove
-                </button>
-              </div>
-            ) : (
+        {/* Dance preview or waveform fallback */}
+        {publishedUrl && publishedDanceId ? (
+          <div className="space-y-3">
+            {/* Action toolbar — above the player */}
+            <div className="flex items-center justify-center gap-1">
+              <a
+                href={publishedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+                title="Watch Dance"
+              >
+                Watch
+              </a>
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+                title="Download"
+              >
+                Download
+              </button>
               <button
                 onClick={() => {
-                  setFeudTab(0);
-                  setFeudSetupOpen(true);
+                  const parsed = publishedUrl
+                    ? parseLyricDanceUrl(publishedUrl)
+                    : null;
+                  const url = parsed
+                    ? buildShareUrl(parsed.artistSlug, parsed.songSlug)
+                    : `${window.location.origin}${publishedUrl}`;
+                  navigator.clipboard
+                    .writeText(url)
+                    .then(() => toast.success("Link copied!"));
                 }}
-                disabled={!hottestHooksEnabled || !canCreate}
-                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40 disabled:opacity-40"
+                className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+                title="Copy Link"
               >
-                <Zap size={10} /> Set Up Your Feud
+                Link
               </button>
-            )}
-          </div>
+              <button
+                onClick={handleCrowdfitToggle}
+                disabled={crowdfitToggling || (!canCreate && !crowdfitPostId)}
+                className={`flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 ${
+                  crowdfitPostId
+                    ? "text-primary border-primary/40 bg-primary/5"
+                    : "text-foreground hover:text-primary border-border/40 hover:border-primary/40"
+                } disabled:opacity-50`}
+                title={
+                  crowdfitPostId
+                    ? "Remove from CrowdFit"
+                    : "Publish to CrowdFit"
+                }
+              >
+                {crowdfitToggling ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : null}
+                {crowdfitPostId
+                  ? "Live"
+                  : !canCreate
+                    ? `${credits}/${required}`
+                    : "Post"}
+              </button>
+            </div>
 
-          {/* ── Feud Setup Modal ── */}
-          <Dialog open={feudSetupOpen} onOpenChange={(open) => {
-            if (!open) {
-              setFeudSetupOpen(false);
-            }
-          }}>
-            <DialogContent className="max-w-lg w-full p-0 overflow-hidden bg-background border border-border/40">
-              {/* Header */}
-              <div className="px-5 pt-5 pb-3 border-b border-border/30">
-                <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-muted-foreground">
-                  Set Up Your Feud
-                </p>
-                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                  Pick two hooks — the FMLY votes on the hottest one
-                </p>
-              </div>
-
-              <div className="flex border-b border-border/30">
-                {(["Left Hook", "Right Hook"] as const).map((label, idx) => {
-                  const isSet = !!(customHooks[idx] ??
-                    (idx === 0 ? renderData?.hook : renderData?.secondHook));
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => setFeudTab(idx as 0 | 1)}
-                      className={`flex-1 px-4 py-3 text-[11px] font-mono uppercase tracking-[0.12em] transition-colors flex items-center justify-center gap-1.5 ${
-                        feudTab === idx
-                          ? "text-primary border-b-2 border-primary"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {label}
-                      {isSet && feudTab !== idx && (
-                        <span className="text-[8px] text-primary/60">✓</span>
+            {/* Video player with profile overlay */}
+            <div className="relative rounded-xl overflow-hidden w-full aspect-video">
+              {playerReady || imageWaitExpired ? (
+                <LyricDanceEmbed
+                  ref={dancePlayerRef}
+                  lyricDanceId={publishedDanceId}
+                  lyricDanceUrl={publishedUrl}
+                  songTitle={lyricData.title || "Untitled"}
+                  artistName=""
+                  prefetchedData={prefetchedDanceData}
+                />
+              ) : (
+                <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-3">
+                  <Loader2 size={20} className="animate-spin text-white/20" />
+                  <span className="text-[10px] font-mono text-white/25 tracking-wider uppercase">
+                    {!prefetchedDanceData
+                      ? "loading..."
+                      : !prefetchedDanceData.section_images?.every(Boolean)
+                        ? `images ${prefetchedDanceData.section_images?.filter(Boolean)?.length ?? 0}/${(prefetchedDanceData.cinematic_direction as any)?.sections?.length ?? "?"}`
+                        : !fontReady
+                          ? "loading font..."
+                          : "preparing player..."}
+                  </span>
+                </div>
+              )}
+              {profile && (
+                <div className="absolute top-0 left-0 right-0 z-[460] flex items-center gap-2 px-3 py-2.5 pointer-events-none">
+                  <div className="relative shrink-0">
+                    <div className="h-7 w-7 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.08]">
+                      {profile.avatar_url ? (
+                        <img
+                          src={profile.avatar_url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User size={12} className="text-white/40" />
                       )}
-                    </button>
-                  );
-                })}
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate">
+                    {profile.display_name
+                      ? `In Studio · ${profile.display_name}`
+                      : "In Studio"}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <FitExportModal
+              isOpen={showExportModal}
+              onClose={() => setShowExportModal(false)}
+              getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
+              songTitle={lyricData.title || "Untitled"}
+              artistName=""
+            />
+          </div>
+        ) : hasRealAudio ? (
+          <div className="glass-card rounded-xl p-3">
+            <LyricWaveform
+              waveform={waveform || parentWaveform || null}
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              onSeek={handleSeek}
+              onTogglePlay={handleTogglePlay}
+              beats={beatGrid?.beats ?? null}
+              beatGridLoading={false}
+            />
+          </div>
+        ) : null}
+
+        {/* ── FMLY Feud Setup ── */}
+        {hottestHooksEnabled && (
+          <>
+            <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
+              <div className="flex items-center gap-1.5">
+                <Zap size={11} className="text-primary" />
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                  Let the FMLY decide the hottest hook
+                </span>
               </div>
 
-              <div className="px-5 py-5" style={{ minHeight: 200 }}>
-                {([0, 1] as const).map((idx) => {
-                  if (feudTab !== idx) return null;
-                  const aiHook = idx === 0 ? renderData?.hook : renderData?.secondHook;
-                  return (
-                    <HookWaveformPicker
-                      key={idx}
-                      waveform={waveform || parentWaveform || null}
-                      lines={lyricData.lines}
-                      audioRef={hookAudioRef}
-                      loopRegionRef={hookLoopRegionRef}
-                      aiHint={aiHook ?? null}
-                      initialHook={customHooks[idx] ?? aiHook ?? null}
-                      isLast={idx === 1}
-                      onSave={async (hook) => {
-                        const saved: SavedCustomHook = { ...hook, color: "#a855f7" };
-                        const next: [SavedCustomHook | null, SavedCustomHook | null] = [...customHooks] as any;
-                        next[idx] = saved;
-                        setCustomHooks(next);
-                        if (idx === 0) {
-                          setFeudTab(1);
-                        } else {
-                          // Pass next directly — React state may not have flushed yet
-                          const hook0 = next[0] ?? renderData?.hook;
-                          const hook1 = next[1];
-                          if (hook0 && hook1) {
-                            await handleStartBattle(next);
+              {battlePublishedUrl ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => window.open(battlePublishedUrl, "_blank")}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-green-400 border-green-400/40 hover:border-green-400/70"
+                  >
+                    <Circle
+                      size={7}
+                      className="fill-green-400 text-green-400"
+                    />{" "}
+                    Live
+                  </button>
+                  <button
+                    onClick={handleRemoveBattle}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground/50 border-border/30 hover:text-foreground hover:border-border/60"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setFeudTab(0);
+                    setFeudSetupOpen(true);
+                  }}
+                  disabled={!hottestHooksEnabled || !canCreate}
+                  className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40 disabled:opacity-40"
+                >
+                  <Zap size={10} /> Set Up Your Feud
+                </button>
+              )}
+            </div>
+
+            {/* ── Feud Setup Modal ── */}
+            <Dialog
+              open={feudSetupOpen}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setFeudSetupOpen(false);
+                }
+              }}
+            >
+              <DialogContent className="max-w-lg w-full p-0 overflow-hidden bg-background border border-border/40">
+                {/* Header */}
+                <div className="px-5 pt-5 pb-3 border-b border-border/30">
+                  <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-muted-foreground">
+                    Set Up Your Feud
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                    Pick two hooks — the FMLY votes on the hottest one
+                  </p>
+                </div>
+
+                <div className="flex border-b border-border/30">
+                  {(["Left Hook", "Right Hook"] as const).map((label, idx) => {
+                    const isSet = !!(
+                      customHooks[idx] ??
+                      (idx === 0 ? renderData?.hook : renderData?.secondHook)
+                    );
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => setFeudTab(idx as 0 | 1)}
+                        className={`flex-1 px-4 py-3 text-[11px] font-mono uppercase tracking-[0.12em] transition-colors flex items-center justify-center gap-1.5 ${
+                          feudTab === idx
+                            ? "text-primary border-b-2 border-primary"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {label}
+                        {isSet && feudTab !== idx && (
+                          <span className="text-[8px] text-primary/60">✓</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="px-5 py-5" style={{ minHeight: 200 }}>
+                  {([0, 1] as const).map((idx) => {
+                    if (feudTab !== idx) return null;
+                    const aiHook =
+                      idx === 0 ? renderData?.hook : renderData?.secondHook;
+                    return (
+                      <HookWaveformPicker
+                        key={idx}
+                        waveform={waveform || parentWaveform || null}
+                        lines={lyricData.lines}
+                        audioRef={hookAudioRef}
+                        loopRegionRef={hookLoopRegionRef}
+                        aiHint={aiHook ?? null}
+                        initialHook={customHooks[idx] ?? aiHook ?? null}
+                        isLast={idx === 1}
+                        onSave={async (hook) => {
+                          const saved: SavedCustomHook = {
+                            ...hook,
+                            color: "#a855f7",
+                          };
+                          const next: [
+                            SavedCustomHook | null,
+                            SavedCustomHook | null,
+                          ] = [...customHooks] as any;
+                          next[idx] = saved;
+                          setCustomHooks(next);
+                          if (idx === 0) {
+                            setFeudTab(1);
+                          } else {
+                            // Pass next directly — React state may not have flushed yet
+                            const hook0 = next[0] ?? renderData?.hook;
+                            const hook1 = next[1];
+                            if (hook0 && hook1) {
+                              await handleStartBattle(next);
+                            }
+                            setFeudSetupOpen(false);
                           }
-                          setFeudSetupOpen(false);
-                        }
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            </DialogContent>
-          </Dialog>
-        </>
-      )}
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>
+        )}
 
-      {/* Single-column report */}
-      <div className="space-y-3">
-        {!allReady && (
+        {/* Single-column report */}
+        <div className="space-y-3">
+          {!allReady && (
             <div className="glass-card rounded-xl p-4 space-y-2">
               <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                {hasErrors ? "Some steps failed" : Object.values(generationStatus).some(v => v === "running") ? "Generating Fit in background" : "Analysis not yet complete"}
+                {hasErrors
+                  ? "Some steps failed"
+                  : Object.values(generationStatus).some((v) => v === "running")
+                    ? "Generating Fit in background"
+                    : "Analysis not yet complete"}
               </p>
               <div className="space-y-1.5 text-xs text-muted-foreground">
                 <div>Rhythm: {generationStatus.beatGrid}</div>
                 <div>Song DNA: {generationStatus.renderData}</div>
-                <div>Cinematic direction: {generationStatus.cinematicDirection}</div>
+                <div>
+                  Cinematic direction: {generationStatus.cinematicDirection}
+                </div>
               </div>
               {onRetry && (
                 <button
@@ -1179,7 +1519,9 @@ export function FitTab({
 
           {renderData?.description && (
             <div className="glass-card rounded-xl p-4 space-y-2">
-              <p className="text-sm text-muted-foreground italic leading-relaxed">{renderData.description}</p>
+              <p className="text-sm text-muted-foreground italic leading-relaxed">
+                {renderData.description}
+              </p>
               {renderData.mood && (
                 <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                   {renderData.mood}
@@ -1191,7 +1533,9 @@ export function FitTab({
           {renderData && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Song DNA</span>
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                  Song DNA
+                </span>
                 {onRetry && hasErrors && (
                   <button
                     onClick={onRetry}
@@ -1209,100 +1553,136 @@ export function FitTab({
                     <Sparkles size={10} />
                     Meaning
                   </div>
-                  {meaning.theme && <p className="text-sm font-semibold text-foreground">{meaning.theme}</p>}
-                  {(meaning.summary || meaning.narrative) && <p className="text-xs text-muted-foreground leading-relaxed">{meaning.summary || meaning.narrative}</p>}
-                  {Array.isArray(meaning.imagery || meaning.emotions) && (meaning.imagery || meaning.emotions).length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {(meaning.imagery || meaning.emotions).map((e: string, i: number) => (
-                        <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{e}</span>
-                      ))}
-                    </div>
+                  {meaning.theme && (
+                    <p className="text-sm font-semibold text-foreground">
+                      {meaning.theme}
+                    </p>
                   )}
+                  {(meaning.summary || meaning.narrative) && (
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {meaning.summary || meaning.narrative}
+                    </p>
+                  )}
+                  {Array.isArray(meaning.imagery || meaning.emotions) &&
+                    (meaning.imagery || meaning.emotions).length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {(meaning.imagery || meaning.emotions).map(
+                          (e: string, i: number) => (
+                            <span
+                              key={i}
+                              className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground"
+                            >
+                              {e}
+                            </span>
+                          ),
+                        )}
+                      </div>
+                    )}
                 </div>
               )}
 
-
-
-              {cinematicDirection?.sections && Array.isArray(cinematicDirection.sections) && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                      <Eye size={10} />
-                      Scenes
-                    </div>
-                    {Array.isArray(cinematicDirection.sections) && cinematicDirection.sections.length > 0 && (
-                      <button
-                        onClick={() => void window.dispatchEvent(new Event("fittab:regenerate-images"))}
-                        disabled={sectionImagesGenerating}
-                        className="text-[9px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1 disabled:opacity-40"
-                      >
-                        {sectionImagesGenerating ? (
-                          <>
-                            <Loader2 size={9} className="animate-spin" />
-                            {sectionImagesProgress ? `${sectionImagesProgress.done}/${sectionImagesProgress.total}` : "Generating…"}
-                          </>
-                        ) : sectionImagesError ? (
-                          <>
-                            <RefreshCw size={9} />
-                            Retry Images
-                          </>
-                        ) : sectionImages.length > 0 ? (
-                          <>
-                            <Image size={9} />
-                            Regenerate Images
-                          </>
-                        ) : (
-                          <>
-                            <Image size={9} />
-                            Generate Images
-                          </>
+              {cinematicDirection?.sections &&
+                Array.isArray(cinematicDirection.sections) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                        <Eye size={10} />
+                        Scenes
+                      </div>
+                      {Array.isArray(cinematicDirection.sections) &&
+                        cinematicDirection.sections.length > 0 && (
+                          <button
+                            onClick={() =>
+                              void window.dispatchEvent(
+                                new Event("fittab:regenerate-images"),
+                              )
+                            }
+                            disabled={sectionImagesGenerating}
+                            className="text-[9px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1 disabled:opacity-40"
+                          >
+                            {sectionImagesGenerating ? (
+                              <>
+                                <Loader2 size={9} className="animate-spin" />
+                                {sectionImagesProgress
+                                  ? `${sectionImagesProgress.done}/${sectionImagesProgress.total}`
+                                  : "Generating…"}
+                              </>
+                            ) : sectionImagesError ? (
+                              <>
+                                <RefreshCw size={9} />
+                                Retry (
+                                {sectionImagesProgress
+                                  ? `${sectionImagesProgress.done}/${sectionImagesProgress.total}`
+                                  : "failed"}
+                                )
+                              </>
+                            ) : sectionImages.length > 0 ? (
+                              <>
+                                <Image size={9} />
+                                Regenerate Images
+                              </>
+                            ) : (
+                              <>
+                                <Image size={9} />
+                                Generate Images
+                              </>
+                            )}
+                          </button>
                         )}
-                      </button>
+                    </div>
+
+                    {cinematicDirection.sections.map(
+                      (section: any, i: number) => {
+                        const imageUrl = sectionImages[i] || null;
+                        return (
+                          <div
+                            key={section.sectionIndex ?? i}
+                            className="glass-card rounded-lg p-2.5 flex gap-3 items-start"
+                          >
+                            {imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt={
+                                  section.structuralLabel || `Section ${i + 1}`
+                                }
+                                className="w-16 h-16 rounded-md object-cover shrink-0"
+                              />
+                            ) : (
+                              <div className="w-16 h-16 rounded-md bg-white/5 shrink-0 flex items-center justify-center">
+                                <Image
+                                  size={14}
+                                  className="text-muted-foreground/30"
+                                />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-foreground font-mono">
+                                  {(() => {
+                                    const t = section.startSec ?? 0;
+                                    const m = Math.floor(t / 60);
+                                    const s = Math.floor(t % 60);
+                                    return `${m}:${s.toString().padStart(2, "0")}`;
+                                  })()}
+                                </span>
+                                {section.visualMood && (
+                                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                                    {section.visualMood}
+                                  </span>
+                                )}
+                              </div>
+                              {section.description && (
+                                <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
+                                  {section.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      },
                     )}
                   </div>
-
-                  {cinematicDirection.sections.map((section: any, i: number) => {
-                    const imageUrl = sectionImages[i] || null;
-                    return (
-                      <div key={section.sectionIndex ?? i} className="glass-card rounded-lg p-2.5 flex gap-3 items-start">
-                        {imageUrl ? (
-                          <img
-                            src={imageUrl}
-                            alt={section.structuralLabel || `Section ${i + 1}`}
-                            className="w-16 h-16 rounded-md object-cover shrink-0"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 rounded-md bg-white/5 shrink-0 flex items-center justify-center">
-                            <Image size={14} className="text-muted-foreground/30" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-foreground font-mono">
-                              {(() => {
-                                const t = section.startSec ?? 0;
-                                const m = Math.floor(t / 60);
-                                const s = Math.floor(t % 60);
-                                return `${m}:${s.toString().padStart(2, '0')}`;
-                              })()}
-                            </span>
-                            {section.visualMood && (
-                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                                {section.visualMood}
-                              </span>
-                            )}
-                          </div>
-                          {section.description && (
-                            <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
-                              {section.description}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                )}
 
               {cinematicDirection && (
                 <CinematicDirectionCard
@@ -1330,13 +1710,18 @@ export function FitTab({
                     Rhythm
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-foreground">{beatGrid.bpm.toFixed(0)} BPM</span>
-                    <span className="text-[10px] text-muted-foreground">{Math.round((beatGrid.confidence ?? 0) * 100)}% confidence</span>
-                    <span className="text-[10px] text-muted-foreground">{beatGrid.beats?.length ?? 0} beats</span>
+                    <span className="text-sm font-semibold text-foreground">
+                      {beatGrid.bpm.toFixed(0)} BPM
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {Math.round((beatGrid.confidence ?? 0) * 100)}% confidence
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {beatGrid.beats?.length ?? 0} beats
+                    </span>
                   </div>
                 </div>
               )}
-
             </div>
           )}
 
@@ -1352,15 +1737,17 @@ export function FitTab({
                   <Loader2 size={14} className="animate-spin" />
                   <span>{publishStatus || "Publishing…"}</span>
                 </span>
+              ) : !canCreate ? (
+                `Vote on ${required - credits} more to post`
+              ) : publishedUrl ? (
+                "Regenerate Dance"
               ) : (
-                !canCreate
-                  ? `Vote on ${required - credits} more to post`
-                  : publishedUrl ? "Regenerate Dance" : "Dance"
+                "Dance"
               )}
             </button>
           )}
         </div>
-    </div>
+      </div>
     </>
   );
 }
@@ -1387,7 +1774,9 @@ function CinematicDirectionCard({
   songTitle: string;
   userId: string;
   projectId: string | null;
-  onImageGenerationStatusChange?: (status: "idle" | "running" | "done" | "error") => void;
+  onImageGenerationStatusChange?: (
+    status: "idle" | "running" | "done" | "error",
+  ) => void;
   audioFile: File;
   beatGrid: BeatGridData | null;
   words: Array<{ word: string; start: number; end: number }> | null;
@@ -1396,11 +1785,16 @@ function CinematicDirectionCard({
   setSectionImages: (images: (string | null)[]) => void;
   setSectionImagesError: (error: string | null) => void;
   setSectionImagesGenerating: (generating: boolean) => void;
-  setSectionImagesProgress: (progress: { done: number; total: number } | null) => void;
+  setSectionImagesProgress: (
+    progress: { done: number; total: number } | null,
+  ) => void;
 }) {
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
-  const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
+  const [genProgress, setGenProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [imageTimestamps, setImageTimestamps] = useState<(string | null)[]>([]);
   const [danceId, setDanceId] = useState<string | null>(null);
   const [imagesHydrated, setImagesHydrated] = useState(false);
@@ -1419,9 +1813,10 @@ function CinematicDirectionCard({
     setSectionImagesProgress(genProgress);
   }, [genProgress, setSectionImagesProgress]);
 
-  const sections: any[] = cinematicDirection.sections && Array.isArray(cinematicDirection.sections)
-    ? cinematicDirection.sections
-    : [];
+  const sections: any[] =
+    cinematicDirection.sections && Array.isArray(cinematicDirection.sections)
+      ? cinematicDirection.sections
+      : [];
 
   const formatImageTimestamp = useCallback((raw: unknown): string | null => {
     if (typeof raw === "number" && Number.isFinite(raw)) {
@@ -1431,7 +1826,8 @@ function CinematicDirectionCard({
     if (typeof raw === "string") {
       const normalized = raw.trim();
       if (!normalized) return null;
-      if (normalized === "0" || normalized === "0.0" || normalized === "0s") return "just now";
+      if (normalized === "0" || normalized === "0.0" || normalized === "0s")
+        return "just now";
       if (/^\d+(\.\d+)?$/.test(normalized)) return `${normalized}s`;
       return normalized;
     }
@@ -1456,9 +1852,15 @@ function CinematicDirectionCard({
           .maybeSingle();
         if (cancelled) return;
         const savedImgs = lyricRow?.section_images;
-        if (Array.isArray(savedImgs) && savedImgs.length > 0 && savedImgs.some(Boolean)) {
+        if (
+          Array.isArray(savedImgs) &&
+          savedImgs.length > 0 &&
+          savedImgs.some(Boolean)
+        ) {
           setSectionImages(savedImgs);
-          setImageTimestamps(Array.from({ length: savedImgs.length }, () => null));
+          setImageTimestamps(
+            Array.from({ length: savedImgs.length }, () => null),
+          );
           setImagesHydrated(true);
           return;
         }
@@ -1481,7 +1883,7 @@ function CinematicDirectionCard({
       setDanceId(dances[0].id);
 
       const imgs = dances[0].section_images;
-      if (Array.isArray(imgs) && imgs.length > 0 && imgs.some(Boolean)) {
+      if (Array.isArray(imgs) && imgs.length > 0) {
         setSectionImages(imgs);
         setImageTimestamps(Array.from({ length: imgs.length }, () => null));
       }
@@ -1511,16 +1913,22 @@ function CinematicDirectionCard({
         if (!dances?.[0]) return;
         setDanceId(dances[0].id);
         const imgs = dances[0].section_images;
-        if (Array.isArray(imgs) && imgs.some(Boolean)) {
+        if (Array.isArray(imgs) && imgs.length > 0) {
+          const doneCount = imgs.filter(Boolean).length;
           setSectionImages(imgs);
           setImageTimestamps(Array.from({ length: imgs.length }, () => null));
-          setGenProgress({ done: imgs.filter(Boolean).length, total: sections.length });
-          setGenerating(false);
-          if (pollRef.current) clearInterval(pollRef.current);
+          setGenProgress({ done: doneCount, total: sections.length });
+          if (doneCount === sections.length) {
+            setGenerating(false);
+            if (pollRef.current) clearInterval(pollRef.current);
+          }
         }
       }, 3000);
       setTimeout(() => {
-        if (pollRef.current) { clearInterval(pollRef.current); setGenerating(false); }
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          setGenerating(false);
+        }
       }, 120_000);
     };
     window.addEventListener("songfit:dance-published", handler);
@@ -1536,12 +1944,18 @@ function CinematicDirectionCard({
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (Array.isArray(detail?.urls) && detail.urls.length > 0 && detail.urls.some(Boolean)) {
+      if (Array.isArray(detail?.urls) && detail.urls.length > 0) {
+        const doneCount = detail.urls.filter(Boolean).length;
         setSectionImages(detail.urls);
-        setImageTimestamps(Array.from({ length: detail.urls.length }, () => null));
+        setImageTimestamps(
+          Array.from({ length: detail.urls.length }, () => null),
+        );
         setImagesHydrated(true);
-        setGenerating(false);
-        if (pollRef.current) clearInterval(pollRef.current);
+        setGenProgress({ done: doneCount, total: sections.length });
+        if (doneCount === sections.length) {
+          setGenerating(false);
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
       }
     };
     window.addEventListener("fittab:images-generated", handler);
@@ -1575,30 +1989,51 @@ function CinematicDirectionCard({
       : `${userId}/${artistSlug}/${songSlug}/lyric-dance.${audioFile.name.split(".").pop() || "webm"}`;
     await supabase.storage
       .from("audio-clips")
-      .upload(storagePath, audioFile, { upsert: true, contentType: audioFile.type || undefined });
-    const { data: urlData } = supabase.storage.from("audio-clips").getPublicUrl(storagePath);
+      .upload(storagePath, audioFile, {
+        upsert: true,
+        contentType: audioFile.type || undefined,
+      });
+    const { data: urlData } = supabase.storage
+      .from("audio-clips")
+      .getPublicUrl(storagePath);
     const audioUrl = urlData.publicUrl;
 
     const mainLines = lyricData.lines.filter((l) => l.tag !== "adlib");
     const { error: insertError } = await supabase
       .from("shareable_lyric_dances" as any)
-      .upsert({
-        user_id: userId,
-        artist_slug: artistSlug,
-        song_slug: songSlug,
-        artist_name: displayName,
-        song_name: lyricData.title || "Untitled",
-        audio_url: audioUrl,
-        lyrics: mainLines,
-        cinematic_direction: cinematicDirection || null,
-        words: words ?? null,
-        beat_grid: beatGrid ? { bpm: beatGrid.bpm, beats: beatGrid.beats, confidence: beatGrid.confidence } : {},
-        palette: cinematicDirection?.palette || ["#ffffff", "#a855f7", "#ec4899"],
-        section_images: null,
-      }, { onConflict: "artist_slug,song_slug" });
+      .upsert(
+        {
+          user_id: userId,
+          artist_slug: artistSlug,
+          song_slug: songSlug,
+          artist_name: displayName,
+          song_name: lyricData.title || "Untitled",
+          audio_url: audioUrl,
+          lyrics: mainLines,
+          cinematic_direction: cinematicDirection || null,
+          words: words ?? null,
+          beat_grid: beatGrid
+            ? {
+                bpm: beatGrid.bpm,
+                beats: beatGrid.beats,
+                confidence: beatGrid.confidence,
+              }
+            : {},
+          palette: cinematicDirection?.palette || [
+            "#ffffff",
+            "#a855f7",
+            "#ec4899",
+          ],
+          section_images: null,
+        },
+        { onConflict: "artist_slug,song_slug" },
+      );
 
     if (insertError) {
-      console.error("[FitTab Debug] draft dance row creation failed:", insertError.message);
+      console.error(
+        "[FitTab Debug] draft dance row creation failed:",
+        insertError.message,
+      );
       return null;
     }
 
@@ -1614,7 +2049,17 @@ function CinematicDirectionCard({
       return newRow.id;
     }
     return null;
-  }, [danceId, userId, songSlug, audioFile, beatGrid, cinematicDirection, lyricData, projectId, words]);
+  }, [
+    danceId,
+    userId,
+    songSlug,
+    audioFile,
+    beatGrid,
+    cinematicDirection,
+    lyricData,
+    projectId,
+    words,
+  ]);
 
   const handleGenerateImages = useCallback(async () => {
     if (generating || !sections.length) return;
@@ -1631,17 +2076,42 @@ function CinematicDirectionCard({
     onImageGenerationStatusChange?.("running");
     setGenProgress({ done: 0, total: sections.length });
     try {
-      const { data: result, error } = await supabase.functions.invoke("generate-section-images", {
-        body: { lyric_dance_id: resolvedDanceId, force: true },
-      });
+      const { data: result, error } = await supabase.functions.invoke(
+        "generate-section-images",
+        {
+          body: { lyric_dance_id: resolvedDanceId, force: true },
+        },
+      );
       if (error) throw error;
-      const urls = result?.urls || result?.section_images || [];
-      const timingCandidates = result?.image_timestamps || result?.timings || result?.durations || [];
-      const normalizedTimestamps = Array.from({ length: urls.length }, (_, idx) => formatImageTimestamp(timingCandidates[idx]));
+      const urls: (string | null)[] =
+        result?.urls || result?.section_images || [];
+      const timingCandidates =
+        result?.image_timestamps || result?.timings || result?.durations || [];
+      const normalizedTimestamps = Array.from(
+        { length: urls.length },
+        (_, idx) => formatImageTimestamp(timingCandidates[idx]),
+      );
+      const allComplete =
+        result?.success === true ||
+        (urls.length === sections.length && urls.every(Boolean));
+      const doneCount = urls.filter(Boolean).length;
       setSectionImages(urls);
       setImageTimestamps(normalizedTimestamps);
-      setGenProgress({ done: urls.filter(Boolean).length, total: sections.length });
-      onImageGenerationStatusChange?.("done");
+      setGenProgress({ done: doneCount, total: sections.length });
+      setGenerationError(
+        allComplete
+          ? null
+          : `Generated ${doneCount}/${sections.length} images. Retry to fill missing sections.`,
+      );
+      onImageGenerationStatusChange?.(allComplete ? "done" : "error");
+
+      if (urls.length > 0) {
+        window.dispatchEvent(
+          new CustomEvent("fittab:images-generated", {
+            detail: { urls, complete: allComplete },
+          }),
+        );
+      }
 
       // Persist to saved_lyrics so images survive tab switches / remounts
       if (projectId && urls.length > 0) {
@@ -1651,7 +2121,7 @@ function CinematicDirectionCard({
           .eq("id", projectId);
       }
 
-      toast.success(`Generated ${urls.filter(Boolean).length}/${sections.length} section images`);
+      toast.success(`Generated ${doneCount}/${sections.length} section images`);
     } catch (e: any) {
       console.error("[SectionImages] Error:", e);
       setGenerationError(e?.message || "Failed to generate section images");
@@ -1660,14 +2130,22 @@ function CinematicDirectionCard({
     } finally {
       setGenerating(false);
     }
-  }, [ensureDanceId, formatImageTimestamp, generating, onImageGenerationStatusChange, projectId, sections]);
+  }, [
+    ensureDanceId,
+    formatImageTimestamp,
+    generating,
+    onImageGenerationStatusChange,
+    projectId,
+    sections,
+  ]);
 
   useEffect(() => {
     const handler = () => {
       void handleGenerateImages();
     };
     window.addEventListener("fittab:regenerate-images", handler);
-    return () => window.removeEventListener("fittab:regenerate-images", handler);
+    return () =>
+      window.removeEventListener("fittab:regenerate-images", handler);
   }, [handleGenerateImages]);
 
   // Image generation is now auto-triggered by the pipeline in LyricFitTab.
