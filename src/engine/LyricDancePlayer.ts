@@ -5310,7 +5310,7 @@ export class LyricDancePlayer {
         });
       }
 
-      if (lineRole === 'current' && !_hasValidMlCache && !groupHasActiveSoloHero && group.words.length > 1 && this._fontStabilized) {
+      if (lineRole === 'current' && !_hasValidMlCache && !groupHasActiveSoloHero && group.words.length > 1 && isFontReady(_resolvedFontForML.replace(/["']/g, '').split(',')[0].trim())) {
           const mCtx = this._measureCtx;
           const resolvedFontML = _resolvedFontForML;
 
