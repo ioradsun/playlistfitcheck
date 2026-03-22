@@ -1578,6 +1578,7 @@ export class LyricDancePlayer {
     }
     this._updateViewportScale();
     this._textMetricsCache.clear();
+    this._mlLayoutCache.clear();
 
     // ═══ POST-BAKE DIMENSION RECONCILIATION ═══
     // The bake is async (~200ms). The container may have reached its final CSS
@@ -1605,9 +1606,13 @@ export class LyricDancePlayer {
     }
 
     const playStart = this.data.region_start ?? this.songStartSec;
-    if (this.audio.currentTime <= 0 || this.data.region_start != null) {
-      this.audio.currentTime = playStart;
-    }
+    // ═══ CLEAN SLATE: reset all runtime state after bake ═══
+    // The tick loop was running during the async bake, accumulating camera zoom,
+    // spring offsets, beat state, etc. This drift can affect wall computation
+    // and text sizing on the first visible frame. Reset everything to the same
+    // clean state that seek() produces — this is exactly why replay fixes
+    // the tiny font issue. The compiled scene stays untouched.
+    this.seek(playStart);
   }
 
   private enableFullVisualMode(): void {
