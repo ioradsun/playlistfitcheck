@@ -2814,6 +2814,7 @@ export class LyricDancePlayer {
     const loaded = await ensureFontReady(fontName);
     if (loaded && !this.destroyed) {
       this._fontStabilized = true;
+      this._fontLayoutReflowPending = true;
     }
   }
 
