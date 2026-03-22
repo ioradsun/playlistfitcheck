@@ -409,9 +409,17 @@ export class BeatConductor {
 
     return {
       // Words: scale, glow, nudge — phase (dance) + hit (slam)
-      wordScale: 1.0 + p * s * 0.04 * wordMult * downbeatBoost + h * 0.08 * wordMult * hitTextBoost,
+      //
+      // AMPLITUDE NOTE: compile canvas is 540px tall. Visible rhythmic motion
+      // requires ≥3% of frame height (~16px). Previous values (max ~8px = 1.5%)
+      // were below human perception threshold. New values target 3-6% for normal
+      // words, 5-8% for hero/climax moments.
+      //
+      // Phase term (-p * s * ...): continuous beat-locked bounce. This is the "dance."
+      // Hit term (-h * ...): impulse slam on detected onsets. This is the "punch."
+      wordScale: 1.0 + p * s * 0.06 * wordMult * downbeatBoost + h * 0.12 * wordMult * hitTextBoost,
       wordGlow: p * s * 0.25 * wordMult + h * 0.5 * wordMult,
-      wordNudgeY: -p * s * 2 * wordMult * downbeatBoost - h * 6 * wordMult,
+      wordNudgeY: -p * s * 8 * wordMult * downbeatBoost - h * 20 * wordMult,
 
       // Backgrounds: zoom rate (from energy), sim intensity (from hits)
       bgZoomRate: 0.5 + e * 1.5 * downbeatBoost,
