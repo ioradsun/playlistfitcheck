@@ -5093,7 +5093,7 @@ export class LyricDancePlayer {
       : '';
     const _sectionIsRelease = /chorus|drop|anthemic|euphoric|triumphant|powerful|release/i.test(_sectionMoodStr);
 
-    const _dt = Math.min(0.1, (this._frameDt || 16.67) / 1000);
+    const _dt = Math.min(0.1, (this._frameDt * 16.67) / 1000);
 
     const _phraseState = beatState
       ? this._phraseMemory.tick(
@@ -5188,7 +5188,7 @@ export class LyricDancePlayer {
           beatState.hitStrength,
           beatState.energy,
           beatState.isDownbeat,
-          Math.min(0.1, (this._frameDt || 16.67) / 1000),
+          Math.min(0.1, (this._frameDt * 16.67) / 1000),
         )
       : this._lastHitMotion;
     this._lastHitMotion = _hitMotion;
