@@ -18,9 +18,23 @@ const ArtistClaimPage = lazy(() => import("./pages/ArtistClaimPage"));
 const CreateArtistPage = lazy(() => import("./pages/CreateArtistPage"));
 
 // ── Main app shell — lazy so embed routes never download providers, Index, Toasters, etc. ──
+// Retry with cache-bust on stale-chunk failures (e.g. after a deploy)
+const importWithRetry = (importer: () => Promise<any>, retries = 1): Promise<any> =>
+  importer().catch((err) => {
+    if (retries > 0 && err?.message?.includes("Failed to fetch dynamically imported module")) {
+      return importWithRetry(
+        () => import(/* @vite-ignore */ `./MainAppShell?t=${Date.now()}`),
+        retries - 1,
+      );
+    }
+    // All retries exhausted — force full reload so the user gets fresh assets
+    window.location.reload();
+    return new Promise(() => {}); // never resolves; page is reloading
+  });
+
 const MainAppShell = _isEmbed
   ? null
-  : lazy(() => import("./MainAppShell"));
+  : lazy(() => importWithRetry(() => import("./MainAppShell")));
 
 const queryClient = new QueryClient();
 
