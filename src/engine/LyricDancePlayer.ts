@@ -5485,7 +5485,20 @@ export class LyricDancePlayer {
             maxZoom: maxCameraZoom,
           });
         } // end cache-miss
-      
+      // ═══ TEMPORARY DEBUG: remove after diagnosis ═══
+      if (lineRole === 'current' && group.words.length > 1 && (!this._mlDebugThrottle || performance.now() - this._mlDebugThrottle > 3000)) {
+        this._mlDebugThrottle = performance.now();
+        console.warn('[ML DEBUG POST]', {
+          groupIdx,
+          wordCount: group.words.length,
+          isMultiLine: _isMultiLine,
+          hasCacheHit: _hasValidMlCache,
+          mlDxSample: (_isMultiLine && _mlDx.length > 0) ? Math.round(_mlDx[0]) : 'none',
+          mlDySample: (_isMultiLine && _mlDy.length > 0) ? Math.round(_mlDy[0]) : 'none',
+          words: group.words.map(w => w.text).join(' '),
+          baseFontSize: group.words[0]?.baseFontSize,
+        });
+      }
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
