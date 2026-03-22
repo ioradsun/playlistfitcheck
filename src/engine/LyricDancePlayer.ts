@@ -1128,6 +1128,8 @@ export class LyricDancePlayer {
   private _bgSnapshot: HTMLCanvasElement | null = null;
   private _bgSnapshotSection = -999; // section index when snapshot was last baked
   private _bgSnapshotQTier = -1;     // quality tier when snapshot was last baked
+  private _bgLastBakeMs = 0;         // timestamp of last snapshot bake
+  private _bgRebakeIntervalMs = 500; // rebake background every 500ms
   // ═══ Per-frame caches — computed once in tick(), reused everywhere ═══
   private _frameSectionIdx = -1;
   private _framePalette: string[] | null = null;
@@ -2798,64 +2800,68 @@ export class LyricDancePlayer {
       }
     }
 
-    // ── BACKGROUND: frozen snapshot, rebaked only on section change ───
-    // At tier ≥ 1 the bg is a static drawImage — zero filter overhead per frame.
-    // At tier 0 we still do full Ken Burns + filter (looks best when fps allows it).
+    // ── BACKGROUND: frozen snapshot at ALL tiers, rebaked periodically ───
+    // At all tiers, bg is a static drawImage — zero filter overhead per frame.
+    // Snapshot is rebaked on section change or every _bgRebakeIntervalMs.
+    // This trades real-time Ken Burns smoothness for drastically lower CPU,
+    // freeing frame budget for jitter-free text animation.
     const curSection = this._frameSectionIdx;
-    const snapshotStale = curSection !== this._bgSnapshotSection || qTier !== this._bgSnapshotQTier;
+    const nowMsBg = performance.now();
+    const snapshotStale =
+      curSection !== this._bgSnapshotSection
+      || qTier !== this._bgSnapshotQTier
+      || (nowMsBg - this._bgLastBakeMs > this._bgRebakeIntervalMs);
 
-    if (qTier === 0 || snapshotStale) {
-      // Bake a fresh snapshot into _bgSnapshot offscreen canvas
-      if (snapshotStale && qTier >= 1) {
-        if (!this._bgSnapshot || this._bgSnapshot.width !== Math.floor(this.width * this._effectiveDpr) || this._bgSnapshot.height !== Math.floor(this.height * this._effectiveDpr)) {
-          this._bgSnapshot = document.createElement('canvas');
-          this._bgSnapshot.width = Math.floor(this.width * this._effectiveDpr);
-          this._bgSnapshot.height = Math.floor(this.height * this._effectiveDpr);
+    if (snapshotStale) {
+      if (!this._bgSnapshot || this._bgSnapshot.width !== Math.floor(this.width * this._effectiveDpr) || this._bgSnapshot.height !== Math.floor(this.height * this._effectiveDpr)) {
+        this._bgSnapshot = document.createElement('canvas');
+        this._bgSnapshot.width = Math.floor(this.width * this._effectiveDpr);
+        this._bgSnapshot.height = Math.floor(this.height * this._effectiveDpr);
+      }
+      const snapCtx = this._bgSnapshot.getContext('2d')!;
+      snapCtx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
+      snapCtx.clearRect(0, 0, this.width, this.height);
+
+      // Draw full background stack into snapshot (gradient + chapter image + sims + lighting)
+      this._drawBackgroundToCtx(snapCtx, frame);
+      const imgIdx = Math.min(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0, Math.max(0, this.chapterImages.length - 1));
+      const nextImgIdx = this.data.region_start != null
+        ? imgIdx
+        : Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
+      const duration = this.audio?.duration || 1;
+      const cdForCrossfade = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+      const sectionsForCrossfade = (cdForCrossfade?.sections as any[]) ?? (cdForCrossfade?.chapters as any[]) ?? [];
+      const currentSectionForCrossfade = sectionsForCrossfade[imgIdx];
+      let crossfade = 0;
+      if (currentSectionForCrossfade && nextImgIdx !== imgIdx) {
+        const secEnd = currentSectionForCrossfade.endSec ?? (currentSectionForCrossfade.endRatio != null ? currentSectionForCrossfade.endRatio * duration : null);
+        if (secEnd != null) {
+          const timeToEnd = secEnd - (this.audio?.currentTime ?? 0);
+          if (timeToEnd < 1.5 && timeToEnd > 0) crossfade = 1 - (timeToEnd / 1.5);
         }
-        const snapCtx = this._bgSnapshot.getContext('2d')!;
-        snapCtx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
-        snapCtx.clearRect(0, 0, this.width, this.height);
-
-        // Draw bg gradient — no parallax needed for a static snapshot
-        this._drawBackgroundToCtx(snapCtx, frame);
-        const imgIdx = Math.min(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0, Math.max(0, this.chapterImages.length - 1));
-        this._drawChapterImageToCtx(snapCtx, imgIdx, imgIdx, 0);
-        if (qTier < 2) {
-          this._drawSimLayerToCtx(snapCtx, frame);
-        }
-        snapCtx.setTransform(1, 0, 0, 1, 0, 0);
-
-        this._bgSnapshotSection = curSection;
-        this._bgSnapshotQTier = qTier;
+      }
+      this._drawChapterImageToCtx(snapCtx, imgIdx, nextImgIdx, crossfade);
+      if (qTier < 2) {
+        this._drawSimLayerToCtx(snapCtx, frame);
       }
 
-      if (qTier === 0) {
-        // Full quality path — Ken Burns, crossfade, filter all live. No parallax on bg.
-        this.drawBackground(frame);
-        const imgIdx = Math.min(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0, Math.max(0, this.chapterImages.length - 1));
-        const nextImgIdx = this.data.region_start != null
-          ? imgIdx  // Region mode: no crossfade, single locked image
-          : Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
-        const duration = this.audio?.duration || 1;
-        const cdForCrossfade = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-        const sectionsForCrossfade = (cdForCrossfade?.sections as any[]) ?? (cdForCrossfade?.chapters as any[]) ?? [];
-        const currentSection = sectionsForCrossfade[imgIdx];
-        let crossfade = 0;
-        if (currentSection && nextImgIdx !== imgIdx) {
-          const secEnd = currentSection.endSec ?? (currentSection.endRatio != null ? currentSection.endRatio * duration : null);
-          if (secEnd != null) {
-            const timeToEnd = secEnd - (this.audio?.currentTime ?? 0);
-            if (timeToEnd < 1.5 && timeToEnd > 0) crossfade = 1 - (timeToEnd / 1.5);
-          }
-        }
-        this.drawChapterImage(imgIdx, nextImgIdx, crossfade);
-        this.drawSimLayer(frame);
+      // Lighting overlay — bake into snapshot too
+      {
+        const savedCtx = this.ctx;
+        (this as any).ctx = snapCtx;
         this.drawLightingOverlay(frame, tSec);
+        (this as any).ctx = savedCtx;
       }
+
+      snapCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+      this._bgSnapshotSection = curSection;
+      this._bgSnapshotQTier = qTier;
+      this._bgLastBakeMs = nowMsBg;
     }
 
-    // Tier ≥ 1: stamp the frozen snapshot — one drawImage, zero filters
-    if (qTier >= 1 && this._bgSnapshot) {
+    // Stamp frozen snapshot — one drawImage, zero filters
+    if (this._bgSnapshot) {
       this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       this.ctx.drawImage(this._bgSnapshot, 0, 0);
       this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
@@ -3211,7 +3217,7 @@ export class LyricDancePlayer {
       let iconOpacity = drawAlpha * 0.45;
       let iconGlow = 0;
       // ═══ Adaptive quality: reduce/disable icon glow at lower tiers ═══
-      const iconGlowCap = this._qualityTier === 0 ? 99 : this._qualityTier === 1 ? 4 : 0;
+      const iconGlowCap = this._qualityTier < 2 ? 4 : 0; // capped at 4 (was 99 at tier 0)
 
       switch (chunk.iconPosition) {
         case 'behind': iconX = centerX; iconY = finalDrawY; iconOpacity = drawAlpha * 0.45; iconGlow = Math.min(12, iconGlowCap); break;
@@ -3253,45 +3259,22 @@ export class LyricDancePlayer {
           const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
           const bloomGlow = baseGlow + beatPulse * 0.35;
           // ═══ Adaptive quality: reduce shadow blur at lower tiers ═══
-          const blurCap = this._qualityTier === 0 ? 8 : this._qualityTier === 1 ? 3 : 0;
+          const blurCap = this._qualityTier < 2 ? 3 : 0; // capped at 3 (was 8 at tier 0) — 60% cheaper, 80% of the visual
           const glowColor = chunk.color ?? '#ffffff';
           const targetBlur = Math.min(blurCap, bloomGlow * 12);
           // PERF: skip GPU state write if shadow hasn't changed
           if (glowColor !== this._lastShadowColor) { this.ctx.shadowColor = glowColor; this._lastShadowColor = glowColor; }
           if (targetBlur !== this._lastShadowBlur) { this.ctx.shadowBlur = targetBlur; this._lastShadowBlur = targetBlur; }
 
-          // Depth stack: 3 shadow layers behind the hero word
-          // Skip at tier 2+ (each layer = setTransform + fillText — very expensive)
-          if (this._qualityTier < 2) {
-            const depthLayers = 3;
-            const layerSpacing = safeFontSize * 0.025;
-            this.ctx.save();
-            for (let layer = depthLayers; layer >= 1; layer--) {
-              const layerAlpha = drawAlpha * (0.10 / layer);
-              const offsetY = layer * layerSpacing;
-              this.ctx.globalAlpha = layerAlpha;
-              this.ctx.shadowBlur = 0;
-              this.ctx.fillStyle = glowColor;
-              const [da, db, dc, dd, de, df] = this.computeTransformMatrix(
-                camShakeX + camCX + (heroDrawX - camCX) * camZoom,
-                camShakeY + camCY + ((heroDrawY + offsetY) - camCY) * camZoom,
-                (chunk.rotation ?? 0) + camRotation,
-                chunk.skewX ?? 0,
-                sx * camZoom,
-                sy * camZoom,
-              );
-              this.ctx.setTransform(da, db, dc, dd, de, df);
-              this.ctx.fillText(text, 0, 0);
-            }
-            this.ctx.restore();
-          }
+          // Depth stack: DISABLED — layers at 3-10% opacity are invisible on dark backgrounds.
+          // Saves 3x (setTransform + fillText) per hero word per frame.
           this.ctx.globalAlpha = drawAlpha;
           this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
           this.ctx.shadowColor = chunk.color ?? '#ffffff';
           this.ctx.shadowBlur = Math.min(blurCap, bloomGlow * 12);
           if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
         } else if (chunk.glow > 0) {
-          const glowCap = this._qualityTier === 0 ? 8 : this._qualityTier === 1 ? 3 : 0;
+          const glowCap = this._qualityTier < 2 ? 3 : 0; // capped at 3 (was 8 at tier 0)
           const gc = chunk.color ?? '#ffffff';
           const gb = Math.min(glowCap, chunk.glow * 12);
           // PERF: skip GPU write if unchanged
@@ -3299,14 +3282,14 @@ export class LyricDancePlayer {
           if (gb !== this._lastShadowBlur) { this.ctx.shadowBlur = gb; this._lastShadowBlur = gb; }
         }
 
-        const needsFilterSaveRestore = (chunk.blur ?? 0) > 0.01 && this._qualityTier < 3;
+        const needsFilterSaveRestore = false; // per-chunk filter blur disabled — cleaner entry/exit, saves rasterize+filter cycle
         if (needsFilterSaveRestore) {
           this.ctx.save();
           this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
         }
 
         if (chunk.ghostTrail && chunk.visible && this._qualityTier === 0) {
-          const count = chunk.ghostCount ?? 3;
+          const count = 1; // reduced from ghostCount (typically 3) — one ghost sells the motion, saves 2 fillText calls/frame
           const spacing = chunk.ghostSpacing ?? 8;
           const dir = chunk.ghostDirection ?? 'up';
           for (let g = count; g >= 1; g -= 1) {
