@@ -323,38 +323,13 @@ export function computeAllLineLayouts(
       }
     }
 
-    // Auto-scale: if line is too wide, shrink fonts proportionally to fit
-    // Skip auto-scale on portrait — wrapping handles overflow with bigger fonts
-    // Use the same zoom-aware width the runtime wrapping engine uses.
-    // Without this, compile-time shrinks fonts to fit 840px, then runtime
-    // tries to wrap at 636px with the pre-shrunk fonts — they disagree.
-    const maxCameraZoom = 1.18; // matches LyricDancePlayer CameraRig default
-    const maxLineWidth = (canvasW * 0.85) / maxCameraZoom * 0.92;
-    if (!isPortrait && totalWidth > maxLineWidth && totalWidth > 0) {
-      const scaleFactor = maxLineWidth / totalWidth;
-      // Floor in reference space — ensures runtime font ≥ 12px after scaling.
-      const minFontSize = isCompactTarget
-        ? Math.min(80, Math.max(24, Math.round(12 / Math.max(0.1, fontScaleEst))))
-        : tw < 500 ? 18 : 24;
-      // Re-measure all words at scaled font sizes
-      for (const fw of flatWords) {
-        fw.fontSize = Math.max(minFontSize, fw.fontSize * scaleFactor);
-        fw.width = getWordWidth(fw.wm.word, fw.fontSize);
-      }
-      // Recompute total width and spaces
-      totalWidth = 0;
-      spaceWidths = [];
-      for (let i = 0; i < flatWords.length; i++) {
-        totalWidth += flatWords[i].width;
-        if (i < flatWords.length - 1) {
-          const sw = getSpaceWidth(Math.min(flatWords[i].fontSize, flatWords[i + 1].fontSize)) * SPACE_MULT;
-          spaceWidths.push(sw);
-          totalWidth += sw;
-        } else {
-          spaceWidths.push(0);
-        }
-      }
-    }
+    // ─── No auto-scale: keep cinematic font sizes intact ───
+    // The runtime multi-line wrapper in LyricDancePlayer._updateChunks handles
+    // overflow by wrapping words onto multiple rows with zoom-aware width budgets.
+    // Compile-time auto-scaling fights this by pre-shrinking fonts, which defeats
+    // the cinematic sizing system. Let words keep their intended display sizes.
+    // The runtime wrapper will reposition them.
+    const maxLineWidth = canvasW - Math.max(8, Math.round(canvasW * (isCompactTarget ? 0.10 : tw < 500 ? 0.08 : 0.0625))) * 2;
 
     // ─── Portrait word wrapping: split into rows ───
     // On portrait, if line is still wider than the effective max, wrap words into rows.
