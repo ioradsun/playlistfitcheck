@@ -5188,13 +5188,10 @@ export class LyricDancePlayer {
                 const wi = nonHeroBuf[i];
                 const ww = measureWordWidth(wi);
 
-                // Case 3: big word → gets its own row.
-                // Two triggers: pixel width exceeds threshold, OR the word has 9+ characters
-                // at display font sizes. Long words at cinematic sizes need visual isolation —
-                // a title designer would never cram "grandiosity" next to three other words.
-                const w = group.words[wi];
-                const isLongDisplayWord = w.text.length >= 9 && w.baseFontSize >= 36;
-                if (ww > SOLO_WORD_THRESHOLD || isLongDisplayWord) {
+                // Case 3: big word → gets its own row when it exceeds 60% of line width.
+                // Only pixel width matters — character count is unreliable because font
+                // metrics vary. The greedy wrapper handles the rest.
+                if (ww > SOLO_WORD_THRESHOLD) {
                   if (rowWords.length > 0) {
                     mlLines.push({ words: rowWords, isHero: false, h: normalLineH });
                     rowWords = [];
