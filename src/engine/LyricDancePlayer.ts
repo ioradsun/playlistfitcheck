@@ -5006,7 +5006,16 @@ export class LyricDancePlayer {
     // and wrong layout. The custom font IS the creative direction — no fallback.
     // Words will appear slightly later on first load but with correct layout.
     if (!this._fontStabilized) {
-      return { ...frame, chunks: [], particles: frame.particles ?? [] } as any;
+      if (!this._evalFrame) {
+        this._evalFrame = {
+          timeMs: 0, beatIndex: 0, sectionIndex: 0,
+          cameraX: 0, cameraY: 0,
+          chunks: [], particles: [],
+        } as any;
+      }
+      this._evalFrame.chunks = [];
+      this._evalFrame.particles = [];
+      return this._evalFrame;
     }
 
     // Keep the active group AND the next upcoming group visible.
@@ -5018,7 +5027,7 @@ export class LyricDancePlayer {
       // Find the next group on the SAME line or the next line
       for (let gi = activeGroupIdx + 1; gi < groups.length; gi++) {
         const ng = groups[gi];
-        if (ng.start > tSec) {
+        if (ng.start > tSec + 1.0) {
           nextGroupIdx = gi;
           break;
         }
@@ -5540,7 +5549,7 @@ export class LyricDancePlayer {
         // No previous/next/offscreen. No vocal wave alpha modulation.
         // Active chunk words are at full brightness. Period.
         const isPreviewGroup = groupIdx === nextGroupIdx;
-        let roleAlpha = lineRole === 'current' ? 1.0 : isPreviewGroup ? 0.15 : 0.0;
+        let roleAlpha = isPreviewGroup ? 0.15 : lineRole === 'current' ? 1.0 : 0.0;
         let roleScale = 1.0;
 
         // Wave proximity still tracked for emphasis glow, but NOT for alpha
