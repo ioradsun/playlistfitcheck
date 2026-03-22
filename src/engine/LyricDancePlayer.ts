@@ -5033,7 +5033,6 @@ export class LyricDancePlayer {
       // Layout is stable for the lifetime of a group: font, word list, emphasis levels
       // don't change mid-group. We compute it once and cache by groupIdx + resolvedFont.
       // Invalidated on: font reflow, resize, seek, cinematic direction change.
-      const MAX_WORDS_PER_LINE = 3;
       const MAX_LINE_WIDTH = 960 * 0.85; // 816px in compile space
       let _isMultiLine = false;
       let _mlDx: number[];
@@ -5099,16 +5098,73 @@ export class LyricDancePlayer {
             const normalFS = group.words[0].baseFontSize;
             const normalLineH = normalFS * 1.3;
 
-            // Build line list: scaled words get solo lines, others wrap at max 3
+            // Build line list: scaled words get solo lines, others wrap by measured width
             type LineRange = { words: number[]; isHero: boolean; h: number };
             const mlLines: LineRange[] = [];
             let nonHeroBuf: number[] = [];
 
+            // Measure a word's rendered width at its base font size
+            const measureWordWidth = (wi: number): number => {
+              const w = group.words[wi];
+              const fs = Math.round(w.baseFontSize);
+              const fontStr = `${w.fontWeight ?? 700} ${fs}px ${w.fontFamily ?? resolvedFontML}`;
+              if (mCtx.font !== fontStr) mCtx.font = fontStr;
+              return mCtx.measureText(w.text).width;
+            };
+
+            // Measure a space between two words
+            const measureSpace = (wi: number): number => {
+              const w = group.words[wi];
+              const fs = Math.round(w.baseFontSize);
+              const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
+              if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
+              return Math.max(mCtx.measureText(' ').width, fs * 0.25) * 1.15;
+            };
+
+            // A word wider than 60% of the line gets its own row
+            const SOLO_WORD_THRESHOLD = MAX_LINE_WIDTH * 0.6;
+
             const flushNonHero = () => {
-              while (nonHeroBuf.length > 0) {
-                const take = nonHeroBuf.splice(0, MAX_WORDS_PER_LINE);
-                mlLines.push({ words: take, isHero: false, h: normalLineH });
+              if (nonHeroBuf.length === 0) return;
+
+              // Greedy width-based wrapping
+              let rowWords: number[] = [];
+              let rowWidth = 0;
+
+              for (let i = 0; i < nonHeroBuf.length; i++) {
+                const wi = nonHeroBuf[i];
+                const ww = measureWordWidth(wi);
+
+                // Case 3: big word → gets its own row
+                if (ww > SOLO_WORD_THRESHOLD) {
+                  if (rowWords.length > 0) {
+                    mlLines.push({ words: rowWords, isHero: false, h: normalLineH });
+                    rowWords = [];
+                    rowWidth = 0;
+                  }
+                  mlLines.push({ words: [wi], isHero: false, h: normalLineH });
+                  continue;
+                }
+
+                const spaceW = rowWords.length > 0 ? measureSpace(wi) : 0;
+
+                // Case 2: doesn't fit current row → start a new one
+                if (rowWords.length > 0 && rowWidth + spaceW + ww > MAX_LINE_WIDTH) {
+                  mlLines.push({ words: rowWords, isHero: false, h: normalLineH });
+                  rowWords = [wi];
+                  rowWidth = ww;
+                } else {
+                  // Case 1: fits → add to current row
+                  rowWords.push(wi);
+                  rowWidth += spaceW + ww;
+                }
               }
+
+              if (rowWords.length > 0) {
+                mlLines.push({ words: rowWords, isHero: false, h: normalLineH });
+              }
+
+              nonHeroBuf = [];
             };
 
             for (let wi = 0; wi < group.words.length; wi++) {
