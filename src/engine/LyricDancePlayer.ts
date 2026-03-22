@@ -1204,6 +1204,7 @@ export class LyricDancePlayer {
 
   /** Temporary debug throttle — remove after tiny-font diagnosis */
   private _tinyFontLogThrottle = 0;
+  private _camDebugThrottle = 0;
 
   // Comment comets
   private activeComments: CommentChunk[] = [];
@@ -3416,6 +3417,35 @@ export class LyricDancePlayer {
     const camRotation = camT.rotation;
     const camCX = camCXWall;
     const camCY = camCYWall;
+
+    // ═══ TEMPORARY DEBUG: remove after diagnosis ═══
+    if (!this._camDebugThrottle || performance.now() - this._camDebugThrottle > 2000) {
+      this._camDebugThrottle = performance.now();
+      const _viewportSxDbg = this._viewportSx;
+      const _viewportSyDbg = this._viewportSy;
+      console.warn('[CAM DEBUG]', {
+        camZoom: Math.round(camZoom * 1000) / 1000,
+        camOffX: Math.round(camOffX * 10) / 10,
+        camOffY: Math.round(camOffY * 10) / 10,
+        camRotation: Math.round(camRotation * 1000) / 1000,
+        viewportSx: Math.round(_viewportSxDbg * 1000) / 1000,
+        viewportSy: Math.round(_viewportSyDbg * 1000) / 1000,
+        fontScale: Math.round(this._viewportFontScale * 1000) / 1000,
+        canvasW: this.width,
+        canvasH: this.height,
+        canvasBackingW: this.canvas.width,
+        canvasBackingH: this.canvas.height,
+        compiledW: this._compiledViewportW,
+        compiledH: this._compiledViewportH,
+        effectiveDpr: this._effectiveDpr,
+        dpr: this.dpr,
+        wallSpace: `${Math.round(wallRight - wallLeft)}x${Math.round(wallBottom - wallTop)}`,
+        visibleChunks: sortBuf.filter((c: any) => c.visible).length,
+        fontStabilized: this._fontStabilized,
+        fullModeEnabled: this.fullModeEnabled,
+        hasCompiledScene: !!this.compiledScene,
+      });
+    }
 
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
       const chunk = sortBuf[ci];
