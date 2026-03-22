@@ -5162,6 +5162,19 @@ export class LyricDancePlayer {
       _danceMotion.dY *= phraseMult;
       _danceMotion.dScale *= phraseMult;
     }
+
+    // ═══ WAVE RIPPLE: precompute per-frame constants ═══
+    // The ripple is a cosine wave that propagates across the word line.
+    // Each word's position (0-1 within the line) shifts its phase, so the
+    // bounce peaks at different times for different words — creating a visible
+    // traveling wave. The anchor word (currently spoken) is the wave origin.
+    //
+    // Wave speed is beat-locked: one full ripple cycle per beat.
+    // Spread controls how much phase offset the edges get relative to center.
+    const _rippleBeatRad = beatPhase * Math.PI * 2; // radians within current beat
+    const _rippleSpread = 1.2; // how far the phase shifts from center to edge (radians)
+    // For echo delay: shift the phase back by 1/8 beat for echo/chorus words
+    const _echoDelayRad = Math.PI * 0.25; // 1/8 of a full beat cycle = π/4 radians
     let ci = 0;
     if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
     const chunks = this._evalChunks;
@@ -5667,15 +5680,47 @@ export class LyricDancePlayer {
           danceRoleAmp *= 0.4;
         }
 
+        // ═══ WAVE RIPPLE + ECHO DELAY: per-word dance phase modulation ═══
+        // Creates visible wave motion across the line instead of uniform bouncing.
+        //
+        // wordPct: 0-1 position of this word within the line (0 = leftmost, 1 = rightmost)
+        // anchorPct: 0-1 position of the anchor/currently-spoken word
+        // distance: how far this word is from the anchor (0 = at anchor, 1 = far edge)
+        //
+        // The wave propagates outward from the anchor word. Words near the anchor
+        // hit the beat at full amplitude. Words at the edges hit it slightly later.
+        // Result: a visible ripple, like a pebble dropped in water.
+
+        const wordCount = group.words.length;
+        let waveModulator = 1.0;
+
+        if (wordCount > 1 && lineRole === 'current' && !groupHasActiveSoloHero) {
+          const wordPct = wi / (wordCount - 1); // 0-1 position in line
+          const anchorPct = (group.anchorWordIdx ?? Math.floor(wordCount / 2)) / (wordCount - 1);
+          const distance = Math.abs(wordPct - anchorPct); // 0 at anchor, up to ~1 at edges
+
+          // Phase offset: edges are delayed relative to anchor
+          const phaseOffset = distance * _rippleSpread;
+
+          // Echo delay: chorus/echo role words get additional phase delay
+          // (danceRoleAmp 0.4 = chorus from Prompt 7, <0 = ghost)
+          const echoShift = (danceRoleAmp > 0 && danceRoleAmp <= 0.45) ? _echoDelayRad : 0;
+
+          // Cosine wave: peaks at 1.0 when wave reaches this word, dips to floor
+          // Floor of 0.5 ensures words always have some motion (never fully frozen by wave)
+          const rippleRaw = Math.cos(_rippleBeatRad - phaseOffset - echoShift);
+          waveModulator = 0.55 + 0.45 * rippleRaw; // range: 0.1 to 1.0
+        }
+
         // When multi-line is active, _mlDx already positions words centered at 480.
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
-        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX * danceRoleAmp) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp) * sy;
+        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX * danceRoleAmp * waveModulator) * sx;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp));
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp));
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator);
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator);
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
