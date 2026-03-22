@@ -2924,15 +2924,16 @@ export class LyricDancePlayer {
     ds.songProgress = songProgress;
     ds.beatIntensity = beatState?.pulse ?? 0;
     ds.dancePattern = this._danceClassification?.pattern ?? 'bounce';
-    if (_phraseState) {
-      (ds as any).phraseTension = _phraseState.tension;
-      (ds as any).phraseRelease = _phraseState.release;
-      (ds as any).phraseAmp = _phraseState.amplitudeMultiplier;
+    if (this._lastPhraseState) {
+      (ds as any).phraseTension = this._lastPhraseState.tension;
+      (ds as any).phraseRelease = this._lastPhraseState.release;
+      (ds as any).phraseAmp = this._lastPhraseState.amplitudeMultiplier;
     }
     (ds as any).sectionDance = this._sectionDancePattern;
     (ds as any).hitType = beatState?.hitType ?? 'none';
-    (ds as any).hitDX = Math.round(_hitMotion.dX * 10) / 10;
-    (ds as any).hitDY = Math.round(_hitMotion.dY * 10) / 10;
+    const _hitDbg = this._lastHitMotion;
+    (ds as any).hitDX = _hitDbg ? Math.round(_hitDbg.dX * 10) / 10 : 0;
+    (ds as any).hitDY = _hitDbg ? Math.round(_hitDbg.dY * 10) / 10 : 0;
     (ds as any).crossfade = this._sectionCrossfadeProgress < 1.0
       ? `${this._prevSectionDancePattern}→${this._sectionDancePattern} ${Math.round(this._sectionCrossfadeProgress * 100)}%`
       : null;
