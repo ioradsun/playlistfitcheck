@@ -3301,13 +3301,34 @@ export class LyricDancePlayer {
       || firstVisibleId !== this._lastVisibleFirstChunkId
       || midVisibleId !== this._lastVisibleMidChunkId
       || lastVisibleId !== this._lastVisibleLastChunkId;
-    // Solver disabled — the runtime multi-line wrapper handles layout.
-    // The solver's corrections were ephemeral (lost when bounds are rebuilt
-    // next frame from animated chunk.x/y), causing oscillation with smoothing.
-    // Wall clamping below still prevents words from leaving the viewport.
-    // Wall-clamp ALL bounds every frame (stable, no jitter)
-    for (let i = 0; i < bounds.length; i++) {
-      const b = bounds[i];
+    // ═══ OVERFLOW HANDLING: cap SCALE, never crush font size ═══
+    // Font size = legibility (must preserve). Scale = emphasis (can sacrifice).
+    //
+    // When a word's scaled width exceeds the viewport, reduce scaleX/scaleY
+    // to the maximum that fits. Write capped scale back to the chunk.
+    // The font stays readable. Emphasis adapts to what the viewport allows.
+    for (let bi = 0; bi < bounds.length; bi += 1) {
+      const b = bounds[bi];
+      const availW = wallRight - wallLeft;
+      const availH = wallBottom - wallTop;
+      if (availW > 0 && availH > 0) {
+        const scaledW = b.baseTextWidth * Math.abs(b.scaleX) + 12;
+        const scaledH = b.halfH * 2;
+        if (scaledW > availW || scaledH > availH) {
+          const maxScaleW = scaledW > availW ? (availW - 12) / Math.max(1, b.baseTextWidth) : Math.abs(b.scaleX);
+          const maxScaleH = scaledH > availH ? (availH * Math.abs(b.scaleY)) / Math.max(1, scaledH) : Math.abs(b.scaleY);
+          const cappedScale = Math.max(0.5, Math.min(maxScaleW, maxScaleH));
+          b.scaleX = (b.scaleX >= 0 ? 1 : -1) * Math.min(Math.abs(b.scaleX), cappedScale);
+          b.scaleY = (b.scaleY >= 0 ? 1 : -1) * Math.min(Math.abs(b.scaleY), cappedScale);
+          b.halfW = (b.baseTextWidth * Math.abs(b.scaleX)) / 2 + 6;
+          const m = this.getCachedMetrics(b.text, `${b.weight} ${b.fontSize}px ${b.family}`);
+          b.halfH = ((m.ascent + m.descent) / 2) * Math.abs(b.scaleY) + 3;
+          // Write capped scale back to chunk so draw uses it
+          b.chunk.scaleX = b.scaleX;
+          b.chunk.scaleY = b.scaleY;
+        }
+      }
+      // Wall-clamp
       const minX = wallLeft + b.halfW;
       const maxX = wallRight - b.halfW;
       const minY = wallTop + b.halfH;
@@ -3325,52 +3346,7 @@ export class LyricDancePlayer {
       if (!this._solvedBounds[i]) {
         this._solvedBounds[i] = { ...bounds[i] };
       } else {
-        this._solvedBounds[i].cx = bounds[i].cx;
-        this._solvedBounds[i].cy = bounds[i].cy;
-      }
-    }
-
-    let shrinkOccurred = false;
-    for (let passPriority = 2; passPriority >= 0; passPriority -= 1) {
-      for (let bi = 0; bi < bounds.length; bi += 1) {
-        const b = bounds[bi];
-        if (b.priority !== passPriority) continue;
-        const availW = wallRight - wallLeft;
-        const availH = wallBottom - wallTop;
-        const tooWide = b.halfW * 2 > availW;
-        const tooTall = b.halfH * 2 > availH;
-        if (!tooWide && !tooTall) continue;
-        const shrinkRatioW = tooWide ? (availW / (b.halfW * 2)) : 1;
-        const shrinkRatioH = tooTall ? (availH / (b.halfH * 2)) : 1;
-        const shrinkRatio = Math.min(shrinkRatioW, shrinkRatioH);
-        b.fontSize = Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio));
-        const newFontStr = `${b.weight} ${b.fontSize}px ${b.family}`;
-        const metrics2 = this.getCachedMetrics(b.text, newFontStr);
-        b.baseTextWidth = metrics2.width;
-        const asc2 = metrics2.ascent;
-        const desc2 = metrics2.descent;
-        const halfTextH2 = (asc2 + desc2) / 2;
-        b.halfW = (b.baseTextWidth * Math.abs(b.scaleX)) / 2 + 6;
-        b.halfH = (halfTextH2 * Math.abs(b.scaleY)) + 3;
-        shrinkOccurred = true;
-      }
-    }
-
-    if (shrinkOccurred) {
-      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
-      // In-place copy — avoid allocating N new objects on every shrink frame.
-      // Only fall back to map() when the array must grow (rare).
-      if (this._solvedBounds.length !== bounds.length) {
-        this._solvedBounds = bounds.map(b => ({ ...b }));
-      } else {
-        for (let si = 0; si < bounds.length; si++) {
-          this._solvedBounds[si].cx = bounds[si].cx;
-          this._solvedBounds[si].cy = bounds[si].cy;
-          this._solvedBounds[si].fontSize = bounds[si].fontSize;
-          this._solvedBounds[si].halfW = bounds[si].halfW;
-          this._solvedBounds[si].halfH = bounds[si].halfH;
-          this._solvedBounds[si].baseTextWidth = bounds[si].baseTextWidth;
-        }
+        Object.assign(this._solvedBounds[i], bounds[i]);
       }
     }
 
