@@ -40,8 +40,8 @@ import {
   type ResolvedWordSettings,
 } from "@/engine/cinematicResolver";
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
-import { classifyDance, type DancePattern, type DanceClassification } from "@/engine/DanceClassifier";
-import { computeDanceMotion, type DanceMotion, type GrammarInput } from "@/engine/MotionGrammar";
+import { classifyDance, classifySection, type DancePattern, type DanceClassification } from "@/engine/DanceClassifier";
+import { computeDanceMotion, crossfadeDanceMotion, type DanceMotion, type GrammarInput } from "@/engine/MotionGrammar";
 import { PhraseMemory, type PhraseState } from "@/engine/PhraseMemory";
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
@@ -1046,6 +1046,14 @@ export class LyricDancePlayer {
   /** Phrase-level tension and release tracker */
   private _phraseMemory = new PhraseMemory();
   private _lastPhraseState: PhraseState | null = null;
+
+  /** Per-section dance pattern override */
+  private _sectionDancePattern: DancePattern = 'bounce';
+  private _prevSectionDancePattern: DancePattern = 'bounce';
+  private _sectionCrossfadeProgress = 1.0; // 1.0 = fully transitioned, no crossfade
+  private _sectionCrossfadeDuration = 0; // seconds — set from beat period at transition
+  private _sectionCrossfadeElapsed = 0;
+  private _lastDanceSectionIdx = -1;
   private cameraRig: CameraRig = new CameraRig();
   private _lastBeatState: BeatState | null = null;
   private _lastSubsystemResponse: SubsystemResponse | null = null;
@@ -1496,6 +1504,10 @@ export class LyricDancePlayer {
           this.conductor.analysis,
         );
         this._phraseMemory.reset();
+        this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
+        this._prevSectionDancePattern = this._sectionDancePattern;
+        this._sectionCrossfadeProgress = 1.0;
+        this._lastDanceSectionIdx = -1;
 
         // ═══ V4: Load song structure into CameraRig ═══
         // CameraRig pre-analyzes beatGrid + cinematic sections to build the song arc:
@@ -1716,6 +1728,10 @@ export class LyricDancePlayer {
     this.conductor?.resetCursor();
     this.cameraRig.reset();
     this._phraseMemory.reset();
+    this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
+    this._prevSectionDancePattern = this._sectionDancePattern;
+    this._sectionCrossfadeProgress = 1.0;
+    this._lastDanceSectionIdx = -1;
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
@@ -2065,6 +2081,10 @@ export class LyricDancePlayer {
     this._lastSortHash = 0;
     this.cameraRig.reset();
     this._phraseMemory.reset();
+    this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
+    this._prevSectionDancePattern = this._sectionDancePattern;
+    this._sectionCrossfadeProgress = 1.0;
+    this._lastDanceSectionIdx = -1;
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
@@ -2427,6 +2447,10 @@ export class LyricDancePlayer {
 
     this.cameraRig?.reset();
     this._phraseMemory.reset();
+    this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
+    this._prevSectionDancePattern = this._sectionDancePattern;
+    this._sectionCrossfadeProgress = 1.0;
+    this._lastDanceSectionIdx = -1;
     this._resetBgParallax();
     this.ambientParticleEngine?.clear();
 
@@ -2895,6 +2919,10 @@ export class LyricDancePlayer {
       (ds as any).phraseRelease = _phraseState.release;
       (ds as any).phraseAmp = _phraseState.amplitudeMultiplier;
     }
+    (ds as any).sectionDance = this._sectionDancePattern;
+    (ds as any).crossfade = this._sectionCrossfadeProgress < 1.0
+      ? `${this._prevSectionDancePattern}→${this._sectionDancePattern} ${Math.round(this._sectionCrossfadeProgress * 100)}%`
+      : null;
 
     const beatIntensityClamped = Math.max(0, Math.min(1, beatState?.pulse ?? 0));
     if (this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
@@ -5046,11 +5074,12 @@ export class LyricDancePlayer {
     const _currentSectionIdx = this._frameSectionIdx;
     const _sectionChapters = this.resolvedState.chapters;
     const _currentSection = _currentSectionIdx >= 0 ? _sectionChapters[_currentSectionIdx] : null;
-    const _sectionIsRelease = _currentSection
-      ? /chorus|drop|anthemic|euphoric|triumphant|powerful|release/i.test(
-          (_currentSection as any).mood ?? (_currentSection as any).role ?? (_currentSection as any).emotionalArc ?? ''
-        )
-      : false;
+    const _sectionMoodStr = _currentSection
+      ? ((_currentSection as any).mood ?? (_currentSection as any).role ?? (_currentSection as any).emotionalArc ?? '')
+      : '';
+    const _sectionIsRelease = /chorus|drop|anthemic|euphoric|triumphant|powerful|release/i.test(_sectionMoodStr);
+
+    const _dt = Math.min(0.1, (this._frameDt || 16.67) / 1000);
 
     const _phraseState = beatState
       ? this._phraseMemory.tick(
@@ -5059,12 +5088,51 @@ export class LyricDancePlayer {
           _cameraAnticipation,
           _currentSectionIdx,
           _sectionIsRelease,
-          Math.min(0.1, (this._frameDt || 16.67) / 1000),
+          _dt,
         )
       : null;
     this._lastPhraseState = _phraseState;
 
-    // ═══ DANCE GRAMMAR: compute motion, modulated by phrase tension ═══
+    // ═══ SECTION-AWARE DANCE PATTERN: override per section + crossfade ═══
+    if (_currentSectionIdx >= 0 && _currentSectionIdx !== this._lastDanceSectionIdx && this._danceClassification) {
+      // Section changed — compute new section-specific dance pattern
+      const songPattern = this._danceClassification.pattern;
+      const sectionEnergy = beatState?.energy ?? 0.5;
+      const bpm = this.conductor?.beatsPerMinute ?? 120;
+
+      // Derive section role from mood string (matches how CameraRig reads sections)
+      let sectionRole = 'verse';
+      if (/chorus|anthemic|euphoric|triumphant|powerful/i.test(_sectionMoodStr)) sectionRole = 'chorus';
+      else if (/drop|explosion|climax|peak/i.test(_sectionMoodStr)) sectionRole = 'drop';
+      else if (/bridge|breakdown|uncertain|searching/i.test(_sectionMoodStr)) sectionRole = 'bridge';
+      else if (/intro|opening/i.test(_sectionMoodStr)) sectionRole = 'intro';
+      else if (/outro|fade|ending|resolution/i.test(_sectionMoodStr)) sectionRole = 'outro';
+      else if (/verse|intimate|quiet|minimal|sparse/i.test(_sectionMoodStr)) sectionRole = 'verse';
+
+      const newPattern = classifySection(songPattern, sectionRole, sectionEnergy, bpm);
+
+      // If the pattern changed, start a crossfade over one bar
+      if (newPattern !== this._sectionDancePattern) {
+        this._prevSectionDancePattern = this._sectionDancePattern;
+        this._sectionDancePattern = newPattern;
+        // Crossfade duration = one bar (4 beats). Feels musical — one bar to settle into the new groove.
+        this._sectionCrossfadeDuration = (this.conductor?.beatPeriod ?? 0.5) * 4;
+        this._sectionCrossfadeElapsed = 0;
+        this._sectionCrossfadeProgress = 0;
+      }
+
+      this._lastDanceSectionIdx = _currentSectionIdx;
+    }
+
+    // Advance crossfade
+    if (this._sectionCrossfadeProgress < 1.0) {
+      this._sectionCrossfadeElapsed += _dt;
+      this._sectionCrossfadeProgress = this._sectionCrossfadeDuration > 0
+        ? Math.min(1.0, this._sectionCrossfadeElapsed / this._sectionCrossfadeDuration)
+        : 1.0;
+    }
+
+    // ═══ DANCE GRAMMAR: compute motion with section pattern + crossfade ═══
     let _danceMotion: DanceMotion = { dX: 0, dY: 0, dScale: 0 };
     if (beatState && this._danceClassification) {
       const grammarInput: GrammarInput = {
@@ -5075,11 +5143,20 @@ export class LyricDancePlayer {
         compileHeight: this._compiledViewportH || 540,
         isDownbeat: beatState.isDownbeat,
       };
-      _danceMotion = computeDanceMotion(this._danceClassification.pattern, grammarInput);
+
+      // Use crossfade when transitioning between patterns, otherwise direct compute
+      if (this._sectionCrossfadeProgress < 1.0) {
+        _danceMotion = crossfadeDanceMotion(
+          this._prevSectionDancePattern,
+          this._sectionDancePattern,
+          this._sectionCrossfadeProgress,
+          grammarInput,
+        );
+      } else {
+        _danceMotion = computeDanceMotion(this._sectionDancePattern, grammarInput);
+      }
 
       // Modulate grammar output by phrase tension + release
-      // amplitudeMultiplier: 0.6 at phrase start → 1.0 at phrase end,
-      // dampened by anticipation, boosted by release impulse (can exceed 1.0)
       const phraseMult = _phraseState?.amplitudeMultiplier ?? 1.0;
       _danceMotion.dX *= phraseMult;
       _danceMotion.dY *= phraseMult;
