@@ -323,13 +323,10 @@ export function computeAllLineLayouts(
       }
     }
 
-    // ─── No auto-scale: keep cinematic font sizes intact ───
-    // The runtime multi-line wrapper in LyricDancePlayer._updateChunks handles
-    // overflow by wrapping words onto multiple rows with zoom-aware width budgets.
-    // Compile-time auto-scaling fights this by pre-shrinking fonts, which defeats
-    // the cinematic sizing system. Let words keep their intended display sizes.
-    // The runtime wrapper will reposition them.
-    const maxLineWidth = canvasW - Math.max(8, Math.round(canvasW * (isCompactTarget ? 0.10 : tw < 500 ? 0.08 : 0.0625))) * 2;
+    // ─── No compile-time auto-scale ───
+    // Fonts stay at their intended cinematic sizes. The runtime multi-line wrapper
+    // in LyricDancePlayer handles overflow by wrapping to rows with zoom-aware
+    // width budgets. Compile-time shrinking fights this and produces tiny text.
 
     // ─── Portrait word wrapping: split into rows ───
     // On portrait, if line is still wider than the effective max, wrap words into rows.
