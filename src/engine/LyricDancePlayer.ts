@@ -1480,11 +1480,18 @@ export class LyricDancePlayer {
       this._bakeLock = true;
       const bakeGen = this._bakeGeneration; // snapshot — if updateTranscript() fires mid-bake it increments this
       this._bakePromise = (async () => {
-        // Ensure real viewport dimensions before compiling
-        if (this.width === 0 && this.container) {
-          const cw = this.container.offsetWidth || this.canvas.offsetWidth || 960;
-          const ch = this.container.offsetHeight || this.canvas.offsetHeight || 540;
-          if (cw > 0 && ch > 0) this.resize(cw, ch);
+        // ═══ ALWAYS refresh viewport from container before compiling ═══
+        // The constructor may have used fallback dimensions (960×540) because
+        // the container wasn't laid out yet. By the time the bake runs (100ms+
+        // later), the container has real dimensions. Always read them fresh.
+        // This also prevents the bake from overwriting a ResizeObserver-triggered
+        // recompile with stale fallback dimensions.
+        if (this.container) {
+          const cw = this.container.offsetWidth || this.canvas.offsetWidth;
+          const ch = this.container.offsetHeight || this.canvas.offsetHeight;
+          if (cw > 0 && ch > 0 && (cw !== this.width || ch !== this.height)) {
+            this.resize(cw, ch);
+          }
         }
 
         const payload = this.buildScenePayload();
