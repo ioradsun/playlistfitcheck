@@ -5006,26 +5006,33 @@ export class LyricDancePlayer {
     // and wrong layout. The custom font IS the creative direction — no fallback.
     // Words will appear slightly later on first load but with correct layout.
     if (!this._fontStabilized) {
-      // Use the class-level frame object (not the local `frame` variable declared below).
-      // Ensures all properties (cameraX, cameraY, sectionIndex, etc.) are present
-      // so update/draw don't corrupt state on pre-font frames.
-      if (!this._evalFrame) {
-        this._evalFrame = {
-          timeMs: 0, beatIndex: 0, sectionIndex: 0,
-          cameraX: 0, cameraY: 0,
-          chunks: [], particles: [],
-        } as any;
-      }
-      this._evalFrame.chunks = [];
-      this._evalFrame.particles = [];
-      return this._evalFrame;
+      return { ...frame, chunks: [], particles: frame.particles ?? [] } as any;
     }
 
-    // Single active group — preview disabled.
-    const nextGroupIdx = -1;
+    // Keep the active group AND the next upcoming group visible.
+    // Active group: full brightness. Next group: preview at 15% alpha.
+    // This gives viewers context for what's coming and positions words
+    // before they become active — no layout jump on transition.
+    let nextGroupIdx = -1;
     if (activeGroupIdx >= 0) {
-      activeGroups.length = 1;
-      activeGroups[0] = activeGroupIdx;
+      // Find the next group on the SAME line or the next line
+      for (let gi = activeGroupIdx + 1; gi < groups.length; gi++) {
+        const ng = groups[gi];
+        if (ng.start > tSec) {
+          nextGroupIdx = gi;
+          break;
+        }
+      }
+    }
+    if (activeGroupIdx >= 0) {
+      if (nextGroupIdx >= 0) {
+        activeGroups.length = 2;
+        activeGroups[0] = activeGroupIdx;
+        activeGroups[1] = nextGroupIdx;
+      } else {
+        activeGroups.length = 1;
+        activeGroups[0] = activeGroupIdx;
+      }
     } else {
       activeGroups.length = 0;
     }
@@ -5521,8 +5528,7 @@ export class LyricDancePlayer {
         const isExiting = exitProgress > 0;
 
         // ═══ ACTIVE CHUNK ONLY: always dead center, full brightness ═══
-        const isPreviewGroup = groupIdx === nextGroupIdx;
-        const roleY = isPreviewGroup ? 430 : 270; // preview below active
+        const roleY = (groupIdx === nextGroupIdx) ? 430 : 270; // preview below active
 
         // Base animation alpha (entry/exit/behavior)
         const animAlpha = isExiting
@@ -5533,6 +5539,7 @@ export class LyricDancePlayer {
 
         // No previous/next/offscreen. No vocal wave alpha modulation.
         // Active chunk words are at full brightness. Period.
+        const isPreviewGroup = groupIdx === nextGroupIdx;
         let roleAlpha = lineRole === 'current' ? 1.0 : isPreviewGroup ? 0.15 : 0.0;
         let roleScale = 1.0;
 
