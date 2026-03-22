@@ -230,6 +230,8 @@ export interface TextInput {
   currentTime: number;
   songProgress: number;
   beatIntensity: number;
+  /** 0-1 beat phase for beat-locked kinetic effects. Derived from BeatConductor or sortedBeats. */
+  beatPhase?: number;
   beatIndex: number;
   sortedBeats: number[];
   cw: number;
@@ -318,6 +320,16 @@ export function renderText(
   const cinematicLetterSpacing = chapterTypoShift?.letterSpacing ?? baseTypoProfile?.letterSpacing ?? "0";
   const cinematicTextTransform = baseTypoProfile?.textTransform as string | undefined;
   const resolvedWordFont = `"${cinematicFontFamily}", Inter, ui-sans-serif, system-ui`;
+  // Derive beat phase for kinetic effects — 0 on beat, 1 just before next beat.
+  // Uses input.beatPhase if provided, otherwise computes from sortedBeats + currentTime.
+  let derivedBeatPhase = input.beatPhase ?? 0;
+  if (derivedBeatPhase === 0 && sortedBeats.length >= 2 && beatIndex >= 0) {
+    const prevBeat = sortedBeats[Math.min(beatIndex, sortedBeats.length - 1)];
+    const nextBeat = sortedBeats[Math.min(beatIndex + 1, sortedBeats.length - 1)];
+    if (nextBeat > prevBeat) {
+      derivedBeatPhase = Math.max(0, Math.min(1, (currentTime - prevBeat) / (nextBeat - prevBeat)));
+    }
+  }
   const buildWordFont = (size: number) => `${cinematicFontWeight} ${size}px ${resolvedWordFont}`;
 
   let drawCalls = 0;
@@ -996,6 +1008,7 @@ export function renderText(
         renderedIndex,
         appearanceCount,
         1 + appearanceCount * 0.3,
+        derivedBeatPhase,
       );
     }
 
