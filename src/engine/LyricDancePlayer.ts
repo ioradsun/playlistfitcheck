@@ -5334,8 +5334,7 @@ export class LyricDancePlayer {
             }
           }
 
-          // Trigger multi-line for scaled words OR wide lines
-          const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4;
+          const needsWrap = true; // always use runtime multi-line layout for proper centering
 
           if (needsWrap) {
             _isMultiLine = true;
