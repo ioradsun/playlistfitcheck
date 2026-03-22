@@ -199,6 +199,8 @@ function spring(pos: number, vel: number, k: number, c: number, dt: number): [nu
 
 export class CameraRig {
   private cfg: CameraConfig;
+  /** Expose config for layout calculations (e.g. maxZoom). */
+  get config(): Readonly<CameraConfig> { return this.cfg; }
   private canvasW = 960;
   private canvasH = 540;
 
