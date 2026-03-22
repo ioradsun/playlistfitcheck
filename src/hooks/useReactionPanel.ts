@@ -59,10 +59,13 @@ export function useReactionPanel({
       .filter((section): section is CanonicalAudioSection => section != null);
   }, [data?.cinematic_direction?.sections, durationSec]);
 
-  const palette = useMemo(
-    () => (Array.isArray(data?.palette) ? (data.palette as string[]) : []),
-    [data?.palette],
-  );
+  const palette = useMemo(() => {
+    const autoPalettes = (data as any)?.auto_palettes;
+    if (Array.isArray(autoPalettes) && autoPalettes.length > 0 && Array.isArray(autoPalettes[0])) {
+      return autoPalettes[0] as string[];
+    }
+    return Array.isArray(data?.palette) ? (data.palette as string[]) : [];
+  }, [data]);
 
   const handlePanelClose = useCallback(() => {
     setReactionPanelOpen(false);

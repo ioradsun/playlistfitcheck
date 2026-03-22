@@ -183,7 +183,7 @@ export async function computeAutoPalettesFromUrls(urls: string[]): Promise<strin
     } catch (err) {
       // image load failed, skipping
       // Push a safe fallback palette so indices stay aligned with section indices
-      palettes.push(['#0a0a0f', '#a855f7', '#f0f0f0', '#e879f9', '#555555']);
+      palettes.push(['#0a0a0f', '#C9A96E', '#f0f0f0', '#FFD700', '#5A4A30']);
     }
     // Yield to main thread between images
     await new Promise((resolve) => setTimeout(resolve, 0));

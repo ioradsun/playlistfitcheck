@@ -52,6 +52,7 @@ import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useVoteGate } from "@/hooks/useVoteGate";
+import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 
 const PEAK_SAMPLES = 200;
 
@@ -729,11 +730,12 @@ export function FitTab({
                   confidence: beatGrid.confidence,
                 }
               : { bpm: 0, beats: [], confidence: 0 },
-            palette: cinematicDirection?.palette || [
-              "#ffffff",
-              "#a855f7",
-              "#ec4899",
-            ],
+            palette: derivePaletteFromDirection({
+              ...cinematicDirection,
+              auto_palettes: danceNeedsRegeneration
+                ? null
+                : (publishAutoPalettes ?? null),
+            }),
             section_images: danceNeedsRegeneration
               ? null
               : (existingDance?.section_images ?? null),
@@ -1287,6 +1289,7 @@ export function FitTab({
               .update({
                 section_images: urls as any,
                 auto_palettes: palettes as any,
+                palette: palettes[0] ?? undefined,
               })
               .eq("id", publishedDanceId);
           }

@@ -16,6 +16,7 @@ interface SectionInput {
   texture?: string;
   motion?: string;
   lyrics?: string;
+  dominantColor?: string;
 }
 
 interface RequestBody {
@@ -25,14 +26,18 @@ interface RequestBody {
 
 // Color palette seeds per section index — ensures visual variety even with similar descriptions
 const SECTION_COLOR_SEEDS = [
-  "deep blue and amber tones",
-  "crimson and dark teal palette",
-  "violet and gold undertones",
-  "emerald and rust hues",
-  "navy and warm copper tones",
-  "dark magenta and silver",
-  "burnt orange and midnight blue",
-  "forest green and dusty rose",
+  "moonlit deep ocean blues with bioluminescent teal accents",
+  "volcanic crimson glow against obsidian darkness",
+  "violet nebula light bleeding through smoke and haze",
+  "emerald forest canopy with shafts of golden dawn light",
+  "arctic aurora borealis reflecting off frozen chrome",
+  "neon magenta city rain on dark wet pavement",
+  "burnt desert sunset with indigo mountain silhouettes",
+  "deep jade temple interior with floating dust motes in amber light",
+  "blood moon rising over a silver mist valley",
+  "electric storm clouds lit from within by copper lightning",
+  "underwater cathedral with shifting turquoise caustics",
+  "abandoned carnival at dusk with rusted gold ferris wheel light",
 ];
 
 // Visual mood → image generation style hints
@@ -113,6 +118,10 @@ function buildImagePrompt(
   const colorSeed =
     SECTION_COLOR_SEEDS[section.sectionIndex % SECTION_COLOR_SEEDS.length];
   parts.push(colorSeed);
+
+  if (section.dominantColor) {
+    parts.push(`primary color accent: ${section.dominantColor}`);
+  }
 
   // Section position awareness
   if (section.sectionIndex === 0) {
@@ -353,6 +362,10 @@ serve(async (req) => {
           motion:
             typeof section?.motion === "string" ? section.motion : undefined,
           lyrics: sectionLyrics || undefined,
+          dominantColor:
+            typeof section?.dominantColor === "string"
+              ? section.dominantColor
+              : undefined,
         };
       })
       .sort(
@@ -414,7 +427,8 @@ serve(async (req) => {
       imageResults.map(async (base64, i) => {
         if (!base64) return null;
         const ext = base64.includes("image/png") ? "png" : "jpg";
-        const path = `${lyric_dance_id}/section-${sections[i].sectionIndex}.${ext}`;
+        const cacheBust = Date.now();
+        const path = `${lyric_dance_id}/section-${sections[i].sectionIndex}-${cacheBust}.${ext}`;
         return uploadBase64ToStorage(supabase, base64, path);
       }),
     );
