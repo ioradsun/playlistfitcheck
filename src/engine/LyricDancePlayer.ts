@@ -5745,12 +5745,37 @@ export class LyricDancePlayer {
         // When multi-line is active, _mlDx already positions words centered at 480.
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
-        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp) * sy;
+
+        // ═══ DISPLACEMENT BUDGET: cap total dance Y offset ═══
+        // Three additive Y sources (beatNudgeY + grammar + hit) can compound to
+        // ~160px on a 540px canvas, pushing words offscreen or piling them up.
+        // Cap to ±10% of compile height (~54px at 540p) — still a visible dance,
+        // but words stay in their spatial lane.
+        const _rawDanceY = beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp;
+        const _rawDanceX = _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp;
+        const _maxDisplacement = (this._compiledViewportH || 540) * 0.10;
+        const _clampedDanceY = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceY));
+        const _clampedDanceX = Math.max(-_maxDisplacement, Math.min(_maxDisplacement, _rawDanceX));
+
+        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _clampedDanceX) * sx;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + _clampedDanceY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
+
+        // ═══ SCALE BUDGET: cap compound scale to prevent shrink-code trigger ═══
+        // The 7-factor scale chain can compound to ~4.3× for hero words on downbeat hits.
+        // The downstream bounds solver (line ~3335) shrinks fontSize when a word's
+        // scaled width exceeds the viewport. Before the dance prompts the peak was ~3.2×
+        // which rarely triggered the shrink. Now it fires constantly.
+        //
+        // Inline words: cap at 1.6× (large enough for beat/emphasis, small enough to
+        //   never trigger the shrink code on a 960px compile canvas).
+        // Solo heroes (alone center screen): cap at 2.5× (they have the full stage).
+        const _rawScaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
+        const _rawScaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
+        const _maxScale = (isSoloHero && groupHasActiveSoloHero) ? 2.5 : 1.6;
+        chunk.scaleX = Math.min(_maxScale, Math.max(0.4, _rawScaleX));
+        chunk.scaleY = Math.min(_maxScale, Math.max(0.4, _rawScaleY));
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
