@@ -42,6 +42,7 @@ import {
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
 import { classifyDance, type DancePattern, type DanceClassification } from "@/engine/DanceClassifier";
 import { computeDanceMotion, type DanceMotion, type GrammarInput } from "@/engine/MotionGrammar";
+import { PhraseMemory, type PhraseState } from "@/engine/PhraseMemory";
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
@@ -1042,6 +1043,9 @@ export class LyricDancePlayer {
   private conductor: BeatConductor | null = null;
   /** Dance pattern classification — set once at song load */
   private _danceClassification: DanceClassification | null = null;
+  /** Phrase-level tension and release tracker */
+  private _phraseMemory = new PhraseMemory();
+  private _lastPhraseState: PhraseState | null = null;
   private cameraRig: CameraRig = new CameraRig();
   private _lastBeatState: BeatState | null = null;
   private _lastSubsystemResponse: SubsystemResponse | null = null;
@@ -1491,7 +1495,8 @@ export class LyricDancePlayer {
           beatGridData,
           this.conductor.analysis,
         );
-        
+        this._phraseMemory.reset();
+
         // ═══ V4: Load song structure into CameraRig ═══
         // CameraRig pre-analyzes beatGrid + cinematic sections to build the song arc:
         // energy profile per section, drop detection, anticipation timing.
@@ -1710,6 +1715,7 @@ export class LyricDancePlayer {
     this._lastVisibleChunkSetHash = 0;
     this.conductor?.resetCursor();
     this.cameraRig.reset();
+    this._phraseMemory.reset();
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
@@ -2058,6 +2064,7 @@ export class LyricDancePlayer {
     this._lastVisibleChunkSetHash = 0;
     this._lastSortHash = 0;
     this.cameraRig.reset();
+    this._phraseMemory.reset();
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
@@ -2419,6 +2426,7 @@ export class LyricDancePlayer {
     this._timeInitialized = false;
 
     this.cameraRig?.reset();
+    this._phraseMemory.reset();
     this._resetBgParallax();
     this.ambientParticleEngine?.clear();
 
@@ -2882,7 +2890,11 @@ export class LyricDancePlayer {
     ds.songProgress = songProgress;
     ds.beatIntensity = beatState?.pulse ?? 0;
     ds.dancePattern = this._danceClassification?.pattern ?? 'bounce';
-
+    if (_phraseState) {
+      (ds as any).phraseTension = _phraseState.tension;
+      (ds as any).phraseRelease = _phraseState.release;
+      (ds as any).phraseAmp = _phraseState.amplitudeMultiplier;
+    }
 
     const beatIntensityClamped = Math.max(0, Math.min(1, beatState?.pulse ?? 0));
     if (this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
@@ -5029,6 +5041,30 @@ export class LyricDancePlayer {
       ? ((_barBeat + beatState.phase) / _beatsPerBar)
       : 0;
 
+    // ═══ PHRASE MEMORY: tick tension/release before grammar ═══
+    const _cameraAnticipation = this.cameraRig?.anticipation ?? 0;
+    const _currentSectionIdx = this._frameSectionIdx;
+    const _sectionChapters = this.resolvedState.chapters;
+    const _currentSection = _currentSectionIdx >= 0 ? _sectionChapters[_currentSectionIdx] : null;
+    const _sectionIsRelease = _currentSection
+      ? /chorus|drop|anthemic|euphoric|triumphant|powerful|release/i.test(
+          (_currentSection as any).mood ?? (_currentSection as any).role ?? (_currentSection as any).emotionalArc ?? ''
+        )
+      : false;
+
+    const _phraseState = beatState
+      ? this._phraseMemory.tick(
+          beatState.beatIndex,
+          beatState.phase,
+          _cameraAnticipation,
+          _currentSectionIdx,
+          _sectionIsRelease,
+          Math.min(0.1, (this._frameDt || 16.67) / 1000),
+        )
+      : null;
+    this._lastPhraseState = _phraseState;
+
+    // ═══ DANCE GRAMMAR: compute motion, modulated by phrase tension ═══
     let _danceMotion: DanceMotion = { dX: 0, dY: 0, dScale: 0 };
     if (beatState && this._danceClassification) {
       const grammarInput: GrammarInput = {
@@ -5040,6 +5076,14 @@ export class LyricDancePlayer {
         isDownbeat: beatState.isDownbeat,
       };
       _danceMotion = computeDanceMotion(this._danceClassification.pattern, grammarInput);
+
+      // Modulate grammar output by phrase tension + release
+      // amplitudeMultiplier: 0.6 at phrase start → 1.0 at phrase end,
+      // dampened by anticipation, boosted by release impulse (can exceed 1.0)
+      const phraseMult = _phraseState?.amplitudeMultiplier ?? 1.0;
+      _danceMotion.dX *= phraseMult;
+      _danceMotion.dY *= phraseMult;
+      _danceMotion.dScale *= phraseMult;
     }
     let ci = 0;
     if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
