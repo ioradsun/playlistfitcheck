@@ -963,6 +963,7 @@ export class LyricDancePlayer {
   private ctx: CanvasRenderingContext2D;
   private dpr: number = window.devicePixelRatio || 1;
   private _exportSavedDpr = 1;
+  private _exportSavedVerticalBias = 0;
   /** Effective DPR used for canvas backing store — capped at 1.5 when tier ≥ 2 to halve pixel fill */
   private get _effectiveDpr(): number {
     return this._qualityTier >= 2 ? Math.min(1.5, this.dpr) : this.dpr;
@@ -1771,13 +1772,38 @@ export class LyricDancePlayer {
     // Export resolution IS the target pixel resolution — DPR must be 1.0
     // Otherwise a 2× display creates a 2160×3840 backing store for a 1080×1920 export
     this._exportSavedDpr = this.dpr;
+    this._exportSavedVerticalBias = this._textVerticalBias;
     this.dpr = 1;
+    this._textVerticalBias = 0; // no bottom overlays in export — center text properly
 
     // Use resize() instead of setResolution() — triggers scene recompile
     // when aspect ratio or size changes significantly. This ensures font sizing,
     // word wrapping, row stacking, and layout positions are correct for the
     // export resolution, not the live viewport.
     this.resize(width, height);
+    // Regenerate pre-blurred images at export resolution — avoids fallback to
+    // per-frame ctx.filter blur which is the most expensive background operation.
+    // loadSectionImages() is async but we don't need to await — the first few
+    // export frames will use runtime blur fallback, then pre-blur kicks in.
+    if (this.chapterImages.length > 0) {
+      this._preBlurredImages = this.chapterImages.map((img) => {
+        if (!img.complete || img.naturalWidth === 0) return null as any;
+        const off = document.createElement('canvas');
+        off.width = this.width;
+        off.height = this.height;
+        const octx = off.getContext('2d');
+        if (!octx) return null as any;
+        // Overscan matches drawChapterImage (1.20×)
+        const ow = this.width * 1.20;
+        const oh = this.height * 1.20;
+        const ox = (this.width - ow) / 2;
+        const oy = (this.height - oh) / 2;
+        octx.filter = 'blur(3px)';
+        octx.drawImage(img, ox, oy, ow, oh);
+        octx.filter = 'none';
+        return off;
+      });
+    }
     // Re-acquire context with willReadFrequently for fast pixel readback
     this.ctx = this.canvas.getContext('2d', {
       willReadFrequently: true,
@@ -1882,6 +1908,7 @@ export class LyricDancePlayer {
   teardownExportResolution(): void {
     this.isExporting = false;
     this.dpr = this._exportSavedDpr; // restore display DPR
+    this._textVerticalBias = this._exportSavedVerticalBias; // restore live overlay bias
     this.resize(this.displayWidth, this.displayHeight); // recompile scene for live viewport
     // Restore normal GPU-backed context
     this.ctx = this.canvas.getContext('2d')!;
@@ -3091,12 +3118,36 @@ export class LyricDancePlayer {
     const isPortraitLocal = this.height > this.width;
     const isCompact = this.width < 250;
     const viewportMinFont = isCompact ? 10 : isPortraitLocal ? 12 : 10;
-    // Adaptive wall margin: text needs breathing room on narrow canvases
-    const margin = isCompact ? Math.round(this.width * 0.08) : isPortraitLocal ? Math.round(this.width * 0.04) : 4;
-    const wallLeft = -safeCameraX + margin;
-    const wallRight = this.width - safeCameraX - margin;
-    const wallTop = -safeCameraY + margin;
-    const wallBottom = this.height - safeCameraY - margin;
+
+    // ═══ Camera-aware wall clamping ═══
+    // Walls must account for the CameraRig transform (zoom + offset) that is applied
+    // AFTER clamping. A word clamped to the wall will be pushed off-screen if the
+    // camera zooms or offsets toward that edge. We invert the camera transform to
+    // find the pre-camera positions that map to the visible margin on screen.
+    //
+    // Screen position of a word at pre-camera position cx:
+    //   screenX = camShakeX + camCX + (cx - camCX) * camZoom
+    //
+    // Solving for cx when screenX = margin:
+    //   cx = camCX + (margin - camShakeX - camCX) / camZoom
+
+    // Separate X and Y margins — Y needs height-based margin on tall canvases
+    const marginX = isCompact ? Math.round(this.width * 0.08) : isPortraitLocal ? Math.round(this.width * 0.05) : 4;
+    const marginY = isCompact ? Math.round(this.height * 0.04) : isPortraitLocal ? Math.round(this.height * 0.04) : 4;
+
+    // Read camera transform early for wall computation
+    const camT = this.cameraRig.getSubjectTransform();
+    const camZoomWall = camT.zoom;
+    const camOffX = camT.offsetX;
+    const camOffY = camT.offsetY;
+    const camCXWall = this.width / 2;
+    const camCYWall = this.height / 2;
+
+    // Inverse camera transform: find pre-camera positions that map to screen margins
+    const wallLeft = -safeCameraX + camCXWall + (marginX - camOffX - camCXWall) / camZoomWall;
+    const wallRight = -safeCameraX + camCXWall + (this.width - marginX - camOffX - camCXWall) / camZoomWall;
+    const wallTop = -safeCameraY + camCYWall + (marginY - camOffY - camCYWall) / camZoomWall;
+    const wallBottom = -safeCameraY + camCYWall + (this.height - marginY - camOffY - camCYWall) / camZoomWall;
 
     const bounds = this._boundsBuffer;
     bounds.length = 0;
@@ -3244,16 +3295,13 @@ export class LyricDancePlayer {
     // NOTE: Canvas zoom is baked into each chunk's setTransform() call below,
     // NOT applied as a parent transform, because setTransform() replaces the
     // entire matrix and would wipe any parent zoom.
-    const subjectT = this.cameraRig.getSubjectTransform();
-    const camZoom = subjectT.zoom;
-    // Text is the nearest layer — use full camera offset (beat dance + sway + drop shake).
-    // shakeX/shakeY is a subset used by parallax layers; offsetX/offsetY is the real camera.
-    const camShakeX = subjectT.offsetX;
-    const camShakeY = subjectT.offsetY;
-    // Camera rotation — wired to transient hit impulses. Applied additively to per-chunk rotation.
-    const camRotation = subjectT.rotation;
-    const camCX = this.width / 2;
-    const camCY = this.height / 2;
+    // camT was already read above for wall computation — reuse it
+    const camZoom = camZoomWall;
+    const camShakeX = camOffX;
+    const camShakeY = camOffY;
+    const camRotation = camT.rotation;
+    const camCX = camCXWall;
+    const camCY = camCYWall;
 
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
       const chunk = sortBuf[ci];
