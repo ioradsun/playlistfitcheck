@@ -6006,6 +6006,13 @@ export class LyricDancePlayer {
     }
   }
 
+    // ═══ FONT GATE: no words until custom font is loaded ═══
+    // Rendering with fallback font produces wrong word widths, wrong spacing,
+    // and wrong layout. The custom font IS the creative direction — no fallback.
+    // Words will appear slightly later on first load but with correct layout.
+    if (!this._fontStabilized) {
+      return { ...frame, chunks: [], particles: frame.particles ?? [] } as any;
+    }
 
 
   /** Draw background gradient to an arbitrary ctx (used for snapshot baking) */
