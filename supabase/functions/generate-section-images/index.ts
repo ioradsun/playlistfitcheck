@@ -344,10 +344,15 @@ serve(async (req) => {
             .slice(0, 120);
         }
 
+        const rawDesc = typeof section?.description === "string" ? section.description.trim() : "";
+        // Fallback: if cinematic direction has no description, synthesize one from lyrics + mood
+        const fallbackDesc = rawDesc || (sectionLyrics
+          ? `Musical scene inspired by: "${sectionLyrics.slice(0, 80)}"`
+          : `Section ${sectionIndex + 1} of the song`);
+
         return {
           sectionIndex,
-          description:
-            typeof section?.description === "string" ? section.description : "",
+          description: fallbackDesc,
           visualMood:
             typeof section?.visualMood === "string"
               ? section.visualMood
