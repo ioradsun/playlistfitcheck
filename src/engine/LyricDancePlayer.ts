@@ -5021,30 +5021,11 @@ export class LyricDancePlayer {
       return this._evalFrame;
     }
 
-    // Keep the active group AND the next upcoming group visible.
-    // Active group: full brightness. Next group: preview at 15% alpha.
-    // This gives viewers context for what's coming and positions words
-    // before they become active — no layout jump on transition.
-    let nextGroupIdx = -1;
+    // Single active group — preview disabled.
+    const nextGroupIdx = -1;
     if (activeGroupIdx >= 0) {
-      // Find the next group on the SAME line or the next line
-      for (let gi = activeGroupIdx + 1; gi < groups.length; gi++) {
-        const ng = groups[gi];
-        if (ng.start > tSec) {
-          nextGroupIdx = gi;
-          break;
-        }
-      }
-    }
-    if (activeGroupIdx >= 0) {
-      if (nextGroupIdx >= 0) {
-        activeGroups.length = 2;
-        activeGroups[0] = activeGroupIdx;
-        activeGroups[1] = nextGroupIdx;
-      } else {
-        activeGroups.length = 1;
-        activeGroups[0] = activeGroupIdx;
-      }
+      activeGroups.length = 1;
+      activeGroups[0] = activeGroupIdx;
     } else {
       activeGroups.length = 0;
     }
