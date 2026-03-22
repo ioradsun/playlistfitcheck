@@ -5018,7 +5018,7 @@ export class LyricDancePlayer {
       // Find the next group on the SAME line or the next line
       for (let gi = activeGroupIdx + 1; gi < groups.length; gi++) {
         const ng = groups[gi];
-        if (ng.start > tSec) {
+        if (ng.start > tSec + 1.0) {
           nextGroupIdx = gi;
           break;
         }
@@ -5540,7 +5540,7 @@ export class LyricDancePlayer {
         // No previous/next/offscreen. No vocal wave alpha modulation.
         // Active chunk words are at full brightness. Period.
         const isPreviewGroup = groupIdx === nextGroupIdx;
-        let roleAlpha = lineRole === 'current' ? 1.0 : isPreviewGroup ? 0.15 : 0.0;
+        let roleAlpha = isPreviewGroup ? 0.15 : lineRole === 'current' ? 1.0 : 0.0;
         let roleScale = 1.0;
 
         // Wave proximity still tracked for emphasis glow, but NOT for alpha
