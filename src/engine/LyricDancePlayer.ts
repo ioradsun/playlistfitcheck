@@ -962,6 +962,7 @@ export class LyricDancePlayer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private dpr: number = window.devicePixelRatio || 1;
+  private _exportSavedDpr = 1;
   /** Effective DPR used for canvas backing store — capped at 1.5 when tier ≥ 2 to halve pixel fill */
   private get _effectiveDpr(): number {
     return this._qualityTier >= 2 ? Math.min(1.5, this.dpr) : this.dpr;
@@ -1766,13 +1767,31 @@ export class LyricDancePlayer {
     this.displayWidth = this.width;
     this.displayHeight = this.height;
     this.isExporting = true;
-    this.setResolution(width, height);
+
+    // Export resolution IS the target pixel resolution — DPR must be 1.0
+    // Otherwise a 2× display creates a 2160×3840 backing store for a 1080×1920 export
+    this._exportSavedDpr = this.dpr;
+    this.dpr = 1;
+
+    // Use resize() instead of setResolution() — triggers scene recompile
+    // when aspect ratio or size changes significantly. This ensures font sizing,
+    // word wrapping, row stacking, and layout positions are correct for the
+    // export resolution, not the live viewport.
+    this.resize(width, height);
     // Re-acquire context with willReadFrequently for fast pixel readback
     this.ctx = this.canvas.getContext('2d', {
       willReadFrequently: true,
       desynchronized: true,
     })!;
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+
+    // Force quality tier 0 for export — maximum visual quality, CPU doesn't matter
+    this._qualityTier = 0 as 0;
+    this._qUpgradeStreak = 0;
+
+    // Reset background snapshot so first export frame gets a fresh bake
+    this._bgSnapshotSection = -999;
+    this._bgLastBakeMs = 0;
     this.seek(this.songStartSec);
   }
 
@@ -1785,11 +1804,21 @@ export class LyricDancePlayer {
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
 
-    const deltaMs = 1000 / 30; // fixed timestep for export
+    const deltaMs = 16.67; // simulate at 60fps timestep — keeps spring physics identical to live playback
     const beatState = this.conductor?.getState(clamped) ?? null;
     if (beatState) (beatState as any)._tSec = clamped;
     this._lastBeatState = beatState;
     this._frameDt = deltaMs / 16.67;
+
+    // Emoji stream — detect line changes and spawn risers (same as tick())
+    if (this.emojiStreamEnabled) {
+      const currentLineIdx = this.resolveCurrentLineIndex(clamped);
+      if (currentLineIdx !== this._lastEmojiLineIndex && currentLineIdx >= 0) {
+        this._lastEmojiLineIndex = currentLineIdx;
+        this.scheduleEmojiSpawns(currentLineIdx, clamped);
+      }
+      this.processEmojiSpawnQueue();
+    }
 
     // Section + palette
     {
@@ -1808,12 +1837,28 @@ export class LyricDancePlayer {
 
     const frame = this.evaluateFrame(clamped);
 
-    // Camera rig
+    // Camera rig — must feed section + energy BEFORE update, same as tick()
     {
       const vocalActive = frame ? frame.chunks.some((c: any) => c.visible && c.alpha > 0.3) : false;
       const upcoming = this._getUpcomingHero(clamped);
       const songProg = (clamped - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
       const isClimax = (beatState?.energy ?? 0) > 0.65 && songProg > 0.50;
+
+      // Feed section mood + energy — drives Layer 1 (Section Arc) camera behavior
+      const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+      const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
+      const secIdx = this._frameSectionIdx;
+      const currentSection = sections[secIdx];
+      if (currentSection) {
+        this.cameraRig.setSectionFromMood(
+          currentSection.atmosphere
+            ?? currentSection.mood
+            ?? currentSection.description
+            ?? ''
+        );
+      }
+      this.cameraRig.setEnergy(beatState?.energy ?? 0.5);
+
       const focus: SubjectFocus = {
         x: this.width / 2,
         y: this.height / 2,
@@ -1836,7 +1881,8 @@ export class LyricDancePlayer {
 
   teardownExportResolution(): void {
     this.isExporting = false;
-    this.setResolution(this.displayWidth, this.displayHeight);
+    this.dpr = this._exportSavedDpr; // restore display DPR
+    this.resize(this.displayWidth, this.displayHeight); // recompile scene for live viewport
     // Restore normal GPU-backed context
     this.ctx = this.canvas.getContext('2d')!;
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
@@ -2245,6 +2291,8 @@ export class LyricDancePlayer {
 
   /** Adaptive quality — call once per frame to update tier based on rolling FPS. */
   private _updateQualityTier(nowMs: number): void {
+    // During export, lock at tier 0 — maximum quality, CPU is irrelevant
+    if (this.isExporting) return;
     this._qFrameCount++;
     if (this._qWindowStart === 0) { this._qWindowStart = nowMs; return; }
     const elapsed = nowMs - this._qWindowStart;
@@ -2844,7 +2892,8 @@ export class LyricDancePlayer {
     const snapshotStale =
       curSection !== this._bgSnapshotSection
       || qTier !== this._bgSnapshotQTier
-      || (nowMsBg - this._bgLastBakeMs > this._bgRebakeIntervalMs);
+      || (nowMsBg - this._bgLastBakeMs > this._bgRebakeIntervalMs)
+      || this.isExporting; // always rebake during export — CPU doesn't matter, quality does
 
     if (snapshotStale) {
       if (!this._bgSnapshot || this._bgSnapshot.width !== Math.floor(this.width * this._effectiveDpr) || this._bgSnapshot.height !== Math.floor(this.height * this._effectiveDpr)) {
