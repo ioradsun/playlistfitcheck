@@ -2551,6 +2551,9 @@ export class LyricDancePlayer {
           this._markCompiledViewport(this.width || 960, this.height || 540);
           this._buildChunkCacheFromScene(this.compiledScene);
           this._updateViewportScale();
+          // Increment bake generation so the in-flight bake's post-restore is skipped.
+          // The bake checks `if (this._bakeGeneration !== bakeGen)` and discards stale results.
+          this._bakeGeneration++;
         }
       }
 
