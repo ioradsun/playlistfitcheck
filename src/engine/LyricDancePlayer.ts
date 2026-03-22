@@ -1480,20 +1480,6 @@ export class LyricDancePlayer {
       this._bakeLock = true;
       const bakeGen = this._bakeGeneration; // snapshot — if updateTranscript() fires mid-bake it increments this
       this._bakePromise = (async () => {
-        // ═══ ALWAYS refresh viewport from container before compiling ═══
-        // The constructor may have used fallback dimensions (960×540) because
-        // the container wasn't laid out yet. By the time the bake runs (100ms+
-        // later), the container has real dimensions. Always read them fresh.
-        // This also prevents the bake from overwriting a ResizeObserver-triggered
-        // recompile with stale fallback dimensions.
-        if (this.container) {
-          const cw = this.container.offsetWidth || this.canvas.offsetWidth;
-          const ch = this.container.offsetHeight || this.canvas.offsetHeight;
-          if (cw > 0 && ch > 0 && (cw !== this.width || ch !== this.height)) {
-            this.resize(cw, ch);
-          }
-        }
-
         const payload = this.buildScenePayload();
         this.payload = payload;
         this._songGrade = null; // force recomputation for new song
@@ -1502,11 +1488,28 @@ export class LyricDancePlayer {
         this.songStartSec = payload.songStart;
         this.songEndSec = payload.songEnd;
 
-        // Compile the scene
+        // ═══ REFRESH VIEWPORT AFTER FONT LOAD ═══
+        // The font await gave the container time to reach its final CSS dimensions.
+        // Read them now — right before compileScene — so the compile uses fully
+        // initialized state: correct font metrics AND correct viewport size.
+        // This is the single moment when everything is settled.
+        if (this.container) {
+          const cw = this.container.offsetWidth || this.canvas.offsetWidth;
+          const ch = this.container.offsetHeight || this.canvas.offsetHeight;
+          if (cw > 0 && ch > 0 && (cw !== this.width || ch !== this.height)) {
+            this.resize(cw, ch);
+          }
+        }
+
+        // Compile the scene — font loaded, viewport final
         const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
         this.compiledScene = compiled;
         this._markCompiledViewport(this.width || 960, this.height || 540);
         this._hitChoreographer.setCompileHeight(this.height || 540);
+
+        // Font is loaded and scene was just compiled with correct metrics.
+        // Clear the reflow flag so tick() doesn't trigger a redundant recompile.
+        this._fontLayoutReflowPending = false;
 
         // ═══ V2: Create BeatConductor with full audio analysis ═══
         const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
