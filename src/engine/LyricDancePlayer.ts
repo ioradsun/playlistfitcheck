@@ -5006,7 +5006,19 @@ export class LyricDancePlayer {
     // and wrong layout. The custom font IS the creative direction — no fallback.
     // Words will appear slightly later on first load but with correct layout.
     if (!this._fontStabilized) {
-      return { timeMs: 0, beatIndex: 0, chunks: [], particles: [] } as any;
+      // Use the class-level frame object (not the local `frame` variable declared below).
+      // Ensures all properties (cameraX, cameraY, sectionIndex, etc.) are present
+      // so update/draw don't corrupt state on pre-font frames.
+      if (!this._evalFrame) {
+        this._evalFrame = {
+          timeMs: 0, beatIndex: 0, sectionIndex: 0,
+          cameraX: 0, cameraY: 0,
+          chunks: [], particles: [],
+        } as any;
+      }
+      this._evalFrame.chunks = [];
+      this._evalFrame.particles = [];
+      return this._evalFrame;
     }
 
     // Keep the active group AND the next upcoming group visible.
