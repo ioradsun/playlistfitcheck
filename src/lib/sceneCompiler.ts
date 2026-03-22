@@ -484,19 +484,80 @@ export function computeExitState(style: ExitStyle, progress: number, intensity: 
   }
 }
 export function computeBehaviorState(style: BehaviorStyle, tSec: number, wordStart: number, beatPhase: number, intensity: number): Partial<AnimState> {
+  // beatPhase is 0-1 within each beat interval (0 = on beat, 1 = just before next beat).
+  // All oscillating behaviors use beatPhase instead of wall-clock tSec so that
+  // word motion is always synchronized to the song's rhythm regardless of BPM.
+  const bp = beatPhase * Math.PI * 2; // full cycle per beat
+
   switch (style) {
-    case 'pulse': { const pulse = Math.sin(beatPhase * Math.PI * 2) * 0.03 * intensity; return { scaleX: 1 + pulse, scaleY: 1 + pulse }; }
-    case 'vibrate': return { offsetX: Math.sin(tSec * 18) * 1.2 * intensity };
-    case 'float': return { offsetY: Math.sin((tSec - wordStart) * 1.8) * 4 * intensity };
-    case 'grow': { const growScale = 1 + Math.min(0.15, (tSec - wordStart) * 0.04) * intensity; return { scaleX: growScale, scaleY: growScale }; }
-    case 'contract': { const contractScale = 1 - Math.min(0.1, (tSec - wordStart) * 0.03) * intensity; return { scaleX: contractScale, scaleY: contractScale }; }
-    case 'flicker': { const f = Math.sin(tSec * 6) * 0.5 + Math.sin(tSec * 13) * 0.5; return { alpha: 0.88 + f * 0.12 }; }
-    case 'orbit': { const angle = (tSec - wordStart) * 1.2; return { offsetX: Math.sin(angle) * 2 * intensity, offsetY: Math.cos(angle) * 1.5 * intensity }; }
-    case 'lean': return { skewX: Math.sin((tSec - wordStart) * 0.8) * 4 * intensity };
-    case 'freeze': { if ((tSec - wordStart) > 0.3) return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, blur: 0, rotation: 0 }; const pulse = Math.sin(beatPhase * Math.PI * 2) * 0.04 * intensity; return { scaleX: 1 + pulse, scaleY: 1 + pulse }; }
-    case 'tilt': return { rotation: Math.sin((tSec - wordStart) * 2) * 0.14 * intensity };
-    case 'pendulum': return { rotation: Math.sin((tSec - wordStart) * 0.8) * 0.26 * intensity };
-    case 'pulse-focus': { const focusPulse = Math.sin(beatPhase * Math.PI * 2) * 0.3; return { blur: Math.max(0, focusPulse) }; }
+    case 'pulse': {
+      const pulse = Math.sin(bp) * 0.03 * intensity;
+      return { scaleX: 1 + pulse, scaleY: 1 + pulse };
+    }
+    case 'vibrate': {
+      // Fast jitter: 2x per beat (double frequency), plus a slower 1x component.
+      // Old: tSec * 18 (wall-clock). New: beat-locked double-speed oscillation.
+      const jitter = Math.sin(bp * 2) * 0.8 + Math.sin(bp) * 0.4;
+      return { offsetX: jitter * 1.2 * intensity };
+    }
+    case 'float': {
+      // Gentle vertical drift: one full sine cycle per beat.
+      // Old: (tSec - wordStart) * 1.8. New: beat-locked.
+      return { offsetY: Math.sin(bp) * 4 * intensity };
+    }
+    case 'grow': {
+      // Grow is time-progressive (intentional — word gets bigger over its lifetime).
+      // Keep wall-clock for the growth, but add a beat-locked micro-pulse on top.
+      const growBase = 1 + Math.min(0.15, (tSec - wordStart) * 0.04) * intensity;
+      const growPulse = Math.sin(bp) * 0.01 * intensity;
+      return { scaleX: growBase + growPulse, scaleY: growBase + growPulse };
+    }
+    case 'contract': {
+      // Contract is time-progressive (intentional). Add beat-locked micro-pulse.
+      const contractBase = 1 - Math.min(0.1, (tSec - wordStart) * 0.03) * intensity;
+      const contractPulse = Math.sin(bp) * 0.008 * intensity;
+      return { scaleX: contractBase + contractPulse, scaleY: contractBase + contractPulse };
+    }
+    case 'flicker': {
+      // Flicker: beat-locked with half-beat overtone for nervous energy.
+      // Old: tSec * 6 + tSec * 13. New: beat-phase harmonics.
+      const f = Math.sin(bp) * 0.5 + Math.sin(bp * 1.5) * 0.5;
+      return { alpha: 0.88 + f * 0.12 };
+    }
+    case 'orbit': {
+      // Orbital path: one orbit per beat using sin/cos pair.
+      // Old: (tSec - wordStart) * 1.2. New: beat-locked circular motion.
+      return {
+        offsetX: Math.sin(bp) * 2 * intensity,
+        offsetY: Math.cos(bp) * 1.5 * intensity,
+      };
+    }
+    case 'lean': {
+      // Lean: one full lean cycle per beat (sway left on beat, right between).
+      // Old: (tSec - wordStart) * 0.8. New: beat-locked.
+      return { skewX: Math.sin(bp) * 4 * intensity };
+    }
+    case 'freeze': {
+      if ((tSec - wordStart) > 0.3) {
+        return { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, blur: 0, rotation: 0 };
+      }
+      const pulse = Math.sin(bp) * 0.04 * intensity;
+      return { scaleX: 1 + pulse, scaleY: 1 + pulse };
+    }
+    case 'tilt': {
+      // Tilt: one wobble per beat.
+      // Old: (tSec - wordStart) * 2. New: beat-locked.
+      return { rotation: Math.sin(bp) * 0.14 * intensity };
+    }
+    case 'pendulum': {
+      // Pendulum: slower swing — one full cycle per 2 beats (half frequency).
+      // Old: (tSec - wordStart) * 0.8. New: beat-locked at half speed.
+      return { rotation: Math.sin(bp * 0.5) * 0.26 * intensity };
+    }
+    case 'pulse-focus': {
+      const focusPulse = Math.sin(bp) * 0.3;
+      return { blur: Math.max(0, focusPulse) };
+    }
     default: return {};
   }
 }
