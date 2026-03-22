@@ -3477,15 +3477,22 @@ export class LyricDancePlayer {
       const sy = Number.isFinite(syRaw) ? syRaw : 1;
 
       // ═══ TEMPORARY DEBUG: remove after diagnosis ═══
+      // Log when visual font size is small relative to viewport width.
+      // On a 1280px viewport, a 40px word is only 3% — that looks tiny.
+      // On a 452px viewport, 40px is 9% — that's fine.
+      // Threshold: visual size < 4% of viewport width AND word is fully entered.
       const _visualSize = safeFontSize * Math.abs(sx);
-      if (_visualSize < 20 && _visualSize > 0 && chunk.alpha > 0.3 && (chunk.entryProgress ?? 0) > 0.5) {
+      const _viewportPct = this.width > 0 ? (_visualSize / this.width) * 100 : 0;
+      if (_viewportPct < 4 && _viewportPct > 0 && chunk.alpha > 0.3 && (chunk.entryProgress ?? 0) > 0.95 && (chunk.exitProgress ?? 0) < 0.1) {
         if (!this._tinyFontLogThrottle || performance.now() - this._tinyFontLogThrottle > 2000) {
           this._tinyFontLogThrottle = performance.now();
           console.warn('[TINY FONT]', {
             text,
             visualSize: Math.round(_visualSize * 10) / 10,
+            viewportPct: Math.round(_viewportPct * 10) / 10,
             safeFontSize,
             chunkFontSize: chunk.fontSize,
+            baseFontSizeRaw: chunk.fontSize,
             scaleX: Math.round(sx * 1000) / 1000,
             scaleY: Math.round(sy * 1000) / 1000,
             chunkScaleXRaw: chunk.scaleX,
@@ -3506,6 +3513,7 @@ export class LyricDancePlayer {
             emp: chunk.emphasisLevel,
             entry: Math.round((chunk.entryProgress ?? 0) * 100),
             exit: Math.round((chunk.exitProgress ?? 0) * 100),
+            fontStabilized: this._fontStabilized,
           });
         }
       }
