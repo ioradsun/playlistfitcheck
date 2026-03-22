@@ -5473,17 +5473,20 @@ export class LyricDancePlayer {
 
              // Store in cache only for current groups - offscreen passes must never
           // prime the cache with isMultiLine=false + empty dx/dy.
-          if (this._mlLayoutCache.size >= 32) {
-            this._mlLayoutCache.delete(this._mlLayoutCache.keys().next().value!);
+          const _fontName = _resolvedFontForML.replace(/["']/g, '').split(',')[0].trim();
+          if (isFontReady(_fontName)) {
+            if (this._mlLayoutCache.size >= 32) {
+              this._mlLayoutCache.delete(this._mlLayoutCache.keys().next().value!);
+            }
+            this._mlLayoutCache.set(groupIdx, {
+              isMultiLine: _isMultiLine,
+              dx: _mlDx.slice(),
+              dy: _mlDy.slice(),
+              groupIdx,
+              resolvedFont: _resolvedFontForML,
+              maxZoom: maxCameraZoom,
+            });
           }
-          this._mlLayoutCache.set(groupIdx, {
-            isMultiLine: _isMultiLine,
-            dx: _mlDx.slice(),
-            dy: _mlDy.slice(),
-            groupIdx,
-            resolvedFont: _resolvedFontForML,
-            maxZoom: maxCameraZoom,
-          });
         } // end cache-miss
       // ═══ TEMPORARY DEBUG: remove after diagnosis ═══
       if (lineRole === 'current' && group.words.length > 1 && (!this._mlDebugThrottle || performance.now() - this._mlDebugThrottle > 3000)) {
@@ -5495,8 +5498,9 @@ export class LyricDancePlayer {
           hasCacheHit: _hasValidMlCache,
           mlDxSample: (_isMultiLine && _mlDx.length > 0) ? Math.round(_mlDx[0]) : 'none',
           mlDySample: (_isMultiLine && _mlDy.length > 0) ? Math.round(_mlDy[0]) : 'none',
-          words: group.words.map(w => w.text).join(' '),
+          words: group.words.map(w => `${w.text}(e${w.emphasisLevel ?? 0}${w.isHeroWord ? 'H' : ''})`).join(' '),
           baseFontSize: group.words[0]?.baseFontSize,
+          fontReady: isFontReady(_resolvedFontForML.replace(/["']/g, '').split(',')[0].trim()),
         });
       }
 
