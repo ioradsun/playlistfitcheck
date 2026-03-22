@@ -1094,7 +1094,6 @@ export class LyricDancePlayer {
   private backgroundSystem = 'default';
   private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim; beatVis?: BeatVisSim }> = [];
   private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
-  private _beatVisLogOnce = false;
   private _barVisStyles: BarVisStyle[] = []; // per-chapter bar style from AI mood
   private lastSimFrame = -1;
   private currentSimCanvases: HTMLCanvasElement[] = [];
@@ -2867,6 +2866,25 @@ export class LyricDancePlayer {
       this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     }
 
+    // ═══ Beat visualizer strip — drawn every frame on main canvas (not in snapshot) ═══
+    // Single lightweight drawImage of 320×64 offscreen canvas. Costs ~0.1ms/frame.
+    // Must be outside snapshot path to stay synced to real-time beat state.
+    if (this._globalBeatVis) {
+      const bs = this._lastBeatState;
+      const bsEnergy = bs?.energy ?? 0;
+      const bsPulse = bs?.pulse ?? 0;
+      const visAlpha = Math.min(0.85, 0.30 + bsEnergy * 0.40 + bsPulse * 0.15);
+      if (visAlpha > 0.01) {
+        const visH = this.height * 0.28;
+        const visTop = this.height - visH;
+        this.ctx.globalAlpha = visAlpha;
+        this.ctx.imageSmoothingEnabled = false;
+        this.ctx.drawImage(this._globalBeatVis.canvas, 0, visTop, this.width, visH);
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.globalAlpha = 1;
+      }
+    }
+
     if (qTier < 3) {
       try { this.checkEmotionalEvents(tSec, songProgress); } catch (e) { console.error('[LyricEngine] emotional events crash:', e); }
       this.drawEmotionalEvents(tSec);
@@ -4613,29 +4631,6 @@ export class LyricDancePlayer {
       this.ctx.globalAlpha = 0.45 * simOpacity;
       this.ctx.drawImage(simCanvas, 0, 0, this.width, this.height);
       this.ctx.globalAlpha = 1;
-    }
-
-    // ═══ Beat visualizer strip — bottom ~25% of canvas, synced to actual beatmap ═══
-    // Beat vis is a single lightweight drawImage (320×64) — always render regardless of tier.
-    if (this._globalBeatVis && !this._beatVisLogOnce) {
-      this._beatVisLogOnce = true;
-      const bs = this._lastBeatState;
-    }
-    if (this._globalBeatVis) {
-      const bs = this._lastBeatState;
-      const bsEnergy = bs?.energy ?? 0;
-      const bsPulse = bs?.pulse ?? 0;
-      // Alpha driven by actual energy — visible floor, strong peak
-      const visAlpha = Math.min(0.85, 0.30 + bsEnergy * 0.40 + bsPulse * 0.15); // 0.30 floor → 0.85 peak
-      if (visAlpha > 0.01) {
-        const visH = this.height * 0.28;
-        const visTop = this.height - visH;
-        this.ctx.globalAlpha = visAlpha;
-        this.ctx.imageSmoothingEnabled = false;
-        this.ctx.drawImage(this._globalBeatVis.canvas, 0, visTop, this.width, visH);
-        this.ctx.imageSmoothingEnabled = true;
-        this.ctx.globalAlpha = 1;
-      }
     }
   }
 
