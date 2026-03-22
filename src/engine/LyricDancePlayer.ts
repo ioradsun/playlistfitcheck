@@ -1017,7 +1017,6 @@ export class LyricDancePlayer {
   private _lastVisibleMidChunkId = "";
   private _lastVisibleLastChunkId = "";
   private _solvedBounds: ChunkBounds[] = [];
-  private _smoothedDrawPos = new Map<string, { x: number; y: number }>();
   private _collisionCellSize = 96;
   private _collisionCols = 0;
   private _collisionRows = 0;
@@ -1695,7 +1694,6 @@ export class LyricDancePlayer {
     // Solver hash reset so it re-runs for the new set of visible chunks.
     this._lastVisibleChunkCount = -1;
     this._lastVisibleChunkSetHash = 0;
-    this._smoothedDrawPos.clear(); // snap to new positions on seek, don't drift
     this.conductor?.resetCursor();
     this.cameraRig.reset();
     this._resetBgParallax();
@@ -1939,7 +1937,6 @@ export class LyricDancePlayer {
     this._preBlurredImages = []; // invalidate — will use runtime blur fallback until reload
     this._watermarkCache = null; // invalidate — dimensions depend on this.width
     this._mlLayoutCache.clear(); // invalidate — viewport scale changed
-    this._smoothedDrawPos.clear();
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
     this._updateViewportScale();
@@ -3229,9 +3226,10 @@ export class LyricDancePlayer {
       || firstVisibleId !== this._lastVisibleFirstChunkId
       || midVisibleId !== this._lastVisibleMidChunkId
       || lastVisibleId !== this._lastVisibleLastChunkId;
-    if (setChanged && bounds.length >= 2) {
-      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
-    }
+    // Solver disabled — the runtime multi-line wrapper handles layout.
+    // The solver's corrections were ephemeral (lost when bounds are rebuilt
+    // next frame from animated chunk.x/y), causing oscillation with smoothing.
+    // Wall clamping below still prevents words from leaving the viewport.
     // Wall-clamp ALL bounds every frame (stable, no jitter)
     for (let i = 0; i < bounds.length; i++) {
       const b = bounds[i];
@@ -3364,25 +3362,8 @@ export class LyricDancePlayer {
 
       const measureFont = `${fontWeight} ${safeFontSize}px ${family}`;
       const textWidth = this.getCachedMetrics(text, measureFont).width;
-      // Smooth draw positions — solver corrections glide instead of popping.
-      // Entry/exit animations are already smooth (eased progress functions).
-      // The only source of single-frame jumps is the solver + wall clamp.
-      // Lerp factor 0.18 per frame at 60fps ≈ 200ms settle. Fast enough to
-      // feel responsive, slow enough to never look jittery.
-      const targetX = bound ? bound.cx : rawDrawX;
-      const targetY = bound ? bound.cy : rawDrawY;
-      const chunkId = chunk.id;
-      const prevPos = this._smoothedDrawPos.get(chunkId);
-      let centerX: number;
-      let centerY: number;
-      if (prevPos) {
-        centerX = prevPos.x + (targetX - prevPos.x) * 0.18;
-        centerY = prevPos.y + (targetY - prevPos.y) * 0.18;
-      } else {
-        centerX = targetX;
-        centerY = targetY;
-      }
-      this._smoothedDrawPos.set(chunkId, { x: centerX, y: centerY });
+      const centerX = bound ? bound.cx : rawDrawX;
+      const centerY = bound ? bound.cy : rawDrawY;
 
       const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
       const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
@@ -3563,16 +3544,6 @@ export class LyricDancePlayer {
       this.ctx.globalAlpha = 1;
       this._lastShadowBlur = 0;
       drawCalls += 1;
-    }
-    // Prune smoothed positions for chunks that are no longer visible
-    if (this._smoothedDrawPos.size > sortBuf.length * 2) {
-      const activeIds = new Set<string>();
-      for (let i = 0; i < sortBuf.length; i++) {
-        if (sortBuf[i].visible) activeIds.add(sortBuf[i].id);
-      }
-      for (const id of this._smoothedDrawPos.keys()) {
-        if (!activeIds.has(id)) this._smoothedDrawPos.delete(id);
-      }
     }
     this.ctx.restore();
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
