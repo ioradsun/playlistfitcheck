@@ -1502,14 +1502,13 @@ export class LyricDancePlayer {
         }
 
         // Compile the scene — font loaded, viewport final
+        // NOTE: Do NOT write to this.compiledScene here. The bakeGeneration check
+        // below may discard this result (if font reflow already recompiled in tick).
+        // Writing early would overwrite the reflow's correct scene.
+        // All code below uses the local `compiled` variable, not this.compiledScene.
         const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
-        this.compiledScene = compiled;
         this._markCompiledViewport(this.width || 960, this.height || 540);
         this._hitChoreographer.setCompileHeight(this.height || 540);
-
-        // Font is loaded and scene was just compiled with correct metrics.
-        // Clear the reflow flag so tick() doesn't trigger a redundant recompile.
-        this._fontLayoutReflowPending = false;
 
         // ═══ V2: Create BeatConductor with full audio analysis ═══
         const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
@@ -1555,11 +1554,14 @@ export class LyricDancePlayer {
         this._updateViewportScale();
         this._textMetricsCache.clear();
 
-        // Only commit to cache if updateTranscript() hasn't fired since we started
+        // Only commit if no one invalidated the bake (font reflow, updateTranscript, etc.)
         if (this._bakeGeneration !== bakeGen) {
           this._bakeLock = false;
-          return; // stale bake — discard, updateTranscript already set compiledScene fresh
+          return; // stale bake — discard, font reflow or updateTranscript already set compiledScene
         }
+        // Bake is valid — NOW write to compiledScene (after validation, not before)
+        this.compiledScene = compiled;
+        this._fontLayoutReflowPending = false;
         this._bakedScene = compiled;
         this._bakedChunkCache = new Map(this.chunks);
         this._bakedHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
