@@ -3419,32 +3419,29 @@ export class LyricDancePlayer {
     const camCY = camCYWall;
 
     // ═══ TEMPORARY DEBUG: remove after diagnosis ═══
-    if (!this._camDebugThrottle || performance.now() - this._camDebugThrottle > 2000) {
+    if (!this._camDebugThrottle || performance.now() - this._camDebugThrottle > 3000) {
       this._camDebugThrottle = performance.now();
-      const _viewportSxDbg = this._viewportSx;
-      const _viewportSyDbg = this._viewportSy;
-      console.warn('[CAM DEBUG]', {
-        camZoom: Math.round(camZoom * 1000) / 1000,
-        camOffX: Math.round(camOffX * 10) / 10,
-        camOffY: Math.round(camOffY * 10) / 10,
-        camRotation: Math.round(camRotation * 1000) / 1000,
-        viewportSx: Math.round(_viewportSxDbg * 1000) / 1000,
-        viewportSy: Math.round(_viewportSyDbg * 1000) / 1000,
-        fontScale: Math.round(this._viewportFontScale * 1000) / 1000,
-        canvasW: this.width,
-        canvasH: this.height,
-        canvasBackingW: this.canvas.width,
-        canvasBackingH: this.canvas.height,
-        compiledW: this._compiledViewportW,
-        compiledH: this._compiledViewportH,
-        effectiveDpr: this._effectiveDpr,
-        dpr: this.dpr,
-        wallSpace: `${Math.round(wallRight - wallLeft)}x${Math.round(wallBottom - wallTop)}`,
-        visibleChunks: sortBuf.filter((c: any) => c.visible).length,
-        fontStabilized: this._fontStabilized,
-        fullModeEnabled: this.fullModeEnabled,
-        hasCompiledScene: !!this.compiledScene,
-      });
+      const wordSizes: string[] = [];
+      for (let di = 0; di < sortBuf.length; di++) {
+        const dc = sortBuf[di];
+        if (!dc.visible || (dc.alpha ?? 0) < 0.3) continue;
+        const dObj = this.chunks.get(dc.id);
+        if (!dObj) continue;
+        const dText = dc.text ?? dObj.text;
+        const dFS = Number.isFinite(dc.fontSize) ? dc.fontSize : 36;
+        const dBaseScale = Number.isFinite(dc.scale) ? dc.scale : 1;
+        const dSX = Number.isFinite(dc.scaleX) ? dc.scaleX : dBaseScale;
+        const dDanceScale = dc.danceScale ?? 0;
+        const dDanceMult = 1 + Math.max(-0.15, Math.min(0.15, dDanceScale));
+        const dVisual = Math.round(dFS * Math.abs(dSX) * dDanceMult * camZoom * 10) / 10;
+        const dEntry = Math.round((dc.entryProgress ?? 0) * 100);
+        const dExit = Math.round((dc.exitProgress ?? 0) * 100);
+        const dHero = dc.isSoloHero ? 'SOLO' : dc.isHeroWord ? 'hero' : '';
+        wordSizes.push(`"${dText}" ${dVisual}px fs=${Math.round(dFS)} sx=${Math.round(dSX*100)/100} dance=${Math.round(dDanceMult*100)/100} e=${dEntry}% ${dHero}`);
+      }
+      if (wordSizes.length > 0) {
+        console.warn(`[WORD SIZES] zoom=${Math.round(camZoom*1000)/1000} viewport=${this.width}x${this.height}`, '\n' + wordSizes.join('\n'));
+      }
     }
 
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
