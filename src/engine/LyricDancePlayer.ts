@@ -3476,6 +3476,40 @@ export class LyricDancePlayer {
       const sx = Number.isFinite(sxRaw) ? sxRaw : 1;
       const sy = Number.isFinite(syRaw) ? syRaw : 1;
 
+      // ═══ TEMPORARY DEBUG: remove after diagnosis ═══
+      const _visualSize = safeFontSize * Math.abs(sx);
+      if (_visualSize < 20 && _visualSize > 0 && chunk.alpha > 0.3 && (chunk.entryProgress ?? 0) > 0.5) {
+        if (!this._tinyFontLogThrottle || performance.now() - this._tinyFontLogThrottle > 2000) {
+          this._tinyFontLogThrottle = performance.now();
+          console.warn('[TINY FONT]', {
+            text,
+            visualSize: Math.round(_visualSize * 10) / 10,
+            safeFontSize,
+            chunkFontSize: chunk.fontSize,
+            scaleX: Math.round(sx * 1000) / 1000,
+            scaleY: Math.round(sy * 1000) / 1000,
+            chunkScaleXRaw: chunk.scaleX,
+            chunkScaleYRaw: chunk.scaleY,
+            chunkScale: chunk.scale,
+            entryScale: chunk.entryScale,
+            exitScale: chunk.exitScale,
+            camZoom: Math.round(camZoom * 1000) / 1000,
+            availW: Math.round(wallRight - wallLeft),
+            availH: Math.round(wallBottom - wallTop),
+            viewport: `${this.width}x${this.height}`,
+            compiledViewport: `${this._compiledViewportW}x${this._compiledViewportH}`,
+            fontScale: Math.round(this._viewportFontScale * 1000) / 1000,
+            boundFontSize: bound?.fontSize,
+            boundScaleX: bound ? Math.round(bound.scaleX * 1000) / 1000 : 'no bound',
+            isHero: chunk.isHeroWord,
+            isSolo: chunk.isSoloHero,
+            emp: chunk.emphasisLevel,
+            entry: Math.round((chunk.entryProgress ?? 0) * 100),
+            exit: Math.round((chunk.exitProgress ?? 0) * 100),
+          });
+        }
+      }
+
       // drawX: position the text's left edge so that AFTER scaling, it's centered on centerX.
       // With textAlign='left', fillText draws from x=0 → rightward.
       // The transform scales by sx, so visual width = textWidth * sx.
