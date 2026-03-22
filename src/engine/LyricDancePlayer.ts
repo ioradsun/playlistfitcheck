@@ -5007,7 +5007,10 @@ export class LyricDancePlayer {
     // and wrong layout. The custom font IS the creative direction — no fallback.
     // Words will appear slightly later on first load but with correct layout.
     if (!this._fontStabilized) {
-      return null;
+      // @ts-ignore TS2448 — frame is declared below but this early return ensures
+      // _draw runs its full pipeline (bg, caches, bounds) with empty chunks.
+      // Returning null skips _draw entirely, leaving caches stale → tiny fonts.
+      return { ...frame, chunks: [], particles: frame.particles ?? [] } as any;
     }
 
 
