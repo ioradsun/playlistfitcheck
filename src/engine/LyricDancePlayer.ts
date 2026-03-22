@@ -5006,7 +5006,7 @@ export class LyricDancePlayer {
     // and wrong layout. The custom font IS the creative direction — no fallback.
     // Words will appear slightly later on first load but with correct layout.
     if (!this._fontStabilized) {
-      return { ...frame, chunks: [], particles: frame.particles ?? [] } as any;
+      return { timeMs: 0, beatIndex: 0, chunks: [], particles: [] } as any;
     }
 
     // Keep the active group AND the next upcoming group visible.
@@ -5528,7 +5528,8 @@ export class LyricDancePlayer {
         const isExiting = exitProgress > 0;
 
         // ═══ ACTIVE CHUNK ONLY: always dead center, full brightness ═══
-        const roleY = 270; // center of 540px compile space
+        const isPreviewGroup = groupIdx === nextGroupIdx;
+        const roleY = isPreviewGroup ? 430 : 270; // preview below active
 
         // Base animation alpha (entry/exit/behavior)
         const animAlpha = isExiting
@@ -5539,7 +5540,6 @@ export class LyricDancePlayer {
 
         // No previous/next/offscreen. No vocal wave alpha modulation.
         // Active chunk words are at full brightness. Period.
-        const isPreviewGroup = groupIdx === nextGroupIdx;
         let roleAlpha = lineRole === 'current' ? 1.0 : isPreviewGroup ? 0.15 : 0.0;
         let roleScale = 1.0;
 
