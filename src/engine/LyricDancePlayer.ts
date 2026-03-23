@@ -4482,11 +4482,15 @@ export class LyricDancePlayer {
         }
       }
 
-      // Hero words stay on screen at least 500ms — even if spoken faster
-      const minDisplaySec = groupHasActiveSoloHero ? 0.5 : 0;
-      const heroLingerExtension = Math.max(0, minDisplaySec - (group.end - group.start) - group.lingerDuration);
-      const effectiveLinger = group.lingerDuration + heroLingerExtension;
-      const groupEnd = Math.min(group.end + effectiveLinger, nextGroupStart);
+      // ═══ NEVER-BLANK CANVAS: phrase holds until the next phrase arrives ═══
+      // The outgoing phrase dims to context (30% ghost) and holds.
+      // When the next phrase's entry fade begins, the old one fades out.
+      // No gap. No blank canvas. Crossfade between phrases.
+      //
+      // group.end = when the last word finishes being spoken
+      // nextGroupStart = when the next phrase begins
+      // groupEnd = when this phrase EXITS — always when replacement arrives
+      const groupEnd = nextGroupStart;
 
       // ═══ LAYOUT: positions are pre-computed by fitTextToViewport at compile time ═══
       // All words have correct layoutX (centered) and layoutY (stacked if wrapped).
@@ -4534,7 +4538,12 @@ export class LyricDancePlayer {
 
         let wordState: 'upcoming' | 'active' | 'spoken';
         if (tSec < wordStart) {
-          wordState = 'upcoming';
+          // Before this word's start time — but if NO word in the phrase
+          // has started yet, the FIRST word should be active so the phrase
+          // doesn't fade in as a gray blob with no accent highlight.
+          wordState = (wi === 0 && tSec < (group.words[0].wordStart ?? group.start))
+            ? 'active'   // first word lights up during phrase entry
+            : 'upcoming';
         } else if (tSec < nextWordStart) {
           wordState = 'active';
         } else {
