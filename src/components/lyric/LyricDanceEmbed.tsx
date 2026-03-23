@@ -346,10 +346,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         if (!effectiveShowCover && !isWaiting) toggleMute(e);
       }}
     >
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={!isBattleMode ? { bottom: 60, height: 'calc(100% - 60px)' } : undefined} />
       <canvas
         ref={textCanvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none"
+        style={!isBattleMode ? { bottom: 60, height: 'calc(100% - 60px)' } : undefined}
       />
 
       {!isBattleMode && (
