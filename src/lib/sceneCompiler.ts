@@ -109,7 +109,7 @@ interface TypographyProfile {
 export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
 interface WordDirectiveLike { word?: string; kineticClass?: string; colorOverride?: string; emphasisLevel?: number; visualMetaphor?: string; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: 'up'|'down'|'left'|'right'|'radial'; letterSequence?: boolean; trail?: string; entry?: string; behavior?: string; exit?: string; heroPresentation?: string; isolation?: boolean; }
 interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; }
-export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; }
+export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; phraseHeroWord?: string; }
 type StoryboardEntryLike = { lineIndex?: number; entryStyle?: string; exitStyle?: string; heroWord?: string; shotType?: string; iconGlyph?: string; iconStyle?: 'outline'|'filled'|'ghost'; iconPosition?: 'behind'|'above'|'beside'|'replace'; iconScale?: number; };
 
 type ManifestWordDirective = { entryStyle?: EntryStyle; behavior?: BehaviorStyle; exitStyle?: ExitStyle };
@@ -219,14 +219,16 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
         // lineIndex derived from first word (for backward compat with storyboard, palette, etc.)
         const lineIndex = phraseWords[0].lineIndex;
 
-        groups.push({
+        const grp: PhraseGroup = {
           words: phraseWords,
           start: phraseWords[0].start,
           end: phraseWords[phraseWords.length - 1].end,
           anchorWordIdx: findAnchorWord(phraseWords),
           lineIndex,
           groupIndex: groupIdx,
-        });
+          phraseHeroWord: phrase.heroWord ?? '',
+        };
+        groups.push(grp);
         groupIdx++;
       }
 
@@ -285,14 +287,16 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
         const phraseWords = lineWords.slice(safeStart, safeEnd + 1);
         if (phraseWords.length === 0) continue;
 
-        groups.push({
+        const grp: PhraseGroup = {
           words: phraseWords,
           start: phraseWords[0].start,
           end: phraseWords[phraseWords.length - 1].end,
           anchorWordIdx: findAnchorWord(phraseWords),
           lineIndex,
           groupIndex: groupIdx,
-        });
+          phraseHeroWord: phrase.heroWord ?? '',
+        };
+        groups.push(grp);
         groupIdx++;
       }
 
@@ -729,6 +733,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const groupLayout = groupLayouts.get(key);
     const positions = groupLayout?.positions ?? [];
     const groupFontSize = groupLayout?.fontSize ?? 56;
+    const phraseHeroClean = (group.phraseHeroWord ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const manifestDirective = manifestWordDirectives[key]?.[wi] ?? null;
       const motion = assignWordAnimations(wm, motionDefaults, storyboard, manifestDirective as ManifestWordDirective | null);
@@ -754,7 +759,9 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         hasSemanticColor: Boolean(semantic?.colorOverride || autoSemantic?.colorOverride),
         isHeroWord: (wm.directive?.emphasisLevel ?? 1) >= 4
           || (wm.directive as any)?.isolation === true
-          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')),
+          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, ''))
+          || (phraseHeroClean && wm.clean === phraseHeroClean)
+          || (Math.max(0, wm.end - wm.start) >= 0.5),
         heroPresentation: undefined, // removed — isolation handled by separate flag
         isAnchor: wi === group.anchorWordIdx,
         isFiller: isFillerWord(wm.word),
