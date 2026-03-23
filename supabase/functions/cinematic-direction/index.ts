@@ -13,400 +13,329 @@ const CINEMATIC_DIRECTION_PROMPT = `
 You are a film director designing a cinematic lyric video.
 
 You will receive:
-1. Song lyrics organized into SECTIONS with timestamps and roles
-   (computed from audio — boundaries are detector outputs and may be imperfect)
-2. A listener scene — where the listener is when they hear this song
+1. Song lyrics with per-word timestamps (word, start, end, duration in ms)
+2. Audio-detected sections with roles and energy levels
+3. A listener scene — the emotional seed for your visual world
+4. BPM — the song's tempo
 
-Your job:
-- Design a visual world for each section
-- Pick presets from the menus below
-- Identify hero words and design their animations
+Your job: design the visual world, pace the story with phrase grouping, and identify
+the words whose meaning should become VISIBLE.
+
+CORE PRINCIPLE — SEMANTIC LITERALISM:
+The viewer should SEE the lyrics, not just read them.
+If a word means "burn," show fire. If it means "drown," show water.
+If it means "freeze," show frost. If it means "fade," show smoke.
+Every word with obvious visual meaning should be tagged — the only gate is
+whether the word has enough screen time (≥350ms) for the effect to register.
+This is the product. This is what makes each video feel bespoke.
 
 THE LISTENER SCENE IS YOUR ANCHOR.
-It is the emotional seed for everything you design.
-Section descriptions should expand their world cinematically.
-If no listener scene is provided, infer one from the lyrics.
+It is the emotional seed for ALL visual descriptions. Section imagery should expand
+outward from this scene — not generic "cinematic landscapes" but specific extensions
+of the world the listener is in. If none is provided, infer one from the lyrics.
 
 You may NOT invent values outside the menus below.
 Return ONLY valid JSON. No markdown. No explanation.
 
 ═══════════════════════════════════════
-SONG DEFAULTS (6 picks)
+SONG DEFAULTS
 ═══════════════════════════════════════
-
-Pick one value for each. These apply to every section unless overridden.
-
-SCENE TONE:
-  "dark"         — moody, cinematic
-  "light"        — bright, airy
-  "mixed-dawn"   — dark start → light ending (hope)
-  "mixed-dusk"   — light start → dark ending (weight)
-  "mixed-pulse"  — dark → light → dark (brief hope)
-
-ATMOSPHERE:
-  "void"       — near-black, text floats in space
-  "cinematic"  — filmic crush + vignette
-  "haze"       — dreamy soft focus
-  "split"      — image on one half, solid on other
-  "grain"      — film grain, analog
-  "wash"       — heavy color tint
-  "glass"      — frosted glass, modern
-  "clean"      — minimal overlay, image-forward
-
-MOTION:
-  "weighted"  — heavy, impactful
-  "fluid"     — smooth, flowing
-  "elastic"   — bouncy, energetic
-  "drift"     — slow, contemplative
-  "glitch"    — choppy, digital
-
-TYPOGRAPHY (match to genre — do NOT default to clean-modern):
-  "bold-impact"      — Oswald, uppercase. USE FOR: hip-hop, trap, EDM, anthems
-  "clean-modern"     — Montserrat, neutral. USE FOR: pop, indie pop, mainstream
-  "elegant-serif"    — Playfair Display, soulful. USE FOR: R&B, soul, jazz, ballads
-  "raw-condensed"    — Barlow Condensed, gritty. USE FOR: punk, rock, grunge, drill
-  "whisper-soft"     — Nunito, gentle. USE FOR: acoustic, folk, lullaby, ambient
-  "tech-mono"        — JetBrains Mono, futuristic. USE FOR: electronic, synthwave, cyberpunk
-  "display-heavy"    — Bebas Neue, statement. USE FOR: arena rock, hype tracks, sports anthems
-  "editorial-light"  — Cormorant Garamond, poetic. USE FOR: singer-songwriter, poetry, classical
-
-TEXTURE:
-  "fire", "rain", "snow", "aurora", "smoke",
-  "storm", "dust", "void", "stars", "petals"
-
-EMOTIONAL ARC:
-  "slow-burn"  — gradual build
-  "surge"      — high early, bigger climax
-  "collapse"   — intense start, minimal end
-  "dawn"       — dark to light
-  "flatline"   — monotone, meditative
-  "eruption"   — quiet start, explodes mid-song
-
-═══════════════════════════════════════
-SECTIONS
-═══════════════════════════════════════
-
-You receive N sections. For EACH section, return:
-
-If no pre-detected sections are provided, YOU must determine the song structure
-from the lyrics. Look for:
-- Repeated lyrics → Chorus
-- Fresh narrative content → Verse (number sequentially)
-- Short transitional passages → Pre-Chorus or Bridge
-- Opening/closing instrumental → Intro/Outro
-Create 4-8 sections with timestamps based on the lyric timestamps.
-Each section's startSec should align with the first lyric line in that section.
-Each section's endSec should align with the last lyric line + 1 second.
 
 REQUIRED:
-- "sectionIndex": integer (must match the input section index)
-- "description": vivid 1-sentence scene for background image generation,
-  rooted in the listener's scene
-- "visualMood": ONE word from this list that captures the section's visual feel:
-  "intimate"    — close, personal, warm soft focus
-  "anthemic"    — arena, powerful, bright and vivid
-  "dreamy"      — floating, hazy, bloom and glow
-  "aggressive"  — hard, confrontational, cold and sharp
-  "melancholy"  — sad, heavy, desaturated and cool
-  "euphoric"    — peak joy, blown-out bright
-  "eerie"       — unsettling, teal tint, selective focus
-  "vulnerable"  — exposed, fragile, warm and breathing
-  "triumphant"  — victory, bright gold, wide and stable
-  "nostalgic"   — memory, warm grain, slow drift
-  "defiant"     — rebellious, cool and sharp
-  "hopeful"     — dawn, rising warmth
-  "raw"         — unpolished, gritty noise
-  "hypnotic"    — trance, tilt-shift, slow zoom
-  Pick the ONE that best matches this section's emotional energy.
-- "dominantColor": a single hex color (#RRGGBB) that represents this section's emotional core.
-  Choose based on the section's feeling and lyrics:
-  · Anger, fire, urgency → reds (#D43030, #E8632B, #FF3030)
-  · Sadness, cold, isolation → blues (#4FA4D4, #2255AA, #050A14)
-  · Hope, dawn, growth → greens (#228844, #39FF14, #34D058) or warm yellows (#C9A96E, #FFD700)
-  · Love, vulnerability, intimacy → pinks/roses (#D4618C, #FF69B4, #FF6B9D)
-  · Power, royalty, mysticism → purples (#B088F9, #A855F7, #C49EFF)
-  · Nostalgia, earth, warmth → browns/ambers (#A0845C, #E8632B, #C4A878)
-  · Darkness, void, menace → near-blacks with tint (#0A0A0F, #0F0510, #120505)
-  · Triumph, glory, celebration → golds (#FFD700, #C9A96E, #F0ECE2)
-  · Eeriness, unease → teals/greens (#00BFA5, #0F5F5F)
-  Every section MUST have a DIFFERENT dominantColor. No two sections should share the same hex.
+- "description": single evocative sentence (max 15 words) — what this song sounds/feels like.
+  Be specific and vivid, not generic.
+- "mood": single dominant emotional word (e.g. "melancholic", "defiant", "euphoric")
 
-OPTIONAL — override song defaults for this section:
-- "motion": override
-- "texture": override
-- "typography": override
-- "atmosphere": override
-- "structuralLabel": human-readable section name. ALWAYS return this field.
-  Each section includes a heuristic role and a confidence percentage.
-  HIGH confidence (≥70%): trust the heuristic role unless lyrics clearly contradict.
-  LOW confidence (<70%): the detector is uncertain — analyze the lyrics to decide:
-    · Lyrics repeat verbatim from an earlier section → Chorus
-    · Energy builds, lyrics are transitional, next section is a chorus → Pre-Chorus
-    · Fresh lyrical content, narrative progression → Verse (number sequentially)
-    · Contrasting one-off section with different feel → Bridge
-    · High energy, sparse or no lyrics → Drop
-    · Energy dip, sparse texture → Breakdown
-  Standard values: "Intro", "Verse 1", "Verse 2", "Verse 3",
-  "Pre-Chorus", "Chorus", "Post-Chorus", "Bridge", "Hook",
-  "Breakdown", "Drop", "Outro".
-  Number repeated types sequentially: "Verse 1", "Verse 2".
-  Number Chorus only if lyrics differ significantly between occurrences.
+PRESETS — pick one for each:
 
-OPTIONAL — boundary correction (LOW confidence sections only):
-- "suggestedStartSec": number — if lyrics clearly begin earlier/later than the given startSec
-- "suggestedEndSec": number — if lyrics clearly end earlier/later than the given endSec
-  Only include these when the timestamps of the first/last lyric in a section are
-  significantly misaligned with the given boundary (>2s gap). These are suggestions
-  for the user — not authoritative.
+SCENE TONE:
+  "dark"    — moody, cinematic
+  "light"   — bright, airy
+  "mixed"   — shifts between dark and light across sections
+
+TYPOGRAPHY (match to genre — do NOT default to clean-modern):
+  "bold-impact"      — Oswald, uppercase. Hip-hop, trap, EDM, anthems
+  "clean-modern"     — Montserrat, neutral. Pop, indie pop, mainstream
+  "elegant-serif"    — Playfair Display, soulful. R&B, soul, jazz, ballads
+  "raw-condensed"    — Barlow Condensed, gritty. Punk, rock, grunge, drill
+  "whisper-soft"     — Nunito, gentle. Acoustic, folk, lullaby, ambient
+  "tech-mono"        — JetBrains Mono, futuristic. Electronic, synthwave
+  "display-heavy"    — Bebas Neue, statement. Arena rock, hype tracks
+  "editorial-light"  — Cormorant Garamond, poetic. Singer-songwriter, classical
+
+TEXTURE (ambient particles — what the air of this song's world is made of):
+  "fire"   — embers, warmth, heat rising
+  "rain"   — droplets, melancholy, descent
+  "snow"   — crystals, cold beauty, stillness
+  "smoke"  — wisps, mystery, haunting fog
+  "dust"   — motes, atmosphere, earthiness
+  "stars"  — sparkles, wonder, night sky
+
+EMOTIONAL ARC:
+  "slow-burn"  — gradual build, payoff at the end
+  "surge"      — high early, even bigger climax
+  "collapse"   — intense start, quiet ending
+  "dawn"       — dark to light, hope builds
+  "eruption"   — quiet start, explodes mid-song
+
+OPTIONAL:
+- "meaning": { "theme": string, "summary": string, "imagery": [strings] }
 
 ═══════════════════════════════════════
-STORYBOARD (sparse)
+SECTIONS (4-8)
 ═══════════════════════════════════════
 
-For 15-25 emotionally significant lines, identify the hero moment.
-Each entry:
-- "lineIndex": integer (0-based into full lyrics array)
-- "heroWord": most significant word on that line (UPPERCASE)
-- "entryStyle": from entries list
-- "exitStyle": from exits list
+For EACH section:
+
+REQUIRED:
+- "sectionIndex": integer (matches input section index)
+- "description": vivid 1-sentence scene for background image generation.
+  ROOT THIS IN THE LISTENER SCENE. Do not write generic landscapes.
+  Extend the listener's world cinematically for this section's emotion.
+  Example: "Rain-streaked car window at night, city lights blurred into rivers of gold and red"
+  Example: "Empty basketball court at dusk, single flickering overhead light casting long shadows"
+- "visualMood": ONE from:
+  "intimate" | "anthemic" | "dreamy" | "aggressive" | "melancholy" |
+  "euphoric" | "eerie" | "vulnerable" | "triumphant" | "nostalgic" |
+  "defiant" | "hopeful" | "raw" | "hypnotic"
+- "dominantColor": ONE bold hex color (#RRGGBB) — this section's emotional core.
+  This single color drives the entire palette: hero word color, glow, particle tint, background.
+  Choose saturated, expressive colors. Every section MUST have a DIFFERENT color.
+  · Anger/fire/urgency → reds (#D43030, #FF3030)
+  · Sadness/cold/isolation → blues (#2255AA, #4FA4D4)
+  · Hope/growth → greens (#228844, #34D058)
+  · Love/intimacy → pinks (#D4618C, #FF69B4)
+  · Power/mysticism → purples (#B088F9, #A855F7)
+  · Triumph/glory → golds (#FFD700, #C9A96E)
+  · Darkness/void/menace → near-blacks (#0A0A0F, #0F0510)
+  · Eeriness/unease → teals (#00BFA5, #0F5F5F)
+
+OPTIONAL per section:
+- "texture": override song default when the section's world genuinely shifts
+  (e.g., verse lives in dust, chorus erupts into fire)
+- "atmosphereState": how the particles behave in this section.
+  Only include when it differs from the song's natural state.
+    "still"     — suspended, intimate, held breath, aftermath
+    "drifting"  — memory, tenderness, loneliness, dreamy flow
+    "falling"   — grief, surrender, rain, winter, collapse
+    "swirling"  — chaos, obsession, climax, emotional storm
 
 ═══════════════════════════════════════
-WORD DIRECTIVES
+PHRASES — cinematic pacing
 ═══════════════════════════════════════
 
-For 15-25 emotionally significant words, design semantic animations.
+Group ALL lyrics into PHRASES — the words that appear on screen together.
+Each phrase is one screen of text. This is the most important creative decision:
+it controls the rhythm and pacing of the entire video.
 
-PRIORITY: If HELD_WORDS are provided, those are your primary candidates.
-The artist held these words for ≥500ms — that's deliberate emphasis.
-Start with held words, then add up to 5 additional short words if narratively critical.
+You receive per-word timestamps with durations AND the BPM. USE THEM.
 
-Match the animation to what the word MEANS:
-- Motion words (fly, spin, fall, drift) → movement-matching entry/exit
-- Impact words (hit, crash, slam) → slam-down, shatter
-- Element words (fire, ice, wave) → element-matching color + entry
-- Time words (wait, patience, forever) → breathe-in, linger
-- If no obvious visual semantic, match to narrative role (climax → explode-in, resolution → drift-in)
+A phrase is a READING BEAT — a single moment where the viewer reads, absorbs,
+and feels before the next moment arrives. Think of it as editing: each phrase is
+a cut. Good cuts follow the emotional rhythm. Bad cuts interrupt it.
+
+TIMING RULES:
+
+  Minimum phrase durations (the viewer needs time to read and absorb):
+    1-word phrase:   350ms  (impact exclamation — "Yeah!", "No!", "Fire!")
+    2-3 word phrase: 840ms
+    4-5 word phrase: 1260ms
+    6-8 word phrase: 1750ms
+
+  Maximum: 4 seconds. The viewer's attention resets. Cut to the next phrase.
+
+  If the time between first word start and last word end is SHORTER than
+  the minimum for that word count, you MUST either:
+    a) Merge into the adjacent phrase, OR
+    b) Split differently to reduce word count
+
+BPM PACING:
+  The song is at {BPM} BPM. Use this to calibrate phrase density:
+    Below 90 BPM:  favor longer phrases (4-8 words), let words breathe
+    90-130 BPM:    balanced (3-6 words typical)
+    Above 130 BPM: favor shorter punchy phrases (2-4 words), match the energy
+
+MEANING RULES:
+  - A phrase is one complete thought, clause, or breath
+  - NEVER split a clause mid-thought ("I can feel the" | "fire inside" — WRONG)
+  - Correct: "I can feel the fire inside" as one phrase
+  - Impact exclamations ("Yeah!", "Oh!", "No!") get their OWN phrase if ≥ 350ms
+  - Words held by the artist for ≥ 700ms MAY be their own phrase (dramatic pause)
+  - Filler at line boundaries ("uh", "mm") attaches to the nearest real phrase
+
+Every lyric word must belong to exactly one phrase. No gaps, no overlaps.
+
+Each phrase:
+- "lineIndex": which lyric line (integer, 0-based)
+- "wordRange": [startWordIndex, endWordIndex] — inclusive indices within the line
+- "heroWord": UPPERCASE — most impactful word in this phrase (optional)
+
+═══════════════════════════════════════
+WORD DIRECTIVES — semantic emphasis
+═══════════════════════════════════════
+
+Tag every emotionally significant word with its visual treatment.
+
+SEMANTIC LITERALISM — this is the core of the product:
+  The viewer should SEE what the word means, not just read it.
+  Tag every word that has obvious visual imagery with its elementalClass.
+  The ONLY constraint is time — the word needs ≥ 350ms screen time for the
+  effect to register. Beyond that, if it burns, tag it FIRE. If it drowns,
+  tag it WATER. If it freezes, tag it FROST. Be generous with elemental tags.
+
+PRIORITY: Start with HELD WORDS (artist held ≥500ms — deliberate emphasis).
+These are your primary hero candidates. Then add any word with strong visual meaning.
+
+TIME RULES (hard — the engine enforces these regardless):
+  emphasisLevel 4-5 requires word duration ≥ 350ms
+  elementalClass requires word duration ≥ 350ms
+  isolation: true requires word duration ≥ 700ms
+  Do NOT tag words under 140ms — too fast for the viewer
+
 Each directive:
-- "word": lowercase
+- "word": lowercase (must match a word in the lyrics)
 - "emphasisLevel": 1-5
-- "entry": from entries list
-- "behavior": from behaviors list
-- "exit": from exits list
+    1 = slight emphasis (color tint)
+    2 = moderate (scale + color)
+    3 = strong (scale + bold color + glow)
+    4 = hero (large scale + bold color + strong glow + particles)
+    5 = climactic (maximum impact — the biggest moment)
 
-Optional:
-- "trail": particle trail
-- "ghostTrail": true
-- "ghostDirection": "up" | "down" | "left" | "right" | "radial"
-- "letterSequence": true
-- "visualMetaphor": freeform string
-- "elementalClass": if this word is strongly depictable as an element, tag it.
-  Only tag when the imagery is OBVIOUS and cinematic — not every word needs one.
-    "FIRE"     — fire, burn, flame, blaze, heat, hell, ash, ember, inferno
-    "WATER"    — rain, drown, ocean, tears, flood, wave, sea, pour, sink
-    "FROST"    — cold, ice, freeze, frozen, winter, snow, chill, numb, bitter
-    "SMOKE"    — smoke, fog, haze, ghost, shadow, fade, vanish, mist, cloud
-    "ELECTRIC" — electric, shock, spark, lightning, thunder, power, energy, neon
-  The word itself doesn't have to be in the list — use judgment. "heartless" → FROST.
-  "scorched" → FIRE. "suffocating" → SMOKE. Leave blank if no element fits.
-- "heroPresentation": HOW the hero word is spatially presented (emphasis 4-5 only).
-  Pick based on what the word MEANS:
-    "inline-scale"      — default. Confident emphasis. Word grows 120% inline. Most hero words.
-    "delayed-reveal"    — punch words, end-of-line impact. Word snaps in 120ms after siblings.
-    "isolation"         — climactic moment. All other words disappear. Hero alone on screen. MAX 1-2 PER SONG.
-    "vertical-lift"     — word means UP: fly, rise, heaven, above, clouds, hope, soar, ascend.
-    "vertical-drop"     — word means DOWN: fall, drop, gravity, drown, sink, crash, weight.
-    "tracking-expand"   — slow emotional stretch: love, forever, breathe, time, slowly, fading.
-    "dim-surroundings"  — singular focus: only, truth, silence, nothing, alone, everything.
-  Only include for emphasisLevel 4-5 words. Omit for emphasis 1-3.
+  Map held-word duration to emphasisLevel:
+    ≥ 1500ms → 5
+    1000-1499ms → 4
+    700-999ms → 3
+    500-699ms → 2
+
+- "elementalClass": tag when the word has obvious visual meaning.
+  Renders visible particles around the word — the lyric becomes visual.
+    "FIRE"     — burn, flame, heat, hell, fire, blaze, ember, scorched, ashes, inferno
+    "WATER"    — rain, drown, ocean, tears, flood, wave, pour, sink, deep, sea, wet
+    "FROST"    — cold, ice, freeze, frozen, winter, snow, numb, bitter, chill, shiver
+    "SMOKE"    — smoke, fog, haze, ghost, shadow, fade, vanish, mist, disappear, cloud
+    "ELECTRIC" — electric, shock, spark, lightning, thunder, power, energy, neon, voltage
+
+  The word itself doesn't have to be in the list — use judgment.
+  "heartless" → FROST. "scorched" → FIRE. "suffocating" → SMOKE.
+  "drowning in your love" → WATER. Be creative. Be literal. Be generous.
+
+- "isolation": true — word appears ALONE on screen.
+  Requires duration ≥ 700ms. Use for the moments that deserve total focus.
+  The stage clears, one word fills the screen. Use when the song demands it.
 
 Return JSON only.
 `;
-
-
 
 const SCENE_DIRECTION_PROMPT = `
 You are a film director designing the visual world for a lyric video.
 
 You will receive:
-1. Song lyrics organized into SECTIONS with timestamps and roles
-   (computed from audio — boundaries are detector outputs and may be imperfect)
-2. A listener scene — where the listener is when they hear this song
-
-Your job:
-- Identify the song's emotional identity
-- Design a visual world for each section
-- Pick presets from the menus below
+1. Song lyrics with timestamps
+2. Audio-detected sections with roles
+3. A listener scene — the emotional seed
 
 THE LISTENER SCENE IS YOUR ANCHOR.
-If no listener scene is provided, infer one from the lyrics.
+Root ALL section descriptions in this world.
+If none is provided, infer one from the lyrics.
 
-You may NOT invent values outside the menus below.
-Return ONLY valid JSON. No markdown. No explanation.
+Return ONLY valid JSON. No markdown.
 
 ═══════════════════════════════════════
 SONG IDENTITY
 ═══════════════════════════════════════
 
-REQUIRED — return these at the top level of your JSON:
-- "description": Single evocative sentence (max 15 words) describing what this song
-  sounds and feels like. Combine sonic texture, lyrical theme, and emotional tone.
-  Be specific and vivid — avoid generic phrases like "a good song" or "nice beat."
-- "mood": Single dominant emotional descriptor (e.g., "melancholic", "hype", "anthemic",
-  "intimate", "defiant", "euphoric", "nostalgic", "aggressive", "vulnerable")
+REQUIRED:
+- "description": single evocative sentence (max 15 words) — what this song sounds/feels like
+- "mood": single dominant emotional word
 
 OPTIONAL:
-- "meaning": {
-    "theme": core theme in 2-4 words,
-    "summary": 2-3 sentence plain-language explanation of what the song is about,
-    "imagery": [2-3 notable metaphors or images from the lyrics]
-  }
+- "meaning": { "theme": string, "summary": string, "imagery": [strings] }
 
-═══════════════════════════════════════
-SONG DEFAULTS (6 picks)
-═══════════════════════════════════════
-
-Pick one value for each. These apply to every section unless overridden.
-
-SCENE TONE:
-  "dark", "light", "mixed-dawn", "mixed-dusk", "mixed-pulse"
-
-ATMOSPHERE:
-  "void", "cinematic", "haze", "split", "grain", "wash", "glass", "clean"
-
-MOTION:
-  "weighted", "fluid", "elastic", "drift", "glitch"
-
-TYPOGRAPHY (match to genre — do NOT default to clean-modern):
-  "bold-impact"      — hip-hop, trap, EDM, anthems
-  "clean-modern"     — pop, indie pop, mainstream
-  "elegant-serif"    — R&B, soul, jazz, ballads
-  "raw-condensed"    — punk, rock, grunge, drill
-  "whisper-soft"     — acoustic, folk, lullaby, ambient
-  "tech-mono"        — electronic, synthwave, cyberpunk
-  "display-heavy"    — arena rock, hype tracks, sports anthems
-  "editorial-light"  — singer-songwriter, poetry, classical
-
-TEXTURE:
-  "fire", "rain", "snow", "aurora", "smoke", "storm", "dust", "void", "stars", "petals"
-
-EMOTIONAL ARC:
-  "slow-burn", "surge", "collapse", "dawn", "flatline", "eruption"
+PRESETS:
+- "sceneTone": "dark" | "light" | "mixed"
+- "typography": "bold-impact" | "clean-modern" | "elegant-serif" | "raw-condensed" | "whisper-soft" | "tech-mono" | "display-heavy" | "editorial-light"
+- "texture": "fire" | "rain" | "snow" | "smoke" | "dust" | "stars"
+- "emotionalArc": "slow-burn" | "surge" | "collapse" | "dawn" | "eruption"
 
 ═══════════════════════════════════════
 SECTIONS
 ═══════════════════════════════════════
 
-For EACH section, return:
+For EACH section:
+- "sectionIndex": integer
+- "description": vivid 1-sentence scene rooted in the listener's world
+- "visualMood": "intimate" | "anthemic" | "dreamy" | "aggressive" | "melancholy" | "euphoric" | "eerie" | "vulnerable" | "triumphant" | "nostalgic" | "defiant" | "hopeful" | "raw" | "hypnotic"
+- "dominantColor": bold hex (#RRGGBB), unique per section
 
-If no pre-detected sections are provided, YOU must determine the song structure
-from the lyrics. Look for:
-- Repeated lyrics → Chorus
-- Fresh narrative content → Verse (number sequentially)
-- Short transitional passages → Pre-Chorus or Bridge
-- Opening/closing instrumental → Intro/Outro
-Create 4-8 sections with timestamps based on the lyric timestamps.
-Each section's startSec should align with the first lyric line in that section.
-Each section's endSec should align with the last lyric line + 1 second.
-
-REQUIRED:
-- "sectionIndex": integer (must match the input section index)
-- "description": vivid 1-sentence scene for background image generation,
-  rooted in the listener's scene
-- "visualMood": ONE word from: "intimate", "anthemic", "dreamy", "aggressive",
-  "melancholy", "euphoric", "eerie", "vulnerable", "triumphant", "nostalgic",
-  "defiant", "hopeful", "raw", "hypnotic"
-- "structuralLabel": human-readable section name. ALWAYS return this field.
-  Each section includes a heuristic role and a confidence percentage.
-  HIGH confidence (≥70%): trust the heuristic role unless lyrics clearly contradict.
-  LOW confidence (<70%): the detector is uncertain — analyze the lyrics to decide:
-    · Lyrics repeat verbatim from an earlier section → Chorus
-    · Energy builds, lyrics are transitional, next section is a chorus → Pre-Chorus
-    · Fresh lyrical content, narrative progression → Verse (number sequentially)
-    · Contrasting one-off section with different feel → Bridge
-    · High energy, sparse or no lyrics → Drop
-    · Energy dip, sparse texture → Breakdown
-  Standard values: "Intro", "Verse 1", "Verse 2", "Verse 3",
-  "Pre-Chorus", "Chorus", "Post-Chorus", "Bridge", "Hook",
-  "Breakdown", "Drop", "Outro".
-  Number repeated types sequentially: "Verse 1", "Verse 2".
-  Number Chorus only if lyrics differ significantly between occurrences.
-
-OPTIONAL — override song defaults for this section:
-- "motion", "texture", "typography", "atmosphere"
-
-OPTIONAL — boundary correction (LOW confidence sections only):
-- "suggestedStartSec": number — if lyrics clearly begin earlier/later than the given startSec
-- "suggestedEndSec": number — if lyrics clearly end earlier/later than the given endSec
-  Only include these when the timestamps of the first/last lyric in a section are
-  significantly misaligned with the given boundary (>2s gap).
+OPTIONAL per section:
+- "texture": override song default
+- "atmosphereState": "still" | "drifting" | "falling" | "swirling"
 
 Return JSON only.
 `;
-
 
 const WORD_DIRECTION_PROMPT = `
 You are a word choreographer for a cinematic lyric video.
 
 The visual world has already been designed. You will receive:
 1. The SCENE DIRECTION (song defaults + section visual moods)
-2. Song lyrics with timestamps
+2. Song lyrics with per-word timestamps and durations
 3. HELD WORDS the artist emphasized vocally
+4. BPM
 
-Your job: design how individual words appear, animate, and exit.
-Match animations to what words MEAN. Harmonize with the established visual mood.
+CORE PRINCIPLE — SEMANTIC LITERALISM:
+The viewer should SEE what each word means. If it burns, show fire.
+If it drowns, show water. Tag every word with obvious visual meaning.
+The only gate is time — word needs ≥ 350ms for the effect to register.
 
-You may NOT invent values outside the menus below.
-Return ONLY valid JSON. No markdown. No explanation.
-
-═══════════════════════════════════════
-STORYBOARD (sparse)
-═══════════════════════════════════════
-
-For 15-25 emotionally significant lines, identify the hero moment.
-Each entry:
-- "lineIndex": integer (0-based into full lyrics array)
-- "heroWord": most significant word on that line (UPPERCASE)
-- "entryStyle": from entries list
-- "exitStyle": from exits list
+Return ONLY valid JSON. No markdown.
 
 ═══════════════════════════════════════
-WORD DIRECTIVES
+PHRASES — cinematic pacing
 ═══════════════════════════════════════
 
-For 15-25 emotionally significant words, design semantic animations.
+Group ALL lyrics into phrases — the words that appear on screen together.
 
-PRIORITY: If HELD_WORDS are provided, those are your primary candidates.
-The artist held these words for ≥500ms — that's deliberate emphasis.
-Start with held words, then add up to 5 additional short words if narratively critical.
+TIMING MINIMUMS:
+  1-word phrase:   350ms
+  2-3 word phrase: 840ms
+  4-5 word phrase: 1260ms
+  6-8 word phrase: 1750ms
+  Maximum: 4 seconds
 
-Match the animation to what the word MEANS:
-- Motion words (fly, spin, fall, drift) → movement-matching entry/exit
-- Impact words (hit, crash, slam) → slam-down, shatter
-- Element words (fire, ice, wave) → element-matching color + entry
-- Time words (wait, patience, forever) → breathe-in, linger
+BPM PACING:
+  Below 90 BPM:  longer phrases (4-8 words)
+  90-130 BPM:    balanced (3-6 words)
+  Above 130 BPM: shorter punchy phrases (2-4 words)
 
-Each directive:
-- "word": lowercase
-- "emphasisLevel": 1-5
-- "entry": from entries list
-- "behavior": from behaviors list
-- "exit": from exits list
+MEANING:
+  - One complete thought per phrase. Never split mid-clause.
+  - Impact exclamations ≥ 350ms get their own phrase
+  - Held words ≥ 700ms may be their own phrase
 
-Optional (ONLY include when the value is meaningful — omit nulls):
-- "trail": particle trail
-- "ghostTrail": true
-- "ghostDirection": "up" | "down" | "left" | "right" | "radial"
-- "letterSequence": true
-- "visualMetaphor": freeform string
-- "elementalClass": "FIRE" | "WATER" | "FROST" | "SMOKE" | "ELECTRIC"
-- "heroPresentation": "inline-scale" | "delayed-reveal" | "isolation" | "vertical-lift" | "vertical-drop" | "tracking-expand" | "dim-surroundings"
+Each phrase:
+  "lineIndex": integer
+  "wordRange": [start, end] inclusive
+  "heroWord": "UPPERCASE" (optional)
 
-ENTRIES: slam-down, punch-in, explode-in, snap-in, rise, materialize, breathe-in, drift-in, drop, plant, stomp, cut-in, whisper, bloom, focus-in, spin-in, tumble-in
-EXITS: shatter, snap-out, burn-out, dissolve, drift-up, sink, cut-out, vanish, linger, evaporate, blur-out, spin-out, scatter-letters, peel-off, peel-reverse, cascade-down, cascade-up, gravity-fall, soar, launch, scatter-fly, melt, freeze-crack
-BEHAVIORS: pulse, vibrate, float, grow, contract, flicker, orbit, lean, none, freeze, tilt, pendulum, pulse-focus
-TRAILS: ember, frost, spark-burst, dust-impact, light-rays, gold-coins, dark-absorb, motion-trail, memory-orbs, none
+═══════════════════════════════════════
+WORD DIRECTIVES — semantic emphasis
+═══════════════════════════════════════
 
-Return JSON only: { "storyboard": [...], "wordDirectives": [...] }
+Tag every emotionally significant word:
+  "word": lowercase
+  "emphasisLevel": 1-5
+  "elementalClass": FIRE | WATER | FROST | SMOKE | ELECTRIC
+    Tag generously — every word with visual meaning that has ≥ 350ms.
+  "isolation": true (word ≥ 700ms, appears alone on screen)
+
+TIME RULES:
+  emphasisLevel 4-5 requires ≥ 350ms
+  elementalClass requires ≥ 350ms
+  isolation requires ≥ 700ms
+  Skip words under 140ms
+
+Return JSON only: { "phrases": [...], "wordDirectives": [...] }
 `;
 
 interface LyricLine {
@@ -437,6 +366,7 @@ interface SceneContext {
 interface RequestBody {
   title?: string;
   artist?: string;
+  bpm?: number;
   lines?: LyricLine[];
   lyrics?: string;
   lyricId?: string;
@@ -451,14 +381,7 @@ interface RequestBody {
 }
 
 const ENUMS = {
-  sceneTone: ["dark", "light", "mixed-dawn", "mixed-dusk", "mixed-pulse"],
-  atmosphere: ["void", "cinematic", "haze", "split", "grain", "wash", "glass", "clean"],
-  motion: ["weighted", "fluid", "elastic", "drift", "glitch"],
-  visualMood: [
-    "intimate", "anthemic", "dreamy", "aggressive", "melancholy",
-    "euphoric", "eerie", "vulnerable", "triumphant", "nostalgic",
-    "defiant", "hopeful", "raw", "hypnotic",
-  ],
+  sceneTone: ["dark", "light", "mixed"],
   typography: [
     "bold-impact",
     "clean-modern",
@@ -469,41 +392,143 @@ const ENUMS = {
     "display-heavy",
     "editorial-light",
   ],
-  texture: ["fire", "rain", "snow", "aurora", "smoke", "storm", "dust", "void", "stars", "petals"],
-  emotionalArc: ["slow-burn", "surge", "collapse", "dawn", "flatline", "eruption"],
-  entries: [
-    "slam-down", "punch-in", "explode-in", "snap-in", "rise", "materialize", "breathe-in", "drift-in",
-    "drop", "plant", "stomp", "cut-in", "whisper", "bloom", "focus-in", "spin-in", "tumble-in",
+  visualMood: [
+    "intimate",
+    "anthemic",
+    "dreamy",
+    "aggressive",
+    "melancholy",
+    "euphoric",
+    "eerie",
+    "vulnerable",
+    "triumphant",
+    "nostalgic",
+    "defiant",
+    "hopeful",
+    "raw",
+    "hypnotic",
   ],
-  exits: [
-    "shatter", "snap-out", "burn-out", "dissolve", "drift-up", "sink", "cut-out", "vanish", "linger",
-    "evaporate", "blur-out", "spin-out", "scatter-letters", "peel-off", "peel-reverse", "cascade-down",
-    "cascade-up", "gravity-fall", "soar", "launch", "scatter-fly", "melt", "freeze-crack",
-  ],
-  behaviors: [
-    "pulse", "vibrate", "float", "grow", "contract", "flicker", "orbit", "lean", "none", "freeze", "tilt",
-    "pendulum", "pulse-focus",
-  ],
-  trails: [
-    "ember", "frost", "spark-burst", "dust-impact", "light-rays", "gold-coins", "dark-absorb", "motion-trail",
-    "memory-orbs", "none",
-  ],
-  elementalClass: [
-    "FIRE", "WATER", "FROST", "SMOKE", "ELECTRIC", "none",
-  ],
+  texture: ["fire", "rain", "snow", "smoke", "dust", "stars"],
+  emotionalArc: ["slow-burn", "surge", "collapse", "dawn", "eruption"],
+  elementalClass: ["FIRE", "WATER", "FROST", "SMOKE", "ELECTRIC"],
+  atmosphereState: ["still", "drifting", "falling", "swirling"],
 } as const;
 
-
 const LYRIC_FILLER = new Set([
-  'the','a','an','in','on','at','to','of','and','or','but','is','it','as','for','with','from','by','than',
-  'i','me','my','im','mine','myself','you','your','yours','he','him','his','she','her','we','us','our','they','them','their',
-  'be','been','was','were','am','are','got','get','do','did','dont','have','has','had','can','cant','will','wont','ill','ive',
-  'oh','yeah','yo','uh','um','ah','ooh','hey','wow','nah','yah','aye','mmm','huh','woo','la','na','da',
-  'that','this','its','those','these','what','where','who','how','when','which',
-  'so','if','up','out','not','no','just','like','all','too','very','real','bout','some',
+  "the",
+  "a",
+  "an",
+  "in",
+  "on",
+  "at",
+  "to",
+  "of",
+  "and",
+  "or",
+  "but",
+  "is",
+  "it",
+  "as",
+  "for",
+  "with",
+  "from",
+  "by",
+  "than",
+  "i",
+  "me",
+  "my",
+  "im",
+  "mine",
+  "myself",
+  "you",
+  "your",
+  "yours",
+  "he",
+  "him",
+  "his",
+  "she",
+  "her",
+  "we",
+  "us",
+  "our",
+  "they",
+  "them",
+  "their",
+  "be",
+  "been",
+  "was",
+  "were",
+  "am",
+  "are",
+  "got",
+  "get",
+  "do",
+  "did",
+  "dont",
+  "have",
+  "has",
+  "had",
+  "can",
+  "cant",
+  "will",
+  "wont",
+  "ill",
+  "ive",
+  "oh",
+  "yeah",
+  "yo",
+  "uh",
+  "um",
+  "ah",
+  "ooh",
+  "hey",
+  "wow",
+  "nah",
+  "yah",
+  "aye",
+  "mmm",
+  "huh",
+  "woo",
+  "la",
+  "na",
+  "da",
+  "that",
+  "this",
+  "its",
+  "those",
+  "these",
+  "what",
+  "where",
+  "who",
+  "how",
+  "when",
+  "which",
+  "so",
+  "if",
+  "up",
+  "out",
+  "not",
+  "no",
+  "just",
+  "like",
+  "all",
+  "too",
+  "very",
+  "real",
+  "bout",
+  "some",
 ]);
-interface HeldWord { word: string; clean: string; durationMs: number; songPosition: number; }
-function extractHeldWords(words: Array<{ word: string; start: number; end: number }>, songStart: number, songEnd: number): { heldWords: HeldWord[]; medianMs: number; totalCount: number } {
+interface HeldWord {
+  word: string;
+  clean: string;
+  durationMs: number;
+  songPosition: number;
+}
+function extractHeldWords(
+  words: Array<{ word: string; start: number; end: number }>,
+  songStart: number,
+  songEnd: number,
+): { heldWords: HeldWord[]; medianMs: number; totalCount: number } {
   const songDur = Math.max(0.01, songEnd - songStart);
   const durations: number[] = [];
   const held: HeldWord[] = [];
@@ -511,28 +536,46 @@ function extractHeldWords(words: Array<{ word: string; start: number; end: numbe
     const dur = w.end - w.start;
     durations.push(dur);
     if (dur < 0.5) continue;
-    const clean = w.word.replace(/[^a-zA-Z]/g, '').toLowerCase();
+    const clean = w.word.replace(/[^a-zA-Z]/g, "").toLowerCase();
     if (!clean || clean.length < 2) continue;
     if (LYRIC_FILLER.has(clean)) continue;
-    held.push({ word: w.word, clean, durationMs: Math.round(dur * 1000), songPosition: (w.start - songStart) / songDur });
+    held.push({
+      word: w.word,
+      clean,
+      durationMs: Math.round(dur * 1000),
+      songPosition: (w.start - songStart) / songDur,
+    });
   }
   const byClean = new Map<string, HeldWord>();
   for (const hw of held) {
     const existing = byClean.get(hw.clean);
-    if (!existing || hw.durationMs > existing.durationMs) byClean.set(hw.clean, hw);
+    if (!existing || hw.durationMs > existing.durationMs)
+      byClean.set(hw.clean, hw);
   }
-  const deduped = [...byClean.values()].sort((a, b) => a.songPosition - b.songPosition);
+  const deduped = [...byClean.values()].sort(
+    (a, b) => a.songPosition - b.songPosition,
+  );
   const sorted = [...durations].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)] ?? 0.2;
-  return { heldWords: deduped, medianMs: Math.round(median * 1000), totalCount: words.length };
+  return {
+    heldWords: deduped,
+    medianMs: Math.round(median * 1000),
+    totalCount: words.length,
+  };
 }
-function formatHeldWordsBlock(words: Array<{ word: string; start: number; end: number }>, lines: LyricLine[]): string {
-  if (!words || words.length === 0) return '';
+function formatHeldWordsBlock(
+  words: Array<{ word: string; start: number; end: number }>,
+  lines: LyricLine[],
+): string {
+  if (!words || words.length === 0) return "";
   const songStart = lines[0]?.start ?? 0;
   const songEnd = lines[lines.length - 1]?.end ?? 1;
   const { heldWords, medianMs } = extractHeldWords(words, songStart, songEnd);
-  if (heldWords.length === 0) return '';
-  const entries = heldWords.map(hw => `  "${hw.clean}" — ${hw.durationMs}ms (${(hw.songPosition * 100).toFixed(0)}% into song)`);
+  if (heldWords.length === 0) return "";
+  const entries = heldWords.map(
+    (hw) =>
+      `  "${hw.clean}" — ${hw.durationMs}ms (${(hw.songPosition * 100).toFixed(0)}% into song)`,
+  );
   return `
 ═══════════════════════════════════════
 HELD WORDS — artist vocal emphasis
@@ -542,7 +585,7 @@ These words were held ≥500ms by the artist (median word is ${medianMs}ms).
 Long duration = deliberate artistic emphasis. These are your PRIMARY hero candidates.
 Every held word below should get a wordDirective unless truly low-impact in context.
 
-${entries.join('\n')}
+${entries.join("\n")}
 
 Map duration to emphasisLevel:
   ≥1500ms → emphasisLevel 5 (the artist REALLY held this)
@@ -553,15 +596,6 @@ Map duration to emphasisLevel:
 You may add up to 5 additional short words if narratively critical (title words, emotional peaks).
 `;
 }
-
-const DEFAULTS: Record<string, string> = {
-  sceneTone: "dark",
-  atmosphere: "cinematic",
-  motion: "fluid",
-  typography: "clean-modern",
-  texture: "dust",
-  emotionalArc: "slow-burn",
-};
 
 interface ValidationResult {
   ok: boolean;
@@ -582,33 +616,58 @@ function buildUserMessage(
   listenerScene: string,
   audioSections?: AudioSectionInput[],
   words?: Array<{ word: string; start: number; end: number }>,
+  bpm?: number,
 ): string {
   let msg = "";
 
   msg += listenerScene
     ? `Listener scene: "${listenerScene}"\n\n`
-    : "Listener scene: not provided. Infer from lyrics.\n\n";
+    : "Listener scene: not provided. Infer one from the lyrics.\n\n";
 
-  msg += `Song: ${artist} — ${title}\n\n`;
+  msg += `Song: ${artist} — ${title}\n`;
+  if (bpm && bpm > 0) msg += `BPM: ${Math.round(bpm)}\n`;
+  msg += "\n";
 
   if (audioSections && audioSections.length > 0) {
-    msg += `SECTIONS (${audioSections.length} sections — boundaries detected from audio):\n\n`;
+    msg += `SECTIONS (${audioSections.length} detected from audio):\n\n`;
     for (const s of audioSections) {
-      const confStr = typeof s.confidence === "number" ? ` (${Math.round(s.confidence * 100)}% conf)` : "";
+      const confStr =
+        typeof s.confidence === "number"
+          ? ` (${Math.round(s.confidence * 100)}% conf)`
+          : "";
       msg += `Section ${s.index}: ${fmt(s.startSec)}–${fmt(s.endSec)} | ${s.role}${confStr}\n`;
       const cap = s.lyrics.slice(0, 8);
       if (cap.length > 0) {
         for (const l of cap) msg += `  "${l.text}"\n`;
-        if (s.lyrics.length > 8) msg += `  ... (${s.lyrics.length - 8} more lines)\n`;
+        if (s.lyrics.length > 8)
+          msg += `  ... (${s.lyrics.length - 8} more lines)\n`;
       } else {
         msg += "  [instrumental]\n";
       }
       msg += "\n";
     }
+  }
+
+  msg += `LYRICS WITH WORD TIMING:\n\n`;
+  if (words && words.length > 0) {
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
+      const lineStart = line.start ?? 0;
+      const lineEnd = line.end ?? 0;
+      const lineWords = words.filter(
+        (w) => w.start >= lineStart - 0.15 && w.end <= lineEnd + 0.15,
+      );
+      msg += `Line ${li} [${fmt(lineStart)}–${fmt(lineEnd)}]: "${line.text}"\n`;
+      if (lineWords.length > 0) {
+        msg += `  Words: ${lineWords.map((w) => `${w.word}(${Math.round((w.end - w.start) * 1000)}ms)`).join(" ")}\n`;
+      }
+      msg += `\n`;
+    }
   } else {
-    msg += `Lyrics (${lines.length} lines — no pre-detected sections, determine structure from lyrics):\n`;
-    for (const l of lines) {
-      msg += `[${fmt(l.start ?? 0)}–${fmt(l.end ?? 0)}] ${l.text}\n`;
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
+      const dur = Math.round(((line.end ?? 0) - (line.start ?? 0)) * 1000);
+      msg += `Line ${li} [${fmt(line.start ?? 0)}–${fmt(line.end ?? 0)}] (${dur}ms): "${line.text}"\n`;
     }
     msg += "\n";
   }
@@ -618,10 +677,9 @@ function buildUserMessage(
     if (heldBlock) msg += heldBlock + "\n";
   }
 
-  msg += "Return cinematic_direction. JSON only.";
+  msg += "Return cinematic_direction JSON only.";
   return msg;
 }
-
 
 function buildWordUserMessage(
   title: string,
@@ -629,26 +687,42 @@ function buildWordUserMessage(
   lines: LyricLine[],
   sceneDirection: Record<string, any>,
   words?: Array<{ word: string; start: number; end: number }>,
+  bpm?: number,
 ): string {
   let msg = "";
 
-  msg += `Song: ${artist} — ${title}\n\n`;
+  msg += `Song: ${artist} — ${title}\n`;
+  if (bpm && bpm > 0) msg += `BPM: ${Math.round(bpm)}\n`;
+  msg += "\n";
 
-  msg += `SCENE DIRECTION (already established — harmonize with this):\n`;
+  msg += `SCENE DIRECTION (harmonize with this):\n`;
   msg += `sceneTone: ${sceneDirection.sceneTone || "dark"}\n`;
-  msg += `atmosphere: ${sceneDirection.atmosphere || "cinematic"}\n`;
-  msg += `motion: ${sceneDirection.motion || "fluid"}\n`;
   msg += `emotionalArc: ${sceneDirection.emotionalArc || "slow-burn"}\n`;
   if (Array.isArray(sceneDirection.sections)) {
     for (const s of sceneDirection.sections) {
-      msg += `  Section ${s.sectionIndex}: ${s.structuralLabel || "?"} — visualMood: ${s.visualMood || "?"}\n`;
+      msg += `  Section ${s.sectionIndex}: ${s.visualMood || "?"} (${s.dominantColor || "?"})\n`;
     }
   }
   msg += "\n";
 
-  msg += `Lyrics (${lines.length} lines):\n`;
-  for (let i = 0; i < lines.length; i++) {
-    msg += `[${i}] ${lines[i].text}\n`;
+  msg += `LYRICS WITH WORD TIMING:\n\n`;
+  if (words && words.length > 0) {
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
+      const lineStart = line.start ?? 0;
+      const lineEnd = line.end ?? 0;
+      const lineWords = words.filter(
+        (w) => w.start >= lineStart - 0.15 && w.end <= lineEnd + 0.15,
+      );
+      msg += `[${li}] "${line.text}"\n`;
+      if (lineWords.length > 0) {
+        msg += `  ${lineWords.map((w) => `${w.word}(${Math.round((w.end - w.start) * 1000)}ms)`).join(" ")}\n`;
+      }
+    }
+  } else {
+    for (let i = 0; i < lines.length; i++) {
+      msg += `[${i}] "${lines[i].text}"\n`;
+    }
   }
   msg += "\n";
 
@@ -657,7 +731,7 @@ function buildWordUserMessage(
     if (heldBlock) msg += heldBlock + "\n";
   }
 
-  msg += "Return JSON only: { storyboard: [...], wordDirectives: [...] }";
+  msg += "Return JSON only: { phrases: [...], wordDirectives: [...] }";
   return msg;
 }
 
@@ -696,8 +770,12 @@ function unwrapNested(obj: Record<string, any>): Record<string, any> {
     const inner = obj[keys[0]];
     if (inner && typeof inner === "object" && !Array.isArray(inner)) {
       // Check if the inner object looks like our expected structure
-      if (inner.sceneTone || inner.storyboard || inner.wordDirectives || inner.sections) {
-        
+      if (
+        inner.sceneTone ||
+        inner.storyboard ||
+        inner.wordDirectives ||
+        inner.sections
+      ) {
         return inner;
       }
     }
@@ -706,7 +784,10 @@ function unwrapNested(obj: Record<string, any>): Record<string, any> {
 }
 
 function extractJson(raw: string): Record<string, any> | null {
-  let cleaned = raw.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
+  let cleaned = raw
+    .replace(/```json\s*/gi, "")
+    .replace(/```/g, "")
+    .trim();
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
@@ -719,7 +800,9 @@ function extractJson(raw: string): Record<string, any> | null {
       .replace(/\/\/[^\n]*/g, "")
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/,\s*([}\]])/g, "$1")
-      .replace(/[\x00-\x1F\x7F]/g, (ch) => (ch === "\n" || ch === "\r" || ch === "\t" ? ch : ""));
+      .replace(/[\x00-\x1F\x7F]/g, (ch) =>
+        ch === "\n" || ch === "\r" || ch === "\t" ? ch : "",
+      );
 
     try {
       return unwrapNested(JSON.parse(cleaned));
@@ -729,11 +812,27 @@ function extractJson(raw: string): Record<string, any> | null {
   }
 }
 
-function validate(raw: Record<string, any>, sectionCount: number, body: RequestBody): ValidationResult {
+function validate(
+  raw: Record<string, any>,
+  sectionCount: number,
+  body: RequestBody,
+): ValidationResult {
   const errors: string[] = [];
   const v = { ...raw };
 
-  for (const key of ["sceneTone", "atmosphere", "motion", "typography", "texture", "emotionalArc"] as const) {
+  // Song defaults
+  const DEFAULTS: Record<string, string> = {
+    sceneTone: "dark",
+    typography: "clean-modern",
+    texture: "dust",
+    emotionalArc: "slow-burn",
+  };
+  for (const key of [
+    "sceneTone",
+    "typography",
+    "texture",
+    "emotionalArc",
+  ] as const) {
     const allowed = ENUMS[key] as readonly string[];
     if (!allowed.includes(v[key])) {
       errors.push(`Invalid ${key}: "${v[key]}"`);
@@ -741,36 +840,46 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
     }
   }
 
+  // Song metadata
+  if (typeof v.description === "string")
+    v.description = v.description.trim().slice(0, 200);
+  if (typeof v.mood === "string") v.mood = v.mood.trim().toLowerCase();
+  if (v.meaning && typeof v.meaning === "object") {
+    v.meaning = {
+      theme:
+        typeof v.meaning.theme === "string"
+          ? v.meaning.theme.trim()
+          : undefined,
+      summary:
+        typeof v.meaning.summary === "string"
+          ? v.meaning.summary.trim()
+          : undefined,
+      imagery: Array.isArray(v.meaning.imagery)
+        ? v.meaning.imagery.map(String).slice(0, 5)
+        : undefined,
+    };
+  }
+
+  // Sections
   if (!Array.isArray(v.sections)) {
     errors.push("sections must be an array");
     v.sections = [];
   } else {
-    if (sectionCount > 0 && v.sections.length === 0) {
-      errors.push(`Expected ${sectionCount} sections, got 0`);
-    }
     for (const s of v.sections) {
-      if (typeof s.description !== "string" || !s.description.trim()) {
-        errors.push(`Section ${s.sectionIndex}: missing description`);
-        const label = s.structuralLabel || `Section ${(s.sectionIndex ?? 0) + 1}`;
-        const mood = s.visualMood || "cinematic";
-        const sectionLines = (body.lines || []).filter((l: any) => {
-          if (typeof l?.start !== "number") return false;
-          const startSec = typeof s.suggestedStartSec === "number" ? s.suggestedStartSec : s.startSec;
-          const endSec = typeof s.suggestedEndSec === "number" ? s.suggestedEndSec : s.endSec;
-          if (typeof startSec !== "number" || typeof endSec !== "number") return false;
-          return l.start >= startSec - 0.5 && l.start < endSec + 0.5;
-        });
-        const lyricsExcerpt = sectionLines.map((l: any) => l.text || "").join(" ").slice(0, 80);
-        s.description = lyricsExcerpt
-          ? `${mood} scene for ${label}: ${lyricsExcerpt}`
-          : `${mood} cinematic landscape for ${label}`;
-      }
-      // Validate visualMood — required field, default to "intimate" if missing/invalid
-      if (!s.visualMood || !(ENUMS.visualMood as readonly string[]).includes(s.visualMood)) {
-        if (s.visualMood) errors.push(`Section ${s.sectionIndex}: invalid visualMood "${s.visualMood}"`);
+      if (
+        !s.visualMood ||
+        !(ENUMS.visualMood as readonly string[]).includes(s.visualMood)
+      ) {
+        if (s.visualMood)
+          errors.push(
+            `Section ${s.sectionIndex}: invalid visualMood "${s.visualMood}"`,
+          );
         s.visualMood = "intimate";
       }
-      if (typeof s.dominantColor !== "string" || !/^#[0-9a-fA-F]{6}$/.test(s.dominantColor)) {
+      if (
+        typeof s.dominantColor !== "string" ||
+        !/^#[0-9a-fA-F]{6}$/.test(s.dominantColor)
+      ) {
         const moodColorMap: Record<string, string> = {
           intimate: "#C9A96E",
           anthemic: "#E8632B",
@@ -789,97 +898,202 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
         };
         s.dominantColor = moodColorMap[s.visualMood] || "#C9A96E";
       }
-      if (typeof s.structuralLabel === "string") {
-        s.structuralLabel = s.structuralLabel.trim();
+      if (typeof s.description !== "string" || !s.description.trim()) {
+        errors.push(`Section ${s.sectionIndex}: missing description`);
+        const mood = s.visualMood || "cinematic";
+        const sectionLines = (body.lines || []).filter((l: any) => {
+          if (typeof l?.start !== "number") return false;
+          const startSec =
+            typeof s.suggestedStartSec === "number"
+              ? s.suggestedStartSec
+              : s.startSec;
+          const endSec =
+            typeof s.suggestedEndSec === "number"
+              ? s.suggestedEndSec
+              : s.endSec;
+          if (typeof startSec !== "number" || typeof endSec !== "number")
+            return false;
+          return l.start >= startSec - 0.5 && l.start < endSec + 0.5;
+        });
+        const lyricsExcerpt = sectionLines
+          .map((l: any) => l.text || "")
+          .join(" ")
+          .slice(0, 80);
+        s.description = lyricsExcerpt
+          ? `${mood} scene: ${lyricsExcerpt}`
+          : `${mood} cinematic landscape`;
       }
-      if (!s.structuralLabel) {
-        errors.push(`Section ${s.sectionIndex}: missing structuralLabel`);
-        s.structuralLabel = `Section ${Number.isInteger(s.sectionIndex) ? s.sectionIndex + 1 : 1}`;
+      if (
+        s.texture !== undefined &&
+        !(ENUMS.texture as readonly string[]).includes(s.texture)
+      ) {
+        delete s.texture;
       }
-      for (const field of ["motion", "texture", "typography", "atmosphere"] as const) {
-        if (s[field] !== undefined && !(ENUMS[field] as readonly string[]).includes(s[field])) {
-          errors.push(`Section ${s.sectionIndex}: invalid ${field} "${s[field]}"`);
-          delete s[field];
-        }
+      if (
+        s.atmosphereState !== undefined &&
+        !(ENUMS.atmosphereState as readonly string[]).includes(
+          s.atmosphereState,
+        )
+      ) {
+        delete s.atmosphereState;
       }
-      // Pass through boundary suggestions — optional floats
-      if (s.suggestedStartSec !== undefined) {
-        if (typeof s.suggestedStartSec !== "number" || !Number.isFinite(s.suggestedStartSec)) {
-          delete s.suggestedStartSec;
-        }
+      if (
+        s.suggestedStartSec !== undefined &&
+        (typeof s.suggestedStartSec !== "number" ||
+          !Number.isFinite(s.suggestedStartSec))
+      ) {
+        delete s.suggestedStartSec;
       }
-      if (s.suggestedEndSec !== undefined) {
-        if (typeof s.suggestedEndSec !== "number" || !Number.isFinite(s.suggestedEndSec)) {
-          delete s.suggestedEndSec;
-        }
+      if (
+        s.suggestedEndSec !== undefined &&
+        (typeof s.suggestedEndSec !== "number" ||
+          !Number.isFinite(s.suggestedEndSec))
+      ) {
+        delete s.suggestedEndSec;
       }
+      delete s.motion;
+      delete s.atmosphere;
+      delete s.typography;
+      delete s.structuralLabel;
     }
   }
 
-  if (!Array.isArray(v.storyboard)) {
-    errors.push("storyboard must be an array");
-    v.storyboard = [];
-  } else if (v.storyboard.length > 40) {
-    v.storyboard = v.storyboard.slice(0, 30);
+  // Phrases
+  if (!Array.isArray(v.phrases)) {
+    v.phrases = [];
+  } else {
+    for (const p of v.phrases) {
+      if (typeof p.lineIndex !== "number")
+        errors.push("Phrase missing lineIndex");
+      if (!Array.isArray(p.wordRange) || p.wordRange.length !== 2) {
+        errors.push("Phrase missing valid wordRange");
+        p.wordRange = [0, 0];
+      }
+      if (p.heroWord && typeof p.heroWord !== "string") delete p.heroWord;
+    }
   }
 
+  // Word directives — time-gated only, no rarity caps
   if (!Array.isArray(v.wordDirectives)) {
     if (v.wordDirectives && typeof v.wordDirectives === "object") {
       v.wordDirectives = Object.values(v.wordDirectives);
     } else {
-      errors.push("wordDirectives must be an array");
       v.wordDirectives = [];
     }
   }
 
-  if (v.wordDirectives.length > 40) {
-    v.wordDirectives = v.wordDirectives.slice(0, 30);
+  const wordDurMap = new Map<string, number>();
+  if (body.words) {
+    for (const w of body.words) {
+      const clean = w.word.replace(/[^a-zA-Z]/g, "").toLowerCase();
+      if (clean) {
+        const dur = Math.round((w.end - w.start) * 1000);
+        const existing = wordDurMap.get(clean);
+        if (!existing || dur > existing) wordDurMap.set(clean, dur);
+      }
+    }
   }
 
   for (const wd of v.wordDirectives) {
-    if (wd.entry && !(ENUMS.entries as readonly string[]).includes(wd.entry)) {
-      errors.push(`Word "${wd.word}": invalid entry "${wd.entry}"`);
-      wd.entry = "materialize";
-    }
-    if (wd.exit && !(ENUMS.exits as readonly string[]).includes(wd.exit)) {
-      errors.push(`Word "${wd.word}": invalid exit "${wd.exit}"`);
-      wd.exit = "dissolve";
-    }
-    if (wd.behavior && !(ENUMS.behaviors as readonly string[]).includes(wd.behavior)) {
-      wd.behavior = "none";
-    }
-    if (wd.trail && !(ENUMS.trails as readonly string[]).includes(wd.trail)) {
-      wd.trail = "none";
-    }
-    if (wd.elementalClass && !(ENUMS.elementalClass as readonly string[]).includes(wd.elementalClass)) {
-      wd.elementalClass = null;
-    }
-    if (wd.elementalClass === "none") wd.elementalClass = null;
-
     if (typeof wd.emphasisLevel === "number") {
       wd.emphasisLevel = Math.min(5, Math.max(1, Math.round(wd.emphasisLevel)));
     } else {
-      wd.emphasisLevel = 3;
+      wd.emphasisLevel = 2;
+    }
+    if (
+      wd.elementalClass &&
+      !(ENUMS.elementalClass as readonly string[]).includes(wd.elementalClass)
+    ) {
+      delete wd.elementalClass;
+    }
+    if (wd.elementalClass === "none") delete wd.elementalClass;
+
+    const clean = (wd.word || "").replace(/[^a-zA-Z]/g, "").toLowerCase();
+    const dur = wordDurMap.get(clean) ?? 999;
+    if (dur < 140) {
+      wd.emphasisLevel = 1;
+      delete wd.elementalClass;
+      delete wd.isolation;
+    }
+    if (dur < 350) {
+      delete wd.elementalClass;
+      if (wd.emphasisLevel > 3) wd.emphasisLevel = 3;
+      delete wd.isolation;
+    }
+    if (dur < 700 && wd.isolation) delete wd.isolation;
+
+    for (const f of [
+      "entry",
+      "exit",
+      "behavior",
+      "trail",
+      "ghostTrail",
+      "ghostDirection",
+      "letterSequence",
+      "visualMetaphor",
+      "heroPresentation",
+      "kineticClass",
+      "colorOverride",
+    ]) {
+      delete (wd as any)[f];
+    }
+  }
+
+  if (Array.isArray(v.storyboard)) {
+    for (const entry of v.storyboard) {
+      delete entry.shotType;
+      delete entry.entryStyle;
+      delete entry.exitStyle;
     }
   }
 
   const FORBIDDEN = [
-    "colorHex", "physicsProfile", "cameraLanguage", "tensionCurve", "fontSize", "position",
-    "scaleX", "scaleY", "color", "glow", "kineticClass", "zoom", "driftIntensity", "startRatio", "endRatio",
-    "chapters", "visualWorld", "beatAlignment",
+    "motion",
+    "atmosphere",
+    "colorHex",
+    "physicsProfile",
+    "cameraLanguage",
+    "tensionCurve",
+    "fontSize",
+    "position",
+    "scaleX",
+    "scaleY",
+    "color",
+    "glow",
+    "kineticClass",
+    "zoom",
+    "driftIntensity",
+    "startRatio",
+    "endRatio",
+    "chapters",
+    "visualWorld",
+    "beatAlignment",
   ];
   for (const key of FORBIDDEN) delete v[key];
 
   return { ok: errors.length === 0, errors, value: v };
 }
 
-
-
-function validateScene(raw: Record<string, any>, sectionCount: number, body: RequestBody): ValidationResult {
+function validateScene(
+  raw: Record<string, any>,
+  sectionCount: number,
+  body: RequestBody,
+): ValidationResult {
   const errors: string[] = [];
   const v = { ...raw };
 
-  for (const key of ["sceneTone", "atmosphere", "motion", "typography", "texture", "emotionalArc"] as const) {
+  const DEFAULTS: Record<string, string> = {
+    sceneTone: "dark",
+    typography: "clean-modern",
+    texture: "dust",
+    emotionalArc: "slow-burn",
+  };
+  for (const key of [
+    "sceneTone",
+    "typography",
+    "texture",
+    "emotionalArc",
+  ] as const) {
     const allowed = ENUMS[key] as readonly string[];
     if (!allowed.includes(v[key])) {
       errors.push(`Invalid ${key}: "${v[key]}"`);
@@ -887,34 +1101,39 @@ function validateScene(raw: Record<string, any>, sectionCount: number, body: Req
     }
   }
 
+  if (typeof v.description === "string")
+    v.description = v.description.trim().slice(0, 200);
+  if (typeof v.mood === "string") v.mood = v.mood.trim().toLowerCase();
+  if (v.meaning && typeof v.meaning === "object") {
+    v.meaning = {
+      theme:
+        typeof v.meaning.theme === "string"
+          ? v.meaning.theme.trim()
+          : undefined,
+      summary:
+        typeof v.meaning.summary === "string"
+          ? v.meaning.summary.trim()
+          : undefined,
+      imagery: Array.isArray(v.meaning.imagery)
+        ? v.meaning.imagery.map(String).slice(0, 5)
+        : undefined,
+    };
+  }
+
   if (!Array.isArray(v.sections)) {
     errors.push("sections must be an array");
     v.sections = [];
   } else {
-    if (sectionCount > 0 && v.sections.length === 0) {
-      errors.push(`Expected ${sectionCount} sections, got 0`);
-    }
     for (const s of v.sections) {
-      if (typeof s.description !== "string" || !s.description.trim()) {
-        errors.push(`Section ${s.sectionIndex}: missing description`);
-        const label = s.structuralLabel || `Section ${(s.sectionIndex ?? 0) + 1}`;
-        const mood = s.visualMood || "cinematic";
-        const sectionLines = (body.lines || []).filter((l: any) => {
-          if (typeof l?.start !== "number") return false;
-          const startSec = typeof s.suggestedStartSec === "number" ? s.suggestedStartSec : s.startSec;
-          const endSec = typeof s.suggestedEndSec === "number" ? s.suggestedEndSec : s.endSec;
-          if (typeof startSec !== "number" || typeof endSec !== "number") return false;
-          return l.start >= startSec - 0.5 && l.start < endSec + 0.5;
-        });
-        const lyricsExcerpt = sectionLines.map((l: any) => l.text || "").join(" ").slice(0, 80);
-        s.description = lyricsExcerpt
-          ? `${mood} scene for ${label}: ${lyricsExcerpt}`
-          : `${mood} cinematic landscape for ${label}`;
-      }
-      if (!s.visualMood || !(ENUMS.visualMood as readonly string[]).includes(s.visualMood)) {
+      if (
+        !s.visualMood ||
+        !(ENUMS.visualMood as readonly string[]).includes(s.visualMood)
+      )
         s.visualMood = "intimate";
-      }
-      if (typeof s.dominantColor !== "string" || !/^#[0-9a-fA-F]{6}$/.test(s.dominantColor)) {
+      if (
+        typeof s.dominantColor !== "string" ||
+        !/^#[0-9a-fA-F]{6}$/.test(s.dominantColor)
+      ) {
         const moodColorMap: Record<string, string> = {
           intimate: "#C9A96E",
           anthemic: "#E8632B",
@@ -933,93 +1152,180 @@ function validateScene(raw: Record<string, any>, sectionCount: number, body: Req
         };
         s.dominantColor = moodColorMap[s.visualMood] || "#C9A96E";
       }
-      if (!s.structuralLabel) {
-        s.structuralLabel = `Section ${Number.isInteger(s.sectionIndex) ? s.sectionIndex + 1 : 1}`;
+      if (typeof s.description !== "string" || !s.description.trim()) {
+        const mood = s.visualMood || "cinematic";
+        const sectionLines = (body.lines || []).filter((l: any) => {
+          if (typeof l?.start !== "number") return false;
+          const startSec =
+            typeof s.suggestedStartSec === "number"
+              ? s.suggestedStartSec
+              : s.startSec;
+          const endSec =
+            typeof s.suggestedEndSec === "number"
+              ? s.suggestedEndSec
+              : s.endSec;
+          if (typeof startSec !== "number" || typeof endSec !== "number")
+            return false;
+          return l.start >= startSec - 0.5 && l.start < endSec + 0.5;
+        });
+        const lyricsExcerpt = sectionLines
+          .map((l: any) => l.text || "")
+          .join(" ")
+          .slice(0, 80);
+        s.description = lyricsExcerpt
+          ? `${mood} scene: ${lyricsExcerpt}`
+          : `${mood} cinematic landscape`;
       }
-      for (const field of ["motion", "texture", "typography", "atmosphere"] as const) {
-        if (s[field] !== undefined && !(ENUMS[field] as readonly string[]).includes(s[field])) {
-          delete s[field];
-        }
-      }
+      if (
+        s.texture !== undefined &&
+        !(ENUMS.texture as readonly string[]).includes(s.texture)
+      )
+        delete s.texture;
+      if (
+        s.atmosphereState !== undefined &&
+        !(ENUMS.atmosphereState as readonly string[]).includes(
+          s.atmosphereState,
+        )
+      )
+        delete s.atmosphereState;
+      delete s.motion;
+      delete s.atmosphere;
+      delete s.typography;
+      delete s.structuralLabel;
     }
-  }
-
-  // Validate and preserve song metadata
-  if (typeof v.description === "string") {
-    v.description = v.description.trim().slice(0, 200);
-  }
-  if (typeof v.mood === "string") {
-    v.mood = v.mood.trim().toLowerCase();
-  }
-  if (v.meaning && typeof v.meaning === "object") {
-    v.meaning = {
-      theme: typeof v.meaning.theme === "string" ? v.meaning.theme.trim() : undefined,
-      summary: typeof v.meaning.summary === "string" ? v.meaning.summary.trim() : undefined,
-      imagery: Array.isArray(v.meaning.imagery) ? v.meaning.imagery.map(String).slice(0, 5) : undefined,
-    };
   }
 
   delete v.storyboard;
   delete v.wordDirectives;
 
   const FORBIDDEN = [
-    "colorHex", "physicsProfile", "cameraLanguage", "tensionCurve", "fontSize", "position",
-    "scaleX", "scaleY", "color", "glow", "kineticClass", "zoom", "driftIntensity", "startRatio", "endRatio",
-    "chapters", "visualWorld", "beatAlignment",
+    "motion",
+    "atmosphere",
+    "colorHex",
+    "physicsProfile",
+    "cameraLanguage",
+    "tensionCurve",
+    "fontSize",
+    "position",
+    "scaleX",
+    "scaleY",
+    "color",
+    "glow",
+    "kineticClass",
+    "zoom",
+    "driftIntensity",
+    "startRatio",
+    "endRatio",
+    "chapters",
+    "visualWorld",
+    "beatAlignment",
   ];
   for (const key of FORBIDDEN) delete v[key];
 
   return { ok: errors.length === 0, errors, value: v };
 }
 
-function validateWords(raw: Record<string, any>): ValidationResult {
+function validateWords(
+  raw: Record<string, any>,
+  words?: Array<{ word: string; start: number; end: number }>,
+): ValidationResult {
   const errors: string[] = [];
   const v = { ...raw };
 
-  if (!Array.isArray(v.storyboard)) {
-    errors.push("storyboard must be an array");
-    v.storyboard = [];
-  } else if (v.storyboard.length > 40) {
-    v.storyboard = v.storyboard.slice(0, 30);
+  // Phrases
+  if (!Array.isArray(v.phrases)) v.phrases = [];
+  for (const p of v.phrases) {
+    if (typeof p.lineIndex !== "number")
+      errors.push("Phrase missing lineIndex");
+    if (!Array.isArray(p.wordRange) || p.wordRange.length !== 2)
+      p.wordRange = [0, 0];
+    if (p.heroWord && typeof p.heroWord !== "string") delete p.heroWord;
   }
 
+  // Storyboard — backward compat
+  if (!Array.isArray(v.storyboard)) v.storyboard = [];
+  for (const entry of v.storyboard) {
+    delete entry.shotType;
+    delete entry.entryStyle;
+    delete entry.exitStyle;
+  }
+
+  // Word directives
   if (!Array.isArray(v.wordDirectives)) {
     if (v.wordDirectives && typeof v.wordDirectives === "object") {
       v.wordDirectives = Object.values(v.wordDirectives);
     } else {
-      errors.push("wordDirectives must be an array");
       v.wordDirectives = [];
     }
   }
-  if (v.wordDirectives.length > 40) {
-    v.wordDirectives = v.wordDirectives.slice(0, 30);
+
+  // Word duration lookup
+  const wordDurMap = new Map<string, number>();
+  if (words) {
+    for (const w of words) {
+      const clean = w.word.replace(/[^a-zA-Z]/g, "").toLowerCase();
+      if (clean) {
+        const dur = Math.round((w.end - w.start) * 1000);
+        const existing = wordDurMap.get(clean);
+        if (!existing || dur > existing) wordDurMap.set(clean, dur);
+      }
+    }
   }
 
   for (const wd of v.wordDirectives) {
-    if (wd.entry && !(ENUMS.entries as readonly string[]).includes(wd.entry)) {
-      wd.entry = "materialize";
-    }
-    if (wd.exit && !(ENUMS.exits as readonly string[]).includes(wd.exit)) {
-      wd.exit = "dissolve";
-    }
-    if (wd.behavior && !(ENUMS.behaviors as readonly string[]).includes(wd.behavior)) {
-      wd.behavior = "none";
-    }
-    if (wd.trail && !(ENUMS.trails as readonly string[]).includes(wd.trail)) {
-      wd.trail = "none";
-    }
-    if (wd.elementalClass && !(ENUMS.elementalClass as readonly string[]).includes(wd.elementalClass)) {
-      wd.elementalClass = null;
-    }
-    if (wd.elementalClass === "none") wd.elementalClass = null;
     if (typeof wd.emphasisLevel === "number") {
       wd.emphasisLevel = Math.min(5, Math.max(1, Math.round(wd.emphasisLevel)));
     } else {
-      wd.emphasisLevel = 3;
+      wd.emphasisLevel = 2;
+    }
+    if (
+      wd.elementalClass &&
+      !(ENUMS.elementalClass as readonly string[]).includes(wd.elementalClass)
+    )
+      delete wd.elementalClass;
+    if (wd.elementalClass === "none") delete wd.elementalClass;
+
+    // Time-gate only
+    const clean = (wd.word || "").replace(/[^a-zA-Z]/g, "").toLowerCase();
+    const dur = wordDurMap.get(clean) ?? 999;
+    if (dur < 140) {
+      wd.emphasisLevel = 1;
+      delete wd.elementalClass;
+      delete wd.isolation;
+    }
+    if (dur < 350) {
+      delete wd.elementalClass;
+      if (wd.emphasisLevel > 3) wd.emphasisLevel = 3;
+      delete wd.isolation;
+    }
+    if (dur < 700 && wd.isolation) delete wd.isolation;
+
+    for (const f of [
+      "entry",
+      "exit",
+      "behavior",
+      "trail",
+      "ghostTrail",
+      "ghostDirection",
+      "letterSequence",
+      "visualMetaphor",
+      "heroPresentation",
+      "kineticClass",
+      "colorOverride",
+    ]) {
+      delete (wd as any)[f];
     }
   }
 
-  return { ok: errors.length === 0, errors, value: { storyboard: v.storyboard, wordDirectives: v.wordDirectives } };
+  return {
+    ok: errors.length === 0,
+    errors,
+    value: {
+      phrases: v.phrases,
+      storyboard: v.storyboard,
+      wordDirectives: v.wordDirectives,
+    },
+  };
 }
 
 async function callScene(
@@ -1055,15 +1361,23 @@ async function callScene(
   // If primary model fails with retryable error, try fallback
   if (!resp.ok && (resp.status === 429 || resp.status >= 500)) {
     const errText = await resp.text().catch(() => "");
-    console.warn(`[cinematic-direction] scene primary model failed (${resp.status}): ${errText.slice(0, 100)}, trying fallback`);
-    await new Promise(r => setTimeout(r, 2000));
+    console.warn(
+      `[cinematic-direction] scene primary model failed (${resp.status}): ${errText.slice(0, 100)}, trying fallback`,
+    );
+    await new Promise((r) => setTimeout(r, 2000));
     resp = await makeRequest(FALLBACK_MODEL);
   }
 
   if (!resp.ok) {
     const text = await resp.text();
     console.error("[cinematic-direction] scene AI error", resp.status, text);
-    throw { status: resp.status, message: resp.status === 429 ? "Rate limited" : `Scene direction AI failed (HTTP ${resp.status})` };
+    throw {
+      status: resp.status,
+      message:
+        resp.status === 429
+          ? "Rate limited"
+          : `Scene direction AI failed (HTTP ${resp.status})`,
+    };
   }
 
   const completion = await resp.json();
@@ -1071,50 +1385,73 @@ async function callScene(
   const raw = String(completion?.choices?.[0]?.message?.content ?? "");
 
   if (finishReason === "length") {
-    console.warn("[cinematic-direction] scene response truncated (finish_reason=length), raw length:", raw.length);
+    console.warn(
+      "[cinematic-direction] scene response truncated (finish_reason=length), raw length:",
+      raw.length,
+    );
   }
 
   let parsed = extractJson(raw);
 
   // If parse failed or response was truncated, retry once
   if (!parsed || finishReason === "length") {
-    console.warn("[cinematic-direction] scene first attempt failed to parse or was truncated, retrying. Raw preview:", raw.slice(0, 300));
+    console.warn(
+      "[cinematic-direction] scene first attempt failed to parse or was truncated, retrying. Raw preview:",
+      raw.slice(0, 300),
+    );
 
-    const retryResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+    const retryResp = await fetch(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: PRIMARY_MODEL,
+          messages: [
+            { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
+            { role: "user", content: userMessage },
+            {
+              role: "user",
+              content:
+                "Your previous response was malformed or truncated. Return ONLY valid JSON with sceneTone, typography, texture, emotionalArc, and sections array. No markdown. No explanation.",
+            },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.5,
+          max_tokens: 4000,
+        }),
       },
-      body: JSON.stringify({
-        model: PRIMARY_MODEL,
-        messages: [
-          { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
-          { role: "user", content: userMessage },
-          { role: "user", content: "Your previous response was malformed or truncated. Return ONLY valid JSON with sceneTone, atmosphere, motion, typography, texture, emotionalArc, and sections array. No markdown. No explanation." },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.5,
-        max_tokens: 4000,
-      }),
-    });
+    );
 
     if (retryResp.ok) {
       const retryCompletion = await retryResp.json();
-      const retryRaw = String(retryCompletion?.choices?.[0]?.message?.content ?? "");
+      const retryRaw = String(
+        retryCompletion?.choices?.[0]?.message?.content ?? "",
+      );
       const retryParsed = extractJson(retryRaw);
       if (retryParsed) {
         parsed = retryParsed;
       } else {
-        console.error("[cinematic-direction] scene retry also failed to parse. Raw preview:", retryRaw.slice(0, 500));
+        console.error(
+          "[cinematic-direction] scene retry also failed to parse. Raw preview:",
+          retryRaw.slice(0, 500),
+        );
       }
     } else {
       const retryText = await retryResp.text();
-      console.error("[cinematic-direction] scene retry request failed:", retryResp.status, retryText);
+      console.error(
+        "[cinematic-direction] scene retry request failed:",
+        retryResp.status,
+        retryText,
+      );
     }
   }
 
-  if (!parsed) throw { status: 422, message: "Invalid JSON from scene direction AI" };
+  if (!parsed)
+    throw { status: 422, message: "Invalid JSON from scene direction AI" };
 
   const result = validateScene(parsed, sectionCount, body);
   return result.value;
@@ -1127,29 +1464,48 @@ async function callWords(
   lines: LyricLine[],
   sceneDirection: Record<string, any>,
   words?: Array<{ word: string; start: number; end: number }>,
+  bpm?: number,
 ): Promise<Record<string, any>> {
-  const wordMessage = buildWordUserMessage(title, artist, lines, sceneDirection, words);
+  const wordMessage = buildWordUserMessage(
+    title,
+    artist,
+    lines,
+    sceneDirection,
+    words,
+    bpm,
+  );
 
-  const callWordAI = async (messages: Array<{ role: string; content: string }>) => {
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+  const callWordAI = async (
+    messages: Array<{ role: string; content: string }>,
+  ) => {
+    const resp = await fetch(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: PRIMARY_MODEL,
+          messages,
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+          max_tokens: 6000,
+        }),
       },
-      body: JSON.stringify({
-        model: PRIMARY_MODEL,
-        messages,
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: 6000,
-      }),
-    });
+    );
 
     if (!resp.ok) {
       const text = await resp.text();
       console.error("[cinematic-direction] words AI error", resp.status, text);
-      throw { status: resp.status, message: resp.status === 429 ? "Rate limited" : "Word direction AI request failed" };
+      throw {
+        status: resp.status,
+        message:
+          resp.status === 429
+            ? "Rate limited"
+            : "Word direction AI request failed",
+      };
     }
 
     const completion = await resp.json();
@@ -1157,7 +1513,10 @@ async function callWords(
     const raw = String(completion?.choices?.[0]?.message?.content ?? "");
 
     if (finishReason === "length") {
-      console.warn("[cinematic-direction] words response truncated (finish_reason=length), raw length:", raw.length);
+      console.warn(
+        "[cinematic-direction] words response truncated (finish_reason=length), raw length:",
+        raw.length,
+      );
     }
 
     return { raw, finishReason };
@@ -1174,13 +1533,17 @@ async function callWords(
 
   // If parse failed or response was truncated, retry once
   if (!parsed || finishReason === "length") {
-    console.warn("[cinematic-direction] words first attempt failed to parse or was truncated, retrying. Raw preview:", raw.slice(0, 300));
+    console.warn(
+      "[cinematic-direction] words first attempt failed to parse or was truncated, retrying. Raw preview:",
+      raw.slice(0, 300),
+    );
 
     const retryMessages = [
       ...messages,
       {
         role: "user",
-        content: "Your previous response was malformed or truncated. Return ONLY valid JSON: { \"storyboard\": [...], \"wordDirectives\": [...] }. No markdown. No explanation. Keep it concise — 15-20 entries each.",
+        content:
+          'Your previous response was malformed or truncated. Return ONLY valid JSON: { "phrases": [...], "wordDirectives": [...] }. No markdown. No explanation.',
       },
     ];
 
@@ -1190,16 +1553,29 @@ async function callWords(
     if (retryParsed) {
       parsed = retryParsed;
     } else if (!parsed) {
-      console.error("[cinematic-direction] words retry also failed. Raw preview:", retryRaw.slice(0, 500));
-      throw { status: 422, message: "Invalid JSON from word direction AI after retry" };
+      console.error(
+        "[cinematic-direction] words retry also failed. Raw preview:",
+        retryRaw.slice(0, 500),
+      );
+      throw {
+        status: 422,
+        message: "Invalid JSON from word direction AI after retry",
+      };
     }
   }
 
-  const result = validateWords(parsed);
+  const result = validateWords(parsed, words);
 
-  if (!Array.isArray(result.value.storyboard) || result.value.storyboard.length === 0 ||
-      !Array.isArray(result.value.wordDirectives) || result.value.wordDirectives.length === 0) {
-    throw { status: 422, message: "Word direction returned empty storyboard or wordDirectives" };
+  if (
+    !Array.isArray(result.value.phrases) ||
+    result.value.phrases.length === 0 ||
+    !Array.isArray(result.value.wordDirectives) ||
+    result.value.wordDirectives.length === 0
+  ) {
+    throw {
+      status: 422,
+      message: "Word direction returned empty phrases or wordDirectives",
+    };
   }
 
   return result.value;
@@ -1219,25 +1595,31 @@ async function callWithRetry(
   const hardMin = Math.max(1, Math.floor(idealMin * 0.5)); // absolute floor for validation
 
   const callAI = async (messages: Array<{ role: string; content: string }>) => {
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+    const resp = await fetch(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: PRIMARY_MODEL,
+          messages,
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+          max_tokens: 8192,
+        }),
       },
-      body: JSON.stringify({
-        model: PRIMARY_MODEL,
-        messages,
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: 8192,
-      }),
-    });
+    );
 
     if (!resp.ok) {
       const text = await resp.text();
       console.error("[cinematic-direction] AI error", resp.status, text);
-      throw { status: resp.status, message: resp.status === 429 ? "Rate limited" : "AI request failed" };
+      throw {
+        status: resp.status,
+        message: resp.status === 429 ? "Rate limited" : "AI request failed",
+      };
     }
 
     const completion = await resp.json();
@@ -1257,13 +1639,23 @@ async function callWithRetry(
 
   // Only retry if critical creative data is completely absent
   const missingCreative: string[] = [];
-  const sbLen = Array.isArray(result.value.storyboard) ? result.value.storyboard.length : 0;
-  const wdLen = Array.isArray(result.value.wordDirectives) ? result.value.wordDirectives.length : 0;
+  const sbLen = Array.isArray(result.value.storyboard)
+    ? result.value.storyboard.length
+    : 0;
+  const wdLen = Array.isArray(result.value.wordDirectives)
+    ? result.value.wordDirectives.length
+    : 0;
 
-  if (!Array.isArray(result.value.storyboard) || result.value.storyboard.length === 0) {
+  if (
+    !Array.isArray(result.value.storyboard) ||
+    result.value.storyboard.length === 0
+  ) {
     missingCreative.push("storyboard has 0 entries");
   }
-  if (!Array.isArray(result.value.wordDirectives) || result.value.wordDirectives.length === 0) {
+  if (
+    !Array.isArray(result.value.wordDirectives) ||
+    result.value.wordDirectives.length === 0
+  ) {
     missingCreative.push("wordDirectives has 0 entries");
   }
 
@@ -1272,14 +1664,17 @@ async function callWithRetry(
 
   const allErrors = [...result.errors, ...missingCreative];
 
-  console.log(`[cinematic-direction] first attempt issues (lineCount=${lineCount}, idealMin=${idealMin}, hardMin=${hardMin}):`, allErrors);
+  console.log(
+    `[cinematic-direction] first attempt issues (lineCount=${lineCount}, idealMin=${idealMin}, hardMin=${hardMin}):`,
+    allErrors,
+  );
 
   const retryMessages = [
     ...messages,
     { role: "assistant", content: JSON.stringify(first) },
     {
       role: "user",
-      content: `Your response had these errors:\n${allErrors.join("\n")}\n\nFix them and return corrected JSON only. This song has ${lineCount} lines. You MUST include ${idealMin}-${idealMax} storyboard entries and ${idealMin}-${idealMax} wordDirectives. If the song is short, include entries for most lines.`,
+      content: `Your response had these errors:\n${allErrors.join("\n")}\n\nFix them and return corrected JSON only. This song has ${lineCount} lines. Include phrases covering all lyrics, wordDirectives for significant words, and storyboard with heroWord per important line.`,
     },
   ];
 
@@ -1287,16 +1682,25 @@ async function callWithRetry(
   if (!second) {
     // If retry JSON parse fails but first attempt had SOME data, use it
     if (sbLen > 0 && wdLen > 0) {
-      console.log("[cinematic-direction] retry parse failed, using first attempt with partial data");
+      console.log(
+        "[cinematic-direction] retry parse failed, using first attempt with partial data",
+      );
       return result.value;
     }
-    throw { status: 422, message: `Cinematic direction failed: ${allErrors.join("; ")}` };
+    throw {
+      status: 422,
+      message: `Cinematic direction failed: ${allErrors.join("; ")}`,
+    };
   }
 
   const retryResult = validate(second, sectionCount, body);
 
-  const retryStoryboard = Array.isArray(retryResult.value.storyboard) ? retryResult.value.storyboard.length : 0;
-  const retryDirectives = Array.isArray(retryResult.value.wordDirectives) ? retryResult.value.wordDirectives.length : 0;
+  const retryStoryboard = Array.isArray(retryResult.value.storyboard)
+    ? retryResult.value.storyboard.length
+    : 0;
+  const retryDirectives = Array.isArray(retryResult.value.wordDirectives)
+    ? retryResult.value.wordDirectives.length
+    : 0;
 
   // Accept if we have at least hardMin, or fall back to first attempt if it had data
   if (retryStoryboard >= hardMin && retryDirectives >= hardMin) {
@@ -1305,18 +1709,24 @@ async function callWithRetry(
 
   // If retry still empty but first attempt had some data, use first attempt
   if (sbLen > 0 && wdLen > 0) {
-    console.log(`[cinematic-direction] retry still sparse (sb=${retryStoryboard}, wd=${retryDirectives}), using first attempt (sb=${sbLen}, wd=${wdLen})`);
+    console.log(
+      `[cinematic-direction] retry still sparse (sb=${retryStoryboard}, wd=${retryDirectives}), using first attempt (sb=${sbLen}, wd=${wdLen})`,
+    );
     return result.value;
   }
 
   // Pick whichever attempt has more data
   if (retryStoryboard + retryDirectives > sbLen + wdLen) {
-    console.log(`[cinematic-direction] using retry attempt (sb=${retryStoryboard}, wd=${retryDirectives})`);
+    console.log(
+      `[cinematic-direction] using retry attempt (sb=${retryStoryboard}, wd=${retryDirectives})`,
+    );
     return retryResult.value;
   }
 
   if (sbLen + wdLen > 0) {
-    console.log(`[cinematic-direction] using first attempt as fallback (sb=${sbLen}, wd=${wdLen})`);
+    console.log(
+      `[cinematic-direction] using first attempt as fallback (sb=${sbLen}, wd=${wdLen})`,
+    );
     return result.value;
   }
 
@@ -1326,7 +1736,10 @@ async function callWithRetry(
   };
 }
 
-async function persist(direction: Record<string, any>, lyricId: string): Promise<void> {
+async function persist(
+  direction: Record<string, any>,
+  lyricId: string,
+): Promise<void> {
   const sbUrl = Deno.env.get("SUPABASE_URL");
   const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!sbUrl || !sbKey) return;
@@ -1341,20 +1754,23 @@ async function persist(direction: Record<string, any>, lyricId: string): Promise
   const payload = { cinematic_direction: direction };
 
   for (const table of ["shareable_lyric_dances", "saved_lyrics"]) {
-    const res = await fetch(`${sbUrl}/rest/v1/${table}?id=eq.${encodeURIComponent(lyricId)}`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify(payload),
-    });
+    const res = await fetch(
+      `${sbUrl}/rest/v1/${table}?id=eq.${encodeURIComponent(lyricId)}`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(payload),
+      },
+    );
     if (res.ok) {
-      
       return;
     }
   }
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   try {
     const body = (await req.json()) as RequestBody;
@@ -1363,30 +1779,51 @@ serve(async (req) => {
 
     const title = String(body.title ?? "").trim();
     const artist = String(body.artist ?? "").trim();
+    const bpm =
+      typeof body.bpm === "number"
+        ? body.bpm
+        : ((body as any).beat_grid?.bpm ?? 0);
     const lyricId = body.lyricId ?? body.id;
 
     const lines: LyricLine[] = Array.isArray(body.lines)
       ? body.lines
       : typeof body.lyrics === "string"
         ? body.lyrics
-          .split(/\n+/)
-          .map((t, i) => ({ text: t.trim(), start: i, end: i + 1 }))
-          .filter((l) => l.text)
+            .split(/\n+/)
+            .map((t, i) => ({ text: t.trim(), start: i, end: i + 1 }))
+            .filter((l) => l.text)
         : [];
 
     if (!title || !artist || lines.length === 0) {
-      return new Response(JSON.stringify({ error: "title, artist, and lines required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "title, artist, and lines required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const listenerScene = resolveListenerScene(body);
     const scenePrefix = buildScenePrefix(body.scene_context);
 
     if (body.mode === "scene") {
-      const userMessage = buildUserMessage(title, artist, lines, listenerScene, body.audioSections, undefined);
-      const sceneResult = await callScene(apiKey, scenePrefix, userMessage, body.audioSections?.length ?? 0, body);
+      const userMessage = buildUserMessage(
+        title,
+        artist,
+        lines,
+        listenerScene,
+        body.audioSections,
+        undefined,
+        bpm,
+      );
+      const sceneResult = await callScene(
+        apiKey,
+        scenePrefix,
+        userMessage,
+        body.audioSections?.length ?? 0,
+        body,
+      );
 
       return new Response(JSON.stringify({ cinematicDirection: sceneResult }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1395,13 +1832,24 @@ serve(async (req) => {
 
     if (body.mode === "words") {
       if (!body.sceneDirection) {
-        return new Response(JSON.stringify({ error: "sceneDirection required for mode=words" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "sceneDirection required for mode=words" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
-      const wordResult = await callWords(apiKey, title, artist, lines, body.sceneDirection, body.words);
+      const wordResult = await callWords(
+        apiKey,
+        title,
+        artist,
+        lines,
+        body.sceneDirection,
+        body.words,
+        bpm,
+      );
 
       return new Response(JSON.stringify({ cinematicDirection: wordResult }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1409,9 +1857,24 @@ serve(async (req) => {
     }
 
     const systemPrompt = scenePrefix + CINEMATIC_DIRECTION_PROMPT;
-    const userMessage = buildUserMessage(title, artist, lines, listenerScene, body.audioSections, body.words);
+    const userMessage = buildUserMessage(
+      title,
+      artist,
+      lines,
+      listenerScene,
+      body.audioSections,
+      body.words,
+      bpm,
+    );
     const sectionCount = body.audioSections?.length ?? 0;
-    const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount, lines.length, body);
+    const result = await callWithRetry(
+      apiKey,
+      systemPrompt,
+      userMessage,
+      sectionCount,
+      lines.length,
+      body,
+    );
 
     if (lyricId) await persist(result, lyricId);
 
@@ -1420,9 +1883,12 @@ serve(async (req) => {
     });
   } catch (error: any) {
     console.error("[cinematic-direction] error:", error);
-    return new Response(JSON.stringify({ error: error.message ?? "Generation failed" }), {
-      status: error.status ?? 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: error.message ?? "Generation failed" }),
+      {
+        status: error.status ?? 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });
