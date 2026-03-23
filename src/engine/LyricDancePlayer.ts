@@ -1549,6 +1549,56 @@ export class LyricDancePlayer {
         this._bakedHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
         this._bakedVersion = BAKER_VERSION;
         this._bakeLock = false;
+
+        // ═══ BAKER DEBUG PANEL ═══
+        const _cd = this.data?.cinematic_direction as Record<string, unknown> | null;
+        const _groups = compiled.phraseGroups ?? [];
+        const _allBaseFontSizes = _groups.flatMap((g: any) => g.words.map((w: any) => w.baseFontSize));
+        const _uniqueFS = [...new Set(_allBaseFontSizes.map((f: number) => Math.round(f)))].sort((a, b) => a - b);
+        console.group('%c[BAKER DEBUG] Bake Complete (v' + BAKER_VERSION + ')', 'color:#0ff;font-weight:bold');
+        console.log('Viewport:', { w: this.width, h: this.height, isPortrait: this.height > this.width });
+        console.log('Viewport Scale:', {
+          sx: Math.round(this._viewportSx * 1000) / 1000,
+          sy: Math.round(this._viewportSy * 1000) / 1000,
+          fontScale: Math.round(this._viewportFontScale * 1000) / 1000,
+        });
+        console.log('Font:', {
+          resolvedFont: this.getResolvedFont(),
+          typography: (_cd?.typography as string) ?? 'default',
+          fontStabilized: this._fontStabilized,
+        });
+        console.log('Scene:', {
+          phraseGroups: _groups.length,
+          totalWords: _allBaseFontSizes.length,
+          uniqueBaseFontSizes: _uniqueFS,
+          minBaseFontSize: Math.min(..._allBaseFontSizes),
+          maxBaseFontSize: Math.max(..._allBaseFontSizes),
+          chapters: compiled.chapters?.length ?? 0,
+          durationSec: Math.round((compiled.durationSec ?? 0) * 10) / 10,
+        });
+        console.log('Camera:', {
+          maxZoom: this.cameraRig?.config?.maxZoom ?? 'N/A',
+          bpm: this.conductor?.beatsPerMinute ?? 'N/A',
+        });
+        console.log('Cinematic Direction:', {
+          tone: (_cd?.sceneTone as string) ?? 'none',
+          motion: (_cd?.motionStyle as string) ?? 'none',
+          atmosphere: (_cd?.atmosphere as string) ?? 'none',
+          palette: (_cd?.palette as string) ?? 'none',
+          typography: (_cd?.typography as string) ?? 'none',
+          emotionalArc: (_cd?.emotionalArc as string) ?? 'none',
+        });
+        // Log first 3 groups as sample
+        for (let _gi = 0; _gi < Math.min(3, _groups.length); _gi++) {
+          const _g = _groups[_gi] as any;
+          console.log(`Group[${_gi}]:`, {
+            words: _g.words.map((w: any) => `${w.text}(fs=${Math.round(w.baseFontSize)},emp=${w.emphasisLevel ?? 0}${w.isHeroWord ? ',HERO' : ''})`).join(' '),
+            start: Math.round(_g.start * 100) / 100,
+            end: Math.round(_g.end * 100) / 100,
+            lineIndex: _g.lineIndex,
+          });
+        }
+        console.groupEnd();
       })();
     }
 
@@ -3353,6 +3403,28 @@ export class LyricDancePlayer {
         const shrinkRatioW = tooWide ? (availW / (b.halfW * 2)) : 1;
         const shrinkRatioH = tooTall ? (availH / (b.halfH * 2)) : 1;
         const shrinkRatio = Math.min(shrinkRatioW, shrinkRatioH);
+        // ═══ SHRINK DEBUG ═══
+        if (!this._shrinkDebugThrottle || performance.now() - this._shrinkDebugThrottle > 2000) {
+          this._shrinkDebugThrottle = performance.now();
+          console.warn('%c[SHRINK]', 'color:#f55', {
+            text: b.text,
+            oldFS: b.fontSize,
+            newFS: Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio)),
+            minFont: b.minFont,
+            ratio: Math.round(shrinkRatio * 100) / 100,
+            halfW: Math.round(b.halfW),
+            halfH: Math.round(b.halfH),
+            availW: Math.round(availW),
+            availH: Math.round(availH),
+            scaleX: Math.round(b.scaleX * 100) / 100,
+            scaleY: Math.round(b.scaleY * 100) / 100,
+            tooWide,
+            tooTall,
+            priority: b.priority,
+            family: b.family,
+            weight: b.weight,
+          });
+        }
         b.fontSize = Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio));
         const newFontStr = `${b.weight} ${b.fontSize}px ${b.family}`;
         const metrics2 = this.getCachedMetrics(b.text, newFontStr);
@@ -5513,6 +5585,47 @@ export class LyricDancePlayer {
             });
           }
         } // end cache-miss
+
+      // ═══ ML LAYOUT DEBUG ═══
+      if (lineRole === 'current' && group.words.length > 1 && (!this._mlLayoutDebugThrottle || performance.now() - this._mlLayoutDebugThrottle > 3000)) {
+        this._mlLayoutDebugThrottle = performance.now();
+        const _fontNameDbg = _resolvedFontForML.replace(/["']/g, '').split(',')[0].trim();
+        console.group('%c[ML LAYOUT DEBUG]', 'color:#0f0;font-weight:bold');
+        console.log('Group:', {
+          groupIdx,
+          wordCount: group.words.length,
+          isMultiLine: _isMultiLine,
+          hasCacheHit: _hasValidMlCache,
+          soloHero: groupHasActiveSoloHero,
+        });
+        console.log('Font:', {
+          resolvedFont: _resolvedFontForML,
+          fontName: _fontNameDbg,
+          fontReady: isFontReady(_fontNameDbg),
+          fontStabilized: this._fontStabilized,
+          fontScale: Math.round(this._viewportFontScale * 1000) / 1000,
+        });
+        console.log('Viewport:', {
+          w: this.width,
+          h: this.height,
+          sx: Math.round(this._viewportSx * 1000) / 1000,
+          sy: Math.round(this._viewportSy * 1000) / 1000,
+          maxCameraZoom,
+          MAX_LINE_WIDTH: Math.round(MAX_LINE_WIDTH),
+        });
+        console.log('Words:', group.words.map((w, i) => ({
+          text: w.text,
+          baseFontSize: Math.round(w.baseFontSize),
+          effectiveFS: Math.round(w.baseFontSize * this._viewportFontScale),
+          emphasisLevel: w.emphasisLevel ?? 0,
+          isHero: w.isHeroWord ?? false,
+          layoutX: Math.round(w.layoutX),
+          layoutY: Math.round(w.layoutY),
+          mlDx: _mlDx[i] !== undefined ? Math.round(_mlDx[i]) : 'N/A',
+          mlDy: _mlDy[i] !== undefined ? Math.round(_mlDy[i]) : 'N/A',
+        })));
+        console.groupEnd();
+      }
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
