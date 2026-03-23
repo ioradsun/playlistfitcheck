@@ -642,20 +642,11 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     (group as any)._positionSlot = slot % 3;
   }
 
-  const shotTypeToFontSize: Record<string, number> = {
-    Wide: 48,
-    Medium: 56,
-    Close: 64,
-    CloseUp: 72,
-    ExtremeClose: 80,
-    FloatingInWorld: 52,
-  };
-  const lineFontSizes = payload.lines.map((_, lineIndex) => {
-    const storyEntry = storyboard.get(lineIndex);
-    const shotType = (storyEntry as any)?.shotType ?? 'Medium';
-    const baseSizeForShot = shotTypeToFontSize[shotType] ?? 68;
-    return baseSizeForShot;
-  });
+  // Single consistent font size for all lines.
+  // Shot type variation (48-80px) created inconsistent sizing and layout issues.
+  // Emphasis hierarchy is handled at runtime via heroScaleMult (1.0-1.75×).
+  const UNIFORM_BASE_FONT = 64;
+  const lineFontSizes = payload.lines.map(() => UNIFORM_BASE_FONT);
   // Prefer DOM canvas (has access to document.fonts) over OffscreenCanvas (doesn't)
   let measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
   if (typeof document !== 'undefined') {
