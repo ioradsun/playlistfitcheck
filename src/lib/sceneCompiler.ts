@@ -560,6 +560,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     (group as any)._positionSlot = slot % 3;
   }
 
+  const beats = payload.beat_grid?.beats ?? [];
 
   const baseTypography = TYPOGRAPHY_PROFILES[((payload.cinematic_direction as any)?.typography as string) ?? 'clean-modern'] ?? TYPOGRAPHY_PROFILES['clean-modern'];
 
