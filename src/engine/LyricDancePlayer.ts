@@ -26,7 +26,7 @@ import {
   type Keyframe,
   type ScenePayload,
 } from "@/lib/sceneCompiler";
-import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
+import { enrichSections } from "@/engine/directionResolvers";
 import { getMoodGrade, buildGradeFilter, type MoodGrade } from "@/engine/moodGrades";
 // getSectionTones removed — song-level grade model
 import { drawElementalWord } from "@/engine/ElementalEffects";
@@ -136,10 +136,6 @@ export interface LiveDebugState {
 
   cameraDistance: string;
   cameraMovement: string;
-  tensionStage: string;
-  tensionMotion: number;
-  tensionParticles: number;
-  tensionTypo: string;
 
   wordDirectiveWord: string;
   wordDirectiveBehavior: string;
@@ -281,10 +277,6 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
 
   cameraDistance: "Wide",
   cameraMovement: "—",
-  tensionStage: "—",
-  tensionMotion: 0,
-  tensionParticles: 0,
-  tensionTypo: "—",
 
   wordDirectiveWord: "",
   wordDirectiveBehavior: "—",
@@ -379,7 +371,6 @@ type ChunkState = {
 
 type ResolvedPlayerState = {
   chapters: any[];
-  tensionCurve: any[];
   wordDirectivesMap: Record<string, any>;
   lineSettings: Record<number, ResolvedLineSettings>;
   wordSettings: Record<string, ResolvedWordSettings>;
@@ -693,7 +684,6 @@ export class LyricDancePlayer {
   public debugState: LiveDebugState = { ...DEFAULT_DEBUG_STATE };
   public resolvedState: ResolvedPlayerState = {
     chapters: [],
-    tensionCurve: [],
     wordDirectivesMap: {},
     lineSettings: {},
     wordSettings: {},
@@ -769,8 +759,6 @@ export class LyricDancePlayer {
 
   // Beat-reactive state (evaluated incrementally)
   private _beatCursor = 0;
-  private _springOffset = 0;
-  private _springVelocity = 0;
   private _lastBeatIndex = -1;
   private _smoothedTime = 0;
   private _frameDt = 1.0;          // normalized dt (1.0 = 60fps), set by tick()
@@ -897,7 +885,6 @@ export class LyricDancePlayer {
   private _heroSchedule: Array<{ startSec: number; endSec: number; emphasis: number; word: string }> = [];
   private _heroLookaheadMs = 400; // anticipate hero words 400ms before they appear
   private activeSectionTexture = 'dust';
-  private activeTension: any = null;
   private chunkActiveSinceMs: Map<string, number> = new Map();
 
 
@@ -1385,8 +1372,6 @@ export class LyricDancePlayer {
     this.currentTimeMs = Math.max(0, (t - this.songStartSec) * 1000);
     this._beatCursor = 0;
     this._lastBeatIndex = -1;
-    this._springOffset = 0;
-    this._springVelocity = 0;
     this._timeInitialized = false;
     // Layout cache intentionally NOT cleared on seek — layout inputs (words, font,
     // viewport) don't change, only playback time. Same group = same rows, always.
@@ -1742,8 +1727,6 @@ export class LyricDancePlayer {
     this.conductor?.resetCursor();
     this._beatCursor = 0;
     this._lastBeatIndex = -1;
-    this._springOffset = 0;
-    this._springVelocity = 0;
     this._timeInitialized = false;
     this._textMetricsCache.clear();
     this._lastVisibleChunkCount = -1;
@@ -2559,26 +2542,15 @@ export class LyricDancePlayer {
         beatReactive: true,
       });
 
-      // Cache tension for this section
-      this.activeTension = this.resolvedState.tensionCurve.find(
-        (ts: any) => songProgress >= (ts.startRatio ?? 0) && songProgress <= (ts.endRatio ?? 1)
-      ) ?? this.resolvedState.tensionCurve[0] ?? null;
     }
 
     // ═══ V2: Use conductor for particle intensity instead of tension curve ═══
     const conductorResponse = beatState ? this.conductor?.getSubsystemResponse(beatState, 2) ?? null : null;
     this._lastSubsystemResponse = conductorResponse;
-    const currentTension = this.activeTension;
-    // V5: camera uses stillness + hold-after-move, not anticipation freeze.
-    const anticipation = 0;
-    const breathFactor = 1 - anticipation * 0.9; // 1.0 at rest, 0.1 at full freeze
 
     if (conductorResponse) {
       this.ambientParticleEngine?.setDensityMultiplier(conductorResponse.particleDensity * 2);
-      this.ambientParticleEngine?.setSpeedMultiplier(conductorResponse.particleSpeed * 2 * breathFactor);
-    } else {
-      this.ambientParticleEngine?.setDensityMultiplier((currentTension?.particleDensity ?? 0.5) * 2);
-      this.ambientParticleEngine?.setSpeedMultiplier((currentTension?.motionIntensity ?? 0.5) * 2 * breathFactor);
+      this.ambientParticleEngine?.setSpeedMultiplier(conductorResponse.particleSpeed * 2);
     }
 
     // ── Minimal debug state (always cheap) ──
@@ -3828,9 +3800,6 @@ export class LyricDancePlayer {
   private resolvePlayerState(payload: ScenePayload): void {
     const direction = payload.cinematic_direction;
     const chapters = this.toLegacyChapters(direction);
-    const tensionCurve = Array.isArray((direction as any)?.tensionCurve) && (direction as any).tensionCurve.length > 0
-      ? (direction as any).tensionCurve
-      : deriveTensionCurve(direction?.emotionalArc);
     const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives);
     const durationSec = Math.max(0.01, (payload.songEnd ?? this.audio.duration ?? 1) - (payload.songStart ?? 0));
     const resolved = resolveCinematicState(direction, payload.lines as any[], durationSec);
@@ -3846,7 +3815,6 @@ export class LyricDancePlayer {
     const texture = this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, direction);
     this.resolvedState = {
       chapters,
-      tensionCurve,
       wordDirectivesMap,
       lineSettings: resolved.lineSettings,
       wordSettings: resolved.wordSettings,
@@ -4131,7 +4099,8 @@ export class LyricDancePlayer {
     const intensity = 0.5;
 
     // Beat response — subtle brightness pulse on beats
-    const beatMod = Math.max(0, this._springOffset);
+    // Background brightness pulse — direct from BeatConductor
+    const beatMod = this._lastBeatState?.pulse ?? 0;
 
     // ═══ PRE-BLURRED PATH: blur is baked into offscreen canvases ═══
     // Only color adjustments at runtime (brightness, saturate, contrast, hue-rotate)
@@ -4433,14 +4402,7 @@ export class LyricDancePlayer {
 
     if (beatIndex !== this._lastBeatIndex && beatIndex >= 0) {
       this._lastBeatIndex = beatIndex;
-      this._springVelocity = beats[beatIndex]?.springVelocity ?? 0;
     }
-
-    // dt-compensated spring (identical feel at 30/60/120 fps)
-    const dt = this._frameDt;
-    this._springOffset += this._springVelocity * dt;
-    this._springVelocity *= Math.pow(0.82, dt);
-    this._springOffset *= Math.pow(0.88, dt);
 
     // CameraRig owns text zoom — effectiveZoom neutralized to 1.0
     const effectiveZoom = 1.0;
