@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -684,46 +685,31 @@ export default function Admin() {
 
           {/* ── LABS TAB ── */}
           <TabsContent value="labs" className="mt-4 space-y-4">
-            <div className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-4">
-              <h3 className="text-sm font-semibold tracking-wide uppercase text-white/60">Engine Feature Flags</h3>
-              <div className="flex items-center justify-between py-2 border-b border-white/5">
-                <div>
-                  <p className="text-sm font-medium text-white/90">Lightning Bar</p>
-                  <p className="text-xs text-white/40 mt-0.5">
-                    Replaces beat visualizer bars with a nervous-system + lightning bolt progress line.
-                    Uses Essentia hit detection, energy, brightness, and waveform preview.
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    const win = window as any;
-                    const next = !win.__LYRIC_DANCE_LIGHTNING_BAR;
-                    win.__LYRIC_DANCE_LIGHTNING_BAR = next;
-                    // Persist across page loads via sessionStorage
-                    try { sessionStorage.setItem('__LYRIC_DANCE_LIGHTNING_BAR', next ? '1' : ''); } catch {}
-                    // Force re-render
-                    setTab('labs');
-                    (window as any).__forceAdminRerender?.();
-                  }}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    (window as any).__LYRIC_DANCE_LIGHTNING_BAR
-                      ? 'bg-green-500'
-                      : 'bg-white/10'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      (window as any).__LYRIC_DANCE_LIGHTNING_BAR
-                        ? 'translate-x-6'
-                        : 'translate-x-1'
-                    }`}
+            {tab === "labs" && (
+              <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+                <h3 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">Engine Feature Flags</h3>
+                <div className="flex items-center justify-between py-2 border-b border-border">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Lightning Bar</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Replaces beat visualizer bars with a nervous-system + lightning bolt progress line.
+                      Uses Essentia hit detection, energy, brightness, and waveform preview.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={!!(window as any).__LYRIC_DANCE_LIGHTNING_BAR}
+                    onCheckedChange={(checked) => {
+                      (window as any).__LYRIC_DANCE_LIGHTNING_BAR = checked;
+                      try { sessionStorage.setItem('__LYRIC_DANCE_LIGHTNING_BAR', checked ? '1' : ''); } catch {}
+                      (window as any).__forceAdminRerender?.();
+                    }}
                   />
-                </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground/50 italic">
+                  Flags apply to new lyric dances loaded after toggling. Refresh pages with active players to see changes.
+                </p>
               </div>
-              <p className="text-[10px] text-white/25 italic">
-                Flags apply to new lyric dances loaded after toggling. Refresh pages with active players to see changes.
-              </p>
-            </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
