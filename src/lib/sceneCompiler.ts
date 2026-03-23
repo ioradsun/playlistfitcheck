@@ -4,6 +4,7 @@ import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { FrameRenderState } from "@/engine/presetDerivation";
 import { getSemanticOverride } from "@/engine/SemanticAnimMapper";
+import { fitTextToViewport, type MeasureContext } from "@/engine/textLayout";
 
 export type LineBeatMap = {
   lineIndex: number;
@@ -99,7 +100,6 @@ export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
 interface WordDirectiveLike { word?: string; kineticClass?: string; colorOverride?: string; emphasisLevel?: number; visualMetaphor?: string; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: 'up'|'down'|'left'|'right'|'radial'; letterSequence?: boolean; trail?: string; entry?: string; behavior?: string; exit?: string; heroPresentation?: string; }
 interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; }
 export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; }
-export interface GroupPosition { x: number; y: number; fontSize: number; isAnchor: boolean; isFiller: boolean; }
 type StoryboardEntryLike = { lineIndex?: number; entryStyle?: string; exitStyle?: string; heroWord?: string; shotType?: string; iconGlyph?: string; iconStyle?: 'outline'|'filled'|'ghost'; iconPosition?: 'behind'|'above'|'beside'|'replace'; iconScale?: number; };
 
 type ManifestWordDirective = { entryStyle?: EntryStyle; behavior?: BehaviorStyle; exitStyle?: ExitStyle };
@@ -203,222 +203,6 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[]): PhraseGroup[] {
   }
   groups.sort((a, b) => a.start - b.start);
   return mergeShortGroups(groups).map((group) => ({ ...group, end: Math.max(group.end, group.start + MIN_GROUP_DURATION) }));
-}
-
-/**
- * Compute positions for ALL phrase groups at the line level.
- * Groups sharing the same lineIndex are laid out as one continuous horizontal line
- * so they don't overlap when centered.
- * Returns a Map keyed by "lineIndex-groupIndex" → GroupPosition[] for that group's words.
- */
-export function computeAllLineLayouts(
-  phraseGroups: PhraseGroup[],
-  canvasW: number,
-  canvasH: number,
-  lineFontSizes: number[],
-  fontWeight: number,
-  fontFamily: string,
-  measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  isPortrait: boolean = false,
-  textTransform: 'none' | 'uppercase' = 'none',
-  targetViewport?: { width: number; height: number },
-): Map<string, GroupPosition[]> {
-  // Target viewport = actual screen dimensions. Reference canvas is always 960×540.
-  // Decisions (wrapping, font boost, margins) use target viewport.
-  // Positions are in reference space — runtime scales by width/960.
-  const tw = targetViewport?.width ?? canvasW;
-  const th = targetViewport?.height ?? canvasH;
-  const isCompactTarget = tw < 250;
-  const fontScaleEst = tw / canvasW; // estimated runtime scale factor
-
-  // Adaptive margin in reference space — wider for compact targets.
-  const marginRatio = isCompactTarget ? 0.10 : tw < 500 ? 0.08 : 0.0625;
-  const margin = Math.max(8, Math.round(canvasW * marginRatio));
-  const lineY = Math.round(canvasH * 0.5);
-  const SPACE_MULT = 1.15;
-  const displaySpaceRatio = (fontSize: number): number =>
-    0.25 + Math.min(0.15, Math.max(0, (fontSize - 24) / 160));
-  const compactFloor = isCompactTarget ? 0.35 : 0;
-  const result = new Map<string, GroupPosition[]>();
-
-  // On compact targets, use a TIGHTER fill threshold to FORCE wrapping —
-  // text stacks into rows using the height instead of squeezing onto one line.
-  const portraitFillRatio = isCompactTarget ? 0.60 : 0.75;
-  const effectiveMaxWidth = isPortrait ? canvasW * portraitFillRatio : canvasW - margin * 2;
-
-  const getWordWidth = (word: string, fontSize: number) => {
-    const measured = textTransform === 'uppercase' ? word.toUpperCase() : word;
-    const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
-    if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
-    const raw = measureCtx.measureText(measured).width;
-    // Guard: fallback fonts can return near-zero widths before the custom font loads.
-    // A minimum of 0.35em × char count prevents two words collapsing to the same X.
-    const minWidth = measured.length * fontSize * 0.35;
-    return Math.max(raw, minWidth);
-  };
-  const getSpaceWidth = (fontSize: number) => {
-    const fontStr = `${fontWeight} ${fontSize}px ${fontFamily}`;
-    if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
-    const measured = measureCtx.measureText(' ').width;
-    return Math.max(measured, fontSize * Math.max(compactFloor, displaySpaceRatio(fontSize)));
-  };
-  const wordFontSize = (wm: WordMetaEntry, baseFontSize: number) => {
-    const isFiller = isFillerWord(wm.word);
-    if (isFiller) return baseFontSize * 0.85;
-    // Emphasis scaling is applied at RUNTIME via scaleX (emphasisScale).
-    // Compile-time uses base size for ALL non-filler words.
-    // This avoids double-scaling since baseFontSize feeds into runtime font.
-    return baseFontSize * 1.0;
-  };
-
-  // Collect groups by lineIndex, preserving group order
-  const lineMap = new Map<number, PhraseGroup[]>();
-  for (const group of phraseGroups) {
-    if (!lineMap.has(group.lineIndex)) lineMap.set(group.lineIndex, []);
-    lineMap.get(group.lineIndex)!.push(group);
-  }
-
-  for (const [lineIndex, groups] of lineMap) {
-    const rawFontSize = lineFontSizes[lineIndex] ?? 36;
-    // Height-aware portrait font boost.
-    // Goal: runtime font ≥ 18px. Runtime font = baseFontSize × fontScaleEst.
-    // So baseFontSize needs to be ≥ 18 / fontScaleEst.
-    // Compact (187px): fontScaleEst≈0.195, need baseFontSize≈92 → boost≈1.65×.
-    // The bigger font naturally overflows width → triggers wrapping → uses height.
-    const minRuntimePx = 18;
-    const idealBoost = isPortrait ? minRuntimePx / (Math.max(1, rawFontSize) * Math.max(0.05, fontScaleEst)) : 1.0;
-    const portraitBoost = isPortrait
-      ? (isCompactTarget
-          ? Math.max(1.3, Math.min(2.5, idealBoost))
-          : tw < 500
-            ? Math.max(1.2, Math.min(1.5, idealBoost))
-            : 1.5)
-      : 1.0;
-    const baseFontSize = isPortrait ? rawFontSize * portraitBoost : rawFontSize;
-    // Sort groups by their temporal order (groupIndex)
-    groups.sort((a, b) => a.groupIndex - b.groupIndex);
-
-    // Flatten all words across all groups on this line
-    type FlatWord = { wm: WordMetaEntry; groupIndex: number; wordIndex: number; fontSize: number; width: number; anchorIdx: number; };
-    const flatWords: FlatWord[] = [];
-    for (const g of groups) {
-      for (let wi = 0; wi < g.words.length; wi++) {
-        const wm = g.words[wi];
-        const fs = wordFontSize(wm, baseFontSize);
-        flatWords.push({ wm, groupIndex: g.groupIndex, wordIndex: wi, fontSize: fs, width: getWordWidth(wm.word, fs), anchorIdx: g.anchorWordIdx });
-      }
-    }
-
-    // Compute total line width with spaces between ALL words (across groups too)
-    let totalWidth = 0;
-    let spaceWidths: number[] = [];
-    for (let i = 0; i < flatWords.length; i++) {
-      totalWidth += flatWords[i].width;
-      if (i < flatWords.length - 1) {
-        const sw = getSpaceWidth(Math.min(flatWords[i].fontSize, flatWords[i + 1].fontSize)) * SPACE_MULT;
-        spaceWidths.push(sw);
-        totalWidth += sw;
-      } else {
-        spaceWidths.push(0);
-      }
-    }
-
-    // ─── No compile-time auto-scale ───
-    // The runtime multi-line wrapper in LyricDancePlayer._updateChunks handles
-    // overflow by wrapping words onto multiple rows with zoom-aware width budgets.
-    // Compile-time auto-scaling fights this by pre-shrinking fonts, defeating
-    // the cinematic sizing system. Words keep their intended display sizes.
-
-    // ─── Portrait word wrapping: split into rows ───
-    // On portrait, if line is still wider than the effective max, wrap words into rows.
-    // Each row gets a different Y offset so words stack vertically.
-    type RowInfo = { startIdx: number; endIdx: number; width: number; };
-    const rows: RowInfo[] = [];
-
-    // Wrap when text overflows AND height is available for rows.
-    // Height check: at least 2 rows of baseFontSize × 1.3 must fit in target viewport.
-    const rowHeightEst = rawFontSize * 1.3 * (th / canvasH);
-    const maxRowsByHeight = Math.max(1, Math.floor((th * 0.70) / Math.max(1, rowHeightEst)));
-    const shouldWrap = totalWidth > effectiveMaxWidth && flatWords.length > 1 && maxRowsByHeight >= 2;
-    if (shouldWrap) {
-      // Greedy wrap: fill each row up to effectiveMaxWidth
-      let rowStart = 0;
-      let rowWidth = 0;
-      for (let i = 0; i < flatWords.length; i++) {
-        const addedWidth = flatWords[i].width + (i > rowStart ? spaceWidths[i - 1] : 0);
-        if (rowWidth + addedWidth > effectiveMaxWidth && i > rowStart) {
-          rows.push({ startIdx: rowStart, endIdx: i - 1, width: rowWidth });
-          rowStart = i;
-          rowWidth = flatWords[i].width;
-        } else {
-          rowWidth += addedWidth;
-        }
-      }
-      rows.push({ startIdx: rowStart, endIdx: flatWords.length - 1, width: rowWidth });
-    } else {
-      // Single row
-      rows.push({ startIdx: 0, endIdx: flatWords.length - 1, width: totalWidth });
-    }
-
-    // Compute row heights — use height generously when available.
-    const baseRowSpacing = (isPortrait ? rawFontSize : baseFontSize) * 1.3;
-    const rowCount = rows.length;
-    const availableVSpace = canvasH * 0.70;
-    // Spread rows to fill height when there's room, capped at 2× base
-    const idealRowSpacing = rowCount > 1 ? availableVSpace / rowCount : baseRowSpacing;
-    const rowSpacing = rowCount > 1
-      ? Math.min(baseRowSpacing * 2.0, Math.max(baseRowSpacing, idealRowSpacing))
-      : baseRowSpacing;
-    const totalRowHeight = (rows.length - 1) * rowSpacing;
-    const firstRowY = lineY - totalRowHeight / 2;
-
-    // Assign positions per row
-    const groupPositions = new Map<number, GroupPosition[]>();
-    for (let ri = 0; ri < rows.length; ri++) {
-      const row = rows[ri];
-      const rowY = firstRowY + ri * rowSpacing;
-      const rowStartX = Math.max(margin, (canvasW - row.width) / 2);
-      let cursorX = rowStartX;
-
-      for (let i = row.startIdx; i <= row.endIdx; i++) {
-        const fw = flatWords[i];
-        const halfW = fw.width * 0.5;
-        const x = Math.max(margin + halfW, Math.min(canvasW - margin - halfW, cursorX + halfW));
-        const pos: GroupPosition = {
-          x,
-          y: Math.max(margin, Math.min(canvasH - margin, rowY)),
-          fontSize: fw.fontSize,
-          isAnchor: fw.wordIndex === fw.anchorIdx,
-          isFiller: isFillerWord(fw.wm.word),
-        };
-        if (!groupPositions.has(fw.groupIndex)) groupPositions.set(fw.groupIndex, []);
-        groupPositions.get(fw.groupIndex)!.push(pos);
-        cursorX += fw.width + spaceWidths[i];
-      }
-    }
-
-    // Store results keyed by "lineIndex-groupIndex"
-    for (const [gi, positions] of groupPositions) {
-      result.set(`${lineIndex}-${gi}`, positions);
-    }
-  }
-
-  return result;
-}
-
-/** @deprecated Use computeAllLineLayouts instead. Kept for backward compatibility. */
-export function getGroupLayout(
-  group: PhraseGroup,
-  _visualMode: VisualMode,
-  canvasW: number,
-  canvasH: number,
-  baseFontSize: number,
-  fontWeight: number,
-  fontFamily: string,
-  measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-): GroupPosition[] {
-  const layouts = computeAllLineLayouts([group], canvasW, canvasH, [baseFontSize], fontWeight, fontFamily, measureCtx);
-  return layouts.get(`${group.lineIndex}-${group.groupIndex}`) ?? [];
 }
 
 export function computeEntryState(style: EntryStyle, progress: number, intensity: number): AnimState {
@@ -642,12 +426,10 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     (group as any)._positionSlot = slot % 3;
   }
 
-  // Single consistent font size for all lines.
-  // Shot type variation (48-80px) created inconsistent sizing and layout issues.
-  // Emphasis hierarchy is handled at runtime via heroScaleMult (1.0-1.75×).
-  const UNIFORM_BASE_FONT = 64;
-  const lineFontSizes = payload.lines.map(() => UNIFORM_BASE_FONT);
-  // Prefer DOM canvas (has access to document.fonts) over OffscreenCanvas (doesn't)
+
+  const baseTypography = TYPOGRAPHY_PROFILES[((payload.cinematic_direction as any)?.typography as string) ?? 'clean-modern'] ?? TYPOGRAPHY_PROFILES['clean-modern'];
+
+  // Create measurement context
   let measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
   if (typeof document !== 'undefined') {
     const domCanvas = document.createElement('canvas');
@@ -657,7 +439,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     if (ctx) {
       measureCtx = ctx;
     } else {
-      // jsdom or headless — fall back to OffscreenCanvas
       const oc = new OffscreenCanvas(1, 1);
       measureCtx = oc.getContext('2d')!;
     }
@@ -665,44 +446,70 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const oc = new OffscreenCanvas(1, 1);
     measureCtx = oc.getContext('2d')!;
   }
-  const baseTypography = TYPOGRAPHY_PROFILES[((payload.cinematic_direction as any)?.typography as string) ?? 'clean-modern'] ?? TYPOGRAPHY_PROFILES['clean-modern'];
 
-  // Pre-compute all line layouts at once so groups sharing a line don't overlap
-  // Pass viewport aspect so the layout can wrap lines for portrait screens
+  // Prime the canvas with the font
+  measureCtx.font = `${baseTypography.fontWeight} 48px "${baseTypography.fontFamily}", sans-serif`;
+  measureCtx.measureText('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
+
+  // Viewport info for portrait-aware layout
   const vw = options?.viewportWidth ?? 960;
   const vh = options?.viewportHeight ?? 540;
   const isPortrait = vh > vw;
-  const allLineLayouts = computeAllLineLayouts(phraseGroups, 960, 540, lineFontSizes, baseTypography.fontWeight, baseTypography.fontFamily, measureCtx, isPortrait, baseTypography.textTransform, { width: vw, height: vh });
 
-  // DIAGNOSTIC: log first 3 lines of layout positions
-  let diagCount = 0;
-  for (const [key, positions] of allLineLayouts) {
-    if (diagCount < 3) {
-      const words = positions.map((p, i) => {
-        const group = phraseGroups.find(g => `${g.lineIndex}-${g.groupIndex}` === key);
-        const word = group?.words[i]?.word ?? '?';
-        return `"${word}" x=${Math.round(p.x)} fs=${Math.round(p.fontSize)}`;
-      }).join('  |  ');
-      diagCount++;
-    }
+  // ═══ NEW LAYOUT: fitTextToViewport per group ═══
+  // All layout in 960×540 reference space. Player scales by sx/sy.
+  // Portrait-aware: pass more maxLines when viewport is portrait.
+  const REF_W = 960;
+  const REF_H = 540;
+  const layoutMaxLines = isPortrait ? 4 : 3;
+
+  // Pre-compute layout for each group using fitTextToViewport
+  const groupLayouts = new Map<string, { fontSize: number; positions: Array<{ x: number; y: number; width: number }> }>();
+
+  for (const group of phraseGroups) {
+    const key = `${group.lineIndex}-${group.groupIndex}`;
+    const groupWords = group.words.map(wm =>
+      baseTypography.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word
+    );
+
+    const hasHero = group.words.some(wm =>
+      (wm.directive?.emphasisLevel ?? 1) >= 4 ||
+      storyboard.get(group.lineIndex)?.heroWord?.toLowerCase() === wm.clean
+    );
+
+    const layout = fitTextToViewport(
+      measureCtx as MeasureContext,
+      groupWords,
+      REF_W,
+      REF_H,
+      baseTypography.fontFamily,
+      baseTypography.fontWeight,
+      {
+        maxLines: layoutMaxLines,
+        textTransform: 'none', // already transformed above
+        hasHeroWord: hasHero,
+      },
+    );
+
+    groupLayouts.set(key, {
+      fontSize: layout.fontSize,
+      positions: layout.wordPositions.map(wp => ({ x: wp.x, y: wp.y, width: wp.width })),
+    });
   }
-  
-  // Also test measureText
-  measureCtx.font = `${baseTypography.fontWeight} 68px ${baseTypography.fontFamily}`;
-  const testWord = measureCtx.measureText('hello').width;
-  const testSpace = measureCtx.measureText(' ').width;
 
   const compiledGroups: CompiledPhraseGroup[] = phraseGroups.map((group) => {
     const key = `${group.lineIndex}-${group.groupIndex}`;
     const lineStory = storyboard.get(group.lineIndex);
-    const positions = allLineLayouts.get(key) ?? [];
+    const groupLayout = groupLayouts.get(key);
+    const positions = groupLayout?.positions ?? [];
+    const groupFontSize = groupLayout?.fontSize ?? 56;
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const manifestDirective = manifestWordDirectives[key]?.[wi] ?? null;
       const motion = assignWordAnimations(wm, motionDefaults, storyboard, manifestDirective as ManifestWordDirective | null);
       const semantic = wm.directive?.visualMetaphor ? SEMANTIC_EFFECTS[wm.directive.visualMetaphor as VisualMetaphor] : null;
       // ═══ Semantic auto-map: word meaning → color/glow (the word IS the directive) ═══
       const autoSemantic = getSemanticOverride(wm.clean);
-      const pos = positions[wi];
+      const pos = positions[wi] ?? { x: REF_W / 2, y: REF_H / 2, width: 40 };
       const base: CompiledWord = {
         id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
         text: baseTypography.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word,
@@ -710,7 +517,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         wordIndex: wi,
         layoutX: pos.x,
         layoutY: pos.y,
-        baseFontSize: pos.fontSize,
+        baseFontSize: groupFontSize,
         wordStart: wm.start,
         entryStyle: semantic?.entry ?? motion.entry,
         exitStyle: semantic?.exit ?? motion.exit,
@@ -725,8 +532,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
           || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')))
           ? (wm.directive as any)?.heroPresentation ?? 'inline-scale'
           : undefined,
-        isAnchor: pos.isAnchor,
-        isFiller: pos.isFiller,
+        isAnchor: wi === group.anchorWordIdx,
+        isFiller: isFillerWord(wm.word),
         emphasisLevel: wm.directive?.emphasisLevel ?? 1,
         wordDuration: Math.max(0, wm.end - wm.start),
         semanticScaleX: semantic?.scaleX ?? 1,
