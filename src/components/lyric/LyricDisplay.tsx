@@ -10,7 +10,6 @@ import {
   MoreHorizontal,
   AlertCircle,
   Video,
-  Film,
   RotateCcw,
   X,
 } from "lucide-react";
@@ -48,10 +47,7 @@ import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
 import { LyricVideoComposer } from "./LyricVideoComposer";
 import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
 import { LyricStage } from "./LyricStage";
-import { DirectorsCutScreen } from "./DirectorsCutScreen";
-import { DirectorsCutPanel } from "./DirectorsCutPanel";
 import { deriveFrameState, type FrameRenderState as FullFrameRenderState } from "@/engine/presetDerivation";
-import { LyricDanceExporter } from "./LyricDanceExporter";
 import { PublishHookButton } from "./PublishHookButton";
 // PublishLyricDanceButton removed — publishing handled by FitTab
 import {
@@ -59,7 +55,7 @@ import {
   type Strictness,
   type ProfanityReport,
 } from "@/lib/profanityFilter";
-import { ensureTypographyProfileReady, type TypographyProfile } from "@/engine/SystemStyles";
+import { ensureFontReady } from "@/lib/fontReadinessCache";
 import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import { useBeatIntensity } from "@/hooks/useBeatIntensity";
@@ -68,7 +64,6 @@ import type {
   FingerprintSongContext,
 } from "./ArtistFingerprintTypes";
 // V3: manifest derived from cinematicDirection via deriveFrameState
-import { animationResolver } from "@/engine/AnimationResolver";
 
 type BeatTick = { time: number; isDownbeat: boolean; strength: number };
 type HookDanceOverrides = { system?: string; energyMultiplier?: number; palette?: string[] };
@@ -362,7 +357,6 @@ export function LyricDisplay({
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [waveform, setWaveform] = useState<WaveformData | null>(initialWaveform ?? null);
-  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   // Beat grid from props only (no useBeatGrid hook — that's in FitTab now)
   const beatGrid = initialBeatGrid ?? null;
   const beatGridLoading = false;
@@ -452,16 +446,10 @@ export function LyricDisplay({
   const hookDanceBeatsRef = useRef<BeatTick[]>([]);
   const [hookDanceOverrides, setHookDanceOverrides] =
     useState<HookDanceOverrides>({});
-  const [showDirectorsCut, setShowDirectorsCut] = useState(false);
   const [artistFingerprint, setArtistFingerprint] = useState<ArtistDNA | null>(
     null,
   );
   const [battlePopupUrl, setBattlePopupUrl] = useState<string | null>(null);
-  const [lyricDanceExportOpen, setLyricDanceExportOpen] = useState(false);
-  const [directorsCutOpen, setDirectorsCutOpen] = useState(false);
-  const [directorsCutRegenerating, setDirectorsCutRegenerating] = useState(false);
-  const [manifestDiff, setManifestDiff] = useState<Array<{ field: string; from: string; to: string }>>([]);
-  const [showDirectorsCutTooltip, setShowDirectorsCutTooltip] = useState(false);
 
 
   // Load fingerprint + display name from profile
@@ -483,11 +471,6 @@ export function LyricDisplay({
       });
   }, [user]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const seen = window.localStorage.getItem("directors_cut_tooltip_seen");
-    setShowDirectorsCutTooltip(!seen);
-  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -517,8 +500,9 @@ export function LyricDisplay({
   }, [renderData, data.lines, hookDanceTime]);
 
   useEffect(() => {
-    const profile = (initialRenderData as any)?.motionProfileSpec?.typographyProfile as TypographyProfile | undefined;
-    if (profile?.fontFamily) void ensureTypographyProfileReady(profile);
+    // Font preloading — uses the same cache as the player
+    const fontFamily = (initialRenderData as any)?.motionProfileSpec?.typographyProfile?.fontFamily;
+    if (fontFamily) void ensureFontReady(fontFamily);
   }, [initialRenderData]);
 
   // Reset Song DNA when audio file changes (e.g. reupload)
@@ -537,106 +521,8 @@ export function LyricDisplay({
     const derived = deriveFrameState(cd, 0, 0);
     setManifest(derived);
     hookDanceRef.current?.loadManifest(derived);
-    animationResolver.loadFromDna(renderData as Record<string, unknown>);
 
   }, [renderData]);
-
-
-  const getManifestDiff = useCallback((before: FullFrameRenderState, after: FullFrameRenderState) => {
-    const changes: Array<{ field: string; from: string; to: string }> = [];
-    const checkFields: Array<keyof FullFrameRenderState> = [
-      "world",
-      "backgroundSystem",
-      "tension",
-      "beatResponse",
-      "contrastMode",
-      "backgroundIntensity",
-      "letterPersonality",
-    ];
-
-    for (const field of checkFields) {
-      const b = String(before[field]);
-      const a = String(after[field]);
-      if (b !== a) changes.push({ field, from: b, to: a });
-    }
-
-    if (before.palette.join() !== after.palette.join()) {
-      changes.push({ field: "palette", from: before.palette.join(", "), to: after.palette.join(", ") });
-    }
-
-    return changes;
-  }, []);
-
-  const handleFieldOverride = useCallback((field: keyof FullFrameRenderState | string, value: unknown) => {
-    setRenderData((prev) => {
-      if (!prev) return prev;
-      const cd = prev.cinematic_direction ?? prev.cinematicDirection ?? {};
-      const current = prev.frame_state ?? deriveFrameState(cd, 0, 0);
-      const next = { ...current } as any;
-      if (field.includes(".")) {
-        const [parent, child] = field.split(".");
-        next[parent] = { ...(next[parent] || {}), [child]: value };
-      } else {
-        next[field] = value;
-      }
-      return { ...prev, frame_state: next };
-    });
-  }, []);
-
-  const handleRegenerateWithDirection = useCallback(async (direction: string) => {
-    if (!renderData || directorsCutRegenerating || !direction.trim()) return;
-    setDirectorsCutRegenerating(true);
-    try {
-      const beforeManifest = renderData.frame_state ?? deriveFrameState(renderData.cinematic_direction ?? {}, 0, 0);
-      const playhead = audioRef.current?.currentTime ?? 0;
-      const lyricsForDirection = data.lines
-        .filter((l: any) => l.tag !== "adlib")
-        .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-      const existingSections = (renderData as any)?.cinematic_direction?.sections;
-      const audioLen = audioBuffer?.duration ?? (data.lines.length > 0 ? data.lines[data.lines.length - 1].end : 1);
-      const audioSections = Array.isArray(existingSections) && existingSections.length > 0
-        ? existingSections.map((s: any, i: number) => ({
-            index: s.sectionIndex ?? i,
-            startSec: (s.startRatio ?? 0) * audioLen,
-            endSec: (s.endRatio ?? 1) * audioLen,
-            role: s.mood ?? "verse",
-            avgEnergy: 0.5,
-            beatDensity: 1,
-            lyrics: lyricsForDirection.filter((l: any) => {
-              const secStart = (s.startRatio ?? 0) * audioLen;
-              const secEnd = (s.endRatio ?? 1) * audioLen;
-              return (l.start ?? 0) >= secStart && (l.start ?? 0) < secEnd;
-            }).map((l: any, li: number) => ({ text: l.text, lineIndex: li })),
-          }))
-        : undefined;
-      const { data: result, error } = await supabase.functions.invoke("cinematic-direction", {
-        body: {
-          title: data.title,
-          artist: profileDisplayName || "artist",
-          lines: lyricsForDirection,
-          listenerScene: direction.trim(),
-          audioSections,
-        },
-      });
-      if (error) throw error;
-
-      const merged = normalizeRenderDataWithManifest({
-        ...renderData,
-        cinematic_direction: result?.cinematicDirection ?? (renderData as any).cinematic_direction,
-      }, data.title);
-
-      const afterManifest = merged.frame_state ?? deriveFrameState(merged.cinematic_direction ?? {}, 0, 0);
-      setManifestDiff(getManifestDiff(beforeManifest, afterManifest));
-      setRenderData(merged);
-      // Background image generation now handled by FitTab
-      if (audioRef.current) audioRef.current.currentTime = playhead;
-    } catch (error) {
-      console.error("Director's Cut regenerate failed", error);
-      toast.error("Couldn't regenerate world direction");
-    } finally {
-      setDirectorsCutRegenerating(false);
-    }
-  }, [renderData, directorsCutRegenerating, data.title, data.lines, getManifestDiff]);
 
   const currentManifest = useMemo<FullFrameRenderState | null>(() => {
     if (manifest) return manifest;
@@ -645,17 +531,6 @@ export function LyricDisplay({
     const cd = renderData.cinematic_direction ?? renderData.cinematicDirection;
     return cd ? deriveFrameState(cd, 0, 0) : null;
   }, [manifest, renderData]);
-
-  const exporterAudioUrl = useMemo(
-    () => (audioFile ? URL.createObjectURL(audioFile) : ""),
-    [audioFile],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (exporterAudioUrl) URL.revokeObjectURL(exporterAudioUrl);
-    };
-  }, [exporterAudioUrl]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw =
@@ -767,7 +642,6 @@ export function LyricDisplay({
       decodeFile(audioFile)
         .then(({ buffer, waveform: decoded }) => {
           setWaveform(decoded);
-          setAudioBuffer(buffer);
         })
         .catch(() => {});
     }
@@ -2009,113 +1883,13 @@ export function LyricDisplay({
          </div>
        </div>
 
-       {/* ── Export Video — Full Song Video ── */}
-       {features?.export_video && renderData?.motionProfileSpec && beatGrid && (
-         <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
-           <div className="flex items-center gap-1.5">
-             <Film size={11} className="text-primary" />
-             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  Lyric Dance
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Full-song lyric video powered by the{" "}
-                {renderData.motionProfileSpec.system} physics engine. All{" "}
-                {data.lines.filter((l) => l.tag !== "adlib").length} lines
-                rendered with effects.
-              </p>
-              <button
-                onClick={() => setLyricDanceExportOpen(true)}
-                className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
-              >
-                <Film size={10} />
-                Export Video
-              </button>
-               {/* PublishLyricDanceButton removed — publishing handled by FitTab */}
-             </div>
-           )}
-
            {/* Spacer so floating widget doesn't block last card */}
            <div className="h-20" />
          </div>
 
        <SignUpToSaveBanner />
 
-       {/* Director's Cut overlay — system selection */}
-       <AnimatePresence>
-         {showDirectorsCut &&
-           renderData?.motionProfileSpec &&
-           renderData.hook &&
-           beatGrid?.beats && (
-             <DirectorsCutScreen
-               baseSpec={renderData.motionProfileSpec as PhysicsSpec}
-               beats={beatGrid.beats.map((t, i) => ({
-                 time: t,
-                 isDownbeat: i % 4 === 0,
-                 strength: i % 4 === 0 ? 1 : 0.6,
-              }))}
-              lines={data.lines.filter(
-                (l) =>
-                  l.start < renderData.hook!.end && l.end > renderData.hook!.start,
-              )}
-              hookStart={renderData.hook.start}
-              hookEnd={renderData.hook.end}
-              audioFile={audioFile}
-              seedBase={`${data.title}-${renderData.hook.start.toFixed(3)}`}
-              onSelect={(system) => {
-                setShowDirectorsCut(false);
-                // Launch Hook Dance with the selected system
-                const audio = audioRef.current;
-                if (!audio || !beatGrid?.beats) return;
-
-                // Unlock audio synchronously within user gesture context
-                audio.currentTime = renderData.hook!.start;
-                audio.play().catch(() => {});
-
-                const beats: BeatTick[] = beatGrid.beats.map((t, i) => ({
-                  time: t,
-                  isDownbeat: i % 4 === 0,
-                  strength: i % 4 === 0 ? 1 : 0.6,
-                }));
-                const hook = renderData.hook!;
-                setHookDanceOverrides({ system });
-                const spec = {
-                  ...(renderData.motionProfileSpec as PhysicsSpec),
-                  system,
-                };
-                const engine = new HookDanceEngine(
-                  spec,
-                  beats,
-                  hook.start,
-                  hook.end,
-                  audio,
-                  {
-                    onFrame: (state, time, bc) => {
-                      setHookDanceState(state);
-                      setHookDanceTime(time);
-                      setHookDanceBeatCount(bc);
-                    },
-                    onEnd: () => {
-                      setHookDanceRunning(false);
-                      setHookDanceState(null);
-                      setHookDanceTime(0);
-                      setHookDanceBeatCount(0);
-                    },
-                  },
-                  `${data.title}-${hook.start.toFixed(3)}`,
-                );
-                hookDanceRef.current = engine;
-                hookDancePrngRef.current = engine.prng;
-                hookDanceBeatsRef.current = beats;
-                setHookDanceRunning(true);
-                engine.start();
-              }}
-              onClose={() => setShowDirectorsCut(false)}
-            />
-          )}
-      </AnimatePresence>
-
-      {/* Hook Dance full-bleed canvas overlay */}
+       {/* Hook Dance full-bleed canvas overlay */}
       <AnimatePresence>
         {hookDanceRunning &&
           renderData?.motionProfileSpec &&
@@ -2267,50 +2041,6 @@ export function LyricDisplay({
       </Dialog>
 
 
-      {currentManifest && (
-        <>
-          <div className="fixed bottom-4 right-4 z-[94]">
-            {showDirectorsCutTooltip && (
-              <div className="mb-2 max-w-xs rounded-lg border border-border/60 bg-background/95 p-3 text-xs shadow-xl">
-                <p>
-                  <strong>AI chose a world for this song.</strong>
-                  <br />
-                  Open Director&apos;s Cut to change the scene, colors, or atmosphere.
-                </p>
-                <Button
-                  size="sm"
-                  className="mt-2 h-7 text-xs"
-                  onClick={() => {
-                    window.localStorage.setItem("directors_cut_tooltip_seen", "1");
-                    setShowDirectorsCutTooltip(false);
-                  }}
-                >
-                  Got it
-                </Button>
-              </div>
-            )}
-
-            <Button
-              className="shadow-lg"
-              onClick={() => setDirectorsCutOpen(true)}
-            >
-              <Film className="mr-2 h-4 w-4" /> Director&apos;s Cut
-            </Button>
-          </div>
-
-          <DirectorsCutPanel
-            manifest={currentManifest}
-            isOpen={directorsCutOpen}
-            isRegenerating={directorsCutRegenerating}
-            onClose={() => setDirectorsCutOpen(false)}
-            onRegenerateWithDirection={handleRegenerateWithDirection}
-            onFieldOverride={handleFieldOverride}
-            onApply={() => setDirectorsCutOpen(false)}
-            diff={manifestDiff}
-          />
-        </>
-      )}
-
       <LyricVideoComposer
         open={videoComposerOpen}
         onOpenChange={setVideoComposerOpen}
@@ -2357,41 +2087,6 @@ export function LyricDisplay({
           artist={profileDisplayName}
           audioFile={audioFile}
           seed={`${data.title}-${renderData.hook.start.toFixed(3)}`}
-        />
-      )}
-
-      {/* Lyric Dance Exporter — full song */}
-      {renderData?.motionProfileSpec && beatGrid?.beats && (
-        <LyricDanceExporter
-          isOpen={lyricDanceExportOpen}
-          onClose={() => setLyricDanceExportOpen(false)}
-          spec={
-            hookDanceOverrides.system
-              ? {
-                  ...(renderData.motionProfileSpec as PhysicsSpec),
-                  system: hookDanceOverrides.system,
-                  palette:
-                    hookDanceOverrides.palette ||
-                    (renderData.motionProfileSpec as PhysicsSpec).palette,
-                }
-              : hookDanceOverrides.palette
-                ? {
-                    ...(renderData.motionProfileSpec as PhysicsSpec),
-                    palette: hookDanceOverrides.palette,
-                  }
-                : (renderData.motionProfileSpec as PhysicsSpec)
-          }
-          beats={beatGrid.beats.map((t, i) => ({
-            time: t,
-            isDownbeat: i % 4 === 0,
-            strength: i % 4 === 0 ? 1 : 0.6,
-          }))}
-          lines={data.lines.filter((l) => l.tag !== "adlib")}
-          songStart={0}
-          songEnd={data.lines[data.lines.length - 1]?.end ?? 0}
-          audioUrl={exporterAudioUrl}
-          cinematicDirection={(renderData as any)?.cinematic_direction ?? null}
-          frameState={(renderData as any)?.frame_state ?? null}
         />
       )}
 
