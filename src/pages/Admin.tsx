@@ -52,7 +52,24 @@ export default function Admin() {
   const [nukeOpen, setNukeOpen] = useState(false);
   const [nuking, setNuking] = useState(false);
   const [nukeConfirmText, setNukeConfirmText] = useState("");
+  const [, forceAdminRerender] = useState(0);
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
+
+  // Hydrate engine feature flags from sessionStorage
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('__LYRIC_DANCE_LIGHTNING_BAR')) {
+        (window as any).__LYRIC_DANCE_LIGHTNING_BAR = true;
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    (window as any).__forceAdminRerender = () => forceAdminRerender((v) => v + 1);
+    return () => {
+      delete (window as any).__forceAdminRerender;
+    };
+  }, [forceAdminRerender]);
 
   // ── Reach tab state ──
   const [reachRows, setReachRows] = useState<any[]>([]);
@@ -310,6 +327,7 @@ export default function Admin() {
             <TabsTrigger value="copy">Copy</TabsTrigger>
             <TabsTrigger value="prompts">AI</TabsTrigger>
             <TabsTrigger value="css">CSS</TabsTrigger>
+            <TabsTrigger value="labs">Labs</TabsTrigger>
           </TabsList>
 
           {/* ── USERS TAB ── */}
@@ -662,6 +680,50 @@ export default function Admin() {
                 <GlobalCssEditor />
               </Suspense>
             )}
+          </TabsContent>
+
+          {/* ── LABS TAB ── */}
+          <TabsContent value="labs" className="mt-4 space-y-4">
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-4">
+              <h3 className="text-sm font-semibold tracking-wide uppercase text-white/60">Engine Feature Flags</h3>
+              <div className="flex items-center justify-between py-2 border-b border-white/5">
+                <div>
+                  <p className="text-sm font-medium text-white/90">Lightning Bar</p>
+                  <p className="text-xs text-white/40 mt-0.5">
+                    Replaces beat visualizer bars with a nervous-system + lightning bolt progress line.
+                    Uses Essentia hit detection, energy, brightness, and waveform preview.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const win = window as any;
+                    const next = !win.__LYRIC_DANCE_LIGHTNING_BAR;
+                    win.__LYRIC_DANCE_LIGHTNING_BAR = next;
+                    // Persist across page loads via sessionStorage
+                    try { sessionStorage.setItem('__LYRIC_DANCE_LIGHTNING_BAR', next ? '1' : ''); } catch {}
+                    // Force re-render
+                    setTab('labs');
+                    (window as any).__forceAdminRerender?.();
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    (window as any).__LYRIC_DANCE_LIGHTNING_BAR
+                      ? 'bg-green-500'
+                      : 'bg-white/10'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      (window as any).__LYRIC_DANCE_LIGHTNING_BAR
+                        ? 'translate-x-6'
+                        : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              <p className="text-[10px] text-white/25 italic">
+                Flags apply to new lyric dances loaded after toggling. Refresh pages with active players to see changes.
+              </p>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

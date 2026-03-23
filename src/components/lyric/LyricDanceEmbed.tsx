@@ -452,7 +452,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               </span>
             </div>
           )}
-          {!effectiveShowCover && !isWaiting && data && (
+          {!effectiveShowCover && !isWaiting && data && !(window as any).__LYRIC_DANCE_LIGHTNING_BAR && (
             <LyricDanceProgressBar
               player={player}
               data={data}

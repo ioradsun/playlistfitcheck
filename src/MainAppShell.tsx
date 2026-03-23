@@ -10,7 +10,7 @@ import { SiteCopyProvider } from "@/hooks/useSiteCopy";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { VoteGateProvider } from "@/hooks/useVoteGate";
 import { Navigate, Routes, Route } from "react-router-dom";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { AdminPageImport } from "@/lib/routePrefetch";
 
 const Index = lazy(() => import("./pages/Index"));
@@ -30,6 +30,15 @@ const PageLayout = lazy(() => import("@/components/PageLayout").then(m => ({ def
 const Admin = lazy(AdminPageImport);
 
 export default function MainAppShell() {
+  // ── Hydrate engine feature flags from sessionStorage ──
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('__LYRIC_DANCE_LIGHTNING_BAR')) {
+        (window as any).__LYRIC_DANCE_LIGHTNING_BAR = true;
+      }
+    } catch {}
+  }, []);
+
   return (
     <AuthProvider>
       <SiteCopyProvider>

@@ -609,6 +609,291 @@ class BeatVisSim {
   get canvas(): HTMLCanvasElement { return this.visCanvas; }
 }
 
+// ═══ NervousLightningBar: merged progress + beat visualizer ═══
+// Admin flag: window.__LYRIC_DANCE_LIGHTNING_BAR
+// One white trunk line = progress bar. Dendrites sprout on energy.
+// Lightning bolts crack on transient/bass hits. Color bleeds in from palette accent.
+// Pre-computed waveform preview shows unplayed song energy.
+
+const NLB_W = 640;
+const NLB_H = 96;
+
+interface NLBDendrite {
+  x: number; y: number;
+  vx: number; vy: number;
+  life: number;
+  rgb: [number, number, number];
+  thickness: number;
+  trail: Array<{ x: number; y: number }>;
+}
+
+interface NLBBolt {
+  points: Array<{ x: number; y: number }>;
+  life: number;
+  rgb: [number, number, number];
+}
+
+class NervousLightningBar {
+  private nlbCanvas: HTMLCanvasElement;
+  private nlbCtx: CanvasRenderingContext2D;
+  private accent: [number, number, number] = [255, 215, 0];
+  private dendrites: NLBDendrite[] = [];
+  private bolts: NLBBolt[] = [];
+  private frame = 0;
+  private lastBeatIndex = -1;
+  private trunkVelocity: Float32Array;
+  private waveformPreview: Float32Array | null = null;
+
+  constructor(accentHex: string) {
+    this.nlbCanvas = document.createElement('canvas');
+    this.nlbCanvas.width = NLB_W;
+    this.nlbCanvas.height = NLB_H;
+    this.nlbCtx = this.nlbCanvas.getContext('2d')!;
+    this.trunkVelocity = new Float32Array(NLB_W).fill(0);
+    this.setAccent(accentHex);
+  }
+
+  private hexToRgb(hex: string): [number, number, number] {
+    const c = hex.replace('#', '').padEnd(6, '0');
+    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+  }
+
+  setAccent(hex: string): void { this.accent = this.hexToRgb(hex); }
+
+  /** Call once after beat analysis completes. Accepts beatEnergies array (one per beat). */
+  setWaveformPreview(beatEnergies: number[]): void {
+    const out = new Float32Array(NLB_W);
+    if (beatEnergies.length === 0) { this.waveformPreview = out; return; }
+    for (let x = 0; x < NLB_W; x++) {
+      const srcIdx = (x / NLB_W) * beatEnergies.length;
+      const lo = Math.floor(srcIdx);
+      const hi = Math.min(lo + 1, beatEnergies.length - 1);
+      const frac = srcIdx - lo;
+      out[x] = beatEnergies[lo] * (1 - frac) + beatEnergies[hi] * frac;
+    }
+    this.waveformPreview = out;
+  }
+
+  update(
+    energy: number,
+    pulse: number,
+    hitStrength: number,
+    beatPhase: number,
+    beatIndex: number,
+    progress: number = 0,
+    hitType: 'transient' | 'bass' | 'tonal' | 'none' = 'none',
+    brightness: number = 0.5,
+    isDownbeat: boolean = false,
+  ): void {
+    const ctx = this.nlbCtx;
+    const W = NLB_W;
+    const H = NLB_H;
+    const centerY = H * 0.55;
+    const px = Math.max(0, Math.min(W - 1, Math.floor(progress * W)));
+
+    this.frame++;
+    const f = this.frame;
+    const [ar, ag, ab] = this.accent;
+    const isNewBeat = beatIndex !== this.lastBeatIndex;
+    this.lastBeatIndex = beatIndex;
+
+    // ── Motion blur ──
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(0, 0, W, H);
+
+    // ── Physics: inject velocity on hits, propagate wave ──
+    const vel = this.trunkVelocity;
+    if (hitStrength > 0.3) {
+      const impulse = hitStrength * 25 * (hitType === 'bass' ? 1.5 : 1.0);
+      const dir = hitType === 'bass' ? 1 : (Math.random() > 0.5 ? 1 : -1);
+      vel[px] += impulse * dir;
+    }
+    for (let i = 0; i < W; i++) vel[i] *= 0.90;
+    for (let i = 1; i < W - 1; i++) {
+      vel[i] += (vel[i - 1] - vel[i]) * 0.04 + (vel[i + 1] - vel[i]) * 0.04;
+    }
+
+    const getTrunkY = (x: number): number => {
+      const wave = Math.sin(x * 0.025 + f * 0.015) * energy * 6;
+      const brightnessDrift = (brightness - 0.5) * 6;
+      const phaseDrift = Math.sin((beatPhase * Math.PI * 2) + x * 0.01) * 1.5;
+      return centerY + wave + phaseDrift + brightnessDrift + (vel[x] || 0);
+    };
+
+    // ── FUTURE: ghosted waveform preview ──
+    if (this.waveformPreview) {
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      for (let x = px; x < W; x++) {
+        const amp = (this.waveformPreview[x] || 0) * 12;
+        const y = centerY + Math.sin(x * 0.025) * amp;
+        x === px ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      ctx.moveTo(px, centerY);
+      ctx.lineTo(W, centerY);
+      ctx.stroke();
+    }
+
+    // ── PLAYED: white trunk line with color bleed near playhead ──
+    for (let x = 0; x < px; x++) {
+      const x2 = x + 1;
+      const y1 = getTrunkY(x);
+      const y2 = getTrunkY(x2);
+      const distFromHead = (px - x) / W;
+      const colorBleed = Math.max(0, 1 - distFromHead * 10) * energy;
+      const transientFlash = (x > px - 15 && hitStrength > 0.3) ? hitStrength * 0.6 : 0;
+      const blendAmt = Math.min(1, colorBleed + transientFlash);
+
+      const r = Math.round(255 + (ar - 255) * blendAmt);
+      const g = Math.round(255 + (ag - 255) * blendAmt);
+      const b = Math.round(255 + (ab - 255) * blendAmt);
+      const alpha = 0.4 + energy * 0.35 + pulse * 0.15;
+      const thickness = 1 + energy * 1.5 + Math.abs(vel[x] || 0) * 0.08;
+
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(1, alpha)})`;
+      ctx.lineWidth = thickness;
+
+      if (blendAmt > 0.1) {
+        ctx.shadowColor = `rgba(${ar},${ag},${ab},${blendAmt * 0.4})`;
+        ctx.shadowBlur = blendAmt * 8;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.moveTo(x, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+
+    // ── SPAWN DENDRITES: on sustained energy ──
+    if (energy > 0.45 && f % 3 === 0) {
+      const numBranches = Math.floor(energy * 2.5) + (isNewBeat && isDownbeat ? 2 : 0);
+      for (let b = 0; b < numBranches; b++) {
+        const angle = (Math.random() - 0.5) * Math.PI * 0.7;
+        const speed = 1.5 + energy * 4;
+        const baseY = getTrunkY(px);
+        this.dendrites.push({
+          x: px, y: baseY,
+          vx: Math.cos(angle) * speed * (Math.random() > 0.5 ? 0.4 : -0.4),
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          rgb: [ar, ag, ab],
+          thickness: 0.4 + energy * 1.2,
+          trail: [{ x: px, y: baseY }],
+        });
+      }
+    }
+
+    // ── SPAWN LIGHTNING BOLTS: on transient/bass hits ──
+    if (isNewBeat && hitStrength > 0.4 && (hitType === 'transient' || hitType === 'bass')) {
+      const baseY = getTrunkY(px);
+      const points = [{ x: px, y: baseY }];
+      let bx = px, by = baseY;
+      const dir = hitType === 'bass' ? 1 : (Math.random() > 0.5 ? -1 : 1);
+      const segments = 3 + Math.floor(hitStrength * 5);
+      for (let s = 0; s < segments; s++) {
+        bx += (Math.random() - 0.4) * 12;
+        by += dir * (4 + Math.random() * 12);
+        points.push({ x: bx, y: Math.max(2, Math.min(H - 2, by)) });
+      }
+      this.bolts.push({ points, life: 1, rgb: [ar, ag, ab] });
+
+      if (hitStrength > 0.7) {
+        const forkPoints = [{ x: px, y: baseY }];
+        let fx = px, fy = baseY;
+        const forkDir = -dir;
+        for (let s = 0; s < segments - 1; s++) {
+          fx += (Math.random() - 0.5) * 10;
+          fy += forkDir * (3 + Math.random() * 10);
+          forkPoints.push({ x: fx, y: Math.max(2, Math.min(H - 2, fy)) });
+        }
+        this.bolts.push({ points: forkPoints, life: 0.85, rgb: [ar, ag, ab] });
+      }
+    }
+
+    // ── UPDATE & DRAW DENDRITES ──
+    this.dendrites = this.dendrites.filter(d => d.life > 0.05);
+    for (const d of this.dendrites) {
+      d.x += d.vx;
+      d.y += d.vy;
+      d.vx *= 0.95;
+      d.vy *= 0.95;
+      d.vy += (Math.random() - 0.5) * 0.7;
+      d.life -= 0.022;
+      d.trail.push({ x: d.x, y: d.y });
+      if (d.trail.length > 18) d.trail.shift();
+
+      if (d.trail.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(d.trail[0].x, d.trail[0].y);
+        for (let i = 1; i < d.trail.length; i++) ctx.lineTo(d.trail[i].x, d.trail[i].y);
+        ctx.strokeStyle = `rgba(${d.rgb[0]},${d.rgb[1]},${d.rgb[2]},${d.life * 0.45})`;
+        ctx.lineWidth = Math.max(0.2, d.thickness * d.life);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(${d.rgb[0]},${d.rgb[1]},${d.rgb[2]},${d.life * 0.5})`;
+        ctx.arc(d.x, d.y, Math.max(0.1, d.thickness * d.life * 1.3), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // ── UPDATE & DRAW BOLTS ──
+    this.bolts = this.bolts.filter(b => b.life > 0.03);
+    for (const b of this.bolts) {
+      b.life -= 0.045;
+
+      ctx.beginPath();
+      ctx.moveTo(b.points[0].x, b.points[0].y);
+      for (let i = 1; i < b.points.length; i++) {
+        ctx.lineTo(
+          b.points[i].x + (Math.random() - 0.5) * 2.5 * b.life,
+          b.points[i].y,
+        );
+      }
+      ctx.strokeStyle = `rgba(${b.rgb[0]},${b.rgb[1]},${b.rgb[2]},${b.life * 0.65})`;
+      ctx.lineWidth = b.life * 2.5;
+      ctx.shadowColor = `rgba(${b.rgb[0]},${b.rgb[1]},${b.rgb[2]},${b.life})`;
+      ctx.shadowBlur = b.life * 12;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(b.points[0].x, b.points[0].y);
+      for (let i = 1; i < b.points.length; i++) ctx.lineTo(b.points[i].x, b.points[i].y);
+      ctx.strokeStyle = `rgba(255,255,255,${b.life * 0.4})`;
+      ctx.lineWidth = b.life * 0.8;
+      ctx.shadowBlur = 0;
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+
+    // ── PLAYHEAD ──
+    const phy = getTrunkY(px);
+    const isHit = hitStrength > 0.4;
+    ctx.beginPath();
+    ctx.fillStyle = isHit ? `rgba(${ar},${ag},${ab},1)` : '#fff';
+    ctx.shadowColor = isHit ? `rgba(${ar},${ag},${ab},0.7)` : 'rgba(255,255,255,0.5)';
+    ctx.shadowBlur = 5 + energy * 10;
+    ctx.arc(px, phy, Math.max(0.5, 2.5 + energy * 2), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // ── Cap to prevent runaway ──
+    if (this.dendrites.length > 60) this.dendrites = this.dendrites.slice(-60);
+    if (this.bolts.length > 12) this.bolts = this.bolts.slice(-12);
+  }
+
+  get canvas(): HTMLCanvasElement { return this.nlbCanvas; }
+}
+
 // ═══ Hero Decomposition Particles ═══
 // When a solo hero word (≥500ms) exits, it "freezes" then shatters into particles.
 interface HeroDecompParticle {
@@ -812,6 +1097,9 @@ export class LyricDancePlayer {
   private _barVisStyles: BarVisStyle[] = []; // per-chapter bar style from AI mood
   private lastSimFrame = -1;
   private _beatVisCanvas: HTMLCanvasElement | null = null; // separate from themed sims
+  // ═══ Lightning Bar (feature flag: window.__LYRIC_DANCE_LIGHTNING_BAR) ═══
+  private _globalLightningBar: NervousLightningBar | null = null;
+  public lightningBarEnabled = false;
   private chapterImages: HTMLImageElement[] = [];
   /** Pre-blurred versions of chapter images — eliminates per-frame ctx.filter blur() cost */
   private _preBlurredImages: HTMLCanvasElement[] = [];
@@ -1046,6 +1334,7 @@ export class LyricDancePlayer {
   // Compatibility with existing React shell
   async init(): Promise<void> {
     this.perfDebugEnabled = Boolean((window as Window & { __LYRIC_DANCE_DEBUG_PERF?: boolean }).__LYRIC_DANCE_DEBUG_PERF);
+    this.lightningBarEnabled = Boolean((window as Window & { __LYRIC_DANCE_LIGHTNING_BAR?: boolean }).__LYRIC_DANCE_LIGHTNING_BAR);
     this._firstPaintMarked = false;
     this._fontLayoutReflowPending = false;
     performance.clearMarks("engine:start");
@@ -1601,8 +1890,9 @@ export class LyricDancePlayer {
       if (secIdx !== this._framePaletteTime) {
         this._framePaletteTime = secIdx;
         this._framePalette = this._resolveCurrentPalette(secIdx);
-        if (this._globalBeatVis && this._framePalette?.[1]) {
-          this._globalBeatVis.setAccent(this._framePalette[1]);
+        if (this._framePalette?.[1]) {
+          if (this._globalBeatVis) this._globalBeatVis.setAccent(this._framePalette[1]);
+          if (this._globalLightningBar) this._globalLightningBar.setAccent(this._framePalette[1]);
         }
       }
     }
@@ -2032,6 +2322,7 @@ export class LyricDancePlayer {
     this._zeroCanvas(this._bgSnapshot);
     this._bgSnapshot = null;
     this._globalBeatVis = null;
+    this._globalLightningBar = null;
     this._beatVisCanvas = null;
     this.emojiRisers = [];
     this._emojiSpawnQueue = [];
@@ -2251,8 +2542,9 @@ export class LyricDancePlayer {
         if (secIdx !== this._framePaletteTime) {
           this._framePaletteTime = secIdx;
           this._framePalette = this._resolveCurrentPalette(secIdx);
-          if (this._globalBeatVis && this._framePalette?.[1]) {
-            this._globalBeatVis.setAccent(this._framePalette[1]);
+          if (this._framePalette?.[1]) {
+            if (this._globalBeatVis) this._globalBeatVis.setAccent(this._framePalette[1]);
+            if (this._globalLightningBar) this._globalLightningBar.setAccent(this._framePalette[1]);
           }
         }
       }
@@ -2664,7 +2956,15 @@ export class LyricDancePlayer {
     } else {
       // At tier >= 2, skip expensive fire/water/aurora sims but still update beat visualizer
       // (beat vis is always drawn — it's a single cheap drawImage).
-      if (this._globalBeatVis) {
+      if (this.lightningBarEnabled && this._globalLightningBar) {
+        const bs = this._lastBeatState;
+        const songDuration = Math.max(0.01, this.songEndSec - this.songStartSec);
+        const songProgress = Math.max(0, Math.min(1, (this.audio.currentTime - this.songStartSec) / songDuration));
+        this._globalLightningBar.update(
+          bs?.energy ?? 0, bs?.pulse ?? 0, bs?.hitStrength ?? 0, bs?.phase ?? 0, bs?.beatIndex ?? 0,
+          songProgress, bs?.hitType ?? 'none', bs?.brightness ?? 0.5, bs?.isDownbeat ?? false,
+        );
+      } else if (this._globalBeatVis) {
         const bs = this._lastBeatState;
         this._globalBeatVis.update(bs?.energy ?? 0, bs?.pulse ?? 0, bs?.hitStrength ?? 0, bs?.phase ?? 0, bs?.beatIndex ?? 0);
       }
@@ -2770,19 +3070,39 @@ export class LyricDancePlayer {
     // ═══ Beat visualizer strip — drawn every frame on main canvas (not in snapshot) ═══
     // Single lightweight drawImage of 320×64 offscreen canvas. Costs ~0.1ms/frame.
     // Must be outside snapshot path to stay synced to real-time beat state.
-    if (this._globalBeatVis) {
+    {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
-      const visAlpha = Math.min(0.85, 0.30 + bsEnergy * 0.40 + bsPulse * 0.15);
-      if (visAlpha > 0.01) {
-        const visH = this.height * 0.28;
-        const visTop = this.height - visH;
-        this.ctx.globalAlpha = visAlpha;
-        this.ctx.imageSmoothingEnabled = false;
-        this.ctx.drawImage(this._globalBeatVis.canvas, 0, visTop, this.width, visH);
-        this.ctx.imageSmoothingEnabled = true;
-        this.ctx.globalAlpha = 1;
+      const activeCnv = this.lightningBarEnabled && this._globalLightningBar
+        ? this._globalLightningBar.canvas
+        : this._globalBeatVis?.canvas ?? null;
+
+      if (activeCnv) {
+        if (this.lightningBarEnabled) {
+          // Lightning bar: taller strip (18%), smooth scaling, slightly higher base alpha
+          const visAlpha = Math.min(0.90, 0.40 + bsEnergy * 0.35 + bsPulse * 0.15);
+          if (visAlpha > 0.01) {
+            const visH = this.height * 0.18;
+            const visTop = this.height - visH;
+            this.ctx.globalAlpha = visAlpha;
+            this.ctx.imageSmoothingEnabled = true;
+            this.ctx.drawImage(activeCnv, 0, visTop, this.width, visH);
+            this.ctx.globalAlpha = 1;
+          }
+        } else {
+          // Original BeatVisSim: unchanged behavior
+          const visAlpha = Math.min(0.85, 0.30 + bsEnergy * 0.40 + bsPulse * 0.15);
+          if (visAlpha > 0.01) {
+            const visH = this.height * 0.28;
+            const visTop = this.height - visH;
+            this.ctx.globalAlpha = visAlpha;
+            this.ctx.imageSmoothingEnabled = false;
+            this.ctx.drawImage(activeCnv, 0, visTop, this.width, visH);
+            this.ctx.imageSmoothingEnabled = true;
+            this.ctx.globalAlpha = 1;
+          }
+        }
       }
     }
 
@@ -4297,6 +4617,14 @@ export class LyricDancePlayer {
       if (!this._globalBeatVis) {
         this._globalBeatVis = new BeatVisSim(accentColor);
       }
+      if (!this._globalLightningBar) {
+        this._globalLightningBar = new NervousLightningBar(accentColor);
+        // Feed pre-computed waveform if available from audio analysis
+        const analysisRef = (this.conductor as any)?._analysis as import('@/engine/audioAnalyzer').AudioAnalysis | null;
+        if (analysisRef?.beatEnergies) {
+          this._globalLightningBar.setWaveformPreview(analysisRef.beatEnergies);
+        }
+      }
 
       this.chapterSims = chapters.map(() => ({}));
 
@@ -4321,7 +4649,22 @@ export class LyricDancePlayer {
       const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
       const chapterIdx = this._frameSectionIdx >= 0 ? Math.min(this._frameSectionIdx, chapters.length - 1) : chapters.length - 1;
       const ci = Math.max(0, chapterIdx);
-      if (this._globalBeatVis) {
+      if (this.lightningBarEnabled && this._globalLightningBar) {
+        const bs = this._lastBeatState;
+        const songDuration = Math.max(0.01, this.songEndSec - this.songStartSec);
+        const songProgress = Math.max(0, Math.min(1, (this.audio.currentTime - this.songStartSec) / songDuration));
+        this._globalLightningBar.update(
+          bs?.energy ?? 0,
+          bs?.pulse ?? 0,
+          bs?.hitStrength ?? 0,
+          bs?.phase ?? 0,
+          bs?.beatIndex ?? 0,
+          songProgress,
+          bs?.hitType ?? 'none',
+          bs?.brightness ?? 0.5,
+          bs?.isDownbeat ?? false,
+        );
+      } else if (this._globalBeatVis) {
         const visStyle = this._barVisStyles[ci] ?? 'flame';
         this._globalBeatVis.setStyle(visStyle);
         const bs = this._lastBeatState;
