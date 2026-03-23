@@ -160,6 +160,7 @@ export default function ShareableLyricDance() {
     handleCommentFromBar,
     isWaiting,
     commentRefreshKey,
+    lightningBarEnabled,
   } = core;
 
   useEffect(() => {
@@ -383,7 +384,7 @@ export default function ShareableLyricDance() {
           ...(isMobile ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
         }}
       >
-        {!showCover && !isWaiting && renderData && !(window as any).__LYRIC_DANCE_LIGHTNING_BAR && (
+        {!showCover && !isWaiting && renderData && !lightningBarEnabled && (
           <LyricDanceProgressBar
             player={player}
             data={renderData}
