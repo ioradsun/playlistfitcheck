@@ -1736,7 +1736,7 @@ async function callScene(
         body: JSON.stringify({
           model: PRIMARY_MODEL,
           messages: [
-            { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
+            { role: "system", content: scenePrefix + sceneSystemPrompt },
             { role: "user", content: userMessage },
             {
               role: "user",
