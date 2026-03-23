@@ -1056,15 +1056,7 @@ export class LyricDancePlayer {
   private _evalChunkPool: Array<ScaledKeyframe['chunks'][number]> = [];
   private _activeGroupIndices: number[] = [];
 
-  // ═══ Multi-line layout cache — computed once per group, invalidated on font change ═══
-  private _mlLayoutCache = new Map<number, {
-    isMultiLine: boolean;
-    dx: number[];
-    dy: number[];
-    groupIdx: number;
-    resolvedFont: string;
-    maxZoom: number;
-  }>();
+  // ML layout cache removed — fitTextToViewport handles all layout at compile time
 
   // ═══ Watermark cache — invalidated on resize ═══
   private _watermarkCache: { font: string; w: number; h: number; x: number; y: number } | null = null;
@@ -1936,7 +1928,6 @@ export class LyricDancePlayer {
     this._vignetteKey = '';
     this._preBlurredImages = []; // invalidate — will use runtime blur fallback until reload
     this._watermarkCache = null; // invalidate — dimensions depend on this.width
-    this._mlLayoutCache.clear(); // invalidate — viewport scale changed
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
     this._updateViewportScale();
@@ -2038,7 +2029,6 @@ export class LyricDancePlayer {
     this._springOffset = 0;
     this._springVelocity = 0;
     this._timeInitialized = false;
-    this._mlLayoutCache.clear();
     this._textMetricsCache.clear();
     this._lastVisibleChunkCount = -1;
     this._lastVisibleChunkSetHash = 0;
@@ -2097,7 +2087,6 @@ export class LyricDancePlayer {
     this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    this._mlLayoutCache.clear(); // cinematic direction can change font/layout
     // ═══ V2: Recompute timing budgets with conductor ═══
     if (this.compiledScene?.phraseGroups?.length > 0 && this.conductor) {
       this.timingBudgets = computeTimingBudgets(this.compiledScene.phraseGroups as any, this.conductor);
@@ -2170,7 +2159,6 @@ export class LyricDancePlayer {
     this._markCompiledViewport(this.width || 960, this.height || 540);
     this._buildChunkCacheFromScene(this.compiledScene);
     this._textMetricsCache.clear();
-    this._mlLayoutCache.clear();
     if (this.compiledScene?.phraseGroups?.length > 0 && this.conductor) {
       this.timingBudgets = computeTimingBudgets(this.compiledScene.phraseGroups as any, this.conductor);
       this._buildWordBudgetMap();
@@ -2296,7 +2284,6 @@ export class LyricDancePlayer {
     this.emojiRisers = [];
     this._emojiSpawnQueue = [];
     this._textMetricsCache.clear();
-    this._mlLayoutCache.clear();
     this._watermarkCache = null;
     this._zeroCanvas(this._measureCanvas);
     this._zeroCanvas(this.textCanvas);
@@ -2441,7 +2428,6 @@ export class LyricDancePlayer {
       if (this._fontLayoutReflowPending) {
         this._fontLayoutReflowPending = false;
         this._textMetricsCache.clear();
-        this._mlLayoutCache.clear();
         this._lastVisibleChunkCount = -1;
         this._lastVisibleChunkSetHash = 0;
         this._lastVisibleFirstChunkId = "";
@@ -3255,49 +3241,8 @@ export class LyricDancePlayer {
       }
     }
 
-    let shrinkOccurred = false;
-    for (let passPriority = 2; passPriority >= 0; passPriority -= 1) {
-      for (let bi = 0; bi < bounds.length; bi += 1) {
-        const b = bounds[bi];
-        if (b.priority !== passPriority) continue;
-        const availW = wallRight - wallLeft;
-        const availH = wallBottom - wallTop;
-        const tooWide = b.halfW * 2 > availW;
-        const tooTall = b.halfH * 2 > availH;
-        if (!tooWide && !tooTall) continue;
-        const shrinkRatioW = tooWide ? (availW / (b.halfW * 2)) : 1;
-        const shrinkRatioH = tooTall ? (availH / (b.halfH * 2)) : 1;
-        const shrinkRatio = Math.min(shrinkRatioW, shrinkRatioH);
-        b.fontSize = Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio));
-        const newFontStr = `${b.weight} ${b.fontSize}px ${b.family}`;
-        const metrics2 = this.getCachedMetrics(b.text, newFontStr);
-        b.baseTextWidth = metrics2.width;
-        const asc2 = metrics2.ascent;
-        const desc2 = metrics2.descent;
-        const halfTextH2 = (asc2 + desc2) / 2;
-        b.halfW = (b.baseTextWidth * Math.abs(b.scaleX)) / 2 + 6;
-        b.halfH = (halfTextH2 * Math.abs(b.scaleY)) + 3;
-        shrinkOccurred = true;
-      }
-    }
-
-    if (shrinkOccurred) {
-      this.solveConstraints(bounds, wallLeft, wallRight, wallTop, wallBottom);
-      // In-place copy — avoid allocating N new objects on every shrink frame.
-      // Only fall back to map() when the array must grow (rare).
-      if (this._solvedBounds.length !== bounds.length) {
-        this._solvedBounds = bounds.map(b => ({ ...b }));
-      } else {
-        for (let si = 0; si < bounds.length; si++) {
-          this._solvedBounds[si].cx = bounds[si].cx;
-          this._solvedBounds[si].cy = bounds[si].cy;
-          this._solvedBounds[si].fontSize = bounds[si].fontSize;
-          this._solvedBounds[si].halfW = bounds[si].halfW;
-          this._solvedBounds[si].halfH = bounds[si].halfH;
-          this._solvedBounds[si].baseTextWidth = bounds[si].baseTextWidth;
-        }
-      }
-    }
+    // Font shrink pass removed — fitTextToViewport guarantees text fits at compile time.
+    // Wall clamping (position only) is handled by the existing wall-clamp loop above.
 
     this.ctx.save();
     // ═══ DIRECTOR'S CAMERA: Pure depth — zoom into the words ═══
@@ -4967,26 +4912,6 @@ export class LyricDancePlayer {
       activeGroups.length = 0;
     }
 
-    // Compute centering offset for the active group:
-    // shift its words so the group center lands at (480, 270) in compile space
-    let groupCenterOffsetX = 0;
-    let _compileWrapped = false;
-    if (activeGroupIdx >= 0) {
-      const g = groups[activeGroupIdx];
-      let minX = Infinity, maxX = -Infinity;
-      let minY = Infinity, maxY = -Infinity;
-      for (const w of g.words) {
-        minX = Math.min(minX, w.layoutX);
-        maxX = Math.max(maxX, w.layoutX);
-        minY = Math.min(minY, w.layoutY);
-        maxY = Math.max(maxY, w.layoutY);
-      }
-      _compileWrapped = (maxY - minY) > 5;
-      if (!_compileWrapped) {
-        const groupCenterX = (minX + maxX) / 2;
-        groupCenterOffsetX = 480 - groupCenterX;
-      }
-    }
 
     // Line transition easing removed — active chunk always at center
 
@@ -5038,243 +4963,9 @@ export class LyricDancePlayer {
         }
       }
 
-      // ═══ MULTI-LINE LAYOUT — cached per group ═══
-      // Layout is stable for the lifetime of a group: font, word list, emphasis levels
-      // don't change mid-group. We compute it once and cache by groupIdx + resolvedFont.
-      // Invalidated on: font reflow, resize, seek, cinematic direction change.
-      // Layout must fit at maximum camera zoom — not just at rest.
-      // CameraRig zooms in on beats, narrowing effective viewport.
-      // Add 8% breathing room so words never touch the walls even at peak zoom + shake.
-      const maxCameraZoom = this.cameraRig?.config?.maxZoom ?? 1.18;
-      const MAX_LINE_WIDTH = (960 * 0.85) / maxCameraZoom * 0.92;
-      const displaySpaceRatio = (fontSize: number): number =>
-        0.25 + Math.min(0.15, Math.max(0, (fontSize - 24) / 160));
-      let _isMultiLine = false;
-      let _mlDx: number[];
-      let _mlDy: number[];
-
-      const _resolvedFontForML = this.getResolvedFont();
-
-      // ── Cache read gated on current + no active solo hero ──
-      // Offscreen groups skip entirely (no layout needed).
-      // Solo-hero-active frames must ALSO skip: the cache was written when
-      // groupHasActiveSoloHero=false (multi-line offsets computed). When the
-      // hero word activates, heroOffsetX/Y is applied on top of the cached
-      // _mlDx/y — both centering systems compound and the word jumps.
-      // Fix: if a solo hero is active, treat as no multi-line layout.
-      let _hasValidMlCache = false;
-      if (lineRole === 'current' && !groupHasActiveSoloHero) {
-        const _mlCached = this._mlLayoutCache.get(groupIdx);
-        if (
-          _mlCached &&
-          _mlCached.groupIdx === groupIdx &&
-          _mlCached.resolvedFont === _resolvedFontForML &&
-          _mlCached.maxZoom === maxCameraZoom
-        ) {
-          // Cache hit — reuse precomputed layout, zero measureText calls
-          _isMultiLine = _mlCached.isMultiLine;
-          _mlDx = _mlCached.dx;
-          _mlDy = _mlCached.dy;
-          _hasValidMlCache = true;
-        } else {
-          // Cache miss — fall through to compute block below
-          _mlDx = [];
-          _mlDy = [];
-        }
-      } else {
-        // Offscreen — skip cache entirely, use defaults
-        _mlDx = [];
-        _mlDy = [];
-      }
-
-      if (lineRole === 'current' && !_hasValidMlCache && !groupHasActiveSoloHero && group.words.length > 1) {
-          const mCtx = this._measureCtx;
-          const resolvedFontML = _resolvedFontForML;
-
-          // Measure total line width and detect scaled words in one pass
-          let hasScaledWord = false;
-          let totalLineW = 0;
-          for (let wi = 0; wi < group.words.length; wi++) {
-            const w = group.words[wi];
-            if (w.isHeroWord || (w.emphasisLevel ?? 0) >= 2) hasScaledWord = true;
-            const fs = Math.round(w.baseFontSize);
-            const fontStr = `${w.fontWeight ?? 700} ${fs}px ${w.fontFamily ?? resolvedFontML}`;
-            if (mCtx.font !== fontStr) mCtx.font = fontStr;
-            const emp = w.emphasisLevel ?? 0;
-            const emphasisScale = 1.0 + Math.max(0, emp - 1) * 0.25;
-            totalLineW += mCtx.measureText(w.text).width * emphasisScale;
-            if (wi < group.words.length - 1) {
-              const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
-              if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-              totalLineW += Math.max(mCtx.measureText(' ').width, fs * displaySpaceRatio(fs)) * 1.15;
-            }
-          }
-
-          // Trigger multi-line for scaled words OR wide lines
-          const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4;
-
-          if (needsWrap) {
-            _isMultiLine = true;
-            const normalFS = group.words[0].baseFontSize;
-            const normalLineH = normalFS * 1.5;
-
-            // Build line list: scaled words get solo lines, others wrap by measured width
-            type LineRange = { words: number[]; isHero: boolean; h: number };
-            const mlLines: LineRange[] = [];
-            let nonHeroBuf: number[] = [];
-
-            // Measure a word's rendered width at its base font size
-            const measureWordWidth = (wi: number): number => {
-              const w = group.words[wi];
-              const fs = Math.round(w.baseFontSize);
-              const fontStr = `${w.fontWeight ?? 700} ${fs}px ${w.fontFamily ?? resolvedFontML}`;
-              if (mCtx.font !== fontStr) mCtx.font = fontStr;
-              const rawWidth = mCtx.measureText(w.text).width;
-              // Account for runtime emphasis scaling — high-emphasis words render wider
-              const emp = w.emphasisLevel ?? 0;
-              const emphasisScale = 1.0 + Math.max(0, emp - 1) * 0.25;
-              return rawWidth * emphasisScale;
-            };
-
-            // Measure a space between two words
-            const measureSpace = (wi: number): number => {
-              const w = group.words[wi];
-              const fs = Math.round(w.baseFontSize);
-              const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
-              if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-              return Math.max(mCtx.measureText(' ').width, fs * displaySpaceRatio(fs)) * 1.15;
-            };
-
-            // A word wider than 60% of the line gets its own row
-            const SOLO_WORD_THRESHOLD = MAX_LINE_WIDTH * 0.6;
-
-            const flushNonHero = () => {
-              if (nonHeroBuf.length === 0) return;
-
-              // Greedy width-based wrapping
-              let rowWords: number[] = [];
-              let rowWidth = 0;
-
-              for (let i = 0; i < nonHeroBuf.length; i++) {
-                const wi = nonHeroBuf[i];
-                const ww = measureWordWidth(wi);
-
-                // Case 3: big word → gets its own row when it exceeds 60% of line width.
-                // Only pixel width matters — character count is unreliable because font
-                // metrics vary. The greedy wrapper handles the rest.
-                if (ww > SOLO_WORD_THRESHOLD) {
-                  if (rowWords.length > 0) {
-                    mlLines.push({ words: rowWords, isHero: false, h: normalLineH });
-                    rowWords = [];
-                    rowWidth = 0;
-                  }
-                  mlLines.push({ words: [wi], isHero: false, h: normalLineH });
-                  continue;
-                }
-
-                const spaceW = rowWords.length > 0 ? measureSpace(wi) : 0;
-
-                // Case 2: doesn't fit current row → start a new one
-                if (rowWords.length > 0 && rowWidth + spaceW + ww > MAX_LINE_WIDTH) {
-                  mlLines.push({ words: rowWords, isHero: false, h: normalLineH });
-                  rowWords = [wi];
-                  rowWidth = ww;
-                } else {
-                  // Case 1: fits → add to current row
-                  rowWords.push(wi);
-                  rowWidth += spaceW + ww;
-                }
-              }
-
-              if (rowWords.length > 0) {
-                mlLines.push({ words: rowWords, isHero: false, h: normalLineH });
-              }
-
-              nonHeroBuf = [];
-            };
-
-            for (let wi = 0; wi < group.words.length; wi++) {
-              const w = group.words[wi];
-              const isScaled = w.isHeroWord || (w.emphasisLevel ?? 0) >= 2;
-              if (isScaled) {
-                flushNonHero();
-                const heroEmp = w.emphasisLevel ?? 0;
-                const heroFS = w.baseFontSize;
-                const heroScale = 1.0 + Math.max(0, heroEmp - 1) * 0.25;
-                mlLines.push({ words: [wi], isHero: true, h: heroFS * heroScale * 1.4 });
-              } else {
-                nonHeroBuf.push(wi);
-              }
-            }
-            flushNonHero();
-
-            // Compute total height and center vertically around 0
-            let totalH = 0;
-            for (const l of mlLines) totalH += l.h;
-            let yPos = -totalH / 2;
-
-            for (const line of mlLines) {
-              const lineY = yPos + line.h / 2;
-
-              // Measure total line width to center it
-              let lineW = 0;
-              const wordWidths: number[] = [];
-              for (let i = 0; i < line.words.length; i++) {
-                const w = group.words[line.words[i]];
-                const fs = Math.round(w.baseFontSize);
-                const weight = w.fontWeight ?? 700;
-                const family = w.fontFamily ?? resolvedFontML;
-                const emp = w.emphasisLevel ?? 0;
-                const scale = line.isHero ? (1.0 + Math.max(0, emp - 1) * 0.25) : 1.0;
-                const fontStr = `${weight} ${fs}px ${family}`;
-                if (mCtx.font !== fontStr) mCtx.font = fontStr;
-                const ww = mCtx.measureText(w.text).width * scale;
-                wordWidths.push(ww);
-                lineW += ww;
-                if (i < line.words.length - 1) {
-                  const spaceStr = `400 ${fs}px ${family}`;
-                  if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-                  lineW += Math.max(mCtx.measureText(' ').width, fs * displaySpaceRatio(fs)) * 1.15;
-                }
-              }
-
-              // Position words left-to-right centered at x=480
-              const startX = 480 - lineW / 2;
-              let cursor = startX;
-              for (let i = 0; i < line.words.length; i++) {
-                const wi = line.words[i];
-                const w = group.words[wi];
-                const wordCenterX = cursor + wordWidths[i] / 2;
-                _mlDx[wi] = wordCenterX - w.layoutX;
-                _mlDy[wi] = lineY;
-                cursor += wordWidths[i];
-                if (i < line.words.length - 1) {
-                  const fs = Math.round(w.baseFontSize);
-                  const spaceStr = `400 ${fs}px ${w.fontFamily ?? resolvedFontML}`;
-                  if (mCtx.font !== spaceStr) mCtx.font = spaceStr;
-                  cursor += Math.max(mCtx.measureText(' ').width, fs * displaySpaceRatio(fs)) * 1.15;
-                }
-              }
-
-              yPos += line.h;
-            }
-          }
-
-             // Store in cache only for current groups - offscreen passes must never
-          // prime the cache with isMultiLine=false + empty dx/dy.
-          if (this._mlLayoutCache.size >= 32) {
-            this._mlLayoutCache.delete(this._mlLayoutCache.keys().next().value!);
-          }
-          this._mlLayoutCache.set(groupIdx, {
-            isMultiLine: _isMultiLine,
-            dx: _mlDx.slice(),
-            dy: _mlDy.slice(),
-            groupIdx,
-            resolvedFont: _resolvedFontForML,
-            maxZoom: maxCameraZoom,
-          });
-        } // end cache-miss
-      
+      // ═══ LAYOUT: positions are pre-computed by fitTextToViewport at compile time ═══
+      // All words have correct layoutX (centered) and layoutY (stacked if wrapped).
+      // No runtime re-layout needed. No dual path. No ML cache.
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
@@ -5319,9 +5010,6 @@ export class LyricDancePlayer {
         const isEntryComplete = entryProgress >= 1.0;
         const isExiting = exitProgress > 0;
 
-        // ═══ ACTIVE CHUNK ONLY: always dead center, full brightness ═══
-        const roleY = 270; // center of 540px compile space
-
         // Base animation alpha (entry/exit/behavior)
         const animAlpha = isExiting
           ? Math.max(0, exitState.alpha)
@@ -5362,8 +5050,8 @@ export class LyricDancePlayer {
 
         // SOLO hero: ≥500ms, alone center screen
         if (isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
-          heroOffsetX = 480 - word.layoutX - groupCenterOffsetX; // center, undoing group shift
-          heroOffsetY = 270 - roleY;
+          heroOffsetX = 480 - word.layoutX; // center in reference space
+          heroOffsetY = 0;
           heroScaleMult = 1.5;
         }
 
@@ -5457,11 +5145,10 @@ export class LyricDancePlayer {
           waveScale = 1.0 + waveProximity * 0.06;
         }
 
-        // When multi-line is active, _mlDx already positions words centered at 480.
-        // Skip groupCenterOffsetX to avoid double-centering.
-        const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
-        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY) * sy;
+        // Positions from fitTextToViewport are already centered in 960×540 reference space.
+        // word.layoutX is centered at ~480. word.layoutY is centered at ~270.
+        chunk.x = (word.layoutX + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
+        chunk.y = (word.layoutY + finalOffsetY + heroOffsetY + beatNudgeY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
         chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
