@@ -1658,6 +1658,7 @@ async function callScene(
   userMessage: string,
   sectionCount: number,
   body: RequestBody,
+  sceneSystemPrompt: string = SCENE_DIRECTION_PROMPT,
 ): Promise<Record<string, any>> {
   const messages = [
     { role: "system", content: scenePrefix + sceneSystemPrompt },
