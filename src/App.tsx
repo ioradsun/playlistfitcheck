@@ -2,7 +2,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense } from "react";
 import { ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
 
 // ── Route detection — skip heavy imports on embed routes ──
@@ -52,16 +52,6 @@ const LyricDanceFallback = () => (
 );
 
 const App = () => {
-  useEffect(() => {
-    try {
-      (window as any).__LYRIC_DANCE_LIGHTNING_BAR = Boolean(
-        sessionStorage.getItem("__LYRIC_DANCE_LIGHTNING_BAR"),
-      );
-    } catch {
-      (window as any).__LYRIC_DANCE_LIGHTNING_BAR = false;
-    }
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="tfm-theme">
