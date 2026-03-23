@@ -417,7 +417,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       {!isBattleMode && !reactionPanelOpen && (
         <div
           className="absolute bottom-0 left-0 right-0 z-[450]"
-          style={{ background: "linear-gradient(to top, rgba(10,10,10,0.95) 60%, transparent)" }}
+          style={{ background: "#0a0a0a" }}
           onClick={(e) => e.stopPropagation()}
         >
           {reelsMode && artistName && effectiveShowCover && (
