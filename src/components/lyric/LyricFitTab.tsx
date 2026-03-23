@@ -1061,13 +1061,14 @@ export function LyricFitTab({
             );
 
             if (wordResult?.cinematicDirection) {
-              const { storyboard, wordDirectives } =
+              const { storyboard, wordDirectives, phrases } =
                 wordResult.cinematicDirection;
 
               const merged = {
                 ...enrichedScene,
                 storyboard: storyboard || [],
                 wordDirectives: wordDirectives || [],
+                phrases: phrases || [],
               };
               setCinematicDirection(merged);
               cinematicDirectionRef.current = merged;
