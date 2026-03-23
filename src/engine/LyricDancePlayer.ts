@@ -3431,36 +3431,7 @@ export class LyricDancePlayer {
           this.ctx.save();
           this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
         }
-
-        if (chunk.ghostTrail && chunk.visible && this._qualityTier === 0) {
-          const count = 1; // reduced from ghostCount (typically 3) — one ghost sells the motion, saves 2 fillText calls/frame
-          const spacing = chunk.ghostSpacing ?? 8;
-          const dir = chunk.ghostDirection ?? 'up';
-          for (let g = count; g >= 1; g -= 1) {
-            const ghostAlpha = drawAlpha * (0.12 + (count - g) * 0.06);
-            const offset = g * spacing;
-            let gx = 0, gy = 0;
-            switch (dir) {
-              case 'up': gy = offset; break;
-              case 'down': gy = -offset; break;
-              case 'left': gx = offset; break;
-              case 'right': gx = -offset; break;
-              case 'radial': gx = Math.cos(g * 1.2) * offset; gy = Math.sin(g * 1.2) * offset; break;
-            }
-            this.ctx.globalAlpha = ghostAlpha;
-            const [ga, gb, gc, gd, ge, gf] = this.computeTransformMatrix(
-              camShakeX + camCX + ((heroDrawX + gx) - camCX) * camZoom,
-              camShakeY + camCY + ((heroDrawY + gy) - camCY) * camZoom,
-              (chunk.rotation ?? 0) + camRotation,
-              chunk.skewX ?? 0,
-              sx * camZoom,
-              sy * camZoom,
-            );
-            this.ctx.setTransform(ga, gb, gc, gd, ge, gf);
-            this.ctx.fillText(chunk.text ?? obj.text, 0, 0);
-          }
-          this.ctx.globalAlpha = drawAlpha;
-        }
+        // Ghost trail removed — 1 copy at 12% opacity was invisible, saves fillText calls
 
         const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
           camShakeX + camCX + (heroDrawX - camCX) * camZoom,
