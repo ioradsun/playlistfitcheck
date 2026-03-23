@@ -1027,6 +1027,7 @@ async function callScene(
   scenePrefix: string,
   userMessage: string,
   sectionCount: number,
+  body: RequestBody,
 ): Promise<Record<string, any>> {
   const messages = [
     { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
@@ -1210,6 +1211,7 @@ async function callWithRetry(
   userMessage: string,
   sectionCount: number,
   lineCount: number,
+  body: RequestBody,
 ): Promise<Record<string, any>> {
   // Scale expected counts to song length — short songs can't fill 15-25 entries
   const idealMin = Math.max(3, Math.min(15, Math.floor(lineCount * 0.6)));
@@ -1384,7 +1386,7 @@ serve(async (req) => {
 
     if (body.mode === "scene") {
       const userMessage = buildUserMessage(title, artist, lines, listenerScene, body.audioSections, undefined);
-      const sceneResult = await callScene(apiKey, scenePrefix, userMessage, body.audioSections?.length ?? 0);
+      const sceneResult = await callScene(apiKey, scenePrefix, userMessage, body.audioSections?.length ?? 0, body);
 
       return new Response(JSON.stringify({ cinematicDirection: sceneResult }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1409,7 +1411,7 @@ serve(async (req) => {
     const systemPrompt = scenePrefix + CINEMATIC_DIRECTION_PROMPT;
     const userMessage = buildUserMessage(title, artist, lines, listenerScene, body.audioSections, body.words);
     const sectionCount = body.audioSections?.length ?? 0;
-    const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount, lines.length);
+    const result = await callWithRetry(apiKey, systemPrompt, userMessage, sectionCount, lines.length, body);
 
     if (lyricId) await persist(result, lyricId);
 
