@@ -283,8 +283,6 @@ export class CameraRig {
     if (bs.hitType === 'bass' || (bs.hitType === 'none' && isDownbeat)) {
       this._posY = -cfg.punchY * finalAmp * (0.5 + gravity * 0.5);
       this._velY = 0;
-      this._posZ = cfg.pushZoom * finalAmp * 0.6;
-      this._velZ = 0;
     } else if (bs.hitType === 'transient') {
       const dir = bs.beatIndex % 2 === 0 ? 1 : -1;
       this._posX = cfg.snapX * finalAmp * dir * (0.5 + latBias * 0.5);
@@ -292,8 +290,6 @@ export class CameraRig {
       this._posR = cfg.tiltRad * finalAmp * dir * 0.5;
       this._velR = 0;
     } else if (bs.hitType === 'tonal') {
-      this._posZ = cfg.pushZoom * finalAmp;
-      this._velZ = 0;
       this._posR = cfg.tiltRad * finalAmp * 0.3 * ((bs.beatIndex % 3 === 0) ? 1 : -1);
       this._velR = 0;
     } else {
@@ -310,7 +306,7 @@ export class CameraRig {
     const c = this.cfg.springC * kMod;
     [this._posX, this._velX] = springStep(this._posX, this._velX, 0, k, c, dt);
     [this._posY, this._velY] = springStep(this._posY, this._velY, 0, k, c, dt);
-    [this._posZ, this._velZ] = springStep(this._posZ, this._velZ, 0, k, c, dt);
+    // Z spring disabled — zoom removed to let fitTextToViewport control text size
     [this._posR, this._velR] = springStep(this._posR, this._velR, 0, k, c, dt);
   }
 
@@ -325,7 +321,7 @@ export class CameraRig {
     }
 
     this._cachedTransform = {
-      zoom: clamp(1 + this._posZ, 2 - cfg.maxZoom, cfg.maxZoom),
+      zoom: 1.0, // zoom disabled — fitTextToViewport sizes text to fill canvas, zoom fights that
       proximity: Math.max(0, this._posZ),
       offsetX: clamp(this._posX + shakeX, -cfg.maxOffsetPx, cfg.maxOffsetPx),
       offsetY: clamp(this._posY + shakeY, -cfg.maxOffsetPx, cfg.maxOffsetPx),
