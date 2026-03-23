@@ -198,92 +198,135 @@ function mergeShortGroups(groups: PhraseGroup[]): PhraseGroup[] {
 function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhrase[]): PhraseGroup[] {
   // ── Try AI phrases first ──
   if (aiPhrases && aiPhrases.length > 0) {
-    const groups: PhraseGroup[] = [];
-    let groupIdx = 0;
+    const isGlobalFormat = aiPhrases.some(
+      (phrase) => phrase.lineIndex === undefined || phrase.lineIndex === null,
+    );
 
-    // Build line→wordMeta mapping for fast lookup
-    const lineMap = new Map<number, WordMetaEntry[]>();
-    for (const wm of wordMeta) {
-      if (!lineMap.has(wm.lineIndex)) lineMap.set(wm.lineIndex, []);
-      lineMap.get(wm.lineIndex)!.push(wm);
-    }
+    if (isGlobalFormat) {
+      const groups: PhraseGroup[] = [];
+      let groupIdx = 0;
 
-    // Pre-compute global offset per line — AI sometimes returns global indices
-    const lineGlobalOffsets = new Map<number, number>();
-    {
-      let offset = 0;
-      const sortedLines = [...lineMap.entries()].sort((a, b) => a[0] - b[0]);
-      for (const [li, words] of sortedLines) {
-        lineGlobalOffsets.set(li, offset);
-        offset += words.length;
-      }
-    }
+      for (const phrase of aiPhrases) {
+        const [startIdx, endIdx] = phrase.wordRange;
 
-    for (const phrase of aiPhrases) {
-      const lineWords = lineMap.get(phrase.lineIndex);
-      if (!lineWords || lineWords.length === 0) continue;
+        // Global indices into the flat wordMeta array
+        const safeStart = Math.max(0, Math.min(startIdx, wordMeta.length - 1));
+        const safeEnd = Math.max(safeStart, Math.min(endIdx, wordMeta.length - 1));
 
-      let [startIdx, endIdx] = phrase.wordRange;
+        const phraseWords = wordMeta.slice(safeStart, safeEnd + 1);
+        if (phraseWords.length === 0) continue;
 
-      // ═══ FIX: detect global indices and convert to per-line ═══
-      // If startIdx >= lineWords.length, AI used global indexing
-      if (startIdx >= lineWords.length) {
-        const globalOffset = lineGlobalOffsets.get(phrase.lineIndex) ?? 0;
-        startIdx -= globalOffset;
-        endIdx -= globalOffset;
+        // lineIndex derived from first word (for backward compat with storyboard, palette, etc.)
+        const lineIndex = phraseWords[0].lineIndex;
+
+        groups.push({
+          words: phraseWords,
+          start: phraseWords[0].start,
+          end: phraseWords[phraseWords.length - 1].end,
+          anchorWordIdx: findAnchorWord(phraseWords),
+          lineIndex,
+          groupIndex: groupIdx,
+        });
+        groupIdx++;
       }
 
-      // Clamp indices to valid range
-      const safeStart = Math.max(0, Math.min(startIdx, lineWords.length - 1));
-      const safeEnd = Math.max(safeStart, Math.min(endIdx, lineWords.length - 1));
-
-      const phraseWords = lineWords.slice(safeStart, safeEnd + 1);
-      if (phraseWords.length === 0) continue;
-
-      groups.push({
-        words: phraseWords,
-        start: phraseWords[0].start,
-        end: phraseWords[phraseWords.length - 1].end,
-        anchorWordIdx: findAnchorWord(phraseWords),
-        lineIndex: phrase.lineIndex,
-        groupIndex: groupIdx,
-      });
-      groupIdx++;
-    }
-
-    if (groups.length > 0) {
-      groups.sort((a, b) => a.start - b.start);
-
-      // Check for ungrouped words — if AI missed some, append them as extra groups
-      const groupedWordIds = new Set<string>();
-      for (const g of groups) {
-        for (const w of g.words) {
-          groupedWordIds.add(`${w.lineIndex}-${w.wordIndex}`);
-        }
-      }
-
-      const ungrouped: WordMetaEntry[] = [];
-      for (const wm of wordMeta) {
-        if (!groupedWordIds.has(`${wm.lineIndex}-${wm.wordIndex}`)) {
-          ungrouped.push(wm);
-        }
-      }
-
-      if (ungrouped.length > 0) {
-        // Group ungrouped words using mechanical fallback
-        const fallbackGroups = mechanicalGrouping(ungrouped);
-        for (const fg of fallbackGroups) {
-          fg.groupIndex = groupIdx++;
-          groups.push(fg);
-        }
+      if (groups.length > 0) {
         groups.sort((a, b) => a.start - b.start);
+
+        // Check for ungrouped words
+        const groupedIndices = new Set<number>();
+        for (const g of groups) {
+          for (const w of g.words) {
+            const globalIdx = wordMeta.indexOf(w);
+            if (globalIdx >= 0) groupedIndices.add(globalIdx);
+          }
+        }
+
+        const ungrouped: WordMetaEntry[] = [];
+        for (let i = 0; i < wordMeta.length; i++) {
+          if (!groupedIndices.has(i)) ungrouped.push(wordMeta[i]);
+        }
+
+        if (ungrouped.length > 0) {
+          const fallbackGroups = mechanicalGrouping(ungrouped);
+          for (const fg of fallbackGroups) {
+            fg.groupIndex = groupIdx++;
+            groups.push(fg);
+          }
+          groups.sort((a, b) => a.start - b.start);
+        }
+
+        return groups.map((g) => ({
+          ...g,
+          end: Math.max(g.end, g.start + MIN_GROUP_DURATION),
+        }));
+      }
+    } else {
+      const groups: PhraseGroup[] = [];
+      let groupIdx = 0;
+
+      const lineMap = new Map<number, WordMetaEntry[]>();
+      for (const wm of wordMeta) {
+        if (!lineMap.has(wm.lineIndex)) lineMap.set(wm.lineIndex, []);
+        lineMap.get(wm.lineIndex)!.push(wm);
       }
 
-      // Enforce minimum duration
-      return groups.map(g => ({
-        ...g,
-        end: Math.max(g.end, g.start + MIN_GROUP_DURATION),
-      }));
+      for (const phrase of aiPhrases) {
+        const lineIndex = phrase.lineIndex;
+        if (typeof lineIndex !== 'number') continue;
+
+        const lineWords = lineMap.get(lineIndex);
+        if (!lineWords || lineWords.length === 0) continue;
+
+        const [startIdx, endIdx] = phrase.wordRange;
+        const safeStart = Math.max(0, Math.min(startIdx, lineWords.length - 1));
+        const safeEnd = Math.max(safeStart, Math.min(endIdx, lineWords.length - 1));
+
+        const phraseWords = lineWords.slice(safeStart, safeEnd + 1);
+        if (phraseWords.length === 0) continue;
+
+        groups.push({
+          words: phraseWords,
+          start: phraseWords[0].start,
+          end: phraseWords[phraseWords.length - 1].end,
+          anchorWordIdx: findAnchorWord(phraseWords),
+          lineIndex,
+          groupIndex: groupIdx,
+        });
+        groupIdx++;
+      }
+
+      if (groups.length > 0) {
+        groups.sort((a, b) => a.start - b.start);
+
+        const groupedWordIds = new Set<string>();
+        for (const g of groups) {
+          for (const w of g.words) {
+            groupedWordIds.add(`${w.lineIndex}-${w.wordIndex}`);
+          }
+        }
+
+        const ungrouped: WordMetaEntry[] = [];
+        for (const wm of wordMeta) {
+          if (!groupedWordIds.has(`${wm.lineIndex}-${wm.wordIndex}`)) {
+            ungrouped.push(wm);
+          }
+        }
+
+        if (ungrouped.length > 0) {
+          const fallbackGroups = mechanicalGrouping(ungrouped);
+          for (const fg of fallbackGroups) {
+            fg.groupIndex = groupIdx++;
+            groups.push(fg);
+          }
+          groups.sort((a, b) => a.start - b.start);
+        }
+
+        return groups.map((g) => ({
+          ...g,
+          end: Math.max(g.end, g.start + MIN_GROUP_DURATION),
+        }));
+      }
     }
   }
 

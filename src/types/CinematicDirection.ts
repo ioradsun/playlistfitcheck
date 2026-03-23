@@ -78,13 +78,14 @@ export interface CinematicSection {
 }
 
 export interface CinematicPhrase {
-  /** Which lyric line this phrase is from (0-based) */
-  lineIndex: number;
-  /** Inclusive range of word indices within the line.
-   *  [0, 3] means words 0, 1, 2, 3 from that line's word-level timestamps. */
+  /** Inclusive range of GLOBAL word indices in the flat word array.
+   *  [0, 3] means words 0, 1, 2, 3 from the full song's word timestamps.
+   *  Phrases can span across Whisper line boundaries. */
   wordRange: [number, number];
   /** Most impactful word in this phrase — UPPERCASE. Optional. */
   heroWord?: string;
+  /** @deprecated — use wordRange with global indices instead */
+  lineIndex?: number;
 }
 
 export interface StoryboardEntry {
