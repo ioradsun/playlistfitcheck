@@ -3323,6 +3323,10 @@ export class LyricDancePlayer {
       } else {
         this._solvedBounds[i].cx = bounds[i].cx;
         this._solvedBounds[i].cy = bounds[i].cy;
+        this._solvedBounds[i].fontSize = bounds[i].fontSize;
+        this._solvedBounds[i].halfW = bounds[i].halfW;
+        this._solvedBounds[i].halfH = bounds[i].halfH;
+        this._solvedBounds[i].baseTextWidth = bounds[i].baseTextWidth;
       }
     }
 
@@ -3339,20 +3343,6 @@ export class LyricDancePlayer {
         const shrinkRatioW = tooWide ? (availW / (b.halfW * 2)) : 1;
         const shrinkRatioH = tooTall ? (availH / (b.halfH * 2)) : 1;
         const shrinkRatio = Math.min(shrinkRatioW, shrinkRatioH);
-        // ═══ TEMPORARY DEBUG ═══
-        if (shrinkRatio < 0.95) {
-          console.warn('[SHRINK]', {
-            text: b.text,
-            oldFS: b.fontSize,
-            newFS: Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio)),
-            ratio: Math.round(shrinkRatio * 100) / 100,
-            halfW: Math.round(b.halfW),
-            halfH: Math.round(b.halfH),
-            availW: Math.round(availW),
-            availH: Math.round(availH),
-            scaleX: Math.round(b.scaleX * 100) / 100,
-          });
-        }
         b.fontSize = Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio));
         const newFontStr = `${b.weight} ${b.fontSize}px ${b.family}`;
         const metrics2 = this.getCachedMetrics(b.text, newFontStr);
@@ -5784,8 +5774,17 @@ export class LyricDancePlayer {
         chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator + _hitMotion.dScale * Math.abs(danceRoleAmp));
+        // ═══ CLAMP total dance dScale to prevent collision-solver font shrink ═══
+        // The grammar (PR5) + phrase release (PR6) + hit choreographer (PR10) can
+        // compound dScale up to ~0.18 on peak frames. This inflates the bounding
+        // box (halfW) past the viewport wall, triggering the shrink pass which
+        // reduces fontSize for the frame. Cap at 0.08 (8%) — still visibly pulses
+        // on beats, but never wide enough to trigger overflow shrink.
+        const _rawDScale = _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator
+                         + _hitMotion.dScale * Math.abs(danceRoleAmp);
+        const _clampedDScale = Math.max(-0.04, Math.min(0.08, _rawDScale));
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _clampedDScale);
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _clampedDScale);
         // Cap compound scale to prevent font shrink trigger.
         // Solo heroes (alone center screen) get more headroom.
         const _scaleMax = (isSoloHero && groupHasActiveSoloHero) ? 2.0 : 1.5;
