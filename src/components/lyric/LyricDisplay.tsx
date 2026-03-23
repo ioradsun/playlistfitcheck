@@ -9,7 +9,6 @@ import {
   Repeat2,
   MoreHorizontal,
   AlertCircle,
-  Video,
   RotateCcw,
   X,
 } from "lucide-react";
@@ -44,10 +43,6 @@ import {
   type SocialPreset,
 } from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
-import { LyricVideoComposer } from "./LyricVideoComposer";
-import type { CinematicDirection, WordDirective } from "@/types/CinematicDirection";
-import { LyricStage } from "./LyricStage";
-import { deriveFrameState, type FrameRenderState as FullFrameRenderState } from "@/engine/presetDerivation";
 import { PublishHookButton } from "./PublishHookButton";
 // PublishLyricDanceButton removed — publishing handled by FitTab
 import {
@@ -56,35 +51,12 @@ import {
   type ProfanityReport,
 } from "@/lib/profanityFilter";
 import { ensureFontReady } from "@/lib/fontReadinessCache";
-import type { PhysicsSpec, PhysicsState } from "@/engine/PhysicsIntegrator";
+import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { WaveformData } from "@/hooks/useAudioEngine";
-import { useBeatIntensity } from "@/hooks/useBeatIntensity";
 import type {
   ArtistDNA,
   FingerprintSongContext,
 } from "./ArtistFingerprintTypes";
-// V3: manifest derived from cinematicDirection via deriveFrameState
-
-type BeatTick = { time: number; isDownbeat: boolean; strength: number };
-type HookDanceOverrides = { system?: string; energyMultiplier?: number; palette?: string[] };
-
-class HookDanceEngine {
-  prng: () => number = () => 0.5;
-  constructor(..._args: any[]) {}
-  start() {}
-  stop() {}
-  loadManifest(_manifest: any) {}
-}
-
-function HookDanceCanvas(_props: any) {
-  return null;
-}
-
-function HookDanceExporter(_props: any) {
-  return null;
-}
-
-
 export interface LyricLine {
   start: number;
   end: number;
@@ -139,12 +111,6 @@ interface VersionMeta {
   lastEdited?: string;
 }
 
-type AudioElementWithAnalyser = HTMLAudioElement & {
-  __analyserNode?: AnalyserNode;
-  __audioContext?: AudioContext;
-  __mediaElementSource?: MediaElementAudioSourceNode;
-};
-
 function normalizeRenderDataWithManifest(
   renderData: any,
   _fallbackTitle: string,
@@ -163,11 +129,9 @@ interface Props {
     explicit?: Partial<VersionMeta>;
     fmly?: Partial<VersionMeta>;
   } | null;
-  debugData?: any | null;
   initialBeatGrid?: BeatGridData | null;
   initialWaveform?: WaveformData | null;
   initialRenderData?: any | null;
-  initialBackgroundImageUrl?: string | null;
   onBack: () => void;
   onSaved?: (id: string) => void;
   onReuploadAudio?: (file: File) => void;
@@ -330,11 +294,9 @@ export function LyricDisplay({
   savedId,
   fmlyLines: initFmlyLines,
   versionMeta: initVersionMeta,
-  debugData,
   initialBeatGrid,
   initialWaveform,
   initialRenderData,
-  initialBackgroundImageUrl,
   onBack,
   onSaved,
   onReuploadAudio,
@@ -347,7 +309,6 @@ export function LyricDisplay({
   const hookfitEnabled = features?.tools_enabled?.hookfit !== false;
   const hottestHooksEnabled = features?.hookfit_hottest_hooks !== false;
   const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
-  const [showDebug, setShowDebug] = useState(false);
   const { decodeFile, play, stop, playingId, getPlayheadPosition } =
     useAudioEngine();
 
@@ -428,24 +389,6 @@ export function LyricDisplay({
     geminiText: string;
   } | null>(null);
 
-  // Lyric video composer
-  const [videoComposerOpen, setVideoComposerOpen] = useState(false);
-
-  // Hook Dance engine
-  const hookDanceRef = useRef<HookDanceEngine | null>(null);
-  const [hookDanceState, setHookDanceState] = useState<PhysicsState | null>(
-    null,
-  );
-  const [hookDanceRunning, setHookDanceRunning] = useState(false);
-  const [hookDanceTime, setHookDanceTime] = useState(0);
-  const [hookDanceBeatCount, setHookDanceBeatCount] = useState(0);
-  const hookDancePrngRef = useRef<(() => number) | null>(null);
-  const beatAnalyserRef = useRef<AnalyserNode | null>(null);
-  const beatAudioContextRef = useRef<AudioContext | null>(null);
-  const [hookDanceExportOpen, setHookDanceExportOpen] = useState(false);
-  const hookDanceBeatsRef = useRef<BeatTick[]>([]);
-  const [hookDanceOverrides, setHookDanceOverrides] =
-    useState<HookDanceOverrides>({});
   const [artistFingerprint, setArtistFingerprint] = useState<ArtistDNA | null>(
     null,
   );
@@ -472,33 +415,8 @@ export function LyricDisplay({
   }, [user]);
 
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      hookDanceRef.current?.stop();
-    };
-  }, []);
-
   // Song DNA — on-demand generation
   const [renderData, setRenderData] = useState<Record<string, any> | null>(normalizeRenderDataWithManifest(initialRenderData, data.title) ?? null);
-  const [backgroundImageUrl] = useState<string | null>(
-    initialBackgroundImageUrl ?? null,
-  );
-  const [manifest, setManifest] = useState<FullFrameRenderState | null>(null);
-
-  const beatIntensity = useBeatIntensity(beatAnalyserRef.current, hookDanceRunning && isPlaying);
-
-  const currentLyricZone = useMemo<"upper" | "middle" | "lower">(() => {
-    if (!renderData?.hook) return "middle";
-    const hookLines = data.lines.filter((l) => l.start < renderData.hook.end && l.end > renderData.hook.start);
-    const activeIdx = hookLines.findIndex((l) => hookDanceTime >= l.start && hookDanceTime < l.end);
-    if (activeIdx < 0 || hookLines.length < 2) return "middle";
-    const position = activeIdx / Math.max(1, hookLines.length - 1);
-    if (position < 0.33) return "upper";
-    if (position > 0.66) return "lower";
-    return "middle";
-  }, [renderData, data.lines, hookDanceTime]);
-
   useEffect(() => {
     // Font preloading — uses the same cache as the player
     const fontFamily = (initialRenderData as any)?.motionProfileSpec?.typographyProfile?.fontFamily;
@@ -514,23 +432,6 @@ export function LyricDisplay({
     }
   }, [audioFile]);
 
-  useEffect(() => {
-    if (!renderData) return;
-
-    const cd = renderData?.cinematic_direction ?? renderData?.cinematicDirection ?? {};
-    const derived = deriveFrameState(cd, 0, 0);
-    setManifest(derived);
-    hookDanceRef.current?.loadManifest(derived);
-
-  }, [renderData]);
-
-  const currentManifest = useMemo<FullFrameRenderState | null>(() => {
-    if (manifest) return manifest;
-    if (!renderData) return null;
-    if (renderData.frame_state) return renderData.frame_state;
-    const cd = renderData.cinematic_direction ?? renderData.cinematicDirection;
-    return cd ? deriveFrameState(cd, 0, 0) : null;
-  }, [manifest, renderData]);
 
   // ── Active lines (format applied) ─────────────────────────────────────────
   const activeLinesRaw =
@@ -576,35 +477,9 @@ export function LyricDisplay({
   useEffect(() => {
     const url = URL.createObjectURL(audioFile);
     audioUrlRef.current = url;
-    const audio = new Audio(url) as AudioElementWithAnalyser;
+    const audio = new Audio(url);
     audioRef.current = audio;
 
-    // Shared analyser for cinematic bloom intensity (same media element as HookDance playback)
-    let beatCtx: AudioContext | null = null;
-    let beatSource: MediaElementAudioSourceNode | null = null;
-    try {
-      if (audio.__analyserNode) {
-        beatCtx = audio.__audioContext ?? null;
-        beatSource = audio.__mediaElementSource ?? null;
-        beatAnalyserRef.current = audio.__analyserNode;
-        beatAudioContextRef.current = beatCtx;
-      } else {
-        beatCtx = new AudioContext();
-        const analyser = beatCtx.createAnalyser();
-        beatSource = beatCtx.createMediaElementSource(audio);
-        beatSource.connect(analyser);
-        analyser.connect(beatCtx.destination);
-        void beatCtx.resume().catch(() => {});
-        audio.__analyserNode = analyser;
-        audio.__audioContext = beatCtx;
-        audio.__mediaElementSource = beatSource;
-        beatAudioContextRef.current = beatCtx;
-        beatAnalyserRef.current = analyser;
-      }
-    } catch {
-      beatAnalyserRef.current = null;
-      beatAudioContextRef.current = null;
-    }
 
     // Single RAF loop — only updates currentTime when audio is actually playing.
     let isRunning = true;
@@ -652,17 +527,6 @@ export function LyricDisplay({
       rafRef.current = null;
       audio.removeEventListener("ended", handleEnded);
       audio.pause();
-      beatAnalyserRef.current = null;
-      if (beatSource) {
-        try { beatSource.disconnect(); } catch {}
-      }
-      if (beatCtx) {
-        beatCtx.close().catch(() => {});
-      }
-      delete audio.__analyserNode;
-      delete audio.__audioContext;
-      delete audio.__mediaElementSource;
-      beatAudioContextRef.current = null;
       URL.revokeObjectURL(url);
     };
   // decodeFile is intentionally omitted to avoid re-running setup when its identity changes.
@@ -883,8 +747,6 @@ export function LyricDisplay({
     onSaved,
     beatGrid,
     renderData,
-    renderData,
-    backgroundImageUrl,
   ]);
 
   const scheduleAutosave = useCallback(() => {
@@ -1100,7 +962,7 @@ export function LyricDisplay({
     [capturedSelectionText, activeLines, activeVersion],
   );
 
-  // Report project title + right content (save indicator + debug) to header
+  // Report project title + right content (save indicator) to header
   useEffect(() => {
     const title =
       data.title && data.title !== "Unknown" && data.title !== "Untitled"
@@ -1112,14 +974,6 @@ export function LyricDisplay({
           <span className="text-[10px] text-muted-foreground shrink-0">
             {saveStatus === "saving" ? "● Saving…" : "✓ Saved"}
           </span>
-        )}
-        {isAdmin && debugData && (
-          <button
-            onClick={() => setShowDebug((v) => !v)}
-            className="text-[10px] font-mono text-muted-foreground/50 hover:text-foreground border border-border/30 rounded px-2 py-1 transition-colors"
-          >
-            ⚙ Debug
-          </button>
         )}
       </>
     );
@@ -1133,251 +987,15 @@ export function LyricDisplay({
     saveStatus,
     user,
     isAdmin,
-    debugData,
-  ]);
+    ]);
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const hookDirection = useMemo(() => {
-    const cinematicDirection = (renderData as any)?.cinematic_direction as CinematicDirection | undefined;
-    const lines = data?.lines ?? [];
-    const songDuration = lines.length > 0 ? lines[lines.length - 1].end - lines[0].start : 1;
-    const hookStartRatio = (renderData?.hook?.start && songDuration > 0)
-      ? renderData.hook.start / Math.max(0.001, songDuration)
-      : 0;
-    if (!cinematicDirection) return null;
-    // Resolve wordDirectives to Record form for HookDanceCanvas
-    const rawWd = cinematicDirection.wordDirectives;
-    const wdRecord: Record<string, WordDirective> = Array.isArray(rawWd)
-      ? Object.fromEntries(rawWd.map(w => [w.word.toLowerCase().replace(/[^a-z]/g, ""), w]))
-      : (rawWd ?? {});
-    return {
-      thesis: cinematicDirection.thesis,
-      visualWorld: cinematicDirection.visualWorld,
-      wordDirectives: wdRecord,
-      climax: cinematicDirection.climax,
-      activeChapter: cinematicDirection.chapters?.find(c => (
-        hookStartRatio >= c.startRatio && hookStartRatio <= c.endRatio
-      )) ?? null,
-    };
-  }, [renderData, data?.lines]);
-
   return (
     <motion.div
       className="w-full space-y-4"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      {/* Debug panel (admin only, toggled from header) */}
-      {isAdmin && debugData && showDebug && (
-        <div className="w-full glass-card rounded-xl p-4 border border-border/40 shadow-lg max-h-[85vh] overflow-y-auto">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-mono font-semibold text-foreground">
-              🔬 Full Debug Panel
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-muted-foreground/40">
-                v{debugData.version} ·{" "}
-                {Math.round((debugData.inputBytes || 0) / 1024)}KB
-              </span>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(
-                    JSON.stringify(debugData, null, 2),
-                  );
-                  toast.success("Full debug data copied");
-                }}
-                className="text-[10px] font-mono text-muted-foreground/60 hover:text-foreground border border-border/30 rounded px-1.5 py-0.5"
-              >
-                Copy All
-              </button>
-            </div>
-          </div>
-
-          {/* ── WHISPER INPUT ── */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">
-                📥 Whisper — Input
-              </p>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(
-                      JSON.stringify(debugData.whisper?.input, null, 2),
-                    )
-                    .then(() => toast.success("Copied"))
-                }
-                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
-              >
-                copy
-              </button>
-            </div>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
-              {JSON.stringify(debugData.whisper?.input, null, 2) || "(no data)"}
-            </pre>
-          </div>
-
-          {/* ── WHISPER OUTPUT ── */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-blue-400/90 uppercase tracking-wider">
-                📤 Whisper — Output ({debugData.whisper?.output?.wordCount ?? 0}{" "}
-                words / {debugData.whisper?.output?.segmentCount} segments)
-              </p>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(
-                      JSON.stringify(debugData.whisper?.output, null, 2),
-                    )
-                    .then(() => toast.success("Copied"))
-                }
-                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
-              >
-                copy
-              </button>
-            </div>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Raw text:
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
-              {debugData.whisper?.output?.rawText || "(no raw text)"}
-            </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Words — source of truth (first 40):
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap mb-1">
-              {JSON.stringify(
-                debugData.whisper?.output?.words?.slice(0, 40),
-                null,
-                2,
-              ) || "(no words — upgrade needed)"}
-            </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Segments — grouping context (first 20):
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-blue-950/20 border border-blue-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
-              {JSON.stringify(
-                debugData.whisper?.output?.segments?.slice(0, 20),
-                null,
-                2,
-              ) || "(no segments)"}
-            </pre>
-          </div>
-
-          {/* ── GEMINI INPUT ── */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-purple-400/90 uppercase tracking-wider">
-                📥 Gemini — Input
-              </p>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(JSON.stringify(debugData.gemini?.input, null, 2))
-                    .then(() => toast.success("Copied"))
-                }
-                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
-              >
-                copy
-              </button>
-            </div>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-28 whitespace-pre-wrap">
-              {JSON.stringify(debugData.gemini?.input, null, 2) || "(no data)"}
-            </pre>
-          </div>
-
-          {/* ── GEMINI OUTPUT ── */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-purple-400/90 uppercase tracking-wider">
-                📤 Gemini — Output{" "}
-                {debugData.gemini?.output?.status === "failed"
-                  ? "❌ FAILED"
-                  : `✓ (${debugData.gemini?.output?.adlibsCount} adlibs)`}
-              </p>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(
-                      JSON.stringify(debugData.gemini?.output, null, 2),
-                    )
-                    .then(() => toast.success("Copied"))
-                }
-                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
-              >
-                copy
-              </button>
-            </div>
-            {debugData.gemini?.output?.status === "failed" && (
-              <pre className="text-[10px] font-mono text-red-400 bg-red-950/20 border border-red-500/20 rounded p-2 mb-1 whitespace-pre-wrap">
-                Error: {debugData.gemini?.output?.error}
-              </pre>
-            )}
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Raw response ({debugData.gemini?.output?.rawResponseLength || 0}{" "}
-              chars):
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap mb-1">
-              {debugData.gemini?.output?.rawResponseContent?.slice(0, 800) ||
-                "(no response)"}
-            </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Parsed metadata:
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
-              {JSON.stringify(debugData.gemini?.output?.metadata, null, 2) ||
-                "(none)"}
-            </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Hook detected:
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-24 whitespace-pre-wrap mb-1">
-              {JSON.stringify(
-                debugData.gemini?.output?.hottest_hook,
-                null,
-                2,
-              ) || "null"}
-            </pre>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              Adlibs ({(debugData.gemini?.output?.adlibs || []).length}):
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-purple-950/20 border border-purple-500/10 rounded p-2 overflow-auto max-h-36 whitespace-pre-wrap">
-              {JSON.stringify(debugData.gemini?.output?.adlibs, null, 2) ||
-                "[]"}
-            </pre>
-          </div>
-
-          {/* ── MERGED OUTPUT ── */}
-          <div className="mb-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-mono text-green-400/90 uppercase tracking-wider">
-                🎯 Merged Output — {debugData.merged?.totalLines} lines (
-                {debugData.merged?.mainLines} main /{" "}
-                {debugData.merged?.adlibLines} adlib) ·{" "}
-                {debugData.merged?.hooks?.length || 0} hooks
-              </p>
-              <button
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(JSON.stringify(debugData.merged, null, 2))
-                    .then(() => toast.success("Copied"))
-                }
-                className="text-[9px] font-mono text-muted-foreground/40 hover:text-foreground"
-              >
-                copy
-              </button>
-            </div>
-            <p className="text-[9px] font-mono text-muted-foreground/60 mb-1">
-              All lines:
-            </p>
-            <pre className="text-[10px] font-mono text-muted-foreground bg-green-950/20 border border-green-500/10 rounded p-2 overflow-auto max-h-48 whitespace-pre-wrap">
-              {JSON.stringify(debugData.merged?.allLines, null, 2) || "[]"}
-            </pre>
-          </div>
-        </div>
-      )}
-
       {/* Metadata strip removed — mood/description now in Song DNA */}
 
       <div className="max-w-3xl mx-auto space-y-4">
@@ -1857,28 +1475,13 @@ export function LyricDisplay({
                }}
                audioFile={audioFile}
                songTitle={data.title}
-               system={
-                 hookDanceOverrides.system || renderData.motionProfileSpec.system
-               }
+               system={renderData.motionProfileSpec.system}
                palette={
-                 renderData.motionProfileSpec.palette || [
-                   "#ffffff",
-                   "#a855f7",
-                   "#ec4899",
-                 ]
+                 renderData.motionProfileSpec.palette || ["#ffffff", "#a855f7", "#ec4899"]
                }
                fingerprint={artistFingerprint}
                onViewBattle={(url) => setBattlePopupUrl(url)}
              />
-           )}
-           {features?.lyric_video && (
-             <button
-               onClick={() => setVideoComposerOpen(true)}
-               className="w-full flex items-center justify-center gap-1.5 text-[10px] font-mono text-primary/70 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40 rounded-lg py-1.5"
-             >
-               <Video size={10} />
-               <span>Create Lyric Video</span>
-             </button>
            )}
          </div>
        </div>
@@ -1888,75 +1491,6 @@ export function LyricDisplay({
          </div>
 
        <SignUpToSaveBanner />
-
-       {/* Hook Dance full-bleed canvas overlay */}
-      <AnimatePresence>
-        {hookDanceRunning &&
-          renderData?.motionProfileSpec &&
-          renderData.hook &&
-          hookDancePrngRef.current &&
-          currentManifest && (
-            <LyricStage
-              manifest={currentManifest}
-              backgroundImageUrl={backgroundImageUrl}
-              isPlaying={isPlaying}
-              beatIntensity={beatIntensity}
-              currentLyricZone={currentLyricZone}
-            >
-              <HookDanceCanvas
-                physicsState={
-                  hookDanceOverrides.energyMultiplier && hookDanceState
-                    ? {
-                        ...hookDanceState,
-                        scale:
-                          1 +
-                          (hookDanceState.scale - 1) *
-                            hookDanceOverrides.energyMultiplier,
-                        shake:
-                          hookDanceState.shake *
-                          (hookDanceOverrides.energyMultiplier ?? 1),
-                        glow:
-                          hookDanceState.glow *
-                          (hookDanceOverrides.energyMultiplier ?? 1),
-                      }
-                    : hookDanceState
-                }
-                spec={
-                  hookDanceOverrides.system
-                    ? {
-                        ...(renderData.motionProfileSpec as PhysicsSpec),
-                        system: hookDanceOverrides.system,
-                      }
-                    : (renderData.motionProfileSpec as PhysicsSpec)
-                }
-                lines={data.lines.filter(
-                  (l) =>
-                    l.start < renderData.hook!.end && l.end > renderData.hook!.start,
-                )}
-                hookStart={renderData.hook.start}
-                hookEnd={renderData.hook.end}
-                currentTime={hookDanceTime}
-                beatCount={hookDanceBeatCount}
-                prng={hookDancePrngRef.current}
-                onClose={() => hookDanceRef.current?.stop()}
-                onExport={() => setHookDanceExportOpen(true)}
-                onOverrides={setHookDanceOverrides}
-                fingerprint={artistFingerprint}
-                onFingerprintChange={(dna) => setArtistFingerprint(dna)}
-                songContext={{
-                  bpm: beatGrid?.bpm,
-                  mood: renderData?.mood,
-                  physics_system:
-                    hookDanceOverrides.system || renderData?.motionProfileSpec?.system,
-                  hook_lyric: renderData?.hook?.previewText,
-                  description: renderData?.description,
-                }}
-                hookDirection={hookDirection}
-              />
-            </LyricStage>
-          )}
-      </AnimatePresence>
-
 
       {/* v2.2: Conflict Resolution Modal — keeps Whisper timestamps, lets artist swap text */}
       <Dialog
@@ -2040,55 +1574,6 @@ export function LyricDisplay({
         </DialogContent>
       </Dialog>
 
-
-      <LyricVideoComposer
-        open={videoComposerOpen}
-        onOpenChange={setVideoComposerOpen}
-        lines={activeLines}
-        hook={hooks[0] ?? null}
-        metadata={data.metadata}
-        title={data.title}
-        artist={profileDisplayName}
-        audioFile={audioFile}
-      />
-
-      {/* Hook Dance Exporter */}
-      {renderData?.motionProfileSpec && renderData.hook && (
-        <HookDanceExporter
-          open={hookDanceExportOpen}
-          onOpenChange={setHookDanceExportOpen}
-          spec={
-            hookDanceOverrides.system
-              ? {
-                  ...(renderData.motionProfileSpec as PhysicsSpec),
-                  system: hookDanceOverrides.system,
-                  palette:
-                    hookDanceOverrides.palette ||
-                    (renderData.motionProfileSpec as PhysicsSpec).palette,
-                }
-              : hookDanceOverrides.palette
-                ? {
-                    ...(renderData.motionProfileSpec as PhysicsSpec),
-                    palette: hookDanceOverrides.palette,
-                  }
-                : (renderData.motionProfileSpec as PhysicsSpec)
-          }
-          beats={hookDanceBeatsRef.current}
-          lines={data.lines.filter(
-            (l) => l.start < renderData.hook!.end && l.end > renderData.hook!.start,
-          )}
-          hookStart={renderData.hook.start}
-          hookEnd={renderData.hook.end}
-          title={
-            data.title && data.title !== "Unknown" && data.title !== "Untitled"
-              ? data.title
-              : audioFile.name.replace(/\.[^.]+$/, "")
-          }
-          artist={profileDisplayName}
-          audioFile={audioFile}
-          seed={`${data.title}-${renderData.hook.start.toFixed(3)}`}
-        />
-      )}
 
       {/* Battle Page Popup Overlay */}
       <AnimatePresence>
