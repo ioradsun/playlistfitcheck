@@ -4492,7 +4492,7 @@ export class LyricDancePlayer {
         // ═══ SINGLE-GROUP MODEL: entry/exit animations handle visibility ═══
         // No phrase crossfade — only one group is active at a time.
         // Entry animation fades words in. Exit animation fades them out.
-        const roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
+        let roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
         const phraseDriftY = 0;
 
         // Wave proximity still tracked for emphasis glow, but NOT for alpha
