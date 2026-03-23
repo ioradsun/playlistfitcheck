@@ -383,7 +383,7 @@ export default function ShareableLyricDance() {
           ...(isMobile ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
         }}
       >
-        {!showCover && !isWaiting && renderData && (
+        {!showCover && !isWaiting && renderData && !(window as any).__LYRIC_DANCE_LIGHTNING_BAR && (
           <LyricDanceProgressBar
             player={player}
             data={renderData}
