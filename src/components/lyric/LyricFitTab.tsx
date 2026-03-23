@@ -114,6 +114,7 @@ export function LyricFitTab({
     siteCopy.features?.hookfit_hottest_hooks !== false;
 
   const artistNameRef = useRef<string>("artist");
+  const artistNameReadyRef = useRef<Promise<void> | null>(null);
   // Compute initial values synchronously from initialLyric to avoid flash of uploader
   const initLyricData = useMemo<LyricData | null>(() => {
     if (!initialLyric) return null;
@@ -314,7 +315,7 @@ export function LyricFitTab({
 
   useEffect(() => {
     if (!user) return;
-    supabase
+    const p = supabase
       .from("profiles")
       .select("display_name")
       .eq("id", user.id)
@@ -322,6 +323,7 @@ export function LyricFitTab({
       .then(({ data }) => {
         if (data?.display_name) artistNameRef.current = data.display_name;
       });
+    artistNameReadyRef.current = p;
   }, [user]);
 
   // Debounced scene resolution
