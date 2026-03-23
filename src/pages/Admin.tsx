@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { hydrateLightningBarFlag, persistLightningBarFlag } from "@/lib/lyricDanceFlags";
+import { applyLightningBarFlag, hydrateLightningBarFlag, refreshLightningBarFlagFromBackend } from "@/lib/lyricDanceFlags";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -55,11 +55,19 @@ export default function Admin() {
   const [nuking, setNuking] = useState(false);
   const [nukeConfirmText, setNukeConfirmText] = useState("");
   const [, forceAdminRerender] = useState(0);
+  const [lightningBarEnabled, setLightningBarEnabled] = useState(() => hydrateLightningBarFlag());
+  const [lightningBarSaving, setLightningBarSaving] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
-  // Hydrate engine feature flags from sessionStorage
+  // Hydrate engine feature flags from backend
   useEffect(() => {
-    hydrateLightningBarFlag();
+    let cancelled = false;
+    refreshLightningBarFlagFromBackend().then((enabled) => {
+      if (!cancelled) setLightningBarEnabled(enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -694,13 +702,46 @@ export default function Admin() {
                     </p>
                   </div>
                   <Switch
-                    checked={!!(window as any).__LYRIC_DANCE_LIGHTNING_BAR}
-                    onCheckedChange={(checked) => {
-                      persistLightningBarFlag(checked);
-                      toast.success(
-                        checked ? "Lightning Bar enabled" : "Lightning Bar disabled",
-                        { description: "Saved for this browser on this domain." },
-                      );
+                    checked={lightningBarEnabled}
+                    disabled={lightningBarSaving}
+                    onCheckedChange={async (checked) => {
+                      const previous = lightningBarEnabled;
+                      setLightningBarEnabled(checked);
+                      applyLightningBarFlag(checked);
+                      setLightningBarSaving(true);
+                      try {
+                        const { data: existing } = await supabase
+                          .from("site_copy")
+                          .select("copy_json")
+                          .limit(1)
+                          .maybeSingle();
+
+                        const prev = (existing?.copy_json as any) || {};
+                        const updated = {
+                          ...prev,
+                          features: {
+                            ...(prev.features || {}),
+                            lyric_dance_lightning_bar: checked,
+                          },
+                        };
+
+                        const { error } = await supabase.functions.invoke("admin-dashboard", {
+                          body: { action: "update_site_copy", copy_json: updated },
+                        });
+                        if (error) throw error;
+
+                        toast.success(
+                          checked ? "Lightning Bar enabled" : "Lightning Bar disabled",
+                          { description: "Saved globally across the app." },
+                        );
+                        window.dispatchEvent(new CustomEvent("site-copy-updated"));
+                      } catch {
+                        setLightningBarEnabled(previous);
+                        applyLightningBarFlag(previous);
+                        toast.error("Failed to save Lightning Bar setting");
+                      } finally {
+                        setLightningBarSaving(false);
+                      }
                       (window as any).__forceAdminRerender?.();
                     }}
                   />
