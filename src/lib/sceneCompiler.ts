@@ -1,4 +1,4 @@
-import type { CinematicDirection, CinematicSection } from "@/types/CinematicDirection";
+import type { CinematicDirection, CinematicSection, CinematicPhrase } from "@/types/CinematicDirection";
 import { enrichSections } from "@/engine/directionResolvers";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
@@ -97,7 +97,7 @@ interface TypographyProfile {
 }
 
 export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
-interface WordDirectiveLike { word?: string; kineticClass?: string; colorOverride?: string; emphasisLevel?: number; visualMetaphor?: string; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: 'up'|'down'|'left'|'right'|'radial'; letterSequence?: boolean; trail?: string; entry?: string; behavior?: string; exit?: string; heroPresentation?: string; }
+interface WordDirectiveLike { word?: string; kineticClass?: string; colorOverride?: string; emphasisLevel?: number; visualMetaphor?: string; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: 'up'|'down'|'left'|'right'|'radial'; letterSequence?: boolean; trail?: string; entry?: string; behavior?: string; exit?: string; heroPresentation?: string; isolation?: boolean; }
 interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; }
 export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; }
 type StoryboardEntryLike = { lineIndex?: number; entryStyle?: string; exitStyle?: string; heroWord?: string; shotType?: string; iconGlyph?: string; iconStyle?: 'outline'|'filled'|'ghost'; iconPosition?: 'behind'|'above'|'beside'|'replace'; iconScale?: number; };
@@ -127,21 +127,11 @@ const FILLER_WORDS = new Set(['a','an','the','to','of','and','or','but','in','on
 const MIN_GROUP_DURATION = 0.4;
 const MAX_GROUP_SIZE = 5;
 
-const INTIMATE_LAYOUTS: Record<number, Array<[number, number]>> = {1:[[0.5,0.5]],2:[[0.42,0.48],[0.58,0.52]],3:[[0.38,0.45],[0.5,0.55],[0.62,0.45]],4:[[0.35,0.43],[0.5,0.37],[0.5,0.6],[0.65,0.5]],5:[[0.35,0.4],[0.45,0.58],[0.5,0.35],[0.55,0.58],[0.65,0.4]],6:[[0.35,0.4],[0.45,0.58],[0.5,0.35],[0.55,0.58],[0.65,0.4],[0.5,0.5]]};
-const CINEMATIC_LAYOUTS: Record<number, Array<[number, number]>> = {1:[[0.5,0.5]],2:[[0.3,0.45],[0.7,0.55]],3:[[0.25,0.35],[0.5,0.55],[0.75,0.38]],4:[[0.28,0.35],[0.72,0.32],[0.25,0.65],[0.72,0.65]],5:[[0.18,0.38],[0.38,0.65],[0.5,0.3],[0.65,0.65],[0.82,0.38]],6:[[0.2,0.32],[0.5,0.25],[0.8,0.32],[0.22,0.68],[0.5,0.73],[0.78,0.65]]};
-const EXPLOSIVE_LAYOUTS: Record<number, Array<[number, number]>> = {1:[[0.5,0.5]],2:[[0.22,0.42],[0.78,0.58]],3:[[0.15,0.35],[0.55,0.65],[0.85,0.3]],4:[[0.15,0.3],[0.82,0.28],[0.18,0.7],[0.8,0.68]],5:[[0.12,0.35],[0.35,0.72],[0.5,0.25],[0.68,0.7],[0.88,0.33]],6:[[0.12,0.28],[0.42,0.18],[0.82,0.25],[0.15,0.72],[0.55,0.8],[0.85,0.7]]};
 
 function isFillerWord(word: string): boolean { return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase()); }
 
-function getVisualMode(payload: ScenePayload): VisualMode {
-  const frameState = payload.frame_state ?? null;
-  const manifestMode = (frameState as any)?.visualMode;
-  if (manifestMode === 'intimate' || manifestMode === 'cinematic' || manifestMode === 'explosive') return manifestMode;
-  const motion = (payload.cinematic_direction as any)?.motion as string | undefined;
-  const texture = (payload.cinematic_direction as any)?.texture as string | undefined;
-  if (motion === 'weighted' || motion === 'glitch' || texture === 'storm' || texture === 'fire') return 'explosive';
-  if (motion === 'drift' || texture === 'petals' || texture === 'snow') return 'intimate';
-  return 'cinematic';
+function getVisualMode(_payload: ScenePayload): VisualMode {
+  return 'cinematic'; // scattered layouts removed — fitTextToViewport handles all positioning
 }
 
 function resolveMotionProfile(motionField: string | undefined, payload: ScenePayload): MotionProfile {
@@ -185,25 +175,137 @@ function mergeShortGroups(groups: PhraseGroup[]): PhraseGroup[] {
   }
   return result;
 }
-function buildPhraseGroups(wordMeta: WordMetaEntry[]): PhraseGroup[] {
+/**
+ * Build phrase groups from AI-provided phrases OR fallback to mechanical grouping.
+ *
+ * AI phrases are grouped by meaning + timing (the AI sees the full lyrics and
+ * understands which words form a complete thought). When available, they produce
+ * much more natural grouping than the mechanical punctuation/word-count splitter.
+ *
+ * Fallback: if no AI phrases are available (old cached data, missing field),
+ * the mechanical grouper still runs — same behavior as before Phase 5.
+ */
+function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhrase[]): PhraseGroup[] {
+  // ── Try AI phrases first ──
+  if (aiPhrases && aiPhrases.length > 0) {
+    const groups: PhraseGroup[] = [];
+    let groupIdx = 0;
+
+    // Build line→wordMeta mapping for fast lookup
+    const lineMap = new Map<number, WordMetaEntry[]>();
+    for (const wm of wordMeta) {
+      if (!lineMap.has(wm.lineIndex)) lineMap.set(wm.lineIndex, []);
+      lineMap.get(wm.lineIndex)!.push(wm);
+    }
+
+    for (const phrase of aiPhrases) {
+      const lineWords = lineMap.get(phrase.lineIndex);
+      if (!lineWords || lineWords.length === 0) continue;
+
+      const [startIdx, endIdx] = phrase.wordRange;
+      // Clamp indices to valid range
+      const safeStart = Math.max(0, Math.min(startIdx, lineWords.length - 1));
+      const safeEnd = Math.max(safeStart, Math.min(endIdx, lineWords.length - 1));
+
+      const phraseWords = lineWords.slice(safeStart, safeEnd + 1);
+      if (phraseWords.length === 0) continue;
+
+      groups.push({
+        words: phraseWords,
+        start: phraseWords[0].start,
+        end: phraseWords[phraseWords.length - 1].end,
+        anchorWordIdx: findAnchorWord(phraseWords),
+        lineIndex: phrase.lineIndex,
+        groupIndex: groupIdx,
+      });
+      groupIdx++;
+    }
+
+    if (groups.length > 0) {
+      groups.sort((a, b) => a.start - b.start);
+
+      // Check for ungrouped words — if AI missed some, append them as extra groups
+      const groupedWordIds = new Set<string>();
+      for (const g of groups) {
+        for (const w of g.words) {
+          groupedWordIds.add(`${w.lineIndex}-${w.wordIndex}`);
+        }
+      }
+
+      const ungrouped: WordMetaEntry[] = [];
+      for (const wm of wordMeta) {
+        if (!groupedWordIds.has(`${wm.lineIndex}-${wm.wordIndex}`)) {
+          ungrouped.push(wm);
+        }
+      }
+
+      if (ungrouped.length > 0) {
+        // Group ungrouped words using mechanical fallback
+        const fallbackGroups = mechanicalGrouping(ungrouped);
+        for (const fg of fallbackGroups) {
+          fg.groupIndex = groupIdx++;
+          groups.push(fg);
+        }
+        groups.sort((a, b) => a.start - b.start);
+      }
+
+      // Enforce minimum duration
+      return groups.map(g => ({
+        ...g,
+        end: Math.max(g.end, g.start + MIN_GROUP_DURATION),
+      }));
+    }
+  }
+
+  // ── Fallback: mechanical grouping (same as original) ──
+  return mechanicalGrouping(wordMeta);
+}
+
+/**
+ * Mechanical phrase grouping — splits at punctuation and MAX_GROUP_SIZE.
+ * Used as fallback when AI phrases aren't available.
+ */
+function mechanicalGrouping(wordMeta: WordMetaEntry[]): PhraseGroup[] {
   const lineMap = new Map<number, WordMetaEntry[]>();
-  for (const wm of wordMeta) { if (!lineMap.has(wm.lineIndex)) lineMap.set(wm.lineIndex, []); lineMap.get(wm.lineIndex)?.push(wm); }
+  for (const wm of wordMeta) {
+    if (!lineMap.has(wm.lineIndex)) lineMap.set(wm.lineIndex, []);
+    lineMap.get(wm.lineIndex)!.push(wm);
+  }
   const groups: PhraseGroup[] = [];
   for (const [lineIdx, words] of lineMap) {
-    let current: WordMetaEntry[] = []; let groupIdx = 0;
-    const flushGroup = () => { if (!current.length) return; groups.push({ words: [...current], start: current[0].start, end: current[current.length - 1].end, anchorWordIdx: findAnchorWord(current), lineIndex: lineIdx, groupIndex: groupIdx }); groupIdx += 1; current = []; };
+    let current: WordMetaEntry[] = [];
+    let groupIdx = 0;
+    const flushGroup = () => {
+      if (!current.length) return;
+      groups.push({
+        words: [...current],
+        start: current[0].start,
+        end: current[current.length - 1].end,
+        anchorWordIdx: findAnchorWord(current),
+        lineIndex: lineIdx,
+        groupIndex: groupIdx,
+      });
+      groupIdx += 1;
+      current = [];
+    };
     for (let i = 0; i < words.length; i += 1) {
-      const wm = words[i]; current.push(wm);
+      const wm = words[i];
+      current.push(wm);
       const duration = current[current.length - 1].end - current[0].start;
       const isNaturalBreak = /[,\.!?;]$/.test(wm.word);
       const isMaxSize = current.length >= MAX_GROUP_SIZE;
       const isLast = i === words.length - 1;
-      if (isLast) flushGroup(); else if ((isNaturalBreak || isMaxSize) && duration >= MIN_GROUP_DURATION) flushGroup();
+      if (isLast) flushGroup();
+      else if ((isNaturalBreak || isMaxSize) && duration >= MIN_GROUP_DURATION) flushGroup();
     }
   }
   groups.sort((a, b) => a.start - b.start);
-  return mergeShortGroups(groups).map((group) => ({ ...group, end: Math.max(group.end, group.start + MIN_GROUP_DURATION) }));
+  return mergeShortGroups(groups).map((group) => ({
+    ...group,
+    end: Math.max(group.end, group.start + MIN_GROUP_DURATION),
+  }));
 }
+
 
 export function computeEntryState(style: EntryStyle, progress: number, intensity: number): AnimState {
   const ep = easeOut(Math.min(1, progress));
@@ -379,7 +481,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const lineWordCounters: Record<number, number> = {};
   for (const wm of wordMeta) { lineWordCounters[wm.lineIndex] = lineWordCounters[wm.lineIndex] ?? 0; wm.wordIndex = lineWordCounters[wm.lineIndex]++; }
 
-  const phraseGroups = buildPhraseGroups(wordMeta);
+  const aiPhrases = (payload.cinematic_direction as any)?.phrases as CinematicPhrase[] | undefined;
+  const phraseGroups = buildPhraseGroups(wordMeta, aiPhrases);
   const manifestWordDirectives = ((payload.frame_state as any)?.wordDirectives ?? {}) as Record<string, ManifestWordDirective>;
   const storyboardRaw = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
   // Convert to map keyed by lineIndex — the raw array is sparse (15-25 entries for a 40-line song)
@@ -450,6 +553,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
     const hasHero = group.words.some(wm =>
       (wm.directive?.emphasisLevel ?? 1) >= 4 ||
+      wm.directive?.isolation === true ||
       storyboard.get(group.lineIndex)?.heroWord?.toLowerCase() === wm.clean
     );
 
@@ -503,6 +607,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         color: semantic?.colorOverride ?? autoSemantic?.colorOverride ?? resolveV3Palette(payload, ((wm.start + (payload.lines[group.lineIndex]?.end ?? wm.start)) * 0.5 - payload.songStart) / Math.max(0.01, payload.songEnd - payload.songStart))[2] ?? '#ffffff',
         hasSemanticColor: Boolean(semantic?.colorOverride || autoSemantic?.colorOverride),
         isHeroWord: (wm.directive?.emphasisLevel ?? 1) >= 4
+          || (wm.directive as any)?.isolation === true
           || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')),
         heroPresentation: undefined, // removed — isolation handled by separate flag
         isAnchor: wi === group.anchorWordIdx,
