@@ -2253,7 +2253,7 @@ serve(async (req) => {
       });
     }
 
-    const systemPrompt = scenePrefix + CINEMATIC_DIRECTION_PROMPT;
+    const systemPrompt = scenePrefix + customPrompts.fullPrompt;
     const userMessage = buildUserMessage(
       title,
       artist,
