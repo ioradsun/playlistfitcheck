@@ -483,18 +483,22 @@ const VIS_H = 64;
 class BeatVisSim {
   private visCanvas: HTMLCanvasElement;
   private visCtx: CanvasRenderingContext2D;
+  private buf: Uint8ClampedArray;
+  private imageData: ImageData;
   private bars: Float32Array;
   private barSeeds: Float32Array;
   private palette: [number, number, number];
   private style: BarVisStyle = 'flame';
   private lastBeatIndex = -1;
-  private flickerPhase = 0; // for flame/smoke animation
+  private flickerPhase = 0;
 
   constructor(accent: string) {
     this.visCanvas = document.createElement('canvas');
     this.visCanvas.width = VIS_W;
     this.visCanvas.height = VIS_H;
     this.visCtx = this.visCanvas.getContext('2d')!;
+    this.imageData = this.visCtx.createImageData(VIS_W, VIS_H);
+    this.buf = this.imageData.data;
     this.bars = new Float32Array(VIS_W);
     this.barSeeds = new Float32Array(VIS_W);
     for (let i = 0; i < VIS_W; i++) {
@@ -515,64 +519,91 @@ class BeatVisSim {
   update(energy: number, pulse: number, hitStrength: number, _beatPhase: number, beatIndex: number): void {
     const W = VIS_W;
     const H = VIS_H;
-    const ctx = this.visCtx;
-    ctx.clearRect(0, 0, W, H);
+    const buf = this.buf;
+
+    for (let i = 0; i < W * H * 4; i += 4) {
+      buf[i] = 0; buf[i + 1] = 0; buf[i + 2] = 0; buf[i + 3] = 0;
+    }
 
     const isNewBeat = beatIndex !== this.lastBeatIndex;
     this.lastBeatIndex = beatIndex;
     this.flickerPhase += 0.15 + energy * 0.3;
 
     const [pr, pg, pb] = this.palette;
-    const beatDrive = pulse * 0.65 + hitStrength * 0.25 + energy * 0.10;
+    const drive = energy * 0.55 + pulse * 0.35 + hitStrength * 0.10;
 
     for (let x = 0; x < W; x++) {
       const nx = x / W;
       const centerBias = 0.5 + 0.5 * (1.0 - Math.abs(nx - 0.5) * 2.0);
       const variation = 0.7 + this.barSeeds[x] * 0.6;
-      const target = beatDrive * centerBias * variation;
-      this.bars[x] += (target > this.bars[x])
-        ? (target - this.bars[x]) * 0.85
-        : (target - this.bars[x]) * 0.15;
+      const target = drive * centerBias * variation;
+      if (target > this.bars[x]) {
+        this.bars[x] += (target - this.bars[x]) * 0.75;
+      } else {
+        this.bars[x] += (target - this.bars[x]) * 0.12;
+      }
     }
 
+    const style = this.style;
     for (let x = 0; x < W; x++) {
       const barH = Math.floor(this.bars[x] * H * 0.92);
       if (barH < 1) continue;
-      const baseH = Math.floor(barH * 0.6);
-      const tipH = barH - baseH;
+      const seed = this.barSeeds[x];
 
-      const bR = Math.floor(pr * 0.5);
-      const bG = Math.floor(pg * 0.5);
-      const bB = Math.floor(pb * 0.5);
-      ctx.fillStyle = `rgba(${bR},${bG},${bB},0.5)`;
-      ctx.fillRect(x, H - baseH, 1, baseH);
+      for (let y = H - 1; y >= H - barH && y >= 0; y--) {
+        const t = (H - y) / Math.max(1, barH);
+        const idx = (y * W + x) * 4;
 
-      let tR = pr, tG = pg, tB = pb, tA = 0.65;
-      if (this.style === 'flame') {
-        const flicker = Math.sin(this.flickerPhase * 3 + this.barSeeds[x] * 40) * 0.12;
-        tR = Math.min(255, pr + 80);
-        tG = Math.min(255, Math.floor(pg * 0.6 + 50));
-        tB = Math.floor(pb * 0.2);
-        tA = 0.6 + flicker;
-      } else if (this.style === 'neon') {
-        tR = Math.min(255, pr + 40);
-        tG = Math.min(255, pg + 30);
-        tB = Math.min(255, pb + 60);
-        tA = 0.7;
-      } else if (this.style === 'smoke') {
-        tR = Math.floor(pr * 0.3 + 130);
-        tG = Math.floor(pg * 0.3 + 125);
-        tB = Math.floor(pb * 0.3 + 128);
-        tA = 0.4;
+        if (style === 'flame') {
+          const flicker = t > 0.6 ? Math.sin(this.flickerPhase * 3 + seed * 40 + x * 0.7) * 0.3 : 0;
+          const tipShift = Math.max(0, t - 0.5) * 2;
+          const r = Math.min(255, Math.floor(pr * (0.4 + t * 0.6) + tipShift * (255 - pr) * 0.6));
+          const g = Math.min(255, Math.floor(pg * (0.3 + t * 0.4) + tipShift * Math.max(0, 180 - pg) * 0.3));
+          const b = Math.floor(pb * (0.2 + t * 0.15) * (1 - tipShift * 0.7));
+          const a = Math.min(255, Math.floor((230 + flicker * 25) * (0.60 + t * 0.35) * (1 - flicker * 0.10)));
+          buf[idx] = r; buf[idx + 1] = g; buf[idx + 2] = Math.max(0, b); buf[idx + 3] = a;
+        } else if (style === 'neon') {
+          const bright = 0.6 + t * 0.4;
+          const glow = 1.0;
+          buf[idx] = Math.min(255, Math.floor(pr * bright * glow + 40 * t));
+          buf[idx + 1] = Math.min(255, Math.floor(pg * bright * glow + 30 * t));
+          buf[idx + 2] = Math.min(255, Math.floor(pb * bright * glow + 60 * t));
+          buf[idx + 3] = Math.min(255, Math.floor(220 * (0.55 + t * 0.40)));
+        } else if (style === 'smoke') {
+          const wisp = t > 0.4 ? Math.sin(this.flickerPhase * 1.5 + seed * 30 + x * 0.5) * 0.25 * t : 0;
+          const fade = t > 0.7 ? 1.0 - (t - 0.7) / 0.3 : 1.0;
+          const grey = 0.5 + t * 0.3;
+          buf[idx] = Math.min(255, Math.floor((pr * 0.3 + 180 * 0.7) * grey));
+          buf[idx + 1] = Math.min(255, Math.floor((pg * 0.3 + 170 * 0.7) * grey));
+          buf[idx + 2] = Math.min(255, Math.floor((pb * 0.3 + 175 * 0.7) * grey));
+          buf[idx + 3] = Math.min(255, Math.floor(185 * fade * (0.45 + t * 0.30 + wisp)));
+        } else {
+          const bright = 0.35 + t * 0.65;
+          buf[idx] = Math.min(255, Math.floor(pr * bright + 50 * t));
+          buf[idx + 1] = Math.min(255, Math.floor(pg * bright + 50 * t));
+          buf[idx + 2] = Math.min(255, Math.floor(pb * bright + 50 * t));
+          buf[idx + 3] = Math.min(255, Math.floor(210 * (0.55 + t * 0.40)));
+        }
       }
-      ctx.fillStyle = `rgba(${tR},${tG},${tB},${tA.toFixed(2)})`;
-      ctx.fillRect(x, H - barH, 1, tipH);
     }
 
     if (isNewBeat && hitStrength > 0.3) {
-      ctx.fillStyle = `rgba(${Math.min(255, pr + 80)},${Math.min(255, Math.floor(pg * 0.7 + 60))},${Math.floor(pb * 0.3)},${Math.min(0.8, hitStrength * 0.6).toFixed(2)})`;
-      ctx.fillRect(0, H - 3, W, 3);
+      const flashAlpha = Math.min(200, Math.floor(hitStrength * 155));
+      const fr = style === 'flame' ? Math.min(255, pr + 80) : pr;
+      const fg = style === 'flame' ? Math.min(255, Math.floor(pg * 0.7 + 60)) : pg;
+      const fb = style === 'flame' ? Math.floor(pb * 0.3) : pb;
+      for (let x = 0; x < W; x++) {
+        for (let y = H - 3; y < H; y++) {
+          const idx = (y * W + x) * 4;
+          buf[idx] = Math.max(buf[idx], Math.min(255, fr));
+          buf[idx + 1] = Math.max(buf[idx + 1], Math.min(255, fg));
+          buf[idx + 2] = Math.max(buf[idx + 2], Math.min(255, fb));
+          buf[idx + 3] = Math.max(buf[idx + 3], flashAlpha);
+        }
+      }
     }
+
+    this.visCtx.putImageData(this.imageData, 0, 0);
   }
 
   get canvas(): HTMLCanvasElement { return this.visCanvas; }
