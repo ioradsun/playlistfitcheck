@@ -70,6 +70,7 @@ TEXTURE (ambient particles — what the air of this song's world is made of):
   "smoke"  — wisps, mystery, haunting fog
   "dust"   — motes, atmosphere, earthiness
   "stars"  — sparkles, wonder, night sky
+  "glare"  — warm golden lens flare spots, god rays, light leakage
 
 EMOTIONAL ARC:
   "slow-burn"  — gradual build, payoff at the end
@@ -269,7 +270,7 @@ OPTIONAL:
 PRESETS:
 - "sceneTone": "dark" | "light" | "mixed"
 - "typography": "bold-impact" | "clean-modern" | "elegant-serif" | "raw-condensed" | "whisper-soft" | "tech-mono" | "display-heavy" | "editorial-light"
-- "texture": "fire" | "rain" | "snow" | "smoke" | "dust" | "stars"
+- "texture": "fire" | "rain" | "snow" | "smoke" | "dust" | "stars" | "glare"
 - "emotionalArc": "slow-burn" | "surge" | "collapse" | "dawn" | "eruption"
 
 ═══════════════════════════════════════
@@ -427,7 +428,7 @@ const ENUMS = {
     "raw",
     "hypnotic",
   ],
-  texture: ["fire", "rain", "snow", "smoke", "dust", "stars"],
+  texture: ["fire", "rain", "snow", "smoke", "dust", "stars", "glare"],
   emotionalArc: ["slow-burn", "surge", "collapse", "dawn", "eruption"],
   elementalClass: ["FIRE", "WATER", "FROST", "SMOKE", "ELECTRIC"],
   atmosphereState: ["still", "drifting", "falling", "swirling"],

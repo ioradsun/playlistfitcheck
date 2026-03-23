@@ -35,6 +35,7 @@ interface Particle {
   phase: number;
   aux: number;
   aux2: number;
+  age: number;
 }
 
 interface ParticleSpawnOverrides {
@@ -105,6 +106,10 @@ export const PARTICLE_SYSTEM_MAP = {
   noise: "GLITCH_PIXELS",
   ice: "CRYSTALS",
   frost: "CRYSTALS",
+  glare: "GLARE",
+  flare: "GLARE",
+  sunlight: "GLARE",
+  lens: "GLARE",
 } as const;
 
 const PARTICLE_LIMITS = {
@@ -125,7 +130,7 @@ function getMaxParticles(): number {
 }
 
 const MAX_PARTICLES = Math.max(PARTICLE_LIMITS.highEnd, 200);
-const FOREGROUND_ALLOWED = new Set(["snow", "petals", "ash", "confetti", "crystals"]);
+const FOREGROUND_ALLOWED = new Set(["snow", "petals", "ash", "confetti", "crystals", "GLARE", "glare"]);
 
 export interface ParticleRuntimeConfig {
   system: string;
@@ -160,6 +165,7 @@ export class ParticleEngine {
     phase: 0,
     aux: 0,
     aux2: 0,
+    age: 0,
   }));
   private config: ParticleRuntimeConfig;
   private bounds: Rect = { x: 0, y: 0, w: 1, h: 1 };
@@ -345,6 +351,7 @@ export class ParticleEngine {
       p.y += p.vy * dt;
       p.rotation += p.rotationSpeed * dt;
       p.phase += 0.02 * dt;
+      p.age += dt;
       p.life -= p.decay * dt;
 
       if (
@@ -543,6 +550,7 @@ export class ParticleEngine {
     p.phase = Math.random() * Math.PI * 2;
     p.aux = Math.random();
     p.aux2 = Math.random();
+    p.age = 0;
 
     switch (this.config.system) {
       case "embers":
@@ -686,6 +694,15 @@ export class ParticleEngine {
         p.opacity = 0.55;
         p.decay = 0.004;
         break;
+      case "glare":
+        p.x = Math.random() * this.bounds.w;
+        p.y = Math.random() * this.bounds.h * 0.6;
+        p.size = 25 + Math.random() * 55;
+        p.opacity = 0.12 + Math.random() * 0.18;
+        p.vx = (Math.random() - 0.5) * 0.08;
+        p.vy = -0.03 - Math.random() * 0.07;
+        p.life = 5000 + Math.random() * 4000;
+        break;
       default:
         p.active = false;
     }
@@ -775,6 +792,8 @@ export class ParticleEngine {
         p.vy = clamp(p.vy, -1.2, 1.2);
         break;
       }
+      case "glare":
+        break;
       default:
         break;
     }
@@ -869,6 +888,19 @@ export class ParticleEngine {
         ctx.fill();
         ctx.restore();
         break;
+      case "glare": {
+        const breath = 0.85 + Math.sin(p.age * 0.0008 + p.x * 0.01) * 0.15;
+        const alpha = p.opacity * breath;
+        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+        gradient.addColorStop(0, `rgba(255, 248, 231, ${alpha})`);
+        gradient.addColorStop(0.35, `rgba(255, 220, 120, ${alpha * 0.4})`);
+        gradient.addColorStop(1, `rgba(255, 200, 50, 0)`);
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
       default: {
         drawNeonOrb(ctx, p.x, p.y, s, 1, this.time, this.config.color);
       }
