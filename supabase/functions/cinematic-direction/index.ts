@@ -128,11 +128,20 @@ Group ALL lyrics into PHRASES — the words that appear on screen together.
 Each phrase is one screen of text. This is the most important creative decision:
 it controls the rhythm and pacing of the entire video.
 
-You receive per-word timestamps with durations AND the BPM. USE THEM.
+You receive a flat word stream with per-word timestamps, durations, gaps,
+and the BPM. USE THEM.
 
 A phrase is a READING BEAT — a single moment where the viewer reads, absorbs,
 and feels before the next moment arrives. Think of it as editing: each phrase is
 a cut. Good cuts follow the emotional rhythm. Bad cuts interrupt it.
+
+PHRASE BOUNDARY SIGNALS (in priority order):
+  1. [BREATH] markers (≥300ms gap) — the artist BREATHED. ALWAYS split here.
+     This is the strongest signal. A breath is a phrase boundary, period.
+  2. [pause] markers (≥150ms gap) — likely a natural pause. Split if meaning supports it.
+  3. Beat bar boundaries — phrases should start/end near strong beats when possible.
+  4. Semantic completeness — one complete thought or clause per phrase.
+  5. Punctuation (commas, periods) — weakest signal. Only split here if timing supports it.
 
 TIMING RULES:
 
@@ -144,10 +153,9 @@ TIMING RULES:
 
   Maximum: 4 seconds. The viewer's attention resets. Cut to the next phrase.
 
-  If the time between first word start and last word end is SHORTER than
-  the minimum for that word count, you MUST either:
-    a) Merge into the adjacent phrase, OR
-    b) Split differently to reduce word count
+  Compute actual phrase duration from word timestamps:
+    phrase_duration = last_word.end - first_word.start
+  Do NOT guess from word count — USE the timestamps.
 
 BPM PACING:
   The song is at {BPM} BPM. Use this to calibrate phrase density:
@@ -165,10 +173,17 @@ MEANING RULES:
 
 Every lyric word must belong to exactly one phrase. No gaps, no overlaps.
 
+wordRange uses GLOBAL indices into the flat word stream:
+  "wordRange": [start, end] — inclusive, 0-based.
+  The w-numbers (w0, w1, w2...) are GLOBAL across the entire song.
+  Use them directly. Phrases CAN and SHOULD cross line boundaries
+  when meaning demands it.
+
 Each phrase:
-- "lineIndex": which lyric line (integer, 0-based)
-- "wordRange": [startWordIndex, endWordIndex] — inclusive indices within the line
-- "heroWord": UPPERCASE — most impactful word in this phrase (optional)
+  "wordRange": [start, end] inclusive, GLOBAL word indices (use w-numbers)
+  "heroWord": "UPPERCASE" (optional — the most impactful word)
+
+NO "lineIndex" field. Phrases are not bound to lines.
 
 ═══════════════════════════════════════
 WORD DIRECTIVES — semantic emphasis
@@ -677,22 +692,30 @@ function buildUserMessage(
     }
   }
 
-  msg += `LYRICS WITH WORD TIMING:\n\n`;
   if (words && words.length > 0) {
-    for (let li = 0; li < lines.length; li++) {
-      const line = lines[li];
-      const lineStart = line.start ?? 0;
-      const lineEnd = line.end ?? 0;
-      const lineWords = words.filter(
-        (w) => w.start >= lineStart - 0.15 && w.end <= lineEnd + 0.15,
-      );
-      msg += `Line ${li} [${fmt(lineStart)}–${fmt(lineEnd)}]: "${line.text}"\n`;
-      if (lineWords.length > 0) {
-        msg += `  Words: ${lineWords.map((w) => `${w.word}(${Math.round((w.end - w.start) * 1000)}ms)`).join(" ")}\n`;
+    msg += `WORD STREAM (flat, with timing and gaps):\n`;
+    msg += `wordRange in your phrases uses these w-numbers (GLOBAL, not per-line).\n\n`;
+    const parts: string[] = [];
+    for (let wi = 0; wi < words.length; wi++) {
+      const w = words[wi];
+      const durMs = Math.round((w.end - w.start) * 1000);
+      let part = `w${wi}:${w.word}(${durMs}ms)`;
+      if (wi < words.length - 1) {
+        const gapMs = Math.round((words[wi + 1].start - w.end) * 1000);
+        if (gapMs >= 300) {
+          part += ` [BREATH:${gapMs}ms]`;
+        } else if (gapMs >= 150) {
+          part += ` [pause:${gapMs}ms]`;
+        }
       }
-      msg += `\n`;
+      parts.push(part);
     }
+    for (let i = 0; i < parts.length; i += 10) {
+      msg += `  ${parts.slice(i, i + 10).join(" ")}\n`;
+    }
+    msg += "\n";
   } else {
+    msg += `LYRICS WITH TIMING:\n\n`;
     for (let li = 0; li < lines.length; li++) {
       const line = lines[li];
       const dur = Math.round(((line.end ?? 0) - (line.start ?? 0)) * 1000);
