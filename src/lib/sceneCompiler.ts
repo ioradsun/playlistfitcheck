@@ -737,6 +737,20 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   }
   const baseTypography = TYPOGRAPHY_PROFILES[((payload.cinematic_direction as any)?.typography as string) ?? 'clean-modern'] ?? TYPOGRAPHY_PROFILES['clean-modern'];
 
+  // ═══ PRIME CANVAS: force the context to rasterize the font before measuring ═══
+  // A fresh canvas context may return fallback-font widths even when document.fonts
+  // reports the font as loaded (known Chrome race condition). Drawing with the font
+  // at all weights we use forces the canvas rasterizer to internalize the font face.
+  // Without this, the first real measureText() calls return narrow widths, causing
+  // word positions (layoutX) to be too close together → text appears cramped/tiny.
+  {
+    const primeFontFamily = baseTypography.fontFamily;
+    for (const w of [baseTypography.fontWeight, baseTypography.heroWeight]) {
+      measureCtx.font = `${w} 48px "${primeFontFamily}", sans-serif`;
+      measureCtx.measureText('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
+    }
+  }
+
   // Pre-compute all line layouts at once so groups sharing a line don't overlap
   // Pass viewport aspect so the layout can wrap lines for portrait screens
   const vw = options?.viewportWidth ?? 960;

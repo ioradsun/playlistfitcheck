@@ -2548,19 +2548,25 @@ export class LyricDancePlayer {
       this.lastTimestamp = timestamp;
       this.updateFrameBudget(deltaMs);
       if (this._fontLayoutReflowPending) {
-        this._fontLayoutReflowPending = false;
-        this._textMetricsCache.clear();
-        this._mlLayoutCache.clear();
-        this._lastVisibleChunkCount = -1;
-        this._lastVisibleChunkSetHash = 0;
-        this._lastVisibleFirstChunkId = "";
-        this._lastVisibleMidChunkId = "";
-        this._lastVisibleLastChunkId = "";
         // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
+        // Only consume the flag when the scene exists and we can actually recompile.
+        // If compiledScene is null (still compiling), keep the flag set so the next
+        // tick retries. This prevents the race where the font loads before the first
+        // scene compile finishes — previously the flag was consumed and the recompile
+        // was silently skipped, leaving the scene with fallback-font positions forever.
         if (this.payload && this.compiledScene) {
+          this._fontLayoutReflowPending = false;
+          this._textMetricsCache.clear();
+          this._mlLayoutCache.clear();
+          this._lastVisibleChunkCount = -1;
+          this._lastVisibleChunkSetHash = 0;
+          this._lastVisibleFirstChunkId = "";
+          this._lastVisibleMidChunkId = "";
+          this._lastVisibleLastChunkId = "";
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
           this._buildChunkCacheFromScene(this.compiledScene);
         }
+        // else: keep _fontLayoutReflowPending = true, retry next tick
       }
 
       // ALWAYS start frame with this exact sequence
