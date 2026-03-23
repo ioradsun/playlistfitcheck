@@ -571,7 +571,11 @@ export class BeatConductor {
   get beatPeriod(): number { return this.period; }
 
   /** Reset cursor (call after seek) */
-  resetCursor(): void { this._cursor = 0; this._hitCursor = 0; }
+  resetCursor(): void {
+    this._cursor = 0;
+    this._hitCursor = 0;
+    this._heroTracker.reset();
+  }
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -579,10 +583,10 @@ export class BeatConductor {
 // ──────────────────────────────────────────────────────────────
 
 const EMPHASIS_RESPONSE: Record<number, number> = {
-  0: 0.2, // filler — barely reacts
-  1: 0.5, // normal word
-  2: 0.75, // slightly important
-  3: 1.0, // emphasized
-  4: 1.4, // hero word
-  5: 1.8, // climax hero
+  0: 0.15, // filler — barely reacts
+  1: 0.4, // normal — subtle breathing
+  2: 0.7, // moderate — noticeable pulse
+  3: 1.0, // strong — full beat response
+  4: 1.5, // hero — amplified
+  5: 2.2, // climactic — explosive
 };
