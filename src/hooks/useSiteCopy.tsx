@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { consumeSiteCopyPrefetch, getCachedSiteCopy } from "@/lib/prefetch";
+import { readLightningBarFlagFromCopy, applyLightningBarFlag } from "@/lib/lyricDanceFlags";
 
 // Default copy (fallback if DB not loaded yet)
 const DEFAULT_COPY: SiteCopy = {
@@ -128,6 +129,9 @@ export function SiteCopyProvider({ children }: { children: ReactNode }) {
     if (data?.copy_json) {
       const merged = deepMerge(DEFAULT_COPY, data.copy_json as any);
       setCopy(merged);
+      // Hydrate lightning bar flag from fresh backend data
+      const lbFlag = readLightningBarFlagFromCopy(data.copy_json);
+      if (lbFlag !== null) applyLightningBarFlag(lbFlag);
     }
     setLoaded(true);
   }, []);
