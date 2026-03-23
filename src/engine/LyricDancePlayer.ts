@@ -5897,21 +5897,12 @@ export class LyricDancePlayer {
         // When multi-line is active, _mlDx already positions words centered at 480.
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
-        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX + _danceMotion.dX * danceRoleAmp * waveModulator + _hitMotion.dX * danceRoleAmp) * sx;
-        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY + _danceMotion.dY * danceRoleAmp * waveModulator + _hitMotion.dY * danceRoleAmp) * sy;
+        chunk.x = (word.layoutX + xCenterOffset + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
+        chunk.y = (roleY + (_isMultiLine ? (_mlDy[wi] ?? 0) : (word.layoutY - 270)) + finalOffsetY + heroOffsetY + beatNudgeY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        // ═══ CLAMP total dance dScale to prevent collision-solver font shrink ═══
-        // The grammar (PR5) + phrase release (PR6) + hit choreographer (PR10) can
-        // compound dScale up to ~0.18 on peak frames. This inflates the bounding
-        // box (halfW) past the viewport wall, triggering the shrink pass which
-        // reduces fontSize for the frame. Cap at 0.08 (8%) — still visibly pulses
-        // on beats, but never wide enough to trigger overflow shrink.
-        const _rawDScale = _danceMotion.dScale * Math.abs(danceRoleAmp) * waveModulator
-                         + _hitMotion.dScale * Math.abs(danceRoleAmp);
-        const _clampedDScale = Math.max(-0.04, Math.min(0.08, _rawDScale));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _clampedDScale);
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult * (1 + _clampedDScale);
+        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
+        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
         // Cap compound scale to prevent font shrink trigger.
         // Solo heroes (alone center screen) get more headroom.
         const _scaleMax = (isSoloHero && groupHasActiveSoloHero) ? 2.0 : 1.5;
