@@ -5336,7 +5336,7 @@ export class LyricDancePlayer {
             }
           }
 
-          const needsWrap = true; // always use runtime multi-line layout for proper centering
+          const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4;
 
           if (needsWrap) {
             _isMultiLine = true;
