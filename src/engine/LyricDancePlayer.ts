@@ -34,7 +34,6 @@ import { getEffectTier, canShowElemental, canShowHeroGlow, getParticleDensity, g
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
   isExactHeroTokenMatch,
-  normalizeToken,
   resolveCinematicState,
   type ResolvedLineSettings,
   type ResolvedWordSettings,
@@ -705,14 +704,7 @@ export class LyricDancePlayer {
   private chunks: Map<string, ChunkState> = new Map();
   private _lastFont = '';
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
-  private _boundsBuffer: ChunkBounds[] = [];
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
-  private _lastVisibleChunkSetHash = 0;
-  private _lastVisibleChunkCount = 0;
-  private _lastVisibleFirstChunkId = "";
-  private _lastVisibleMidChunkId = "";
-  private _lastVisibleLastChunkId = "";
-  private _solvedBounds: ChunkBounds[] = [];
   private _collisionCellSize = 96;
   private _collisionCols = 0;
   private _collisionRows = 0;
@@ -733,6 +725,8 @@ export class LyricDancePlayer {
   private cameraRig: CameraRig = new CameraRig();
   private _lastBeatState: BeatState | null = null;
   private _lastSubsystemResponse: SubsystemResponse | null = null;
+  private _activeGroupCursor = 0;
+  private _activeGroupCursorTime = -1;
 
   // ═══ EffectBudgeter — compile-time timing guarantees ═══
   private timingBudgets: GroupTimingBudget[] = [];
@@ -1402,10 +1396,10 @@ export class LyricDancePlayer {
     // Layout cache intentionally NOT cleared on seek — layout inputs (words, font,
     // viewport) don't change, only playback time. Same group = same rows, always.
     // Solver hash reset so it re-runs for the new set of visible chunks.
-    this._lastVisibleChunkCount = -1;
-    this._lastVisibleChunkSetHash = 0;
     this.conductor?.resetCursor();
     this.cameraRig.reset();
+    this._activeGroupCursor = 0;
+    this._activeGroupCursorTime = -1;
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
@@ -1661,7 +1655,6 @@ export class LyricDancePlayer {
     this.lastSimFrame = -1;
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    this._lastVisibleMidChunkId = '';
     this.cameraRig.setViewport(w, h);
 
     // ═══ RESPONSIVE: always recompile on resize ═══
@@ -1755,10 +1748,10 @@ export class LyricDancePlayer {
     this._lastBeatIndex = -1;
     this._timeInitialized = false;
     this._textMetricsCache.clear();
-    this._lastVisibleChunkCount = -1;
-    this._lastVisibleChunkSetHash = 0;
     this._lastSortHash = 0;
     this.cameraRig.reset();
+    this._activeGroupCursor = 0;
+    this._activeGroupCursorTime = -1;
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
@@ -2147,11 +2140,6 @@ export class LyricDancePlayer {
       if (this._fontLayoutReflowPending) {
         this._fontLayoutReflowPending = false;
         this._textMetricsCache.clear();
-        this._lastVisibleChunkCount = -1;
-        this._lastVisibleChunkSetHash = 0;
-        this._lastVisibleFirstChunkId = "";
-        this._lastVisibleMidChunkId = "";
-        this._lastVisibleLastChunkId = "";
         // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
         if (this.payload && this.compiledScene) {
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
@@ -2841,140 +2829,14 @@ export class LyricDancePlayer {
     const isPortraitLocal = this.height > this.width;
     const isCompact = this.width < 250;
     const viewportMinFont = isCompact ? 10 : isPortraitLocal ? 12 : 10;
+    const clampMargin = isPortraitLocal ? this.width * 0.05 : 8;
+    const clampMinX = clampMargin;
+    const clampMaxX = this.width - clampMargin;
+    const clampMinY = clampMargin;
+    const clampMaxY = this.height - clampMargin;
 
-    // ═══ Camera-aware wall clamping ═══
-    // Walls must account for the CameraRig transform (zoom + offset) that is applied
-    // AFTER clamping. A word clamped to the wall will be pushed off-screen if the
-    // camera zooms or offsets toward that edge. We invert the camera transform to
-    // find the pre-camera positions that map to the visible margin on screen.
-    //
-    // Screen position of a word at pre-camera position cx:
-    //   screenX = camShakeX + camCX + (cx - camCX) * camZoom
-    //
-    // Solving for cx when screenX = margin:
-    //   cx = camCX + (margin - camShakeX - camCX) / camZoom
-
-    // Separate X and Y margins — Y needs height-based margin on tall canvases
-    const marginX = isCompact ? Math.round(this.width * 0.08) : isPortraitLocal ? Math.round(this.width * 0.05) : 4;
-    const marginY = isCompact ? Math.round(this.height * 0.04) : isPortraitLocal ? Math.round(this.height * 0.04) : 4;
-
-    // Read camera transform early for wall computation
     const camT = this.cameraRig.getSubjectTransform();
-    const camZoomWall = camT.zoom;
-    const camOffX = camT.offsetX;
-    const camOffY = camT.offsetY;
-    const camCXWall = this.width / 2;
-    const camCYWall = this.height / 2;
-
-    // Inverse camera transform: find pre-camera positions that map to screen margins
-    const wallLeft = -safeCameraX + camCXWall + (marginX - camOffX - camCXWall) / camZoomWall;
-    const wallRight = -safeCameraX + camCXWall + (this.width - marginX - camOffX - camCXWall) / camZoomWall;
-    const wallTop = -safeCameraY + camCYWall + (marginY - camOffY - camCYWall) / camZoomWall;
-    const wallBottom = -safeCameraY + camCYWall + (this.height - marginY - camOffY - camCYWall) / camZoomWall;
-
-    const bounds = this._boundsBuffer;
-    bounds.length = 0;
     const resolvedFont = this.getResolvedFont();
-    for (let i = 0; i < sortBuf.length; i += 1) {
-      const chunk = sortBuf[i];
-      // Ghost/preview words (alpha < 0.3) render visually but must not participate
-      // in collision solving. They're anticipation cues, not physical objects.
-      // Including them causes settled words to jump every time a new ghost appears.
-      if (!chunk.visible || (chunk.alpha ?? 1) < 0.3) continue;
-      const obj = this.chunks.get(chunk.id);
-      if (!obj) continue;
-      const text = chunk.text ?? obj.text;
-      const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
-      const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y - this._textVerticalBias : 0;
-      const cx = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
-      const cy = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
-      const baseFontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
-      const fontSize = Math.max(viewportMinFont, Math.round(baseFontSize) || 36);
-      const weight = chunk.fontWeight ?? 700;
-      const family = chunk.fontFamily ?? resolvedFont;
-      const measureFont = `${weight} ${fontSize}px ${family}`;
-      const metrics = this.getCachedMetrics(text, measureFont);
-      const baseTextWidth = metrics.width;
-      const asc = metrics.ascent;
-      const desc = metrics.descent;
-      const halfTextH = (asc + desc) / 2;
-      const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
-      const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
-      const syRaw = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : baseScale;
-      const scaleX = Number.isFinite(sxRaw) ? sxRaw : 1;
-      const scaleY = Number.isFinite(syRaw) ? syRaw : 1;
-      bounds.push({
-        chunk,
-        cx,
-        cy,
-        halfW: (baseTextWidth * Math.abs(scaleX)) / 2 + 6,
-        halfH: (halfTextH * Math.abs(scaleY)) + 3,
-        priority: chunk.isAnchor ? 0 : ((chunk.exitProgress ?? 0) > 0 ? 2 : 1),
-        fontSize,
-        minFont: viewportMinFont,
-        text,
-        family,
-        weight,
-        baseTextWidth,
-        scaleX,
-        scaleY,
-      });
-    }
-
-    // Build a signature of which chunks are visible — only re-solve when this changes
-    let visibleHash = 2166136261;
-    for (let i = 0; i < bounds.length; i++) {
-      const id = bounds[i].chunk.id;
-      for (let ci = 0; ci < id.length; ci += 1) {
-        visibleHash ^= id.charCodeAt(ci);
-        visibleHash = Math.imul(visibleHash, 16777619);
-      }
-      visibleHash ^= 44;
-      visibleHash = Math.imul(visibleHash, 16777619);
-    }
-    const firstVisibleId = bounds.length > 0 ? bounds[0].chunk.id : "";
-    const midVisibleId = bounds.length > 2 ? bounds[(bounds.length / 2) | 0].chunk.id : firstVisibleId;
-    const lastVisibleId = bounds.length > 0 ? bounds[bounds.length - 1].chunk.id : "";
-    // Compile-time solver in sceneCompiler handles static layout.
-    // Runtime solver fixes dynamic overlaps from entry/exit offsets.
-    // Hash+count+sentinel ids protects against hash collision stale states.
-    const setChanged =
-      bounds.length !== this._lastVisibleChunkCount
-      || visibleHash !== this._lastVisibleChunkSetHash
-      || firstVisibleId !== this._lastVisibleFirstChunkId
-      || midVisibleId !== this._lastVisibleMidChunkId
-      || lastVisibleId !== this._lastVisibleLastChunkId;
-    // Solver disabled — the runtime multi-line wrapper handles layout.
-    // The solver's corrections were ephemeral (lost when bounds are rebuilt
-    // next frame from animated chunk.x/y), causing oscillation with smoothing.
-    // Wall clamping below still prevents words from leaving the viewport.
-    // Wall-clamp ALL bounds every frame (stable, no jitter)
-    for (let i = 0; i < bounds.length; i++) {
-      const b = bounds[i];
-      const minX = wallLeft + b.halfW;
-      const maxX = wallRight - b.halfW;
-      const minY = wallTop + b.halfH;
-      const maxY = wallBottom - b.halfH;
-      b.cx = Math.max(minX, Math.min(maxX, b.cx));
-      b.cy = Math.max(minY, Math.min(maxY, b.cy));
-    }
-    this._lastVisibleChunkCount = bounds.length;
-    this._lastVisibleChunkSetHash = visibleHash;
-    this._lastVisibleFirstChunkId = firstVisibleId;
-    this._lastVisibleMidChunkId = midVisibleId;
-    this._lastVisibleLastChunkId = lastVisibleId;
-    this._solvedBounds.length = bounds.length;
-    for (let i = 0; i < bounds.length; i++) {
-      if (!this._solvedBounds[i]) {
-        this._solvedBounds[i] = { ...bounds[i] };
-      } else {
-        this._solvedBounds[i].cx = bounds[i].cx;
-        this._solvedBounds[i].cy = bounds[i].cy;
-      }
-    }
-
-    // Font shrink pass removed — fitTextToViewport guarantees text fits at compile time.
-    // Wall clamping (position only) is handled by the existing wall-clamp loop above.
 
     this.ctx.save();
     // ═══ DIRECTOR'S CAMERA: Pure depth — zoom into the words ═══
@@ -2982,16 +2844,42 @@ export class LyricDancePlayer {
     // NOT applied as a parent transform, because setTransform() replaces the
     // entire matrix and would wipe any parent zoom.
     // camT was already read above for wall computation — reuse it
-    const camZoom = camZoomWall;
-    const camShakeX = camOffX;
-    const camShakeY = camOffY;
+    const camZoom = camT.zoom;
+    const camShakeX = camT.offsetX;
+    const camShakeY = camT.offsetY;
     const camRotation = camT.rotation;
-    const camCX = camCXWall;
-    const camCY = camCYWall;
+    const camCX = this.width / 2;
+    const camCY = this.height / 2;
 
-    for (let ci = 0; ci < sortBuf.length; ci += 1) {
-      const chunk = sortBuf[ci];
-      if (!chunk.visible) continue;
+    const getGlowSettings = (chunk: ScaledKeyframe['chunks'][number], entry: number, drawAlpha: number, beatPulseNow: number) => {
+      const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || chunk.isHeroWord;
+      if (isHeroChunk && entry >= 0.5 && drawAlpha > 0.1) {
+        const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
+        const bloomGlow = baseGlow + beatPulseNow * 0.35;
+        const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
+        const tier = getEffectTier(wordDurMs);
+        const tierGlowCap = canShowHeroGlow(tier) ? getGlowCap(tier) : 0;
+        const blurCap = this._qualityTier < 2 ? Math.min(tierGlowCap, 12) : 0;
+        return {
+          glowColor: chunk.color ?? '#ffffff',
+          glowBlur: Math.min(blurCap, bloomGlow * 12),
+        };
+      }
+      if (chunk.glow > 0) {
+        const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
+        const tier = getEffectTier(wordDurMs);
+        const tierCap = getGlowCap(tier);
+        const glowCap = this._qualityTier < 2 ? Math.min(tierCap, 8) : 0;
+        return {
+          glowColor: chunk.color ?? '#ffffff',
+          glowBlur: Math.min(glowCap, chunk.glow * 12),
+        };
+      }
+      return { glowColor: 'transparent', glowBlur: 0 };
+    };
+
+    const drawChunkText = (chunk: ScaledKeyframe['chunks'][number], glowPass: boolean) => {
+      if (!chunk.visible) return;
 
       const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
       const exit = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
@@ -3006,41 +2894,31 @@ export class LyricDancePlayer {
       // Skip at tier 2+ (spawns dozens of particles per hero word)
       if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2 && (chunk.wordDuration ?? 0) >= 0.35) {
         this._heroDecompSpawned.add(chunk.id);
-        const spawnBound = bounds.find(b => b.chunk.id === chunk.id);
-        const spawnX = spawnBound ? spawnBound.cx : (Number.isFinite(chunk.x) ? chunk.x : this.width / 2);
-        const spawnY = spawnBound ? spawnBound.cy : (Number.isFinite(chunk.y) ? chunk.y : this.height / 2);
-        const spawnFontSize = spawnBound ? spawnBound.fontSize : 36;
+        const spawnX = Number.isFinite(chunk.x) ? Math.max(clampMinX, Math.min(clampMaxX, chunk.x as number)) : this.width / 2;
+        const spawnY = Number.isFinite(chunk.y) ? Math.max(clampMinY, Math.min(clampMaxY, (chunk.y as number) - this._textVerticalBias)) : this.height / 2;
+        const spawnFontSize = Number.isFinite(chunk.fontSize) ? Math.max(viewportMinFont, Math.round(chunk.fontSize as number) || 36) : 36;
         const spawnColor = chunk.color ?? '#f0f0f0';
         this.spawnDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, spawnColor, frameNowMs);
       }
 
       const obj = this.chunks.get(chunk.id);
-      if (!obj) continue;
+      if (!obj) return;
 
       const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
       const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y - this._textVerticalBias : 0;
       const rawDrawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
       const rawDrawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
 
-      let bound: ChunkBounds | null = null;
-      for (let bi = 0; bi < bounds.length; bi += 1) {
-        if (bounds[bi].chunk === chunk) {
-          bound = bounds[bi];
-          break;
-        }
-      }
-
       const baseFontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
-      let safeFontSize = Math.max(viewportMinFont, Math.round(baseFontSize) || 36);
+      const safeFontSize = Math.max(viewportMinFont, Math.round(baseFontSize) || 36);
       const fontWeight = chunk.fontWeight ?? 700;
       const family = chunk.fontFamily ?? resolvedFont;
       const text = chunk.text ?? obj.text;
-      if (bound) safeFontSize = bound.fontSize;
 
       const measureFont = `${fontWeight} ${safeFontSize}px ${family}`;
       const textWidth = this.getCachedMetrics(text, measureFont).width;
-      const centerX = bound ? bound.cx : rawDrawX;
-      const centerY = bound ? bound.cy : rawDrawY;
+      const centerX = rawDrawX;
+      const centerY = rawDrawY;
 
       const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
       const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
@@ -3054,9 +2932,8 @@ export class LyricDancePlayer {
       // We need: tx + textWidth * sx / 2 = visual_center
       // But tx feeds through computeTransformMatrix as the origin (e = tx * dpr).
       // So: drawX = centerX - textWidth * sx * 0.5
-      let drawX = centerX - textWidth * sx * 0.5;
-      const drawY = centerY;
-      const finalDrawY = drawY;
+      const drawX = centerX - textWidth * sx * 0.5;
+      const finalDrawY = centerY;
 
       const isAnchor = chunk.isAnchor ?? false;
       // ═══ SINGLE COLOR MODEL: no colored halos behind words ═══
@@ -3065,98 +2942,61 @@ export class LyricDancePlayer {
       const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
       const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
 
-      this.ctx.globalAlpha = drawAlpha;
-      this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
       const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
       if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
 
-        // ═══ HERO EFFECTS: bloom pulse, underline sweep ═══
-        const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || chunk.isHeroWord;
-        const beatState = this._lastBeatState;
-        const beatPulse = beatState?.pulse ?? 0;
-        // PERF: sub-pixel snap draw coordinates to device pixel grid
-        // Fractional positions cause shimmer during scale transitions (especially hero pop-in).
-        const dpr = this._effectiveDpr;
-        const heroDrawX = Math.round(drawX * dpr) / dpr;
-        const heroDrawY = Math.round(finalDrawY * dpr) / dpr;
-        // NOTE: beat bounce Y is now handled in evaluateFrame via SubsystemResponse.wordNudgeY
-        // so every word (not just heroes) dances to the grid.
+      const beatState = this._lastBeatState;
+      const beatPulse = beatState?.pulse ?? 0;
+      const { glowColor, glowBlur } = getGlowSettings(chunk, entry, drawAlpha, beatPulse);
+      const hasGlow = glowBlur >= 0.01;
+      if (hasGlow !== glowPass) return;
+      this.ctx.globalAlpha = drawAlpha;
+      this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
 
-        if (isHeroChunk && entry >= 0.5 && drawAlpha > 0.1) {
-          // Bloom pulse: amplified glow synced to beat
-          const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
-          const bloomGlow = baseGlow + beatPulse * 0.35;
+      const dpr = this._effectiveDpr;
+      const heroDrawX = Math.round(drawX * dpr) / dpr;
+      const heroDrawY = Math.round(finalDrawY * dpr) / dpr;
+      const clampedDrawX = Math.max(clampMinX, Math.min(clampMaxX, heroDrawX));
+      const clampedDrawY = Math.max(clampMinY, Math.min(clampMaxY, heroDrawY));
 
-          // ═══ TIME-TIER GLOW: more screen time = more glow allowed ═══
-          const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
-          const tier = getEffectTier(wordDurMs);
-          const tierGlowCap = canShowHeroGlow(tier) ? getGlowCap(tier) : 0;
-          // Adaptive quality: further reduce at lower quality tiers
-          const qualityCap = this._qualityTier < 2 ? Math.min(tierGlowCap, 12) : 0;
-          const blurCap = qualityCap;
-          const glowColor = chunk.color ?? '#ffffff';
-          const targetBlur = Math.min(blurCap, bloomGlow * 12);
-          // PERF: skip GPU state write if shadow hasn't changed
-          if (glowColor !== this._lastShadowColor) { this.ctx.shadowColor = glowColor; this._lastShadowColor = glowColor; }
-          if (targetBlur !== this._lastShadowBlur) { this.ctx.shadowBlur = targetBlur; this._lastShadowBlur = targetBlur; }
+      const needsFilterSaveRestore = false; // per-chunk filter blur disabled — cleaner entry/exit, saves rasterize+filter cycle
+      if (needsFilterSaveRestore) {
+        this.ctx.save();
+        this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
+      }
+      // Ghost trail removed — 1 copy at 12% opacity was invisible, saves fillText calls
 
-          // Depth stack: DISABLED — layers at 3-10% opacity are invisible on dark backgrounds.
-          // Saves 3x (setTransform + fillText) per hero word per frame.
-          this.ctx.globalAlpha = drawAlpha;
-          this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
-          this.ctx.shadowColor = chunk.color ?? '#ffffff';
-          this.ctx.shadowBlur = targetBlur;
-          if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
-        } else if (chunk.glow > 0) {
-          const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
-          const tier = getEffectTier(wordDurMs);
-          const tierCap = getGlowCap(tier);
-          const glowCap = this._qualityTier < 2 ? Math.min(tierCap, 8) : 0;
-          const gc = chunk.color ?? '#ffffff';
-          const gb = Math.min(glowCap, chunk.glow * 12);
-          // PERF: skip GPU write if unchanged
-          if (gc !== this._lastShadowColor) { this.ctx.shadowColor = gc; this._lastShadowColor = gc; }
-          if (gb !== this._lastShadowBlur) { this.ctx.shadowBlur = gb; this._lastShadowBlur = gb; }
-        }
-
-        const needsFilterSaveRestore = false; // per-chunk filter blur disabled — cleaner entry/exit, saves rasterize+filter cycle
-        if (needsFilterSaveRestore) {
-          this.ctx.save();
-          this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
-        }
-        // Ghost trail removed — 1 copy at 12% opacity was invisible, saves fillText calls
-
-        const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
-          camShakeX + camCX + (heroDrawX - camCX) * camZoom,
-          camShakeY + camCY + (heroDrawY - camCY) * camZoom,
-          (chunk.rotation ?? 0) + camRotation,
-          chunk.skewX ?? 0,
-          sx * camZoom,
-          sy * camZoom,
-        );
-        this.ctx.setTransform(ma, mb, mc, md, me, mf);
+      const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
+        camShakeX + camCX + (clampedDrawX - camCX) * camZoom,
+        camShakeY + camCY + (clampedDrawY - camCY) * camZoom,
+        (chunk.rotation ?? 0) + camRotation,
+        chunk.skewX ?? 0,
+        sx * camZoom,
+        sy * camZoom,
+      );
+      this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
         // ═══ Text stroke for edge contrast in ambiguous zones ═══
         // Skip at tier 2+ (strokeText is as expensive as fillText)
-        const textStrokeColor = this._qualityTier < 2 ? (chunk as any).textStroke as string | undefined : undefined;
-        if (textStrokeColor) {
-          this.ctx.strokeStyle = textStrokeColor;
-          this.ctx.lineWidth = Math.max(1.5, safeFontSize * 0.03);
-          this.ctx.lineJoin = 'round';
-        }
+      const textStrokeColor = this._qualityTier < 2 ? (chunk as any).textStroke as string | undefined : undefined;
+      if (textStrokeColor) {
+        this.ctx.strokeStyle = textStrokeColor;
+        this.ctx.lineWidth = Math.max(1.5, safeFontSize * 0.03);
+        this.ctx.lineJoin = 'round';
+      }
 
         // Main text draw
-        if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
-        this.ctx.fillText(text, 0, 0);
+      if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
+      this.ctx.fillText(text, 0, 0);
 
-        if (needsFilterSaveRestore) {
-          this.ctx.filter = 'none';
-          this.ctx.restore();
-        }
+      if (needsFilterSaveRestore) {
+        this.ctx.filter = 'none';
+        this.ctx.restore();
+      }
 
         // ═══ ELEMENTAL EFFECTS: semantic literalism — the viewer SEES the lyric ═══
         // Fire on "burn", water on "drown", frost on "cold", smoke on "fade", electric on "shock"
-        if (directive?.elementalClass && chunk.visible && drawAlpha > 0.15) {
+      if (directive?.elementalClass && chunk.visible && drawAlpha > 0.15) {
           const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
           const tier = getEffectTier(wordDurMs);
 
@@ -3194,8 +3034,8 @@ export class LyricDancePlayer {
                   useBlur: this._qualityTier === 0,
                   isHeroWord: chunk.isHeroWord ?? false,
                   effectQuality: this._qualityTier === 0 ? 'high' : 'low',
-                  wordX: centerX - (textWidth * sx * camZoom) / 2,
-                  wordY: centerY,
+                  wordX: clampedDrawX,
+                  wordY: clampedDrawY,
                   canvasWidth: this._canvasWidth,
                   canvasHeight: this._canvasHeight,
                   lightingMode: bgIsLight ? 'bright' : 'dark',
@@ -3209,12 +3049,44 @@ export class LyricDancePlayer {
             this.ctx.globalAlpha = 1;
           }
         }
-      }
-      this.ctx.shadowBlur = 0;
-      this.ctx.globalAlpha = 1;
-      this._lastShadowBlur = 0;
       drawCalls += 1;
+    };
+
+    this.ctx.shadowBlur = 0;
+    this.ctx.shadowColor = 'transparent';
+    this._lastShadowBlur = 0;
+    this._lastShadowColor = 'transparent';
+    for (let ci = 0; ci < sortBuf.length; ci += 1) {
+      drawChunkText(sortBuf[ci], false);
     }
+
+    let lastGlowColor = 'transparent';
+    let lastGlowBlur = 0;
+    for (let ci = 0; ci < sortBuf.length; ci += 1) {
+      const chunk = sortBuf[ci];
+      if (!chunk.visible) continue;
+      const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
+      const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
+      const beatPulse = this._lastBeatState?.pulse ?? 0;
+      const { glowColor, glowBlur } = getGlowSettings(chunk, entry, drawAlpha, beatPulse);
+      if (glowBlur < 0.01) continue;
+      if (glowColor !== lastGlowColor) {
+        this.ctx.shadowColor = glowColor;
+        this._lastShadowColor = glowColor;
+        lastGlowColor = glowColor;
+      }
+      if (glowBlur !== lastGlowBlur) {
+        this.ctx.shadowBlur = glowBlur;
+        this._lastShadowBlur = glowBlur;
+        lastGlowBlur = glowBlur;
+      }
+      drawChunkText(chunk, true);
+    }
+    this.ctx.shadowBlur = 0;
+    this.ctx.shadowColor = 'transparent';
+    this.ctx.globalAlpha = 1;
+    this._lastShadowBlur = 0;
+    this._lastShadowColor = 'transparent';
     this.ctx.restore();
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.ctx.globalAlpha = 1;
@@ -3361,7 +3233,7 @@ export class LyricDancePlayer {
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'top';
     this.ctx.fillText(`fps(avg): ${this.frameBudget.fpsAvg.toFixed(1)}  dt(avg): ${this.frameBudget.dtAvgMs.toFixed(2)}ms`, x + 8, y + 8);
-    this.ctx.fillText(`entities: ${this._boundsBuffer.length}  pairs: ${this._pairsTestedLast}  hits: ${this._pairsCollidingLast}`, x + 8, y + 26);
+    this.ctx.fillText(`entities: ${this._sortBuffer.length}  pairs: ${this._pairsTestedLast}  hits: ${this._pairsCollidingLast}`, x + 8, y + 26);
     this.ctx.fillText(`drawCalls: ${this.debugState.drawCalls}  qualityTier: ${this._qualityTier}`, x + 8, y + 44);
     this.ctx.restore();
   }
@@ -3721,7 +3593,6 @@ export class LyricDancePlayer {
     this.lastSimFrame = -1;
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    this._lastVisibleMidChunkId = '';
   }
 
   private getCachedMetrics(text: string, font: string): { width: number; ascent: number; descent: number } {
@@ -4451,123 +4322,75 @@ export class LyricDancePlayer {
     let driftY = Math.cos(tSec * 0.12) * 5 * sy;
 
     const groups = scene.phraseGroups;
-    const activeGroups = this._activeGroupIndices;
-    activeGroups.length = 0;
 
-    // First pass: collect groups by their individual time windows (original logic)
-    for (let gi = 0; gi < groups.length; gi++) {
-      const group = groups[gi];
-      const visStart = group.start - group.entryDuration - group.staggerDelay * group.words.length;
-      const visEnd = group.end + group.lingerDuration + group.exitDuration;
-      if (tSec < visStart) {
-        if (tSec < visStart - 2.0) break;
-        continue;
-      }
-      if (tSec > visEnd) continue;
-      activeGroups.push(gi);
+    // ═══ SINGLE CURSOR: find active group in O(1) amortized ═══
+    // Groups are sorted by start time. Time moves forward.
+    // Cursor advances when time crosses the current group's end.
+    let cursor = this._activeGroupCursor;
+
+    // Handle seek (time jumped backward)
+    if (tSec < this._activeGroupCursorTime - 0.5) {
+      cursor = 0;
     }
+    this._activeGroupCursorTime = tSec;
 
-    // ─── Determine which line is currently being sung ───
-    let primaryLineIndex = -1;
-    const _roleLines = this.data.lyrics ?? [];
-    for (let li = 0; li < _roleLines.length; li++) {
-      const ls = _roleLines[li].start ?? 0;
-      const le = _roleLines[li].end ?? Infinity;
-      if (tSec >= ls && tSec < le) {
-        primaryLineIndex = li;
+    // Advance cursor past groups we've fully exited
+    while (cursor < groups.length - 1) {
+      const g = groups[cursor];
+      const fullEnd = g.end + g.lingerDuration + g.exitDuration;
+      if (tSec > fullEnd) {
+        cursor++;
+      } else {
         break;
       }
     }
-    // If between lines, find the next upcoming line
-    if (primaryLineIndex === -1) {
-      for (let li = 0; li < _roleLines.length; li++) {
-        if ((_roleLines[li].start ?? 0) > tSec) {
-          primaryLineIndex = li;
-          break;
-        }
-      }
-    }
-    if (primaryLineIndex === -1) primaryLineIndex = _roleLines.length - 1;
+    this._activeGroupCursor = cursor;
 
-    // prevLineIndex/nextLineIndex removed — active chunk only model
-
-    // ═══ ACTIVE CHUNK ONLY: find THE single group being spoken right now ═══
-    // No previous groups. No upcoming groups. One chunk, dead center.
+    // Check if cursor group is active (being spoken, lingering, entering, or exiting)
     let activeGroupIdx = -1;
-    {
-      // Pass 1a: find a group whose speech is actively happening (highest priority)
-      for (let ri = 0; ri < activeGroups.length; ri++) {
-        const g = groups[activeGroups[ri]];
-        if (g.lineIndex !== primaryLineIndex) continue;
-        if (tSec >= g.start && tSec < g.end) {
-          activeGroupIdx = activeGroups[ri];
-          break;
+    const cursorGroup = groups[cursor];
+    if (cursorGroup) {
+      const entryPad = cursorGroup.words.length * (cursorGroup.staggerDelay ?? 0.05) + 0.2;
+      const visStart = cursorGroup.start - entryPad;
+      const fullEnd = cursorGroup.end + cursorGroup.lingerDuration + cursorGroup.exitDuration;
+
+      if (tSec >= visStart && tSec <= fullEnd) {
+        activeGroupIdx = cursor;
+      } else if (cursor + 1 < groups.length) {
+        const next = groups[cursor + 1];
+        const nextEntryPad = next.words.length * (next.staggerDelay ?? 0.05) + 0.2;
+        if (tSec >= next.start - nextEntryPad) {
+          activeGroupIdx = cursor + 1;
         }
       }
-      // Pass 1b: find a group that finished speaking but is still lingering
-      // Only if no actively-spoken group was found — prevents linger from blocking next group
-      if (activeGroupIdx === -1) {
-        for (let ri = 0; ri < activeGroups.length; ri++) {
-          const g = groups[activeGroups[ri]];
-          if (g.lineIndex !== primaryLineIndex) continue;
-          if (tSec >= g.end && tSec < g.end + g.lingerDuration) {
-            activeGroupIdx = activeGroups[ri];
-            break;
-          }
-        }
-      }
-      // Pass 2: if between groups, find the one we're entering (entry animation visible)
-      if (activeGroupIdx === -1) {
-        for (let ri = 0; ri < activeGroups.length; ri++) {
-          const g = groups[activeGroups[ri]];
-          if (g.lineIndex !== primaryLineIndex) continue;
-          const entryPad = g.words.length * (g.staggerDelay ?? 0.05) + 0.2;
-          if (tSec >= g.start - entryPad && tSec < g.start) {
-            activeGroupIdx = activeGroups[ri];
-            break;
-          }
-        }
-      }
-      // Pass 3: if still nothing, find closest exiting group (exit animation visible)
-      if (activeGroupIdx === -1) {
-        for (let ri = 0; ri < activeGroups.length; ri++) {
-          const g = groups[activeGroups[ri]];
-          if (g.lineIndex !== primaryLineIndex) continue;
-          const exitEnd = g.end + g.lingerDuration + g.exitDuration;
-          if (tSec >= g.end && tSec < exitEnd) {
-            activeGroupIdx = activeGroups[ri];
-            break;
-          }
-        }
-      }
-    }
-    // Replace activeGroups with just the one active group
-    if (activeGroupIdx >= 0) {
-      activeGroups.length = 1;
-      activeGroups[0] = activeGroupIdx;
-    } else {
-      activeGroups.length = 0;
     }
 
+    const activeGroups = this._activeGroupIndices;
+    activeGroups.length = 0;
+    if (activeGroupIdx >= 0) activeGroups.push(activeGroupIdx);
+
+    const primaryLineIndex = activeGroupIdx >= 0
+      ? groups[activeGroupIdx].lineIndex
+      : -1;
+    const _roleLines = this.data.lyrics ?? [];
 
     // Line transition easing removed — active chunk always at center
 
-    // ═══ BEAT-TO-TEXT: pre-compute subsystem response per emphasis tier ═══
-    // getSubsystemResponse() is cheap (pure math, no lookups) but calling it
-    // N times per word per frame adds up. Pre-computing 6 buckets costs 6 calls
-    // total per frame regardless of word count.
-    // hitStrength drives punch/slam impulses; pulse drives the softer dance motion.
+    // ═══ BEAT-TO-TEXT: lazy subsystem response cache ═══
     type SR = import('@/engine/BeatConductor').SubsystemResponse;
-    const _beatResponses: SR[] = [];
-    const _beatResponsesHero: SR[] = []; // isHero=true → 1.6× on all word values
-    if (beatState && this.conductor) {
-      for (let eLevel = 0; eLevel <= 5; eLevel++) {
-        const secIdx = this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0;
-        _beatResponses[eLevel] = this.conductor.getSubsystemResponse(beatState, eLevel, false, secIdx);
-        _beatResponsesHero[eLevel] = this.conductor.getSubsystemResponse(beatState, eLevel, true, secIdx);
-      }
-    }
-    const _hasBeatResponses = _beatResponses.length > 0;
+    const _beatCache = new Map<number, SR>();
+    const _beatCacheHero = new Map<number, SR>();
+    const _hasBeatResponses = !!(beatState && this.conductor);
+    const secIdx = this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0;
+    const getBeatResponse = (emp: number, isHero: boolean): SR | null => {
+      if (!_hasBeatResponses) return null;
+      const cache = isHero ? _beatCacheHero : _beatCache;
+      const cached = cache.get(emp);
+      if (cached) return cached;
+      const resp = this.conductor!.getSubsystemResponse(beatState!, emp, isHero, secIdx);
+      cache.set(emp, resp);
+      return resp;
+    };
     let ci = 0;
     if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
     const chunks = this._evalChunks;
@@ -4607,7 +4430,7 @@ export class LyricDancePlayer {
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
-        const resolvedWord = this.resolvedState.wordSettings[word.clean ?? normalizeToken(word.text)] ?? null;
+        const resolvedWord = this.resolvedState.wordSettings[word.clean] ?? null;
         const isAnchor = wi === group.anchorWordIdx;
         // Use actual word-level timestamp for entry timing instead of artificial stagger
         const staggerDelay = Math.max(0, (word.wordStart ?? group.start) - group.start);
@@ -4769,7 +4592,7 @@ export class LyricDancePlayer {
         const empBeat = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
         // Hero words get isHero=true response (1.6× on wordScale/wordGlow/wordNudgeY)
         const beatResp = _hasBeatResponses
-          ? (isHeroWord ? _beatResponsesHero[empBeat] : _beatResponses[empBeat])
+          ? getBeatResponse(empBeat, isHeroWord)
           : null;
 
         let wordGlow = 0;
