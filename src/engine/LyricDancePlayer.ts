@@ -34,6 +34,7 @@ import { getEffectTier, canShowElemental, canShowHeroGlow, getParticleDensity, g
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
   isExactHeroTokenMatch,
+  normalizeToken,
   resolveCinematicState,
   type ResolvedLineSettings,
   type ResolvedWordSettings,
@@ -1611,7 +1612,8 @@ export class LyricDancePlayer {
 
       // Tell camera the current phrase's reading load (for motion suppression)
       // Active group's motionBudget.damping — dense phrases lock the camera
-      const activeGroup = this._activeGroupIdx >= 0 ? this.compiledScene?.phraseGroups[this._activeGroupIdx] : null;
+      const _activeGIdx = this._activeGroupIndices[0] ?? -1;
+      const activeGroup = _activeGIdx >= 0 ? this.compiledScene?.phraseGroups[_activeGIdx] : null;
       this.cameraRig.setPhraseDamping((activeGroup as any)?.motionBudget?.damping ?? 0);
 
       this.cameraRig.update(deltaMs, beatState, focus);
@@ -2260,7 +2262,8 @@ export class LyricDancePlayer {
 
         // Tell camera the current phrase's reading load (for motion suppression)
         // Active group's motionBudget.damping — dense phrases lock the camera
-        const activeGroup = this._activeGroupIdx >= 0 ? this.compiledScene?.phraseGroups[this._activeGroupIdx] : null;
+        const _activeGIdx2 = this._activeGroupIndices[0] ?? -1;
+        const activeGroup = _activeGIdx2 >= 0 ? this.compiledScene?.phraseGroups[_activeGIdx2] : null;
         this.cameraRig.setPhraseDamping((activeGroup as any)?.motionBudget?.damping ?? 0);
 
         this.cameraRig.update(deltaMs, beatState, focus);
@@ -3036,9 +3039,9 @@ export class LyricDancePlayer {
                   effectQuality: this._qualityTier === 0 ? 'high' : 'low',
                   wordX: clampedDrawX,
                   wordY: clampedDrawY,
-                  canvasWidth: this._canvasWidth,
-                  canvasHeight: this._canvasHeight,
-                  lightingMode: bgIsLight ? 'bright' : 'dark',
+                  canvasWidth: this.width,
+                  canvasHeight: this.height,
+                  lightingMode: 'dark',
                 },
               );
             } catch (e) {
@@ -4522,7 +4525,8 @@ export class LyricDancePlayer {
         // ─── NEW HERO MODEL: duration-gated solo OR emphasis-based inline ───
         const isHeroWord = word.isHeroWord === true;
         const heroDuration = word.wordDuration ?? 0;
-        const hasIsolation = Boolean((directive as any)?.isolation);
+        const wordDirective = word.clean ? this.resolvedState.wordDirectivesMap[word.clean] ?? null : null;
+        const hasIsolation = Boolean((wordDirective as any)?.isolation);
         const isSoloHero = (isHeroWord && heroDuration >= 0.5) || (hasIsolation && heroDuration >= 0.7);
         let heroScaleMult = 1.0;
         let heroOffsetX = 0;

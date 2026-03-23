@@ -651,7 +651,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     });
   }
 
-  const beats = payload.beat_grid?.beats ?? [];
+  const chapterBeats = payload.beat_grid?.beats ?? [];
   const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
 
   const compiledChapters: CompiledChapter[] = chapters.map((chapter: any, index: number) => ({
