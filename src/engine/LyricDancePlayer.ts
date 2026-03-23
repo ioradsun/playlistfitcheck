@@ -1195,7 +1195,6 @@ export class LyricDancePlayer {
 
   /** Pixel offset to shift text UP — compensates for bottom overlay (playbar, battle bar) */
   private _textVerticalBias = 0;
-  private _mlDebugThrottle = 0;
 
   // Comment comets
   private activeComments: CommentChunk[] = [];
@@ -1728,9 +1727,10 @@ export class LyricDancePlayer {
     this._springOffset = 0;
     this._springVelocity = 0;
     this._timeInitialized = false;
-    // Layout cache intentionally NOT cleared on seek — layout inputs (words, font,
-    // viewport) don't change, only playback time. Same group = same rows, always.
-    // Solver hash reset so it re-runs for the new set of visible chunks.
+    // Clear ML layout cache on seek — font warmth may have changed since the cache
+    // was written (canvas measureText returns different widths before vs after the font
+    // is rasterized). Costs nothing: cache rebuilds lazily as groups become visible.
+    this._mlLayoutCache.clear();
     this._lastVisibleChunkCount = -1;
     this._lastVisibleChunkSetHash = 0;
     this.conductor?.resetCursor();
@@ -2813,6 +2813,16 @@ export class LyricDancePlayer {
     const fontName = fontMap[typoKey] ?? 'Montserrat';
     const loaded = await ensureFontReady(fontName);
     if (loaded && !this.destroyed) {
+      // ═══ PRIME CANVAS: force the measurement context to rasterize the loaded font ═══
+      // document.fonts.check() returns true before canvas measureText() actually uses the
+      // new font (known Chrome race condition). Performing a dummy measurement with every
+      // weight we use forces the canvas rasterizer to internalize the font face.
+      // Without this, the first real measureText() call returns fallback-font widths,
+      // which are narrower, causing the multi-line layout to skip wrapping.
+      for (const w of [400, 600, 700]) {
+        this._measureCtx.font = `${w} 48px "${fontName}", sans-serif`;
+        this._measureCtx.measureText('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
+      }
       this._fontStabilized = true;
       this._fontLayoutReflowPending = true;
     }
@@ -5326,7 +5336,18 @@ export class LyricDancePlayer {
             }
           }
 
-          const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4;
+          // Sanity check: if measured width is much narrower than what this font size
+          // and word count should produce, the canvas is still using fallback metrics.
+          // Each character should be at least 0.35em wide in any latin font.
+          // If we're below 70% of that floor, force wrapping as the safe default —
+          // centered multi-line is always readable, while scattered single-line is not.
+          let expectedMinWidth = 0;
+          for (let wi = 0; wi < group.words.length; wi++) {
+            expectedMinWidth += group.words[wi].text.length * Math.round(group.words[wi].baseFontSize) * 0.35;
+          }
+          const _isSuspiciouslyNarrow = totalLineW < expectedMinWidth * 0.7;
+
+          const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4 || _isSuspiciouslyNarrow;
 
           if (needsWrap) {
             _isMultiLine = true;
@@ -5478,7 +5499,7 @@ export class LyricDancePlayer {
              // Store in cache only for current groups - offscreen passes must never
           // prime the cache with isMultiLine=false + empty dx/dy.
           const _fontName = _resolvedFontForML.replace(/["']/g, '').split(',')[0].trim();
-          if (isFontReady(_fontName)) {
+          if (isFontReady(_fontName) && !_isSuspiciouslyNarrow) {
             if (this._mlLayoutCache.size >= 32) {
               this._mlLayoutCache.delete(this._mlLayoutCache.keys().next().value!);
             }
@@ -5492,21 +5513,6 @@ export class LyricDancePlayer {
             });
           }
         } // end cache-miss
-      // ═══ TEMPORARY DEBUG: remove after diagnosis ═══
-      if (lineRole === 'current' && group.words.length > 1 && (!this._mlDebugThrottle || performance.now() - this._mlDebugThrottle > 3000)) {
-        this._mlDebugThrottle = performance.now();
-        console.warn('[ML DEBUG POST]', {
-          groupIdx,
-          wordCount: group.words.length,
-          isMultiLine: _isMultiLine,
-          hasCacheHit: _hasValidMlCache,
-          mlDxSample: (_isMultiLine && _mlDx.length > 0) ? Math.round(_mlDx[0]) : 'none',
-          mlDySample: (_isMultiLine && _mlDy.length > 0) ? Math.round(_mlDy[0]) : 'none',
-          words: group.words.map(w => `${w.text}(e${w.emphasisLevel ?? 0}${w.isHeroWord ? 'H' : ''})`).join(' '),
-          baseFontSize: group.words[0]?.baseFontSize,
-          fontReady: isFontReady(_resolvedFontForML.replace(/["']/g, '').split(',')[0].trim()),
-        });
-      }
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
