@@ -697,6 +697,10 @@ export default function Admin() {
                     checked={!!(window as any).__LYRIC_DANCE_LIGHTNING_BAR}
                     onCheckedChange={(checked) => {
                       persistLightningBarFlag(checked);
+                      toast.success(
+                        checked ? "Lightning Bar enabled" : "Lightning Bar disabled",
+                        { description: "Saved for this browser on this domain." },
+                      );
                       (window as any).__forceAdminRerender?.();
                     }}
                   />
