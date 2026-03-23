@@ -30,7 +30,8 @@ import {
 import { deriveTensionCurve, enrichSections } from "@/engine/directionResolvers";
 import { getMoodGrade, buildGradeFilter, type MoodGrade } from "@/engine/moodGrades";
 // getSectionTones removed — song-level grade model
-// ElementalEffects removed — single color model
+import { drawElementalWord } from "@/engine/ElementalEffects";
+import { getEffectTier, canShowElemental, canShowHeroGlow, getParticleDensity, getGlowCap } from "@/engine/timeTiers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
   isExactHeroTokenMatch,
@@ -434,6 +435,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     isLetterChunk?: boolean;
     isSoloHero?: boolean;
     isHeroWord?: boolean;
+    wordDuration?: number;
     visible: boolean;
     entryOffsetY?: number;
     entryOffsetX?: number;
@@ -3391,8 +3393,14 @@ export class LyricDancePlayer {
           // Bloom pulse: amplified glow synced to beat
           const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
           const bloomGlow = baseGlow + beatPulse * 0.35;
-          // ═══ Adaptive quality: reduce shadow blur at lower tiers ═══
-          const blurCap = this._qualityTier < 2 ? 3 : 0; // capped at 3 (was 8 at tier 0) — 60% cheaper, 80% of the visual
+
+          // ═══ TIME-TIER GLOW: more screen time = more glow allowed ═══
+          const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
+          const tier = getEffectTier(wordDurMs);
+          const tierGlowCap = canShowHeroGlow(tier) ? getGlowCap(tier) : 0;
+          // Adaptive quality: further reduce at lower quality tiers
+          const qualityCap = this._qualityTier < 2 ? Math.min(tierGlowCap, 12) : 0;
+          const blurCap = qualityCap;
           const glowColor = chunk.color ?? '#ffffff';
           const targetBlur = Math.min(blurCap, bloomGlow * 12);
           // PERF: skip GPU state write if shadow hasn't changed
@@ -3404,10 +3412,13 @@ export class LyricDancePlayer {
           this.ctx.globalAlpha = drawAlpha;
           this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
           this.ctx.shadowColor = chunk.color ?? '#ffffff';
-          this.ctx.shadowBlur = Math.min(blurCap, bloomGlow * 12);
+          this.ctx.shadowBlur = targetBlur;
           if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
         } else if (chunk.glow > 0) {
-          const glowCap = this._qualityTier < 2 ? 3 : 0; // capped at 3 (was 8 at tier 0)
+          const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
+          const tier = getEffectTier(wordDurMs);
+          const tierCap = getGlowCap(tier);
+          const glowCap = this._qualityTier < 2 ? Math.min(tierCap, 8) : 0;
           const gc = chunk.color ?? '#ffffff';
           const gb = Math.min(glowCap, chunk.glow * 12);
           // PERF: skip GPU write if unchanged
@@ -3477,6 +3488,62 @@ export class LyricDancePlayer {
         if (needsFilterSaveRestore) {
           this.ctx.filter = 'none';
           this.ctx.restore();
+        }
+
+        // ═══ ELEMENTAL EFFECTS: semantic literalism — the viewer SEES the lyric ═══
+        // Fire on "burn", water on "drown", frost on "cold", smoke on "fade", electric on "shock"
+        if (directive?.elementalClass && chunk.visible && drawAlpha > 0.15) {
+          const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
+          const tier = getEffectTier(wordDurMs);
+
+          if (canShowElemental(tier)) {
+            const density = getParticleDensity(tier);
+            const maxParticles = Math.max(2, Math.round(8 * density));
+
+            // Reset transform for elemental effects (they position relative to word)
+            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+            this.ctx.globalAlpha = drawAlpha * density;
+
+            // entry = word-local time normalized 0→1 for entry animation
+            // Use entryProgress to compute word-local time
+            const wordLocalTime = (chunk.entryProgress ?? 1) < 1
+              ? (chunk.entryProgress ?? 0) * 0.3
+              : 0.8;
+
+            const bubbleXPositions = Array.from({ length: maxParticles }, (_, i) =>
+              (textWidth * sx * camZoom) * (i / Math.max(1, maxParticles - 1))
+            );
+
+            try {
+              drawElementalWord(
+                this.ctx,
+                text,
+                safeFontSize * camZoom,
+                textWidth * sx * camZoom,
+                directive.elementalClass,
+                wordLocalTime,
+                beatPulse,
+                1,
+                null,
+                {
+                  bubbleXPositions,
+                  useBlur: this._qualityTier === 0,
+                  isHeroWord: chunk.isHeroWord ?? false,
+                  effectQuality: this._qualityTier === 0 ? 'high' : 'low',
+                  wordX: centerX - (textWidth * sx * camZoom) / 2,
+                  wordY: centerY,
+                  canvasWidth: this._canvasWidth,
+                  canvasHeight: this._canvasHeight,
+                  lightingMode: bgIsLight ? 'bright' : 'dark',
+                },
+              );
+            } catch (e) {
+              console.warn('[LyricEngine] elemental effect error:', e);
+            }
+
+            // Restore alpha for next chunk
+            this.ctx.globalAlpha = 1;
+          }
         }
       }
 
@@ -5180,18 +5247,18 @@ export class LyricDancePlayer {
               chunk.color = semColor;
             }
           } else if (isHeroWord) {
-            // Hero word = palette accent. Use _framePalette[1] (the mood color).
+            // Hero word = section accent at FULL SATURATION. No desaturation.
+            // Readability via text stroke at draw time, not color dulling.
             const pal = this._framePalette ?? [];
             const rawAccent = pal[1] ?? '#FFD700';
-
-            // WCAG readability guard: ensure accent has enough contrast against the bg.
+            chunk.color = rawAccent;
             const accentLum = this._hexLuminance(rawAccent);
-            if (bgIsLight && accentLum > 0.55) {
-              chunk.color = this._blendHex(rawAccent, '#1a1a2e', 0.5);
-            } else if (!bgIsLight && accentLum < 0.15) {
-              chunk.color = this._blendHex(rawAccent, '#f0f0f0', 0.5);
+            if (accentLum > 0.5) {
+              (chunk as any).textStroke = 'rgba(0,0,0,0.55)';
+            } else if (accentLum < 0.15) {
+              (chunk as any).textStroke = 'rgba(255,255,255,0.25)';
             } else {
-              chunk.color = rawAccent;
+              (chunk as any).textStroke = 'rgba(0,0,0,0.35)';
             }
           } else {
             chunk.color = baseColor;
@@ -5213,6 +5280,7 @@ export class LyricDancePlayer {
         chunk.ghostDirection = (resolvedWord?.ghostDirection ?? word.ghostDirection) as any;
         chunk.heroTrackingExpand = false;
         chunk.isHeroWord = isHeroWord;
+        chunk.wordDuration = word.wordDuration ?? 0;
         chunk.isSoloHero = isSoloHero;
         chunk.letterIndex = word.letterIndex;
         chunk.letterTotal = word.letterTotal;
