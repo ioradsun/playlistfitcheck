@@ -1849,7 +1849,7 @@ async function callWords(
   };
 
   const messages = [
-    { role: "system", content: WORD_DIRECTION_PROMPT },
+    { role: "system", content: wordSystemPrompt },
     { role: "user", content: wordMessage },
   ];
 
