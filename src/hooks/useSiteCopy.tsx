@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { consumeSiteCopyPrefetch, getCachedSiteCopy } from "@/lib/prefetch";
+import { readLightningBarFlagFromCopy, applyLightningBarFlag } from "@/lib/lyricDanceFlags";
 
 // Default copy (fallback if DB not loaded yet)
 const DEFAULT_COPY: SiteCopy = {
