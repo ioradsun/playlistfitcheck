@@ -14,6 +14,7 @@ import {
   type SongMotionIdentity,
 } from "@/engine/MotionIdentity";
 import { getEffectTier } from "@/engine/timeTiers";
+import { beatSnapWords } from "@/engine/beatSnapWords";
 
 export type LineBeatMap = {
   lineIndex: number;
@@ -521,6 +522,23 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   });
   const lineWordCounters: Record<number, number> = {};
   for (const wm of wordMeta) { lineWordCounters[wm.lineIndex] = lineWordCounters[wm.lineIndex] ?? 0; wm.wordIndex = lineWordCounters[wm.lineIndex]++; }
+
+  // ═══ BEAT-SNAP: align word timestamps to beat grid ═══
+  // Whisper timestamps are acoustically accurate (when mouth opens).
+  // Beat grid is perceptually accurate (when the audience feels the beat).
+  // Snapping words to beats makes lyrics feel performed, not transcribed.
+  // After this, words + camera + beat bars all fire from the same grid.
+  const beats = payload.beat_grid?.beats ?? [];
+  if (beats.length > 0) {
+    const snapped = beatSnapWords(
+      wordMeta.map(wm => ({ word: wm.word, start: wm.start, end: wm.end })),
+      beats,
+    );
+    for (let i = 0; i < wordMeta.length && i < snapped.length; i++) {
+      wordMeta[i].start = snapped[i].start;
+      wordMeta[i].end = snapped[i].end;
+    }
+  }
 
   const aiPhrases = (payload.cinematic_direction as any)?.phrases as CinematicPhrase[] | undefined;
   const phraseGroups = buildPhraseGroups(wordMeta, aiPhrases);
