@@ -2,6 +2,7 @@
 
 import "./lib/prefetch"; // side-effect: starts network requests immediately
 import { isEmbedRoute } from "./lib/prefetch";
+import { hydrateLightningBarFlag } from "./lib/lyricDanceFlags";
 
 // Buffer polyfill — only needed by crypto/wallet features, never on embed routes
 if (!isEmbedRoute) {
@@ -11,6 +12,8 @@ if (!isEmbedRoute) {
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+
+hydrateLightningBarFlag();
 
 const syncAppViewportHeight = () => {
   if (typeof window === "undefined") return;
