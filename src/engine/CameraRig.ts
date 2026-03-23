@@ -136,6 +136,7 @@ export class CameraRig {
   private _phraseDamping = 0;
 
   private _energyAvg = 0.3;
+  private _amplitudeScale = 1.0;
 
   private _sectionIdx = -1;
   private _lastSectionChangeMs = -Infinity;
@@ -165,6 +166,10 @@ export class CameraRig {
 
   setPhraseDamping(damping: number): void {
     this._phraseDamping = damping;
+  }
+
+  setAmplitudeScale(scale: number): void {
+    this._amplitudeScale = Math.max(0, Math.min(1, scale));
   }
 
   setSectionFromMood(_m: string): void {}
@@ -278,7 +283,7 @@ export class CameraRig {
 
     const timeSinceChange = performance.now() - this._lastSectionChangeMs;
     const releaseMult = timeSinceChange < 300 ? 1.5 : 1.0;
-    const finalAmp = amp * releaseMult;
+    const finalAmp = amp * releaseMult * (this._amplitudeScale ?? 1.0);
 
     if (bs.hitType === 'bass' || (bs.hitType === 'none' && isDownbeat)) {
       this._posY = -cfg.punchY * finalAmp * (0.5 + gravity * 0.5);

@@ -48,6 +48,129 @@ import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
 
 const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-04-PERF';
 
+// ═══════════════════════════════════════════════════════════════
+// CINEMATIC TREATMENT SYSTEM
+// ═══════════════════════════════════════════════════════════════
+//
+// Layer 1: Treatment table (visualMood → base config)
+// Layer 2: Arc scaling (section position → intensity multiplier)
+// Layer 3: Spectacle budget (runtime cooldown → downgrades)
+// Layer 4: Legibility ceilings (hard caps → readability wins)
+
+interface PhraseTreatment {
+  tier: 'restrained' | 'dynamic' | 'cinematic';
+  entry: string;
+  exit: string;
+  behavior: string;
+  entryDuration: number;
+  exitDuration: number;
+  elementalEnabled: boolean;
+  glowMode: 'hero-only' | 'emphasis' | 'selective';
+  glowCap: number;
+  cameraIntensity: number;
+  particleDensity: number;
+  particleSpeed: number;
+  beatBarStyle: 'light' | 'smoke' | 'neon' | 'flame';
+  vignetteStrength: number;
+  heroDecompEnabled: boolean;
+  spectacleCost: number;
+}
+
+const TREATMENT_TABLE: Record<string, PhraseTreatment> = {
+  raw:         { tier: 'restrained', entry: 'rise',        exit: 'dissolve',    behavior: 'none',    entryDuration: 0.3,  exitDuration: 0.25, elementalEnabled: false, glowMode: 'hero-only', glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.3, particleSpeed: 0.3, beatBarStyle: 'light', vignetteStrength: 0.5,  heroDecompEnabled: false, spectacleCost: 0.05 },
+  vulnerable:  { tier: 'restrained', entry: 'breathe-in',  exit: 'exhale',      behavior: 'none',    entryDuration: 0.35, exitDuration: 0.3,  elementalEnabled: false, glowMode: 'hero-only', glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.3, particleSpeed: 0.2, beatBarStyle: 'smoke', vignetteStrength: 0.6,  heroDecompEnabled: false, spectacleCost: 0.05 },
+  melancholy:  { tier: 'restrained', entry: 'drift-in',    exit: 'sink',        behavior: 'none',    entryDuration: 0.4,  exitDuration: 0.35, elementalEnabled: false, glowMode: 'hero-only', glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.4, particleSpeed: 0.3, beatBarStyle: 'smoke', vignetteStrength: 0.7,  heroDecompEnabled: false, spectacleCost: 0.05 },
+  intimate:    { tier: 'restrained', entry: 'whisper',     exit: 'evaporate',   behavior: 'none',    entryDuration: 0.4,  exitDuration: 0.4,  elementalEnabled: false, glowMode: 'hero-only', glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.2, particleSpeed: 0.15, beatBarStyle: 'light', vignetteStrength: 0.8,  heroDecompEnabled: false, spectacleCost: 0.05 },
+  nostalgic:   { tier: 'restrained', entry: 'materialize', exit: 'dissolve',    behavior: 'none',    entryDuration: 0.35, exitDuration: 0.35, elementalEnabled: false, glowMode: 'hero-only', glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.4, particleSpeed: 0.25, beatBarStyle: 'smoke', vignetteStrength: 0.6,  heroDecompEnabled: false, spectacleCost: 0.05 },
+  aggressive:  { tier: 'dynamic',    entry: 'slam-down',   exit: 'burn-out',    behavior: 'pulse',   entryDuration: 0.18, exitDuration: 0.2,  elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 10, cameraIntensity: 0.6, particleDensity: 0.7, particleSpeed: 0.8, beatBarStyle: 'flame', vignetteStrength: 0.4,  heroDecompEnabled: false, spectacleCost: 0.15 },
+  defiant:     { tier: 'dynamic',    entry: 'punch-in',    exit: 'punch-out',   behavior: 'pulse',   entryDuration: 0.15, exitDuration: 0.18, elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 10, cameraIntensity: 0.5, particleDensity: 0.6, particleSpeed: 0.7, beatBarStyle: 'flame', vignetteStrength: 0.3,  heroDecompEnabled: false, spectacleCost: 0.15 },
+  eerie:       { tier: 'dynamic',    entry: 'surface',     exit: 'vanish',      behavior: 'flicker', entryDuration: 0.3,  exitDuration: 0.25, elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 8,  cameraIntensity: 0.3, particleDensity: 0.5, particleSpeed: 0.4, beatBarStyle: 'smoke', vignetteStrength: 0.7,  heroDecompEnabled: false, spectacleCost: 0.10 },
+  hypnotic:    { tier: 'dynamic',    entry: 'materialize', exit: 'dissolve',    behavior: 'float',   entryDuration: 0.3,  exitDuration: 0.3,  elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.6, particleSpeed: 0.5, beatBarStyle: 'neon',  vignetteStrength: 0.5,  heroDecompEnabled: false, spectacleCost: 0.10 },
+  hopeful:     { tier: 'dynamic',    entry: 'rise',        exit: 'drift-up',    behavior: 'grow',    entryDuration: 0.25, exitDuration: 0.25, elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.6, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.3,  heroDecompEnabled: false, spectacleCost: 0.10 },
+  euphoric:    { tier: 'cinematic',  entry: 'explode-in',  exit: 'shatter',     behavior: 'float',   entryDuration: 0.2,  exitDuration: 0.2,  elementalEnabled: true,  glowMode: 'selective', glowCap: 16, cameraIntensity: 0.9, particleDensity: 1.0, particleSpeed: 1.0, beatBarStyle: 'flame', vignetteStrength: 0.2,  heroDecompEnabled: true,  spectacleCost: 0.30 },
+  dreamy:      { tier: 'cinematic',  entry: 'bloom',       exit: 'soar',        behavior: 'grow',    entryDuration: 0.3,  exitDuration: 0.3,  elementalEnabled: true,  glowMode: 'selective', glowCap: 14, cameraIntensity: 0.5, particleDensity: 0.8, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.3,  heroDecompEnabled: true,  spectacleCost: 0.20 },
+  triumphant:  { tier: 'cinematic',  entry: 'focus-in',    exit: 'scatter-fly', behavior: 'pulse',   entryDuration: 0.2,  exitDuration: 0.25, elementalEnabled: true,  glowMode: 'selective', glowCap: 16, cameraIntensity: 0.8, particleDensity: 1.0, particleSpeed: 1.2, beatBarStyle: 'flame', vignetteStrength: 0.15, heroDecompEnabled: true,  spectacleCost: 0.30 },
+  anthemic:    { tier: 'cinematic',  entry: 'slam-down',   exit: 'cascade-up',  behavior: 'pulse',   entryDuration: 0.18, exitDuration: 0.22, elementalEnabled: true,  glowMode: 'selective', glowCap: 14, cameraIntensity: 0.7, particleDensity: 0.9, particleSpeed: 1.0, beatBarStyle: 'flame', vignetteStrength: 0.2,  heroDecompEnabled: true,  spectacleCost: 0.25 },
+};
+
+const DEFAULT_TREATMENT: PhraseTreatment = TREATMENT_TABLE.raw;
+
+function getTreatmentBase(visualMood: string | undefined): PhraseTreatment {
+  return TREATMENT_TABLE[visualMood ?? 'raw'] ?? DEFAULT_TREATMENT;
+}
+
+type ArcLevel = 'restrained' | 'build' | 'payoff' | 'aftermath';
+
+function getArcLevel(sectionIndex: number, totalSections: number, tier: string): ArcLevel {
+  if (totalSections <= 1) return 'payoff';
+  const position = sectionIndex / (totalSections - 1);
+  if (position < 0.12) return 'restrained';
+  if (position > 0.88) return 'aftermath';
+  if (tier === 'cinematic') return 'payoff';
+  if (position > 0.35 && position < 0.75) return 'build';
+  return 'restrained';
+}
+
+const ARC_MULTIPLIER: Record<ArcLevel, number> = { restrained: 0.5, build: 0.7, payoff: 1.0, aftermath: 0.4 };
+
+interface TreatmentTransition {
+  from: PhraseTreatment;
+  to: PhraseTreatment;
+  startMs: number;
+  durationMs: number;
+}
+
+function lerpTreatment(a: PhraseTreatment, b: PhraseTreatment, t: number): PhraseTreatment {
+  const eased = t * t * (3 - 2 * t);
+  return {
+    ...b,
+    glowCap: a.glowCap + (b.glowCap - a.glowCap) * eased,
+    cameraIntensity: a.cameraIntensity + (b.cameraIntensity - a.cameraIntensity) * eased,
+    particleDensity: a.particleDensity + (b.particleDensity - a.particleDensity) * eased,
+    particleSpeed: a.particleSpeed + (b.particleSpeed - a.particleSpeed) * eased,
+    vignetteStrength: a.vignetteStrength + (b.vignetteStrength - a.vignetteStrength) * eased,
+    spectacleCost: a.spectacleCost + (b.spectacleCost - a.spectacleCost) * eased,
+  };
+}
+
+function updateSpectacleBudget(budget: number, deltaMs: number): number {
+  return Math.min(1.0, budget + (deltaMs / 1000) * 0.15);
+}
+
+function budgetAdjustedEntry(entry: string, budget: number): string {
+  if (budget >= 0.25) return entry;
+  const DOWNGRADES: Record<string, string> = {
+    'explode-in': 'rise',
+    'slam-down': 'drop',
+    'focus-in': 'materialize',
+    'punch-in': 'cut-in',
+    'bloom': 'breathe-in',
+    'tumble-in': 'drift-in',
+  };
+  return DOWNGRADES[entry] ?? entry;
+}
+
+function budgetAdjustedExit(exit: string, budget: number): string {
+  if (budget >= 0.25) return exit;
+  const DOWNGRADES: Record<string, string> = {
+    shatter: 'dissolve',
+    'scatter-fly': 'drift-up',
+    'cascade-up': 'dissolve',
+    'burn-out': 'exhale',
+    'punch-out': 'cut-out',
+    'scatter-letters': 'dissolve',
+  };
+  return DOWNGRADES[exit] ?? exit;
+}
+
+const LEGIBILITY = {
+  maxTextBlur: 0.3,
+  maxForegroundAlphaOverText: 0.12,
+  glowCapAtSpeed: (wordsPerSec: number): number => Math.max(4, 20 - wordsPerSec * 2.5),
+  cameraCapForDensity: (wordCount: number): number => wordCount > 5 ? 0.4 : wordCount > 3 ? 0.7 : 1.0,
+  motionCapForDensity: (wordCount: number): number => wordCount > 5 ? 0.3 : wordCount > 3 ? 0.6 : 1.0,
+};
+
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
 // ──────────────────────────────────────────────────────────────
@@ -1194,6 +1317,10 @@ export class LyricDancePlayer {
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
   private ambientParticleEngine: ParticleEngine | null = null;
   private activeSectionIndex = -1;
+  private _activeTreatment: PhraseTreatment = DEFAULT_TREATMENT;
+  private _treatmentTransition: TreatmentTransition | null = null;
+  private _spectacleBudget = 1.0;
+  private _lastSpectacleMs = 0;
 
   // ═══ Pre-computed hero word schedule for camera lookahead ═══
   private _heroSchedule: Array<{ startSec: number; endSec: number; emphasis: number; word: string }> = [];
@@ -2591,13 +2718,20 @@ export class LyricDancePlayer {
         // Tell camera which section we're in (for amplitude scaling)
         this.cameraRig.setSectionIndex(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0);
 
-        // Tell camera the current phrase's reading load (for motion suppression)
-        // Active group's motionBudget.damping — dense phrases lock the camera
         const _activeGIdx2 = this._activeGroupIndices[0] ?? -1;
         const activeGroup = _activeGIdx2 >= 0 ? this.compiledScene?.phraseGroups[_activeGIdx2] : null;
+        const activeGroupWordCount = activeGroup?.words?.length ?? 0;
         this.cameraRig.setPhraseDamping((activeGroup as any)?.motionBudget?.damping ?? 0);
 
-        this.cameraRig.update(deltaMs, beatState, focus);
+        const camIntensity = this._activeTreatment.cameraIntensity
+          * LEGIBILITY.cameraCapForDensity(activeGroupWordCount);
+        if (camIntensity > 0.05) {
+          this.cameraRig.setAmplitudeScale(camIntensity);
+          this.cameraRig.update(deltaMs, beatState, focus);
+        } else {
+          this.cameraRig.setAmplitudeScale(0);
+          this.cameraRig.softReset();
+        }
       }
 
       this.update(deltaMs, smoothedTime, frame, beatState);
@@ -2859,9 +2993,37 @@ export class LyricDancePlayer {
     const section = sectionIndex >= 0 ? chapters[sectionIndex] : null;
     if (sectionIndex !== this.activeSectionIndex) {
       this.activeSectionIndex = sectionIndex;
+
+      const sectionMood = (section as any)?.visualMood as string | undefined;
+      const baseTreatment = getTreatmentBase(sectionMood);
+      const totalSections = chapters.length;
+      const arcLevel = getArcLevel(sectionIndex, totalSections, baseTreatment.tier);
+      const arcMult = ARC_MULTIPLIER[arcLevel];
+      const arcScaled: PhraseTreatment = {
+        ...baseTreatment,
+        glowCap: Math.round(baseTreatment.glowCap * arcMult),
+        cameraIntensity: baseTreatment.cameraIntensity * arcMult,
+        particleDensity: baseTreatment.particleDensity * arcMult,
+        particleSpeed: baseTreatment.particleSpeed * Math.max(0.3, arcMult),
+        vignetteStrength: baseTreatment.vignetteStrength + (1 - arcMult) * 0.15,
+        spectacleCost: baseTreatment.spectacleCost * arcMult,
+        elementalEnabled: baseTreatment.elementalEnabled && arcMult >= 0.6,
+        heroDecompEnabled: baseTreatment.heroDecompEnabled && arcMult >= 0.9,
+      };
+
+      this._treatmentTransition = {
+        from: { ...this._activeTreatment },
+        to: arcScaled,
+        startMs: performance.now(),
+        durationMs: 500,
+      };
+
+      if (this._globalBeatVis) {
+        this._globalBeatVis.setStyle(arcScaled.beatBarStyle);
+      }
+
       const texture = section?.texture ?? this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, cd) ?? "dust";
       this.activeSectionTexture = texture;
-      // atmosphereState controls particle motion style per section
       const atmosphereState = (section as any)?.atmosphereState as string | undefined;
       if (atmosphereState && this.ambientParticleEngine) {
         switch (atmosphereState) {
@@ -2887,19 +3049,23 @@ export class LyricDancePlayer {
         system: mapped,
         density: this.resolvedState.particleConfig.density ?? 0.35,
         speed: this.resolvedState.particleConfig.speed ?? 0.35,
-        opacity: 0.7,
-        beatReactive: true,
+        opacity: Math.min(0.7, LEGIBILITY.maxForegroundAlphaOverText / 0.12 * 0.7),
+        beatReactive: mapped !== 'glare',
       });
-
     }
 
     // ═══ V2: Use conductor for particle intensity instead of tension curve ═══
     const conductorResponse = beatState ? this.conductor?.getSubsystemResponse(beatState, 2) ?? null : null;
     this._lastSubsystemResponse = conductorResponse;
 
+    const treatment = this._activeTreatment;
+
     if (conductorResponse) {
-      this.ambientParticleEngine?.setDensityMultiplier(conductorResponse.particleDensity * 2);
-      this.ambientParticleEngine?.setSpeedMultiplier(conductorResponse.particleSpeed * 2);
+      this.ambientParticleEngine?.setDensityMultiplier((conductorResponse.particleDensity * 2) * treatment.particleDensity);
+      this.ambientParticleEngine?.setSpeedMultiplier((conductorResponse.particleSpeed * 2) * treatment.particleSpeed);
+    } else {
+      this.ambientParticleEngine?.setDensityMultiplier(treatment.particleDensity * 2);
+      this.ambientParticleEngine?.setSpeedMultiplier(treatment.particleSpeed * 2);
     }
 
     // ── Minimal debug state (always cheap) ──
@@ -3260,7 +3426,7 @@ export class LyricDancePlayer {
 
       // ═══ HERO DECOMPOSITION: spawn shatter burst when solo hero starts exiting ═══
       // Skip at tier 2+ (spawns dozens of particles per hero word)
-      if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2 && (chunk.wordDuration ?? 0) >= 0.35) {
+      if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && this._activeTreatment.heroDecompEnabled && this._spectacleBudget > 0.3 && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2 && (chunk.wordDuration ?? 0) >= 0.35) {
         this._heroDecompSpawned.add(chunk.id);
         const spawnX = Number.isFinite(chunk.x) ? Math.max(clampMinX, Math.min(clampMaxX, chunk.x as number)) : this.width / 2;
         const spawnY = Number.isFinite(chunk.y) ? Math.max(clampMinY, Math.min(clampMaxY, (chunk.y as number) - this._textVerticalBias)) : this.height / 2;
@@ -3377,7 +3543,7 @@ export class LyricDancePlayer {
 
         // ═══ ELEMENTAL EFFECTS: semantic literalism — the viewer SEES the lyric ═══
         // Fire on "burn", water on "drown", frost on "cold", smoke on "fade", electric on "shock"
-      if (directive?.elementalClass && chunk.visible && drawAlpha > 0.15) {
+      if (directive?.elementalClass && chunk.visible && drawAlpha > 0.15 && this._activeTreatment.elementalEnabled) {
           const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
           const tier = getEffectTier(wordDurMs);
 
@@ -4688,6 +4854,17 @@ export class LyricDancePlayer {
     const scene = this.compiledScene;
     if (!scene) return null;
 
+    if (this._treatmentTransition) {
+      const t = this._treatmentTransition;
+      const elapsed = performance.now() - t.startMs;
+      const progress = Math.min(1, elapsed / t.durationMs);
+      this._activeTreatment = lerpTreatment(t.from, t.to, progress);
+      if (progress >= 1) this._treatmentTransition = null;
+    }
+
+    const deltaMs = this._frameDt * 16.67;
+    this._spectacleBudget = updateSpectacleBudget(this._spectacleBudget, deltaMs || 16.67);
+
     const songDuration = Math.max(0.01, scene.durationSec);
     const songProgress = Math.max(0, Math.min(1, (tSec - scene.songStartSec) / songDuration));
     const { _viewportSx: sx, _viewportSy: sy, _viewportFontScale: fontScale } = this;
@@ -4841,13 +5018,14 @@ export class LyricDancePlayer {
       // ── Phrase-level envelope: one fade-in, one fade-out for the whole group ──
       const phraseDuration = Math.max(0.01, group.end - group.start);
       const phraseRemaining = groupEnd - tSec;
-      const phraseExitDuration = Math.min(0.15, phraseDuration * 0.10);
+      const treatment = this._activeTreatment;
+      const wordCount = group.words.length;
+      const motionCap = LEGIBILITY.motionCapForDensity(wordCount);
+      const phraseExitDuration = Math.min(treatment.exitDuration, phraseDuration * 0.35);
 
-      // Entry: fade from when cursor activated this group (entryPad before group.start)
-      // to group.start. This matches the cursor's switch timing — no alpha gap.
       const entryPad = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
       const timeSinceActivation = tSec - (group.start - entryPad);
-      const phraseEntryDuration = entryPad;
+      const phraseEntryDuration = Math.max(treatment.entryDuration, entryPad * 0.35);
 
       let phraseAlpha = 1.0;
       if (timeSinceActivation < phraseEntryDuration) {
@@ -4856,6 +5034,47 @@ export class LyricDancePlayer {
       if (phraseRemaining < phraseExitDuration) {
         phraseAlpha = Math.max(0, phraseRemaining / Math.max(0.01, phraseExitDuration));
       }
+
+      const effectiveEntry = budgetAdjustedEntry(treatment.entry, this._spectacleBudget);
+      const effectiveExit = budgetAdjustedExit(treatment.exit, this._spectacleBudget);
+      let phraseEntryState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: phraseAlpha, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+      const isEntering = timeSinceActivation < treatment.entryDuration;
+      if (isEntering) {
+        const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, treatment.entryDuration));
+        phraseEntryState = computeEntryState(effectiveEntry as any, entryProgress, 0.7) as typeof phraseEntryState;
+        phraseEntryState.offsetX *= motionCap;
+        phraseEntryState.offsetY *= motionCap;
+        phraseEntryState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseEntryState.blur ?? 0);
+        phraseEntryState.alpha *= phraseAlpha;
+        if (entryProgress < 0.1 && this._lastSpectacleMs + 80 < performance.now()) {
+          this._spectacleBudget = Math.max(0, this._spectacleBudget - treatment.spectacleCost);
+          this._lastSpectacleMs = performance.now();
+        }
+      }
+
+      let phraseExitState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+      const isExiting = phraseRemaining < treatment.exitDuration && phraseRemaining >= 0;
+      if (isExiting) {
+        const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, treatment.exitDuration)));
+        phraseExitState = computeExitState(effectiveExit as any, exitProgress, 0.7, 0, 1) as typeof phraseExitState;
+        phraseExitState.offsetX *= motionCap;
+        phraseExitState.offsetY *= motionCap;
+        phraseExitState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseExitState.blur ?? 0);
+      }
+
+      let phraseBehaviorOX = 0, phraseBehaviorOY = 0, phraseBehaviorSX = 1, phraseBehaviorSY = 1;
+      if (treatment.behavior !== 'none' && phraseAlpha >= 1.0 && !isEntering && !isExiting) {
+        const bState = computeBehaviorState(treatment.behavior as any, tSec, group.start, beatPhase, 0.5);
+        phraseBehaviorOX = (bState.offsetX ?? 0) * motionCap * 0.5;
+        phraseBehaviorOY = (bState.offsetY ?? 0) * motionCap * 0.5;
+        phraseBehaviorSX = bState.scaleX ?? 1;
+        phraseBehaviorSY = bState.scaleY ?? 1;
+      }
+
+      const phraseDurSec = Math.max(0.1, group.end - group.start);
+      const wordsPerSec = wordCount / phraseDurSec;
+      const glowCapForSpeed = LEGIBILITY.glowCapAtSpeed(wordsPerSec);
+      const effectiveGlowCap = Math.min(treatment.glowCap, glowCapForSpeed);
 
       // ── Shared beat response: the whole phrase breathes together ──
       const sharedBeatResp = _hasBeatResponses
@@ -4940,32 +5159,33 @@ export class LyricDancePlayer {
         // Hero words hold at higher opacity after being spoken
         // (spotlightAlpha is now phrase-level, so adjust finalAlpha directly for heroes)
 
-        // ── Final alpha: phrase envelope × spotlight × role ──
         const roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
-        // Hero words hold brightness longer — 75% vs 30% for context
         const heroHoldAlpha = (isHeroWord && lineRole === 'current' && tSec > (word.wordStart ?? group.start) + (word.wordDuration ?? 0))
           ? 0.75
           : spotlightAlpha;
+
+        const animAlpha = (phraseEntryState.alpha ?? phraseAlpha) * (phraseExitState.alpha ?? 1);
         const finalAlpha = soloHeroHidden
           ? 0
           : Math.min(
               word.semanticAlphaMax,
-              phraseAlpha * heroHoldAlpha * roleAlpha,
+              animAlpha * heroHoldAlpha * roleAlpha,
             );
 
-        // ── Final scale: shared beat + hero boost ──
         const totalScale = Math.min(1.6, sharedBeatScale + heroBeatBoost);
 
-        // ── Glow: only active + hero words ──
         let wordGlow = 0;
         if (lineRole === 'current') {
-          if (isSoloHero && groupHasActiveSoloHero) {
-            wordGlow = 0.7;
-          } else if (isHeroWord && wordState === 'active') {
-            wordGlow = 0.5;
-          } else if (wordState === 'active' && emp >= 2) {
-            wordGlow = 0.2;
+          if (treatment.glowMode === 'selective') {
+            if (isHeroWord) wordGlow = 0.7;
+            else if (emp >= 3) wordGlow = 0.3;
+          } else if (treatment.glowMode === 'emphasis') {
+            if (isHeroWord) wordGlow = 0.5;
+            else if (emp >= 2) wordGlow = 0.2;
+          } else if (treatment.glowMode === 'hero-only') {
+            if (isHeroWord) wordGlow = 0.4;
           }
+          if (isSoloHero && groupHasActiveSoloHero) wordGlow = 0.8;
         }
 
         const emphasisWeight = Math.min(900, (word.fontWeight ?? 400) + Math.max(0, emp - 1) * 100);
@@ -4976,15 +5196,17 @@ export class LyricDancePlayer {
         chunk.id = word.id;
         chunk.text = word.text;
 
-        // Position: layout position + shared beat nudge + hero offset (no per-word entry/exit offsets)
-        chunk.x = word.layoutX + heroOffsetX;
-        chunk.y = word.layoutY + sharedBeatNudgeY + heroOffsetY;
+        chunk.x = word.layoutX + heroOffsetX
+          + phraseEntryState.offsetX + (phraseExitState.offsetX ?? 0) + phraseBehaviorOX;
+        chunk.y = word.layoutY + sharedBeatNudgeY + heroOffsetY
+          + phraseEntryState.offsetY + (phraseExitState.offsetY ?? 0) + phraseBehaviorOY;
         chunk.fontSize = word.baseFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
 
-        // Scale: shared beat pulse × hero multiplier (no per-word entry/exit scale)
-        chunk.scaleX = totalScale * heroScaleMult;
-        chunk.scaleY = totalScale * heroScaleMult;
+        const phraseAnimScaleX = (phraseEntryState.scaleX ?? 1) * (phraseExitState.scaleX ?? 1) * phraseBehaviorSX;
+        const phraseAnimScaleY = (phraseEntryState.scaleY ?? 1) * (phraseExitState.scaleY ?? 1) * phraseBehaviorSY;
+        chunk.scaleX = totalScale * heroScaleMult * phraseAnimScaleX;
+        chunk.scaleY = totalScale * heroScaleMult * phraseAnimScaleY;
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
@@ -5025,16 +5247,16 @@ export class LyricDancePlayer {
           }
         }
 
-        chunk.glow = wordGlow;
-        chunk.entryStyle = 'none';
-        chunk.exitStyle = 'none';
+        chunk.glow = Math.min(wordGlow, effectiveGlowCap / 20);
+        chunk.entryStyle = effectiveEntry as any;
+        chunk.exitStyle = effectiveExit as any;
         chunk.emphasisLevel = emp;
-        chunk.entryProgress = phraseAlpha >= 1.0 ? 1.0 : phraseAlpha;
-        chunk.exitProgress = phraseRemaining < phraseExitDuration ? 1.0 - phraseAlpha : 0;
-        chunk.behavior = 'none';
-        chunk.skewX = 0;
-        chunk.blur = 0;
-        chunk.rotation = 0;
+        chunk.entryProgress = isEntering ? Math.max(0, Math.min(1, timeSinceActivation / Math.max(0.01, treatment.entryDuration))) : 1;
+        chunk.exitProgress = isExiting ? Math.max(0, Math.min(1, 1 - (phraseRemaining / Math.max(0.01, treatment.exitDuration)))) : 0;
+        chunk.behavior = treatment.behavior as any;
+        chunk.skewX = ((phraseEntryState.skewX ?? 0) + (phraseExitState.skewX ?? 0)) * motionCap;
+        chunk.blur = Math.min(LEGIBILITY.maxTextBlur, (phraseEntryState.blur ?? 0) + (phraseExitState.blur ?? 0));
+        chunk.rotation = ((phraseEntryState.rotation ?? 0) + (phraseExitState.rotation ?? 0)) * motionCap;
         chunk.ghostTrail = false;
         chunk.ghostCount = 0;
         chunk.ghostSpacing = 0;
@@ -5317,6 +5539,8 @@ export class LyricDancePlayer {
    * The audience never sees the vignette. They feel claustrophobia and release.
    */
   private drawVignette(): void {
+    const strength = this._activeTreatment.vignetteStrength;
+    if (strength < 0.01) return;
     // Smoothed energy for gentle breathing (not beat-by-beat, section-level)
     const targetEnergy = this._lastBeatState?.energy ?? 0.3;
     this._vignetteEnergy += (targetEnergy - this._vignetteEnergy) * 0.03; // very slow EMA
@@ -5350,7 +5574,7 @@ export class LyricDancePlayer {
     // Low energy (quiet verse) → higher alpha → heavier vignette → intimate
     // High energy (loud chorus) → lower alpha → lighter vignette → expansive
     // Range: 0.35 (loud) to 0.75 (quiet)
-    const alpha = 0.75 - this._vignetteEnergy * 0.40;
+    const alpha = (0.75 - this._vignetteEnergy * 0.40) * strength;
     if (alpha < 0.02) return;
 
     this.ctx.globalAlpha = alpha;
