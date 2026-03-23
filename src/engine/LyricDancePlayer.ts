@@ -4424,14 +4424,11 @@ export class LyricDancePlayer {
     let ci = 0;
     if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
     const chunks = this._evalChunks;
-    const bpm = scene.bpm;
 
     for (let ai = 0; ai < activeGroups.length; ai++) {
       const groupIdx = activeGroups[ai];
       const group = groups[groupIdx];
-      const resolvedLine = this.resolvedState.lineSettings[group.lineIndex];
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
-      const groupEnd = Math.min(group.end + group.lingerDuration, nextGroupStart);
 
       // ═══ ACTIVE CHUNK ONLY: non-current groups are already filtered out above ═══
       const lineRole = group.lineIndex === primaryLineIndex ? 'current' : 'offscreen';
@@ -4454,119 +4451,101 @@ export class LyricDancePlayer {
         }
       }
 
+      // Hero words stay on screen at least 500ms — even if spoken faster
+      const minDisplaySec = groupHasActiveSoloHero ? 0.5 : 0;
+      const heroLingerExtension = Math.max(0, minDisplaySec - (group.end - group.start) - group.lingerDuration);
+      const effectiveLinger = group.lingerDuration + heroLingerExtension;
+      const groupEnd = Math.min(group.end + effectiveLinger, nextGroupStart);
+
       // ═══ LAYOUT: positions are pre-computed by fitTextToViewport at compile time ═══
       // All words have correct layoutX (centered) and layoutY (stacked if wrapped).
       // No runtime re-layout needed. No dual path. No ML cache.
 
+      // ═══ PHRASE-LEVEL MOTION MODEL ═══
+      // The phrase is the unit. All words enter together, breathe together, exit together.
+      // Within the phrase, the ACTIVE word (currently being spoken) is full brightness.
+      // Other words are dimmed context — visible but not competing for attention.
+
+      // ── Phrase-level envelope: one fade-in, one fade-out for the whole group ──
+      const phraseDuration = Math.max(0.01, group.end - group.start);
+      const phraseAge = tSec - group.start;
+      const phraseRemaining = groupEnd - tSec;
+      const phraseEntryDuration = Math.min(0.15, phraseDuration * 0.12);
+      const phraseExitDuration = Math.min(0.15, phraseDuration * 0.10);
+
+      let phraseAlpha = 1.0;
+      if (phraseAge < 0) {
+        // Before phrase starts — entry window from cursor
+        phraseAlpha = Math.max(0, Math.min(1, (phraseAge + phraseEntryDuration) / Math.max(0.01, phraseEntryDuration)));
+      } else if (phraseAge < phraseEntryDuration) {
+        phraseAlpha = Math.min(1, phraseAge / Math.max(0.01, phraseEntryDuration));
+      } else if (phraseRemaining < phraseExitDuration) {
+        phraseAlpha = Math.max(0, phraseRemaining / Math.max(0.01, phraseExitDuration));
+      }
+
+      // ── Shared beat response: the whole phrase breathes together ──
+      const sharedBeatResp = _hasBeatResponses
+        ? getBeatResponse(1, false)  // emphasis=1 (baseline), not hero
+        : null;
+      const sharedBeatScale = sharedBeatResp ? sharedBeatResp.wordScale : 1.0;
+      const sharedBeatNudgeY = sharedBeatResp ? sharedBeatResp.wordNudgeY * 0.3 : 0; // gentle — whole phrase lifts
+
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
-        const resolvedWord = this.resolvedState.wordSettings[word.clean] ?? null;
         const isAnchor = wi === group.anchorWordIdx;
-        // Use actual word-level timestamp for entry timing instead of artificial stagger
-        const staggerDelay = Math.max(0, (word.wordStart ?? group.start) - group.start);
-        const li = word.letterIndex ?? 0;
-        const lt = word.letterTotal ?? 1;
-        const letterDelay = word.isLetterChunk ? li * 0.06 : 0;
-        const adjustedElapsed = Math.max(0, tSec - group.start - staggerDelay - letterDelay);
-        // Use budget-constrained entry duration when available — prevents 350ms fade-in
-        // on words that are only spoken for 170ms in fast sections
-        const wb = this._wordBudgetMap.get(word.id);
-        const effectiveEntryDuration = wb ? wb.entryBudget : (group.entryDuration * word.entryDurationMult);
-        const entryProgress = Math.min(1, Math.max(0, adjustedElapsed / Math.max(0.01, effectiveEntryDuration)));
 
-        const effectiveExitDuration = wb ? wb.exitBudget : Math.min(group.exitDuration, Math.max(0.05, nextGroupStart - group.end));
-        const exitDelay = word.isLetterChunk && SPLIT_EXIT_STYLES.has(word.exitStyle) ? letterDelay : 0;
-        const exitProgress = Math.max(0, (tSec - groupEnd - exitDelay) / Math.max(0.01, effectiveExitDuration));
+        // ── Word timing: is this word currently being spoken? ──
+        const wordStart = word.wordStart ?? group.start;
+        const nextWordStart = (wi + 1 < group.words.length)
+          ? (group.words[wi + 1].wordStart ?? group.end)
+          : group.end;
 
-        // ═══ V2: EffectBudgeter — use budget-resolved styles when available ═══
-        // Budget downgrades heavy effects (slide, scale) to lighter ones (fade, cut)
-        // when the word's screen time is too short for the original animation to complete.
-        // wb already resolved above for entry/exit duration budgeting
-        const usedEntry = (wb?.resolvedEntry ?? word.entryStyle) as any;
-        const usedExit = (wb?.resolvedExit ?? word.exitStyle) as any;
-        const usedBehavior = (wb?.resolvedBehavior ?? word.behaviorStyle) as any;
-        const usedIntensity = wb?.behaviorIntensity ?? group.behaviorIntensity;
-
-        const entryState = computeEntryState(usedEntry, entryProgress, usedIntensity);
-        const exitState = computeExitState(usedExit, exitProgress, usedIntensity, li, lt);
-        // ═══ V2: Use conductor phase directly ═══
-        const wordBeatPhase = beatPhase;
-        const behaviorState = computeBehaviorState(usedBehavior, tSec, group.start, wordBeatPhase, usedIntensity);
-
-        const finalOffsetX = entryState.offsetX + (exitState.offsetX ?? 0) + (behaviorState.offsetX ?? 0);
-        const finalOffsetY = entryState.offsetY + (exitState.offsetY ?? 0) + (behaviorState.offsetY ?? 0);
-        let finalScaleX = entryState.scaleX * (exitState.scaleX ?? 1) * (behaviorState.scaleX ?? 1) * word.semanticScaleX;
-        let finalScaleY = entryState.scaleY * (exitState.scaleY ?? 1) * (behaviorState.scaleY ?? 1) * word.semanticScaleY;
-
-        const isEntryComplete = entryProgress >= 1.0;
-        const isExiting = exitProgress > 0;
-
-        // Base animation alpha (entry/exit/behavior)
-        const animAlpha = isExiting
-          ? Math.max(0, exitState.alpha)
-          : isEntryComplete
-            ? 1.0 * (behaviorState.alpha ?? 1)
-            : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
-
-        // ═══ SINGLE-GROUP MODEL: entry/exit animations handle visibility ═══
-        // No phrase crossfade — only one group is active at a time.
-        // Entry animation fades words in. Exit animation fades them out.
-        let roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
-        const phraseDriftY = 0;
-
-        // Wave proximity still tracked for emphasis glow, but NOT for alpha
-        let waveProximity = 0;
-        if (lineRole === 'current' && isEntryComplete && !isExiting) {
-          const lineData = _roleLines[primaryLineIndex];
-          const lineStart = lineData?.start ?? group.start;
-          const lineEnd = lineData?.end ?? group.end;
-          const lineDuration = Math.max(0.01, lineEnd - lineStart);
-          const vocalProgress = Math.max(0, Math.min(1, (tSec - lineStart) / lineDuration));
-          const wordTime = group.start + staggerDelay;
-          const wordPosition = Math.max(0, Math.min(1, (wordTime - lineStart) / lineDuration));
-          const distance = vocalProgress - wordPosition;
-          const empLevel = word.emphasisLevel ?? 0;
-          const waveWidth = 0.12 + Math.min(empLevel, 5) * 0.026;
-          waveProximity = Math.exp(-(distance * distance) / (2 * waveWidth * waveWidth));
+        let wordState: 'upcoming' | 'active' | 'spoken';
+        if (tSec < wordStart) {
+          wordState = 'upcoming';
+        } else if (tSec < nextWordStart) {
+          wordState = 'active';
+        } else {
+          wordState = 'spoken';
         }
 
-        let finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
+        // ── Spotlight brightness: active = full, context = dimmed ──
+        let spotlightAlpha: number;
+        switch (wordState) {
+          case 'active': spotlightAlpha = 1.0; break;
+          case 'spoken': spotlightAlpha = 0.50; break;
+          case 'upcoming': spotlightAlpha = 0.35; break;
+        }
 
-        // ─── NEW HERO MODEL: duration-gated solo OR emphasis-based inline ───
+        // ── Hero word detection ──
         const isHeroWord = word.isHeroWord === true;
         const heroDuration = word.wordDuration ?? 0;
         const wordDirective = word.clean ? this.resolvedState.wordDirectivesMap[word.clean] ?? null : null;
         const hasIsolation = Boolean((wordDirective as any)?.isolation);
         const isSoloHero = (isHeroWord && heroDuration >= 0.5) || (hasIsolation && heroDuration >= 0.7);
-        let heroScaleMult = 1.0;
+        const emp = word.emphasisLevel ?? 0;
+
+        // ── Solo hero: center screen, hide other words ──
         let heroOffsetX = 0;
         let heroOffsetY = 0;
+        let heroScaleMult = 1.0;
 
-        // SOLO hero: ≥500ms, alone center screen
         if (isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
           heroOffsetX = (this.width / 2) - word.layoutX;
           heroOffsetY = (this.height / 2) - word.layoutY;
           heroScaleMult = 1.5;
         }
 
-        // Non-hero words: hidden while a SOLO hero is active
         if (!isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
-          roleAlpha = 0;
+          spotlightAlpha = 0; // hide non-hero words when solo hero is active
         }
 
-        // ═══ EMPHASIS-BASED INLINE SCALING ═══
-        // emp 1 = baseline (matches compile-time layout), emp 2+ = progressively larger.
-        // Compile-time layoutX positions words at base size (emp 1 = 1.0x).
-        // Runtime scale MUST match or words overflow their slots.
-        const emp = word.emphasisLevel ?? 0;
-        const emphasisScale = 1.0 + Math.max(0, emp - 1) * 0.25;
-        const emphasisWeight = Math.min(900, (word.fontWeight ?? 400) + Math.max(0, emp - 1) * 100);
-
-        // Apply emphasis to inline words (solo heroes get heroScaleMult instead)
+        // ── Emphasis-based inline scaling (non-solo hero words) ──
         if (!isSoloHero || !groupHasActiveSoloHero) {
-          heroScaleMult = emphasisScale;
+          heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.25;
         }
 
+        // ── Hero scale cooldown ──
         if (isHeroWord && heroScaleMult > 1.2 && this.conductor) {
           const cooldown = this.conductor.getHeroTracker().getCooldownMultiplier(tSec);
           heroScaleMult = 1 + (heroScaleMult - 1) * cooldown;
@@ -4575,115 +4554,70 @@ export class LyricDancePlayer {
           }
         }
 
-        finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
-
-
-        const finalSkewX = entryState.skewX + (exitState.skewX ?? 0) + (behaviorState.skewX ?? 0);
-        const finalGlowMult = entryState.glowMult + (exitState.glowMult ?? 0);
-        const finalBlur = (entryState.blur ?? 0) + (exitState.blur ?? 0) + (behaviorState.blur ?? 0);
-        const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
-        const isFrozen = usedBehavior === 'freeze' && (tSec - group.start) > 0.3;
-
-        const effectiveFontSize = word.baseFontSize;
-        const charW = word.isLetterChunk ? effectiveFontSize * 0.6 : 0;
-        const wordSpan = charW * lt;
-        const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
-
-        // Micro cam push — skip for SOLO hero words (they're center-screen)
-        if (!(isSoloHero && groupHasActiveSoloHero)) {
-          const isHeroBeatHit = isExactHeroTokenMatch(word.text, resolvedLine?.heroWord ?? '') && beatPulse > 0.35;
-          if (isHeroBeatHit) {
-            const push = resolvedWord?.microCamPush ?? 0.04;
-            finalScaleX *= 1 + push;
-            finalScaleY *= 1 + push;
-            driftY += push * 16;
-          }
-        }
-
-        // ═══ BEAT-GRID GLOW, SCALE, NUDGE via SubsystemResponse ═══
-        // Use the pre-computed per-emphasis-level response so every word dances
-        // to the beat proportional to its semantic weight.
-        const empBeat = Math.min(5, Math.max(0, resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0));
-        // Hero words get isHero=true response (1.6× on wordScale/wordGlow/wordNudgeY)
-        const beatResp = _hasBeatResponses
-          ? getBeatResponse(empBeat, isHeroWord)
+        // ── Hero words: extra beat scale on top of shared ──
+        const heroBeatResp = (isHeroWord && _hasBeatResponses)
+          ? getBeatResponse(emp, true)
           : null;
+        const heroBeatBoost = heroBeatResp
+          ? Math.max(0, heroBeatResp.wordScale - 1.0) * 0.5  // 50% of hero-level beat response
+          : 0;
 
+        // ── Hero words hold brightness longer after being spoken ──
+        if (isHeroWord && wordState === 'spoken') {
+          spotlightAlpha = Math.max(spotlightAlpha, 0.75); // hero stays bright
+        }
+
+        // ── Final alpha: phrase envelope × spotlight × role ──
+        const roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
+        const finalAlpha = Math.min(
+          word.semanticAlphaMax,
+          phraseAlpha * spotlightAlpha * roleAlpha,
+        );
+
+        // ── Final scale: shared beat + hero boost ──
+        const totalScale = Math.min(1.6, sharedBeatScale + heroBeatBoost);
+
+        // ── Glow: only active + hero words ──
         let wordGlow = 0;
-        let beatScaleMult = 1.0;
-        let beatNudgeY = 0;
-        let beatNudgeX = beatResp?.wordNudgeX ?? 0;
-
         if (lineRole === 'current') {
-          const phraseBudget = group.motionBudget;
-          if (phraseBudget && this.conductor && beatState) {
-            const secIdx = this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0;
-            const pBeatResp = this.conductor.getSubsystemResponse(beatState, emp, isHeroWord, secIdx, phraseBudget);
-            beatScaleMult = pBeatResp.wordScale;
-            beatNudgeY = pBeatResp.wordNudgeY;
-            beatNudgeX = pBeatResp.wordNudgeX ?? 0;
-            wordGlow = Math.min(1, 0.5 + pBeatResp.wordGlow * 0.8);
-          } else if (beatResp) {
-            // All active words scale and nudge to the beat — emphasis level controls how much.
-            // Hero words (isHero=true) already got 1.6x multiplier inside getSubsystemResponse.
-            beatScaleMult = beatResp.wordScale;
-            beatNudgeY = beatResp.wordNudgeY;
-            beatNudgeX = beatResp.wordNudgeX ?? 0;
-
-            // Glow: currently-spoken anchor glows brightest, then hero words, then rest.
-            if (isAnchor) {
-              wordGlow = Math.min(1, 0.5 + beatResp.wordGlow * 0.8);
-            } else if (isSoloHero && groupHasActiveSoloHero) {
-              wordGlow = Math.min(1, 0.6 + beatResp.wordGlow * 0.6);
-            } else if (emp >= 2) {
-              // High-emphasis non-hero words get subtle glow on hits
-              wordGlow = beatResp.wordGlow * 0.5;
-            }
-          } else {
-            // Fallback if beat state unavailable
-            if (isAnchor) wordGlow = 0.6;
-            else if (isSoloHero && groupHasActiveSoloHero) wordGlow = 0.7;
+          if (isSoloHero && groupHasActiveSoloHero) {
+            wordGlow = 0.7;
+          } else if (isHeroWord && wordState === 'active') {
+            wordGlow = 0.5;
+          } else if (wordState === 'active' && emp >= 2) {
+            wordGlow = 0.2;
           }
         }
 
+        const emphasisWeight = Math.min(900, (word.fontWeight ?? 400) + Math.max(0, emp - 1) * 100);
+
+        // ── Build chunk ──
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
         chunk.id = word.id;
         chunk.text = word.text;
 
-        const waveScale = 1.0;
-
-        chunk.x = word.layoutX + finalOffsetX + letterOffsetX + heroOffsetX + beatNudgeX;
-        chunk.y = word.layoutY + finalOffsetY + heroOffsetY + beatNudgeY + phraseDriftY;
-        chunk.fontSize = effectiveFontSize;
+        // Position: layout position + shared beat nudge + hero offset (no per-word entry/exit offsets)
+        chunk.x = word.layoutX + heroOffsetX;
+        chunk.y = word.layoutY + sharedBeatNudgeY + heroOffsetY;
+        chunk.fontSize = word.baseFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
 
-        const heroBoost = Math.min(0.5, Math.max(0, emp - 1) * 0.12);
-        const beatBoost = Math.max(0, beatScaleMult - 1.0);
-        const totalScale = Math.min(1.6, 1.0 + heroBoost + beatBoost);
-        const entryExitScaleX = finalScaleX * intensityScaleMult * waveScale;
-        const entryExitScaleY = finalScaleY * intensityScaleMult * waveScale;
-
-        chunk.scaleX = entryExitScaleX * totalScale;
-        chunk.scaleY = entryExitScaleY * totalScale;
+        // Scale: shared beat pulse × hero multiplier (no per-word entry/exit scale)
+        chunk.scaleX = totalScale * heroScaleMult;
+        chunk.scaleY = totalScale * heroScaleMult;
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
-        if (ci < 3) console.log('[CHUNK]', word.text, 'fontSize:', effectiveFontSize, 'scaleX:', chunk.scaleX.toFixed(2), 'alpha:', chunk.alpha.toFixed(2), 'entry:', entryProgress.toFixed(2), 'exit:', exitProgress.toFixed(2), 'role:', lineRole);
         chunk.fontWeight = emphasisWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
-        chunk.color = word.color;
-        // ═══ SINGLE COLOR MODEL: one color for all words, contrast against background ═══
-        // Light text on dark backgrounds, dark text on light backgrounds.
-        // EXCEPTION 1: Hero words get the palette accent color.
-        // EXCEPTION 2: Words with semantic color overrides keep their color (e.g. "red" = red).
+
+        // ── Color: same model as before ──
         {
           const bgIsLight = this._textBandBrightness > 0.55;
           const baseColor = bgIsLight ? '#1a1a2e' : '#f0f0f0';
 
           if (word.hasSemanticColor) {
-            // ═══ SEMANTIC COLOR: "red" turns red, "gold" turns gold, etc. ═══
-            // Apply contrast guard so semantic colors remain readable on any background.
             const semColor = word.color;
             const semLum = this._hexLuminance(semColor);
             if (bgIsLight && semLum > 0.7) {
@@ -4694,8 +4628,6 @@ export class LyricDancePlayer {
               chunk.color = semColor;
             }
           } else if (isHeroWord) {
-            // Hero word = section accent at FULL SATURATION. No desaturation.
-            // Readability via text stroke at draw time, not color dulling.
             const pal = this._framePalette ?? [];
             const rawAccent = pal[1] ?? '#FFD700';
             chunk.color = rawAccent;
@@ -4711,20 +4643,21 @@ export class LyricDancePlayer {
             chunk.color = baseColor;
           }
         }
+
         chunk.glow = wordGlow;
-        chunk.entryStyle = usedEntry;
-        chunk.exitStyle = usedExit;
-        chunk.emphasisLevel = resolvedWord?.emphasisLevel ?? word.emphasisLevel ?? 0;
-        chunk.entryProgress = entryProgress;
-        chunk.exitProgress = Math.min(1, exitProgress);
-        chunk.behavior = usedBehavior;
-        chunk.skewX = finalSkewX;
-        chunk.blur = Math.max(0, Math.min(1, finalBlur));
-        chunk.rotation = finalRotation;
-        chunk.ghostTrail = resolvedWord?.ghostTrail ?? word.ghostTrail;
-        chunk.ghostCount = word.ghostCount;
-        chunk.ghostSpacing = word.ghostSpacing;
-        chunk.ghostDirection = (resolvedWord?.ghostDirection ?? word.ghostDirection) as any;
+        chunk.entryStyle = 'none';
+        chunk.exitStyle = 'none';
+        chunk.emphasisLevel = emp;
+        chunk.entryProgress = phraseAlpha >= 1.0 ? 1.0 : phraseAlpha;
+        chunk.exitProgress = phraseRemaining < phraseExitDuration ? 1.0 - phraseAlpha : 0;
+        chunk.behavior = 'none';
+        chunk.skewX = 0;
+        chunk.blur = 0;
+        chunk.rotation = 0;
+        chunk.ghostTrail = false;
+        chunk.ghostCount = 0;
+        chunk.ghostSpacing = 0;
+        chunk.ghostDirection = undefined;
         chunk.heroTrackingExpand = false;
         chunk.isHeroWord = isHeroWord;
         chunk.wordDuration = word.wordDuration ?? 0;
@@ -4733,7 +4666,7 @@ export class LyricDancePlayer {
         chunk.letterTotal = word.letterTotal;
         chunk.letterDelay = word.letterDelay ?? 0;
         chunk.isLetterChunk = word.isLetterChunk;
-        chunk.frozen = isFrozen;
+        chunk.frozen = false;
         chunk.entryOffsetY = 0;
         chunk.entryOffsetX = 0;
         chunk.entryScale = 1;
