@@ -409,17 +409,9 @@ export class BeatConductor {
 
     return {
       // Words: scale, glow, nudge — phase (dance) + hit (slam)
-      //
-      // AMPLITUDE NOTE: compile canvas is 540px tall. Visible rhythmic motion
-      // requires ≥3% of frame height (~16px). Previous values (max ~8px = 1.5%)
-      // were below human perception threshold. New values target 3-6% for normal
-      // words, 5-8% for hero/climax moments.
-      //
-      // Phase term (-p * s * ...): continuous beat-locked bounce. This is the "dance."
-      // Hit term (-h * ...): impulse slam on detected onsets. This is the "punch."
-      wordScale: 1.0 + p * s * 0.06 * wordMult * downbeatBoost + h * 0.12 * wordMult * hitTextBoost,
+      wordScale: 1.0 + p * s * 0.04 * wordMult * downbeatBoost + h * 0.08 * wordMult * hitTextBoost,
       wordGlow: p * s * 0.25 * wordMult + h * 0.5 * wordMult,
-      wordNudgeY: -p * s * 8 * wordMult * downbeatBoost - h * 20 * wordMult,
+      wordNudgeY: -p * s * 2 * wordMult * downbeatBoost - h * 6 * wordMult,
 
       // Backgrounds: zoom rate (from energy), sim intensity (from hits)
       bgZoomRate: 0.5 + e * 1.5 * downbeatBoost,
@@ -512,26 +504,6 @@ export class BeatConductor {
 
   /** Get beat period in seconds */
   get beatPeriod(): number { return this.period; }
-
-  /** Variance of beat strengths (0 = perfectly uniform, higher = more syncopated) */
-  get beatStrengthVariance(): number {
-    const n = this.beatStrengths.length;
-    if (n < 2) return 0;
-    let sum = 0;
-    for (let i = 0; i < n; i++) sum += this.beatStrengths[i];
-    const mean = sum / n;
-    let sumSq = 0;
-    for (let i = 0; i < n; i++) {
-      const d = this.beatStrengths[i] - mean;
-      sumSq += d * d;
-    }
-    return Math.sqrt(sumSq / n);
-  }
-
-  /** Access the audio analysis (if attached), for classifiers and diagnostics */
-  get analysis(): import('@/engine/audioAnalyzer').AudioAnalysis | null {
-    return this._analysis;
-  }
 
   /** Reset cursor (call after seek) */
   resetCursor(): void { this._cursor = 0; this._hitCursor = 0; }

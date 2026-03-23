@@ -40,10 +40,6 @@ import {
   type ResolvedWordSettings,
 } from "@/engine/cinematicResolver";
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
-import { classifyDance, classifySection, type DancePattern, type DanceClassification } from "@/engine/DanceClassifier";
-import { computeDanceMotion, crossfadeDanceMotion, type DanceMotion, type GrammarInput } from "@/engine/MotionGrammar";
-import { PhraseMemory, type PhraseState } from "@/engine/PhraseMemory";
-import { HitChoreographer, type HitMotion } from "@/engine/HitChoreographer";
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
@@ -205,7 +201,6 @@ export interface LiveDebugState {
   bgNextBeat: number;
   bgBeatPhase: number;
   bgBeatPulse: number;
-  dancePattern?: string;
 
   // Active word
   activeWord: string;
@@ -480,7 +475,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 5;
+const BAKER_VERSION = 4;
 
 const SIM_W = 96;
 const SIM_H = 54;
@@ -1008,9 +1003,6 @@ export class LyricDancePlayer {
 
   /** Read-only accessor — used by auto-save to retrieve reconciled words after updateTranscript */
   get currentData(): LyricDanceData { return this.data; }
-  /** The classified dance pattern for the current song */
-  get dancePattern(): DancePattern { return this._danceClassification?.pattern ?? 'bounce'; }
-  get danceClassification(): DanceClassification | null { return this._danceClassification; }
   private payload: ScenePayload | null = null;
 
   // Runtime chunks
@@ -1042,23 +1034,6 @@ export class LyricDancePlayer {
 
   // ═══ BeatConductor — single rhythmic driver ═══
   private conductor: BeatConductor | null = null;
-  /** Dance pattern classification — set once at song load */
-  private _danceClassification: DanceClassification | null = null;
-  /** Phrase-level tension and release tracker */
-  private _phraseMemory = new PhraseMemory();
-  private _lastPhraseState: PhraseState | null = null;
-
-  /** Per-instrument hit response with physics decay */
-  private _hitChoreographer = new HitChoreographer();
-  private _lastHitMotion: HitMotion = { dX: 0, dY: 0, dScale: 0, rotation: 0 };
-
-  /** Per-section dance pattern override */
-  private _sectionDancePattern: DancePattern = 'bounce';
-  private _prevSectionDancePattern: DancePattern = 'bounce';
-  private _sectionCrossfadeProgress = 1.0; // 1.0 = fully transitioned, no crossfade
-  private _sectionCrossfadeDuration = 0; // seconds — set from beat period at transition
-  private _sectionCrossfadeElapsed = 0;
-  private _lastDanceSectionIdx = -1;
   private cameraRig: CameraRig = new CameraRig();
   private _lastBeatState: BeatState | null = null;
   private _lastSubsystemResponse: SubsystemResponse | null = null;
@@ -1267,8 +1242,6 @@ export class LyricDancePlayer {
   private _firstPaintMarked = false;
   private _fontStabilized = false;
   private _fontLayoutReflowPending = false;
-  private _shrinkDebugThrottle = 0;
-  private _mlLayoutDebugThrottle = 0;
   private _handleVisibilityChange: () => void;
   private _pendingUpgradeTimeout: number | null = null;
   private _pendingIdleHandle: number | null = null;
@@ -1495,7 +1468,6 @@ export class LyricDancePlayer {
         const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
         this.compiledScene = compiled;
         this._markCompiledViewport(this.width || 960, this.height || 540);
-        this._hitChoreographer.setCompileHeight(this.height || 540);
 
         // ═══ V2: Create BeatConductor with full audio analysis ═══
         const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
@@ -1505,19 +1477,7 @@ export class LyricDancePlayer {
         if ((beatGridData as any)._analysis) {
           this.conductor.setAnalysis((beatGridData as any)._analysis);
         }
-
-        // ═══ Classify dance pattern from audio features ═══
-        this._danceClassification = classifyDance(
-          beatGridData,
-          this.conductor.analysis,
-        );
-        this._phraseMemory.reset();
-        this._hitChoreographer.reset();
-        this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
-        this._prevSectionDancePattern = this._sectionDancePattern;
-        this._sectionCrossfadeProgress = 1.0;
-        this._lastDanceSectionIdx = -1;
-
+        
         // ═══ V4: Load song structure into CameraRig ═══
         // CameraRig pre-analyzes beatGrid + cinematic sections to build the song arc:
         // energy profile per section, drop detection, anticipation timing.
@@ -1551,56 +1511,6 @@ export class LyricDancePlayer {
         this._bakedHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
         this._bakedVersion = BAKER_VERSION;
         this._bakeLock = false;
-
-        // ═══ BAKER DEBUG PANEL ═══
-        const _cd = this.data?.cinematic_direction as Record<string, unknown> | null;
-        const _groups = compiled.phraseGroups ?? [];
-        const _allBaseFontSizes = _groups.flatMap((g: any) => g.words.map((w: any) => w.baseFontSize));
-        const _uniqueFS = [...new Set(_allBaseFontSizes.map((f: number) => Math.round(f)))].sort((a, b) => a - b);
-        console.group('%c[BAKER DEBUG] Bake Complete (v' + BAKER_VERSION + ')', 'color:#0ff;font-weight:bold');
-        console.log('Viewport:', { w: this.width, h: this.height, isPortrait: this.height > this.width });
-        console.log('Viewport Scale:', {
-          sx: Math.round(this._viewportSx * 1000) / 1000,
-          sy: Math.round(this._viewportSy * 1000) / 1000,
-          fontScale: Math.round(this._viewportFontScale * 1000) / 1000,
-        });
-        console.log('Font:', {
-          resolvedFont: this.getResolvedFont(),
-          typography: (_cd?.typography as string) ?? 'default',
-          fontStabilized: this._fontStabilized,
-        });
-        console.log('Scene:', {
-          phraseGroups: _groups.length,
-          totalWords: _allBaseFontSizes.length,
-          uniqueBaseFontSizes: _uniqueFS,
-          minBaseFontSize: Math.min(..._allBaseFontSizes),
-          maxBaseFontSize: Math.max(..._allBaseFontSizes),
-          chapters: compiled.chapters?.length ?? 0,
-          durationSec: Math.round((compiled.durationSec ?? 0) * 10) / 10,
-        });
-        console.log('Camera:', {
-          maxZoom: this.cameraRig?.config?.maxZoom ?? 'N/A',
-          bpm: this.conductor?.beatsPerMinute ?? 'N/A',
-        });
-        console.log('Cinematic Direction:', {
-          tone: (_cd?.sceneTone as string) ?? 'none',
-          motion: (_cd?.motionStyle as string) ?? 'none',
-          atmosphere: (_cd?.atmosphere as string) ?? 'none',
-          palette: (_cd?.palette as string) ?? 'none',
-          typography: (_cd?.typography as string) ?? 'none',
-          emotionalArc: (_cd?.emotionalArc as string) ?? 'none',
-        });
-        // Log first 3 groups as sample
-        for (let _gi = 0; _gi < Math.min(3, _groups.length); _gi++) {
-          const _g = _groups[_gi] as any;
-          console.log(`Group[${_gi}]:`, {
-            words: _g.words.map((w: any) => `${w.text}(fs=${Math.round(w.baseFontSize)},emp=${w.emphasisLevel ?? 0}${w.isHeroWord ? ',HERO' : ''})`).join(' '),
-            start: Math.round(_g.start * 100) / 100,
-            end: Math.round(_g.end * 100) / 100,
-            lineIndex: _g.lineIndex,
-          });
-        }
-        console.groupEnd();
       })();
     }
 
@@ -1779,20 +1689,13 @@ export class LyricDancePlayer {
     this._springOffset = 0;
     this._springVelocity = 0;
     this._timeInitialized = false;
-    // Clear ML layout cache on seek — font warmth may have changed since the cache
-    // was written (canvas measureText returns different widths before vs after the font
-    // is rasterized). Costs nothing: cache rebuilds lazily as groups become visible.
-    this._mlLayoutCache.clear();
+    // Layout cache intentionally NOT cleared on seek — layout inputs (words, font,
+    // viewport) don't change, only playback time. Same group = same rows, always.
+    // Solver hash reset so it re-runs for the new set of visible chunks.
     this._lastVisibleChunkCount = -1;
     this._lastVisibleChunkSetHash = 0;
     this.conductor?.resetCursor();
     this.cameraRig.reset();
-    this._phraseMemory.reset();
-    this._hitChoreographer.reset();
-    this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
-    this._prevSectionDancePattern = this._sectionDancePattern;
-    this._sectionCrossfadeProgress = 1.0;
-    this._lastDanceSectionIdx = -1;
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
@@ -2141,12 +2044,6 @@ export class LyricDancePlayer {
     this._lastVisibleChunkSetHash = 0;
     this._lastSortHash = 0;
     this.cameraRig.reset();
-    this._phraseMemory.reset();
-    this._hitChoreographer.reset();
-    this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
-    this._prevSectionDancePattern = this._sectionDancePattern;
-    this._sectionCrossfadeProgress = 1.0;
-    this._lastDanceSectionIdx = -1;
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
@@ -2508,12 +2405,6 @@ export class LyricDancePlayer {
     this._timeInitialized = false;
 
     this.cameraRig?.reset();
-    this._phraseMemory.reset();
-    this._hitChoreographer.reset();
-    this._sectionDancePattern = this._danceClassification?.pattern ?? 'bounce';
-    this._prevSectionDancePattern = this._sectionDancePattern;
-    this._sectionCrossfadeProgress = 1.0;
-    this._lastDanceSectionIdx = -1;
     this._resetBgParallax();
     this.ambientParticleEngine?.clear();
 
@@ -2548,25 +2439,19 @@ export class LyricDancePlayer {
       this.lastTimestamp = timestamp;
       this.updateFrameBudget(deltaMs);
       if (this._fontLayoutReflowPending) {
+        this._fontLayoutReflowPending = false;
+        this._textMetricsCache.clear();
+        this._mlLayoutCache.clear();
+        this._lastVisibleChunkCount = -1;
+        this._lastVisibleChunkSetHash = 0;
+        this._lastVisibleFirstChunkId = "";
+        this._lastVisibleMidChunkId = "";
+        this._lastVisibleLastChunkId = "";
         // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
-        // Only consume the flag when the scene exists and we can actually recompile.
-        // If compiledScene is null (still compiling), keep the flag set so the next
-        // tick retries. This prevents the race where the font loads before the first
-        // scene compile finishes — previously the flag was consumed and the recompile
-        // was silently skipped, leaving the scene with fallback-font positions forever.
         if (this.payload && this.compiledScene) {
-          this._fontLayoutReflowPending = false;
-          this._textMetricsCache.clear();
-          this._mlLayoutCache.clear();
-          this._lastVisibleChunkCount = -1;
-          this._lastVisibleChunkSetHash = 0;
-          this._lastVisibleFirstChunkId = "";
-          this._lastVisibleMidChunkId = "";
-          this._lastVisibleLastChunkId = "";
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
           this._buildChunkCacheFromScene(this.compiledScene);
         }
-        // else: keep _fontLayoutReflowPending = true, retry next tick
       }
 
       // ALWAYS start frame with this exact sequence
@@ -2871,18 +2756,7 @@ export class LyricDancePlayer {
     const fontName = fontMap[typoKey] ?? 'Montserrat';
     const loaded = await ensureFontReady(fontName);
     if (loaded && !this.destroyed) {
-      // ═══ PRIME CANVAS: force the measurement context to rasterize the loaded font ═══
-      // document.fonts.check() returns true before canvas measureText() actually uses the
-      // new font (known Chrome race condition). Performing a dummy measurement with every
-      // weight we use forces the canvas rasterizer to internalize the font face.
-      // Without this, the first real measureText() call returns fallback-font widths,
-      // which are narrower, causing the multi-line layout to skip wrapping.
-      for (const w of [400, 600, 700]) {
-        this._measureCtx.font = `${w} 48px "${fontName}", sans-serif`;
-        this._measureCtx.measureText('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
-      }
       this._fontStabilized = true;
-      this._fontLayoutReflowPending = true;
     }
   }
 
@@ -2993,20 +2867,7 @@ export class LyricDancePlayer {
     ds.qualityTier = this._qualityTier;
     ds.songProgress = songProgress;
     ds.beatIntensity = beatState?.pulse ?? 0;
-    ds.dancePattern = this._danceClassification?.pattern ?? 'bounce';
-    if (this._lastPhraseState) {
-      (ds as any).phraseTension = this._lastPhraseState.tension;
-      (ds as any).phraseRelease = this._lastPhraseState.release;
-      (ds as any).phraseAmp = this._lastPhraseState.amplitudeMultiplier;
-    }
-    (ds as any).sectionDance = this._sectionDancePattern;
-    (ds as any).hitType = beatState?.hitType ?? 'none';
-    const _hitDbg = this._lastHitMotion;
-    (ds as any).hitDX = _hitDbg ? Math.round(_hitDbg.dX * 10) / 10 : 0;
-    (ds as any).hitDY = _hitDbg ? Math.round(_hitDbg.dY * 10) / 10 : 0;
-    (ds as any).crossfade = this._sectionCrossfadeProgress < 1.0
-      ? `${this._prevSectionDancePattern}→${this._sectionDancePattern} ${Math.round(this._sectionCrossfadeProgress * 100)}%`
-      : null;
+
 
     const beatIntensityClamped = Math.max(0, Math.min(1, beatState?.pulse ?? 0));
     if (this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
@@ -3391,10 +3252,6 @@ export class LyricDancePlayer {
       } else {
         this._solvedBounds[i].cx = bounds[i].cx;
         this._solvedBounds[i].cy = bounds[i].cy;
-        this._solvedBounds[i].fontSize = bounds[i].fontSize;
-        this._solvedBounds[i].halfW = bounds[i].halfW;
-        this._solvedBounds[i].halfH = bounds[i].halfH;
-        this._solvedBounds[i].baseTextWidth = bounds[i].baseTextWidth;
       }
     }
 
@@ -3411,28 +3268,6 @@ export class LyricDancePlayer {
         const shrinkRatioW = tooWide ? (availW / (b.halfW * 2)) : 1;
         const shrinkRatioH = tooTall ? (availH / (b.halfH * 2)) : 1;
         const shrinkRatio = Math.min(shrinkRatioW, shrinkRatioH);
-        // ═══ SHRINK DEBUG ═══
-        if (!this._shrinkDebugThrottle || performance.now() - this._shrinkDebugThrottle > 2000) {
-          this._shrinkDebugThrottle = performance.now();
-          console.warn('%c[SHRINK]', 'color:#f55', {
-            text: b.text,
-            oldFS: b.fontSize,
-            newFS: Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio)),
-            minFont: b.minFont,
-            ratio: Math.round(shrinkRatio * 100) / 100,
-            halfW: Math.round(b.halfW),
-            halfH: Math.round(b.halfH),
-            availW: Math.round(availW),
-            availH: Math.round(availH),
-            scaleX: Math.round(b.scaleX * 100) / 100,
-            scaleY: Math.round(b.scaleY * 100) / 100,
-            tooWide,
-            tooTall,
-            priority: b.priority,
-            family: b.family,
-            weight: b.weight,
-          });
-        }
         b.fontSize = Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio));
         const newFontStr = `${b.weight} ${b.fontSize}px ${b.family}`;
         const metrics2 = this.getCachedMetrics(b.text, newFontStr);
@@ -5170,137 +5005,6 @@ export class LyricDancePlayer {
       }
     }
     const _hasBeatResponses = _beatResponses.length > 0;
-
-    // ═══ DANCE GRAMMAR: compute once per frame, apply per word ═══
-    // Derive bar-level timing from beatState for the grammar functions.
-    const _beatsPerBar = 4; // standard 4/4 assumption (matches BeatConductor)
-    const _barBeat = beatState ? (beatState.beatIndex % _beatsPerBar) : 0;
-    const _barPhase = beatState
-      ? ((_barBeat + beatState.phase) / _beatsPerBar)
-      : 0;
-
-    // ═══ PHRASE MEMORY: tick tension/release before grammar ═══
-    const _cameraAnticipation = this.cameraRig?.anticipation ?? 0;
-    const _currentSectionIdx = this._frameSectionIdx;
-    const _sectionChapters = this.resolvedState.chapters;
-    const _currentSection = _currentSectionIdx >= 0 ? _sectionChapters[_currentSectionIdx] : null;
-    const _sectionMoodStr = _currentSection
-      ? ((_currentSection as any).mood ?? (_currentSection as any).role ?? (_currentSection as any).emotionalArc ?? '')
-      : '';
-    const _sectionIsRelease = /chorus|drop|anthemic|euphoric|triumphant|powerful|release/i.test(_sectionMoodStr);
-
-    const _dt = Math.min(0.1, (this._frameDt * 16.67) / 1000);
-
-    const _phraseState = beatState
-      ? this._phraseMemory.tick(
-          beatState.beatIndex,
-          beatState.phase,
-          _cameraAnticipation,
-          _currentSectionIdx,
-          _sectionIsRelease,
-          _dt,
-        )
-      : null;
-    this._lastPhraseState = _phraseState;
-
-    // ═══ SECTION-AWARE DANCE PATTERN: override per section + crossfade ═══
-    if (_currentSectionIdx >= 0 && _currentSectionIdx !== this._lastDanceSectionIdx && this._danceClassification) {
-      // Section changed — compute new section-specific dance pattern
-      const songPattern = this._danceClassification.pattern;
-      const sectionEnergy = beatState?.energy ?? 0.5;
-      const bpm = this.conductor?.beatsPerMinute ?? 120;
-
-      // Derive section role from mood string (matches how CameraRig reads sections)
-      let sectionRole = 'verse';
-      if (/chorus|anthemic|euphoric|triumphant|powerful/i.test(_sectionMoodStr)) sectionRole = 'chorus';
-      else if (/drop|explosion|climax|peak/i.test(_sectionMoodStr)) sectionRole = 'drop';
-      else if (/bridge|breakdown|uncertain|searching/i.test(_sectionMoodStr)) sectionRole = 'bridge';
-      else if (/intro|opening/i.test(_sectionMoodStr)) sectionRole = 'intro';
-      else if (/outro|fade|ending|resolution/i.test(_sectionMoodStr)) sectionRole = 'outro';
-      else if (/verse|intimate|quiet|minimal|sparse/i.test(_sectionMoodStr)) sectionRole = 'verse';
-
-      const newPattern = classifySection(songPattern, sectionRole, sectionEnergy, bpm);
-
-      // If the pattern changed, start a crossfade over one bar
-      if (newPattern !== this._sectionDancePattern) {
-        this._prevSectionDancePattern = this._sectionDancePattern;
-        this._sectionDancePattern = newPattern;
-        // Crossfade duration = one bar (4 beats). Feels musical — one bar to settle into the new groove.
-        this._sectionCrossfadeDuration = (this.conductor?.beatPeriod ?? 0.5) * 4;
-        this._sectionCrossfadeElapsed = 0;
-        this._sectionCrossfadeProgress = 0;
-      }
-
-      this._lastDanceSectionIdx = _currentSectionIdx;
-    }
-
-    // Advance crossfade
-    if (this._sectionCrossfadeProgress < 1.0) {
-      this._sectionCrossfadeElapsed += _dt;
-      this._sectionCrossfadeProgress = this._sectionCrossfadeDuration > 0
-        ? Math.min(1.0, this._sectionCrossfadeElapsed / this._sectionCrossfadeDuration)
-        : 1.0;
-    }
-
-    // ═══ DANCE GRAMMAR: compute motion with section pattern + crossfade ═══
-    let _danceMotion: DanceMotion = { dX: 0, dY: 0, dScale: 0 };
-    if (beatState && this._danceClassification) {
-      const grammarInput: GrammarInput = {
-        phase: beatState.phase,
-        barPhase: _barPhase,
-        barBeat: _barBeat,
-        energy: beatState.energy,
-        compileHeight: this._compiledViewportH || 540,
-        isDownbeat: beatState.isDownbeat,
-      };
-
-      // Use crossfade when transitioning between patterns, otherwise direct compute
-      if (this._sectionCrossfadeProgress < 1.0) {
-        _danceMotion = crossfadeDanceMotion(
-          this._prevSectionDancePattern,
-          this._sectionDancePattern,
-          this._sectionCrossfadeProgress,
-          grammarInput,
-        );
-      } else {
-        _danceMotion = computeDanceMotion(this._sectionDancePattern, grammarInput);
-      }
-
-      // Modulate grammar output by phrase tension + release
-      const phraseMult = _phraseState?.amplitudeMultiplier ?? 1.0;
-      _danceMotion.dX *= phraseMult;
-      _danceMotion.dY *= phraseMult;
-      _danceMotion.dScale *= phraseMult;
-    }
-
-    // ═══ HIT CHOREOGRAPHER: per-instrument impulse response ═══
-    // Fires physics-decayed impulses on bass/transient/tonal hits.
-    // Output stacks on top of grammar dance — grammar is the continuous dance,
-    // hit choreographer is the punctuation (the kick, the crack, the bloom).
-    const _hitMotion = beatState
-      ? this._hitChoreographer.tick(
-          beatState.beatIndex,
-          beatState.hitType,
-          beatState.hitStrength,
-          beatState.energy,
-          beatState.isDownbeat,
-          Math.min(0.1, (this._frameDt * 16.67) / 1000),
-        )
-      : this._lastHitMotion;
-    this._lastHitMotion = _hitMotion;
-
-    // ═══ WAVE RIPPLE: precompute per-frame constants ═══
-    // The ripple is a cosine wave that propagates across the word line.
-    // Each word's position (0-1 within the line) shifts its phase, so the
-    // bounce peaks at different times for different words — creating a visible
-    // traveling wave. The anchor word (currently spoken) is the wave origin.
-    //
-    // Wave speed is beat-locked: one full ripple cycle per beat.
-    // Spread controls how much phase offset the edges get relative to center.
-    const _rippleBeatRad = beatPhase * Math.PI * 2; // radians within current beat
-    const _rippleSpread = 1.2; // how far the phase shifts from center to edge (radians)
-    // For echo delay: shift the phase back by 1/8 beat for echo/chorus words
-    const _echoDelayRad = Math.PI * 0.25; // 1/8 of a full beat cycle = π/4 radians
     let ci = 0;
     if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
     const chunks = this._evalChunks;
@@ -5332,13 +5036,6 @@ export class LyricDancePlayer {
             break;
           }
         }
-      }
-
-      // ═══ HERO STAGING: dim particles when a solo hero commands the stage ═══
-      // Reduces visual noise so the hero word is the clear focal point.
-      // Particles drop to 30% density. Recovers automatically when hero exits.
-      if (groupHasActiveSoloHero && this.ambientParticleEngine) {
-        this.ambientParticleEngine.setDensityMultiplier(0.3);
       }
 
       // ═══ MULTI-LINE LAYOUT — cached per group ═══
@@ -5390,9 +5087,6 @@ export class LyricDancePlayer {
         _mlDy = [];
       }
 
-
-
-
       if (lineRole === 'current' && !_hasValidMlCache && !groupHasActiveSoloHero && group.words.length > 1) {
           const mCtx = this._measureCtx;
           const resolvedFontML = _resolvedFontForML;
@@ -5416,18 +5110,8 @@ export class LyricDancePlayer {
             }
           }
 
-          // Sanity check: if measured width is much narrower than what this font size
-          // and word count should produce, the canvas is still using fallback metrics.
-          // Each character should be at least 0.35em wide in any latin font.
-          // If we're below 70% of that floor, force wrapping as the safe default —
-          // centered multi-line is always readable, while scattered single-line is not.
-          let expectedMinWidth = 0;
-          for (let wi = 0; wi < group.words.length; wi++) {
-            expectedMinWidth += group.words[wi].text.length * Math.round(group.words[wi].baseFontSize) * 0.35;
-          }
-          const _isSuspiciouslyNarrow = totalLineW < expectedMinWidth * 0.7;
-
-          const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4 || _isSuspiciouslyNarrow;
+          // Trigger multi-line for scaled words OR wide lines
+          const needsWrap = hasScaledWord || totalLineW > MAX_LINE_WIDTH || group.words.length > 4;
 
           if (needsWrap) {
             _isMultiLine = true;
@@ -5578,62 +5262,19 @@ export class LyricDancePlayer {
 
              // Store in cache only for current groups - offscreen passes must never
           // prime the cache with isMultiLine=false + empty dx/dy.
-          const _fontName = _resolvedFontForML.replace(/["']/g, '').split(',')[0].trim();
-          if (isFontReady(_fontName) && !_isSuspiciouslyNarrow) {
-            if (this._mlLayoutCache.size >= 32) {
-              this._mlLayoutCache.delete(this._mlLayoutCache.keys().next().value!);
-            }
-            this._mlLayoutCache.set(groupIdx, {
-              isMultiLine: _isMultiLine,
-              dx: _mlDx.slice(),
-              dy: _mlDy.slice(),
-              groupIdx,
-              resolvedFont: _resolvedFontForML,
-              maxZoom: maxCameraZoom,
-            });
+          if (this._mlLayoutCache.size >= 32) {
+            this._mlLayoutCache.delete(this._mlLayoutCache.keys().next().value!);
           }
+          this._mlLayoutCache.set(groupIdx, {
+            isMultiLine: _isMultiLine,
+            dx: _mlDx.slice(),
+            dy: _mlDy.slice(),
+            groupIdx,
+            resolvedFont: _resolvedFontForML,
+            maxZoom: maxCameraZoom,
+          });
         } // end cache-miss
-
-      // ═══ ML LAYOUT DEBUG ═══
-      if (lineRole === 'current' && group.words.length > 1 && (!this._mlLayoutDebugThrottle || performance.now() - this._mlLayoutDebugThrottle > 3000)) {
-        this._mlLayoutDebugThrottle = performance.now();
-        const _fontNameDbg = _resolvedFontForML.replace(/["']/g, '').split(',')[0].trim();
-        console.group('%c[ML LAYOUT DEBUG]', 'color:#0f0;font-weight:bold');
-        console.log('Group:', {
-          groupIdx,
-          wordCount: group.words.length,
-          isMultiLine: _isMultiLine,
-          hasCacheHit: _hasValidMlCache,
-          soloHero: groupHasActiveSoloHero,
-        });
-        console.log('Font:', {
-          resolvedFont: _resolvedFontForML,
-          fontName: _fontNameDbg,
-          fontReady: isFontReady(_fontNameDbg),
-          fontStabilized: this._fontStabilized,
-          fontScale: Math.round(this._viewportFontScale * 1000) / 1000,
-        });
-        console.log('Viewport:', {
-          w: this.width,
-          h: this.height,
-          sx: Math.round(this._viewportSx * 1000) / 1000,
-          sy: Math.round(this._viewportSy * 1000) / 1000,
-          maxCameraZoom,
-          MAX_LINE_WIDTH: Math.round(MAX_LINE_WIDTH),
-        });
-        console.log('Words:', group.words.map((w, i) => ({
-          text: w.text,
-          baseFontSize: Math.round(w.baseFontSize),
-          effectiveFS: Math.round(w.baseFontSize * this._viewportFontScale),
-          emphasisLevel: w.emphasisLevel ?? 0,
-          isHero: w.isHeroWord ?? false,
-          layoutX: Math.round(w.layoutX),
-          layoutY: Math.round(w.layoutY),
-          mlDx: _mlDx[i] !== undefined ? Math.round(_mlDx[i]) : 'N/A',
-          mlDy: _mlDy[i] !== undefined ? Math.round(_mlDy[i]) : 'N/A',
-        })));
-        console.groupEnd();
-      }
+      
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
@@ -5816,84 +5457,6 @@ export class LyricDancePlayer {
           waveScale = 1.0 + waveProximity * 0.06;
         }
 
-        // ═══ WORD CASTING: per-word dance role amplitude ═══
-        // Each word gets a dance amplitude multiplier based on its role in the performance.
-        // Hero/lead words dance at full amplitude. Filler/anchor words hold still,
-        // creating a stable reference that makes the hero's motion legible.
-        //
-        // Role hierarchy (derived from existing emphasisLevel + isHeroWord):
-        //   Lead    (1.0)  — hero words with emp >= 4: full dance, they ARE the performance
-        //   Support (0.7)  — high-emphasis non-hero (emp 3) or currently-spoken anchor
-        //   Chorus  (0.4)  — normal words (emp 2): follow along, don't compete
-        //   Anchor  (0.12) — filler words (emp 0-1): nearly still, the stable stage
-        //   Ghost   (0.0 → reversed) — exiting words: drift away with inverted motion
-        let danceRoleAmp = 0.4; // default: chorus
-        const isExitingWord = exitProgress > 0.3;
-
-        if (isExitingWord) {
-          // Ghost: exiting words get inverted, fading dance — they drift away
-          const exitFade = Math.max(0, 1 - exitProgress);
-          danceRoleAmp = -0.3 * exitFade; // negative = inverted motion direction
-        } else if (isHeroWord && emp >= 4) {
-          // Lead: hero words dance at full amplitude
-          danceRoleAmp = 1.0;
-        } else if (isSoloHero) {
-          // Solo hero always leads regardless of emp
-          danceRoleAmp = 1.0;
-        } else if (isAnchor && emp >= 2) {
-          // Currently-spoken word: support role — visible but not competing
-          danceRoleAmp = 0.7;
-        } else if (emp >= 3) {
-          // High emphasis non-hero: support
-          danceRoleAmp = 0.7;
-        } else if (emp >= 2) {
-          // Normal word: chorus — follows along at moderate amplitude
-          danceRoleAmp = 0.4;
-        } else {
-          // Filler (emp 0-1): anchor — nearly still, the stable stage
-          danceRoleAmp = 0.12;
-        }
-
-        // ═══ HERO STAGING: when a solo hero is center stage, everyone else steps back ═══
-        // Non-hero words reduce dance amplitude by 60% so the hero has visual space.
-        // This is the opposite of the old behavior where hero words piled on MORE visual
-        // noise while the background stayed at full volume.
-        if (groupHasActiveSoloHero && !isSoloHero && lineRole === 'current') {
-          danceRoleAmp *= 0.4;
-        }
-
-        // ═══ WAVE RIPPLE + ECHO DELAY: per-word dance phase modulation ═══
-        // Creates visible wave motion across the line instead of uniform bouncing.
-        //
-        // wordPct: 0-1 position of this word within the line (0 = leftmost, 1 = rightmost)
-        // anchorPct: 0-1 position of the anchor/currently-spoken word
-        // distance: how far this word is from the anchor (0 = at anchor, 1 = far edge)
-        //
-        // The wave propagates outward from the anchor word. Words near the anchor
-        // hit the beat at full amplitude. Words at the edges hit it slightly later.
-        // Result: a visible ripple, like a pebble dropped in water.
-
-        const wordCount = group.words.length;
-        let waveModulator = 1.0;
-
-        if (wordCount > 1 && lineRole === 'current' && !groupHasActiveSoloHero) {
-          const wordPct = wi / (wordCount - 1); // 0-1 position in line
-          const anchorPct = (group.anchorWordIdx ?? Math.floor(wordCount / 2)) / (wordCount - 1);
-          const distance = Math.abs(wordPct - anchorPct); // 0 at anchor, up to ~1 at edges
-
-          // Phase offset: edges are delayed relative to anchor
-          const phaseOffset = distance * _rippleSpread;
-
-          // Echo delay: chorus/echo role words get additional phase delay
-          // (danceRoleAmp 0.4 = chorus from Prompt 7, <0 = ghost)
-          const echoShift = (danceRoleAmp > 0 && danceRoleAmp <= 0.45) ? _echoDelayRad : 0;
-
-          // Cosine wave: peaks at 1.0 when wave reaches this word, dips to floor
-          // Floor of 0.5 ensures words always have some motion (never fully frozen by wave)
-          const rippleRaw = Math.cos(_rippleBeatRad - phaseOffset - echoShift);
-          waveModulator = 0.55 + 0.45 * rippleRaw; // range: 0.1 to 1.0
-        }
-
         // When multi-line is active, _mlDx already positions words centered at 480.
         // Skip groupCenterOffsetX to avoid double-centering.
         const xCenterOffset = _isMultiLine ? (_mlDx[wi] ?? 0) : groupCenterOffsetX;
@@ -5903,11 +5466,6 @@ export class LyricDancePlayer {
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
         chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
         chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
-        // Cap compound scale to prevent font shrink trigger.
-        // Solo heroes (alone center screen) get more headroom.
-        const _scaleMax = (isSoloHero && groupHasActiveSoloHero) ? 2.0 : 1.5;
-        chunk.scaleX = Math.max(0.5, Math.min(_scaleMax, chunk.scaleX));
-        chunk.scaleY = Math.max(0.5, Math.min(_scaleMax, chunk.scaleY));
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
@@ -5961,7 +5519,7 @@ export class LyricDancePlayer {
         chunk.behavior = usedBehavior;
         chunk.skewX = finalSkewX;
         chunk.blur = Math.max(0, Math.min(1, finalBlur));
-        chunk.rotation = finalRotation + _hitMotion.rotation * Math.abs(danceRoleAmp);
+        chunk.rotation = finalRotation;
         chunk.ghostTrail = resolvedWord?.ghostTrail ?? word.ghostTrail;
         chunk.ghostCount = word.ghostCount;
         chunk.ghostSpacing = word.ghostSpacing;

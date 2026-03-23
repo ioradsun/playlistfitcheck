@@ -281,15 +281,6 @@ export function LyricDanceExporter({
         : visibleLines.reduce((latest, l) => ((l.start ?? 0) > (latest.start ?? 0) ? l : latest));
       const activeLineIndex = activeLine ? lines.indexOf(activeLine) : -1;
       const currentBeatIntensity = Math.max(state.glow, state.shake * 2, 0);
-      // Derive beat phase (0-1) for beat-locked kinetic effects
-      let exportBeatPhase = 0;
-      if (sortedBeats.length >= 2 && beatIndex > 0) {
-        const prevBeatTime = sortedBeats[Math.min(beatIndex - 1, sortedBeats.length - 1)].time;
-        const nextBeatTime = sortedBeats[Math.min(beatIndex, sortedBeats.length - 1)].time;
-        if (nextBeatTime > prevBeatTime) {
-          exportBeatPhase = Math.max(0, Math.min(1, (currentTime - prevBeatTime) / (nextBeatTime - prevBeatTime)));
-        }
-      }
 
       const renderSection = interpreter?.getSectionRenderInput(songProgress, effectivePalette) ?? {
         dominantColor: effectivePalette[0],
@@ -355,7 +346,6 @@ export function LyricDanceExporter({
           currentTime,
           songProgress,
           beatIntensity: currentBeatIntensity,
-          beatPhase: exportBeatPhase,
           beatIndex,
           sortedBeats: sortedBeats.map(b => b.time),
           cw, ch,
