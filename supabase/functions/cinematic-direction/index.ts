@@ -286,37 +286,61 @@ The visual world has already been designed. You will receive:
 CORE PRINCIPLE — SEMANTIC LITERALISM:
 The viewer should SEE what each word means. If it burns, show fire.
 If it drowns, show water. Tag every word with obvious visual meaning.
-The only gate is time — word needs ≥ 350ms for the effect to register.
+The only gate is time — word needs ≥ 140ms for the effect to register.
 
 Return ONLY valid JSON. No markdown.
 
 ═══════════════════════════════════════
-PHRASES — cinematic pacing
+PHRASES — a master film editor's cuts
 ═══════════════════════════════════════
 
-Group ALL lyrics into phrases — the words that appear on screen together.
+Each phrase is ONE SCREEN of text — the words that appear together.
+You are editing this song like a film. Each cut matters.
 
-TIMING MINIMUMS:
-  1-word phrase:   350ms
-  2-3 word phrase: 840ms
-  4-5 word phrase: 1260ms
-  6-8 word phrase: 1750ms
-  Maximum: 4 seconds
+PHRASE BOUNDARY SIGNALS (in priority order):
+  1. [BREATH] markers (≥300ms gap) — the artist BREATHED. ALWAYS split here.
+     This is the strongest signal. A breath is a phrase boundary, period.
+  2. [pause] markers (≥150ms gap) — likely a natural pause. Split if meaning supports it.
+  3. Beat bar boundaries — phrases should start/end near strong beats when possible.
+  4. Semantic completeness — one complete thought or clause per phrase.
+  5. Punctuation (commas, periods) — weakest signal. Only split here if timing supports it.
+
+TIMING RULES:
+  Minimum phrase durations (the viewer needs time to READ):
+    1-word phrase:   350ms  (impact exclamation only)
+    2-3 word phrase: 840ms
+    4-5 word phrase: 1260ms
+    6-8 word phrase: 1750ms
+  Maximum: 4 seconds. Attention resets — cut to next phrase.
+
+  Compute actual phrase duration from word timestamps:
+    phrase_duration = last_word.end - first_word.start
+  Do NOT guess from word count — USE the timestamps.
 
 BPM PACING:
-  Below 90 BPM:  longer phrases (4-8 words)
+  Below 90 BPM:  longer phrases (4-8 words), let words breathe
   90-130 BPM:    balanced (3-6 words)
-  Above 130 BPM: shorter punchy phrases (2-4 words)
+  Above 130 BPM: shorter punchy phrases (2-4 words), match the energy
 
 MEANING:
   - One complete thought per phrase. Never split mid-clause.
   - Impact exclamations ≥ 350ms get their own phrase
-  - Held words ≥ 700ms may be their own phrase
+  - Held words ≥ 700ms may be their own phrase (dramatic isolation)
+  - Filler at line boundaries ("uh", "mm") attaches to the nearest real phrase
+
+COVERAGE:
+  Every word in every line MUST belong to exactly one phrase.
+  No gaps. No overlaps. If a line has no phrase, it falls to a dumb splitter.
+
+CRITICAL — wordRange uses PER-LINE indices:
+  "wordRange": [start, end] — inclusive, 0-based WITHIN the line.
+  The wi numbers shown in the lyrics (w0, w1, w2...) are per-line indices.
+  Use them directly. Do NOT use global word counts across lines.
 
 Each phrase:
-  "lineIndex": integer
-  "wordRange": [start, end] inclusive
-  "heroWord": "UPPERCASE" (optional)
+  "lineIndex": integer (which line)
+  "wordRange": [start, end] inclusive, PER-LINE word indices (use wi numbers)
+  "heroWord": "UPPERCASE" (optional — the most impactful word in this phrase)
 
 ═══════════════════════════════════════
 WORD DIRECTIVES — semantic emphasis
@@ -326,12 +350,12 @@ Tag every emotionally significant word:
   "word": lowercase
   "emphasisLevel": 1-5
   "elementalClass": FIRE | WATER | FROST | SMOKE | ELECTRIC
-    Tag generously — every word with visual meaning that has ≥ 350ms.
+    Tag generously — every word with visual meaning that has ≥ 140ms.
   "isolation": true (word ≥ 700ms, appears alone on screen)
 
 TIME RULES:
   emphasisLevel 4-5 requires ≥ 350ms
-  elementalClass requires ≥ 350ms
+  elementalClass requires ≥ 140ms (lowered — phrase model gives visual budget)
   isolation requires ≥ 700ms
   Skip words under 140ms
 
@@ -705,7 +729,8 @@ function buildWordUserMessage(
   }
   msg += "\n";
 
-  msg += `LYRICS WITH WORD TIMING:\n\n`;
+  msg += `LYRICS WITH WORD TIMING AND GAPS:\n`;
+  msg += `(wi = word index within line, for use in wordRange)\n\n`;
   if (words && words.length > 0) {
     for (let li = 0; li < lines.length; li++) {
       const line = lines[li];
@@ -716,7 +741,22 @@ function buildWordUserMessage(
       );
       msg += `[${li}] "${line.text}"\n`;
       if (lineWords.length > 0) {
-        msg += `  ${lineWords.map((w) => `${w.word}(${Math.round((w.end - w.start) * 1000)}ms)`).join(" ")}\n`;
+        const parts: string[] = [];
+        for (let wi = 0; wi < lineWords.length; wi++) {
+          const w = lineWords[wi];
+          const durMs = Math.round((w.end - w.start) * 1000);
+          let part = `w${wi}:${w.word}(${durMs}ms)`;
+          if (wi < lineWords.length - 1) {
+            const gapMs = Math.round((lineWords[wi + 1].start - w.end) * 1000);
+            if (gapMs >= 300) {
+              part += ` [BREATH:${gapMs}ms]`;
+            } else if (gapMs >= 150) {
+              part += ` [pause:${gapMs}ms]`;
+            }
+          }
+          parts.push(part);
+        }
+        msg += `  ${parts.join(" ")}\n`;
       }
     }
   } else {
