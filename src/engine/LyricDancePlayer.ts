@@ -2620,6 +2620,12 @@ export class LyricDancePlayer {
 
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
 
+    // Reset cached canvas state — canvas resize clears all context state (font, shadow, etc.)
+    // but our caches don't know about it. Force re-set on every frame.
+    this._lastFont = '';
+    this._lastShadowBlur = -1;
+    this._lastShadowColor = '';
+
     // ── Sim update: skip at tier ≥ 2 (they're not drawn) ──────────────
     // Cuts fire/water/aurora particle math entirely when fps is low.
     if (qTier < 2) {
