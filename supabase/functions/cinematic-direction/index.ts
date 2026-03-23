@@ -2245,6 +2245,7 @@ serve(async (req) => {
         body.sceneDirection,
         body.words,
         bpm,
+        customPrompts.wordPrompt,
       );
 
       return new Response(JSON.stringify({ cinematicDirection: wordResult }), {
