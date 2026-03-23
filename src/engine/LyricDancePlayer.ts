@@ -4395,11 +4395,14 @@ export class LyricDancePlayer {
     }
     this._activeGroupCursorTime = tSec;
 
-    // Advance cursor past groups we've fully exited
+    // ═══ NEVER-BLANK: cursor stays on current group until NEXT group is ready ═══
+    // Don't advance past a group just because its linger/exit expired.
+    // Hold it (as a 30% ghost) until the next group's entry window begins.
     while (cursor < groups.length - 1) {
-      const g = groups[cursor];
-      const fullEnd = g.end + g.lingerDuration + g.exitDuration;
-      if (tSec > fullEnd) {
+      const next = groups[cursor + 1];
+      const nextEntryPad = next.words.length * (next.staggerDelay ?? 0.05) + 0.2;
+      const nextVisStart = next.start - nextEntryPad;
+      if (tSec >= nextVisStart) {
         cursor++;
       } else {
         break;
@@ -4407,23 +4410,14 @@ export class LyricDancePlayer {
     }
     this._activeGroupCursor = cursor;
 
-    // Check if cursor group is active (being spoken, lingering, entering, or exiting)
+    // ═══ NEVER-BLANK: cursor group is ALWAYS active ═══
+    // The cursor only advances when the next group is ready.
+    // So if the cursor is on a group, that group is active — either being
+    // spoken, lingering, or held as a 30% ghost until replacement arrives.
     let activeGroupIdx = -1;
     const cursorGroup = groups[cursor];
     if (cursorGroup) {
-      const entryPad = cursorGroup.words.length * (cursorGroup.staggerDelay ?? 0.05) + 0.2;
-      const visStart = cursorGroup.start - entryPad;
-      const fullEnd = cursorGroup.end + cursorGroup.lingerDuration + cursorGroup.exitDuration;
-
-      if (tSec >= visStart && tSec <= fullEnd) {
-        activeGroupIdx = cursor;
-      } else if (cursor + 1 < groups.length) {
-        const next = groups[cursor + 1];
-        const nextEntryPad = next.words.length * (next.staggerDelay ?? 0.05) + 0.2;
-        if (tSec >= next.start - nextEntryPad) {
-          activeGroupIdx = cursor + 1;
-        }
-      }
+      activeGroupIdx = cursor;
     }
 
     const activeGroups = this._activeGroupIndices;
