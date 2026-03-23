@@ -5234,18 +5234,10 @@ export class LyricDancePlayer {
               chunk.color = semColor;
             }
           } else if (isHeroWord) {
-            // Hero words always use accent color
             const pal = this._framePalette ?? [];
             const rawAccent = pal[1] ?? '#FFD700';
             chunk.color = rawAccent;
-            const accentLum = this._hexLuminance(rawAccent);
-            if (accentLum > 0.5) {
-              (chunk as any).textStroke = 'rgba(0,0,0,0.55)';
-            } else if (accentLum < 0.15) {
-              (chunk as any).textStroke = 'rgba(255,255,255,0.25)';
-            } else {
-              (chunk as any).textStroke = 'rgba(0,0,0,0.35)';
-            }
+            // NO textStroke — hero accent color is already high contrast
           } else {
             // All other words: base color (white on dark bg, dark on light bg)
             chunk.color = baseColor;
