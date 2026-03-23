@@ -732,47 +732,56 @@ class BeatVisSim {
   get canvas(): HTMLCanvasElement { return this.visCanvas; }
 }
 
-// ═══ NervousLightningBar: merged progress + beat visualizer ═══
+// ═══ DynamiteWickBar: fuse-cord waveform progress + beat visualizer ═══
 // Admin flag: window.__LYRIC_DANCE_LIGHTNING_BAR
-// One white trunk line = progress bar. Dendrites sprout on energy.
-// Lightning bolts crack on transient/bass hits. Color bleeds in from palette accent.
-// Pre-computed waveform preview shows unplayed song energy.
+// Unplayed = warm rope-textured fuse cord (ridgeline from beatEnergies).
+// Playhead = crackling flame that breathes with energy.
+// Played = charred ember trail glowing orange→red→ash.
+// Sparks shoot on energy, smoke wisps rise from burn point.
 
-const NLB_W = 640;
-const NLB_H = 96;
+const DWB_W = 640;
+const DWB_H = 96;
 
-interface NLBDendrite {
+interface DWBSpark {
   x: number; y: number;
   vx: number; vy: number;
   life: number;
-  rgb: [number, number, number];
-  thickness: number;
+  size: number;
+  bright: number; // 0-1 — brighter sparks are whiter, dimmer are orange
+}
+
+interface DWBSmoke {
+  x: number; y: number;
+  vx: number; vy: number;
+  life: number;
+  size: number;
   trail: Array<{ x: number; y: number }>;
 }
 
-interface NLBBolt {
-  points: Array<{ x: number; y: number }>;
-  life: number;
-  rgb: [number, number, number];
-}
-
-class NervousLightningBar {
-  private nlbCanvas: HTMLCanvasElement;
-  private nlbCtx: CanvasRenderingContext2D;
-  private accent: [number, number, number] = [255, 215, 0];
-  private dendrites: NLBDendrite[] = [];
-  private bolts: NLBBolt[] = [];
+class DynamiteWickBar {
+  private dwbCanvas: HTMLCanvasElement;
+  private dwbCtx: CanvasRenderingContext2D;
+  private accent: [number, number, number] = [255, 160, 20];
+  private sparks: DWBSpark[] = [];
+  private smokes: DWBSmoke[] = [];
   private frame = 0;
   private lastBeatIndex = -1;
-  private trunkVelocity: Float32Array;
-  private waveformPreview: Float32Array | null = null;
+  // Physics: per-pixel velocity for ember glow pulsing
+  private emberHeat: Float32Array;
+  // Waveform
+  private waveform: Float32Array;
+  private waveformSmooth: Float32Array;
+  // Flame flicker state
+  private flamePhase = 0;
 
   constructor(accentHex: string) {
-    this.nlbCanvas = document.createElement('canvas');
-    this.nlbCanvas.width = NLB_W;
-    this.nlbCanvas.height = NLB_H;
-    this.nlbCtx = this.nlbCanvas.getContext('2d')!;
-    this.trunkVelocity = new Float32Array(NLB_W).fill(0);
+    this.dwbCanvas = document.createElement('canvas');
+    this.dwbCanvas.width = DWB_W;
+    this.dwbCanvas.height = DWB_H;
+    this.dwbCtx = this.dwbCanvas.getContext('2d')!;
+    this.emberHeat = new Float32Array(DWB_W).fill(0);
+    this.waveform = new Float32Array(DWB_W).fill(0.15);
+    this.waveformSmooth = new Float32Array(DWB_W).fill(0.15);
     this.setAccent(accentHex);
   }
 
@@ -783,18 +792,34 @@ class NervousLightningBar {
 
   setAccent(hex: string): void { this.accent = this.hexToRgb(hex); }
 
-  /** Call once after beat analysis completes. Accepts beatEnergies array (one per beat). */
+  /** Call once after beat analysis. Resamples beatEnergies to DWB_W and smooths. */
   setWaveformPreview(beatEnergies: number[]): void {
-    const out = new Float32Array(NLB_W);
-    if (beatEnergies.length === 0) { this.waveformPreview = out; return; }
-    for (let x = 0; x < NLB_W; x++) {
-      const srcIdx = (x / NLB_W) * beatEnergies.length;
+    const out = new Float32Array(DWB_W);
+    if (beatEnergies.length === 0) {
+      out.fill(0.15);
+      this.waveform = out;
+      this.waveformSmooth = new Float32Array(out);
+      return;
+    }
+    for (let x = 0; x < DWB_W; x++) {
+      const srcIdx = (x / DWB_W) * beatEnergies.length;
       const lo = Math.floor(srcIdx);
       const hi = Math.min(lo + 1, beatEnergies.length - 1);
       const frac = srcIdx - lo;
-      out[x] = beatEnergies[lo] * (1 - frac) + beatEnergies[hi] * frac;
+      out[x] = Math.max(0.08, beatEnergies[lo] * (1 - frac) + beatEnergies[hi] * frac);
     }
-    this.waveformPreview = out;
+    this.waveform = out;
+    const smooth = new Float32Array(DWB_W);
+    const R = 3;
+    for (let x = 0; x < DWB_W; x++) {
+      let sum = 0, count = 0;
+      for (let k = -R; k <= R; k++) {
+        const idx = x + k;
+        if (idx >= 0 && idx < DWB_W) { sum += out[idx]; count++; }
+      }
+      smooth[x] = sum / count;
+    }
+    this.waveformSmooth = smooth;
   }
 
   update(
@@ -808,213 +833,342 @@ class NervousLightningBar {
     brightness: number = 0.5,
     isDownbeat: boolean = false,
   ): void {
-    const ctx = this.nlbCtx;
-    const W = NLB_W;
-    const H = NLB_H;
-    const centerY = H * 0.55;
+    const ctx = this.dwbCtx;
+    const W = DWB_W;
+    const H = DWB_H;
+    const baseY = H * 0.85;
+    const maxPeakH = H * 0.72;
     const px = Math.max(0, Math.min(W - 1, Math.floor(progress * W)));
 
     this.frame++;
     const f = this.frame;
-    const [ar, ag, ab] = this.accent;
+    this.flamePhase += 0.2 + energy * 0.3;
     const isNewBeat = beatIndex !== this.lastBeatIndex;
     this.lastBeatIndex = beatIndex;
+    const wf = this.waveformSmooth;
+    const accentBoost = 0.75 + brightness * 0.35 + beatPhase * 0.1;
 
-    // ── Motion blur ──
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    // ── Clear with very slight motion blur for smoke persistence ──
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
     ctx.fillRect(0, 0, W, H);
 
-    // ── Physics: inject velocity on hits, propagate wave ──
-    const vel = this.trunkVelocity;
-    if (hitStrength > 0.3) {
-      const impulse = hitStrength * 25 * (hitType === 'bass' ? 1.5 : 1.0);
-      const dir = hitType === 'bass' ? 1 : (Math.random() > 0.5 ? 1 : -1);
-      vel[px] += impulse * dir;
+    // ── Ember heat: inject at playhead, decay behind ──
+    const heat = this.emberHeat;
+    // Beat injects heat near playhead
+    if (pulse > 0.3) {
+      for (let i = Math.max(0, px - 20); i <= px; i++) {
+        heat[i] = Math.min(1, heat[i] + pulse * 0.15);
+      }
     }
-    for (let i = 0; i < W; i++) vel[i] *= 0.90;
-    for (let i = 1; i < W - 1; i++) {
-      vel[i] += (vel[i - 1] - vel[i]) * 0.04 + (vel[i + 1] - vel[i]) * 0.04;
+    // Decay
+    for (let i = 0; i < W; i++) {
+      heat[i] *= 0.975;
+      // Distance-based base heat near playhead
+      const dist = Math.abs(i - px);
+      if (i <= px && dist < 80) {
+        heat[i] = Math.max(heat[i], Math.max(0, 1 - dist / 80) * 0.5);
+      }
+    }
+    // Bass hit: pulse heat through entire ember trail
+    if (hitType === 'bass' && hitStrength > 0.3) {
+      for (let i = 0; i <= px; i++) {
+        heat[i] = Math.min(1, heat[i] + hitStrength * 0.25 * (1 - (px - i) / Math.max(1, px)));
+      }
     }
 
-    const getTrunkY = (x: number): number => {
-      const wave = Math.sin(x * 0.025 + f * 0.015) * energy * 6;
-      const brightnessDrift = (brightness - 0.5) * 6;
-      const phaseDrift = Math.sin((beatPhase * Math.PI * 2) + x * 0.01) * 1.5;
-      return centerY + wave + phaseDrift + brightnessDrift + (vel[x] || 0);
+    const getPeakH = (x: number): number => {
+      return Math.min(maxPeakH, (wf[x] || 0.08) * maxPeakH);
     };
 
-    // ── FUTURE: ghosted waveform preview ──
-    if (this.waveformPreview) {
+    // ════════════════════════════════════════════════════
+    // FUSE CORD (unplayed) — warm rope texture
+    // ════════════════════════════════════════════════════
+    {
+      // Filled shape — warm dark brown
       ctx.beginPath();
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.moveTo(Math.max(px, 0), baseY);
+      for (let x = Math.max(px, 0); x < W; x++) {
+        ctx.lineTo(x, baseY - getPeakH(x));
+      }
+      ctx.lineTo(W, baseY);
+      ctx.closePath();
+      // Warm brown gradient
+      const fuseGrad = ctx.createLinearGradient(0, baseY - maxPeakH, 0, baseY);
+      fuseGrad.addColorStop(0, 'rgba(160,110,60,0.35)');
+      fuseGrad.addColorStop(0.5, 'rgba(130,85,45,0.25)');
+      fuseGrad.addColorStop(1, 'rgba(90,60,30,0.15)');
+      ctx.fillStyle = fuseGrad;
+      ctx.fill();
+
+      // Rope texture: top edge with slight roughness
+      ctx.beginPath();
+      for (let x = Math.max(px + 2, 0); x < W; x++) {
+        const peakH = getPeakH(x);
+        // Tiny jitter for rope texture feel
+        const jitter = Math.sin(x * 2.3 + 17.1) * 0.8 + Math.sin(x * 5.7 + 3.2) * 0.4;
+        const y = baseY - peakH + jitter;
+        x === Math.max(px + 2, 0) ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = 'rgba(180,130,70,0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Inner braid lines for rope feel
+      ctx.beginPath();
+      for (let x = Math.max(px + 2, 0); x < W; x++) {
+        const peakH = getPeakH(x);
+        const braidY = baseY - peakH * 0.5 + Math.sin(x * 0.3) * peakH * 0.15;
+        x === Math.max(px + 2, 0) ? ctx.moveTo(x, braidY) : ctx.lineTo(x, braidY);
+      }
+      ctx.strokeStyle = 'rgba(140,100,55,0.15)';
       ctx.lineWidth = 1;
-      for (let x = px; x < W; x++) {
-        const amp = (this.waveformPreview[x] || 0) * 12;
-        const y = centerY + Math.sin(x * 0.025) * amp;
-        x === px ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }
       ctx.stroke();
-    } else {
+    }
+
+    // ════════════════════════════════════════════════════
+    // EMBER TRAIL (played) — charred wick, glowing embers
+    // ════════════════════════════════════════════════════
+    if (px > 0) {
+      // Base charred shape — dark
       ctx.beginPath();
-      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.moveTo(0, baseY);
+      for (let x = 0; x <= px; x++) {
+        ctx.lineTo(x, baseY - getPeakH(x));
+      }
+      ctx.lineTo(px, baseY);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(30,15,10,0.6)';
+      ctx.fill();
+
+      // Ember glow overlay — per-column based on heat
+      for (let x = 0; x <= px; x++) {
+        const h = heat[x] || 0;
+        if (h < 0.02) continue;
+        const peakH = getPeakH(x);
+        if (peakH < 1) continue;
+
+        // Color: hot = bright orange/yellow, cooling = deep red, cold = dark
+        const temp = h;
+        const [ar, ag, ab] = this.accent;
+        const r = Math.min(255, Math.floor((255 * Math.min(1, temp * 2)) * 0.7 + ar * 0.3));
+        const g = Math.min(255, Math.floor((80 + 140 * Math.max(0, temp - 0.3)) * 0.65 + ag * 0.35 * accentBoost));
+        const b = Math.min(255, Math.floor((20 * Math.max(0, temp - 0.6)) * 0.4 + ab * 0.18));
+        const a = h * 0.7;
+
+        // Glow column
+        const glowGrad = ctx.createLinearGradient(x, baseY - peakH, x, baseY);
+        glowGrad.addColorStop(0, `rgba(${r},${g},${b},${a * 0.9})`);
+        glowGrad.addColorStop(0.6, `rgba(${r},${Math.floor(g * 0.6)},${b},${a * 0.5})`);
+        glowGrad.addColorStop(1, `rgba(${Math.floor(r * 0.4)},${Math.floor(g * 0.2)},0,${a * 0.2})`);
+        ctx.fillStyle = glowGrad;
+        ctx.fillRect(x, baseY - peakH, 1.5, peakH);
+      }
+
+      // Top edge: glowing ember line
+      ctx.beginPath();
+      for (let x = 0; x <= px; x++) {
+        const y = baseY - getPeakH(x);
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      const edgeR = Math.min(255, Math.floor(this.accent[0] * 0.4 + 180 + energy * 55));
+      const edgeG = Math.min(255, Math.floor(this.accent[1] * 0.35 + 60 + energy * 70));
+      const edgeB = Math.min(80, Math.floor(this.accent[2] * 0.2));
+      ctx.strokeStyle = `rgba(${edgeR},${edgeG},${edgeB},${0.3 + energy * 0.3})`;
       ctx.lineWidth = 1;
-      ctx.moveTo(px, centerY);
-      ctx.lineTo(W, centerY);
+      ctx.shadowColor = `rgba(${Math.min(255, edgeR + 20)},${Math.min(255, edgeG + 10)},${edgeB},${0.3 + energy * 0.3})`;
+      ctx.shadowBlur = 3 + energy * 5;
       ctx.stroke();
-    }
+      ctx.shadowBlur = 0;
 
-    // ── PLAYED: white trunk line with color bleed near playhead ──
-    for (let x = 0; x < px; x++) {
-      const x2 = x + 1;
-      const y1 = getTrunkY(x);
-      const y2 = getTrunkY(x2);
-      const distFromHead = (px - x) / W;
-      const colorBleed = Math.max(0, 1 - distFromHead * 10) * energy;
-      const transientFlash = (x > px - 15 && hitStrength > 0.3) ? hitStrength * 0.6 : 0;
-      const blendAmt = Math.min(1, colorBleed + transientFlash);
-
-      const r = Math.round(255 + (ar - 255) * blendAmt);
-      const g = Math.round(255 + (ag - 255) * blendAmt);
-      const b = Math.round(255 + (ab - 255) * blendAmt);
-      const alpha = 0.4 + energy * 0.35 + pulse * 0.15;
-      const thickness = 1 + energy * 1.5 + Math.abs(vel[x] || 0) * 0.08;
-
-      ctx.beginPath();
-      ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(1, alpha)})`;
-      ctx.lineWidth = thickness;
-
-      if (blendAmt > 0.1) {
-        ctx.shadowColor = `rgba(${ar},${ag},${ab},${blendAmt * 0.4})`;
-        ctx.shadowBlur = blendAmt * 8;
-      } else {
-        ctx.shadowBlur = 0;
-      }
-
-      ctx.moveTo(x, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
-    }
-    ctx.shadowBlur = 0;
-
-    // ── SPAWN DENDRITES: on sustained energy ──
-    if (energy > 0.45 && f % 3 === 0) {
-      const numBranches = Math.floor(energy * 2.5) + (isNewBeat && isDownbeat ? 2 : 0);
-      for (let b = 0; b < numBranches; b++) {
-        const angle = (Math.random() - 0.5) * Math.PI * 0.7;
-        const speed = 1.5 + energy * 4;
-        const baseY = getTrunkY(px);
-        this.dendrites.push({
-          x: px, y: baseY,
-          vx: Math.cos(angle) * speed * (Math.random() > 0.5 ? 0.4 : -0.4),
-          vy: Math.sin(angle) * speed,
-          life: 1,
-          rgb: [ar, ag, ab],
-          thickness: 0.4 + energy * 1.2,
-          trail: [{ x: px, y: baseY }],
-        });
-      }
-    }
-
-    // ── SPAWN LIGHTNING BOLTS: on transient/bass hits ──
-    if (isNewBeat && hitStrength > 0.4 && (hitType === 'transient' || hitType === 'bass')) {
-      const baseY = getTrunkY(px);
-      const points = [{ x: px, y: baseY }];
-      let bx = px, by = baseY;
-      const dir = hitType === 'bass' ? 1 : (Math.random() > 0.5 ? -1 : 1);
-      const segments = 3 + Math.floor(hitStrength * 5);
-      for (let s = 0; s < segments; s++) {
-        bx += (Math.random() - 0.4) * 12;
-        by += dir * (4 + Math.random() * 12);
-        points.push({ x: bx, y: Math.max(2, Math.min(H - 2, by)) });
-      }
-      this.bolts.push({ points, life: 1, rgb: [ar, ag, ab] });
-
-      if (hitStrength > 0.7) {
-        const forkPoints = [{ x: px, y: baseY }];
-        let fx = px, fy = baseY;
-        const forkDir = -dir;
-        for (let s = 0; s < segments - 1; s++) {
-          fx += (Math.random() - 0.5) * 10;
-          fy += forkDir * (3 + Math.random() * 10);
-          forkPoints.push({ x: fx, y: Math.max(2, Math.min(H - 2, fy)) });
+      // Beat pulse: flash embers brighter on beat
+      if (isNewBeat && pulse > 0.4) {
+        ctx.beginPath();
+        ctx.moveTo(Math.max(0, px - 60), baseY);
+        for (let x = Math.max(0, px - 60); x <= px; x++) {
+          ctx.lineTo(x, baseY - getPeakH(x));
         }
-        this.bolts.push({ points: forkPoints, life: 0.85, rgb: [ar, ag, ab] });
-      }
-    }
-
-    // ── UPDATE & DRAW DENDRITES ──
-    this.dendrites = this.dendrites.filter(d => d.life > 0.05);
-    for (const d of this.dendrites) {
-      d.x += d.vx;
-      d.y += d.vy;
-      d.vx *= 0.95;
-      d.vy *= 0.95;
-      d.vy += (Math.random() - 0.5) * 0.7;
-      d.life -= 0.022;
-      d.trail.push({ x: d.x, y: d.y });
-      if (d.trail.length > 18) d.trail.shift();
-
-      if (d.trail.length > 1) {
-        ctx.beginPath();
-        ctx.moveTo(d.trail[0].x, d.trail[0].y);
-        for (let i = 1; i < d.trail.length; i++) ctx.lineTo(d.trail[i].x, d.trail[i].y);
-        ctx.strokeStyle = `rgba(${d.rgb[0]},${d.rgb[1]},${d.rgb[2]},${d.life * 0.45})`;
-        ctx.lineWidth = Math.max(0.2, d.thickness * d.life);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.fillStyle = `rgba(${d.rgb[0]},${d.rgb[1]},${d.rgb[2]},${d.life * 0.5})`;
-        ctx.arc(d.x, d.y, Math.max(0.1, d.thickness * d.life * 1.3), 0, Math.PI * 2);
+        ctx.lineTo(px, baseY);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(${Math.min(255, this.accent[0] + 40)},${Math.min(255, this.accent[1] + 20)},20,${pulse * 0.12})`;
         ctx.fill();
       }
     }
 
-    // ── UPDATE & DRAW BOLTS ──
-    this.bolts = this.bolts.filter(b => b.life > 0.03);
-    for (const b of this.bolts) {
-      b.life -= 0.045;
+    // ════════════════════════════════════════════════════
+    // BURN POINT (playhead) — crackling flame
+    // ════════════════════════════════════════════════════
+    {
+      const peakH = getPeakH(px);
+      const flameBase = baseY - peakH;
+      const flameH = 8 + energy * 18 + pulse * 8;
+      const flicker1 = Math.sin(this.flamePhase * 1.7) * 0.3;
+      const flicker2 = Math.sin(this.flamePhase * 2.9 + 1.3) * 0.2;
+      const flicker3 = Math.sin(this.flamePhase * 4.3 + 2.7) * 0.15;
+      const [ar, ag, ab] = this.accent;
 
-      ctx.beginPath();
-      ctx.moveTo(b.points[0].x, b.points[0].y);
-      for (let i = 1; i < b.points.length; i++) {
-        ctx.lineTo(
-          b.points[i].x + (Math.random() - 0.5) * 2.5 * b.life,
-          b.points[i].y,
+      // Outer flame glow (large soft)
+      const outerGlow = ctx.createRadialGradient(
+        px, flameBase - flameH * 0.3, 0,
+        px, flameBase - flameH * 0.3, flameH * 1.5 + 10,
+      );
+      outerGlow.addColorStop(0, `rgba(${Math.min(255, ar + 80)},${Math.max(70, ag)},${Math.max(10, Math.floor(ab * 0.35))},${0.25 + energy * 0.15})`);
+      outerGlow.addColorStop(0.5, `rgba(${Math.min(255, ar + 40)},${Math.floor(Math.max(60, ag * 0.5))},0,${0.1 + energy * 0.05})`);
+      outerGlow.addColorStop(1, 'rgba(255,30,0,0)');
+      ctx.fillStyle = outerGlow;
+      ctx.fillRect(px - flameH * 2, flameBase - flameH * 2, flameH * 4, flameH * 2.5);
+
+      // Flame tongues (3 overlapping bezier shapes)
+      for (let tongue = 0; tongue < 3; tongue++) {
+        const xOff = (tongue - 1) * (3 + energy * 3) + flicker1 * 4;
+        const hMult = tongue === 1 ? 1.0 : 0.65 + flicker2 * 0.2;
+        const tongueH = flameH * hMult;
+        const tongueW = 4 + energy * 4 + flicker3 * 2;
+
+        ctx.beginPath();
+        ctx.moveTo(px + xOff - tongueW / 2, flameBase);
+        ctx.quadraticCurveTo(
+          px + xOff - tongueW * 0.3 + flicker2 * 3,
+          flameBase - tongueH * 0.6,
+          px + xOff + flicker1 * 2,
+          flameBase - tongueH,
         );
+        ctx.quadraticCurveTo(
+          px + xOff + tongueW * 0.3 - flicker3 * 3,
+          flameBase - tongueH * 0.5,
+          px + xOff + tongueW / 2,
+          flameBase,
+        );
+        ctx.closePath();
+
+        const flameGrad = ctx.createLinearGradient(
+          px + xOff, flameBase,
+          px + xOff, flameBase - tongueH,
+        );
+        if (tongue === 1) {
+          flameGrad.addColorStop(0, 'rgba(255,220,150,0.9)');
+          flameGrad.addColorStop(0.2, `rgba(${Math.min(255, ar + 40)},${Math.min(255, ag + 30)},50,0.85)`);
+          flameGrad.addColorStop(0.5, `rgba(${Math.min(255, ar + 20)},${Math.max(90, ag)},20,0.7)`);
+          flameGrad.addColorStop(0.8, 'rgba(255,60,10,0.5)');
+          flameGrad.addColorStop(1, 'rgba(200,30,0,0.1)');
+        } else {
+          flameGrad.addColorStop(0, `rgba(${Math.min(255, ar + 10)},${Math.max(120, ag * 0.9)},40,0.7)`);
+          flameGrad.addColorStop(0.4, `rgba(${Math.min(255, ar + 20)},80,10,0.5)`);
+          flameGrad.addColorStop(1, 'rgba(180,20,0,0.05)');
+        }
+        ctx.fillStyle = flameGrad;
+        ctx.fill();
       }
-      ctx.strokeStyle = `rgba(${b.rgb[0]},${b.rgb[1]},${b.rgb[2]},${b.life * 0.65})`;
-      ctx.lineWidth = b.life * 2.5;
-      ctx.shadowColor = `rgba(${b.rgb[0]},${b.rgb[1]},${b.rgb[2]},${b.life})`;
-      ctx.shadowBlur = b.life * 12;
-      ctx.stroke();
+
+      const coreGlow = ctx.createRadialGradient(px, flameBase, 0, px, flameBase, 5 + energy * 3);
+      coreGlow.addColorStop(0, `rgba(255,255,230,${0.7 + pulse * 0.3})`);
+      coreGlow.addColorStop(0.5, `rgba(${Math.min(255, ar + 40)},${Math.min(255, ag + 20)},100,0.3)`);
+      coreGlow.addColorStop(1, `rgba(${Math.min(255, ar)},${Math.max(90, ag * 0.7)},20,0)`);
+      ctx.fillStyle = coreGlow;
+      ctx.beginPath();
+      ctx.arc(px, flameBase, 6 + energy * 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (hitStrength > 0.4) {
+        const flareR = 15 + hitStrength * 25;
+        const flareGrad = ctx.createRadialGradient(px, flameBase - flameH * 0.3, 0, px, flameBase - flameH * 0.3, flareR);
+        flareGrad.addColorStop(0, `rgba(255,255,200,${hitStrength * 0.5})`);
+        flareGrad.addColorStop(0.4, `rgba(${Math.min(255, ar + 50)},${Math.min(255, ag + 10)},30,${hitStrength * 0.3})`);
+        flareGrad.addColorStop(1, 'rgba(255,50,0,0)');
+        ctx.fillStyle = flareGrad;
+        ctx.fillRect(px - flareR, flameBase - flameH - flareR, flareR * 2, flareR * 2);
+      }
+    }
+
+    if (energy > 0.35 && f % 2 === 0) {
+      const numSparks = Math.floor(energy * 3) + (isNewBeat && isDownbeat ? 4 : 0)
+        + (hitStrength > 0.5 ? Math.floor(hitStrength * 6) : 0);
+      const spawnY = baseY - getPeakH(px);
+      for (let s = 0; s < numSparks; s++) {
+        this.sparks.push({
+          x: px + (Math.random() - 0.5) * 6,
+          y: spawnY - Math.random() * 8,
+          vx: (Math.random() - 0.5) * (3 + energy * 4),
+          vy: -(2 + Math.random() * (4 + hitStrength * 8)),
+          life: 1,
+          size: 0.5 + Math.random() * 2,
+          bright: 0.3 + Math.random() * 0.7,
+        });
+      }
+    }
+
+    this.sparks = this.sparks.filter(s => s.life > 0.02);
+    for (const s of this.sparks) {
+      s.x += s.vx;
+      s.y += s.vy;
+      s.vy += 0.18;
+      s.vx *= 0.98;
+      s.life -= 0.025;
+
+      const temp = s.life * s.bright;
+      const sr = 255;
+      const sg = Math.min(255, Math.floor(100 + 155 * temp));
+      const sb = Math.min(255, Math.floor(30 * temp));
+      const sa = s.life * 0.8;
 
       ctx.beginPath();
-      ctx.moveTo(b.points[0].x, b.points[0].y);
-      for (let i = 1; i < b.points.length; i++) ctx.lineTo(b.points[i].x, b.points[i].y);
-      ctx.strokeStyle = `rgba(255,255,255,${b.life * 0.4})`;
-      ctx.lineWidth = b.life * 0.8;
-      ctx.shadowBlur = 0;
-      ctx.stroke();
+      ctx.fillStyle = `rgba(${sr},${sg},${sb},${sa})`;
+      ctx.arc(s.x, s.y, Math.max(0.1, s.size * s.life), 0, Math.PI * 2);
+      ctx.fill();
+
+      if (s.bright > 0.6 && s.life > 0.3) {
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x - s.vx * 2, s.y - s.vy * 2);
+        ctx.strokeStyle = `rgba(255,${sg},0,${s.life * 0.3})`;
+        ctx.lineWidth = Math.max(0.1, s.size * s.life * 0.5);
+        ctx.stroke();
+      }
     }
-    ctx.shadowBlur = 0;
 
-    // ── PLAYHEAD ──
-    const phy = getTrunkY(px);
-    const isHit = hitStrength > 0.4;
-    ctx.beginPath();
-    ctx.fillStyle = isHit ? `rgba(${ar},${ag},${ab},1)` : '#fff';
-    ctx.shadowColor = isHit ? `rgba(${ar},${ag},${ab},0.7)` : 'rgba(255,255,255,0.5)';
-    ctx.shadowBlur = 5 + energy * 10;
-    ctx.arc(px, phy, Math.max(0.5, 2.5 + energy * 2), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    if (f % 4 === 0 && energy > 0.2) {
+      const numSmoke = 1 + (hitStrength > 0.3 ? 1 : 0);
+      const spawnY = baseY - getPeakH(px) - 10 - energy * 10;
+      for (let s = 0; s < numSmoke; s++) {
+        this.smokes.push({
+          x: px + (Math.random() - 0.5) * 8,
+          y: spawnY,
+          vx: (Math.random() - 0.5) * 0.8,
+          vy: -(0.5 + Math.random() * 1.2),
+          life: 1,
+          size: 2 + Math.random() * 3,
+          trail: [{ x: px + (Math.random() - 0.5) * 4, y: spawnY }],
+        });
+      }
+    }
 
-    // ── Cap to prevent runaway ──
-    if (this.dendrites.length > 60) this.dendrites = this.dendrites.slice(-60);
-    if (this.bolts.length > 12) this.bolts = this.bolts.slice(-12);
+    this.smokes = this.smokes.filter(s => s.life > 0.03);
+    for (const s of this.smokes) {
+      s.x += s.vx;
+      s.y += s.vy;
+      s.vx += (Math.random() - 0.5) * 0.15;
+      s.vy *= 0.99;
+      s.life -= 0.015;
+      s.size += 0.08;
+      s.trail.push({ x: s.x, y: s.y });
+      if (s.trail.length > 12) s.trail.shift();
+
+      for (let i = 0; i < s.trail.length; i++) {
+        const t = s.trail[i];
+        const age = i / s.trail.length;
+        const alpha = s.life * (0.06 + age * 0.06);
+        const sz = s.size * (0.4 + age * 0.6);
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(120,110,100,${alpha})`;
+        ctx.arc(t.x, t.y, Math.max(0.1, sz), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    if (this.sparks.length > 80) this.sparks = this.sparks.slice(-80);
+    if (this.smokes.length > 15) this.smokes = this.smokes.slice(-15);
   }
 
-  get canvas(): HTMLCanvasElement { return this.nlbCanvas; }
+  get canvas(): HTMLCanvasElement { return this.dwbCanvas; }
 }
 
 // ═══ Hero Decomposition Particles ═══
@@ -1220,11 +1374,10 @@ export class LyricDancePlayer {
   private _barVisStyles: BarVisStyle[] = []; // per-chapter bar style from AI mood
   private lastSimFrame = -1;
   private _beatVisCanvas: HTMLCanvasElement | null = null; // separate from themed sims
-  // ═══ Lightning Bar (feature flag: window.__LYRIC_DANCE_LIGHTNING_BAR) ═══
-  private _globalLightningBar: NervousLightningBar | null = null;
-  public get lightningBarEnabled(): boolean {
-    return Boolean((window as any).__LYRIC_DANCE_LIGHTNING_BAR);
-  }
+  // ═══ Dynamite Wick Bar (feature flag: window.__LYRIC_DANCE_LIGHTNING_BAR) ═══
+  private _globalWickBar: DynamiteWickBar | null = null;
+  private _wickSeekOverlay: HTMLDivElement | null = null;
+  public wickBarEnabled = false;
   private chapterImages: HTMLImageElement[] = [];
   /** Pre-blurred versions of chapter images — eliminates per-frame ctx.filter blur() cost */
   private _preBlurredImages: HTMLCanvasElement[] = [];
@@ -1463,7 +1616,7 @@ export class LyricDancePlayer {
   // Compatibility with existing React shell
   async init(): Promise<void> {
     this.perfDebugEnabled = Boolean((window as Window & { __LYRIC_DANCE_DEBUG_PERF?: boolean }).__LYRIC_DANCE_DEBUG_PERF);
-    // lightningBarEnabled is now a live getter — no need to cache here
+    this.wickBarEnabled = Boolean((window as Window & { __LYRIC_DANCE_LIGHTNING_BAR?: boolean }).__LYRIC_DANCE_LIGHTNING_BAR);
     this._firstPaintMarked = false;
     this._fontLayoutReflowPending = false;
     performance.clearMarks("engine:start");
@@ -2021,7 +2174,7 @@ export class LyricDancePlayer {
         this._framePalette = this._resolveCurrentPalette(secIdx);
         if (this._framePalette?.[1]) {
           if (this._globalBeatVis) this._globalBeatVis.setAccent(this._framePalette[1]);
-          if (this._globalLightningBar) this._globalLightningBar.setAccent(this._framePalette[1]);
+          if (this._globalWickBar) this._globalWickBar.setAccent(this._framePalette[1]);
         }
       }
     }
@@ -2451,7 +2604,8 @@ export class LyricDancePlayer {
     this._zeroCanvas(this._bgSnapshot);
     this._bgSnapshot = null;
     this._globalBeatVis = null;
-    this._globalLightningBar = null;
+    this._unmountWickSeekOverlay();
+    this._globalWickBar = null;
     this._beatVisCanvas = null;
     this.emojiRisers = [];
     this._emojiSpawnQueue = [];
@@ -2673,7 +2827,7 @@ export class LyricDancePlayer {
           this._framePalette = this._resolveCurrentPalette(secIdx);
           if (this._framePalette?.[1]) {
             if (this._globalBeatVis) this._globalBeatVis.setAccent(this._framePalette[1]);
-            if (this._globalLightningBar) this._globalLightningBar.setAccent(this._framePalette[1]);
+            if (this._globalWickBar) this._globalWickBar.setAccent(this._framePalette[1]);
           }
         }
       }
@@ -3124,11 +3278,11 @@ export class LyricDancePlayer {
     } else {
       // At tier >= 2, skip expensive fire/water/aurora sims but still update beat visualizer
       // (beat vis is always drawn — it's a single cheap drawImage).
-      if (this.lightningBarEnabled && this._globalLightningBar) {
+      if (this.wickBarEnabled && this._globalWickBar) {
         const bs = this._lastBeatState;
         const songDuration = Math.max(0.01, this.songEndSec - this.songStartSec);
         const songProgress = Math.max(0, Math.min(1, (this.audio.currentTime - this.songStartSec) / songDuration));
-        this._globalLightningBar.update(
+        this._globalWickBar.update(
           bs?.energy ?? 0, bs?.pulse ?? 0, bs?.hitStrength ?? 0, bs?.phase ?? 0, bs?.beatIndex ?? 0,
           songProgress, bs?.hitType ?? 'none', bs?.brightness ?? 0.5, bs?.isDownbeat ?? false,
         );
@@ -3242,14 +3396,14 @@ export class LyricDancePlayer {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
-      const activeCnv = this.lightningBarEnabled && this._globalLightningBar
-        ? this._globalLightningBar.canvas
+      const activeCnv = this.wickBarEnabled && this._globalWickBar
+        ? this._globalWickBar.canvas
         : this._globalBeatVis?.canvas ?? null;
 
       if (activeCnv) {
-        if (this.lightningBarEnabled) {
-          // Lightning bar: taller strip (18%), smooth scaling, slightly higher base alpha
-          const visAlpha = Math.min(0.90, 0.40 + bsEnergy * 0.35 + bsPulse * 0.15);
+        if (this.wickBarEnabled) {
+          // Wick bar: 18% height, smooth, slightly higher base alpha for flame visibility
+          const visAlpha = Math.min(0.95, 0.50 + bsEnergy * 0.30 + bsPulse * 0.15);
           if (visAlpha > 0.01) {
             const visH = this.height * 0.18;
             const visTop = this.height - visH;
@@ -3259,7 +3413,7 @@ export class LyricDancePlayer {
             this.ctx.globalAlpha = 1;
           }
         } else {
-          // Original BeatVisSim: unchanged behavior
+          // Original BeatVisSim: unchanged
           const visAlpha = Math.min(0.85, 0.30 + bsEnergy * 0.40 + bsPulse * 0.15);
           if (visAlpha > 0.01) {
             const visH = this.height * 0.28;
@@ -4788,13 +4942,15 @@ export class LyricDancePlayer {
       if (!this._globalBeatVis) {
         this._globalBeatVis = new BeatVisSim(accentColor);
       }
-      if (!this._globalLightningBar) {
-        this._globalLightningBar = new NervousLightningBar(accentColor);
-        // Feed pre-computed waveform if available from audio analysis
+      if (!this._globalWickBar) {
+        this._globalWickBar = new DynamiteWickBar(accentColor);
         const analysisRef = (this.conductor as any)?._analysis as import('@/engine/audioAnalyzer').AudioAnalysis | null;
         if (analysisRef?.beatEnergies) {
-          this._globalLightningBar.setWaveformPreview(analysisRef.beatEnergies);
+          this._globalWickBar.setWaveformPreview(analysisRef.beatEnergies);
         }
+      }
+      if (this.wickBarEnabled && !this._wickSeekOverlay) {
+        this._mountWickSeekOverlay();
       }
 
       this.chapterSims = chapters.map(() => ({}));
@@ -4811,6 +4967,84 @@ export class LyricDancePlayer {
     }
   }
 
+  /**
+   * Transparent seek overlay positioned at bottom 18% of the container.
+   * Click/drag → converts X to song time → seek().
+   */
+  private _mountWickSeekOverlay(): void {
+    if (this._wickSeekOverlay || !this.wickBarEnabled) return;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 18%;
+      z-index: 20;
+      cursor: pointer;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    `;
+
+    let dragging = false;
+    let wasPlaying = false;
+
+    const seekFromEvent = (clientX: number) => {
+      const rect = overlay.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const timeSec = this.songStartSec + ratio * (this.songEndSec - this.songStartSec);
+      this.seek(timeSec);
+    };
+
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      wasPlaying = !this.audio.paused;
+      this.pause();
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      seekFromEvent(clientX);
+    };
+
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (!dragging) return;
+      e.preventDefault();
+      const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+      seekFromEvent(clientX);
+    };
+
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      if (wasPlaying) this.play();
+    };
+
+    overlay.addEventListener('mousedown', onDown);
+    overlay.addEventListener('touchstart', onDown, { passive: false });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+
+    (overlay as any).__dwb_cleanup = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+    };
+
+    this.container.style.position = this.container.style.position || 'relative';
+    this.container.appendChild(overlay);
+    this._wickSeekOverlay = overlay;
+  }
+
+  private _unmountWickSeekOverlay(): void {
+    if (!this._wickSeekOverlay) return;
+    (this._wickSeekOverlay as any).__dwb_cleanup?.();
+    this._wickSeekOverlay.remove();
+    this._wickSeekOverlay = null;
+  }
+
   private updateSims(_tSec: number, _frame: ScaledKeyframe): void {
     try {
       const tSec = this.currentTSec;
@@ -4820,11 +5054,11 @@ export class LyricDancePlayer {
       const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
       const chapterIdx = this._frameSectionIdx >= 0 ? Math.min(this._frameSectionIdx, chapters.length - 1) : chapters.length - 1;
       const ci = Math.max(0, chapterIdx);
-      if (this.lightningBarEnabled && this._globalLightningBar) {
+      if (this.wickBarEnabled && this._globalWickBar) {
         const bs = this._lastBeatState;
         const songDuration = Math.max(0.01, this.songEndSec - this.songStartSec);
         const songProgress = Math.max(0, Math.min(1, (this.audio.currentTime - this.songStartSec) / songDuration));
-        this._globalLightningBar.update(
+        this._globalWickBar.update(
           bs?.energy ?? 0,
           bs?.pulse ?? 0,
           bs?.hitStrength ?? 0,
