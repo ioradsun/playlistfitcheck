@@ -3339,6 +3339,20 @@ export class LyricDancePlayer {
         const shrinkRatioW = tooWide ? (availW / (b.halfW * 2)) : 1;
         const shrinkRatioH = tooTall ? (availH / (b.halfH * 2)) : 1;
         const shrinkRatio = Math.min(shrinkRatioW, shrinkRatioH);
+        // ═══ TEMPORARY DEBUG ═══
+        if (shrinkRatio < 0.95) {
+          console.warn('[SHRINK]', {
+            text: b.text,
+            oldFS: b.fontSize,
+            newFS: Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio)),
+            ratio: Math.round(shrinkRatio * 100) / 100,
+            halfW: Math.round(b.halfW),
+            halfH: Math.round(b.halfH),
+            availW: Math.round(availW),
+            availH: Math.round(availH),
+            scaleX: Math.round(b.scaleX * 100) / 100,
+          });
+        }
         b.fontSize = Math.max(b.minFont, Math.floor(b.fontSize * shrinkRatio));
         const newFontStr = `${b.weight} ${b.fontSize}px ${b.family}`;
         const metrics2 = this.getCachedMetrics(b.text, newFontStr);
