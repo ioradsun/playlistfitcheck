@@ -2996,6 +2996,19 @@ export class LyricDancePlayer {
         this.ctx.lineJoin = 'round';
       }
 
+        // DIAGNOSTIC — remove after debugging
+      if (drawCalls < 2 && this.frameCount % 120 === 0) {
+        const t = this.ctx.getTransform();
+        console.log('[RENDER]', text, 
+          'font:', this.ctx.font,
+          'transform: a=', t.a.toFixed(2), 'b=', t.b.toFixed(2), 'c=', t.c.toFixed(2), 'd=', t.d.toFixed(2), 'e=', t.e.toFixed(1), 'f=', t.f.toFixed(1),
+          'canvas:', this.canvas.width, '×', this.canvas.height,
+          'css:', this.canvas.style.width, '×', this.canvas.style.height,
+          'logical:', this.width, '×', this.height,
+          'dpr:', this.dpr, 'eDpr:', this._effectiveDpr,
+        );
+      }
+
         // Main text draw
       if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
       this.ctx.fillText(text, 0, 0);
