@@ -77,20 +77,20 @@ interface PhraseTreatment {
 }
 
 const TREATMENT_TABLE: Record<string, PhraseTreatment> = {
-  raw:         { tier: 'restrained', entry: 'rise',        exit: 'dissolve',    behavior: 'none',    entryDuration: 0.3,  exitDuration: 0.25, elementalEnabled: false, glowMode: 'hero-only', glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.3, particleSpeed: 0.3, beatBarStyle: 'light', vignetteStrength: 0.5,  heroDecompEnabled: false, spectacleCost: 0.05 },
-  vulnerable:  { tier: 'restrained', entry: 'breathe-in',  exit: 'exhale',      behavior: 'none',    entryDuration: 0.35, exitDuration: 0.3,  elementalEnabled: false, glowMode: 'hero-only', glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.3, particleSpeed: 0.2, beatBarStyle: 'smoke', vignetteStrength: 0.6,  heroDecompEnabled: false, spectacleCost: 0.05 },
-  melancholy:  { tier: 'restrained', entry: 'drift-in',    exit: 'sink',        behavior: 'none',    entryDuration: 0.4,  exitDuration: 0.35, elementalEnabled: false, glowMode: 'hero-only', glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.4, particleSpeed: 0.3, beatBarStyle: 'smoke', vignetteStrength: 0.7,  heroDecompEnabled: false, spectacleCost: 0.05 },
-  intimate:    { tier: 'restrained', entry: 'whisper',     exit: 'evaporate',   behavior: 'none',    entryDuration: 0.4,  exitDuration: 0.4,  elementalEnabled: false, glowMode: 'hero-only', glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.2, particleSpeed: 0.15, beatBarStyle: 'light', vignetteStrength: 0.8,  heroDecompEnabled: false, spectacleCost: 0.05 },
-  nostalgic:   { tier: 'restrained', entry: 'materialize', exit: 'dissolve',    behavior: 'none',    entryDuration: 0.35, exitDuration: 0.35, elementalEnabled: false, glowMode: 'hero-only', glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.4, particleSpeed: 0.25, beatBarStyle: 'smoke', vignetteStrength: 0.6,  heroDecompEnabled: false, spectacleCost: 0.05 },
-  aggressive:  { tier: 'dynamic',    entry: 'slam-down',   exit: 'burn-out',    behavior: 'pulse',   entryDuration: 0.18, exitDuration: 0.2,  elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 10, cameraIntensity: 0.6, particleDensity: 0.7, particleSpeed: 0.8, beatBarStyle: 'flame', vignetteStrength: 0.4,  heroDecompEnabled: false, spectacleCost: 0.15 },
-  defiant:     { tier: 'dynamic',    entry: 'punch-in',    exit: 'punch-out',   behavior: 'pulse',   entryDuration: 0.15, exitDuration: 0.18, elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 10, cameraIntensity: 0.5, particleDensity: 0.6, particleSpeed: 0.7, beatBarStyle: 'flame', vignetteStrength: 0.3,  heroDecompEnabled: false, spectacleCost: 0.15 },
-  eerie:       { tier: 'dynamic',    entry: 'surface',     exit: 'vanish',      behavior: 'flicker', entryDuration: 0.3,  exitDuration: 0.25, elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 8,  cameraIntensity: 0.3, particleDensity: 0.5, particleSpeed: 0.4, beatBarStyle: 'smoke', vignetteStrength: 0.7,  heroDecompEnabled: false, spectacleCost: 0.10 },
-  hypnotic:    { tier: 'dynamic',    entry: 'materialize', exit: 'dissolve',    behavior: 'float',   entryDuration: 0.3,  exitDuration: 0.3,  elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.6, particleSpeed: 0.5, beatBarStyle: 'neon',  vignetteStrength: 0.5,  heroDecompEnabled: false, spectacleCost: 0.10 },
-  hopeful:     { tier: 'dynamic',    entry: 'rise',        exit: 'drift-up',    behavior: 'grow',    entryDuration: 0.25, exitDuration: 0.25, elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.6, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.3,  heroDecompEnabled: false, spectacleCost: 0.10 },
-  euphoric:    { tier: 'cinematic',  entry: 'explode-in',  exit: 'shatter',     behavior: 'float',   entryDuration: 0.2,  exitDuration: 0.2,  elementalEnabled: true,  glowMode: 'selective', glowCap: 16, cameraIntensity: 0.9, particleDensity: 1.0, particleSpeed: 1.0, beatBarStyle: 'flame', vignetteStrength: 0.2,  heroDecompEnabled: true,  spectacleCost: 0.30 },
-  dreamy:      { tier: 'cinematic',  entry: 'bloom',       exit: 'soar',        behavior: 'grow',    entryDuration: 0.3,  exitDuration: 0.3,  elementalEnabled: true,  glowMode: 'selective', glowCap: 14, cameraIntensity: 0.5, particleDensity: 0.8, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.3,  heroDecompEnabled: true,  spectacleCost: 0.20 },
-  triumphant:  { tier: 'cinematic',  entry: 'focus-in',    exit: 'scatter-fly', behavior: 'pulse',   entryDuration: 0.2,  exitDuration: 0.25, elementalEnabled: true,  glowMode: 'selective', glowCap: 16, cameraIntensity: 0.8, particleDensity: 1.0, particleSpeed: 1.2, beatBarStyle: 'flame', vignetteStrength: 0.15, heroDecompEnabled: true,  spectacleCost: 0.30 },
-  anthemic:    { tier: 'cinematic',  entry: 'slam-down',   exit: 'cascade-up',  behavior: 'pulse',   entryDuration: 0.18, exitDuration: 0.22, elementalEnabled: true,  glowMode: 'selective', glowCap: 14, cameraIntensity: 0.7, particleDensity: 0.9, particleSpeed: 1.0, beatBarStyle: 'flame', vignetteStrength: 0.2,  heroDecompEnabled: true,  spectacleCost: 0.25 },
+  raw:         { tier: 'restrained', entry: 'rise',        exit: 'dissolve',    behavior: 'none',    entryDuration: 0.3,  exitDuration: 0.25, elementalEnabled: false, glowMode: 'hero-only', glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.5, particleSpeed: 0.4, beatBarStyle: 'light', vignetteStrength: 0.5,  heroDecompEnabled: false, spectacleCost: 0.05 },
+  vulnerable:  { tier: 'restrained', entry: 'breathe-in',  exit: 'exhale',      behavior: 'none',    entryDuration: 0.35, exitDuration: 0.3,  elementalEnabled: false, glowMode: 'hero-only', glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.5, particleSpeed: 0.35, beatBarStyle: 'smoke', vignetteStrength: 0.6,  heroDecompEnabled: false, spectacleCost: 0.05 },
+  melancholy:  { tier: 'restrained', entry: 'drift-in',    exit: 'sink',        behavior: 'none',    entryDuration: 0.4,  exitDuration: 0.35, elementalEnabled: false, glowMode: 'hero-only', glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.6, particleSpeed: 0.4, beatBarStyle: 'smoke', vignetteStrength: 0.7,  heroDecompEnabled: false, spectacleCost: 0.05 },
+  intimate:    { tier: 'restrained', entry: 'whisper',     exit: 'evaporate',   behavior: 'none',    entryDuration: 0.4,  exitDuration: 0.4,  elementalEnabled: false, glowMode: 'hero-only', glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.5, particleSpeed: 0.3, beatBarStyle: 'light', vignetteStrength: 0.8,  heroDecompEnabled: false, spectacleCost: 0.05 },
+  nostalgic:   { tier: 'restrained', entry: 'materialize', exit: 'dissolve',    behavior: 'none',    entryDuration: 0.35, exitDuration: 0.35, elementalEnabled: false, glowMode: 'hero-only', glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.6, particleSpeed: 0.35, beatBarStyle: 'smoke', vignetteStrength: 0.6,  heroDecompEnabled: false, spectacleCost: 0.05 },
+  aggressive:  { tier: 'dynamic',    entry: 'slam-down',   exit: 'burn-out',    behavior: 'pulse',   entryDuration: 0.18, exitDuration: 0.2,  elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 10, cameraIntensity: 0.6, particleDensity: 0.9, particleSpeed: 0.9, beatBarStyle: 'flame', vignetteStrength: 0.4,  heroDecompEnabled: false, spectacleCost: 0.15 },
+  defiant:     { tier: 'dynamic',    entry: 'punch-in',    exit: 'punch-out',   behavior: 'pulse',   entryDuration: 0.15, exitDuration: 0.18, elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 10, cameraIntensity: 0.5, particleDensity: 0.8, particleSpeed: 0.8, beatBarStyle: 'flame', vignetteStrength: 0.3,  heroDecompEnabled: false, spectacleCost: 0.15 },
+  eerie:       { tier: 'dynamic',    entry: 'surface',     exit: 'vanish',      behavior: 'flicker', entryDuration: 0.3,  exitDuration: 0.25, elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 8,  cameraIntensity: 0.3, particleDensity: 0.7, particleSpeed: 0.5, beatBarStyle: 'smoke', vignetteStrength: 0.7,  heroDecompEnabled: false, spectacleCost: 0.10 },
+  hypnotic:    { tier: 'dynamic',    entry: 'materialize', exit: 'dissolve',    behavior: 'float',   entryDuration: 0.3,  exitDuration: 0.3,  elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.8, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.5,  heroDecompEnabled: false, spectacleCost: 0.10 },
+  hopeful:     { tier: 'dynamic',    entry: 'rise',        exit: 'drift-up',    behavior: 'grow',    entryDuration: 0.25, exitDuration: 0.25, elementalEnabled: true,  glowMode: 'emphasis',  glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.8, particleSpeed: 0.7, beatBarStyle: 'neon',  vignetteStrength: 0.3,  heroDecompEnabled: false, spectacleCost: 0.10 },
+  euphoric:    { tier: 'cinematic',  entry: 'explode-in',  exit: 'shatter',     behavior: 'float',   entryDuration: 0.2,  exitDuration: 0.2,  elementalEnabled: true,  glowMode: 'selective', glowCap: 16, cameraIntensity: 0.9, particleDensity: 1.3, particleSpeed: 1.1, beatBarStyle: 'flame', vignetteStrength: 0.2,  heroDecompEnabled: true,  spectacleCost: 0.30 },
+  dreamy:      { tier: 'cinematic',  entry: 'bloom',       exit: 'soar',        behavior: 'grow',    entryDuration: 0.3,  exitDuration: 0.3,  elementalEnabled: true,  glowMode: 'selective', glowCap: 14, cameraIntensity: 0.5, particleDensity: 1.1, particleSpeed: 0.7, beatBarStyle: 'neon',  vignetteStrength: 0.3,  heroDecompEnabled: true,  spectacleCost: 0.20 },
+  triumphant:  { tier: 'cinematic',  entry: 'focus-in',    exit: 'scatter-fly', behavior: 'pulse',   entryDuration: 0.2,  exitDuration: 0.25, elementalEnabled: true,  glowMode: 'selective', glowCap: 16, cameraIntensity: 0.8, particleDensity: 1.3, particleSpeed: 1.3, beatBarStyle: 'flame', vignetteStrength: 0.15, heroDecompEnabled: true,  spectacleCost: 0.30 },
+  anthemic:    { tier: 'cinematic',  entry: 'slam-down',   exit: 'cascade-up',  behavior: 'pulse',   entryDuration: 0.18, exitDuration: 0.22, elementalEnabled: true,  glowMode: 'selective', glowCap: 14, cameraIntensity: 0.7, particleDensity: 1.2, particleSpeed: 1.1, beatBarStyle: 'flame', vignetteStrength: 0.2,  heroDecompEnabled: true,  spectacleCost: 0.25 },
 };
 
 const DEFAULT_TREATMENT: PhraseTreatment = TREATMENT_TABLE.raw;
@@ -111,7 +111,7 @@ function getArcLevel(sectionIndex: number, totalSections: number, tier: string):
   return 'restrained';
 }
 
-const ARC_MULTIPLIER: Record<ArcLevel, number> = { restrained: 0.5, build: 0.7, payoff: 1.0, aftermath: 0.4 };
+const ARC_MULTIPLIER: Record<ArcLevel, number> = { restrained: 0.7, build: 0.85, payoff: 1.0, aftermath: 0.6 };
 
 interface TreatmentTransition {
   from: PhraseTreatment;
@@ -1126,7 +1126,7 @@ export class LyricDancePlayer {
     wordDirectivesMap: {},
     lineSettings: {},
     wordSettings: {},
-    particleConfig: { texture: 'dust', system: 'dust', density: 0.35, speed: 0.35 },
+    particleConfig: { texture: 'dust', system: 'dust', density: 0.8, speed: 0.5 },
   };
   
 
@@ -3049,8 +3049,8 @@ export class LyricDancePlayer {
       this.ambientParticleEngine?.setSystem(mapped);
       this.ambientParticleEngine?.setConfig({
         system: mapped,
-        density: this.resolvedState.particleConfig.density ?? 0.35,
-        speed: this.resolvedState.particleConfig.speed ?? 0.35,
+        density: this.resolvedState.particleConfig.density ?? 0.8,
+        speed: this.resolvedState.particleConfig.speed ?? 0.5,
         opacity: Math.min(0.7, LEGIBILITY.maxForegroundAlphaOverText / 0.12 * 0.7),
         beatReactive: mapped !== 'glare',
       });
