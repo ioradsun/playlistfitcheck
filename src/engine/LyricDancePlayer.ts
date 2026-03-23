@@ -1180,14 +1180,13 @@ export class LyricDancePlayer {
           this.conductor.setSectionMods(compiled.sectionMods);
         }
 
-        // ═══ V4: Load song structure into CameraRig ═══
-        // CameraRig pre-analyzes beatGrid + cinematic sections to build the song arc:
-        // energy profile per section, drop detection, anticipation timing.
-        this.cameraRig.loadSongData(
-          beatGridData as any,
-          this.data.cinematic_direction ?? null,
-        );
-        this.cameraRig.setBPM(this.conductor.beatsPerMinute);
+        // Camera reads Phase 6 motion identity + section mods (not AI labels)
+        if (compiled.songMotion) {
+          this.cameraRig.setSongIdentity(compiled.songMotion);
+        }
+        if (compiled.sectionMods) {
+          this.cameraRig.setSectionMods(compiled.sectionMods);
+        }
 
         // ═══ V2: Compute timing budgets ═══
         if (compiled.phraseGroups?.length > 0 && this.conductor) {
@@ -1602,6 +1601,14 @@ export class LyricDancePlayer {
         vocalActive,
         heroApproaching: upcoming?.isAnticipation ?? false,
       };
+      // Tell camera which section we're in (for amplitude scaling)
+      this.cameraRig.setSectionIndex(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0);
+
+      // Tell camera the current phrase's reading load (for motion suppression)
+      // Active group's motionBudget.damping — dense phrases lock the camera
+      const activeGroup = this._activeGroupIdx >= 0 ? this.compiledScene?.phraseGroups[this._activeGroupIdx] : null;
+      this.cameraRig.setPhraseDamping((activeGroup as any)?.motionBudget?.damping ?? 0);
+
       this.cameraRig.update(deltaMs, beatState, focus);
     }
 
@@ -2250,6 +2257,14 @@ export class LyricDancePlayer {
           vocalActive,
           heroApproaching: upcoming?.isAnticipation ?? false,
         };
+        // Tell camera which section we're in (for amplitude scaling)
+        this.cameraRig.setSectionIndex(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0);
+
+        // Tell camera the current phrase's reading load (for motion suppression)
+        // Active group's motionBudget.damping — dense phrases lock the camera
+        const activeGroup = this._activeGroupIdx >= 0 ? this.compiledScene?.phraseGroups[this._activeGroupIdx] : null;
+        this.cameraRig.setPhraseDamping((activeGroup as any)?.motionBudget?.damping ?? 0);
+
         this.cameraRig.update(deltaMs, beatState, focus);
       }
 
@@ -2554,12 +2569,8 @@ export class LyricDancePlayer {
     const conductorResponse = beatState ? this.conductor?.getSubsystemResponse(beatState, 2) ?? null : null;
     this._lastSubsystemResponse = conductorResponse;
     const currentTension = this.activeTension;
-    // ═══ Villeneuve's held breath: particles freeze during anticipation ═══
-    // CameraRig ramps anticipation 0→1 over 3-8 bars before section change.
-    // Particles mirror this: speed drops to 10% at full anticipation.
-    // On release (anticipation snaps to 0), particles resume at full speed.
-    // The environment holds its breath before the drop.
-    const anticipation = this.cameraRig?.anticipation ?? 0;
+    // V5: camera uses stillness + hold-after-move, not anticipation freeze.
+    const anticipation = 0;
     const breathFactor = 1 - anticipation * 0.9; // 1.0 at rest, 0.1 at full freeze
 
     if (conductorResponse) {
