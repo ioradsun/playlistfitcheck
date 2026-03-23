@@ -1646,13 +1646,11 @@ export class LyricDancePlayer {
     this._lastVisibleMidChunkId = '';
     this.cameraRig.setViewport(w, h);
 
-    // Keep compile-time layout in sync with meaningful viewport changes.
+    // ═══ RESPONSIVE: always recompile on resize ═══
+    // Layout is in viewport pixels — any size change needs recompile.
     if (this.payload && this.compiledScene) {
-      const isPortrait = h > w;
-      const widthDelta = Math.abs(w - prevCompiledW) / Math.max(1, prevCompiledW);
-      const heightDelta = Math.abs(h - prevCompiledH) / Math.max(1, prevCompiledH);
-      const crossedSizeThreshold = widthDelta >= 0.2 || heightDelta >= 0.2;
-      if (this._compiledWasPortrait !== isPortrait || crossedSizeThreshold) {
+      const sizeChanged = w !== prevCompiledW || h !== prevCompiledH;
+      if (sizeChanged) {
         this.compiledScene = compileScene(this.payload, { viewportWidth: w, viewportHeight: h });
         this._buildChunkCacheFromScene(this.compiledScene);
         this._markCompiledViewport(w, h);
@@ -3881,36 +3879,12 @@ export class LyricDancePlayer {
   }
 
   private _updateViewportScale(): void {
-    const sx = this.width / 960;
-    const sy = this.height / 540;
-    const baseScale = Math.min(sx, sy);
-    const isPortrait = this.height > this.width;
-    const isCompact = this.width < 250;
-
-    let fontScale: number;
-    if (isPortrait) {
-      fontScale = sx;
-      // On compact viewports, the scene compiler uses a height-aware portrait
-      // boost so reference fonts are large enough to survive the ~0.195 scale.
-      // Apply a small legibility floor so text never drops below ~10px.
-      if (isCompact) {
-        const legibilityFloor = 10 / Math.max(36, 72 * sx);
-        fontScale = Math.max(fontScale, legibilityFloor);
-      }
-    } else {
-      if (this.height >= 1080) {
-        fontScale = baseScale;
-      } else {
-        const deficit = (1080 - this.height) / 1080;
-        fontScale = Math.min(baseScale * (1 + deficit * 0.3), baseScale * 1.2);
-      }
-    }
-
-    fontScale = Math.min(fontScale, sx);
-
-    this._viewportSx = sx;
-    this._viewportSy = sy;
-    this._viewportFontScale = fontScale;
+    // ═══ RESPONSIVE: no reference space scaling ═══
+    // Positions and font sizes from compileScene are already in viewport pixels.
+    // sx/sy are kept as 1.0 for backward compat with any code that reads them.
+    this._viewportSx = 1.0;
+    this._viewportSy = 1.0;
+    this._viewportFontScale = 1.0;
   }
 
   private _getArcFunction(arcName: string): (p: number) => number {
@@ -4471,7 +4445,7 @@ export class LyricDancePlayer {
 
     const arcFn = this._getArcFunction(scene.emotionalArc);
     const intensity = Math.max(0, Math.min(1, arcFn(songProgress)));
-    const intensityScaleMult = 0.95 + intensity * 0.1;
+    const intensityScaleMult = 1.0;
 
     let driftX = Math.sin(tSec * 0.15) * 8 * sx;
     let driftY = Math.cos(tSec * 0.12) * 5 * sy;
@@ -4682,9 +4656,27 @@ export class LyricDancePlayer {
             : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
 
         // No previous/next/offscreen. No vocal wave alpha modulation.
-        // Active chunk words are at full brightness. Period.
-        let roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
-        let roleScale = 1.0;
+        let roleAlpha = 0.0;
+        let phraseDriftY = 0;
+        if (lineRole === 'current') {
+          const phraseDuration = Math.max(0.01, group.end - group.start);
+          const phraseAge = tSec - group.start;
+          const phraseRemaining = group.end - tSec;
+          const fadeInDuration = Math.min(0.25, phraseDuration * 0.15);
+          const fadeOutDuration = Math.min(0.20, phraseDuration * 0.12);
+
+          if (phraseAge < fadeInDuration) {
+            const fadeInT = Math.max(0, phraseAge / Math.max(0.001, fadeInDuration));
+            roleAlpha = Math.min(1, fadeInT);
+            phraseDriftY = (1 - fadeInT) * 12;
+          } else if (phraseRemaining < fadeOutDuration) {
+            const fadeOutT = 1 - (phraseRemaining / Math.max(0.001, fadeOutDuration));
+            roleAlpha = Math.max(0, phraseRemaining / Math.max(0.001, fadeOutDuration));
+            phraseDriftY = -fadeOutT * 8;
+          } else {
+            roleAlpha = 1.0;
+          }
+        }
 
         // Wave proximity still tracked for emphasis glow, but NOT for alpha
         let waveProximity = 0;
@@ -4715,8 +4707,8 @@ export class LyricDancePlayer {
 
         // SOLO hero: ≥500ms, alone center screen
         if (isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
-          heroOffsetX = 480 - word.layoutX; // center in reference space
-          heroOffsetY = 0;
+          heroOffsetX = (this.width / 2) - word.layoutX;
+          heroOffsetY = (this.height / 2) - word.layoutY;
           heroScaleMult = 1.5;
         }
 
@@ -4755,7 +4747,7 @@ export class LyricDancePlayer {
         const finalRotation = (entryState.rotation ?? 0) + (exitState.rotation ?? 0) + (behaviorState.rotation ?? 0);
         const isFrozen = usedBehavior === 'freeze' && (tSec - group.start) > 0.3;
 
-        const effectiveFontSize = word.baseFontSize * fontScale;
+        const effectiveFontSize = word.baseFontSize;
         const charW = word.isLetterChunk ? effectiveFontSize * 0.6 : 0;
         const wordSpan = charW * lt;
         const letterOffsetX = word.isLetterChunk ? (li * charW) - (wordSpan * 0.5) + (charW * 0.5) : 0;
@@ -4822,20 +4814,21 @@ export class LyricDancePlayer {
         chunk.id = word.id;
         chunk.text = word.text;
 
-        // Wave-driven scale: gentle breathe for inline words as vocal passes
-        let waveScale = 1.0;
-        if (!(isSoloHero && groupHasActiveSoloHero) && lineRole === 'current' && waveProximity > 0.01) {
-          waveScale = 1.0 + waveProximity * 0.06;
-        }
+        const waveScale = 1.0;
 
-        // Positions from fitTextToViewport are already centered in 960×540 reference space.
-        // word.layoutX is centered at ~480. word.layoutY is centered at ~270.
-        chunk.x = (word.layoutX + finalOffsetX + letterOffsetX + heroOffsetX + beatNudgeX) * sx;
-        chunk.y = (word.layoutY + finalOffsetY + heroOffsetY + beatNudgeY) * sy;
+        chunk.x = word.layoutX + finalOffsetX + letterOffsetX + heroOffsetX + beatNudgeX;
+        chunk.y = word.layoutY + finalOffsetY + heroOffsetY + beatNudgeY + phraseDriftY;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
-        chunk.scaleX = finalScaleX * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
-        chunk.scaleY = finalScaleY * intensityScaleMult * heroScaleMult * waveScale * roleScale * beatScaleMult;
+
+        const heroBoost = Math.min(0.5, Math.max(0, emp - 1) * 0.12);
+        const beatBoost = Math.max(0, beatScaleMult - 1.0);
+        const totalScale = Math.min(1.6, 1.0 + heroBoost + beatBoost);
+        const entryExitScaleX = finalScaleX * intensityScaleMult * waveScale;
+        const entryExitScaleY = finalScaleY * intensityScaleMult * waveScale;
+
+        chunk.scaleX = entryExitScaleX * totalScale;
+        chunk.scaleY = entryExitScaleY * totalScale;
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;

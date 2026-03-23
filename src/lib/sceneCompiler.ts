@@ -583,12 +583,14 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const vh = options?.viewportHeight ?? 540;
   const isPortrait = vh > vw;
 
-  // ═══ NEW LAYOUT: fitTextToViewport per group ═══
-  // All layout in 960×540 reference space. Player scales by sx/sy.
-  // Portrait-aware: pass more maxLines when viewport is portrait.
-  const REF_W = 960;
-  const REF_H = 540;
-  const layoutMaxLines = isPortrait ? 4 : 3;
+  // ═══ RESPONSIVE: compile in actual viewport dimensions ═══
+  // Positions and font sizes are FINAL pixel values — no scaling at render time.
+  // On resize, the scene recompiles with the new dimensions.
+  const REF_W = vw;
+  const REF_H = vh;
+  // fitTextToViewport auto-selects maxLines based on aspect ratio internally
+  // No override needed — let it use its default.
+  const layoutMaxLines = undefined;
 
   // Pre-compute layout for each group using fitTextToViewport
   const groupLayouts = new Map<string, { fontSize: number; positions: Array<{ x: number; y: number; width: number }> }>();
@@ -613,7 +615,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       baseTypography.fontFamily,
       baseTypography.fontWeight,
       {
-        maxLines: layoutMaxLines,
+        ...(layoutMaxLines !== undefined ? { maxLines: layoutMaxLines } : {}),
         textTransform: 'none', // already transformed above
         hasHeroWord: hasHero,
       },
