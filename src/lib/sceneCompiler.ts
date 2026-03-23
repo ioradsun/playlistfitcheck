@@ -645,6 +645,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       },
     );
 
+    console.log('[LAYOUT]', groupWords.join(' '), '→ fontSize:', layout.fontSize, 'positions:', layout.wordPositions.length, 'canvasW:', REF_W, 'canvasH:', REF_H);
+
     groupLayouts.set(key, {
       fontSize: layout.fontSize,
       positions: layout.wordPositions.map(wp => ({ x: wp.x, y: wp.y, width: wp.width })),
