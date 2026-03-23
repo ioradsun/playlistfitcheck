@@ -4544,14 +4544,10 @@ export class LyricDancePlayer {
           wordState = 'spoken';
         }
 
-        // ── Spotlight: active = accent color + full opacity, context = 30% ghost ──
-        let spotlightAlpha: number;
-        let useAccentColor = false;
-        switch (wordState) {
-          case 'active': spotlightAlpha = 1.0; useAccentColor = true; break;
-          case 'spoken': spotlightAlpha = 0.30; break;
-          case 'upcoming': spotlightAlpha = 0.30; break;
-        }
+        // ═══ PHRASE-LEVEL SPOTLIGHT: all words white, hero words accent ═══
+        // No per-word color switching — strobes at fast BPM.
+        // Phrase is the unit. All words full white. Hero words get section accent.
+        const spotlightAlpha = lineRole === 'current' ? 1.0 : 0.30;
 
         // ── Hero word detection ──
         const isHeroWord = word.isHeroWord === true;
@@ -4572,9 +4568,7 @@ export class LyricDancePlayer {
           heroScaleMult = 1.5;
         }
 
-        if (!isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
-          spotlightAlpha = 0; // hide non-hero words when solo hero is active
-        }
+        const soloHeroHidden = !isSoloHero && lineRole === 'current' && groupHasActiveSoloHero;
 
         // ── Emphasis-based inline scaling (non-solo hero words) ──
         if (!isSoloHero || !groupHasActiveSoloHero) {
@@ -4598,18 +4592,21 @@ export class LyricDancePlayer {
           ? Math.max(0, heroBeatResp.wordScale - 1.0) * 0.5  // 50% of hero-level beat response
           : 0;
 
-        // ── Hero words hold accent color longer after being spoken ──
-        if (isHeroWord && wordState === 'spoken') {
-          spotlightAlpha = Math.max(spotlightAlpha, 0.75);
-          useAccentColor = true; // hero stays in accent even after spoken
-        }
+        // Hero words hold at higher opacity after being spoken
+        // (spotlightAlpha is now phrase-level, so adjust finalAlpha directly for heroes)
 
         // ── Final alpha: phrase envelope × spotlight × role ──
         const roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
-        const finalAlpha = Math.min(
-          word.semanticAlphaMax,
-          phraseAlpha * spotlightAlpha * roleAlpha,
-        );
+        // Hero words hold brightness longer — 75% vs 30% for context
+        const heroHoldAlpha = (isHeroWord && lineRole === 'current' && tSec > (word.wordStart ?? group.start) + (word.wordDuration ?? 0))
+          ? 0.75
+          : spotlightAlpha;
+        const finalAlpha = soloHeroHidden
+          ? 0
+          : Math.min(
+              word.semanticAlphaMax,
+              phraseAlpha * heroHoldAlpha * roleAlpha,
+            );
 
         // ── Final scale: shared beat + hero boost ──
         const totalScale = Math.min(1.6, sharedBeatScale + heroBeatBoost);
@@ -4677,23 +4674,8 @@ export class LyricDancePlayer {
             } else {
               (chunk as any).textStroke = 'rgba(0,0,0,0.35)';
             }
-          } else if (useAccentColor) {
-            // ═══ ACTIVE WORD = ACCENT COLOR ═══
-            // The eye separates hue instantly. A gold word among gray words = zero processing time.
-            const pal = this._framePalette ?? [];
-            const rawAccent = pal[1] ?? '#FFD700';
-            chunk.color = rawAccent;
-            // Text stroke for readability against any background
-            const accentLum = this._hexLuminance(rawAccent);
-            if (accentLum > 0.5) {
-              (chunk as any).textStroke = 'rgba(0,0,0,0.45)';
-            } else if (accentLum < 0.15) {
-              (chunk as any).textStroke = 'rgba(255,255,255,0.2)';
-            } else {
-              (chunk as any).textStroke = 'rgba(0,0,0,0.3)';
-            }
           } else {
-            // Context words = base color at 30% opacity (handled by spotlightAlpha)
+            // All other words: base color (white on dark bg, dark on light bg)
             chunk.color = baseColor;
           }
         }
