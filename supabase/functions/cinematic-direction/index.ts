@@ -864,7 +864,8 @@ function fillPhraseGaps(
 }
 
 /**
- * Fill missing heroWords — pick the longest-duration word in the phrase.
+ * Validate existing heroWords against the phrase range, then fill missing
+ * heroWords with the longest-duration word in the phrase.
  * Every phrase needs a heroWord for accent color highlighting.
  */
 function fillMissingHeroWords(
@@ -872,25 +873,47 @@ function fillMissingHeroWords(
   words: Array<{ word: string; start: number; end: number }>,
 ): void {
   for (const phrase of phrases) {
-    if (phrase.heroWord) continue;
+    // Validate heroWord actually exists in this phrase's word range.
+    if (phrase.heroWord) {
+      const heroClean = phrase.heroWord.toLowerCase().replace(/[^a-z0-9]/g, "");
+      let found = false;
 
-    let longest = "";
-    let longestDur = 0;
+      for (
+        let i = phrase.wordRange[0];
+        i <= phrase.wordRange[1] && i < words.length;
+        i++
+      ) {
+        const wordClean = words[i].word.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (wordClean === heroClean) {
+          found = true;
+          break;
+        }
+      }
 
-    for (
-      let i = phrase.wordRange[0];
-      i <= phrase.wordRange[1] && i < words.length;
-      i++
-    ) {
-      const dur = words[i].end - words[i].start;
-      if (dur > longestDur) {
-        longestDur = dur;
-        longest = words[i].word;
+      if (!found) {
+        phrase.heroWord = undefined;
       }
     }
 
-    if (longest) {
-      phrase.heroWord = longest.toUpperCase().replace(/[^A-Z0-9'.,-]/g, "");
+    if (!phrase.heroWord) {
+      let longest = "";
+      let longestDur = 0;
+
+      for (
+        let i = phrase.wordRange[0];
+        i <= phrase.wordRange[1] && i < words.length;
+        i++
+      ) {
+        const dur = words[i].end - words[i].start;
+        if (dur > longestDur) {
+          longestDur = dur;
+          longest = words[i].word;
+        }
+      }
+
+      if (longest) {
+        phrase.heroWord = longest.toUpperCase().replace(/[^A-Z0-9'.,-]/g, "");
+      }
     }
   }
 }
