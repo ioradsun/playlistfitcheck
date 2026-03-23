@@ -323,7 +323,7 @@ export function LyricFitTab({
       .then(({ data }) => {
         if (data?.display_name) artistNameRef.current = data.display_name;
       });
-    artistNameReadyRef.current = p;
+    artistNameReadyRef.current = Promise.resolve(p);
   }, [user]);
 
   // Debounced scene resolution
