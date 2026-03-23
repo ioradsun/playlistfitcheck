@@ -634,6 +634,7 @@ export function LyricFitTab({
     (async () => {
       try {
         const { slugify } = await import("@/lib/slugify");
+        await artistNameReadyRef.current;
         const songSlugVal = slugify(lyricData.title || "untitled");
         const artistSlugVal = slugify(artistNameRef.current || "artist");
 
@@ -1132,6 +1133,7 @@ export function LyricFitTab({
           setFitProgress((prev) => Math.max(prev, 85));
 
           try {
+            await artistNameReadyRef.current;
             const songSlugVal = (await import("@/lib/slugify")).slugify(
               lyricData!.title || "untitled",
             );
