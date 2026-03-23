@@ -1660,7 +1660,7 @@ async function callScene(
   body: RequestBody,
 ): Promise<Record<string, any>> {
   const messages = [
-    { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
+    { role: "system", content: scenePrefix + sceneSystemPrompt },
     { role: "user", content: userMessage },
   ];
 
