@@ -4489,28 +4489,11 @@ export class LyricDancePlayer {
             ? 1.0 * (behaviorState.alpha ?? 1)
             : Math.max(0.1, entryState.alpha * (behaviorState.alpha ?? 1));
 
-        // No previous/next/offscreen. No vocal wave alpha modulation.
-        let roleAlpha = 0.0;
-        let phraseDriftY = 0;
-        if (lineRole === 'current') {
-          const phraseDuration = Math.max(0.01, group.end - group.start);
-          const phraseAge = tSec - group.start;
-          const phraseRemaining = group.end - tSec;
-          const fadeInDuration = Math.min(0.25, phraseDuration * 0.15);
-          const fadeOutDuration = Math.min(0.20, phraseDuration * 0.12);
-
-          if (phraseAge < fadeInDuration) {
-            const fadeInT = Math.max(0, phraseAge / Math.max(0.001, fadeInDuration));
-            roleAlpha = Math.min(1, fadeInT);
-            phraseDriftY = (1 - fadeInT) * 12;
-          } else if (phraseRemaining < fadeOutDuration) {
-            const fadeOutT = 1 - (phraseRemaining / Math.max(0.001, fadeOutDuration));
-            roleAlpha = Math.max(0, phraseRemaining / Math.max(0.001, fadeOutDuration));
-            phraseDriftY = -fadeOutT * 8;
-          } else {
-            roleAlpha = 1.0;
-          }
-        }
+        // ═══ SINGLE-GROUP MODEL: entry/exit animations handle visibility ═══
+        // No phrase crossfade — only one group is active at a time.
+        // Entry animation fades words in. Exit animation fades them out.
+        let roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
+        const phraseDriftY = 0;
 
         // Wave proximity still tracked for emphasis glow, but NOT for alpha
         let waveProximity = 0;
