@@ -12,6 +12,14 @@
  * - Every method is pure — same input, same output, no side effects.
  */
 
+import {
+  type PhraseMotionBudget,
+  type SectionMotionMod,
+  type SongMotionIdentity,
+  computeInterBeatSway,
+  HeroEventTracker,
+} from "@/engine/MotionIdentity";
+
 // ──────────────────────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────────────────────
@@ -88,6 +96,8 @@ export interface SubsystemResponse {
   wordGlow: number;
   /** Y offset nudge for words (px in compile space) */
   wordNudgeY: number;
+  /** X offset nudge for words (px in compile space) — inter-beat lateral sway */
+  wordNudgeX: number;
   /** Ken Burns zoom rate multiplier */
   bgZoomRate: number;
   /** Background sim intensity (fire heat, water disturbance, etc.) */
@@ -152,6 +162,9 @@ export class BeatConductor {
   private readonly beatEnergies: Float32Array;
   private _hitCursor = 0; // cursor for efficient sequential hit lookup
   private _analysis: import('@/engine/audioAnalyzer').AudioAnalysis | null = null;
+  private _songIdentity: SongMotionIdentity | null = null;
+  private _sectionMods: SectionMotionMod[] = [];
+  private _heroTracker = new HeroEventTracker();
 
   // Cursor for efficient sequential access (avoids full scan each frame)
   private _cursor = 0;
@@ -197,6 +210,18 @@ export class BeatConductor {
       this.hits.length = 0;
       this.hits.push(...analysis.hits);
     }
+  }
+
+  setSongIdentity(identity: SongMotionIdentity): void {
+    this._songIdentity = identity;
+  }
+
+  setSectionMods(mods: SectionMotionMod[]): void {
+    this._sectionMods = mods;
+  }
+
+  getHeroTracker(): HeroEventTracker {
+    return this._heroTracker;
   }
 
   // ─── Real-time query (called every frame) ───
@@ -382,48 +407,88 @@ export class BeatConductor {
   // ─── Subsystem response (translates raw pulse into per-system values) ───
 
   /**
-   * Convert a BeatState into concrete visual parameters for all subsystems.
-   * emphasisLevel (0-5) controls how much a word responds.
-   * isHero gets extra response on the same signal.
+   * Convert a BeatState into visual parameters using all 4 motion layers.
    *
-   * V2: hitStrength drives punch effects (zoom, shake, slam) separately from
-   * phase-based dance motion. This is the key distinction from V1.
+   * Layer 1: Song identity shapes HOW motion feels (per-song)
+   * Layer 2: Section mod scales amplitude (verse quiet, chorus loud)
+   * Layer 3: Phrase budget damps motion for readability (dense phrase = stable)
+   * Layer 4: Hero cooldown is tracked separately via HeroEventTracker
    */
-  getSubsystemResponse(state: BeatState, emphasisLevel: number = 1, isHero: boolean = false): SubsystemResponse {
+  getSubsystemResponse(
+    state: BeatState,
+    emphasisLevel: number = 1,
+    isHero: boolean = false,
+    sectionIndex: number = 0,
+    phraseBudget?: PhraseMotionBudget,
+  ): SubsystemResponse {
     const p = state.pulse;
     const s = state.strength;
-    const h = state.hitStrength; // V2: onset-detected hit impulse
-    const e = state.energy; // V2: continuous energy level
-    const downbeatBoost = state.isDownbeat ? 1.3 : 1.0;
+    const h = state.hitStrength;
+    const e = state.energy;
+    const b = state.brightness;
+    const phase = state.phase;
+    const downbeatBoost = state.isDownbeat ? 1.35 : 1.0;
 
-    // Emphasis scales the response — filler words barely react, hero words explode
+    const id = this._songIdentity;
+    const flow = id ? id.flowContinuity : 0.5;
+    const grav = id ? id.gravity : 0.5;
+    const latBias = id ? id.lateralBias : 0.35;
+    const yBias = 1 - latBias;
+
+    const secMod = this._sectionMods[sectionIndex];
+    const ampScale = secMod?.amplitudeScale ?? 1.0;
+    const effectiveFlow = Math.max(0, Math.min(1, flow + (secMod?.flowShift ?? 0)));
+
+    const damping = phraseBudget?.damping ?? 0;
+    const readabilityMult = 1 - damping * 0.7;
+
     const empMult = EMPHASIS_RESPONSE[Math.min(5, Math.max(0, emphasisLevel))];
     const heroMult = isHero ? 1.6 : 1.0;
-    const wordMult = empMult * heroMult;
+    const wordMult = empMult * heroMult * ampScale * readabilityMult;
 
-    // V2: Hit-specific multipliers (bass hits = more camera, transient hits = more text)
     const isBassHit = state.hitType === 'bass';
     const isTransientHit = state.hitType === 'transient';
-    const hitCameraBoost = isBassHit ? 1.5 : 1.0;
+    const isTonalHit = state.hitType === 'tonal';
     const hitTextBoost = isTransientHit ? 1.3 : 1.0;
+    const hitCameraBoost = isBassHit ? 1.5 : 1.0;
+
+    const heavyMod = b < 0.35 ? 1.3 : 1.0;
+    const lightMod = b > 0.65 ? 1.2 : 1.0;
+
+    let hitMod = h;
+    if (id && h > 0.01) {
+      if (id.hitSharpness > 0.7) hitMod = h * h;
+      else if (id.hitSharpness < 0.3) hitMod = Math.sqrt(h);
+    }
+
+    const sway = computeInterBeatSway(phase, effectiveFlow);
 
     return {
-      // Words: scale, glow, nudge — phase (dance) + hit (slam)
-      wordScale: 1.0 + p * s * 0.04 * wordMult * downbeatBoost + h * 0.08 * wordMult * hitTextBoost,
-      wordGlow: p * s * 0.25 * wordMult + h * 0.5 * wordMult,
-      wordNudgeY: -p * s * 2 * wordMult * downbeatBoost - h * 6 * wordMult,
+      wordScale: 1.0
+        + p * s * 0.06 * wordMult * downbeatBoost
+        + hitMod * 0.14 * wordMult * hitTextBoost
+        + e * 0.02 * wordMult,
 
-      // Backgrounds: zoom rate (from energy), sim intensity (from hits)
-      bgZoomRate: 0.5 + e * 1.5 * downbeatBoost,
-      bgSimIntensity: 0.3 + p * s * 0.4 + h * 0.6 * hitCameraBoost,
+      wordGlow:
+        p * s * 0.35 * wordMult
+        + hitMod * 0.6 * wordMult * (isTonalHit ? 1.8 : 1.0)
+        + e * 0.08 * wordMult,
 
-      // Particles: density from energy, speed spikes on hits
-      particleDensity: 0.4 + e * 0.4 + h * 0.3 * downbeatBoost,
-      particleSpeed: 0.3 + p * s * 0.3 + h * 0.7,
+      wordNudgeY:
+        -p * s * 5 * wordMult * downbeatBoost * yBias * heavyMod
+        - hitMod * (isBassHit ? 14 : 4) * wordMult * grav
+        + sway.y * e * 3 * wordMult * lightMod,
 
-      // Camera & atmosphere: hits drive shake, energy drives vignette
-      vignetteIntensity: 0.1 + e * 0.15 + h * 0.1 * downbeatBoost,
-      cameraShake: h * 4 * hitCameraBoost * (emphasisLevel >= 4 ? 1.5 : 0.5),
+      wordNudgeX:
+        sway.x * e * 3 * wordMult * latBias * lightMod
+        + (isTransientHit ? hitMod * 4 * wordMult * latBias : 0),
+
+      bgZoomRate: 0.3 + e * 2.0 * downbeatBoost * ampScale,
+      bgSimIntensity: 0.2 + p * s * 0.5 + hitMod * 0.7 * hitCameraBoost,
+      particleDensity: 0.3 + e * 0.5 * ampScale + hitMod * 0.3 * downbeatBoost,
+      particleSpeed: 0.2 + p * s * 0.4 + hitMod * 0.8,
+      vignetteIntensity: 0.05 + e * 0.2 * ampScale + hitMod * 0.15 * downbeatBoost,
+      cameraShake: hitMod * (isBassHit ? 6 : 2.5) * grav * (emphasisLevel >= 4 ? 1.5 : 0.6),
     };
   }
 

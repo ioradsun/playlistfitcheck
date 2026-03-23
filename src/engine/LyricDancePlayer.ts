@@ -1472,6 +1472,13 @@ export class LyricDancePlayer {
           this.conductor.setAnalysis((beatGridData as any)._analysis);
         }
         
+        if (compiled.songMotion) {
+          this.conductor.setSongIdentity(compiled.songMotion);
+        }
+        if (compiled.sectionMods) {
+          this.conductor.setSectionMods(compiled.sectionMods);
+        }
+
         // ═══ V4: Load song structure into CameraRig ═══
         // CameraRig pre-analyzes beatGrid + cinematic sections to build the song arc:
         // energy profile per section, drop detection, anticipation timing.
@@ -4983,8 +4990,9 @@ export class LyricDancePlayer {
     const _beatResponsesHero: SR[] = []; // isHero=true → 1.6× on all word values
     if (beatState && this.conductor) {
       for (let eLevel = 0; eLevel <= 5; eLevel++) {
-        _beatResponses[eLevel] = this.conductor.getSubsystemResponse(beatState, eLevel, false);
-        _beatResponsesHero[eLevel] = this.conductor.getSubsystemResponse(beatState, eLevel, true);
+        const secIdx = this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0;
+        _beatResponses[eLevel] = this.conductor.getSubsystemResponse(beatState, eLevel, false, secIdx);
+        _beatResponsesHero[eLevel] = this.conductor.getSubsystemResponse(beatState, eLevel, true, secIdx);
       }
     }
     const _hasBeatResponses = _beatResponses.length > 0;
@@ -5132,6 +5140,14 @@ export class LyricDancePlayer {
           heroScaleMult = emphasisScale;
         }
 
+        if (isHeroWord && heroScaleMult > 1.2 && this.conductor) {
+          const cooldown = this.conductor.getHeroTracker().getCooldownMultiplier(tSec);
+          heroScaleMult = 1 + (heroScaleMult - 1) * cooldown;
+          if (cooldown >= 0.8) {
+            this.conductor.getHeroTracker().recordHeroEvent(tSec, emp);
+          }
+        }
+
         finalAlpha = Math.min(word.semanticAlphaMax, animAlpha * roleAlpha);
 
 
@@ -5169,13 +5185,23 @@ export class LyricDancePlayer {
         let wordGlow = 0;
         let beatScaleMult = 1.0;
         let beatNudgeY = 0;
+        let beatNudgeX = beatResp?.wordNudgeX ?? 0;
 
         if (lineRole === 'current') {
-          if (beatResp) {
+          const phraseBudget = group.motionBudget;
+          if (phraseBudget && this.conductor && beatState) {
+            const secIdx = this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0;
+            const pBeatResp = this.conductor.getSubsystemResponse(beatState, emp, isHeroWord, secIdx, phraseBudget);
+            beatScaleMult = pBeatResp.wordScale;
+            beatNudgeY = pBeatResp.wordNudgeY;
+            beatNudgeX = pBeatResp.wordNudgeX ?? 0;
+            wordGlow = Math.min(1, 0.5 + pBeatResp.wordGlow * 0.8);
+          } else if (beatResp) {
             // All active words scale and nudge to the beat — emphasis level controls how much.
             // Hero words (isHero=true) already got 1.6x multiplier inside getSubsystemResponse.
             beatScaleMult = beatResp.wordScale;
             beatNudgeY = beatResp.wordNudgeY;
+            beatNudgeX = beatResp.wordNudgeX ?? 0;
 
             // Glow: currently-spoken anchor glows brightest, then hero words, then rest.
             if (isAnchor) {
@@ -5206,7 +5232,7 @@ export class LyricDancePlayer {
 
         // Positions from fitTextToViewport are already centered in 960×540 reference space.
         // word.layoutX is centered at ~480. word.layoutY is centered at ~270.
-        chunk.x = (word.layoutX + finalOffsetX + letterOffsetX + heroOffsetX) * sx;
+        chunk.x = (word.layoutX + finalOffsetX + letterOffsetX + heroOffsetX + beatNudgeX) * sx;
         chunk.y = (word.layoutY + finalOffsetY + heroOffsetY + beatNudgeY) * sy;
         chunk.fontSize = effectiveFontSize;
         chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
