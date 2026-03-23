@@ -53,6 +53,7 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useVoteGate } from "@/hooks/useVoteGate";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
+import { preloadImage } from "@/lib/imagePreloadCache";
 
 const PEAK_SAMPLES = 200;
 
@@ -1255,6 +1256,9 @@ export function FitTab({
       if (error) throw error;
       const urls: (string | null)[] =
         result?.urls || result?.section_images || [];
+      for (const url of urls) {
+        if (url) void preloadImage(url);
+      }
       const doneCount = urls.filter(Boolean).length;
       const allComplete =
         result?.success === true ||

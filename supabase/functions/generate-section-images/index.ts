@@ -132,7 +132,7 @@ function buildImagePrompt(
 
   // Base quality — no longer forcing "ultra dark" on every image
   parts.push(
-    "wide cinematic shot, no people, no text, no faces, photorealistic, film grain, 4k",
+    "wide cinematic shot, no people, no text, no faces, photorealistic, film grain, 1920x1080 landscape aspect ratio, 16:9",
   );
 
   const prompt = parts.join(", ");
@@ -239,6 +239,7 @@ async function uploadBase64ToStorage(
     .upload(path, bytes, {
       contentType: mimeType,
       upsert: true,
+      cacheControl: '31536000', // 1 year — images are immutable (cache-busted by timestamp in filename)
     });
 
   if (error) {

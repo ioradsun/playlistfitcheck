@@ -958,6 +958,21 @@ function validate(
     }
   }
 
+  if (sectionCount > 0 && v.sections.length !== sectionCount) {
+    while (v.sections.length < sectionCount) {
+      const lastIdx = v.sections.length;
+      v.sections.push({
+        sectionIndex: lastIdx,
+        description: `Cinematic scene for section ${lastIdx + 1}`,
+        visualMood: "intimate",
+        dominantColor: ["#C9A96E", "#4FA4D4", "#D4618C", "#228844", "#B088F9", "#E8632B", "#FFD700", "#00BFA5"][lastIdx % 8],
+      });
+    }
+    if (v.sections.length > sectionCount) {
+      v.sections = v.sections.slice(0, sectionCount);
+    }
+  }
+
   // Phrases
   if (!Array.isArray(v.phrases)) {
     v.phrases = [];
@@ -1192,6 +1207,21 @@ function validateScene(
       delete s.atmosphere;
       delete s.typography;
       delete s.structuralLabel;
+    }
+  }
+
+  if (sectionCount > 0 && v.sections.length !== sectionCount) {
+    while (v.sections.length < sectionCount) {
+      const lastIdx = v.sections.length;
+      v.sections.push({
+        sectionIndex: lastIdx,
+        description: `Cinematic scene for section ${lastIdx + 1}`,
+        visualMood: "intimate",
+        dominantColor: ["#C9A96E", "#4FA4D4", "#D4618C", "#228844", "#B088F9", "#E8632B", "#FFD700", "#00BFA5"][lastIdx % 8],
+      });
+    }
+    if (v.sections.length > sectionCount) {
+      v.sections = v.sections.slice(0, sectionCount);
     }
   }
 
