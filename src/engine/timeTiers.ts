@@ -21,9 +21,11 @@ export function getEffectTier(durationMs: number): EffectTier {
   return 'sustained';
 }
 
-/** Can this tier show elemental particle effects? */
+/** Can this tier show elemental particle effects?
+ *  Lowered to 'quick' (≥140ms) — with phrase-level motion model,
+ *  only the active word is prominent so visual budget is available. */
 export function canShowElemental(tier: EffectTier): boolean {
-  return tier === 'normal' || tier === 'held' || tier === 'sustained';
+  return tier === 'quick' || tier === 'normal' || tier === 'held' || tier === 'sustained';
 }
 
 /** Can this tier show hero glow (shadow blur)? */

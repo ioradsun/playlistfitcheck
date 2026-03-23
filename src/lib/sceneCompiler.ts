@@ -208,11 +208,31 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
       lineMap.get(wm.lineIndex)!.push(wm);
     }
 
+    // Pre-compute global offset per line — AI sometimes returns global indices
+    const lineGlobalOffsets = new Map<number, number>();
+    {
+      let offset = 0;
+      const sortedLines = [...lineMap.entries()].sort((a, b) => a[0] - b[0]);
+      for (const [li, words] of sortedLines) {
+        lineGlobalOffsets.set(li, offset);
+        offset += words.length;
+      }
+    }
+
     for (const phrase of aiPhrases) {
       const lineWords = lineMap.get(phrase.lineIndex);
       if (!lineWords || lineWords.length === 0) continue;
 
-      const [startIdx, endIdx] = phrase.wordRange;
+      let [startIdx, endIdx] = phrase.wordRange;
+
+      // ═══ FIX: detect global indices and convert to per-line ═══
+      // If startIdx >= lineWords.length, AI used global indexing
+      if (startIdx >= lineWords.length) {
+        const globalOffset = lineGlobalOffsets.get(phrase.lineIndex) ?? 0;
+        startIdx -= globalOffset;
+        endIdx -= globalOffset;
+      }
+
       // Clamp indices to valid range
       const safeStart = Math.max(0, Math.min(startIdx, lineWords.length - 1));
       const safeEnd = Math.max(safeStart, Math.min(endIdx, lineWords.length - 1));
