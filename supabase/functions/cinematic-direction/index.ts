@@ -1790,6 +1790,7 @@ async function callWords(
   sceneDirection: Record<string, any>,
   words?: Array<{ word: string; start: number; end: number }>,
   bpm?: number,
+  wordSystemPrompt: string = WORD_DIRECTION_PROMPT,
 ): Promise<Record<string, any>> {
   const wordMessage = buildWordUserMessage(
     title,
