@@ -5,6 +5,15 @@ import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { FrameRenderState } from "@/engine/presetDerivation";
 import { getSemanticOverride } from "@/engine/SemanticAnimMapper";
 import { fitTextToViewport, type MeasureContext } from "@/engine/textLayout";
+import {
+  deriveAllSectionMods,
+  derivePhraseMotionBudget,
+  deriveSongMotionIdentity,
+  type PhraseMotionBudget,
+  type SectionMotionMod,
+  type SongMotionIdentity,
+} from "@/engine/MotionIdentity";
+import { getEffectTier } from "@/engine/timeTiers";
 
 export type LineBeatMap = {
   lineIndex: number;
@@ -387,13 +396,44 @@ export function computeBehaviorState(style: BehaviorStyle, tSec: number, wordSta
   }
 }
 
+function phraseAnimDurations(wordCount: number, durationMs: number): { entryDuration: number; exitDuration: number; linger: number; stagger: number } {
+  const tier = getEffectTier(durationMs);
+  const density = wordCount / Math.max(0.25, durationMs / 1000);
+  const tierBase = {
+    flash: { entryDuration: 0.08, exitDuration: 0.07, linger: 0.04, stagger: 0.018 },
+    quick: { entryDuration: 0.11, exitDuration: 0.09, linger: 0.07, stagger: 0.022 },
+    normal: { entryDuration: 0.16, exitDuration: 0.12, linger: 0.12, stagger: 0.028 },
+    held: { entryDuration: 0.2, exitDuration: 0.16, linger: 0.18, stagger: 0.034 },
+    sustained: { entryDuration: 0.26, exitDuration: 0.2, linger: 0.24, stagger: 0.04 },
+  }[tier];
+  const densityClamp = Math.max(0.72, Math.min(1.15, 1.08 - density * 0.07));
+  return {
+    entryDuration: tierBase.entryDuration * densityClamp,
+    exitDuration: tierBase.exitDuration * densityClamp,
+    linger: tierBase.linger,
+    stagger: tierBase.stagger,
+  };
+}
+
+function snapToBeat(timeSec: number, beats: number[]): number {
+  if (beats.length === 0) return timeSec;
+  let best = beats[0];
+  let minDist = Math.abs(best - timeSec);
+  for (let i = 1; i < beats.length; i += 1) {
+    const dist = Math.abs(beats[i] - timeSec);
+    if (dist < minDist) {
+      minDist = dist;
+      best = beats[i];
+    }
+  }
+  return minDist <= 0.08 ? best : timeSec;
+}
+
 function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults, storyboard: Map<number, StoryboardEntryLike>, manifestDirective: ManifestWordDirective | null): { entry: EntryStyle; behavior: BehaviorStyle; exit: ExitStyle } {
-  // Priority: manifest directive > word directive > SEMANTIC AUTO-MAP > storyboard > motion defaults
   if (manifestDirective?.entryStyle) {
     return { entry: manifestDirective.entryStyle, behavior: manifestDirective.behavior ?? 'none', exit: manifestDirective.exitStyle ?? motionDefaults.exits[0] };
   }
 
-  // Word directive entry/behavior/exit — the AI's per-word creative choices
   const wd = wm.directive;
   if (wd?.entry) {
     return {
@@ -403,8 +443,6 @@ function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults,
     };
   }
 
-  // ═══ SEMANTIC AUTO-MAP: the word IS the directive ═══
-  // "red" turns red, "wave" flows in, "spin" rotates — no AI annotation needed.
   const semanticAnim = getSemanticOverride(wm.clean);
   if (semanticAnim && (semanticAnim.entry || semanticAnim.exit || semanticAnim.behavior)) {
     return {
@@ -414,10 +452,8 @@ function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults,
     };
   }
 
-  // Storyboard entry/exit — per-line choices (v2 uses direct enum values)
   const storyEntry = storyboard.get(wm.lineIndex);
   if (storyEntry?.entryStyle) {
-    // v1 legacy map for old-style verb names; v2 values pass through directly
     const v1EntryMap: Record<string, EntryStyle> = { rises: 'rise', 'slams-in': 'slam-down', 'fractures-in': 'shatter-in', materializes: 'materialize', hiding: 'whisper', cuts: 'snap-in', fades: motionDefaults.entries[1] ?? 'materialize' };
     const v1ExitMap: Record<string, ExitStyle> = { 'dissolves-upward': 'drift-up', 'burns-out': 'burn-out', shatters: 'shatter', lingers: 'linger', fades: motionDefaults.exits[1] ?? 'dissolve' };
     const entry = v1EntryMap[storyEntry.entryStyle] ?? (storyEntry.entryStyle as EntryStyle);
@@ -425,7 +461,12 @@ function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults,
     return { entry, behavior: motionDefaults.behaviors[0] ?? 'pulse', exit };
   }
 
-  // Fallback: deterministic variation from motion profile defaults
+  const emphasis = wm.directive?.emphasisLevel ?? (isFillerWord(wm.word) ? 0 : 1);
+  if (emphasis >= 5) return { entry: 'explode-in', behavior: 'pulse', exit: 'shatter' };
+  if (emphasis >= 4) return { entry: 'slam-down', behavior: 'grow', exit: 'snap-out' };
+  if (emphasis >= 3) return { entry: 'punch-in', behavior: 'pulse', exit: 'punch-out' };
+  if (emphasis <= 0) return { entry: 'cut-in', behavior: 'none', exit: 'cut-out' };
+
   const variationSeed = ((wm.lineIndex ?? 0) * 7 + (wm.wordIndex ?? 0) * 3) % 4;
   return {
     entry: motionDefaults.entries[variationSeed % motionDefaults.entries.length],
@@ -437,10 +478,10 @@ function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults,
 export type WordEmitterType = 'ember'|'frost'|'spark-burst'|'dust-impact'|'light-rays'|'converge'|'shockwave-ring'|'gold-coins'|'memory-orbs'|'motion-trail'|'dark-absorb'|'none';
 
 export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; wordStart: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isHeroWord?: boolean; heroPresentation?: string; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
-export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; }
+export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; motionBudget?: PhraseMotionBudget; }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
-export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; }
+export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
 
 const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
 
@@ -494,12 +535,19 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   }
 
   const WORD_LINGER_BY_PROFILE: Record<string, number> = { weighted: 0.15, fluid: 0.55, elastic: 0.2, drift: 0.8, glitch: 0.05 };
-  const animParams = { linger: WORD_LINGER_BY_PROFILE[motionProfile] ?? 0.4, stagger: typeof (payload.frame_state as any)?.stagger === 'number' ? (payload.frame_state as any).stagger : 0.05, entryDuration: motionDefaults.entryDuration, exitDuration: motionDefaults.exitDuration };
+  const globalPhraseDur = phraseAnimDurations(Math.max(1, phraseGroups[0]?.words.length ?? 1), Math.max(250, Math.round(durationSec * 250)));
+  const animParams = {
+    linger: WORD_LINGER_BY_PROFILE[motionProfile] ?? globalPhraseDur.linger,
+    stagger: typeof (payload.frame_state as any)?.stagger === 'number' ? (payload.frame_state as any).stagger : globalPhraseDur.stagger,
+    entryDuration: Math.min(motionDefaults.entryDuration, globalPhraseDur.entryDuration),
+    exitDuration: Math.min(motionDefaults.exitDuration, globalPhraseDur.exitDuration),
+  };
 
   const slotEnds: number[] = [];
   for (const group of phraseGroups) {
-    const visStart = group.start - animParams.entryDuration - animParams.stagger * group.words.length;
-    const visEnd = group.end + animParams.linger + animParams.exitDuration;
+    const groupDur = phraseAnimDurations(group.words.length, Math.round((group.end - group.start) * 1000));
+    const visStart = group.start - groupDur.entryDuration - groupDur.stagger * group.words.length;
+    const visEnd = group.end + Math.max(animParams.linger, groupDur.linger) + groupDur.exitDuration;
     let slot = 0; for (; slot < slotEnds.length; slot += 1) if (visStart >= slotEnds[slot]) break;
     if (slot === slotEnds.length) slotEnds.push(visEnd); else slotEnds[slot] = visEnd;
     (group as any)._positionSlot = slot % 3;
@@ -577,9 +625,32 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     });
   }
 
+  const beats = payload.beat_grid?.beats ?? [];
+  const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
+
+  const compiledChapters: CompiledChapter[] = chapters.map((chapter: any, index: number) => ({
+    index,
+    startRatio: chapter.startRatio ?? 0,
+    endRatio: chapter.endRatio ?? 1,
+    targetZoom: distanceToZoom[((payload.cinematic_direction?.storyboard?.[index] as any)?.shotType ?? 'Medium')] ?? 1.0,
+    emotionalIntensity: chapter.emotionalIntensity ?? 0.5,
+    typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform },
+    atmosphere: chapter.atmosphere ?? (payload.cinematic_direction as any)?.atmosphere ?? 'cinematic',
+  }));
+
+  const analysis = (payload.beat_grid as any)?._analysis ?? null;
+  const songMotion = deriveSongMotionIdentity(bpm, analysis, beats);
+  const sectionMods = deriveAllSectionMods(analysis, compiledChapters, durationSec);
+
+  for (const group of phraseGroups) {
+    const phraseDurMs = Math.round((group.end - group.start) * 1000);
+    (group as any)._motionBudget = derivePhraseMotionBudget(group.words.length, phraseDurMs);
+  }
+
   const compiledGroups: CompiledPhraseGroup[] = phraseGroups.map((group) => {
     const key = `${group.lineIndex}-${group.groupIndex}`;
     const lineStory = storyboard.get(group.lineIndex);
+    const groupDur = phraseAnimDurations(group.words.length, Math.round((group.end - group.start) * 1000));
     const groupLayout = groupLayouts.get(key);
     const positions = groupLayout?.positions ?? [];
     const groupFontSize = groupLayout?.fontSize ?? 56;
@@ -598,7 +669,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         layoutX: pos.x,
         layoutY: pos.y,
         baseFontSize: groupFontSize,
-        wordStart: wm.start,
+        wordStart: snapToBeat(wm.start, beats),
         entryStyle: semantic?.entry ?? motion.entry,
         exitStyle: semantic?.exit ?? motion.exit,
         behaviorStyle: semantic?.behavior ?? motion.behavior,
@@ -632,26 +703,16 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       };
       return [base];
     });
-    return { lineIndex: group.lineIndex, groupIndex: group.groupIndex, anchorWordIdx: group.anchorWordIdx, start: group.start, end: group.end, words: wordsCompiled, staggerDelay: animParams.stagger, entryDuration: animParams.entryDuration, exitDuration: animParams.exitDuration, lingerDuration: animParams.linger, behaviorIntensity: motionDefaults.behaviorIntensity };
+    return { lineIndex: group.lineIndex, groupIndex: group.groupIndex, anchorWordIdx: group.anchorWordIdx, start: group.start, end: group.end, words: wordsCompiled, staggerDelay: groupDur.stagger, entryDuration: groupDur.entryDuration, exitDuration: groupDur.exitDuration, lingerDuration: Math.max(animParams.linger, groupDur.linger), behaviorIntensity: motionDefaults.behaviorIntensity, motionBudget: (group as any)._motionBudget ?? undefined };
   }).sort((a, b) => a.start - b.start);
 
-  const beats = payload.beat_grid?.beats ?? [];
-  const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
   const heat = physicsProfile?.heat ?? 0.5;
   const beatResponse = physicsProfile?.beatResponse ?? 'pulse';
   const springInit = beatResponse === 'slam' ? 1.8 * heat : 0.8 * heat;
   const glowMax = beatResponse === 'slam' ? 1.2 * heat : 0.6 * heat;
   const beatEvents: BeatEvent[] = beats.map((time) => ({ time, springVelocity: springInit, glowMax }));
 
-  const compiledChapters: CompiledChapter[] = chapters.map((chapter: any, index: number) => ({
-    index,
-    startRatio: chapter.startRatio ?? 0,
-    endRatio: chapter.endRatio ?? 1,
-    targetZoom: distanceToZoom[((payload.cinematic_direction?.storyboard?.[index] as any)?.shotType ?? 'Medium')] ?? 1.0,
-    emotionalIntensity: chapter.emotionalIntensity ?? 0.5,
-    typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform },
-    atmosphere: chapter.atmosphere ?? (payload.cinematic_direction as any)?.atmosphere ?? 'cinematic',
-  }));
+
 
   const palettes = compiledChapters.map((c) => resolveV3Palette(payload, (c.startRatio + c.endRatio) * 0.5));
   return {
@@ -669,6 +730,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     baseTextTransform: baseTypography.textTransform,
     palettes,
     animParams,
+    songMotion,
+    sectionMods,
   };
 }
 
