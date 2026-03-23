@@ -4494,8 +4494,8 @@ export class LyricDancePlayer {
 
       // ═══ PHRASE-LEVEL MOTION MODEL ═══
       // The phrase is the unit. All words enter together, breathe together, exit together.
-      // Within the phrase, the ACTIVE word (currently being spoken) is full brightness.
-      // Other words are dimmed context — visible but not competing for attention.
+      // Within the phrase, the ACTIVE word (currently being spoken) is ACCENT COLOR.
+      // Context words are 30% opacity gray ghosts — visible but not competing.
 
       // ── Phrase-level envelope: one fade-in, one fade-out for the whole group ──
       const phraseDuration = Math.max(0.01, group.end - group.start);
@@ -4523,6 +4523,7 @@ export class LyricDancePlayer {
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
+        const resolvedWord = this.resolvedState.wordSettings[word.clean] ?? null;
         const isAnchor = wi === group.anchorWordIdx;
 
         // ── Word timing: is this word currently being spoken? ──
@@ -4540,12 +4541,13 @@ export class LyricDancePlayer {
           wordState = 'spoken';
         }
 
-        // ── Spotlight brightness: active = full, context = dimmed ──
+        // ── Spotlight: active = accent color + full opacity, context = 30% ghost ──
         let spotlightAlpha: number;
+        let useAccentColor = false;
         switch (wordState) {
-          case 'active': spotlightAlpha = 1.0; break;
-          case 'spoken': spotlightAlpha = 0.50; break;
-          case 'upcoming': spotlightAlpha = 0.35; break;
+          case 'active': spotlightAlpha = 1.0; useAccentColor = true; break;
+          case 'spoken': spotlightAlpha = 0.30; break;
+          case 'upcoming': spotlightAlpha = 0.30; break;
         }
 
         // ── Hero word detection ──
@@ -4593,15 +4595,16 @@ export class LyricDancePlayer {
           ? Math.max(0, heroBeatResp.wordScale - 1.0) * 0.5  // 50% of hero-level beat response
           : 0;
 
-        // ── Hero words hold brightness longer after being spoken ──
+        // ── Hero words hold accent color longer after being spoken ──
         if (isHeroWord && wordState === 'spoken') {
-          spotlightAlpha = Math.max(spotlightAlpha, 0.75); // hero stays bright
+          spotlightAlpha = Math.max(spotlightAlpha, 0.75);
+          useAccentColor = true; // hero stays in accent even after spoken
         }
 
         // ── Final alpha: phrase envelope × spotlight × role ──
         const roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
         const finalAlpha = Math.min(
-          word.semanticAlphaMax,
+          resolvedWord?.semanticAlphaMax ?? word.semanticAlphaMax,
           phraseAlpha * spotlightAlpha * roleAlpha,
         );
 
@@ -4643,7 +4646,7 @@ export class LyricDancePlayer {
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
 
-        // ── Color: same model as before ──
+        // ── Color: active word = accent color, context = base white/dark ──
         {
           const bgIsLight = this._textBandBrightness > 0.55;
           const baseColor = bgIsLight ? '#1a1a2e' : '#f0f0f0';
@@ -4659,6 +4662,7 @@ export class LyricDancePlayer {
               chunk.color = semColor;
             }
           } else if (isHeroWord) {
+            // Hero words always use accent color
             const pal = this._framePalette ?? [];
             const rawAccent = pal[1] ?? '#FFD700';
             chunk.color = rawAccent;
@@ -4670,7 +4674,23 @@ export class LyricDancePlayer {
             } else {
               (chunk as any).textStroke = 'rgba(0,0,0,0.35)';
             }
+          } else if (useAccentColor) {
+            // ═══ ACTIVE WORD = ACCENT COLOR ═══
+            // The eye separates hue instantly. A gold word among gray words = zero processing time.
+            const pal = this._framePalette ?? [];
+            const rawAccent = pal[1] ?? '#FFD700';
+            chunk.color = rawAccent;
+            // Text stroke for readability against any background
+            const accentLum = this._hexLuminance(rawAccent);
+            if (accentLum > 0.5) {
+              (chunk as any).textStroke = 'rgba(0,0,0,0.45)';
+            } else if (accentLum < 0.15) {
+              (chunk as any).textStroke = 'rgba(255,255,255,0.2)';
+            } else {
+              (chunk as any).textStroke = 'rgba(0,0,0,0.3)';
+            }
           } else {
+            // Context words = base color at 30% opacity (handled by spotlightAlpha)
             chunk.color = baseColor;
           }
         }
