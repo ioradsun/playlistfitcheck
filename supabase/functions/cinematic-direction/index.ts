@@ -332,15 +332,20 @@ COVERAGE:
   Every word in every line MUST belong to exactly one phrase.
   No gaps. No overlaps. If a line has no phrase, it falls to a dumb splitter.
 
-CRITICAL — wordRange uses PER-LINE indices:
-  "wordRange": [start, end] — inclusive, 0-based WITHIN the line.
-  The wi numbers shown in the lyrics (w0, w1, w2...) are per-line indices.
-  Use them directly. Do NOT use global word counts across lines.
+wordRange uses GLOBAL indices into the flat word stream:
+  "wordRange": [start, end] — inclusive, 0-based.
+  The w-numbers (w0, w1, w2...) are GLOBAL across the entire song.
+  Use them directly. Phrases CAN and SHOULD cross line boundaries
+  when meaning demands it.
+
+  Example: "is your soul for sale?" might be w2 through w6 even though
+  "for" and "sale?" are on different transcription lines. That's correct.
 
 Each phrase:
-  "lineIndex": integer (which line)
-  "wordRange": [start, end] inclusive, PER-LINE word indices (use wi numbers)
-  "heroWord": "UPPERCASE" (optional — the most impactful word in this phrase)
+  "wordRange": [start, end] inclusive, GLOBAL word indices (use w-numbers)
+  "heroWord": "UPPERCASE" (optional — the most impactful word)
+
+NO "lineIndex" field. Phrases are not bound to lines.
 
 ═══════════════════════════════════════
 WORD DIRECTIVES — semantic emphasis
@@ -729,35 +734,27 @@ function buildWordUserMessage(
   }
   msg += "\n";
 
-  msg += `LYRICS WITH WORD TIMING AND GAPS:\n`;
-  msg += `(wi = word index within line, for use in wordRange)\n\n`;
+  msg += `WORD STREAM (flat, with timing and gaps):\n`;
+  msg += `wordRange in your phrases uses these w-numbers (GLOBAL, not per-line).\n\n`;
   if (words && words.length > 0) {
-    for (let li = 0; li < lines.length; li++) {
-      const line = lines[li];
-      const lineStart = line.start ?? 0;
-      const lineEnd = line.end ?? 0;
-      const lineWords = words.filter(
-        (w) => w.start >= lineStart - 0.15 && w.end <= lineEnd + 0.15,
-      );
-      msg += `[${li}] "${line.text}"\n`;
-      if (lineWords.length > 0) {
-        const parts: string[] = [];
-        for (let wi = 0; wi < lineWords.length; wi++) {
-          const w = lineWords[wi];
-          const durMs = Math.round((w.end - w.start) * 1000);
-          let part = `w${wi}:${w.word}(${durMs}ms)`;
-          if (wi < lineWords.length - 1) {
-            const gapMs = Math.round((lineWords[wi + 1].start - w.end) * 1000);
-            if (gapMs >= 300) {
-              part += ` [BREATH:${gapMs}ms]`;
-            } else if (gapMs >= 150) {
-              part += ` [pause:${gapMs}ms]`;
-            }
-          }
-          parts.push(part);
+    const parts: string[] = [];
+    for (let wi = 0; wi < words.length; wi++) {
+      const w = words[wi];
+      const durMs = Math.round((w.end - w.start) * 1000);
+      let part = `w${wi}:${w.word}(${durMs}ms)`;
+      if (wi < words.length - 1) {
+        const gapMs = Math.round((words[wi + 1].start - w.end) * 1000);
+        if (gapMs >= 300) {
+          part += ` [BREATH:${gapMs}ms]`;
+        } else if (gapMs >= 150) {
+          part += ` [pause:${gapMs}ms]`;
         }
-        msg += `  ${parts.join(" ")}\n`;
       }
+      parts.push(part);
+    }
+    // Print ~10 words per line for readability
+    for (let i = 0; i < parts.length; i += 10) {
+      msg += `  ${parts.slice(i, i + 10).join(" ")}\n`;
     }
   } else {
     for (let i = 0; i < lines.length; i++) {
@@ -1018,8 +1015,6 @@ function validate(
     v.phrases = [];
   } else {
     for (const p of v.phrases) {
-      if (typeof p.lineIndex !== "number")
-        errors.push("Phrase missing lineIndex");
       if (!Array.isArray(p.wordRange) || p.wordRange.length !== 2) {
         errors.push("Phrase missing valid wordRange");
         p.wordRange = [0, 0];
@@ -1305,8 +1300,6 @@ function validateWords(
   // Phrases
   if (!Array.isArray(v.phrases)) v.phrases = [];
   for (const p of v.phrases) {
-    if (typeof p.lineIndex !== "number")
-      errors.push("Phrase missing lineIndex");
     if (!Array.isArray(p.wordRange) || p.wordRange.length !== 2)
       p.wordRange = [0, 0];
     if (p.heroWord && typeof p.heroWord !== "string") delete p.heroWord;
