@@ -4666,6 +4666,7 @@ export class LyricDancePlayer {
         chunk.scaleY = entryExitScaleY * totalScale;
         chunk.scale = 1;
         chunk.visible = finalAlpha > 0.01;
+        if (ci < 3) console.log('[CHUNK]', word.text, 'fontSize:', effectiveFontSize, 'scaleX:', chunk.scaleX.toFixed(2), 'alpha:', chunk.alpha.toFixed(2), 'entry:', entryProgress.toFixed(2), 'exit:', exitProgress.toFixed(2), 'role:', lineRole);
         chunk.fontWeight = emphasisWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
