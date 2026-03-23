@@ -2855,7 +2855,7 @@ export class LyricDancePlayer {
     // NOT applied as a parent transform, because setTransform() replaces the
     // entire matrix and would wipe any parent zoom.
     // camT was already read above for wall computation — reuse it
-    const camZoom = camT.zoom;
+    const camZoom = 1.0; // zoom disabled — fitTextToViewport sizes text to fill canvas, zoom fights that
     const camShakeX = camT.offsetX;
     const camShakeY = camT.offsetY;
     const camRotation = camT.rotation;
