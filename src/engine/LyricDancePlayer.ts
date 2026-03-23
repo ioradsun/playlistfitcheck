@@ -1267,6 +1267,8 @@ export class LyricDancePlayer {
   private _firstPaintMarked = false;
   private _fontStabilized = false;
   private _fontLayoutReflowPending = false;
+  private _shrinkDebugThrottle = 0;
+  private _mlLayoutDebugThrottle = 0;
   private _handleVisibilityChange: () => void;
   private _pendingUpgradeTimeout: number | null = null;
   private _pendingIdleHandle: number | null = null;
