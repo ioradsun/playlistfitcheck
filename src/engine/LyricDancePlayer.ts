@@ -1149,6 +1149,7 @@ export class LyricDancePlayer {
         this.songEndSec = payload.songEnd;
 
         // Compile the scene
+        console.log('[COMPILE] viewport:', this.width, this.height, 'canvas:', this.canvas.width, this.canvas.height);
         const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
         this.compiledScene = compiled;
         this._markCompiledViewport(this.width || 960, this.height || 540);
@@ -1308,6 +1309,7 @@ export class LyricDancePlayer {
       const cw = this.container?.offsetWidth || this.canvas.offsetWidth || 960;
       const ch = this.container?.offsetHeight || this.canvas.offsetHeight || 540;
       this.resize(cw, ch);
+      console.log('[COMPILE] viewport:', this.width, this.height, 'canvas:', this.canvas.width, this.canvas.height);
       const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
       this._markCompiledViewport(this.width || 960, this.height || 540);
@@ -1664,6 +1666,7 @@ export class LyricDancePlayer {
     if (this.payload && this.compiledScene) {
       const sizeChanged = w !== prevCompiledW || h !== prevCompiledH;
       if (sizeChanged) {
+        console.log('[COMPILE] viewport:', w, h, 'canvas:', this.canvas.width, this.canvas.height);
         this.compiledScene = compileScene(this.payload, { viewportWidth: w, viewportHeight: h });
         this._buildChunkCacheFromScene(this.compiledScene);
         this._markCompiledViewport(w, h);
@@ -1739,6 +1742,7 @@ export class LyricDancePlayer {
     this.payload = payload;
     this.songStartSec = payload.songStart;
     this.songEndSec = payload.songEnd;
+    console.log('[COMPILE] viewport:', this.width, this.height, 'canvas:', this.canvas.width, this.canvas.height);
     const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this.compiledScene = compiled;
     this._buildChunkCacheFromScene(compiled);
@@ -1802,6 +1806,7 @@ export class LyricDancePlayer {
     this.payload = { ...this.payload, cinematic_direction: direction };
     this._songGrade = null; // cinematic direction changed — recompute grade
     this.resolvePlayerState(this.payload);
+    console.log('[COMPILE] viewport:', this.width, this.height, 'canvas:', this.canvas.width, this.canvas.height);
     this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this._markCompiledViewport(this.width || 960, this.height || 540);
     this._buildChunkCacheFromScene(this.compiledScene);
@@ -1874,6 +1879,7 @@ export class LyricDancePlayer {
     this.payload = payload;
     this.songStartSec = payload.songStart;
     this.songEndSec = payload.songEnd;
+    console.log('[COMPILE] viewport:', this.width, this.height, 'canvas:', this.canvas.width, this.canvas.height);
     this.compiledScene = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this._markCompiledViewport(this.width || 960, this.height || 540);
     this._buildChunkCacheFromScene(this.compiledScene);
@@ -1908,6 +1914,7 @@ export class LyricDancePlayer {
     // Recompile scene with fresh palette data
     if (this.payload) {
       this.payload = { ...this.payload, auto_palettes: palettes };
+      console.log('[COMPILE] viewport:', this.width, this.height, 'canvas:', this.canvas.width, this.canvas.height);
       const compiled = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
       this._markCompiledViewport(this.width || 960, this.height || 540);
@@ -2144,6 +2151,7 @@ export class LyricDancePlayer {
         this._textMetricsCache.clear();
         // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
         if (this.payload && this.compiledScene) {
+          console.log('[COMPILE] viewport:', this.width, this.height, 'canvas:', this.canvas.width, this.canvas.height);
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
           this._buildChunkCacheFromScene(this.compiledScene);
         }
