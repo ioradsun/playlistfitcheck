@@ -294,7 +294,7 @@ You are a word choreographer for a cinematic lyric video.
 
 The visual world has already been designed. You will receive:
 1. The SCENE DIRECTION (song defaults + section visual moods)
-2. Song lyrics with per-word timestamps and durations
+2. Song lyrics as PRE-SEGMENTED word stream (segments split at artist breaths)
 3. HELD WORDS the artist emphasized vocally
 4. BPM
 
@@ -306,61 +306,36 @@ The only gate is time — word needs ≥ 140ms for the effect to register.
 Return ONLY valid JSON. No markdown.
 
 ═══════════════════════════════════════
-PHRASES — a master film editor's cuts
+PHRASES — refine the pre-segmented stream
 ═══════════════════════════════════════
 
-Each phrase is ONE SCREEN of text — the words that appear together.
-You are editing this song like a film. Each cut matters.
+The word stream is already split at BREATH boundaries (≥300ms silence).
+These splits are PERMANENT — you CANNOT merge segments back together.
+A phrase NEVER crosses a segment boundary.
 
-PHRASE BOUNDARY SIGNALS (in priority order):
-  1. [BREATH] markers (≥300ms gap) — the artist BREATHED. ALWAYS split here.
-     This is the strongest signal. A breath is a phrase boundary, period.
-  2. [pause] markers (≥150ms gap) — likely a natural pause. Split if meaning supports it.
-  3. Beat bar boundaries — phrases should start/end near strong beats when possible.
-  4. Semantic completeness — one complete thought or clause per phrase.
-  5. Punctuation (commas, periods) — weakest signal. Only split here if timing supports it.
+Your job for each segment:
+  1. Is this segment ONE phrase? → use it as-is
+  2. Should it be SUB-SPLIT into 2-3 smaller phrases?
+     Split at [pause] markers or at meaning boundaries.
+  3. Pick the heroWord for each phrase.
 
-TIMING RULES:
-  Minimum phrase durations (the viewer needs time to READ):
-    1-word phrase:   350ms  (impact exclamation only)
-    2-3 word phrase: 840ms
-    4-5 word phrase: 1260ms
-    6-8 word phrase: 1750ms
-  Maximum: 4 seconds. Attention resets — cut to next phrase.
+RULES:
+  - Max 6 words per phrase. If a segment has 7+ words, you MUST sub-split it.
+  - A phrase NEVER crosses a segment boundary (breaths are sacred).
+  - 1-2 word segments are almost always one phrase. Don't overthink them.
+  - Sub-split when: there's a [pause] inside, or two distinct thoughts in one segment.
+  - Don't sub-split when: the segment is one flowing thought under 6 words.
+  - Hero word: the most emotionally impactful word in the phrase. UPPERCASE.
 
-  Compute actual phrase duration from word timestamps:
-    phrase_duration = last_word.end - first_word.start
-  Do NOT guess from word count — USE the timestamps.
+wordRange uses GLOBAL w-numbers (the numbers shown in the stream):
+  "wordRange": [start, end] — inclusive.
+  Example: SEG 1 [w2–w6] as one phrase → { "wordRange": [2, 6], "heroWord": "SOUL" }
 
-BPM PACING:
-  Below 90 BPM:  longer phrases (4-8 words), let words breathe
-  90-130 BPM:    balanced (3-6 words)
-  Above 130 BPM: shorter punchy phrases (2-4 words), match the energy
-
-MEANING:
-  - One complete thought per phrase. Never split mid-clause.
-  - Impact exclamations ≥ 350ms get their own phrase
-  - Held words ≥ 700ms may be their own phrase (dramatic isolation)
-  - Filler at line boundaries ("uh", "mm") attaches to the nearest real phrase
-
-COVERAGE:
-  Every word in every line MUST belong to exactly one phrase.
-  No gaps. No overlaps. If a line has no phrase, it falls to a dumb splitter.
-
-wordRange uses GLOBAL indices into the flat word stream:
-  "wordRange": [start, end] — inclusive, 0-based.
-  The w-numbers (w0, w1, w2...) are GLOBAL across the entire song.
-  Use them directly. Phrases CAN and SHOULD cross line boundaries
-  when meaning demands it.
-
-  Example: "is your soul for sale?" might be w2 through w6 even though
-  "for" and "sale?" are on different transcription lines. That's correct.
+COVERAGE: Every word must belong to exactly one phrase. No gaps.
 
 Each phrase:
-  "wordRange": [start, end] inclusive, GLOBAL word indices (use w-numbers)
-  "heroWord": "UPPERCASE" (optional — the most impactful word)
-
-NO "lineIndex" field. Phrases are not bound to lines.
+  "wordRange": [start, end] inclusive global indices
+  "heroWord": "UPPERCASE" (the emotional weight of this phrase)
 
 ═══════════════════════════════════════
 WORD DIRECTIVES — semantic emphasis
@@ -375,7 +350,7 @@ Tag every emotionally significant word:
 
 TIME RULES:
   emphasisLevel 4-5 requires ≥ 350ms
-  elementalClass requires ≥ 140ms (lowered — phrase model gives visual budget)
+  elementalClass requires ≥ 140ms
   isolation requires ≥ 700ms
   Skip words under 140ms
 
@@ -733,6 +708,160 @@ function buildUserMessage(
   return msg;
 }
 
+/**
+ * Pre-split word stream into segments at breath boundaries (≥300ms gaps).
+ * These are physics-based splits — the artist literally stopped vocalizing.
+ * Each segment is a candidate phrase or may be sub-split by the AI.
+ */
+interface WordSegment {
+  /** Global start index in the words array */
+  startIdx: number;
+  /** Global end index (inclusive) in the words array */
+  endIdx: number;
+  /** The words in this segment */
+  words: Array<{ word: string; start: number; end: number }>;
+  /** Duration from first word start to last word end (ms) */
+  durationMs: number;
+  /** Number of words */
+  wordCount: number;
+  /** Internal gaps ≥150ms (potential sub-split points) */
+  pauses: Array<{ afterWordIdx: number; gapMs: number }>;
+}
+
+function preSegmentAtBreaths(
+  words: Array<{ word: string; start: number; end: number }>,
+  breathThresholdMs: number = 300,
+): WordSegment[] {
+  if (!words || words.length === 0) return [];
+
+  const segments: WordSegment[] = [];
+  let segStart = 0;
+
+  for (let i = 0; i < words.length; i++) {
+    const isLast = i === words.length - 1;
+    let shouldSplit = isLast;
+
+    if (!isLast) {
+      const gapMs = Math.round((words[i + 1].start - words[i].end) * 1000);
+      if (gapMs >= breathThresholdMs) shouldSplit = true;
+    }
+
+    if (shouldSplit) {
+      const segWords = words.slice(segStart, i + 1);
+      const durationMs = Math.round(
+        (segWords[segWords.length - 1].end - segWords[0].start) * 1000,
+      );
+
+      // Find internal pauses (≥150ms gaps within the segment)
+      const pauses: Array<{ afterWordIdx: number; gapMs: number }> = [];
+      for (let j = 0; j < segWords.length - 1; j++) {
+        const gap = Math.round((segWords[j + 1].start - segWords[j].end) * 1000);
+        if (gap >= 150) {
+          pauses.push({ afterWordIdx: segStart + j, gapMs: gap });
+        }
+      }
+
+      segments.push({
+        startIdx: segStart,
+        endIdx: i,
+        words: segWords,
+        durationMs,
+        wordCount: segWords.length,
+        pauses,
+      });
+
+      segStart = i + 1;
+    }
+  }
+
+  return segments;
+}
+
+/**
+ * Hard-enforce phrase rules that the AI can't be trusted with:
+ * - Max 6 words per phrase
+ * - Min duration floors
+ * Splits oversized phrases at the largest internal gap.
+ */
+function enforcePhraseLimits(
+  phrases: Array<{ wordRange: [number, number]; heroWord?: string }>,
+  words: Array<{ word: string; start: number; end: number }>,
+  maxWords: number = 6,
+): Array<{ wordRange: [number, number]; heroWord?: string }> {
+  const result: Array<{ wordRange: [number, number]; heroWord?: string }> = [];
+
+  for (const phrase of phrases) {
+    const [start, end] = phrase.wordRange;
+    const count = end - start + 1;
+
+    if (count <= maxWords) {
+      result.push(phrase);
+      continue;
+    }
+
+    // Split at the largest gap within this phrase
+    let bestSplitIdx = start + Math.floor(count / 2); // fallback: midpoint
+    let bestGap = -1;
+
+    for (let i = start; i < end; i++) {
+      if (i + 1 >= words.length) continue;
+      const gap = words[i + 1].start - words[i].end;
+      if (gap > bestGap) {
+        bestGap = gap;
+        bestSplitIdx = i;
+      }
+    }
+
+    // Split into two halves at the largest gap
+    const firstHalf: typeof phrase = {
+      wordRange: [start, bestSplitIdx],
+      heroWord: phrase.heroWord,
+    };
+    const secondHalf: typeof phrase = {
+      wordRange: [bestSplitIdx + 1, end],
+    };
+
+    // Recursively enforce on each half
+    result.push(...enforcePhraseLimits([firstHalf], words, maxWords));
+    result.push(...enforcePhraseLimits([secondHalf], words, maxWords));
+  }
+
+  return result;
+}
+
+/**
+ * Ensure every word belongs to exactly one phrase.
+ * Fills gaps left by the AI with mechanical phrases.
+ */
+function fillPhraseGaps(
+  phrases: Array<{ wordRange: [number, number]; heroWord?: string }>,
+  totalWords: number,
+): Array<{ wordRange: [number, number]; heroWord?: string }> {
+  if (totalWords === 0) return phrases;
+
+  // Sort by start index
+  const sorted = [...phrases].sort((a, b) => a.wordRange[0] - b.wordRange[0]);
+  const result: Array<{ wordRange: [number, number]; heroWord?: string }> = [];
+  let nextExpected = 0;
+
+  for (const phrase of sorted) {
+    const [start, end] = phrase.wordRange;
+    // Fill gap before this phrase
+    if (start > nextExpected) {
+      result.push({ wordRange: [nextExpected, start - 1] });
+    }
+    result.push(phrase);
+    nextExpected = end + 1;
+  }
+
+  // Fill gap after last phrase
+  if (nextExpected < totalWords) {
+    result.push({ wordRange: [nextExpected, totalWords - 1] });
+  }
+
+  return result;
+}
+
 function buildWordUserMessage(
   title: string,
   artist: string,
@@ -757,38 +886,43 @@ function buildWordUserMessage(
   }
   msg += "\n";
 
-  msg += `WORD STREAM (flat, with timing and gaps):\n`;
-  msg += `wordRange in your phrases uses these w-numbers (GLOBAL, not per-line).\n\n`;
   if (words && words.length > 0) {
-    const parts: string[] = [];
-    for (let wi = 0; wi < words.length; wi++) {
-      const w = words[wi];
-      const durMs = Math.round((w.end - w.start) * 1000);
-      let part = `w${wi}:${w.word}(${durMs}ms)`;
-      if (wi < words.length - 1) {
-        const gapMs = Math.round((words[wi + 1].start - w.end) * 1000);
-        if (gapMs >= 300) {
-          part += ` [BREATH:${gapMs}ms]`;
-        } else if (gapMs >= 150) {
-          part += ` [pause:${gapMs}ms]`;
+    const segments = preSegmentAtBreaths(words, 300);
+
+    msg += `PRE-SEGMENTED WORD STREAM:\n`;
+    msg += `Segments are split at breaths (≥300ms silence). These boundaries are FIXED.\n`;
+    msg += `Your job: decide if each segment is ONE phrase or should be SUB-SPLIT.\n`;
+    msg += `Use the w-numbers as global wordRange indices.\n\n`;
+
+    for (let si = 0; si < segments.length; si++) {
+      const seg = segments[si];
+      const wordParts = seg.words.map((w, i) => {
+        const globalIdx = seg.startIdx + i;
+        const durMs = Math.round((w.end - w.start) * 1000);
+        let part = `w${globalIdx}:${w.word}(${durMs}ms)`;
+        // Mark internal pauses
+        const pause = seg.pauses.find((p) => p.afterWordIdx === globalIdx);
+        if (pause) {
+          part += ` [pause:${pause.gapMs}ms]`;
         }
-      }
-      parts.push(part);
+        return part;
+      });
+
+      msg += `  SEG ${si} [w${seg.startIdx}–w${seg.endIdx}] ${seg.wordCount} words, ${seg.durationMs}ms`;
+      if (seg.pauses.length > 0) msg += ` (${seg.pauses.length} internal pauses)`;
+      msg += `\n`;
+      msg += `    ${wordParts.join(" ")}\n`;
     }
-    // Print ~10 words per line for readability
-    for (let i = 0; i < parts.length; i += 10) {
-      msg += `  ${parts.slice(i, i + 10).join(" ")}\n`;
-    }
+    msg += "\n";
+
+    // Held words block
+    const heldBlock = formatHeldWordsBlock(words, lines);
+    if (heldBlock) msg += heldBlock + "\n";
   } else {
     for (let i = 0; i < lines.length; i++) {
       msg += `[${i}] "${lines[i].text}"\n`;
     }
-  }
-  msg += "\n";
-
-  if (words && words.length > 0) {
-    const heldBlock = formatHeldWordsBlock(words, lines);
-    if (heldBlock) msg += heldBlock + "\n";
+    msg += "\n";
   }
 
   msg += "Return JSON only: { phrases: [...], wordDirectives: [...] }";
@@ -1323,8 +1457,19 @@ function validateWords(
   // Phrases
   if (!Array.isArray(v.phrases)) v.phrases = [];
   for (const p of v.phrases) {
-    if (!Array.isArray(p.wordRange) || p.wordRange.length !== 2)
+    // lineIndex no longer required — phrases use global wordRange
+    if (!Array.isArray(p.wordRange) || p.wordRange.length !== 2) {
       p.wordRange = [0, 0];
+    }
+    // Ensure indices are numbers
+    p.wordRange[0] =
+      typeof p.wordRange[0] === "number"
+        ? Math.max(0, Math.round(p.wordRange[0]))
+        : 0;
+    p.wordRange[1] =
+      typeof p.wordRange[1] === "number"
+        ? Math.max(p.wordRange[0], Math.round(p.wordRange[1]))
+        : p.wordRange[0];
     if (p.heroWord && typeof p.heroWord !== "string") delete p.heroWord;
   }
 
@@ -1651,6 +1796,12 @@ async function callWords(
   }
 
   const result = validateWords(parsed, words);
+
+  // Server-side enforcement: split any phrase over 6 words at largest gap
+  if (words && Array.isArray(result.value.phrases)) {
+    result.value.phrases = enforcePhraseLimits(result.value.phrases, words, 6);
+    result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
+  }
 
   if (
     !Array.isArray(result.value.phrases) ||
