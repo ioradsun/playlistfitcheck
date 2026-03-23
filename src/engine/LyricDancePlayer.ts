@@ -2542,11 +2542,11 @@ export class LyricDancePlayer {
             break;
           case 'falling':
             this.ambientParticleEngine.setSpeedMultiplier(0.8);
-            this.ambientParticleEngine.setDirection?.('down');
+            (this.ambientParticleEngine as any).setDirection?.('down');
             break;
           case 'swirling':
             this.ambientParticleEngine.setSpeedMultiplier(1.2);
-            this.ambientParticleEngine.setDirection?.('swirl');
+            (this.ambientParticleEngine as any).setDirection?.('swirl');
             break;
         }
       }
