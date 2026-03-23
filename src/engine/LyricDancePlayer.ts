@@ -4215,6 +4215,9 @@ export class LyricDancePlayer {
       backgroundDirective: section.description ?? '',
       sectionIndex: section.sectionIndex,
       mood: section.mood,
+      visualMood: section.visualMood,
+      atmosphereState: section.atmosphereState,
+      dominantColor: section.dominantColor,
       zoom: 1,
       driftIntensity: direction.motion === 'fluid' ? 0.3 : 0.1,
     }));
