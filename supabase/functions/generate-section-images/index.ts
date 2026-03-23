@@ -262,7 +262,18 @@ serve(async (req) => {
   }
 
   try {
-    const body = (await req.json()) as RequestBody;
+    let body: RequestBody;
+    try {
+      body = (await req.json()) as RequestBody;
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid or empty JSON body" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
     const { lyric_dance_id, force } = body;
 
     if (!lyric_dance_id) {
