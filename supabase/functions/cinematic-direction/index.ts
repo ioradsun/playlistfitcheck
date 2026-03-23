@@ -1658,9 +1658,10 @@ async function callScene(
   userMessage: string,
   sectionCount: number,
   body: RequestBody,
+  sceneSystemPrompt: string = SCENE_DIRECTION_PROMPT,
 ): Promise<Record<string, any>> {
   const messages = [
-    { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
+    { role: "system", content: scenePrefix + sceneSystemPrompt },
     { role: "user", content: userMessage },
   ];
 
@@ -1735,7 +1736,7 @@ async function callScene(
         body: JSON.stringify({
           model: PRIMARY_MODEL,
           messages: [
-            { role: "system", content: scenePrefix + SCENE_DIRECTION_PROMPT },
+            { role: "system", content: scenePrefix + sceneSystemPrompt },
             { role: "user", content: userMessage },
             {
               role: "user",
@@ -1789,6 +1790,7 @@ async function callWords(
   sceneDirection: Record<string, any>,
   words?: Array<{ word: string; start: number; end: number }>,
   bpm?: number,
+  wordSystemPrompt: string = WORD_DIRECTION_PROMPT,
 ): Promise<Record<string, any>> {
   const wordMessage = buildWordUserMessage(
     title,
@@ -1847,7 +1849,7 @@ async function callWords(
   };
 
   const messages = [
-    { role: "system", content: WORD_DIRECTION_PROMPT },
+    { role: "system", content: wordSystemPrompt },
     { role: "user", content: wordMessage },
   ];
 
@@ -2104,6 +2106,60 @@ async function persist(
   }
 }
 
+/** Fetch custom prompts from ai_prompts table, falling back to hardcoded defaults. */
+async function loadCustomPrompts(): Promise<{
+  fullPrompt: string;
+  scenePrompt: string;
+  wordPrompt: string;
+}> {
+  const sbUrl = Deno.env.get("SUPABASE_URL");
+  const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!sbUrl || !sbKey) {
+    return {
+      fullPrompt: CINEMATIC_DIRECTION_PROMPT,
+      scenePrompt: SCENE_DIRECTION_PROMPT,
+      wordPrompt: WORD_DIRECTION_PROMPT,
+    };
+  }
+
+  try {
+    const slugs = ["cinematic-direction", "cinematic-scene", "cinematic-words"];
+    const res = await fetch(
+      `${sbUrl}/rest/v1/ai_prompts?slug=in.(${slugs.join(",")})&select=slug,prompt`,
+      {
+        headers: {
+          apikey: sbKey,
+          Authorization: `Bearer ${sbKey}`,
+        },
+      },
+    );
+    if (!res.ok) {
+      console.warn("[cinematic-direction] Failed to load custom prompts, using defaults");
+      return {
+        fullPrompt: CINEMATIC_DIRECTION_PROMPT,
+        scenePrompt: SCENE_DIRECTION_PROMPT,
+        wordPrompt: WORD_DIRECTION_PROMPT,
+      };
+    }
+
+    const rows: Array<{ slug: string; prompt: string }> = await res.json();
+    const bySlug = Object.fromEntries(rows.map((r) => [r.slug, r.prompt]));
+
+    return {
+      fullPrompt: bySlug["cinematic-direction"] || CINEMATIC_DIRECTION_PROMPT,
+      scenePrompt: bySlug["cinematic-scene"] || SCENE_DIRECTION_PROMPT,
+      wordPrompt: bySlug["cinematic-words"] || WORD_DIRECTION_PROMPT,
+    };
+  } catch (e) {
+    console.warn("[cinematic-direction] Error loading custom prompts:", e);
+    return {
+      fullPrompt: CINEMATIC_DIRECTION_PROMPT,
+      scenePrompt: SCENE_DIRECTION_PROMPT,
+      wordPrompt: WORD_DIRECTION_PROMPT,
+    };
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
@@ -2112,6 +2168,9 @@ serve(async (req) => {
     const body = (await req.json()) as RequestBody;
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
+
+    // Load custom prompts from admin panel (falls back to hardcoded defaults)
+    const customPrompts = await loadCustomPrompts();
 
     const title = String(body.title ?? "").trim();
     const artist = String(body.artist ?? "").trim();
@@ -2159,6 +2218,7 @@ serve(async (req) => {
         userMessage,
         body.audioSections?.length ?? 0,
         body,
+        customPrompts.scenePrompt,
       );
 
       return new Response(JSON.stringify({ cinematicDirection: sceneResult }), {
@@ -2185,6 +2245,7 @@ serve(async (req) => {
         body.sceneDirection,
         body.words,
         bpm,
+        customPrompts.wordPrompt,
       );
 
       return new Response(JSON.stringify({ cinematicDirection: wordResult }), {
@@ -2192,7 +2253,7 @@ serve(async (req) => {
       });
     }
 
-    const systemPrompt = scenePrefix + CINEMATIC_DIRECTION_PROMPT;
+    const systemPrompt = scenePrefix + customPrompts.fullPrompt;
     const userMessage = buildUserMessage(
       title,
       artist,
