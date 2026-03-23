@@ -1222,7 +1222,9 @@ export class LyricDancePlayer {
   private _beatVisCanvas: HTMLCanvasElement | null = null; // separate from themed sims
   // ═══ Lightning Bar (feature flag: window.__LYRIC_DANCE_LIGHTNING_BAR) ═══
   private _globalLightningBar: NervousLightningBar | null = null;
-  public lightningBarEnabled = false;
+  public get lightningBarEnabled(): boolean {
+    return Boolean((window as any).__LYRIC_DANCE_LIGHTNING_BAR);
+  }
   private chapterImages: HTMLImageElement[] = [];
   /** Pre-blurred versions of chapter images — eliminates per-frame ctx.filter blur() cost */
   private _preBlurredImages: HTMLCanvasElement[] = [];
@@ -1461,7 +1463,7 @@ export class LyricDancePlayer {
   // Compatibility with existing React shell
   async init(): Promise<void> {
     this.perfDebugEnabled = Boolean((window as Window & { __LYRIC_DANCE_DEBUG_PERF?: boolean }).__LYRIC_DANCE_DEBUG_PERF);
-    this.lightningBarEnabled = Boolean((window as Window & { __LYRIC_DANCE_LIGHTNING_BAR?: boolean }).__LYRIC_DANCE_LIGHTNING_BAR);
+    // lightningBarEnabled is now a live getter — no need to cache here
     this._firstPaintMarked = false;
     this._fontLayoutReflowPending = false;
     performance.clearMarks("engine:start");
