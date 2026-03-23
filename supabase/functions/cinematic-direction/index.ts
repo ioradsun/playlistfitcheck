@@ -2218,6 +2218,7 @@ serve(async (req) => {
         userMessage,
         body.audioSections?.length ?? 0,
         body,
+        customPrompts.scenePrompt,
       );
 
       return new Response(JSON.stringify({ cinematicDirection: sceneResult }), {
