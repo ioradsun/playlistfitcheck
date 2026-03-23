@@ -2812,6 +2812,26 @@ export class LyricDancePlayer {
       this.activeSectionIndex = sectionIndex;
       const texture = section?.texture ?? this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, cd) ?? "dust";
       this.activeSectionTexture = texture;
+      // atmosphereState controls particle motion style per section
+      const atmosphereState = (section as any)?.atmosphereState as string | undefined;
+      if (atmosphereState && this.ambientParticleEngine) {
+        switch (atmosphereState) {
+          case 'still':
+            this.ambientParticleEngine.setSpeedMultiplier(0.15);
+            break;
+          case 'drifting':
+            this.ambientParticleEngine.setSpeedMultiplier(0.5);
+            break;
+          case 'falling':
+            this.ambientParticleEngine.setSpeedMultiplier(0.8);
+            this.ambientParticleEngine.setDirection?.('down');
+            break;
+          case 'swirling':
+            this.ambientParticleEngine.setSpeedMultiplier(1.2);
+            this.ambientParticleEngine.setDirection?.('swirl');
+            break;
+        }
+      }
       const mapped = (PARTICLE_SYSTEM_MAP as Record<string, string | undefined>)[texture?.toLowerCase?.() ?? ""]?.toLowerCase?.() ?? texture;
       this.ambientParticleEngine?.setSystem(mapped);
       this.ambientParticleEngine?.setConfig({
@@ -5081,7 +5101,8 @@ export class LyricDancePlayer {
         // ─── NEW HERO MODEL: duration-gated solo OR emphasis-based inline ───
         const isHeroWord = word.isHeroWord === true;
         const heroDuration = word.wordDuration ?? 0;
-        const isSoloHero = isHeroWord && heroDuration >= 0.5; // ≥500ms = solo center
+        const hasIsolation = Boolean((directive as any)?.isolation);
+        const isSoloHero = (isHeroWord && heroDuration >= 0.5) || (hasIsolation && heroDuration >= 0.7);
         let heroScaleMult = 1.0;
         let heroOffsetX = 0;
         let heroOffsetY = 0;

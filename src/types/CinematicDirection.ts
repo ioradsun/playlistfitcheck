@@ -27,6 +27,10 @@ export interface CinematicDirection {
   // Storyboard: new format = StoryboardEntry[], old = LineDirection[]
   storyboard?: StoryboardEntry[] | LineDirection[];
 
+  /** AI-grouped phrases: which words appear on screen together.
+   *  Each phrase is one "reading beat" — a complete thought the viewer reads and absorbs. */
+  phrases?: CinematicPhrase[];
+
   // ── Legacy fields (deprecated — use resolvers instead) ─────
   /** @deprecated Use emotionalArc + resolvers */
   thesis?: string;
@@ -67,6 +71,20 @@ export interface CinematicSection {
   suggestedStartSec?: number;
   /** AI boundary suggestion — only present for low-confidence sections */
   suggestedEndSec?: number;
+  /** How particles behave in this section */
+  atmosphereState?: 'still' | 'drifting' | 'falling' | 'swirling';
+  /** Section's dominant color — drives palette */
+  dominantColor?: string;
+}
+
+export interface CinematicPhrase {
+  /** Which lyric line this phrase is from (0-based) */
+  lineIndex: number;
+  /** Inclusive range of word indices within the line.
+   *  [0, 3] means words 0, 1, 2, 3 from that line's word-level timestamps. */
+  wordRange: [number, number];
+  /** Most impactful word in this phrase — UPPERCASE. Optional. */
+  heroWord?: string;
 }
 
 export interface StoryboardEntry {
@@ -88,14 +106,23 @@ export interface WordDirective {
   word: string;
   emphasisLevel: number;
   // v2 fields
+  /** @deprecated Phase 0 — engine derives entry from emphasisLevel */
   entry?: string | null;
+  /** @deprecated Phase 0 — engine derives behavior from beat sync */
   behavior?: string | null;
+  /** @deprecated Phase 0 — engine derives exit from emphasisLevel */
   exit?: string | null;
+  /** @deprecated Phase 0 — removed, only elementalClass used */
   trail?: string | null;
+  /** @deprecated Phase 0 — removed */
   ghostTrail?: boolean;
+  /** @deprecated Phase 0 — removed */
   ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial' | null;
+  /** @deprecated Phase 0 — removed */
   letterSequence?: boolean;
+  /** @deprecated Phase 0 — removed, elementalClass covers visible effects */
   visualMetaphor?: string | null;
+  /** @deprecated Phase 0 — replaced by isolation flag */
   heroPresentation?: 'inline-scale' | 'delayed-reveal' | 'isolation' | 'vertical-lift' | 'vertical-drop' | 'tracking-expand' | 'dim-surroundings' | null;
   // v1 legacy fields
   kineticClass?:
@@ -105,6 +132,8 @@ export interface WordDirective {
   elementalClass?:
     | 'FIRE' | 'WATER' | 'FROST' | 'SMOKE' | 'ELECTRIC'
     | 'ICE' | 'RAIN' | 'NEON' | null; // ICE/RAIN/NEON kept for legacy compat
+  /** Word appears alone on screen — requires word duration ≥ 700ms */
+  isolation?: boolean;
   colorOverride?: string | null;
   specialEffect?: string | null;
   evolutionRule?: string | null;
