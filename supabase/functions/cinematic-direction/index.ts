@@ -862,6 +862,75 @@ function fillPhraseGaps(
   return result;
 }
 
+/**
+ * Fill missing heroWords — pick the longest-duration word in the phrase.
+ * Every phrase needs a heroWord for accent color highlighting.
+ */
+function fillMissingHeroWords(
+  phrases: Array<{ wordRange: [number, number]; heroWord?: string }>,
+  words: Array<{ word: string; start: number; end: number }>,
+): void {
+  for (const phrase of phrases) {
+    if (phrase.heroWord) continue;
+
+    let longest = "";
+    let longestDur = 0;
+
+    for (
+      let i = phrase.wordRange[0];
+      i <= phrase.wordRange[1] && i < words.length;
+      i++
+    ) {
+      const dur = words[i].end - words[i].start;
+      if (dur > longestDur) {
+        longestDur = dur;
+        longest = words[i].word;
+      }
+    }
+
+    if (longest) {
+      phrase.heroWord = longest.toUpperCase().replace(/[^A-Z0-9'.,-]/g, "");
+    }
+  }
+}
+
+/**
+ * Merge orphan single-word phrases (< 350ms) into adjacent phrases.
+ * Single-word phrases are only valid for impact exclamations (≥ 350ms).
+ * Filler words, articles, and line-boundary artifacts get absorbed.
+ */
+function mergeOrphanPhrases(
+  phrases: Array<{ wordRange: [number, number]; heroWord?: string }>,
+  words: Array<{ word: string; start: number; end: number }>,
+): Array<{ wordRange: [number, number]; heroWord?: string }> {
+  const sorted = [...phrases].sort((a, b) => a.wordRange[0] - b.wordRange[0]);
+
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const phrase = sorted[i];
+    const count = phrase.wordRange[1] - phrase.wordRange[0] + 1;
+    if (count > 1) continue;
+
+    const wordIdx = phrase.wordRange[0];
+    if (wordIdx >= words.length) continue;
+
+    const durMs = Math.round((words[wordIdx].end - words[wordIdx].start) * 1000);
+    if (durMs >= 350) continue;
+
+    if (i > 0 && sorted[i - 1].wordRange[1] === phrase.wordRange[0] - 1) {
+      sorted[i - 1].wordRange[1] = phrase.wordRange[1];
+      sorted.splice(i, 1);
+    } else if (
+      i < sorted.length - 1 &&
+      sorted[i + 1].wordRange[0] === phrase.wordRange[1] + 1
+    ) {
+      sorted[i + 1].wordRange[0] = phrase.wordRange[0];
+      sorted.splice(i, 1);
+    }
+  }
+
+  return sorted;
+}
+
 function buildWordUserMessage(
   title: string,
   artist: string,
@@ -1797,10 +1866,16 @@ async function callWords(
 
   const result = validateWords(parsed, words);
 
-  // Server-side enforcement: split any phrase over 6 words at largest gap
+  // Server-side enforcement pipeline (order matters)
   if (words && Array.isArray(result.value.phrases)) {
+    // 1. Hard cap: split any phrase over 6 words
     result.value.phrases = enforcePhraseLimits(result.value.phrases, words, 6);
+    // 2. Merge orphan single-word phrases (< 350ms) into neighbors
+    result.value.phrases = mergeOrphanPhrases(result.value.phrases, words);
+    // 3. Fill gaps left by merging or AI omissions
     result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
+    // 4. Every phrase must have a heroWord for accent color
+    fillMissingHeroWords(result.value.phrases, words);
   }
 
   if (
