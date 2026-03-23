@@ -928,6 +928,8 @@ export class LyricDancePlayer {
   private _pendingUpgradeTimeout: number | null = null;
   private _pendingIdleHandle: number | null = null;
   private _pendingCanPlayHandler: (() => void) | null = null;
+  /** Audio is waiting for scene compilation to finish before playing */
+  private _audioDeferredUntilReady = false;
   private options?: { bootMode?: "minimal" | "full"; preloadedImages?: HTMLImageElement[] };
 
   constructor(
@@ -1065,7 +1067,12 @@ export class LyricDancePlayer {
     if (this.destroyed) return;
     this.perfMarks.tClockStart = this.perfMarks.tClockStart ?? performance.now();
     this.primeAudio();
-    this.audio.play().catch(() => {});
+    // Full boot: scene is already compiled by prepareFullMode()
+    if (this.fullModeEnabled) {
+      this.audio.play().catch(() => {});
+    } else {
+      this._audioDeferredUntilReady = true;
+    }
     this.playing = true;
     this.startHealthMonitor();
     if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
@@ -1227,6 +1234,12 @@ export class LyricDancePlayer {
       // image upgrade best-effort
     });
     this.fullModeEnabled = true;
+    // ═══ DEFERRED AUDIO: scene is now ready — start audio if play() was called earlier ═══
+    if (this._audioDeferredUntilReady && this.playing) {
+      this._audioDeferredUntilReady = false;
+      this._startAudioPlayback();
+      this.startHealthMonitor();
+    }
     this.perfMarks.tFullModeEnabled = performance.now();
   }
 
@@ -1271,6 +1284,24 @@ export class LyricDancePlayer {
   // Public API (React calls these)
   // ────────────────────────────────────────────────────────────
 
+  private _startAudioPlayback(): void {
+    const playStart = this.data.region_start ?? this.songStartSec;
+    if (this.audio.currentTime <= 0 || (this.data.region_start != null && this.audio.currentTime < playStart)) {
+      if (this.audio.readyState >= 2) {
+        this.audio.currentTime = playStart;
+      } else if (this.data.region_start != null) {
+        const onReady = () => {
+          this.audio.removeEventListener("canplay", onReady);
+          if (this._pendingCanPlayHandler === onReady) this._pendingCanPlayHandler = null;
+          if (!this.destroyed) this.audio.currentTime = playStart;
+        };
+        this._pendingCanPlayHandler = onReady;
+        this.audio.addEventListener("canplay", onReady);
+      }
+    }
+    this.audio.play().catch(() => {});
+  }
+
   async load(payload: ScenePayload, onProgress: (pct: number) => void): Promise<Map<string, ChunkState>> {
     try {
       this.payload = payload;
@@ -1304,32 +1335,26 @@ export class LyricDancePlayer {
     if (this.destroyed) return;
     this.primeAudio();
     this.playing = true;
-    const playStart = this.data.region_start ?? this.songStartSec;
-    if (this.audio.currentTime <= 0 || (this.data.region_start != null && this.audio.currentTime < playStart)) {
-      // Only seek if audio is ready; otherwise wait for canplay
-      if (this.audio.readyState >= 2) {
-        this.audio.currentTime = playStart;
-      } else if (this.data.region_start != null) {
-        const onReady = () => {
-          this.audio.removeEventListener("canplay", onReady);
-          if (this._pendingCanPlayHandler === onReady) this._pendingCanPlayHandler = null;
-          if (!this.destroyed) this.audio.currentTime = playStart;
-        };
-        this._pendingCanPlayHandler = onReady;
-        this.audio.addEventListener("canplay", onReady);
+
+    // ═══ AUDIO GATE: don't start audio before scene is compiled ═══
+    // Without compiled scene, the viewer sees black while hearing music.
+    // Defer audio until fullModeEnabled, then start automatically.
+    if (!this.fullModeEnabled) {
+      this._audioDeferredUntilReady = true;
+      // Start the upgrade — audio will start when it completes
+      if (!this._bakePromise) {
+        this.scheduleFullModeUpgrade();
       }
+      // Start RAF loop so drawMinimalFirstFrame keeps rendering
+      if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
+      this.rafHandle = requestAnimationFrame(this.tick);
+      return;
     }
-    this.audio.play().catch(() => {});
+
+    // Scene is ready — start audio immediately
+    this._startAudioPlayback();
     this.startHealthMonitor();
 
-    // ── Lazy full-mode upgrade on first play() call ──
-    // In minimal boot, compileScene / fonts / images haven't loaded yet.
-    // Trigger the upgrade now that we have a user gesture (network + CPU fair game).
-    if (!this.fullModeEnabled && !this._bakePromise) {
-      this.scheduleFullModeUpgrade();
-    }
-
-    // Restart the RAF loop — it stops when playing becomes false
     if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
     this.rafHandle = requestAnimationFrame(this.tick);
   }
@@ -1367,6 +1392,7 @@ export class LyricDancePlayer {
   }
 
   seek(timeSec: number): void {
+    this._audioDeferredUntilReady = false;
     this.audio.currentTime = timeSec;
     const t = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (t - this.songStartSec) * 1000);
@@ -1941,6 +1967,7 @@ export class LyricDancePlayer {
       this.audio.removeEventListener("canplay", this._pendingCanPlayHandler);
       this._pendingCanPlayHandler = null;
     }
+    this._audioDeferredUntilReady = false;
 
     this.audio.pause();
     this.audio.src = "";
