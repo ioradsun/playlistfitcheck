@@ -4604,7 +4604,7 @@ export class LyricDancePlayer {
         // ── Final alpha: phrase envelope × spotlight × role ──
         const roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
         const finalAlpha = Math.min(
-          resolvedWord?.semanticAlphaMax ?? word.semanticAlphaMax,
+          word.semanticAlphaMax,
           phraseAlpha * spotlightAlpha * roleAlpha,
         );
 
