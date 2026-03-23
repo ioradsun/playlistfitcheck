@@ -37,6 +37,7 @@ export function canShowHeroGlow(tier: EffectTier): boolean {
  *  Scales how many particles the elemental effect spawns. */
 export function getParticleDensity(tier: EffectTier): number {
   switch (tier) {
+    case 'quick': return 0.3;     // brief burst — few particles, short-lived
     case 'normal': return 0.5;    // subtle: fewer, shorter-lived particles
     case 'held': return 0.8;      // moderate
     case 'sustained': return 1.0; // full treatment

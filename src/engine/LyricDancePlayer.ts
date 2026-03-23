@@ -4497,18 +4497,20 @@ export class LyricDancePlayer {
 
       // ── Phrase-level envelope: one fade-in, one fade-out for the whole group ──
       const phraseDuration = Math.max(0.01, group.end - group.start);
-      const phraseAge = tSec - group.start;
       const phraseRemaining = groupEnd - tSec;
-      const phraseEntryDuration = Math.min(0.15, phraseDuration * 0.12);
       const phraseExitDuration = Math.min(0.15, phraseDuration * 0.10);
 
+      // Entry: fade from when cursor activated this group (entryPad before group.start)
+      // to group.start. This matches the cursor's switch timing — no alpha gap.
+      const entryPad = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
+      const timeSinceActivation = tSec - (group.start - entryPad);
+      const phraseEntryDuration = entryPad;
+
       let phraseAlpha = 1.0;
-      if (phraseAge < 0) {
-        // Before phrase starts — entry window from cursor
-        phraseAlpha = Math.max(0, Math.min(1, (phraseAge + phraseEntryDuration) / Math.max(0.01, phraseEntryDuration)));
-      } else if (phraseAge < phraseEntryDuration) {
-        phraseAlpha = Math.min(1, phraseAge / Math.max(0.01, phraseEntryDuration));
-      } else if (phraseRemaining < phraseExitDuration) {
+      if (timeSinceActivation < phraseEntryDuration) {
+        phraseAlpha = Math.max(0, Math.min(1, timeSinceActivation / Math.max(0.01, phraseEntryDuration)));
+      }
+      if (phraseRemaining < phraseExitDuration) {
         phraseAlpha = Math.max(0, phraseRemaining / Math.max(0.01, phraseExitDuration));
       }
 
