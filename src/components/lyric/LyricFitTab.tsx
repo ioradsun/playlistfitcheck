@@ -6,7 +6,6 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { beatSnapWords } from "@/engine/beatSnapWords";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -174,9 +173,6 @@ export function LyricFitTab({
     start: number;
     end: number;
   }> | null>(initialLyric?.words ?? null);
-
-  // Tracks whether the current words array has already been beat-snapped
-  const wordsSnappedRef = useRef(false);
 
   const [renderData, setRenderData] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
@@ -351,12 +347,6 @@ export function LyricFitTab({
 
   useEffect(() => {
     if (!detectedGrid || beatGrid) return;
-
-    // Beat-snap words that arrived before the beat grid was ready
-    if (words?.length && !wordsSnappedRef.current) {
-      wordsSnappedRef.current = true;
-      setWords(beatSnapWords(words, detectedGrid.beats));
-    }
 
     setBeatGrid(detectedGrid);
     setBeatGridDone(true);
@@ -1629,21 +1619,6 @@ export function LyricFitTab({
     [handleViewChange],
   );
 
-  const handleSetWords = useCallback(
-    (w: Array<{ word: string; start: number; end: number }> | null) => {
-      if (w?.length && beatGrid?.beats?.length) {
-        // Beat grid already available — snap immediately
-        wordsSnappedRef.current = true;
-        setWords(beatSnapWords(w, beatGrid.beats));
-      } else {
-        // Beat grid not ready yet — store raw and let detectedGrid effect snap
-        wordsSnappedRef.current = false;
-        setWords(w);
-      }
-    },
-    [beatGrid],
-  );
-
   const fitDisabled = !transcriptionDone;
 
   const sceneInputNode = !lyricData ? (
@@ -1714,7 +1689,7 @@ export function LyricFitTab({
           versionMeta={versionMeta}
           setVersionMeta={setVersionMeta}
           beatGrid={beatGrid}
-          setWords={handleSetWords}
+          setWords={setWords}
           onProjectSaved={onProjectSaved}
           onNewProject={() => {
             setRenderData(null);
