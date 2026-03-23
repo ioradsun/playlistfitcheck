@@ -17,7 +17,6 @@ import type { CinematicDirection } from "@/types/CinematicDirection";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
-import { drawIcon, type IconGlyph, type IconStyle } from "@/lib/lyricIcons";
 import {
   compileScene,
   computeEntryState,
@@ -424,10 +423,6 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     emphasisLevel?: number;
     entryProgress?: number;
     exitProgress?: number;
-    iconGlyph?: string;
-    iconStyle?: 'outline' | 'filled' | 'ghost';
-    iconPosition?: 'behind' | 'above' | 'beside' | 'replace';
-    iconScale?: number;
     behavior?: string;
     letterIndex?: number;
     letterTotal?: number;
@@ -483,249 +478,6 @@ const SIM_W = 96;
 const SIM_H = 54;
 const SPLIT_EXIT_STYLES = new Set(['scatter-letters', 'peel-off', 'peel-reverse', 'cascade-down', 'cascade-up']);
 
-interface PixelSim {
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
-  buffer: Uint8ClampedArray;
-  imageData: ImageData;
-}
-
-function createPixelSim(): PixelSim {
-  const canvas = document.createElement('canvas');
-  canvas.width = SIM_W;
-  canvas.height = SIM_H;
-  const ctx = canvas.getContext('2d')!;
-  const imageData = ctx.createImageData(SIM_W, SIM_H);
-  return { canvas, ctx, buffer: imageData.data, imageData };
-}
-
-class FireSim {
-  private heat: Float32Array;
-  private sim: PixelSim;
-  private palette: Uint32Array;
-
-  constructor(
-    private colorMode: 'fire' | 'smoke' | 'ember',
-    private cooling: number = 0.12,
-  ) {
-    this.heat = new Float32Array((SIM_H + 2) * SIM_W);
-    this.sim = createPixelSim();
-    this.palette = this.buildPalette(colorMode);
-  }
-
-  private buildPalette(mode: 'fire' | 'smoke' | 'ember'): Uint32Array {
-    const p = new Uint32Array(256);
-    for (let i = 0; i < 256; i++) {
-      const t = i / 255;
-      let r = 0, g = 0, b = 0, a = 0;
-      if (mode === 'fire') {
-        r = Math.min(255, Math.floor(t < 0.5 ? t * 2 * 255 : 255));
-        g = Math.min(255, Math.floor(t < 0.5 ? 0 : (t - 0.5) * 2 * 200));
-        b = Math.min(255, Math.floor(t < 0.75 ? 0 : (t - 0.75) * 4 * 255));
-        a = Math.min(255, Math.floor(t * 300));
-      } else if (mode === 'smoke') {
-        const gray = Math.floor(t * 180);
-        r = gray; g = gray; b = gray + Math.floor(t * 30);
-        a = Math.min(255, Math.floor(t * 200));
-      } else {
-        r = Math.min(255, Math.floor(t < 0.4 ? t * 2.5 * 180 : 180 + (t - 0.4) * 1.25 * 75));
-        g = Math.min(255, Math.floor(t < 0.5 ? t * 100 : 100 + (t - 0.5) * 2 * 155));
-        b = Math.min(255, Math.floor(t < 0.3 ? t * 3 * 120 : Math.max(0, 120 - (t - 0.3) * 170)));
-        a = Math.min(255, Math.floor(t * 280));
-      }
-      p[i] = (a << 24) | (b << 16) | (g << 8) | r;
-    }
-    return p;
-  }
-
-  update(intensity: number, beatPulse: number): void {
-    const W = SIM_W;
-    const H = SIM_H;
-    const heat = this.heat;
-    const seedHeat = intensity * 0.9 + beatPulse * 0.8;
-    for (let x = 0; x < W; x++) {
-      const seed = Math.random();
-      heat[(H + 1) * W + x] = seed < 0.6 ? seedHeat + Math.random() * 0.1 : 0;
-      heat[H * W + x] = seed < 0.7 ? seedHeat * 0.8 : 0;
-    }
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const below1 = heat[(y + 1) * W + x];
-        const below2 = heat[(y + 2) * W + x];
-        const left = heat[(y + 1) * W + Math.max(0, x - 1)];
-        const right = heat[(y + 1) * W + Math.min(W - 1, x + 1)];
-        heat[y * W + x] = Math.max(0, (below1 + below2 + left + right) / 4 - this.cooling);
-      }
-    }
-    const buf = this.sim.buffer;
-    for (let i = 0; i < W * H; i++) {
-      const heatVal = Math.min(255, Math.floor(heat[i] * 255));
-      const color = this.palette[heatVal];
-      const idx = i * 4;
-      buf[idx] = color & 0xff;
-      buf[idx + 1] = (color >> 8) & 0xff;
-      buf[idx + 2] = (color >> 16) & 0xff;
-      buf[idx + 3] = (color >> 24) & 0xff;
-    }
-    this.sim.ctx.putImageData(this.sim.imageData, 0, 0);
-  }
-
-  get canvas(): HTMLCanvasElement { return this.sim.canvas; }
-}
-
-class WaterSim {
-  private buf1 = new Float32Array(SIM_W * SIM_H);
-  private buf2 = new Float32Array(SIM_W * SIM_H);
-  private sim = createPixelSim();
-  private dominantColor: [number, number, number];
-  private accentColor: [number, number, number];
-
-  constructor(dominant: string, accent: string) {
-    this.dominantColor = this.hexToRgb(dominant);
-    this.accentColor = this.hexToRgb(accent);
-  }
-
-  private hexToRgb(hex: string): [number, number, number] {
-    const c = hex.replace('#', '').padEnd(6, '0');
-    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
-  }
-
-  disturb(x: number, y: number, strength: number): void {
-    const ix = Math.floor(x * SIM_W);
-    const iy = Math.floor(y * SIM_H);
-    if (ix > 0 && ix < SIM_W - 1 && iy > 0 && iy < SIM_H - 1) this.buf1[iy * SIM_W + ix] = strength;
-  }
-
-  update(tSec: number, beatPulse: number, intensity: number): void {
-    const W = SIM_W;
-    const H = SIM_H;
-    if (Math.random() < 0.08 + intensity * 0.15) this.disturb(Math.random(), Math.random() * 0.7, 0.8 + Math.random() * 0.4);
-    if (beatPulse > 0.5) this.disturb(0.5, 0.5, beatPulse * 1.2 + Math.sin(tSec * 0.1) * 0.05);
-    const damping = 0.985;
-    for (let y = 1; y < H - 1; y++) {
-      for (let x = 1; x < W - 1; x++) {
-        const idx = y * W + x;
-        const wave = (this.buf1[(y - 1) * W + x] + this.buf1[(y + 1) * W + x] + this.buf1[y * W + x - 1] + this.buf1[y * W + x + 1]) / 2 - this.buf2[idx];
-        this.buf2[idx] = wave * damping;
-      }
-    }
-    const temp = this.buf1;
-    this.buf1 = this.buf2;
-    this.buf2 = temp;
-    const [dr, dg, db] = this.dominantColor;
-    const [ar, ag, ab] = this.accentColor;
-    const buf = this.sim.buffer;
-    for (let i = 0; i < W * H; i++) {
-      const wave = this.buf1[i];
-      const t = Math.max(0, Math.min(1, wave * 0.5 + 0.5));
-      const idx = i * 4;
-      buf[idx] = Math.min(255, Math.floor(dr * (1 - t) * 0.3 + ar * t * 0.6));
-      buf[idx + 1] = Math.min(255, Math.floor(dg * (1 - t) * 0.3 + ag * t * 0.6));
-      buf[idx + 2] = Math.min(255, Math.floor(Math.min(255, db * 0.4 + ab * t * 0.8 + wave * 80)));
-      buf[idx + 3] = Math.floor(120 + t * 80);
-    }
-    this.sim.ctx.putImageData(this.sim.imageData, 0, 0);
-  }
-
-  get canvas(): HTMLCanvasElement { return this.sim.canvas; }
-}
-
-class AuroraSim {
-  private sim = createPixelSim();
-  private colors: Array<[number, number, number]>;
-
-  constructor(dominant: string, accent: string) {
-    this.colors = [this.hexToRgb(dominant), this.hexToRgb(accent), [0, 200, 180], [120, 80, 200]];
-  }
-
-  private hexToRgb(hex: string): [number, number, number] {
-    const c = hex.replace('#', '').padEnd(6, '0');
-    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
-  }
-
-  update(tSec: number, intensity: number): void {
-    const W = SIM_W;
-    const H = SIM_H;
-    const buf = this.sim.buffer;
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const nx = x / W;
-        const ny = y / H;
-        let r = 0, g = 0, b = 0, a = 0;
-        for (let band = 0; band < 4; band++) {
-          const bandY = 0.1 + band * 0.18 + Math.sin(tSec * 0.3 + band * 1.4) * 0.06;
-          const bandW = 0.06 + band * 0.02 + Math.sin(tSec * 0.2 + band) * 0.02;
-          const dist = Math.abs(ny - bandY) / bandW;
-          if (dist > 1) continue;
-          const wave = Math.sin(nx * 8 + tSec * 0.5 + band * 2) * 0.3 + 0.7;
-          const brightness = (1 - dist) * wave * intensity * 0.6;
-          const [cr, cg, cb] = this.colors[band % this.colors.length];
-          r += cr * brightness; g += cg * brightness; b += cb * brightness; a += brightness * 180;
-        }
-        const idx = (y * W + x) * 4;
-        buf[idx] = Math.min(255, Math.floor(r));
-        buf[idx + 1] = Math.min(255, Math.floor(g));
-        buf[idx + 2] = Math.min(255, Math.floor(b));
-        buf[idx + 3] = Math.min(255, Math.floor(a));
-      }
-    }
-    this.sim.ctx.putImageData(this.sim.imageData, 0, 0);
-  }
-
-  get canvas(): HTMLCanvasElement { return this.sim.canvas; }
-}
-
-class RainSim {
-  private drops: Array<{ x: number; y: number; speed: number; length: number; alpha: number }>;
-  private sim = createPixelSim();
-  private accentColor: [number, number, number];
-
-  constructor(accent: string) {
-    this.accentColor = this.hexToRgb(accent);
-    this.drops = Array.from({ length: 80 }, (_, i) => ({
-      x: (i * 0.618033) % 1,
-      y: (i * 0.381966) % 1,
-      speed: 0.008 + (i * 0.618033 % 1) * 0.012,
-      length: 0.03 + (i * 0.381966 % 1) * 0.06,
-      alpha: 0.2 + (i % 5) * 0.08,
-    }));
-  }
-
-  private hexToRgb(hex: string): [number, number, number] {
-    const c = hex.replace('#', '').padEnd(6, '0');
-    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
-  }
-
-  update(_tSec: number, intensity: number, beatPulse: number): void {
-    const W = SIM_W;
-    const H = SIM_H;
-    const buf = this.sim.buffer;
-    for (let i = 0; i < W * H * 4; i += 4) {
-      buf[i] = 5; buf[i + 1] = 5; buf[i + 2] = 8; buf[i + 3] = 255;
-    }
-    const [ar, ag, ab] = this.accentColor;
-    for (const drop of this.drops) {
-      drop.y = (drop.y + drop.speed * (1 + beatPulse * 0.5)) % 1;
-      const x = Math.floor(drop.x * W);
-      const y1 = Math.floor(drop.y * H);
-      const y2 = Math.floor((drop.y + drop.length) * H);
-      const alpha = Math.floor(drop.alpha * intensity * 255);
-      const denom = Math.max(1, y2 - y1);
-      for (let py = y1; py < Math.min(y2, H); py++) {
-        const t = (py - y1) / denom;
-        const idx = (py * W + x) * 4;
-        buf[idx] = Math.min(255, ar + Math.floor(t * 30));
-        buf[idx + 1] = Math.min(255, ag + Math.floor(t * 30));
-        buf[idx + 2] = Math.min(255, ab + Math.floor(t * 40));
-        buf[idx + 3] = Math.floor(alpha * (1 - t * 0.5));
-      }
-    }
-    this.sim.ctx.putImageData(this.sim.imageData, 0, 0);
-  }
-
-  get canvas(): HTMLCanvasElement { return this.sim.canvas; }
-}
-
 // ═══ BeatVisSim: In-place beat-reactive visualizer ═══
 // Bar HEIGHT bounces with beat energy. Bar APPEARANCE varies by mood:
 //   flame  — orange/red tips, warm glow, flicker
@@ -740,8 +492,6 @@ const VIS_H = 64;
 class BeatVisSim {
   private visCanvas: HTMLCanvasElement;
   private visCtx: CanvasRenderingContext2D;
-  private buf: Uint8ClampedArray;
-  private imageData: ImageData;
   private bars: Float32Array;
   private barSeeds: Float32Array;
   private palette: [number, number, number];
@@ -754,8 +504,6 @@ class BeatVisSim {
     this.visCanvas.width = VIS_W;
     this.visCanvas.height = VIS_H;
     this.visCtx = this.visCanvas.getContext('2d')!;
-    this.imageData = this.visCtx.createImageData(VIS_W, VIS_H);
-    this.buf = this.imageData.data;
     this.bars = new Float32Array(VIS_W);
     this.barSeeds = new Float32Array(VIS_W);
     for (let i = 0; i < VIS_W; i++) {
@@ -776,100 +524,64 @@ class BeatVisSim {
   update(energy: number, pulse: number, hitStrength: number, _beatPhase: number, beatIndex: number): void {
     const W = VIS_W;
     const H = VIS_H;
-    const buf = this.buf;
-
-    for (let i = 0; i < W * H * 4; i += 4) {
-      buf[i] = 0; buf[i + 1] = 0; buf[i + 2] = 0; buf[i + 3] = 0;
-    }
+    const ctx = this.visCtx;
+    ctx.clearRect(0, 0, W, H);
 
     const isNewBeat = beatIndex !== this.lastBeatIndex;
     this.lastBeatIndex = beatIndex;
     this.flickerPhase += 0.15 + energy * 0.3;
 
     const [pr, pg, pb] = this.palette;
-    const drive = energy * 0.55 + pulse * 0.35 + hitStrength * 0.10;
+    const beatDrive = pulse * 0.65 + hitStrength * 0.25 + energy * 0.10;
 
-    // ── Compute bar heights (same for all styles) ──
     for (let x = 0; x < W; x++) {
       const nx = x / W;
       const centerBias = 0.5 + 0.5 * (1.0 - Math.abs(nx - 0.5) * 2.0);
       const variation = 0.7 + this.barSeeds[x] * 0.6;
-      const target = drive * centerBias * variation;
-      if (target > this.bars[x]) {
-        this.bars[x] += (target - this.bars[x]) * 0.75;
-      } else {
-        this.bars[x] += (target - this.bars[x]) * 0.12;
-      }
+      const target = beatDrive * centerBias * variation;
+      this.bars[x] += (target > this.bars[x])
+        ? (target - this.bars[x]) * 0.85
+        : (target - this.bars[x]) * 0.15;
     }
 
-    // ── Render per style ──
-    const style = this.style;
     for (let x = 0; x < W; x++) {
       const barH = Math.floor(this.bars[x] * H * 0.92);
       if (barH < 1) continue;
-      const seed = this.barSeeds[x];
+      const baseH = Math.floor(barH * 0.6);
+      const tipH = barH - baseH;
 
-      for (let y = H - 1; y >= H - barH && y >= 0; y--) {
-        const t = (H - y) / Math.max(1, barH); // 0=base, 1=tip
-        const idx = (y * W + x) * 4;
+      const bR = Math.floor(pr * 0.5);
+      const bG = Math.floor(pg * 0.5);
+      const bB = Math.floor(pb * 0.5);
+      ctx.fillStyle = `rgba(${bR},${bG},${bB},0.5)`;
+      ctx.fillRect(x, H - baseH, 1, baseH);
 
-        if (style === 'flame') {
-          // ── FLAME: warm base → orange mid → bright tip, flicker at top ──
-          const flicker = t > 0.6 ? Math.sin(this.flickerPhase * 3 + seed * 40 + x * 0.7) * 0.3 : 0;
-          const tipShift = Math.max(0, t - 0.5) * 2; // 0-1 over top half
-          // Color: palette base → shift toward orange/yellow at tips
-          const r = Math.min(255, Math.floor(pr * (0.4 + t * 0.6) + tipShift * (255 - pr) * 0.6));
-          const g = Math.min(255, Math.floor(pg * (0.3 + t * 0.4) + tipShift * Math.max(0, 180 - pg) * 0.3));
-          const b = Math.floor(pb * (0.2 + t * 0.15) * (1 - tipShift * 0.7));
-          const a = Math.min(255, Math.floor((230 + flicker * 25) * (0.60 + t * 0.35) * (1 - flicker * 0.10)));
-          buf[idx] = r; buf[idx + 1] = g; buf[idx + 2] = Math.max(0, b); buf[idx + 3] = a;
-        } else if (style === 'neon') {
-          // ── NEON: bright core, bloom falloff at edges ──
-          // Horizontal bloom: center of bar column is brightest
-          const bright = 0.6 + t * 0.4;
-          const glow = 1.0; // full intensity in core
-          buf[idx]     = Math.min(255, Math.floor(pr * bright * glow + 40 * t));
-          buf[idx + 1] = Math.min(255, Math.floor(pg * bright * glow + 30 * t));
-          buf[idx + 2] = Math.min(255, Math.floor(pb * bright * glow + 60 * t));
-          buf[idx + 3] = Math.min(255, Math.floor(220 * (0.55 + t * 0.40)));
-        } else if (style === 'smoke') {
-          // ── SMOKE: soft, feathered, wispy at top ──
-          const wisp = t > 0.4 ? Math.sin(this.flickerPhase * 1.5 + seed * 30 + x * 0.5) * 0.25 * t : 0;
-          const fade = t > 0.7 ? 1.0 - (t - 0.7) / 0.3 : 1.0; // feather out at tip
-          const grey = 0.5 + t * 0.3;
-          buf[idx]     = Math.min(255, Math.floor((pr * 0.3 + 180 * 0.7) * grey));
-          buf[idx + 1] = Math.min(255, Math.floor((pg * 0.3 + 170 * 0.7) * grey));
-          buf[idx + 2] = Math.min(255, Math.floor((pb * 0.3 + 175 * 0.7) * grey));
-          buf[idx + 3] = Math.min(255, Math.floor(185 * fade * (0.45 + t * 0.30 + wisp)));
-        } else {
-          // ── LIGHT: clean, bright, minimal pillars ──
-          const bright = 0.35 + t * 0.65;
-          buf[idx]     = Math.min(255, Math.floor(pr * bright + 50 * t));
-          buf[idx + 1] = Math.min(255, Math.floor(pg * bright + 50 * t));
-          buf[idx + 2] = Math.min(255, Math.floor(pb * bright + 50 * t));
-          buf[idx + 3] = Math.min(255, Math.floor(210 * (0.55 + t * 0.40)));
-        }
+      let tR = pr, tG = pg, tB = pb, tA = 0.65;
+      if (this.style === 'flame') {
+        const flicker = Math.sin(this.flickerPhase * 3 + this.barSeeds[x] * 40) * 0.12;
+        tR = Math.min(255, pr + 80);
+        tG = Math.min(255, Math.floor(pg * 0.6 + 50));
+        tB = Math.floor(pb * 0.2);
+        tA = 0.6 + flicker;
+      } else if (this.style === 'neon') {
+        tR = Math.min(255, pr + 40);
+        tG = Math.min(255, pg + 30);
+        tB = Math.min(255, pb + 60);
+        tA = 0.7;
+      } else if (this.style === 'smoke') {
+        tR = Math.floor(pr * 0.3 + 130);
+        tG = Math.floor(pg * 0.3 + 125);
+        tB = Math.floor(pb * 0.3 + 128);
+        tA = 0.4;
       }
+      ctx.fillStyle = `rgba(${tR},${tG},${tB},${tA.toFixed(2)})`;
+      ctx.fillRect(x, H - barH, 1, tipH);
     }
 
-    // ── Beat flash: bright line at bottom on new beat ──
     if (isNewBeat && hitStrength > 0.3) {
-      const flashAlpha = Math.min(200, Math.floor(hitStrength * 155));
-      const fr = style === 'flame' ? Math.min(255, pr + 80) : pr;
-      const fg = style === 'flame' ? Math.min(255, Math.floor(pg * 0.7 + 60)) : pg;
-      const fb = style === 'flame' ? Math.floor(pb * 0.3) : pb;
-      for (let x = 0; x < W; x++) {
-        for (let y = H - 3; y < H; y++) {
-          const idx = (y * W + x) * 4;
-          buf[idx]     = Math.max(buf[idx],     Math.min(255, fr));
-          buf[idx + 1] = Math.max(buf[idx + 1], Math.min(255, fg));
-          buf[idx + 2] = Math.max(buf[idx + 2], Math.min(255, fb));
-          buf[idx + 3] = Math.max(buf[idx + 3], flashAlpha);
-        }
-      }
+      ctx.fillStyle = `rgba(${Math.min(255, pr + 80)},${Math.min(255, Math.floor(pg * 0.7 + 60))},${Math.floor(pb * 0.3)},${Math.min(0.8, hitStrength * 0.6).toFixed(2)})`;
+      ctx.fillRect(0, H - 3, W, 3);
     }
-
-    this.visCtx.putImageData(this.imageData, 0, 0);
   }
 
   get canvas(): HTMLCanvasElement { return this.visCanvas; }
@@ -896,14 +608,6 @@ interface HeroDecompBurst {
   duration: number;     // ms
   originX: number;
   originY: number;
-}
-
-interface EmotionalEvent {
-  type: 'soul-flare' | 'void-moment' | 'light-break' | 'heartbeat' | 'color-drain' | 'lens-breath' | 'halo-ring' | 'echo-ghost' | 'tremor' | 'golden-rain' | 'world-shift';
-  triggerRatio: number;
-  intensity: number;
-  duration: number;
-  triggered: boolean;
 }
 
 interface CommentChunk {
@@ -1089,11 +793,10 @@ export class LyricDancePlayer {
   public chapterParticleSystems: (string | null)[] = [];
 
   private backgroundSystem = 'default';
-  private chapterSims: Array<{ fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim; beatVis?: BeatVisSim }> = [];
+  private chapterSims: Array<{ beatVis?: BeatVisSim }> = [];
   private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
   private _barVisStyles: BarVisStyle[] = []; // per-chapter bar style from AI mood
   private lastSimFrame = -1;
-  private currentSimCanvases: HTMLCanvasElement[] = [];
   private _beatVisCanvas: HTMLCanvasElement | null = null; // separate from themed sims
   private chapterImages: HTMLImageElement[] = [];
   /** Pre-blurred versions of chapter images — eliminates per-frame ctx.filter blur() cost */
@@ -1143,8 +846,6 @@ export class LyricDancePlayer {
   private _frameSectionIdx = -1;
   private _framePalette: string[] | null = null;
   private _framePaletteTime = -1; // audio time when palette was last resolved
-  private emotionalEvents: EmotionalEvent[] = [];
-  private activeEvents: Array<{ event: EmotionalEvent; startTime: number }> = [];
 
   // Reusable 1×1 canvas for text measurement (avoids per-recompile DOM allocation)
   private readonly _measureCanvas = (() => { const c = document.createElement('canvas'); c.width = 1; c.height = 1; return c; })();
@@ -1536,7 +1237,6 @@ export class LyricDancePlayer {
     this.buildBgCache();
     this.deriveVisualSystems();
     this.buildChapterSims();
-    this.buildEmotionalEvents();
     this.loadSectionImages().catch(() => {
       // image upgrade best-effort
     });
@@ -1606,7 +1306,6 @@ export class LyricDancePlayer {
       this.buildBgCache();
       this.deriveVisualSystems();
       this.buildChapterSims();
-      this.buildEmotionalEvents();
       onProgress(100);
       return chunkSnapshot;
     } catch (err) {
@@ -1805,7 +1504,7 @@ export class LyricDancePlayer {
         const ox = (this.width - ow) / 2;
         const oy = (this.height - oh) / 2;
         octx.filter = 'blur(3px)';
-        octx.drawImage(img, ox, oy, ow, oh);
+        this._drawImageCoverCropped(octx, img, ox, oy, ow, oh);
         octx.filter = 'none';
         return off;
       });
@@ -1864,6 +1563,9 @@ export class LyricDancePlayer {
       if (secIdx !== this._framePaletteTime) {
         this._framePaletteTime = secIdx;
         this._framePalette = this._resolveCurrentPalette(secIdx);
+        if (this._globalBeatVis && this._framePalette?.[1]) {
+          this._globalBeatVis.setAccent(this._framePalette[1]);
+        }
       }
     }
 
@@ -2104,7 +1806,6 @@ export class LyricDancePlayer {
     this.buildBgCache();
     this.deriveVisualSystems();
     this.buildChapterSims();
-    this.buildEmotionalEvents();
   }
 
   /**
@@ -2263,14 +1964,8 @@ export class LyricDancePlayer {
       this.audioContext = null;
     }
 
-    this._zeroCanvasList(this.currentSimCanvases);
-    this.currentSimCanvases = [];
     this.ambientParticleEngine?.clear();
     this.chapterSims.forEach((sim) => {
-      this._zeroCanvas(sim.fire?.canvas);
-      this._zeroCanvas(sim.water?.canvas);
-      this._zeroCanvas(sim.aurora?.canvas);
-      this._zeroCanvas(sim.rain?.canvas);
       this._zeroCanvas(sim.beatVis?.canvas);
     });
     this._zeroCanvas(this._globalBeatVis?.canvas ?? null);
@@ -2464,7 +2159,6 @@ export class LyricDancePlayer {
             this.conductor?.resetCursor();
             this._beatCursor = 0;
             this._lastBeatIndex = -1;
-            this.activeEvents = [];
           }
         }
       }
@@ -2513,6 +2207,9 @@ export class LyricDancePlayer {
         if (secIdx !== this._framePaletteTime) {
           this._framePaletteTime = secIdx;
           this._framePalette = this._resolveCurrentPalette(secIdx);
+          if (this._globalBeatVis && this._framePalette?.[1]) {
+            this._globalBeatVis.setAccent(this._framePalette[1]);
+          }
         }
       }
 
@@ -3046,8 +2743,6 @@ export class LyricDancePlayer {
     }
 
     if (qTier < 3) {
-      try { this.checkEmotionalEvents(tSec, songProgress); } catch (e) { console.error('[LyricEngine] emotional events crash:', e); }
-      this.drawEmotionalEvents(tSec);
       this.ambientParticleEngine?.draw(this.ctx, "far");
     }
 
@@ -3301,7 +2996,7 @@ export class LyricDancePlayer {
 
       // ═══ HERO DECOMPOSITION: spawn shatter burst when solo hero starts exiting ═══
       // Skip at tier 2+ (spawns dozens of particles per hero word)
-      if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2) {
+      if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2 && (chunk.wordDuration ?? 0) >= 0.35) {
         this._heroDecompSpawned.add(chunk.id);
         const spawnBound = bounds.find(b => b.chunk.id === chunk.id);
         const spawnX = spawnBound ? spawnBound.cx : (Number.isFinite(chunk.x) ? chunk.x : this.width / 2);
@@ -3359,50 +3054,13 @@ export class LyricDancePlayer {
       // ═══ SINGLE COLOR MODEL: no colored halos behind words ═══
 
       const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
-      const iconScaleMult = chunk.iconScale ?? 2.0;
-      const positionScaleOverride: Record<string, number> = {
-        behind: iconScaleMult,
-        above: iconScaleMult * 0.55,
-        beside: iconScaleMult * 0.5,
-        replace: iconScaleMult * 0.9,
-      };
-      const effectiveScale = positionScaleOverride[chunk.iconPosition ?? 'behind'] ?? iconScaleMult;
-      const iconBaseSize = safeFontSize * effectiveScale;
-      const iconColor = chunk.color ?? '#f0f0f0';
-      const now = frameNowSec;
-      let iconPulse = 1.0;
-      if (chunk.iconPosition === 'behind') iconPulse = 1.0 + Math.sin(now * 1.5) * 0.08;
-      else if (chunk.behavior === 'pulse') iconPulse = 1.0 + Math.sin(now * 3) * 0.04;
-      const iconSize = iconBaseSize * iconPulse;
-      let iconX = centerX;
-      let iconY = finalDrawY;
-      let iconOpacity = drawAlpha * 0.45;
-      let iconGlow = 0;
-      // ═══ Adaptive quality: reduce/disable icon glow at lower tiers ═══
-      const iconGlowCap = this._qualityTier < 2 ? 4 : 0; // capped at 4 (was 99 at tier 0)
-
-      switch (chunk.iconPosition) {
-        case 'behind': iconX = centerX; iconY = finalDrawY; iconOpacity = drawAlpha * 0.45; iconGlow = Math.min(12, iconGlowCap); break;
-        case 'above': iconX = centerX; iconY = finalDrawY - safeFontSize * 1.3; iconOpacity = drawAlpha * 0.85; iconGlow = Math.min(6, iconGlowCap); break;
-        case 'beside': iconX = centerX - iconSize * 0.7; iconY = finalDrawY; iconOpacity = drawAlpha * 0.9; iconGlow = Math.min(6, iconGlowCap); break;
-        case 'replace': iconX = centerX; iconY = finalDrawY; iconOpacity = drawAlpha * 1.0; iconGlow = Math.min(16, iconGlowCap); break;
-      }
-
-      const drawBefore = chunk.iconPosition === 'behind' || chunk.iconPosition === 'replace';
-      if (chunk.iconGlyph && chunk.visible && drawBefore) {
-        if (iconGlow > 0) { this.ctx.save(); this.ctx.shadowColor = iconColor; this.ctx.shadowBlur = iconGlow; }
-        drawIcon(this.ctx, chunk.iconGlyph as IconGlyph, iconX, iconY, iconSize, iconColor, (chunk.iconStyle as IconStyle) ?? 'ghost', iconOpacity);
-        if (iconGlow > 0) this.ctx.restore();
-      }
-
       const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
       const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
 
-      if (chunk.iconPosition !== 'replace') {
-        this.ctx.globalAlpha = drawAlpha;
-        this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
-        const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
-        if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
+      this.ctx.globalAlpha = drawAlpha;
+      this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
+      const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
+      if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
 
         // ═══ HERO EFFECTS: bloom pulse, underline sweep ═══
         const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || chunk.isHeroWord;
@@ -3543,12 +3201,6 @@ export class LyricDancePlayer {
             this.ctx.globalAlpha = 1;
           }
         }
-      }
-
-      if (chunk.iconGlyph && chunk.visible && !drawBefore) {
-        if (iconGlow > 0) { this.ctx.save(); this.ctx.shadowColor = iconColor; this.ctx.shadowBlur = iconGlow; }
-        drawIcon(this.ctx, chunk.iconGlyph as IconGlyph, iconX, iconY, iconSize, iconColor, (chunk.iconStyle as IconStyle) ?? 'outline', iconOpacity);
-        if (iconGlow > 0) this.ctx.restore();
       }
       this.ctx.shadowBlur = 0;
       this.ctx.globalAlpha = 1;
@@ -4302,87 +3954,97 @@ export class LyricDancePlayer {
     const urls = this.data.section_images ?? [];
     if (this.options?.preloadedImages?.length) {
       this.chapterImages = this.options.preloadedImages;
-      const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-      const cdSections = (cd?.sections as any[]) ?? [];
-      const songGrade = this._songGrade ?? getMoodGrade(cdSections[0]?.visualMood as string | undefined);
-      const blurRadius = Math.min(3, songGrade.blur.radius);
-      this._preBlurredImages = this.chapterImages.map((img) => {
-        const off = document.createElement('canvas');
-        off.width = this.width || 960;
-        off.height = this.height || 540;
-        const ctx = off.getContext('2d');
-        if (!ctx || !img.complete || img.naturalWidth === 0) return off;
-        if (blurRadius > 0.2) {
-          ctx.filter = `blur(${blurRadius.toFixed(1)}px)`;
-        }
-        const OVERSCAN = 1.25;
-        const ow = off.width * OVERSCAN;
-        const oh = off.height * OVERSCAN;
-        const ox = (off.width - ow) / 2;
-        const oy = (off.height - oh) / 2;
-        ctx.drawImage(img, ox, oy, ow, oh);
-        ctx.filter = 'none';
-        return off;
-      });
+      this._preBlurredImages = this.chapterImages.map(() => document.createElement('canvas'));
+      this.chapterImages.forEach((img, i) => this._preBlurSingleImage(img, i));
+      this._rebuildKenBurnsParams();
       return;
     }
     if (urls.length === 0) return;
-    const duration = this.audio?.duration || 1;
-    const totalChapters = urls.length || 1;
-    const chapterSpan = duration / totalChapters;
-    this.chapterImages = await Promise.all(
-      urls.map((url: string) => {
-        if (!url) return Promise.resolve(new Image());
-        return preloadImage(url);
-      })
-    );
+    this.chapterImages = urls.map(() => new Image());
+    this._preBlurredImages = urls.map(() => document.createElement('canvas'));
 
-    // ═══ PRE-BLUR: Bake Gaussian blur into offscreen canvases once ═══
-    // This eliminates the ~1.65M pixel-op/frame cost of ctx.filter = 'blur(3px)'
-    // which causes thermal throttle + frame drops after ~60-90s of playback.
-    {
-      const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-      const cdSections = (cd?.sections as any[]) ?? [];
-      const songGrade = this._songGrade ?? getMoodGrade(cdSections[0]?.visualMood as string | undefined);
-      const blurRadius = Math.min(3, songGrade.blur.radius);
-      this._preBlurredImages = this.chapterImages.map((img) => {
-        const off = document.createElement('canvas');
-        // Use image natural size capped at canvas size (no need for higher res)
-        off.width = this.width || 960;
-        off.height = this.height || 540;
-        const ctx = off.getContext('2d');
-        if (!ctx || !img.complete || img.naturalWidth === 0) return off;
-        // Apply blur once via filter
-        if (blurRadius > 0.2) {
-          ctx.filter = `blur(${blurRadius.toFixed(1)}px)`;
-        }
-        // Draw with overscan to avoid blurred edges
-        const OVERSCAN = 1.25;
-        const ow = off.width * OVERSCAN;
-        const oh = off.height * OVERSCAN;
-        const ox = (off.width - ow) / 2;
-        const oy = (off.height - oh) / 2;
-        ctx.drawImage(img, ox, oy, ow, oh);
-        ctx.filter = 'none';
-        return off;
-      });
+    const loadPromises = urls.map(async (url: string, i: number) => {
+      if (!url) return;
+      try {
+        const img = await preloadImage(url);
+        this.chapterImages[i] = img;
+        this._preBlurSingleImage(img, i);
+      } catch {
+        // leave fallback empty image
+      }
+    });
+
+    const firstLoads = loadPromises.filter((_, i) => !!urls[i]);
+    if (firstLoads.length > 0) {
+      await Promise.race(firstLoads);
     }
 
-    // Generate Ken Burns parameters per chapter — driven by motionIntent from mood grade.
-    // Images are drawn with 20% overscan, so KB can safely use up to ~8% pan + 1.15 zoom
-    // without ever revealing canvas edges (CameraRig 'far' parallax adds ≤2% displacement).
+    void Promise.all(loadPromises).then(() => {
+      this._rebuildKenBurnsParams();
+    }).catch(() => {});
+  }
+
+  private _drawImageCoverCropped(
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void {
+    const srcW = img.naturalWidth || Math.max(1, Math.round(dw));
+    const srcH = img.naturalHeight || Math.max(1, Math.round(dh));
+    const canvasAspect = Math.max(0.0001, dw / Math.max(1, dh));
+    const srcAspect = srcW / Math.max(1, srcH);
+    let cropX = 0, cropY = 0, cropW = srcW, cropH = srcH;
+    if (srcAspect > canvasAspect) {
+      cropW = Math.round(srcH * canvasAspect);
+      cropX = Math.round((srcW - cropW) / 2);
+    } else {
+      cropH = Math.round(srcW / canvasAspect);
+      cropY = Math.round((srcH - cropH) / 2);
+    }
+    ctx.drawImage(img, cropX, cropY, cropW, cropH, dx, dy, dw, dh);
+  }
+
+  private _preBlurSingleImage(img: HTMLImageElement, index: number): void {
+    if (!img.complete || img.naturalWidth === 0) return;
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+    const cdSections = (cd?.sections as any[]) ?? [];
+    const songGrade = this._songGrade ?? getMoodGrade(cdSections[0]?.visualMood as string | undefined);
+    const blurRadius = Math.min(3, songGrade.blur.radius);
+
+    const off = document.createElement('canvas');
+    off.width = this.width || 960;
+    off.height = this.height || 540;
+    const ctx = off.getContext('2d');
+    if (!ctx) return;
+
+    if (blurRadius > 0.2) ctx.filter = `blur(${blurRadius.toFixed(1)}px)`;
+    const OVERSCAN = 1.25;
+    const ow = off.width * OVERSCAN;
+    const oh = off.height * OVERSCAN;
+    const ox = (off.width - ow) / 2;
+    const oy = (off.height - oh) / 2;
+    this._drawImageCoverCropped(ctx, img, ox, oy, ow, oh);
+    ctx.filter = 'none';
+
+    while (this._preBlurredImages.length <= index) {
+      this._preBlurredImages.push(document.createElement('canvas'));
+    }
+    this._preBlurredImages[index] = off;
+  }
+
+  private _rebuildKenBurnsParams(): void {
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const sections = (cd?.sections as any[]) ?? [];
     this._kenBurnsParams = this.chapterImages.map((_, i) => {
       const seed = (i * 2654435761) >>> 0;
       const s = (v: number) => ((seed * v) & 0xFFFF) / 0xFFFF;
-
-      // Resolve this chapter's motionIntent from its section's visualMood
       const sectionMood = sections[i]?.visualMood as string | undefined;
       const grade = getMoodGrade(sectionMood);
       const intent = grade.motionIntent;
 
-      // Base: all chapters have enough zoom to avoid border visibility
       let zoomStart = 1.06;
       let zoomEnd = 1.06;
       let panStartX = 0;
@@ -4394,16 +4056,14 @@ export class LyricDancePlayer {
         case 'push-in':
           zoomStart = 1.06; zoomEnd = 1.14;
           panStartX = (s(17) - 0.5) * 0.03; panStartY = (s(31) - 0.5) * 0.02;
-          panEndX = 0; panEndY = 0; // push-in converges toward center
           break;
         case 'pull-out':
           zoomStart = 1.14; zoomEnd = 1.06;
-          panStartX = 0; panStartY = 0;
           panEndX = (s(53) - 0.5) * 0.03; panEndY = (s(71) - 0.5) * 0.02;
           break;
         case 'drift-up':
           zoomStart = 1.08; zoomEnd = 1.10;
-          panStartY = 0.03; panEndY = -0.03; // image drifts up (pan moves down in image space)
+          panStartY = 0.03; panEndY = -0.03;
           panStartX = (s(17) - 0.5) * 0.01; panEndX = (s(53) - 0.5) * 0.01;
           break;
         case 'drift-down':
@@ -4422,16 +4082,14 @@ export class LyricDancePlayer {
         case 'slow-zoom':
           zoomStart = 1.06; zoomEnd = 1.15;
           panStartX = (s(17) - 0.5) * 0.02; panStartY = (s(31) - 0.5) * 0.015;
-          panEndX = panStartX * 0.3; panEndY = panStartY * 0.3; // slowly converges
+          panEndX = panStartX * 0.3; panEndY = panStartY * 0.3;
           break;
         case 'breathing':
-          // Gentle oscillation — zoom handled by CameraRig sway, KB just holds steady
           zoomStart = 1.08; zoomEnd = 1.10;
           panStartX = (s(17) - 0.5) * 0.015; panStartY = (s(31) - 0.5) * 0.015;
           panEndX = -panStartX; panEndY = -panStartY;
           break;
         case 'handheld':
-          // Intentionally jittery — small random start/end, CameraRig shake adds the rest
           zoomStart = 1.07; zoomEnd = 1.09;
           panStartX = (s(17) - 0.5) * 0.04; panStartY = (s(31) - 0.5) * 0.03;
           panEndX = (s(53) - 0.5) * 0.04; panEndY = (s(71) - 0.5) * 0.03;
@@ -4722,26 +4380,12 @@ export class LyricDancePlayer {
       const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
       const palette = this.getResolvedPalette();
       const accentColor = palette[1] ?? '#FFD700';
-      const bgSystem = this.backgroundSystem;
-
       // ═══ Always-on beat visualizer — present throughout entire song ═══
       if (!this._globalBeatVis) {
         this._globalBeatVis = new BeatVisSim(accentColor);
       }
 
-      this.chapterSims = chapters.map((chapter: any, ci: number) => {
-        const dominant = chapter?.dominantColor ?? palette[ci % palette.length] ?? '#111111';
-        const bgDesc = (chapter?.backgroundDirective ?? chapter?.background ?? '').toLowerCase();
-        const perSystem = this.mapBackgroundSystem(`${bgDesc} ${bgSystem}`);
-        const sim: { fire?: FireSim; water?: WaterSim; aurora?: AuroraSim; rain?: RainSim; beatVis?: BeatVisSim } = {};
-        if (perSystem === 'fire') sim.fire = new FireSim('fire', 0.08 + (chapter?.emotionalIntensity ?? 0.5) * 0.1);
-        else if (perSystem === 'storm') sim.fire = new FireSim('smoke', 0.18);
-        else if (perSystem === 'ocean') sim.water = new WaterSim(dominant, accentColor);
-        else if (perSystem === 'aurora') sim.aurora = new AuroraSim(dominant, accentColor);
-        else if (perSystem === 'urban') sim.rain = new RainSim(accentColor);
-        else if (perSystem === 'intimate') sim.fire = new FireSim('ember', 0.25);
-        return sim;
-      });
+      this.chapterSims = chapters.map(() => ({}));
 
       // Bar visualizer style: round-robin by section for variety
       const styleRotation: BarVisStyle[] = ['flame', 'neon', 'smoke', 'light'];
@@ -4755,48 +4399,15 @@ export class LyricDancePlayer {
     }
   }
 
-  private buildEmotionalEvents(): void {
-    const cd = this.payload?.cinematic_direction as any;
-    if (!cd) return;
-    const events: EmotionalEvent[] = [];
-    if (cd.climax?.timeRatio) events.push({ type: 'light-break', triggerRatio: cd.climax.timeRatio, intensity: cd.climax.maxLightIntensity ?? 1, duration: 1.2, triggered: false });
-    if (this.resolvedState.chapters?.length >= 3) events.push({ type: 'world-shift', triggerRatio: this.resolvedState.chapters[2].startRatio ?? 0.6, intensity: 0.8, duration: 2.0, triggered: false });
-    events.push({ type: 'lens-breath', triggerRatio: 0.05, intensity: 0.5, duration: 3.0, triggered: false });
-    const peakChapter = this.resolvedState.chapters?.reduce((max: any, ch: any) => (ch.emotionalIntensity ?? 0) > (max?.emotionalIntensity ?? 0) ? ch : max, null);
-    if (peakChapter) events.push({ type: 'void-moment', triggerRatio: (peakChapter.startRatio ?? 0.6) + 0.05, intensity: 1.0, duration: 0.4, triggered: false });
-    events.push({ type: 'halo-ring', triggerRatio: 0.82, intensity: 0.9, duration: 1.5, triggered: false });
-    this.emotionalEvents = events;
-    this.activeEvents = [];
-  }
-
-  private updateSims(tSec: number, frame: ScaledKeyframe): void {
+  private updateSims(_tSec: number, _frame: ScaledKeyframe): void {
     try {
+      const tSec = this.currentTSec;
       const simFrame = Math.floor(tSec * 24);
       if (simFrame === this.lastSimFrame) return;
       this.lastSimFrame = simFrame;
       const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
-      // Use cached section index — already resolved in tick()
       const chapterIdx = this._frameSectionIdx >= 0 ? Math.min(this._frameSectionIdx, chapters.length - 1) : chapters.length - 1;
       const ci = Math.max(0, chapterIdx);
-      const chapter = chapters[ci] ?? {};
-
-      // ═══ V2: Beat-driven sim intensity (no climax curve) ═══
-      const conductorResponse = this._lastSubsystemResponse;
-      const simIntensity = conductorResponse
-        ? conductorResponse.bgSimIntensity
-        : 0.3; // fallback ambient
-      const intensity = ((chapter as any)?.emotionalIntensity ?? 0.5) * simIntensity;
-      const pulse = (frame as any).beatPulse ?? 0;
-
-      const sim = this.chapterSims[ci];
-      this.currentSimCanvases = [];
-      if (!sim) return;
-      if (sim.fire) { sim.fire.update(intensity, pulse); this.currentSimCanvases.push(sim.fire.canvas); }
-      if (sim.water) { sim.water.update(tSec, pulse, intensity); this.currentSimCanvases.push(sim.water.canvas); }
-      if (sim.aurora) { sim.aurora.update(tSec, intensity); this.currentSimCanvases.push(sim.aurora.canvas); }
-      if (sim.rain) { sim.rain.update(tSec, intensity, pulse); this.currentSimCanvases.push(sim.rain.canvas); }
-
-      // ═══ Beat visualizer — driven by ACTUAL BeatState, not section intensity ═══
       if (this._globalBeatVis) {
         const visStyle = this._barVisStyles[ci] ?? 'flame';
         this._globalBeatVis.setStyle(visStyle);
@@ -4814,20 +4425,7 @@ export class LyricDancePlayer {
     }
   }
 
-  private drawSimLayer(_frame: ScaledKeyframe): void {
-    // ═══ V2: Sim opacity from conductor (fire flares on beats, water splashes on downbeats) ═══
-    const conductorResponse = this._lastSubsystemResponse;
-    const simOpacity = conductorResponse
-      ? conductorResponse.bgSimIntensity
-      : 0.3; // ambient fallback
-
-    // Section-specific sims (fire, water, aurora, rain) — full canvas, subtle
-    for (const simCanvas of this.currentSimCanvases) {
-      this.ctx.globalAlpha = 0.45 * simOpacity;
-      this.ctx.drawImage(simCanvas, 0, 0, this.width, this.height);
-      this.ctx.globalAlpha = 1;
-    }
-  }
+  private drawSimLayer(_frame: ScaledKeyframe): void {}
 
 
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
@@ -5305,10 +4903,6 @@ export class LyricDancePlayer {
         chunk.letterDelay = word.letterDelay ?? 0;
         chunk.isLetterChunk = word.isLetterChunk;
         chunk.frozen = isFrozen;
-        chunk.iconGlyph = isAnchor ? word.iconGlyph : undefined;
-        chunk.iconStyle = isAnchor ? word.iconStyle : undefined;
-        chunk.iconPosition = isAnchor ? word.iconPosition : undefined;
-        chunk.iconScale = isAnchor ? word.iconScale : undefined;
         chunk.entryOffsetY = 0;
         chunk.entryOffsetX = 0;
         chunk.entryScale = 1;
@@ -5617,81 +5211,6 @@ export class LyricDancePlayer {
     this.ctx.globalAlpha = alpha;
     this.ctx.drawImage(this._vignetteCanvas, 0, 0, w, h);
     this.ctx.globalAlpha = 1;
-  }
-
-  private checkEmotionalEvents(tSec: number, songProgress: number): void {
-    for (const ev of this.emotionalEvents) {
-      if (ev.triggered) continue;
-      if (songProgress >= ev.triggerRatio) {
-        ev.triggered = true;
-        this.activeEvents.push({ event: ev, startTime: tSec });
-      }
-    }
-    // In-place filter — no allocation
-    let writeIdx = 0;
-    for (let i = 0; i < this.activeEvents.length; i++) {
-      if ((tSec - this.activeEvents[i].startTime) < this.activeEvents[i].event.duration) {
-        this.activeEvents[writeIdx++] = this.activeEvents[i];
-      }
-    }
-    this.activeEvents.length = writeIdx;
-  }
-
-  private drawEmotionalEvents(tSec: number): void {
-    for (const ae of this.activeEvents) {
-      const age = tSec - ae.startTime;
-      if (age < 0) continue; // Region loop: skip events scheduled in the future
-      const progress = Math.max(0, Math.min(1, age / ae.event.duration));
-      const fadeAlpha = ae.event.intensity * (1 - progress);
-
-      this.ctx.save();
-      switch (ae.event.type) {
-        case 'light-break': {
-          const grad = this.ctx.createRadialGradient(
-            this.width / 2, this.height / 2, 0,
-            this.width / 2, this.height / 2, this.width * (0.3 + progress * 0.5)
-          );
-          grad.addColorStop(0, `rgba(255,255,220,${fadeAlpha * 0.25})`);
-          grad.addColorStop(1, 'rgba(255,255,220,0)');
-          this.ctx.fillStyle = grad;
-          this.ctx.fillRect(0, 0, this.width, this.height);
-          break;
-        }
-        case 'void-moment': {
-          this.ctx.fillStyle = `rgba(0,0,0,${fadeAlpha * 0.3})`;
-          this.ctx.fillRect(0, 0, this.width, this.height);
-          break;
-        }
-        case 'lens-breath': {
-          const grad = this.ctx.createRadialGradient(
-            this.width / 2, this.height / 2, this.width * 0.3,
-            this.width / 2, this.height / 2, this.width * 0.7
-          );
-          grad.addColorStop(0, 'rgba(0,0,0,0)');
-          grad.addColorStop(1, `rgba(0,0,0,${fadeAlpha * 0.15})`);
-          this.ctx.fillStyle = grad;
-          this.ctx.fillRect(0, 0, this.width, this.height);
-          break;
-        }
-        case 'halo-ring': {
-          const radius = progress * this.width * 0.4;
-          this.ctx.beginPath();
-          this.ctx.arc(this.width / 2, this.height / 2, radius, 0, Math.PI * 2);
-          this.ctx.lineWidth = 2 * (1 - progress);
-          this.ctx.strokeStyle = `rgba(255,255,255,${fadeAlpha * 0.2})`;
-          this.ctx.stroke();
-          break;
-        }
-        case 'world-shift': {
-          this.ctx.fillStyle = `rgba(20,10,40,${fadeAlpha * 0.1})`;
-          this.ctx.fillRect(0, 0, this.width, this.height);
-          break;
-        }
-        default:
-          break;
-      }
-      this.ctx.restore();
-    }
   }
 
   private cleanWord(text: string): string {

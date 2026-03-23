@@ -696,10 +696,10 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         ghostCount: undefined,
         ghostSpacing: undefined,
         ghostDirection: undefined,
-        iconGlyph: lineStory?.iconGlyph,
-        iconStyle: lineStory?.iconStyle,
-        iconPosition: lineStory?.iconPosition,
-        iconScale: lineStory?.iconScale,
+        iconGlyph: undefined,
+        iconStyle: undefined,
+        iconPosition: undefined,
+        iconScale: undefined,
       };
       return [base];
     });
