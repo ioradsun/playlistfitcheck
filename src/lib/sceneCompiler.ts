@@ -332,31 +332,7 @@ function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults,
   };
 }
 
-type VisualMetaphor = 'ember-burst'|'frost-form'|'lens-focus'|'gravity-drop'|'ascent'|'fracture'|'heartbeat'|'pain-weight'|'isolation'|'convergence'|'shockwave'|'void-absorb'|'radiance'|'gold-rain'|'speed-blur'|'slow-drift'|'power-surge'|'dream-float'|'truth-snap'|'motion-streak';
 export type WordEmitterType = 'ember'|'frost'|'spark-burst'|'dust-impact'|'light-rays'|'converge'|'shockwave-ring'|'gold-coins'|'memory-orbs'|'motion-trail'|'dark-absorb'|'none';
-interface SemanticEffect { entry: EntryStyle; behavior: BehaviorStyle; exit: ExitStyle; colorOverride: string | null; glowMultiplier: number; scaleX: number; scaleY: number; emitterType: WordEmitterType; alphaMax: number; entryDurationMult: number; fontWeight: number; }
-const SEMANTIC_EFFECTS: Record<VisualMetaphor, SemanticEffect> = {
-  'ember-burst': { entry: 'rise', behavior: 'float', exit: 'burn-out', colorOverride: '#FF8C00', glowMultiplier: 2.0, scaleX: 1.0, scaleY: 1.15, emitterType: 'ember', alphaMax: 1.0, entryDurationMult: 0.8, fontWeight: 800 },
-  'frost-form': { entry: 'materialize', behavior: 'flicker', exit: 'dissolve', colorOverride: '#A8D8EA', glowMultiplier: 0.8, scaleX: 1.0, scaleY: 1.0, emitterType: 'frost', alphaMax: 0.9, entryDurationMult: 1.4, fontWeight: 400 },
-  'lens-focus': { entry: 'surface', behavior: 'none', exit: 'dissolve', colorOverride: '#FFFFFF', glowMultiplier: 1.2, scaleX: 1.0, scaleY: 1.0, emitterType: 'none', alphaMax: 1.0, entryDurationMult: 1.6, fontWeight: 700 },
-  'gravity-drop': { entry: 'slam-down', behavior: 'none', exit: 'sink', colorOverride: null, glowMultiplier: 0.5, scaleX: 1.3, scaleY: 0.7, emitterType: 'dust-impact', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 900 },
-  'ascent': { entry: 'rise', behavior: 'float', exit: 'drift-up', colorOverride: null, glowMultiplier: 1.3, scaleX: 1.0, scaleY: 1.15, emitterType: 'light-rays', alphaMax: 1.0, entryDurationMult: 1.0, fontWeight: 700 },
-  'fracture': { entry: 'shatter-in', behavior: 'vibrate', exit: 'shatter', colorOverride: '#CCCCCC', glowMultiplier: 0.6, scaleX: 1.0, scaleY: 1.0, emitterType: 'spark-burst', alphaMax: 0.9, entryDurationMult: 0.7, fontWeight: 700 },
-  'heartbeat': { entry: 'bloom', behavior: 'pulse', exit: 'exhale', colorOverride: '#FFB4B4', glowMultiplier: 1.5, scaleX: 1.0, scaleY: 1.0, emitterType: 'memory-orbs', alphaMax: 1.0, entryDurationMult: 1.2, fontWeight: 700 },
-  'pain-weight': { entry: 'plant', behavior: 'flicker', exit: 'linger', colorOverride: '#8B0000', glowMultiplier: 0.4, scaleX: 1.0, scaleY: 0.9, emitterType: 'none', alphaMax: 0.85, entryDurationMult: 0.8, fontWeight: 800 },
-  'isolation': { entry: 'whisper', behavior: 'float', exit: 'evaporate', colorOverride: '#888888', glowMultiplier: 0.2, scaleX: 1.0, scaleY: 1.0, emitterType: 'none', alphaMax: 0.70, entryDurationMult: 2.0, fontWeight: 400 },
-  'convergence': { entry: 'breathe-in', behavior: 'pulse', exit: 'linger', colorOverride: '#FFF5E4', glowMultiplier: 1.4, scaleX: 1.05, scaleY: 1.0, emitterType: 'converge', alphaMax: 1.0, entryDurationMult: 1.1, fontWeight: 700 },
-  'shockwave': { entry: 'explode-in', behavior: 'vibrate', exit: 'shatter', colorOverride: '#FFFFFF', glowMultiplier: 2.5, scaleX: 1.6, scaleY: 0.65, emitterType: 'shockwave-ring', alphaMax: 1.0, entryDurationMult: 0.4, fontWeight: 900 },
-  'void-absorb': { entry: 'surface', behavior: 'flicker', exit: 'snap-out', colorOverride: '#1a1a1a', glowMultiplier: 0.0, scaleX: 1.0, scaleY: 1.0, emitterType: 'dark-absorb', alphaMax: 0.95, entryDurationMult: 1.0, fontWeight: 700 },
-  'radiance': { entry: 'bloom', behavior: 'pulse', exit: 'burn-out', colorOverride: '#FFD700', glowMultiplier: 3.0, scaleX: 1.1, scaleY: 1.0, emitterType: 'light-rays', alphaMax: 1.0, entryDurationMult: 0.9, fontWeight: 800 },
-  'gold-rain': { entry: 'cut-in', behavior: 'grow', exit: 'punch-out', colorOverride: '#FFD700', glowMultiplier: 1.8, scaleX: 1.0, scaleY: 1.0, emitterType: 'gold-coins', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 900 },
-  'speed-blur': { entry: 'punch-in', behavior: 'lean', exit: 'punch-out', colorOverride: null, glowMultiplier: 1.0, scaleX: 1.2, scaleY: 0.85, emitterType: 'motion-trail', alphaMax: 1.0, entryDurationMult: 0.5, fontWeight: 700 },
-  'slow-drift': { entry: 'whisper', behavior: 'float', exit: 'evaporate', colorOverride: '#CCCCCC', glowMultiplier: 0.3, scaleX: 1.0, scaleY: 1.0, emitterType: 'none', alphaMax: 0.80, entryDurationMult: 2.5, fontWeight: 400 },
-  'power-surge': { entry: 'slam-down', behavior: 'pulse', exit: 'burn-out', colorOverride: null, glowMultiplier: 2.0, scaleX: 1.1, scaleY: 1.1, emitterType: 'spark-burst', alphaMax: 1.0, entryDurationMult: 0.5, fontWeight: 900 },
-  'dream-float': { entry: 'materialize', behavior: 'float', exit: 'dissolve', colorOverride: null, glowMultiplier: 0.9, scaleX: 1.0, scaleY: 1.0, emitterType: 'memory-orbs', alphaMax: 0.80, entryDurationMult: 1.8, fontWeight: 400 },
-  'truth-snap': { entry: 'snap-in', behavior: 'none', exit: 'snap-out', colorOverride: '#FFFFFF', glowMultiplier: 0.0, scaleX: 1.0, scaleY: 1.0, emitterType: 'none', alphaMax: 1.0, entryDurationMult: 1.0, fontWeight: 700 },
-  'motion-streak': { entry: 'punch-in', behavior: 'lean', exit: 'cut-out', colorOverride: null, glowMultiplier: 1.2, scaleX: 1.15, scaleY: 0.9, emitterType: 'motion-trail', alphaMax: 1.0, entryDurationMult: 0.6, fontWeight: 700 },
-};
 
 export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; wordStart: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isHeroWord?: boolean; heroPresentation?: string; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
 export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; }
@@ -506,7 +482,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const manifestDirective = manifestWordDirectives[key]?.[wi] ?? null;
       const motion = assignWordAnimations(wm, motionDefaults, storyboard, manifestDirective as ManifestWordDirective | null);
-      const semantic = wm.directive?.visualMetaphor ? SEMANTIC_EFFECTS[wm.directive.visualMetaphor as VisualMetaphor] : null;
+      const semantic = null; // visualMetaphor removed — entry/exit/behavior derived from emphasisLevel
       // ═══ Semantic auto-map: word meaning → color/glow (the word IS the directive) ═══
       const autoSemantic = getSemanticOverride(wm.clean);
       const pos = positions[wi] ?? { x: REF_W / 2, y: REF_H / 2, width: 40 };
@@ -528,10 +504,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         hasSemanticColor: Boolean(semantic?.colorOverride || autoSemantic?.colorOverride),
         isHeroWord: (wm.directive?.emphasisLevel ?? 1) >= 4
           || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')),
-        heroPresentation: ((wm.directive?.emphasisLevel ?? 1) >= 4
-          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '')))
-          ? (wm.directive as any)?.heroPresentation ?? 'inline-scale'
-          : undefined,
+        heroPresentation: undefined, // removed — isolation handled by separate flag
         isAnchor: wi === group.anchorWordIdx,
         isFiller: isFillerWord(wm.word),
         emphasisLevel: wm.directive?.emphasisLevel ?? 1,
@@ -543,19 +516,15 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         entryDurationMult: semantic?.entryDurationMult ?? 1,
         emitterType: semantic?.emitterType ?? 'none',
         trail: wm.directive?.trail ?? (semantic?.emitterType ?? 'none'),
-        ghostTrail: wm.directive?.ghostTrail,
-        ghostCount: wm.directive?.ghostCount,
-        ghostSpacing: wm.directive?.ghostSpacing,
-        ghostDirection: wm.directive?.ghostDirection,
+        ghostTrail: undefined,
+        ghostCount: undefined,
+        ghostSpacing: undefined,
+        ghostDirection: undefined,
         iconGlyph: lineStory?.iconGlyph,
         iconStyle: lineStory?.iconStyle,
         iconPosition: lineStory?.iconPosition,
         iconScale: lineStory?.iconScale,
       };
-      // letterSequence: render as single chunk with spaced letters (e.g. "count" → "c o u n t")
-      if (wm.directive?.letterSequence) {
-        base.text = base.text.split('').join(' ');
-      }
       return [base];
     });
     return { lineIndex: group.lineIndex, groupIndex: group.groupIndex, anchorWordIdx: group.anchorWordIdx, start: group.start, end: group.end, words: wordsCompiled, staggerDelay: animParams.stagger, entryDuration: animParams.entryDuration, exitDuration: animParams.exitDuration, lingerDuration: animParams.linger, behaviorIntensity: motionDefaults.behaviorIntensity };
