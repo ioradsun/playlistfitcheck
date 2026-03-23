@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { hydrateLightningBarFlag, persistLightningBarFlag } from "@/lib/lyricDanceFlags";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -58,11 +59,7 @@ export default function Admin() {
 
   // Hydrate engine feature flags from sessionStorage
   useEffect(() => {
-    try {
-      if (sessionStorage.getItem('__LYRIC_DANCE_LIGHTNING_BAR')) {
-        (window as any).__LYRIC_DANCE_LIGHTNING_BAR = true;
-      }
-    } catch {}
+    hydrateLightningBarFlag();
   }, []);
 
   useEffect(() => {
@@ -699,8 +696,7 @@ export default function Admin() {
                   <Switch
                     checked={!!(window as any).__LYRIC_DANCE_LIGHTNING_BAR}
                     onCheckedChange={(checked) => {
-                      (window as any).__LYRIC_DANCE_LIGHTNING_BAR = checked;
-                      try { sessionStorage.setItem('__LYRIC_DANCE_LIGHTNING_BAR', checked ? '1' : ''); } catch {}
+                      persistLightningBarFlag(checked);
                       (window as any).__forceAdminRerender?.();
                     }}
                   />
