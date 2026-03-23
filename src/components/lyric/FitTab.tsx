@@ -174,6 +174,7 @@ export function FitTab({
   const [prefetchedDanceData, setPrefetchedDanceData] =
     useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [lightboxScene, setLightboxScene] = useState<{ imageUrl: string; description: string; timestamp: string; visualMood?: string; index: number } | null>(null);
   const dancePlayerRef =
     useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(
       null,
@@ -1766,10 +1767,41 @@ export function FitTab({
                     {cinematicDirection.sections.map(
                       (section: any, i: number) => {
                         const imageUrl = sectionImageUrls[i] || null;
+                        const startSec = typeof section.startSec === "number" && section.startSec > 0
+                          ? section.startSec
+                          : typeof section.start === "number" && section.start > 0
+                            ? section.start
+                            : null;
+                        const endSec = typeof section.endSec === "number" && section.endSec > 0
+                          ? section.endSec
+                          : typeof section.end === "number" && section.end > 0
+                            ? section.end
+                            : null;
+                        const fmtTime = (t: number) => {
+                          const m = Math.floor(t / 60);
+                          const s = Math.floor(t % 60);
+                          return `${m}:${s.toString().padStart(2, "0")}`;
+                        };
+                        const tsLabel = startSec != null
+                          ? endSec != null
+                            ? `${fmtTime(startSec)} – ${fmtTime(endSec)}`
+                            : fmtTime(startSec)
+                          : `Section ${i + 1}`;
                         return (
                           <div
                             key={section.sectionIndex ?? i}
-                            className="glass-card rounded-lg p-2.5 flex gap-3 items-start"
+                            className="glass-card rounded-lg p-2.5 flex gap-3 items-start cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all"
+                            onClick={() => {
+                              if (imageUrl) {
+                                setLightboxScene({
+                                  imageUrl,
+                                  description: section.description || "",
+                                  timestamp: tsLabel,
+                                  visualMood: section.visualMood,
+                                  index: i,
+                                });
+                              }
+                            }}
                           >
                             {imageUrl ? (
                               <img
@@ -1790,12 +1822,7 @@ export function FitTab({
                             <div className="flex-1 min-w-0 space-y-1">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-semibold text-foreground font-mono">
-                                  {(() => {
-                                    const t = section.startSec ?? 0;
-                                    const m = Math.floor(t / 60);
-                                    const s = Math.floor(t % 60);
-                                    return `${m}:${s.toString().padStart(2, "0")}`;
-                                  })()}
+                                  {tsLabel}
                                 </span>
                                 {section.visualMood && (
                                   <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
@@ -1813,6 +1840,38 @@ export function FitTab({
                         );
                       },
                     )}
+
+                    {/* Scene Lightbox */}
+                    <Dialog open={!!lightboxScene} onOpenChange={(open) => { if (!open) setLightboxScene(null); }}>
+                      <DialogContent className="max-w-2xl w-full p-0 overflow-hidden bg-background border border-border/40">
+                        {lightboxScene && (
+                          <div className="space-y-0">
+                            <img
+                              src={lightboxScene.imageUrl}
+                              alt={`Scene ${lightboxScene.index + 1}`}
+                              className="w-full aspect-video object-cover"
+                            />
+                            <div className="px-5 py-4 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-foreground font-mono">
+                                  {lightboxScene.timestamp}
+                                </span>
+                                {lightboxScene.visualMood && (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                    {lightboxScene.visualMood}
+                                  </span>
+                                )}
+                              </div>
+                              {lightboxScene.description && (
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                  {lightboxScene.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 )}
 
