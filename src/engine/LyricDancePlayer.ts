@@ -5323,7 +5323,9 @@ export class LyricDancePlayer {
         // ═══ PHRASE-LEVEL SPOTLIGHT: all words white, hero words accent ═══
         // No per-word color switching — strobes at fast BPM.
         // Phrase is the unit. All words full white. Hero words get section accent.
-        const spotlightAlpha = lineRole === 'current' ? 1.0 : 0.30;
+        const spotlightAlpha = lineRole !== 'current'
+          ? 0.30
+          : wordState === 'upcoming' ? 0.30 : 1.0;
 
         // ── Hero word detection ──
         const isHeroWord = word.isHeroWord === true;
