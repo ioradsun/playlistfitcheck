@@ -30,6 +30,8 @@ export interface SemanticOverride {
   colorOverride?: string;
   /** Extra glow multiplier (stacks with existing glow pipeline) */
   glowMult?: number;
+  /** Elemental particle class — spreads to the entire phrase at render time */
+  elementalClass?: 'FIRE' | 'WATER' | 'FROST' | 'SMOKE' | 'ELECTRIC' | null;
 }
 
 /**
@@ -177,7 +179,7 @@ const WATER_WORDS = ['wave', 'waves', 'ocean', 'surf', 'surfing', 'surfin', 'tid
 
 function matchWater(w: string): SemanticOverride | null {
   if (WATER_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'melt-in', exit: 'evaporate', behavior: 'float', colorOverride: '#38BDF8' };
+    return { entry: 'melt-in', exit: 'evaporate', behavior: 'float', colorOverride: '#38BDF8', elementalClass: 'WATER' };
   }
   return null;
 }
@@ -187,7 +189,7 @@ const FIRE_WORDS = ['fire', 'flame', 'flames', 'burn', 'burning', 'blaze', 'blaz
 
 function matchFire(w: string): SemanticOverride | null {
   if (FIRE_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'rise', exit: 'burn-out', behavior: 'flicker', colorOverride: '#FF8C00', glowMult: 2.0 };
+    return { entry: 'rise', exit: 'burn-out', behavior: 'flicker', colorOverride: '#FF8C00', glowMult: 2.0, elementalClass: 'FIRE' };
   }
   return null;
 }
@@ -197,7 +199,7 @@ const COLD_WORDS = ['freeze', 'frozen', 'ice', 'icy', 'cold', 'frost', 'frosty',
 
 function matchCold(w: string): SemanticOverride | null {
   if (COLD_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'snap-in', exit: 'freeze-crack', behavior: 'freeze', colorOverride: '#A8D8EA' };
+    return { entry: 'snap-in', exit: 'freeze-crack', behavior: 'freeze', colorOverride: '#A8D8EA', elementalClass: 'FROST' };
   }
   return null;
 }
@@ -207,7 +209,7 @@ const LIGHT_WORDS = ['light', 'lights', 'shine', 'shining', 'shiny', 'glow', 'gl
 
 function matchLight(w: string): SemanticOverride | null {
   if (LIGHT_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'bloom', exit: 'burn-out', colorOverride: '#FFD700', glowMult: 2.5 };
+    return { entry: 'bloom', exit: 'burn-out', colorOverride: '#FFD700', glowMult: 2.5, elementalClass: 'ELECTRIC' };
   }
   return null;
 }
@@ -217,7 +219,7 @@ const DARK_WORDS = ['dark', 'darkness', 'shadow', 'shadows', 'midnight', 'night'
 
 function matchDark(w: string): SemanticOverride | null {
   if (DARK_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'surface', exit: 'vanish', colorOverride: '#2D2D3F', glowMult: 0 };
+    return { entry: 'surface', exit: 'vanish', colorOverride: '#2D2D3F', glowMult: 0, elementalClass: 'SMOKE' };
   }
   return null;
 }
