@@ -1126,6 +1126,7 @@ async function callScene(
   sectionCount: number,
   body: RequestBody,
   sceneSystemPrompt: string = SCENE_DIRECTION_PROMPT,
+  modelOverride: string = PRIMARY_MODEL,
 ): Promise<Record<string, any>> {
   const messages = [
     { role: "system", content: scenePrefix + sceneSystemPrompt },
@@ -1148,7 +1149,7 @@ async function callScene(
       }),
     });
 
-  let resp = await makeRequest(PRIMARY_MODEL);
+  let resp = await makeRequest(modelOverride);
 
   // If primary model fails with retryable error, try fallback
   if (!resp.ok && (resp.status === 429 || resp.status >= 500)) {
@@ -1201,7 +1202,7 @@ async function callScene(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: PRIMARY_MODEL,
+           model: modelOverride,
           messages: [
             { role: "system", content: scenePrefix + sceneSystemPrompt },
             { role: "user", content: userMessage },
@@ -1258,6 +1259,7 @@ async function callWords(
   words?: Array<{ word: string; start: number; end: number }>,
   bpm?: number,
   wordSystemPrompt: string = WORD_DIRECTION_PROMPT,
+  modelOverride: string = PRIMARY_MODEL,
 ): Promise<Record<string, any>> {
   const wordMessage = buildWordUserMessage(
     title,
@@ -1280,7 +1282,7 @@ async function callWords(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: PRIMARY_MODEL,
+          model: modelOverride,
           messages,
           response_format: { type: "json_object" },
           temperature: 0.7,
@@ -1424,24 +1426,25 @@ async function persist(
   }
 }
 
-/** Fetch custom prompts from ai_prompts table, falling back to hardcoded defaults. */
+/** Fetch custom prompts + model from ai_prompts table, falling back to hardcoded defaults. */
 async function loadCustomPrompts(): Promise<{
   fullPrompt: string;
   scenePrompt: string;
   wordPrompt: string;
+  model: string;
 }> {
+  const defaults = {
+    fullPrompt: CINEMATIC_DIRECTION_PROMPT,
+    scenePrompt: SCENE_DIRECTION_PROMPT,
+    wordPrompt: WORD_DIRECTION_PROMPT,
+    model: PRIMARY_MODEL,
+  };
   const sbUrl = Deno.env.get("SUPABASE_URL");
   const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!sbUrl || !sbKey) {
-    return {
-      fullPrompt: CINEMATIC_DIRECTION_PROMPT,
-      scenePrompt: SCENE_DIRECTION_PROMPT,
-      wordPrompt: WORD_DIRECTION_PROMPT,
-    };
-  }
+  if (!sbUrl || !sbKey) return defaults;
 
   try {
-    const slugs = ["cinematic-direction", "cinematic-scene", "cinematic-words"];
+    const slugs = ["cinematic-direction", "cinematic-scene", "cinematic-words", "analysis-model"];
     const res = await fetch(
       `${sbUrl}/rest/v1/ai_prompts?slug=in.(${slugs.join(",")})&select=slug,prompt`,
       {
@@ -1453,11 +1456,7 @@ async function loadCustomPrompts(): Promise<{
     );
     if (!res.ok) {
       console.warn("[cinematic-direction] Failed to load custom prompts, using defaults");
-      return {
-        fullPrompt: CINEMATIC_DIRECTION_PROMPT,
-        scenePrompt: SCENE_DIRECTION_PROMPT,
-        wordPrompt: WORD_DIRECTION_PROMPT,
-      };
+      return defaults;
     }
 
     const rows: Array<{ slug: string; prompt: string }> = await res.json();
@@ -1467,14 +1466,11 @@ async function loadCustomPrompts(): Promise<{
       fullPrompt: bySlug["cinematic-direction"] || CINEMATIC_DIRECTION_PROMPT,
       scenePrompt: bySlug["cinematic-scene"] || SCENE_DIRECTION_PROMPT,
       wordPrompt: bySlug["cinematic-words"] || WORD_DIRECTION_PROMPT,
+      model: bySlug["analysis-model"]?.trim() || PRIMARY_MODEL,
     };
   } catch (e) {
     console.warn("[cinematic-direction] Error loading custom prompts:", e);
-    return {
-      fullPrompt: CINEMATIC_DIRECTION_PROMPT,
-      scenePrompt: SCENE_DIRECTION_PROMPT,
-      wordPrompt: WORD_DIRECTION_PROMPT,
-    };
+    return defaults;
   }
 }
 
@@ -1540,6 +1536,7 @@ serve(async (req) => {
         body.audioSections?.length ?? 0,
         body,
         customPrompts.scenePrompt,
+        customPrompts.model,
       );
 
       return new Response(JSON.stringify({ cinematicDirection: sceneResult }), {
@@ -1567,6 +1564,7 @@ serve(async (req) => {
         body.words,
         bpm,
         customPrompts.wordPrompt,
+        customPrompts.model,
       );
 
       return new Response(JSON.stringify({ cinematicDirection: wordResult }), {
