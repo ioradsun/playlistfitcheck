@@ -4512,8 +4512,7 @@ export class LyricDancePlayer {
       'double-peak': (p) => Math.sin(p * Math.PI * 2) * 0.5 + 0.5,
     };
     return curves[arcName] ?? curves['slow-burn'];
-  }
-
+      }
 
   private getActiveWord(timeSec: number): { word?: string; start: number; end: number } | null {
     const words = this.data.words ?? [];
@@ -5121,7 +5120,6 @@ export class LyricDancePlayer {
 
   private drawSimLayer(_frame: ScaledKeyframe): void {}
 
-
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
     const scene = this.compiledScene;
     if (!scene) return null;
@@ -5345,6 +5343,9 @@ export class LyricDancePlayer {
         phraseAlpha = Math.max(0, phraseRemaining / Math.max(0.01, phraseExitDuration));
       }
 
+      // On-deck: promote system is sole authority on alpha/position/scale
+      if (isOnDeck) phraseAlpha = 1.0;
+
       // ── Phrase-level entry/exit: default for all words ──
       // Solo hero phrases will override these per-word below.
       let phraseEntryState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: phraseAlpha, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
@@ -5452,9 +5453,11 @@ export class LyricDancePlayer {
         // ═══ PHRASE-LEVEL SPOTLIGHT: all words white, hero words accent ═══
         // No per-word color switching — strobes at fast BPM.
         // Phrase is the unit. All words full white. Hero words get section accent.
-        const spotlightAlpha = lineRole !== 'current'
-          ? 0.30
-          : wordState === 'upcoming' ? 0.30 : 1.0;
+        const spotlightAlpha = isOnDeck
+          ? 1.0  // promote system controls on-deck opacity
+          : lineRole !== 'current'
+            ? 0.30
+            : wordState === 'upcoming' ? 0.30 : 1.0;
 
         // ── Hero word detection ──
         const isHeroWord = word.isHeroWord === true;
@@ -5743,8 +5746,7 @@ export class LyricDancePlayer {
     frame.chunks = chunks;
     frame.particles = [];
     return frame;
-  }
-
+      }
 
   /** Draw background gradient to an arbitrary ctx (used for snapshot baking) */
   private _drawBackgroundToCtx(ctx: CanvasRenderingContext2D, frame: ScaledKeyframe): void {
