@@ -171,6 +171,87 @@ const LEGIBILITY = {
   motionCapForDensity: (wordCount: number): number => wordCount > 5 ? 0.3 : wordCount > 3 ? 0.6 : 1.0,
 };
 
+/**
+ * Compute the maximum uniform scale that keeps a word fully inside the viewport.
+ *
+ * First principles: a word rendered at (cx, cy) with measured width `w` and
+ * fontSize `f`, scaled by S, occupies the bounding box:
+ *
+ *   left   = cx - (w * S / 2)
+ *   right  = cx + (w * S / 2)
+ *   top    = cy - (f * S * 0.6)   // ascent ≈ 60% of fontSize
+ *   bottom = cy + (f * S * 0.4)   // descent ≈ 40% of fontSize
+ *
+ * For the box to fit inside [margin, viewW - margin] × [margin, viewH - margin]:
+ *
+ *   S ≤ (cx - margin) * 2 / w          (left edge)
+ *   S ≤ ((viewW - margin) - cx) * 2 / w (right edge)
+ *   S ≤ (cy - margin) / (f * 0.6)       (top edge)
+ *   S ≤ ((viewH - margin) - cy) / (f * 0.4) (bottom edge)
+ *
+ * Returns the minimum of all four constraints, floored at 1.0.
+ */
+function maxViewportSafeScale(
+  cx: number, cy: number,
+  wordWidth: number, fontSize: number,
+  viewW: number, viewH: number,
+  margin: number,
+): number {
+  if (wordWidth <= 0 || fontSize <= 0) return 1.0;
+  const halfW = wordWidth / 2;
+  const ascent = fontSize * 0.6;
+  const descent = fontSize * 0.4;
+  const maxFromLeft = (cx - margin) / halfW;
+  const maxFromRight = (viewW - margin - cx) / halfW;
+  const maxFromTop = (cy - margin) / ascent;
+  const maxFromBottom = (viewH - margin - cy) / descent;
+  return Math.max(1.0, Math.min(maxFromLeft, maxFromRight, maxFromTop, maxFromBottom));
+}
+
+/**
+ * Compute the maximum scale for a hero word such that it doesn't overlap
+ * its nearest neighbors on the same wrapped line.
+ *
+ * First principles: two words on the same line with centers cx_i, cx_j
+ * and widths w_i, w_j, scaled S_i, S_j respectively, overlap when:
+ *
+ *   (cx_i + w_i * S_i / 2) + minGap > (cx_j - w_j * S_j / 2)
+ *
+ * For the hero word (index h) with neighbors, we solve for S_h:
+ *
+ *   S_h ≤ (|cx_neighbor - cx_hero| - w_neighbor * S_neighbor / 2 - minGap) * 2 / w_hero
+ *
+ * We check both left and right neighbors and return the tighter constraint.
+ */
+function maxNonOverlapScale(
+  heroIdx: number,
+  words: Array<{ layoutX: number; layoutY: number; layoutWidth: number; baseFontSize: number }>,
+  wordScales: number[],
+  minGap: number,
+): number {
+  const hero = words[heroIdx];
+  const heroHalfW = hero.layoutWidth / 2;
+  if (heroHalfW <= 0) return 10;
+
+  let maxScale = 10;
+
+  for (let i = 0; i < words.length; i++) {
+    if (i === heroIdx) continue;
+    const w = words[i];
+    if (Math.abs(w.layoutY - hero.layoutY) > 4) continue;
+
+    const neighborHalfW = (w.layoutWidth * (wordScales[i] ?? 1)) / 2;
+    const dist = Math.abs(w.layoutX - hero.layoutX);
+    const available = dist - neighborHalfW - minGap;
+    if (available <= 0) continue;
+
+    const maxS = (available * 2) / hero.layoutWidth;
+    if (maxS < maxScale) maxScale = maxS;
+  }
+
+  return Math.max(1.0, maxScale);
+}
+
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
 // ──────────────────────────────────────────────────────────────
@@ -5247,13 +5328,15 @@ export class LyricDancePlayer {
         phraseAlpha = Math.max(0, phraseRemaining / Math.max(0.01, phraseExitDuration));
       }
 
-      const effectiveEntry = budgetAdjustedEntry(treatment.entry, this._spectacleBudget);
-      const effectiveExit = budgetAdjustedExit(treatment.exit, this._spectacleBudget);
+      // ── Phrase-level entry/exit: default for all words ──
+      // Solo hero phrases will override these per-word below.
+      const phraseEntry = budgetAdjustedEntry(treatment.entry, this._spectacleBudget);
+      const phraseExit = budgetAdjustedExit(treatment.exit, this._spectacleBudget);
       let phraseEntryState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: phraseAlpha, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
       const isEntering = timeSinceActivation < treatment.entryDuration;
       if (isEntering) {
         const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, treatment.entryDuration));
-        phraseEntryState = computeEntryState(effectiveEntry as any, entryProgress, 0.7) as typeof phraseEntryState;
+        phraseEntryState = computeEntryState(phraseEntry as any, entryProgress, 0.7) as typeof phraseEntryState;
         phraseEntryState.offsetX *= motionCap;
         phraseEntryState.offsetY *= motionCap;
         phraseEntryState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseEntryState.blur ?? 0);
@@ -5268,7 +5351,7 @@ export class LyricDancePlayer {
       const isExiting = phraseRemaining < treatment.exitDuration && phraseRemaining >= 0;
       if (isExiting) {
         const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, treatment.exitDuration)));
-        phraseExitState = computeExitState(effectiveExit as any, exitProgress, 0.7, 0, 1) as typeof phraseExitState;
+        phraseExitState = computeExitState(phraseExit as any, exitProgress, 0.7, 0, 1) as typeof phraseExitState;
         phraseExitState.offsetX *= motionCap;
         phraseExitState.offsetY *= motionCap;
         phraseExitState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseExitState.blur ?? 0);
@@ -5310,7 +5393,13 @@ export class LyricDancePlayer {
           // Replicate heroScaleMult formula (no solo hero — that's handled separately)
           const isOnlyWord = group.words.length === 1;
           if (isOnlyWord) continue; // solo hero centers, no neighbors to push
-          const sm = 1.0 + Math.max(0, emp - 1) * 0.25;
+          const rawSm = 1.0 + Math.max(0, emp - 1) * 0.25;
+          const viewMargin = isPortraitLocal ? this.width * 0.08 : 16;
+          const maxVp = maxViewportSafeScale(
+            w.layoutX, w.layoutY, w.layoutWidth ?? 40, w.baseFontSize ?? 36,
+            this.width, this.height, viewMargin,
+          );
+          const sm = Math.min(rawSm, maxVp);
           if (sm > heroScale) { heroScale = sm; heroWi = wi; }
         }
 
@@ -5385,14 +5474,65 @@ export class LyricDancePlayer {
         if (isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
           heroOffsetX = (this.width / 2) - word.layoutX;
           heroOffsetY = (this.height / 2) - word.layoutY;
-          heroScaleMult = 1.5;
+
+          // ── Viewport-safe solo hero scale ──
+          // Scale as large as the viewport allows, capped at 1.5
+          const viewMargin = isPortraitLocal ? this.width * 0.08 : 16;
+          const maxSafeScale = maxViewportSafeScale(
+            this.width / 2, this.height / 2,
+            word.layoutWidth, word.baseFontSize,
+            this.width, this.height, viewMargin,
+          );
+          heroScaleMult = Math.min(1.5, maxSafeScale);
+
+          // ── Solo hero uses its OWN entry/exit style ──
+          // The word IS the phrase — its compiled animation replaces the treatment's.
+          if (isEntering) {
+            const wordEntry = budgetAdjustedEntry(word.entryStyle, this._spectacleBudget);
+            const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, treatment.entryDuration));
+            phraseEntryState = computeEntryState(wordEntry as any, entryProgress, 0.7) as typeof phraseEntryState;
+            phraseEntryState.offsetX *= motionCap;
+            phraseEntryState.offsetY *= motionCap;
+            phraseEntryState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseEntryState.blur ?? 0);
+            phraseEntryState.alpha *= phraseAlpha;
+          }
+          if (isExiting) {
+            const wordExit = budgetAdjustedExit(word.exitStyle, this._spectacleBudget);
+            const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, treatment.exitDuration)));
+            phraseExitState = computeExitState(wordExit as any, exitProgress, 0.7, 0, 1) as typeof phraseExitState;
+            phraseExitState.offsetX *= motionCap;
+            phraseExitState.offsetY *= motionCap;
+            phraseExitState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseExitState.blur ?? 0);
+          }
         }
 
         const soloHeroHidden = !isSoloHero && lineRole === 'current' && groupHasActiveSoloHero;
 
         // ── Emphasis-based inline scaling (non-solo hero words) ──
         if (!isSoloHero || !groupHasActiveSoloHero) {
-          heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.25;
+          const rawEmpScale = 1.0 + Math.max(0, emp - 1) * 0.25;
+
+          // ── Viewport clamp: scaled word must not overflow canvas edges ──
+          const viewMargin = isPortraitLocal ? this.width * 0.08 : 16;
+          const maxVpScale = maxViewportSafeScale(
+            word.layoutX, word.layoutY,
+            word.layoutWidth, word.baseFontSize,
+            this.width, this.height, viewMargin,
+          );
+
+          // ── Overlap clamp: scaled word must not collide with neighbors ──
+          // Build a lightweight scale array for this phrase (1.0 for non-heroes)
+          const wordScales = group.words.map((w: any) => {
+            if (w === word) return rawEmpScale;
+            const wEmp = w.emphasisLevel ?? 0;
+            return 1.0 + Math.max(0, wEmp - 1) * 0.25;
+          });
+          const minGap = word.baseFontSize * 0.15; // minimum gap between word edges
+          const maxOverlapScale = maxNonOverlapScale(
+            wi, group.words as any, wordScales, minGap,
+          );
+
+          heroScaleMult = Math.min(rawEmpScale, maxVpScale, maxOverlapScale);
         }
 
         // ── Hero scale cooldown ──
@@ -5420,14 +5560,6 @@ export class LyricDancePlayer {
           ? 0.75
           : spotlightAlpha;
 
-        const animAlpha = (phraseEntryState.alpha ?? phraseAlpha) * (phraseExitState.alpha ?? 1);
-        const finalAlpha = soloHeroHidden
-          ? 0
-          : Math.min(
-              word.semanticAlphaMax,
-              animAlpha * heroHoldAlpha * roleAlpha,
-            );
-
         const totalScale = Math.min(1.6, sharedBeatScale + heroBeatBoost);
 
         let wordGlow = 0;
@@ -5446,25 +5578,98 @@ export class LyricDancePlayer {
 
         const emphasisWeight = Math.min(900, (word.fontWeight ?? 400) + Math.max(0, emp - 1) * 100);
 
+        // ── Per-word entry/exit blend for high-emphasis words in multi-word phrases ──
+        // The hero word gets its own animation character, blended proportionally to emphasis.
+        // emp 1-2: pure phrase animation (no per-word motion)
+        // emp 3: 33% word + 67% phrase
+        // emp 4: 67% word + 33% phrase
+        // emp 5: 100% word (fully independent entry/exit)
+        let wordEntryBlend = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+        let wordExitBlend = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+        let wordBlendFactor = 0;
+
+        if (!isSoloHero && emp >= 3 && lineRole === 'current' && word.entryStyle) {
+          wordBlendFactor = Math.min(1.0, (emp - 2) / 3); // 0.33, 0.67, 1.0
+
+          if (isEntering) {
+            const wordEntry = budgetAdjustedEntry(word.entryStyle, this._spectacleBudget);
+            const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, treatment.entryDuration));
+            const rawState = computeEntryState(wordEntry as any, entryProgress, 0.5);
+            wordEntryBlend = {
+              offsetX: (rawState.offsetX ?? 0) * motionCap,
+              offsetY: (rawState.offsetY ?? 0) * motionCap,
+              scaleX: rawState.scaleX ?? 1,
+              scaleY: rawState.scaleY ?? 1,
+              alpha: rawState.alpha ?? 1,
+              skewX: rawState.skewX ?? 0,
+              glowMult: rawState.glowMult ?? 0,
+              blur: Math.min(LEGIBILITY.maxTextBlur, rawState.blur ?? 0),
+              rotation: rawState.rotation ?? 0,
+            };
+          }
+          if (isExiting) {
+            const wordExit = budgetAdjustedExit(word.exitStyle, this._spectacleBudget);
+            const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, treatment.exitDuration)));
+            const rawState = computeExitState(wordExit as any, exitProgress, 0.5, word.letterIndex ?? 0, word.letterTotal ?? 1);
+            wordExitBlend = {
+              offsetX: (rawState.offsetX ?? 0) * motionCap,
+              offsetY: (rawState.offsetY ?? 0) * motionCap,
+              scaleX: rawState.scaleX ?? 1,
+              scaleY: rawState.scaleY ?? 1,
+              alpha: rawState.alpha ?? 1,
+              skewX: rawState.skewX ?? 0,
+              glowMult: rawState.glowMult ?? 0,
+              blur: Math.min(LEGIBILITY.maxTextBlur, rawState.blur ?? 0),
+              rotation: rawState.rotation ?? 0,
+            };
+          }
+        }
+
         // ── Build chunk ──
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
         chunk.id = word.id;
         chunk.text = word.text;
 
-        chunk.x = word.layoutX + heroOffsetX + neighborPushOffsets[wi]
-          + phraseEntryState.offsetX + (phraseExitState.offsetX ?? 0) + phraseBehaviorOX;
-        chunk.y = word.layoutY + sharedBeatNudgeY + heroOffsetY
-          + phraseEntryState.offsetY + (phraseExitState.offsetY ?? 0) + phraseBehaviorOY;
-        chunk.fontSize = word.baseFontSize;
-        chunk.alpha = Math.max(0, Math.min(1, finalAlpha));
+        // ── Blend phrase-level and word-level entry/exit ──
+        // wordBlendFactor: 0 = pure phrase, 1 = pure word (only >0 for emp ≥ 3)
+        const bf = wordBlendFactor;
+        const ibf = 1 - bf;
 
-        const phraseAnimScaleX = (phraseEntryState.scaleX ?? 1) * (phraseExitState.scaleX ?? 1) * phraseBehaviorSX;
-        const phraseAnimScaleY = (phraseEntryState.scaleY ?? 1) * (phraseExitState.scaleY ?? 1) * phraseBehaviorSY;
+        const blendedEntryOX = phraseEntryState.offsetX * ibf + wordEntryBlend.offsetX * bf;
+        const blendedEntryOY = phraseEntryState.offsetY * ibf + wordEntryBlend.offsetY * bf;
+        const blendedEntrySX = phraseEntryState.scaleX * ibf + wordEntryBlend.scaleX * bf;
+        const blendedEntrySY = phraseEntryState.scaleY * ibf + wordEntryBlend.scaleY * bf;
+        const blendedEntryAlpha = (phraseEntryState.alpha ?? phraseAlpha) * ibf + (wordEntryBlend.alpha ?? 1) * bf;
+
+        const blendedExitOX = (phraseExitState.offsetX ?? 0) * ibf + wordExitBlend.offsetX * bf;
+        const blendedExitOY = (phraseExitState.offsetY ?? 0) * ibf + wordExitBlend.offsetY * bf;
+        const blendedExitSX = (phraseExitState.scaleX ?? 1) * ibf + wordExitBlend.scaleX * bf;
+        const blendedExitSY = (phraseExitState.scaleY ?? 1) * ibf + wordExitBlend.scaleY * bf;
+        const blendedExitAlpha = (phraseExitState.alpha ?? 1) * ibf + (wordExitBlend.alpha ?? 1) * bf;
+
+        chunk.x = word.layoutX + heroOffsetX + neighborPushOffsets[wi]
+          + blendedEntryOX + blendedExitOX + phraseBehaviorOX;
+        chunk.y = word.layoutY + sharedBeatNudgeY + heroOffsetY
+          + blendedEntryOY + blendedExitOY + phraseBehaviorOY;
+        chunk.fontSize = word.baseFontSize;
+
+        // Alpha: blend entry and exit, then multiply by spotlight and role
+        const blendedAnimAlpha = blendedEntryAlpha * blendedExitAlpha;
+        const recalcFinalAlpha = soloHeroHidden
+          ? 0
+          : Math.min(
+            word.semanticAlphaMax,
+            blendedAnimAlpha * heroHoldAlpha * roleAlpha,
+          );
+        chunk.alpha = Math.max(0, Math.min(1, recalcFinalAlpha));
+
+        const phraseAnimScaleX = blendedEntrySX * blendedExitSX * phraseBehaviorSX;
+        const phraseAnimScaleY = blendedEntrySY * blendedExitSY * phraseBehaviorSY;
         chunk.scaleX = totalScale * heroScaleMult * phraseAnimScaleX;
         chunk.scaleY = totalScale * heroScaleMult * phraseAnimScaleY;
         chunk.scale = 1;
-        chunk.visible = finalAlpha > 0.01;
+        chunk.visible = recalcFinalAlpha > 0.01;
         chunk.fontWeight = emphasisWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
@@ -5496,15 +5701,24 @@ export class LyricDancePlayer {
         }
 
         chunk.glow = Math.min(wordGlow, effectiveGlowCap / 20);
-        chunk.entryStyle = effectiveEntry as any;
-        chunk.exitStyle = effectiveExit as any;
+        chunk.entryStyle = (bf > 0.5 ? word.entryStyle : phraseEntry) as any;
+        chunk.exitStyle = (bf > 0.5 ? word.exitStyle : phraseExit) as any;
         chunk.emphasisLevel = emp;
         chunk.entryProgress = isEntering ? Math.max(0, Math.min(1, timeSinceActivation / Math.max(0.01, treatment.entryDuration))) : 1;
         chunk.exitProgress = isExiting ? Math.max(0, Math.min(1, 1 - (phraseRemaining / Math.max(0.01, treatment.exitDuration)))) : 0;
         chunk.behavior = treatment.behavior as any;
-        chunk.skewX = ((phraseEntryState.skewX ?? 0) + (phraseExitState.skewX ?? 0)) * motionCap;
-        chunk.blur = Math.min(LEGIBILITY.maxTextBlur, (phraseEntryState.blur ?? 0) + (phraseExitState.blur ?? 0));
-        chunk.rotation = ((phraseEntryState.rotation ?? 0) + (phraseExitState.rotation ?? 0)) * motionCap;
+        chunk.skewX = (
+          ((phraseEntryState.skewX ?? 0) + (phraseExitState.skewX ?? 0)) * ibf
+          + ((wordEntryBlend.skewX ?? 0) + (wordExitBlend.skewX ?? 0)) * bf
+        ) * motionCap;
+        chunk.blur = Math.min(LEGIBILITY.maxTextBlur,
+          ((phraseEntryState.blur ?? 0) + (phraseExitState.blur ?? 0)) * ibf
+          + ((wordEntryBlend.blur ?? 0) + (wordExitBlend.blur ?? 0)) * bf,
+        );
+        chunk.rotation = (
+          ((phraseEntryState.rotation ?? 0) + (phraseExitState.rotation ?? 0)) * ibf
+          + ((wordEntryBlend.rotation ?? 0) + (wordExitBlend.rotation ?? 0)) * bf
+        ) * motionCap;
         chunk.ghostTrail = false;
         chunk.ghostCount = 0;
         chunk.ghostSpacing = 0;
