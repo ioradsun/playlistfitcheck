@@ -138,7 +138,7 @@ export function LyricDanceCover({
         ) : (
           <>
             {songName ? (
-              <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4 max-w-[85%]">
+              <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-4 whitespace-nowrap">
                 {songName}
               </p>
             ) : (
