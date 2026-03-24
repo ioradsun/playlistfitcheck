@@ -3753,7 +3753,8 @@ export class LyricDancePlayer {
         maxFontSize: number; totalWidth: number; avgEntryProgress: number;
         groupStart: number;
         groupEnd: number;
-        phraseTextParts: string[];
+        text: string;
+        words: string[];
         visibleChunkCount: number;
       }>();
 
@@ -3776,7 +3777,8 @@ export class LyricDancePlayer {
             maxFontSize: 0, totalWidth: 0, avgEntryProgress: 0,
             groupStart: 0,
             groupEnd: 0,
-            phraseTextParts: [],
+            text: '',
+            words: [],
             visibleChunkCount: 0,
           };
           const li = Number(idParts[0]);
@@ -3812,8 +3814,16 @@ export class LyricDancePlayer {
         entry.totalWidth = entry.maxX - entry.minX;
         entry.avgEntryProgress += (chunk.entryProgress ?? 1);
         entry.visibleChunkCount += 1;
-        const chunkText = String(chunk.text ?? '').trim();
-        if (chunkText) entry.phraseTextParts.push(chunkText);
+
+        // Collect word text for elemental rendering
+        if (chunk.text) {
+          entry.words.push(chunk.text as string);
+        }
+      }
+
+      // Build phrase text for elemental rendering
+      for (const [, entry] of phraseMap) {
+        entry.text = entry.words.join(' ');
       }
 
       const beatPulse = this._lastBeatState?.pulse ?? 0;
@@ -3821,7 +3831,7 @@ export class LyricDancePlayer {
       const elementalAlpha = Math.max(this._activeMoodConfig.elementalIntensity, 0.5);
 
       for (const [phraseKey, phrase] of phraseMap) {
-        const phraseText = phrase.phraseTextParts.join(' ').replace(/\s+/g, ' ').trim();
+        phrase.text = phrase.text.replace(/\s+/g, ' ').trim();
         const avgEntryProgress = phrase.visibleChunkCount > 0
           ? phrase.avgEntryProgress / phrase.visibleChunkCount
           : 1;
@@ -3830,12 +3840,12 @@ export class LyricDancePlayer {
         const normalizedPhaseTime = Math.max(0, Math.min(1, (tSec - timingStart) / Math.max(0.01, timingEnd - timingStart)));
         const wordLocalTime = Math.max(0, Math.min(1.8, normalizedPhaseTime * 0.95 + (1 - avgEntryProgress) * 0.25));
         const skipped = !phrase.elementalClass
-          || !phraseText
+          || !phrase.text
           || !Number.isFinite(phrase.minX)
           || phrase.totalWidth <= 0;
         if (DEBUG_ELEMENTAL_TRACE) {
           console.log(
-            `[ElementalTrace] key=${phraseKey} text="${phraseText}" class=${phrase.elementalClass ?? 'none'} local=${wordLocalTime.toFixed(3)} bounds=(${phrase.minX.toFixed(1)},${phrase.minY.toFixed(1)})-(${phrase.maxX.toFixed(1)},${phrase.maxY.toFixed(1)}) skipped=${skipped}`,
+            `[ElementalTrace] key=${phraseKey} text="${phrase.text}" class=${phrase.elementalClass ?? 'none'} local=${wordLocalTime.toFixed(3)} bounds=(${phrase.minX.toFixed(1)},${phrase.minY.toFixed(1)})-(${phrase.maxX.toFixed(1)},${phrase.maxY.toFixed(1)}) skipped=${skipped}`,
           );
         }
         if (skipped) continue;
@@ -3853,11 +3863,14 @@ export class LyricDancePlayer {
         this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
         this.ctx.globalAlpha = elementalAlpha;
         this.ctx.translate(phrase.minX, phraseCY);
+        // Set font for fillText calls inside drawElementalWord
+        this.ctx.font = `${this.compiledScene?.baseFontWeight ?? 600} ${phraseFontSize}px "${this.compiledScene?.baseFontFamily ?? 'Montserrat'}", sans-serif`;
+        this.ctx.textBaseline = 'middle';
 
         try {
           drawElementalWord(
             this.ctx,
-            phraseText,
+            phrase.text,
             phraseFontSize,
             phraseW,
             phrase.elementalClass,
