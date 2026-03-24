@@ -1023,12 +1023,12 @@ export function LyricFitTab({
 
         if (!mountedRef.current) return;
 
-        const enrichedScene = beatGrid
-          ? {
-              ...sceneDirection,
-              beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence },
-            }
-          : { ...sceneDirection };
+        const enrichedScene = {
+          ...(beatGrid
+            ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
+            : { ...sceneDirection }),
+          _meta: { scene: sceneMeta },
+        };
 
         setCinematicDirection(enrichedScene);
 
