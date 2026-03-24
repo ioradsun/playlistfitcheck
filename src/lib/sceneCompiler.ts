@@ -89,6 +89,126 @@ export interface AnimState {
   rotation: number;
 }
 
+
+// ═══ V3 Motion Characters ═══
+// Six perceptually distinct animations. Entry = character forward. Exit = character reversed.
+export type MotionCharacter = 'slam' | 'rise' | 'drift' | 'snap' | 'bloom' | 'whisper';
+
+/**
+ * Compute entry animation state for a motion character.
+ * progress: 0 = start of entry, 1 = fully entered
+ * intensity: 0..1 scales motion magnitude (from mood config)
+ */
+export function computeMotionEntry(character: MotionCharacter, progress: number, intensity: number): AnimState {
+  const ep = easeOut(Math.min(1, progress));
+  const eb = easeOutBack(Math.min(1, progress));
+  const I = Math.max(0, Math.min(1, intensity));
+
+  switch (character) {
+    case 'slam': {
+      // Drop from above. Squash on landing.
+      const squash = ep > 0.85 ? (1 - ep) * 10 * I : 0;
+      return {
+        offsetX: 0,
+        offsetY: -(1 - ep) * 80 * I,
+        scaleX: 1 + squash * 0.15,
+        scaleY: 1 - squash * 0.15,
+        alpha: Math.min(1, progress * 6),
+        skewX: 0,
+        glowMult: ep > 0.85 ? (1 - ep) * 4 * I : 0,
+        blur: 0,
+        rotation: 0,
+      };
+    }
+    case 'rise': {
+      // Float up from below.
+      return {
+        offsetX: 0,
+        offsetY: (1 - ep) * 50 * I,
+        scaleX: 1,
+        scaleY: 1,
+        alpha: easeOut(Math.min(1, progress * 2)),
+        skewX: 0,
+        glowMult: 0,
+        blur: 0,
+        rotation: 0,
+      };
+    }
+    case 'drift': {
+      // Slide from left with parallax skew.
+      return {
+        offsetX: (1 - eb) * -100 * I,
+        offsetY: 0,
+        scaleX: 1,
+        scaleY: 1,
+        alpha: easeOut(Math.min(1, progress * 2)),
+        skewX: (1 - ep) * -6 * I,
+        glowMult: 0,
+        blur: 0,
+        rotation: 0,
+      };
+    }
+    case 'snap': {
+      // Instant appear.
+      return {
+        offsetX: 0, offsetY: 0,
+        scaleX: 1, scaleY: 1,
+        alpha: progress > 0.01 ? 1 : 0,
+        skewX: 0, glowMult: 0, blur: 0, rotation: 0,
+      };
+    }
+    case 'bloom': {
+      // Scale from center with glow burst.
+      const s = 0.5 + ep * 0.5;
+      return {
+        offsetX: 0, offsetY: 0,
+        scaleX: s,
+        scaleY: s,
+        alpha: easeOut(Math.min(1, progress * 1.5)),
+        skewX: 0,
+        glowMult: (1 - ep) * 2.5 * I,
+        blur: 0,
+        rotation: 0,
+      };
+    }
+    case 'whisper': {
+      // Slow fade. Subtle scale shift.
+      return {
+        offsetX: 0, offsetY: 0,
+        scaleX: 0.96 + ep * 0.04,
+        scaleY: 0.96 + ep * 0.04,
+        alpha: easeIn(Math.min(1, progress * 0.8)),
+        skewX: 0, glowMult: 0, blur: 0, rotation: 0,
+      };
+    }
+    default: {
+      // Fallback = whisper
+      return {
+        offsetX: 0, offsetY: 0,
+        scaleX: 0.96 + ep * 0.04, scaleY: 0.96 + ep * 0.04,
+        alpha: easeIn(Math.min(1, progress * 0.8)),
+        skewX: 0, glowMult: 0, blur: 0, rotation: 0,
+      };
+    }
+  }
+}
+
+/**
+ * Compute exit animation state. This is the entry played in reverse
+ * with directional fields flipped — guaranteed visual symmetry.
+ */
+export function computeMotionExit(character: MotionCharacter, progress: number, intensity: number): AnimState {
+  // progress: 0 = still visible, 1 = fully exited
+  // Run entry in reverse: entry at (1-progress) gives the "unwinding" state
+  const reversed = computeMotionEntry(character, 1 - progress, intensity);
+  // Flip direction so exit goes the opposite way
+  reversed.offsetX *= -1;
+  reversed.offsetY *= -1;
+  reversed.skewX *= -1;
+  reversed.rotation *= -1;
+  return reversed;
+}
+
 type MotionProfile = 'weighted' | 'fluid' | 'elastic' | 'drift' | 'glitch';
 interface MotionDefaults {
   entries: EntryStyle[];
