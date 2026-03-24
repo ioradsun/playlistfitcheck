@@ -3827,7 +3827,7 @@ export class LyricDancePlayer {
         this.ctx.save();
         this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
         this.ctx.globalAlpha = elementalAlpha;
-        this.ctx.translate(phraseCX, phraseCY);
+        this.ctx.translate(phrase.minX, phraseCY);
 
         try {
           drawElementalWord(
