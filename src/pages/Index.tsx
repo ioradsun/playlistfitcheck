@@ -469,6 +469,7 @@ const Index = () => {
     title: string;
     onBack: () => void;
     rightContent?: React.ReactNode;
+    onTitleChange?: (newTitle: string) => void;
   } | null>(null);
   const [loadedMixProject, setLoadedMixProject] =
     useState<MixProjectData | null>(null);
@@ -1368,9 +1369,25 @@ const Index = () => {
           </SidebarTrigger>
           {headerProject ? (
             <>
-              <span className="text-xs font-semibold">
-                {headerProject.title}
-              </span>
+              {headerProject.onTitleChange ? (
+                <input
+                  className="text-xs font-semibold bg-transparent border-none outline-none focus:ring-1 focus:ring-primary/40 rounded px-1 -ml-1 min-w-0 max-w-[50vw] truncate"
+                  defaultValue={headerProject.title}
+                  key={headerProject.title}
+                  onBlur={(e) => {
+                    const v = e.currentTarget.value.trim();
+                    if (v && v !== headerProject.title) headerProject.onTitleChange!(v);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.currentTarget.blur(); }
+                    if (e.key === "Escape") { e.currentTarget.value = headerProject.title; e.currentTarget.blur(); }
+                  }}
+                />
+              ) : (
+                <span className="text-xs font-semibold">
+                  {headerProject.title}
+                </span>
+              )}
               {headerProject.rightContent && (
                 <div className="ml-auto flex items-center gap-2">
                   {headerProject.rightContent}
