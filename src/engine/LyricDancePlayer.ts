@@ -5452,9 +5452,11 @@ export class LyricDancePlayer {
         // ═══ PHRASE-LEVEL SPOTLIGHT: all words white, hero words accent ═══
         // No per-word color switching — strobes at fast BPM.
         // Phrase is the unit. All words full white. Hero words get section accent.
-        const spotlightAlpha = lineRole !== 'current'
-          ? 0.30
-          : wordState === 'upcoming' ? 0.30 : 1.0;
+        const spotlightAlpha = isOnDeck
+          ? 1.0  // promote system controls on-deck opacity
+          : lineRole !== 'current'
+            ? 0.30
+            : wordState === 'upcoming' ? 0.30 : 1.0;
 
         // ── Hero word detection ──
         const isHeroWord = word.isHeroWord === true;
@@ -5743,8 +5745,10 @@ export class LyricDancePlayer {
     frame.chunks = chunks;
     frame.particles = [];
     return frame;
-  }
+      }
 
+      // On-deck: promote system is sole authority on alpha/position/scale
+      if (isOnDeck) phraseAlpha = 1.0;
 
   /** Draw background gradient to an arbitrary ctx (used for snapshot baking) */
   private _drawBackgroundToCtx(ctx: CanvasRenderingContext2D, frame: ScaledKeyframe): void {
