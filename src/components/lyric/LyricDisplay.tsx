@@ -304,6 +304,7 @@ export function LyricDisplay({
   onReuploadAudio,
   onLinesChange,
   onHeaderProject,
+  onTitleChange,
 }: Props) {
   const { user, roles } = useAuth();
   const siteCopy = useSiteCopy();
@@ -979,7 +980,7 @@ export function LyricDisplay({
         )}
       </>
     );
-    onHeaderProject?.({ title, onBack, rightContent });
+    onHeaderProject?.({ title, onBack, rightContent, onTitleChange });
     return () => onHeaderProject?.(null);
   }, [
     data.title,
