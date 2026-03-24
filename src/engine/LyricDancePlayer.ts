@@ -5294,6 +5294,42 @@ export class LyricDancePlayer {
       const sharedBeatScale = sharedBeatResp ? sharedBeatResp.wordScale : 1.0;
       const sharedBeatNudgeY = sharedBeatResp ? sharedBeatResp.wordNudgeY * 0.3 : 0; // gentle — whole phrase lifts
 
+      // ── Hero neighbor push: pre-pass to find hero and compute per-word X offsets ──
+      // When the hero word scales up, words on the same line are pushed outward.
+      const neighborPushOffsets: number[] = new Array(group.words.length).fill(0);
+      {
+        // Find the hero word index and its scale for this frame
+        let heroWi = -1;
+        let heroScale = 1.0;
+        for (let wi = 0; wi < group.words.length; wi++) {
+          const w = group.words[wi];
+          const emp = w.emphasisLevel ?? 0;
+          const isHero = w.isHeroWord === true;
+          if (!isHero) continue;
+          // Replicate heroScaleMult formula (no solo hero — that's handled separately)
+          const isOnlyWord = group.words.length === 1;
+          if (isOnlyWord) continue; // solo hero centers, no neighbors to push
+          const sm = 1.0 + Math.max(0, emp - 1) * 0.25;
+          if (sm > heroScale) { heroScale = sm; heroWi = wi; }
+        }
+
+        if (heroWi >= 0 && heroScale > 1.01) {
+          const heroWord = group.words[heroWi];
+          const heroHalfExpansion = (heroWord.layoutWidth ?? 0) * (heroScale - 1) * 0.5;
+          const heroLineY = heroWord.layoutY;
+
+          for (let wi = 0; wi < group.words.length; wi++) {
+            if (wi === heroWi) continue;
+            const w = group.words[wi];
+            // Only push words on the same wrapped line as the hero
+            if (Math.abs(w.layoutY - heroLineY) > 4) continue;
+            // Push direction: right-of-hero → positive X, left-of-hero → negative X
+            const side = w.layoutX > heroWord.layoutX ? 1 : -1;
+            neighborPushOffsets[wi] = side * heroHalfExpansion;
+          }
+        }
+      }
+
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
         const resolvedWord = this.resolvedState.wordSettings[word.clean] ?? null;
@@ -5415,7 +5451,7 @@ export class LyricDancePlayer {
         chunk.id = word.id;
         chunk.text = word.text;
 
-        chunk.x = word.layoutX + heroOffsetX
+        chunk.x = word.layoutX + heroOffsetX + neighborPushOffsets[wi]
           + phraseEntryState.offsetX + (phraseExitState.offsetX ?? 0) + phraseBehaviorOX;
         chunk.y = word.layoutY + sharedBeatNudgeY + heroOffsetY
           + phraseEntryState.offsetY + (phraseExitState.offsetY ?? 0) + phraseBehaviorOY;
