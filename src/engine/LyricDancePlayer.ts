@@ -3861,14 +3861,16 @@ export class LyricDancePlayer {
 
         this.ctx.save();
         this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
-        this.ctx.globalAlpha = elementalAlpha;
+        this.ctx.globalCompositeOperation = 'screen';
+        this.ctx.globalAlpha = elementalAlpha * 0.7;
         this.ctx.translate(phrase.minX, phraseCY);
         this.ctx.textBaseline = 'middle';
+        this.ctx.font = `${this.compiledScene?.baseFontWeight ?? 600} ${phraseFontSize}px "${this.compiledScene?.baseFontFamily ?? 'Montserrat'}", sans-serif`;
 
         try {
           drawElementalWord(
             this.ctx,
-            '',
+            phrase.text,
             phraseFontSize,
             phraseW,
             phrase.elementalClass,
