@@ -22,7 +22,7 @@ interface MixFitCheckProps {
   initialProject?: MixProjectData | null;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
-  onHeaderProject?: (project: { title: string; onBack: () => void; rightContent?: React.ReactNode } | null) => void;
+  onHeaderProject?: (project: { title: string; onBack: () => void; rightContent?: React.ReactNode; onTitleChange?: (newTitle: string) => void } | null) => void;
   onSavedId?: (id: string, projectData?: MixProjectData) => void;
   onOptimisticItem?: (item: RecentItem) => void;
 }
