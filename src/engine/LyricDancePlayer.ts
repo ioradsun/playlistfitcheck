@@ -848,9 +848,8 @@ class DynamiteWickBar {
     const wf = this.waveformSmooth;
     const accentBoost = 0.75 + brightness * 0.35 + beatPhase * 0.1;
 
-    // ── Clear with very slight motion blur for smoke persistence ──
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx.fillRect(0, 0, W, H);
+    // ── Clear to transparent; smoke trails are redrawn from trail history each frame ──
+    ctx.clearRect(0, 0, W, H);
 
     // ── Ember heat: inject at playhead, decay behind ──
     const heat = this.emberHeat;
