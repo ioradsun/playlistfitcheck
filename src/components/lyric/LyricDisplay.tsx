@@ -141,8 +141,10 @@ interface Props {
       title: string;
       onBack: () => void;
       rightContent?: React.ReactNode;
+      onTitleChange?: (newTitle: string) => void;
     } | null,
   ) => void;
+  onTitleChange?: (newTitle: string) => void;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
