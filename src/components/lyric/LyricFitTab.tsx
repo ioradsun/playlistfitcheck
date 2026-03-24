@@ -1019,6 +1019,7 @@ export function LyricFitTab({
         }
 
         const sceneDirection = sceneResult.cinematicDirection;
+        const sceneMeta = sceneResult._meta || null;
 
         if (!mountedRef.current) return;
 
