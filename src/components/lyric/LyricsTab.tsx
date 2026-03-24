@@ -79,6 +79,7 @@ export type HeaderProjectSetter = (
     title: string;
     onBack: () => void;
     rightContent?: ReactNode;
+    onTitleChange?: (newTitle: string) => void;
   } | null,
 ) => void;
 
