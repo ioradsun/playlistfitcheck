@@ -691,7 +691,7 @@ export function LyricFitTab({
             .from("audio-clips")
             .getPublicUrl(storagePath);
 
-          await supabase.from("shareable_lyric_dances" as any).upsert(
+          const { error: upsertErr } = await supabase.from("shareable_lyric_dances" as any).upsert(
             {
               user_id: user.id,
               artist_slug: artistSlugVal,
@@ -715,10 +715,14 @@ export function LyricFitTab({
             { onConflict: "artist_slug,song_slug" },
           );
 
+          if (upsertErr) {
+            console.error("[Pipeline] Dance upsert failed:", upsertErr.message);
+          }
+
           const { data: newRow }: any = await supabase
             .from("shareable_lyric_dances" as any)
             .select("id")
-            .eq("user_id", user.id)
+            .eq("artist_slug", artistSlugVal)
             .eq("song_slug", songSlugVal)
             .maybeSingle();
           resolvedDanceId = newRow?.id ?? null;
