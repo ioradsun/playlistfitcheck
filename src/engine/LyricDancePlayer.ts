@@ -3808,7 +3808,7 @@ export class LyricDancePlayer {
         const phraseW = phrase.totalWidth;
         const phraseFontSize = phrase.maxFontSize;
 
-        const wordLocalTime = tSec - (group.start ?? 0);
+        const wordLocalTime = tSec;
         const maxParticles = Math.max(3, Math.round(10 * elementalAlpha));
         const bubbleXPositions = Array.from({ length: maxParticles }, (_, i) =>
           phraseW * (i / Math.max(1, maxParticles - 1))
