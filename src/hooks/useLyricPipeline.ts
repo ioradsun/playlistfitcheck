@@ -43,7 +43,6 @@ interface UsePipelineSchedulerParams {
   audioFile: File | null;
   savedIdRef: React.MutableRefObject<string | null>;
   hookDetectionRunRef: React.MutableRefObject<boolean>;
-  imageRetriggerRef: React.MutableRefObject<boolean>;
 
   setRenderData: (d: any) => void;
   setCinematicDirection: (d: any) => void;
@@ -101,7 +100,6 @@ export function usePipelineScheduler({
   audioFile,
   savedIdRef,
   hookDetectionRunRef,
-  imageRetriggerRef,
   setRenderData,
   setCinematicDirection,
   setSectionImageUrls,
@@ -338,7 +336,6 @@ export function usePipelineScheduler({
     pipelineTriggeredRef.current = false;
     cinematicTriggeredRef.current = false;
     hookDetectionRunRef.current = false;
-    imageRetriggerRef.current = false;
 
     if (savedIdRef.current) {
       persistQueue.enqueue({
@@ -347,12 +344,8 @@ export function usePipelineScheduler({
         payload: {
           render_data: { cinematicDirection: null },
           cinematic_direction: null,
+          section_images: null,
         },
-      });
-      persistQueue.enqueue({
-        table: "saved_lyrics",
-        id: savedIdRef.current,
-        payload: { section_images: null },
       });
     }
 
@@ -370,7 +363,6 @@ export function usePipelineScheduler({
     setPipelineDanceId,
     setPipelineDanceUrl,
     hookDetectionRunRef,
-    imageRetriggerRef,
     savedIdRef,
   ]);
 
@@ -864,207 +856,26 @@ export function useLyricPipeline({
     })();
   }, [user, initialLyric, cinematicDirection, pipelineDanceId]);
 
-  const imageRetriggerRef = useRef(false);
   useEffect(() => {
-    if (imageRetriggerRef.current) return;
-    if (!user || !cinematicDirection || !lyricData || !audioFile) return;
-    const hasImages =
-      Array.isArray((initialLyric as any)?.section_images) &&
-      (initialLyric as any).section_images.some(Boolean);
-    if (hasImages) return;
-    if (
-      generationStatus.sectionImages === "running" ||
-      generationStatus.sectionImages === "done"
-    )
-      return;
-    if (!cinematicTriggeredRef.current) return;
-
-    imageRetriggerRef.current = true;
-
-    const dirSections = cinematicDirection?.sections;
-    if (!Array.isArray(dirSections) || dirSections.length === 0) {
-      setSectionImageUrls([]);
-      setSectionImageProgress(null);
-      setSectionImageError(null);
-      setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
-      return;
-    }
-
-    setSectionImageError(null);
-    setSectionImageProgress({ done: 0, total: dirSections.length });
-    setGenerationStatus((prev) => ({ ...prev, sectionImages: "running" }));
-
-    (async () => {
-      try {
-        const { slugify } = await import("@/lib/slugify");
-        await artistNameReadyRef.current;
-        const songSlugVal = slugify(lyricData.title || "untitled");
-        const artistSlugVal = slugify(artistNameRef.current || "artist");
-
-        const { data: existing }: any = await supabase
-          .from("shareable_lyric_dances" as any)
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("song_slug", songSlugVal)
-          .maybeSingle();
-
-        let resolvedDanceId = existing?.id ?? null;
-
-        if (!resolvedDanceId) {
-          const mainLines = lyricData.lines.filter(
-            (l: any) => l.tag !== "adlib",
-          );
-          const storagePath = savedIdRef.current
-            ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(
-                user.id,
-                savedIdRef.current,
-                audioFile.name,
-              )
-            : `${user.id}/${artistSlugVal}/${songSlugVal}/lyric-dance.${audioFile.name.split(".").pop() || "webm"}`;
-          if (audioFile.size > 0) {
-            await supabase.storage
-              .from("audio-clips")
-              .upload(storagePath, audioFile, {
-                upsert: true,
-                contentType: audioFile.type || undefined,
-              });
-          }
-          const { data: urlData } = supabase.storage
-            .from("audio-clips")
-            .getPublicUrl(storagePath);
-
-          const { error: upsertErr } = await supabase.from("shareable_lyric_dances" as any).upsert(
-            {
-              user_id: user.id,
-              artist_slug: artistSlugVal,
-              song_slug: songSlugVal,
-              artist_name: artistNameRef.current || "artist",
-              song_name: lyricData.title || "Untitled",
-              audio_url: urlData.publicUrl,
-              lyrics: mainLines,
-              cinematic_direction: cinematicDirection,
-              words: words ?? null,
-              beat_grid: beatGrid
-                ? {
-                    bpm: beatGrid.bpm,
-                    beats: beatGrid.beats,
-                    confidence: beatGrid.confidence,
-                  }
-                : { bpm: 0, beats: [], confidence: 0 },
-              palette: derivePaletteFromDirection(cinematicDirection),
-              section_images: null,
-            } as any,
-            { onConflict: "artist_slug,song_slug" },
-          );
-
-          if (upsertErr) {
-            console.error("[Pipeline] Dance upsert failed:", upsertErr.message);
-          }
-
-          const { data: newRow }: any = await supabase
-            .from("shareable_lyric_dances" as any)
-            .select("id")
-            .eq("artist_slug", artistSlugVal)
-            .eq("song_slug", songSlugVal)
-            .maybeSingle();
-          resolvedDanceId = newRow?.id ?? null;
-        }
-
-        if (!resolvedDanceId) {
-          setSectionImageError("Could not create dance row for image generation");
-          setGenerationStatus((prev) => ({ ...prev, sectionImages: "error" }));
-          return;
-        }
-
-        if (resolvedDanceId) {
-          setPipelineDanceId(resolvedDanceId);
-          setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
-        }
-
-        const { data: result, error } = await supabase.functions.invoke(
-          "generate-section-images",
-          {
-            body: {
-              lyric_dance_id: resolvedDanceId,
-              saved_lyric_id: savedIdRef.current ?? undefined,
-              force: true,
-            },
-          },
-        );
-        if (error) throw error;
-        const urls = result?.urls || result?.section_images || [];
-        setSectionImageUrls(urls);
-        setSectionImageProgress({
-          done: urls.filter(Boolean).length,
-          total: dirSections.length,
-        });
-        setSectionImageError(null);
-
-        if (savedIdRef.current && urls.length > 0) {
-          persistQueue.enqueue({
-            table: "saved_lyrics",
-            id: savedIdRef.current,
-            payload: { section_images: urls },
-          });
-        }
-
-        setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
-      } catch (err: any) {
-        console.error(
-          "[Pipeline] Image re-generation on remount failed:",
-          err?.message || err,
-        );
-        setGenerationStatus((prev) => ({ ...prev, sectionImages: "error" }));
-      }
-    })();
-  }, [
-    user,
-    cinematicDirection,
-    lyricData,
-    audioFile,
-    generationStatus.sectionImages,
-    initialLyric,
-    beatGrid,
-    words,
-  ]);
-
-  useEffect(() => {
-    if (!savedIdRef.current || !renderData) return;
+    const id = savedIdRef.current;
+    if (!id || !renderData) return;
     if (renderDataLoadedFromDbRef.current) {
       renderDataLoadedFromDbRef.current = false;
       return;
     }
-    const payload = { ...renderData };
-    if (cinematicDirection) payload.cinematicDirection = cinematicDirection;
-    if (waveformData && waveformData.peaks.length > 0) {
-      payload.waveformPeaks = waveformData.peaks;
-      payload.waveformDuration = waveformData.duration;
-    }
-    if (pipelineDanceId) payload.pipelineDanceId = pipelineDanceId;
-    if (pipelineDanceUrl) payload.pipelineDanceUrl = pipelineDanceUrl;
-    persistQueue.enqueue({
-      table: "saved_lyrics",
-      id: savedIdRef.current,
-      payload: { render_data: payload },
-    });
-  }, [
-    savedId,
-    renderData,
-    waveformData,
-    pipelineDanceId,
-    pipelineDanceUrl,
-    cinematicDirection,
-  ]);
-
-  useEffect(() => {
-    if (!savedIdRef.current) return;
-    if (!sectionImageUrls.length || !sectionImageUrls.some(Boolean)) return;
-    persistQueue.enqueue({
-      table: "saved_lyrics",
-      id: savedIdRef.current,
-      payload: { section_images: sectionImageUrls },
-    });
-  }, [sectionImageUrls]);
+    const timer = setTimeout(() => {
+      const payload = { ...renderData };
+      if (cinematicDirection) payload.cinematicDirection = cinematicDirection;
+      if (waveformData?.peaks?.length) {
+        payload.waveformPeaks = waveformData.peaks;
+        payload.waveformDuration = waveformData.duration;
+      }
+      if (pipelineDanceId) payload.pipelineDanceId = pipelineDanceId;
+      if (pipelineDanceUrl) payload.pipelineDanceUrl = pipelineDanceUrl;
+      persistQueue.enqueue({ table: "saved_lyrics", id, payload: { render_data: payload } });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [renderData, cinematicDirection, waveformData, pipelineDanceId, pipelineDanceUrl]);
 
   const hookDetectionRunRef = useRef(false);
   const startHookDetection = useCallback(async () => {
@@ -1297,7 +1108,6 @@ export function useLyricPipeline({
         })();
 
         const imagePromise = (async () => {
-          imageRetriggerRef.current = true;
           const dirSections = enrichedScene?.sections;
           if (!mountedRef.current) return;
           if (
@@ -1437,64 +1247,6 @@ export function useLyricPipeline({
               return;
             }
 
-            const persistSectionImages = async (
-              finalUrls: (string | null)[],
-              complete: boolean,
-            ) => {
-              setSectionImageUrls(finalUrls);
-              setSectionImageProgress({
-                done: finalUrls.filter(Boolean).length,
-                total: dirSections.length,
-              });
-              setSectionImageError(
-                complete
-                  ? null
-                  : `Generated ${finalUrls.filter(Boolean).length}/${dirSections.length} images. Retry to fill missing sections.`,
-              );
-              if (savedIdRef.current && finalUrls.length > 0) {
-                persistQueue.enqueue({
-                  table: "saved_lyrics",
-                  id: savedIdRef.current,
-                  payload: { section_images: finalUrls },
-                });
-              }
-
-              if (resolvedDanceId && finalUrls.some(Boolean)) {
-                persistQueue.enqueue({
-                  table: "shareable_lyric_dances",
-                  id: resolvedDanceId,
-                  payload: { section_images: finalUrls },
-                });
-              }
-
-              const validUrls = finalUrls.filter(
-                (url: string | null): url is string =>
-                  typeof url === "string" && Boolean(url),
-              );
-              if (validUrls.length > 0 && resolvedDanceId) {
-                try {
-                  const { computeAutoPalettesFromUrls } =
-                    await import("@/lib/autoPalette");
-                  const palettes = await computeAutoPalettesFromUrls(validUrls);
-                  if (palettes && palettes.length > 0) {
-                    persistQueue.enqueue({
-                      table: "shareable_lyric_dances",
-                      id: resolvedDanceId,
-                      payload: {
-                        auto_palettes: palettes,
-                        palette: palettes[0] ?? undefined,
-                      },
-                    });
-                  }
-                } catch (paletteErr) {
-                  console.error(
-                    "[Pipeline] Auto palette generation failed:",
-                    paletteErr,
-                  );
-                }
-              }
-            };
-
             const { data: result, error } = await invokeWithTimeout(
               "generate-section-images",
               {
@@ -1508,55 +1260,18 @@ export function useLyricPipeline({
             const urls: (string | null)[] =
               result?.urls || result?.section_images || [];
             const allComplete = result?.success === true || urls.every(Boolean);
-            const failedCount = urls.filter(
-              (url: string | null) => !url,
-            ).length;
-
-            if (!allComplete && failedCount > 0 && resolvedDanceId) {
-              console.log(
-                `[Pipeline] ${failedCount} images failed, retrying in 5s...`,
-              );
-              await new Promise((resolve) => setTimeout(resolve, 5000));
-              try {
-                const { data: retryResult } = await invokeWithTimeout(
-                  "generate-section-images",
-                  {
-                    lyric_dance_id: resolvedDanceId,
-                    saved_lyric_id: savedIdRef.current ?? undefined,
-                    force: true,
-                  },
-                  90_000,
-                );
-                const retryUrls: (string | null)[] =
-                  retryResult?.urls || retryResult?.section_images || [];
-                const mergedUrls = urls.map(
-                  (url: string | null, index: number) =>
-                    url || retryUrls[index] || null,
-                );
-                const retryAllComplete = mergedUrls.every(Boolean);
-
-                setGenerationStatus((prev) => ({
-                  ...prev,
-                  sectionImages: retryAllComplete ? "done" : "error",
-                }));
-                await persistSectionImages(mergedUrls, retryAllComplete);
-              } catch (retryErr) {
-                console.error("[Pipeline] Image retry failed:", retryErr);
-                setGenerationStatus((prev) => ({
-                  ...prev,
-                  sectionImages: "error",
-                }));
-                if (urls.some(Boolean)) {
-                  await persistSectionImages(urls, false);
-                }
-              }
-            } else {
-              setGenerationStatus((prev) => ({
-                ...prev,
-                sectionImages: allComplete ? "done" : "error",
-              }));
-              await persistSectionImages(urls, allComplete);
-            }
+            setSectionImageUrls(urls);
+            setSectionImageProgress({
+              done: urls.filter(Boolean).length,
+              total: dirSections.length,
+            });
+            setSectionImageError(
+              allComplete ? null : `${urls.filter(Boolean).length}/${dirSections.length} images generated`,
+            );
+            setGenerationStatus((prev) => ({
+              ...prev,
+              sectionImages: allComplete ? "done" : "error",
+            }));
           } catch (imgErr: any) {
             console.error(
               "[Pipeline] Image generation failed:",
@@ -1613,7 +1328,6 @@ export function useLyricPipeline({
     audioFile,
     savedIdRef,
     hookDetectionRunRef,
-    imageRetriggerRef,
     setRenderData,
     setCinematicDirection,
     setSectionImageUrls,
@@ -1718,7 +1432,6 @@ export function useLyricPipeline({
     cinematicTriggeredRef.current = false;
     pipelineTriggeredRef.current = false;
     hookDetectionRunRef.current = false;
-    imageRetriggerRef.current = false;
     onNewProject?.();
   }, [onNewProject, setFitReadiness, setFitUnlocked, setGenerationStatus]);
 

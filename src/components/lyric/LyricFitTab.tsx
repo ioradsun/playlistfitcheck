@@ -199,19 +199,12 @@ export function LyricFitTab({
             hasRealAudio={p.hasRealAudio}
             savedId={p.savedId}
             renderData={p.renderData}
-            setRenderData={p.setRenderData}
             beatGrid={p.beatGrid}
-            setBeatGrid={p.setBeatGrid}
             cinematicDirection={p.cinematicDirection}
-            setCinematicDirection={p.setCinematicDirection}
             generationStatus={p.generationStatus}
             words={p.words}
-            onRetry={undefined}
             onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
             onBack={handleBackToLyrics}
-            onImageGenerationStatusChange={p.handleImageGenerationStatusChange}
-            onSectionImagesGenerated={p.handleSectionImagesGenerated}
-            onSectionImagesError={p.handleSectionImagesError}
             pipelineStages={p.pipelineStages}
             parentWaveform={p.waveformData}
             initialDanceId={p.pipelineDanceId}

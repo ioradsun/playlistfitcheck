@@ -29,7 +29,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
-import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
@@ -53,8 +52,6 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useVoteGate } from "@/hooks/useVoteGate";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
-import { preloadImage } from "@/lib/imagePreloadCache";
-import { persistQueue } from "@/lib/persistQueue";
 import type { UseLyricPipelineReturn } from "@/hooks/useLyricPipeline";
 
 const PEAK_SAMPLES = 200;
@@ -77,32 +74,19 @@ function extractPeaks(buffer: AudioBuffer, samples: number): number[] {
 }
 
 interface Props {
-  pipeline?: UseLyricPipelineReturn;
+  pipeline: UseLyricPipelineReturn;
   lyricData: LyricData;
   audioFile: File;
   parentWaveform?: WaveformData | null;
   hasRealAudio: boolean;
   savedId: string | null;
   renderData: any | null;
-  setRenderData: (d: any) => void;
   beatGrid: BeatGridData | null;
-  setBeatGrid: (g: BeatGridData | null) => void;
   cinematicDirection: any | null;
-  setCinematicDirection: (d: any) => void;
   generationStatus: GenerationStatus;
   words?: Array<{ word: string; start: number; end: number }> | null;
-  onRetry?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
-  onImageGenerationStatusChange?: (
-    status: "idle" | "running" | "done" | "error",
-  ) => void;
-  onSectionImagesGenerated?: (payload: {
-    urls: (string | null)[];
-    total: number;
-    error?: string | null;
-  }) => void;
-  onSectionImagesError?: (error: string | null) => void;
   pipelineStages?: PipelineStages;
   initialDanceId?: string | null;
   initialDanceUrl?: string | null;
@@ -120,19 +104,12 @@ export function FitTab({
   hasRealAudio,
   savedId,
   renderData,
-  setRenderData,
   beatGrid,
-  setBeatGrid,
   cinematicDirection,
-  setCinematicDirection,
   generationStatus,
   words,
-  onRetry,
   onHeaderProject,
   onBack,
-  onImageGenerationStatusChange,
-  onSectionImagesGenerated,
-  onSectionImagesError,
   pipelineStages: pipelineStagesProp,
   initialDanceId,
   initialDanceUrl,
@@ -495,24 +472,9 @@ export function FitTab({
       lyricData.title !== "Untitled"
         ? lyricData.title
         : audioFile.name.replace(/\.[^.]+$/, "");
-    const rightContent = onRetry ? (
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.preventDefault();
-            onRetry();
-          }}
-          className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
-        >
-          <RefreshCw size={12} />
-          Regenerate
-        </button>
-      </div>
-    ) : undefined;
-    onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent, onTitleChange });
+    onHeaderProject({ title, onBack: onBack ?? (() => {}), onTitleChange });
     return () => onHeaderProject(null);
-  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onRetry, onTitleChange]);
+  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onTitleChange]);
   // CinematicDirectionCard extracted to top-level — see below FitTab
 
   // ── Live transcript sync ──────────────────────────────────────────────
@@ -1237,124 +1199,8 @@ export function FitTab({
   };
 
   const handleGenerateImages = useCallback(async () => {
-    if (pipeline) {
-      await pipeline.retryImages();
-      return;
-    }
-    const sections =
-      cinematicDirection?.sections && Array.isArray(cinematicDirection.sections)
-        ? cinematicDirection.sections
-        : [];
-    if (!sections.length || generationStatus.sectionImages === "running") return;
-
-    if (!publishedDanceId) {
-      const error = "Could not create dance row for image generation";
-      onImageGenerationStatusChange?.("error");
-      onSectionImagesError?.(error);
-      toast.error(error);
-      return;
-    }
-
-    onSectionImagesError?.(null);
-    onImageGenerationStatusChange?.("running");
-    onSectionImagesGenerated?.({
-      urls: sectionImageUrls,
-      total: sections.length,
-      error: null,
-    });
-
-    try {
-      const { data: result, error } = await supabase.functions.invoke(
-        "generate-section-images",
-        {
-          body: {
-            lyric_dance_id: publishedDanceId,
-            saved_lyric_id: savedId ?? undefined,
-            force: true,
-          },
-        },
-      );
-      if (error) throw error;
-      const urls: (string | null)[] =
-        result?.urls || result?.section_images || [];
-      for (const url of urls) {
-        if (url) void preloadImage(url);
-      }
-      const doneCount = urls.filter(Boolean).length;
-      const allComplete =
-        result?.success === true ||
-        (urls.length === sections.length && urls.every(Boolean));
-      const nextError = allComplete
-        ? null
-        : `Generated ${doneCount}/${sections.length} images. Retry to fill missing sections.`;
-
-      onSectionImagesGenerated?.({
-        urls,
-        total: sections.length,
-        error: nextError,
-      });
-      onImageGenerationStatusChange?.(allComplete ? "done" : "error");
-
-      if (savedId && urls.length > 0) {
-        persistQueue.enqueue({
-          table: "saved_lyrics",
-          id: savedId,
-          payload: { section_images: urls as any },
-        });
-      }
-
-      const validUrls = urls.filter(
-        (url: string | null): url is string => typeof url === "string" && Boolean(url),
-      );
-      if (validUrls.length > 0) {
-        try {
-          const palettes = await computeAutoPalettesFromUrls(validUrls);
-          if (palettes && palettes.length > 0) {
-            persistQueue.enqueue({
-              table: "shareable_lyric_dances",
-              id: publishedDanceId,
-              payload: {
-                section_images: urls as any,
-                auto_palettes: palettes as any,
-                palette: palettes[0] ?? undefined,
-              },
-            });
-          }
-        } catch (paletteErr) {
-          console.error("[FitTab] Auto palette generation failed:", paletteErr);
-          persistQueue.enqueue({
-            table: "shareable_lyric_dances",
-            id: publishedDanceId,
-            payload: { section_images: urls as any },
-          });
-        }
-      } else {
-        persistQueue.enqueue({
-          table: "shareable_lyric_dances",
-          id: publishedDanceId,
-          payload: { section_images: urls as any },
-        });
-      }
-
-      toast.success(`Generated ${doneCount}/${sections.length} section images`);
-    } catch (e: any) {
-      console.error("[SectionImages] Error:", e);
-      const message = e?.message || "Failed to generate section images";
-      onSectionImagesError?.(message);
-      onImageGenerationStatusChange?.("error");
-      toast.error(message);
-    }
-  }, [
-    cinematicDirection,
-    generationStatus.sectionImages,
-    onImageGenerationStatusChange,
-    onSectionImagesError,
-    onSectionImagesGenerated,
-    publishedDanceId,
-    savedId,
-    sectionImageUrls,
-    pipeline,
-  ]);
+    await pipeline.retryImages();
+  }, [pipeline]);
 
   const handleRetryImages = useCallback(() => {
     void handleGenerateImages();
@@ -1677,15 +1523,6 @@ export function FitTab({
                   Cinematic direction: {generationStatus.cinematicDirection}
                 </div>
               </div>
-              {onRetry && (
-                <button
-                  onClick={onRetry}
-                  className="text-[11px] font-mono text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
-                >
-                  <RefreshCw size={10} />
-                  {hasErrors ? "Retry failed steps" : "Re-analyze"}
-                </button>
-              )}
             </div>
           )}
 
@@ -1708,15 +1545,6 @@ export function FitTab({
                 <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
                   Song DNA
                 </span>
-                {onRetry && hasErrors && (
-                  <button
-                    onClick={onRetry}
-                    className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    <RefreshCw size={10} />
-                    Test Again
-                  </button>
-                )}
               </div>
 
               {meaning && (
@@ -1917,7 +1745,7 @@ export function FitTab({
                   imageProgress={sectionImageProgress}
                   imageError={sectionImageError}
                   imageGenerating={generationStatus.sectionImages === "running"}
-                  onRetryImages={handleRetryImages}
+                  retryImagesAction={handleRetryImages}
                 />
               )}
 
@@ -1978,14 +1806,14 @@ function CinematicDirectionCard({
   imageProgress,
   imageError,
   imageGenerating,
-  onRetryImages,
+  retryImagesAction,
 }: {
   cinematicDirection: any;
   sectionImages: (string | null)[];
   imageProgress: { done: number; total: number } | null;
   imageError: string | null;
   imageGenerating: boolean;
-  onRetryImages: () => void;
+  retryImagesAction: () => void;
 }) {
   const [imageTimestamps, setImageTimestamps] = useState<(string | null)[]>([]);
 
