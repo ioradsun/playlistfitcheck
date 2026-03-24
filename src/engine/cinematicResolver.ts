@@ -15,16 +15,6 @@ export interface ResolvedLineSettings {
 export interface ResolvedWordSettings {
   token: string;
   emphasisLevel: number;
-  behavior: string;
-  ghostTrail: boolean;
-  ghostDirection: 'up' | 'down' | 'left' | 'right' | 'radial';
-  letterSequence: boolean;
-  entry: string;
-  exit: string;
-  pulseAmp: number;
-  glowGain: number;
-  particleBurst: number;
-  microCamPush: number;
 }
 
 export interface BeatSpineState {
@@ -34,26 +24,8 @@ export interface BeatSpineState {
   nextBeat: number;
 }
 
-const EMPHASIS_LEVEL_MAP: Record<number, Pick<ResolvedWordSettings, 'pulseAmp' | 'glowGain' | 'particleBurst' | 'microCamPush'>> = {
-  0: { pulseAmp: 0.01, glowGain: 0.02, particleBurst: 0, microCamPush: 0 },
-  1: { pulseAmp: 0.015, glowGain: 0.05, particleBurst: 0, microCamPush: 0 },
-  2: { pulseAmp: 0.025, glowGain: 0.10, particleBurst: 0.1, microCamPush: 0.005 },
-  3: { pulseAmp: 0.04, glowGain: 0.18, particleBurst: 0.2, microCamPush: 0.01 },
-  4: { pulseAmp: 0.05, glowGain: 0.30, particleBurst: 0.4, microCamPush: 0.02 },
-  5: { pulseAmp: 0.06, glowGain: 0.42, particleBurst: 0.65, microCamPush: 0.03 },
-};
 
-const DEFAULT_WORD: ResolvedWordSettings = {
-  token: "",
-  emphasisLevel: 0,
-  behavior: "none",
-  ghostTrail: false,
-  ghostDirection: "up",
-  letterSequence: false,
-  entry: "fades",
-  exit: "fades",
-  ...EMPHASIS_LEVEL_MAP[0],
-};
+const DEFAULT_WORD: ResolvedWordSettings = { token: "", emphasisLevel: 0 };
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
@@ -147,13 +119,6 @@ export function resolveCinematicState(
       ...DEFAULT_WORD,
       token,
       emphasisLevel,
-      behavior: String(wd.behavior ?? wd.kineticClass ?? "none"),
-      ghostTrail: Boolean(wd.ghostTrail),
-      ghostDirection: (wd.ghostDirection ?? "up") as ResolvedWordSettings['ghostDirection'],
-      letterSequence: Boolean(wd.letterSequence),
-      entry: String(wd.entry ?? "fades"),
-      exit: String(wd.exit ?? "fades"),
-      ...(EMPHASIS_LEVEL_MAP[emphasisLevel] ?? EMPHASIS_LEVEL_MAP[0]),
     };
   });
 
