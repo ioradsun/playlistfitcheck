@@ -5218,7 +5218,14 @@ export class LyricDancePlayer {
 
     const activeGroups = this._activeGroupIndices;
     activeGroups.length = 0;
-    if (activeGroupIdx >= 0) activeGroups.push(activeGroupIdx);
+    if (activeGroupIdx >= 0) {
+      activeGroups.push(activeGroupIdx);
+      // ═══ TELEPROMPTER: on-deck phrase always visible below ═══
+      const onDeckIdx = activeGroupIdx + 1;
+      if (onDeckIdx < groups.length) {
+        activeGroups.push(onDeckIdx);
+      }
+    }
 
     const primaryLineIndex = activeGroupIdx >= 0
       ? groups[activeGroupIdx].lineIndex
@@ -5250,6 +5257,44 @@ export class LyricDancePlayer {
       const groupIdx = activeGroups[ai];
       const group = groups[groupIdx];
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
+      // ═══ TELEPROMPTER: promote animation state ═══
+      // Two-layer system: promote (macro position/scale) + entry style (micro flourish)
+      //
+      // On-deck (ai > 0):   promoteT = 0 → sits below at small/dim
+      // Entering (ai === 0): promoteT eases 0→1 during entry window → rises to center
+      // Active (ai === 0):   promoteT = 1 → fully at center, promote layer is identity
+      //
+      // First phrase in song (groupIdx === 0) skips promote — no previous on-deck state.
+      const isOnDeck = ai > 0;
+      const skipPromote = groupIdx === 0;
+
+      const PROMOTE_OFFSET_Y = this.height * 0.28;
+      const PROMOTE_SCALE = 0.5;
+      const PROMOTE_ALPHA = 0.25;
+
+      let promoteT = 1.0; // default: fully promoted (no effect)
+      if (isOnDeck) {
+        promoteT = 0.0;
+      } else if (!skipPromote) {
+        // Active group: ease promote during entry window
+        const entryPadForPromote = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
+        const tSinceActivate = tSec - (group.start - entryPadForPromote);
+        const promoteDur = Math.max(0.25, group.entryDuration ?? 0.3);
+        if (tSinceActivate < promoteDur) {
+          const raw = Math.max(0, Math.min(1, tSinceActivate / promoteDur));
+          promoteT = 1 - Math.pow(1 - raw, 3); // easeOutCubic
+        }
+      }
+
+      const promoteOffY = (1 - promoteT) * PROMOTE_OFFSET_Y;
+      const promoteSclMult = PROMOTE_SCALE + promoteT * (1 - PROMOTE_SCALE);
+      const promoteAlphaMult = PROMOTE_ALPHA + promoteT * (1 - PROMOTE_ALPHA);
+
+      // On-deck phrases: no beat response, no behavior — just a quiet preview
+      if (isOnDeck) {
+        // Override the treatment for this iteration to suppress motion
+        // We'll zero out beat and behavior contributions in the word loop
+      }
 
       // ═══ ACTIVE CHUNK ONLY: non-current groups are already filtered out above ═══
       const lineRole = group.lineIndex === primaryLineIndex ? 'current' : 'offscreen';
@@ -5522,7 +5567,7 @@ export class LyricDancePlayer {
           ? 0.75
           : spotlightAlpha;
 
-        const totalScale = Math.min(1.6, sharedBeatScale + heroBeatBoost);
+        const totalScale = isOnDeck ? 1.0 : Math.min(1.6, sharedBeatScale + heroBeatBoost);
 
         let wordGlow = 0;
         if (lineRole === 'current') {
@@ -5604,8 +5649,9 @@ export class LyricDancePlayer {
 
         chunk.x = word.layoutX + heroOffsetX + neighborPushOffsets[wi]
           + blendedEntryOX + blendedExitOX + phraseBehaviorOX;
-        chunk.y = word.layoutY + sharedBeatNudgeY + heroOffsetY
-          + blendedEntryOY + blendedExitOY + phraseBehaviorOY;
+        chunk.y = word.layoutY + (isOnDeck ? 0 : sharedBeatNudgeY) + heroOffsetY
+          + blendedEntryOY + blendedExitOY + (isOnDeck ? 0 : phraseBehaviorOY)
+          + promoteOffY;
         chunk.fontSize = word.baseFontSize;
 
         // Alpha: blend entry and exit, then multiply by spotlight and role
@@ -5616,14 +5662,14 @@ export class LyricDancePlayer {
             word.semanticAlphaMax,
             blendedAnimAlpha * heroHoldAlpha * roleAlpha,
           );
-        chunk.alpha = Math.max(0, Math.min(1, recalcFinalAlpha));
+        chunk.alpha = Math.max(0, Math.min(1, recalcFinalAlpha * promoteAlphaMult));
 
         const phraseAnimScaleX = blendedEntrySX * blendedExitSX * phraseBehaviorSX;
         const phraseAnimScaleY = blendedEntrySY * blendedExitSY * phraseBehaviorSY;
-        chunk.scaleX = totalScale * heroScaleMult * phraseAnimScaleX;
-        chunk.scaleY = totalScale * heroScaleMult * phraseAnimScaleY;
+        chunk.scaleX = totalScale * heroScaleMult * phraseAnimScaleX * promoteSclMult;
+        chunk.scaleY = totalScale * heroScaleMult * phraseAnimScaleY * promoteSclMult;
         chunk.scale = 1;
-        chunk.visible = recalcFinalAlpha > 0.01;
+        chunk.visible = (recalcFinalAlpha * promoteAlphaMult) > 0.01;
         chunk.fontWeight = emphasisWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
