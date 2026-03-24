@@ -4514,9 +4514,6 @@ export class LyricDancePlayer {
     return curves[arcName] ?? curves['slow-burn'];
       }
 
-      // On-deck: promote system is sole authority on alpha/position/scale
-      if (isOnDeck) phraseAlpha = 1.0;
-
   private getActiveWord(timeSec: number): { word?: string; start: number; end: number } | null {
     const words = this.data.words ?? [];
     for (let i = words.length - 1; i >= 0; i--) {
