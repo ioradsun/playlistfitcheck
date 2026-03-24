@@ -1126,6 +1126,7 @@ async function callScene(
   sectionCount: number,
   body: RequestBody,
   sceneSystemPrompt: string = SCENE_DIRECTION_PROMPT,
+  modelOverride: string = PRIMARY_MODEL,
 ): Promise<Record<string, any>> {
   const messages = [
     { role: "system", content: scenePrefix + sceneSystemPrompt },
@@ -1148,7 +1149,7 @@ async function callScene(
       }),
     });
 
-  let resp = await makeRequest(PRIMARY_MODEL);
+  let resp = await makeRequest(modelOverride);
 
   // If primary model fails with retryable error, try fallback
   if (!resp.ok && (resp.status === 429 || resp.status >= 500)) {
@@ -1201,7 +1202,7 @@ async function callScene(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: PRIMARY_MODEL,
+           model: modelOverride,
           messages: [
             { role: "system", content: scenePrefix + sceneSystemPrompt },
             { role: "user", content: userMessage },
@@ -1258,6 +1259,7 @@ async function callWords(
   words?: Array<{ word: string; start: number; end: number }>,
   bpm?: number,
   wordSystemPrompt: string = WORD_DIRECTION_PROMPT,
+  modelOverride: string = PRIMARY_MODEL,
 ): Promise<Record<string, any>> {
   const wordMessage = buildWordUserMessage(
     title,
@@ -1280,7 +1282,7 @@ async function callWords(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: PRIMARY_MODEL,
+          model: modelOverride,
           messages,
           response_format: { type: "json_object" },
           temperature: 0.7,
