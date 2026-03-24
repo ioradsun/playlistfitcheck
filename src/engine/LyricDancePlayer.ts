@@ -1442,7 +1442,7 @@ export class LyricDancePlayer {
     background: '#0a0a0f',
     accent: '#C9A96E',
     isLight: false,
-    textBase: '#f0f0f0',
+    textBase: '#ffffff',
     textAccent: '#C9A96E',
     elementalTint: '#9A7A4E',
   };
@@ -3068,6 +3068,17 @@ export class LyricDancePlayer {
   private _resolveAndCachePalette(secIdx: number): string[] {
     const raw = this._resolveCurrentPalette(secIdx);
     this._currentSectionPalette = deserializeSectionPalette(raw);
+    // ── Lyric video contrast guarantee ──
+    // If mood grading will darken the background, override to white text
+    // regardless of what the raw image palette decided.
+    const gradeForPalette = (this as any)._activeMoodGrade as { brightness: number } | undefined;
+    if (gradeForPalette && gradeForPalette.brightness < 0.55) {
+      this._currentSectionPalette = {
+        ...this._currentSectionPalette,
+        isLight: false,
+        textBase: '#ffffff',
+      };
+    }
     return raw;
   }
 
@@ -3603,7 +3614,7 @@ export class LyricDancePlayer {
         const spawnX = Number.isFinite(chunk.x) ? Math.max(clampMinX, Math.min(clampMaxX, chunk.x as number)) : this.width / 2;
         const spawnY = Number.isFinite(chunk.y) ? Math.max(clampMinY, Math.min(clampMaxY, (chunk.y as number) - this._textVerticalBias)) : this.height / 2;
         const spawnFontSize = Number.isFinite(chunk.fontSize) ? Math.max(viewportMinFont, Math.round(chunk.fontSize as number) || 36) : 36;
-        const spawnColor = chunk.color ?? '#f0f0f0';
+        const spawnColor = chunk.color ?? '#ffffff';
         this.spawnDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, spawnColor, frameNowMs);
       }
 
@@ -3655,7 +3666,17 @@ export class LyricDancePlayer {
       const hasGlow = glowBlur >= 0.01;
       if (hasGlow !== glowPass) return;
       this.ctx.globalAlpha = drawAlpha;
-      this.ctx.fillStyle = chunk.color ?? '#f0f0f0';
+      // Lyric video safety net: if background is dark, ensure text is bright
+      let textColor = chunk.color ?? '#ffffff';
+      if (!this._currentSectionPalette?.isLight) {
+        // Dark background — check if text color is too dark
+        const _r = parseInt(textColor.slice(1, 3), 16) || 0;
+        const _g = parseInt(textColor.slice(3, 5), 16) || 0;
+        const _b = parseInt(textColor.slice(5, 7), 16) || 0;
+        const _lum = (0.299 * _r + 0.587 * _g + 0.114 * _b) / 255;
+        if (_lum < 0.5) textColor = '#ffffff';
+      }
+      this.ctx.fillStyle = textColor;
 
       const dpr = this._effectiveDpr;
       const heroDrawX = Math.round(drawX * dpr) / dpr;
@@ -5969,7 +5990,7 @@ export class LyricDancePlayer {
         // ── Color: active word = accent color, context = base white/dark ──
         {
           const bgIsLight = this._currentSectionPalette?.isLight ?? (this._textBandBrightness > 0.55);
-          const baseColor = this._currentSectionPalette?.textBase ?? (bgIsLight ? '#1a1a2e' : '#f0f0f0');
+          const baseColor = this._currentSectionPalette?.textBase ?? (bgIsLight ? '#111111' : '#ffffff');
 
           let rawColor = baseColor;
           if (word.hasSemanticColor) {
@@ -5978,7 +5999,7 @@ export class LyricDancePlayer {
             if (bgIsLight && semLum > 0.7) {
               rawColor = this._blendHex(semColor, '#1a1a2e', 0.35);
             } else if (!bgIsLight && semLum < 0.1) {
-              rawColor = this._blendHex(semColor, '#f0f0f0', 0.35);
+              rawColor = this._blendHex(semColor, '#ffffff', 0.35);
             } else {
               rawColor = semColor;
             }
