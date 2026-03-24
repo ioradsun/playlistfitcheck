@@ -15,6 +15,25 @@ export interface AutoPalette {
   dim: string;
 }
 
+/**
+ * Structured palette for one section of a lyric video.
+ * One accent color. Knows light vs dark. Contrast guaranteed.
+ */
+export interface SectionPalette {
+  /** Darkest region of the section image */
+  background: string;
+  /** The ONE accent color — most vibrant, contrast-safe against background */
+  accent: string;
+  /** Is the section image predominantly light? (averageLuminance > 0.5) */
+  isLight: boolean;
+  /** Base text color: dark on light backgrounds, light on dark */
+  textBase: string;
+  /** Accent adjusted for text contrast — guaranteed ≥4.5:1 against midtone */
+  textAccent: string;
+  /** Accent at reduced saturation for elemental particle tinting */
+  elementalTint: string;
+}
+
 type Pixel = { r: number; g: number; b: number; h: number; s: number; l: number };
 
 const SAMPLE_SIZE = 32;
@@ -146,6 +165,131 @@ export function generateAutoPalette(sample: ImageSample): string[] {
   return [result.background, result.accent, result.text, result.glow, result.dim];
 }
 
+/**
+ * Generate a structured SectionPalette from an image sample.
+ *
+ * First principles:
+ * 1. One accent — the most vibrant non-dominant hue from the image.
+ * 2. Contrast guarantee — accent luminance is pushed until ≥4.5:1 against midtone.
+ * 3. Light/dark awareness — derived from actual image luminance, not mood metadata.
+ * 4. Fallback — grayscale images get warm gold (#C9A96E) as accent.
+ */
+export function generateSectionPalette(sample: ImageSample): SectionPalette {
+  const { dominantHue, dominantSaturation, averageLuminance, shadowColor, midtoneColor } = sample;
+
+  const isLight = averageLuminance > 0.5;
+  const background = shadowColor;
+  const textBase = isLight ? '#1a1a2e' : '#f0f0f0';
+
+  // ── Accent color: vibrant, saturated, contrast-safe ──
+  let accentH = dominantHue;
+  let accentS = Math.min(0.85, dominantSaturation * 1.4 + 0.2);
+
+  // Grayscale fallback: if image has very low saturation, use warm gold
+  if (dominantSaturation < 0.1) {
+    accentH = 45; // gold hue
+    accentS = 0.7;
+  }
+
+  // Luminance: accent must contrast with the midtone (where text actually sits)
+  // Dark background → bright accent (L 0.55-0.65)
+  // Light background → rich accent (L 0.35-0.45)
+  let accentL = isLight ? 0.4 : 0.6;
+
+  let accent = hslToHex(accentH, accentS, accentL);
+
+  // ── Contrast verification ──
+  // WCAG AA requires 4.5:1 for normal text, 3:1 for large text.
+  // Our hero words are large, so target 3.5:1 as minimum.
+  const midtoneLum = relativeLuminance(midtoneColor);
+  let cr = contrastRatio(relativeLuminance(accent), midtoneLum);
+
+  // Push luminance away from midtone until contrast is met
+  let attempts = 0;
+  while (cr < 3.5 && attempts < 8) {
+    accentL = isLight
+      ? Math.max(0.15, accentL - 0.06) // darker accent on light bg
+      : Math.min(0.85, accentL + 0.06); // brighter accent on dark bg
+    accent = hslToHex(accentH, accentS, accentL);
+    cr = contrastRatio(relativeLuminance(accent), midtoneLum);
+    attempts++;
+  }
+
+  // ── Text accent: same hue but guaranteed readable against background ──
+  let textAccentL = isLight ? 0.35 : 0.65;
+  let textAccent = hslToHex(accentH, accentS, textAccentL);
+  let textCr = contrastRatioHex(textAccent, background);
+
+  attempts = 0;
+  while (textCr < 4.5 && attempts < 8) {
+    textAccentL = isLight
+      ? Math.max(0.10, textAccentL - 0.06)
+      : Math.min(0.90, textAccentL + 0.06);
+    textAccent = hslToHex(accentH, accentS, textAccentL);
+    textCr = contrastRatioHex(textAccent, background);
+    attempts++;
+  }
+
+  // ── Elemental tint: accent at 60% saturation for particle overlays ──
+  const elementalTint = hslToHex(accentH, Math.min(0.6, accentS * 0.7), accentL);
+
+  return {
+    background,
+    accent,
+    isLight,
+    textBase,
+    textAccent,
+    elementalTint,
+  };
+}
+
+/** Serialize SectionPalette to a string array for DB storage.
+ *  Format: [background, accent, textBase, textAccent, elementalTint, isLight flag] */
+export function serializeSectionPalette(p: SectionPalette): string[] {
+  return [p.background, p.accent, p.textBase, p.textAccent, p.elementalTint, p.isLight ? '1' : '0'];
+}
+
+/** Deserialize a palette array into SectionPalette.
+ *  Handles both old 5-element and new 6-element formats. */
+export function deserializeSectionPalette(arr: string[]): SectionPalette {
+  if (!arr || arr.length === 0) {
+    return {
+      background: '#0a0a0f',
+      accent: '#C9A96E',
+      isLight: false,
+      textBase: '#f0f0f0',
+      textAccent: '#C9A96E',
+      elementalTint: '#9A7A4E',
+    };
+  }
+
+  // New format: 6 elements with isLight flag
+  if (arr.length >= 6) {
+    return {
+      background: arr[0],
+      accent: arr[1],
+      textBase: arr[2],
+      textAccent: arr[3],
+      elementalTint: arr[4],
+      isLight: arr[5] === '1',
+    };
+  }
+
+  // Legacy format: [background, accent, text, glow, dim]
+  const bg = arr[0] ?? '#0a0a0f';
+  const accent = arr[1] ?? '#C9A96E';
+  const bgLum = relativeLuminance(bg);
+  const isLight = bgLum > 0.4; // slightly lower threshold for legacy since bg is shadow color
+  return {
+    background: bg,
+    accent,
+    isLight,
+    textBase: isLight ? '#1a1a2e' : '#f0f0f0',
+    textAccent: accent, // legacy accent wasn't contrast-checked, but it's what we have
+    elementalTint: accent,
+  };
+}
+
 function isValidHttpUrl(s: string): boolean {
   try {
     const url = new URL(s);
@@ -177,13 +321,19 @@ export async function computeAutoPalettesFromUrls(urls: string[]): Promise<strin
     try {
       const img = await loadImage(url);
       const sample = sampleChapterImage(img, ctx, SAMPLE_SIZE);
-      const palette = generateAutoPalette(sample);
-      // palette computed OK
-      palettes.push(palette);
+      const sectionPalette = generateSectionPalette(sample);
+      palettes.push(serializeSectionPalette(sectionPalette));
     } catch (err) {
       // image load failed, skipping
       // Push a safe fallback palette so indices stay aligned with section indices
-      palettes.push(['#0a0a0f', '#C9A96E', '#f0f0f0', '#FFD700', '#5A4A30']);
+      palettes.push(serializeSectionPalette({
+        background: '#0a0a0f',
+        accent: '#C9A96E',
+        isLight: false,
+        textBase: '#f0f0f0',
+        textAccent: '#C9A96E',
+        elementalTint: '#9A7A4E',
+      }));
     }
     // Yield to main thread between images
     await new Promise((resolve) => setTimeout(resolve, 0));

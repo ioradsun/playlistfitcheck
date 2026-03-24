@@ -46,6 +46,7 @@ import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } f
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
+import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalette";
 
 const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-04-PERF';
 
@@ -1478,6 +1479,14 @@ export class LyricDancePlayer {
   private _frameSectionIdx = -1;
   private _framePalette: string[] | null = null;
   private _framePaletteTime = -1; // audio time when palette was last resolved
+  private _currentSectionPalette: SectionPalette = {
+    background: '#0a0a0f',
+    accent: '#C9A96E',
+    isLight: false,
+    textBase: '#f0f0f0',
+    textAccent: '#C9A96E',
+    elementalTint: '#9A7A4E',
+  };
 
   // Reusable 1×1 canvas for text measurement (avoids per-recompile DOM allocation)
   private readonly _measureCanvas = (() => { const c = document.createElement('canvas'); c.width = 1; c.height = 1; return c; })();
@@ -2221,10 +2230,11 @@ export class LyricDancePlayer {
       const secIdx = this._frameSectionIdx;
       if (secIdx !== this._framePaletteTime) {
         this._framePaletteTime = secIdx;
-        this._framePalette = this._resolveCurrentPalette(secIdx);
-        if (this._framePalette?.[1]) {
-          if (this._globalBeatVis) this._globalBeatVis.setAccent(this._framePalette[1]);
-          if (this._globalWickBar) this._globalWickBar.setAccent(this._framePalette[1]);
+        this._framePalette = this._resolveAndCachePalette(secIdx);
+        {
+          const accent = this._currentSectionPalette.accent;
+          if (this._globalBeatVis) this._globalBeatVis.setAccent(accent);
+          if (this._globalWickBar) this._globalWickBar.setAccent(accent);
         }
       }
     }
@@ -2868,10 +2878,11 @@ export class LyricDancePlayer {
         const secIdx = this._frameSectionIdx;
         if (secIdx !== this._framePaletteTime) {
           this._framePaletteTime = secIdx;
-          this._framePalette = this._resolveCurrentPalette(secIdx);
-          if (this._framePalette?.[1]) {
-            if (this._globalBeatVis) this._globalBeatVis.setAccent(this._framePalette[1]);
-            if (this._globalWickBar) this._globalWickBar.setAccent(this._framePalette[1]);
+          this._framePalette = this._resolveAndCachePalette(secIdx);
+          {
+            const accent = this._currentSectionPalette.accent;
+            if (this._globalBeatVis) this._globalBeatVis.setAccent(accent);
+            if (this._globalWickBar) this._globalWickBar.setAccent(accent);
           }
         }
       }
@@ -3057,7 +3068,7 @@ export class LyricDancePlayer {
 
   /** Return per-frame cached palette */
   private getResolvedPalette(): string[] {
-    return this._framePalette ?? this._resolveCurrentPalette(this._frameSectionIdx);
+    return this._framePalette ?? this._resolveAndCachePalette(this._frameSectionIdx);
   }
 
   /** Raw palette resolution — only called on section change */
@@ -3099,6 +3110,13 @@ export class LyricDancePlayer {
       existing[0] ?? '#0A0A0F', existing[1] ?? '#FFD700', existing[2] ?? '#F0F0F0',
       existing[3] ?? '#FFD700', existing[4] ?? '#555555',
     ];
+  }
+
+  /** Resolve palette and update structured SectionPalette */
+  private _resolveAndCachePalette(secIdx: number): string[] {
+    const raw = this._resolveCurrentPalette(secIdx);
+    this._currentSectionPalette = deserializeSectionPalette(raw);
+    return raw;
   }
 
   private getResolvedFont(): string {
@@ -3492,12 +3510,15 @@ export class LyricDancePlayer {
         // Force dark background → light text
         this._textBandBrightness = 0.25;
       } else {
-        // Auto: use mood grade as before
-        const moodGrade = (this as any)._activeMoodGrade as MoodGrade | undefined;
-        if (moodGrade) {
-          // CSS filter brightness applies to the whole image. Text sits in the lower
-          // half where it's almost always darker. Bias down by 0.15.
-          this._textBandBrightness = Math.max(0, moodGrade.brightness - 0.15);
+        // Auto: prefer palette isLight (derived from actual image luminance)
+        // Fall back to mood grade if no palette is available yet
+        if (this._currentSectionPalette) {
+          this._textBandBrightness = this._currentSectionPalette.isLight ? 0.7 : 0.25;
+        } else {
+          const moodGrade = (this as any)._activeMoodGrade as MoodGrade | undefined;
+          if (moodGrade) {
+            this._textBandBrightness = Math.max(0, moodGrade.brightness - 0.15);
+          }
         }
       }
     }
@@ -3856,7 +3877,7 @@ export class LyricDancePlayer {
             wordLocalTime,
             beatPulse,
             1,
-            null,
+            this._currentSectionPalette.elementalTint,
             {
               bubbleXPositions,
               useBlur: this._qualityTier === 0,
@@ -5012,8 +5033,8 @@ export class LyricDancePlayer {
         const ctx = off.getContext('2d');
         if (!ctx) continue;
 
-        const resolvedPal = this.getResolvedPalette();
-        const bgColor = resolvedPal[0];
+        this.getResolvedPalette(); // ensure _currentSectionPalette is populated
+        const bgColor = this._currentSectionPalette.background;
         const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
         const sectionTexture = this.resolveParticleTexture(ci, this.payload?.cinematic_direction);
         this.chapterParticleSystems.push(sectionTexture);
@@ -5040,8 +5061,8 @@ export class LyricDancePlayer {
     
     try {
       const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
-      const palette = this.getResolvedPalette();
-      const accentColor = palette[1] ?? '#FFD700';
+      this.getResolvedPalette(); // ensure _currentSectionPalette is populated
+      const accentColor = this._currentSectionPalette.accent;
       // ═══ Always-on beat visualizer — present throughout entire song ═══
       if (!this._globalBeatVis) {
         this._globalBeatVis = new BeatVisSim(accentColor);
@@ -5697,24 +5718,21 @@ export class LyricDancePlayer {
 
         // ── Color: active word = accent color, context = base white/dark ──
         {
-          const bgIsLight = this._textBandBrightness > 0.55;
-          const baseColor = bgIsLight ? '#1a1a2e' : '#f0f0f0';
+          const bgIsLight = this._currentSectionPalette.isLight;
+          const baseColor = this._currentSectionPalette.textBase;
 
           if (word.hasSemanticColor) {
             const semColor = word.color;
             const semLum = this._hexLuminance(semColor);
             if (bgIsLight && semLum > 0.7) {
-              chunk.color = this._blendHex(semColor, '#1a1a2e', 0.35);
+              chunk.color = this._blendHex(semColor, this._currentSectionPalette.textBase, 0.35);
             } else if (!bgIsLight && semLum < 0.1) {
-              chunk.color = this._blendHex(semColor, '#f0f0f0', 0.35);
+              chunk.color = this._blendHex(semColor, this._currentSectionPalette.textBase, 0.35);
             } else {
               chunk.color = semColor;
             }
           } else if (isHeroWord) {
-            const pal = this._framePalette ?? [];
-            const rawAccent = pal[1] ?? '#FFD700';
-            chunk.color = rawAccent;
-            // NO textStroke — hero accent color is already high contrast
+            chunk.color = this._currentSectionPalette.textAccent;
           } else {
             // All other words: base color (white on dark bg, dark on light bg)
             chunk.color = baseColor;
