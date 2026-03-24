@@ -59,7 +59,7 @@ export function derivePaletteFromDirection(cd: any): string[] {
       return [
         darkenHex(primary, 0.85),
         accent,
-        "#f0f0f0",
+        "#ffffff",
         lightenHex(accent, 0.3),
         desaturateHex(primary, 0.6),
       ];

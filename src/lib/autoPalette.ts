@@ -142,7 +142,12 @@ export function generateAutoPalette(sample: ImageSample): string[] {
     if (lightContrast > darkContrast) {
       textH = (dominantHue + 180) % 360;
       textS = Math.min(0.35, dominantSaturation * 0.5 + 0.12);
-      textL = 0.90;
+      textL = 0.95;
+    } else {
+      // Dark contrast wins — use bright white text (lyric video needs pop)
+      textH = (dominantHue + 180) % 360;
+      textS = 0.05;
+      textL = 0.95;
     }
   }
 
@@ -177,9 +182,13 @@ export function generateAutoPalette(sample: ImageSample): string[] {
 export function generateSectionPalette(sample: ImageSample): SectionPalette {
   const { dominantHue, dominantSaturation, averageLuminance, shadowColor, midtoneColor } = sample;
 
-  const isLight = averageLuminance > 0.5;
+  // Mood grading darkens most backgrounds by 30-60%.
+  // Only classify as "light" when the image is very clearly bright.
+  // At 0.5-0.7, mood grading will make it dark — default to white text.
+  const isLight = averageLuminance > 0.72;
   const background = shadowColor;
-  const textBase = isLight ? '#1a1a2e' : '#f0f0f0';
+  // Lyric video: text must pop. White on dark, near-black on genuinely bright.
+  const textBase = isLight ? '#111111' : '#ffffff';
 
   // ── Accent color: vibrant, saturated, contrast-safe ──
   let accentH = dominantHue;
@@ -257,7 +266,7 @@ export function deserializeSectionPalette(arr: string[]): SectionPalette {
       background: '#0a0a0f',
       accent: '#C9A96E',
       isLight: false,
-      textBase: '#f0f0f0',
+      textBase: '#ffffff',
       textAccent: '#C9A96E',
       elementalTint: '#9A7A4E',
     };
@@ -284,7 +293,7 @@ export function deserializeSectionPalette(arr: string[]): SectionPalette {
     background: bg,
     accent,
     isLight,
-    textBase: isLight ? '#1a1a2e' : '#f0f0f0',
+    textBase: isLight ? '#111111' : '#ffffff',
     textAccent: accent, // legacy accent wasn't contrast-checked, but it's what we have
     elementalTint: accent,
   };
@@ -330,7 +339,7 @@ export async function computeAutoPalettesFromUrls(urls: string[]): Promise<strin
         background: '#0a0a0f',
         accent: '#C9A96E',
         isLight: false,
-        textBase: '#f0f0f0',
+        textBase: '#ffffff',
         textAccent: '#C9A96E',
         elementalTint: '#9A7A4E',
       }));
