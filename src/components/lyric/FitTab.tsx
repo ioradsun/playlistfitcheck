@@ -135,6 +135,7 @@ export function FitTab({
   sectionImageUrls = [],
   sectionImageProgress = null,
   sectionImageError = null,
+  onTitleChange,
 }: Props) {
   const { user, profile } = useAuth();
   const { canCreate, credits, required, spendCredits } = useVoteGate();
