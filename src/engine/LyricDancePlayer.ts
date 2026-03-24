@@ -5304,7 +5304,6 @@ export class LyricDancePlayer {
 
       // Is this the just-finished phrase still cooling?
       const COOL_DURATION_SEC = 0.5;
-      const COOL_COLOR_SEC = 0.15; // color drains in first 150ms
       const isCooling = isPast && (groupIdx === activeGroupIdx - 1) && timeSinceDone >= 0 && timeSinceDone < COOL_DURATION_SEC;
 
       // Ghost visual constants
@@ -5330,50 +5329,102 @@ export class LyricDancePlayer {
       const gph = this._ghostLineH * 2;
 
       if (isActive) {
-        // ── ACTIVE: identity. Everything passes through. ──
-        wallSclMult = 1.0;
-        wallAlphaMult = 1.0;
-        wallColorDrain = 0;
-        wallSuppressAnim = false;
+        // ── ACTIVE: spatial journey driven by entry/exit timing ──
+        // During entry: ease FROM future ghost slot TO center
+        // During steady: at center (identity)
+        // During exit: ease FROM center TO past ghost slot
+
+        // Where was this phrase as a future ghost?
+        // It was 1 step below active, so stepsFromActive = 1
+        const futureSlotY = activeBottom + 0.5 * gph;
+        const futureOffY = futureSlotY - activeCenterY;
+
+        // Where will this phrase go as a past ghost?
+        // It will be 1 step above active, so stepsFromActive = 1
+        const pastSlotY = activeTop - 0.5 * gph;
+        const pastOffY = pastSlotY - activeCenterY;
+
+        // Use the SAME timing as phrase entry/exit
+        const _entryPad = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
+        const _tSinceAct = tSec - (group.start - _entryPad);
+        const _entryDur = Math.max(config.entryDuration, _entryPad * 0.35);
+        const _exitDur = Math.min(config.exitDuration, phraseDuration * 0.35);
+        const _phraseRem = nextGroupStart - tSec;
+
+        // Entry: ease from future ghost to center
+        if (_tSinceAct < _entryDur && _tSinceAct >= 0) {
+          const p = Math.min(1, _tSinceAct / Math.max(0.01, _entryDur));
+          const e = 1 - Math.pow(1 - p, 3); // easeOutCubic
+          wallOffY = futureOffY * (1 - e);
+          wallSclMult = GHOST_SCALE + e * (1 - GHOST_SCALE);
+          wallAlphaMult = GHOST_ALPHA + e * (1 - GHOST_ALPHA);
+          wallColorDrain = 1 - e; // mono → full color during entry
+        }
+        // Exit: ease from center to past ghost
+        else if (_phraseRem < _exitDur && _phraseRem >= 0) {
+          const p = Math.min(1, 1 - (_phraseRem / Math.max(0.01, _exitDur)));
+          const e = p * p; // easeIn — reluctant start, fast finish
+          wallOffY = pastOffY * e;
+          wallSclMult = 1.0 - e * (1.0 - GHOST_SCALE);
+          wallAlphaMult = 1.0 - e * (1.0 - GHOST_ALPHA);
+          wallColorDrain = e; // full color → mono during exit
+        }
+        // Steady: at center
+        else {
+          wallOffY = 0;
+          wallSclMult = 1.0;
+          wallAlphaMult = 1.0;
+          wallColorDrain = 0;
+        }
+
+        wallSuppressAnim = false; // per-word entry/exit always runs for active
 
       } else if (isWarming) {
-        // ── WARMING: the plié. Smooth ease from ghost to coiled state. ──
-        // warmT: 0 = just entered warming range, 1 = about to activate
+        // ── WARMING: brightening in place, building anticipation ──
         const warmT = 1 - (timeUntilActive / WARMUP_DURATION_SEC);
         const eWarm = warmT * warmT; // easeIn — slow start, builds tension
 
+        // Position: at its future ghost slot (seamless handoff to active entry)
+        const stepsFromActive = groupIdx - activeGroupIdx;
+        const futureSlotY = activeBottom + (stepsFromActive - 0.5) * gph;
+        wallOffY = futureSlotY - activeCenterY;
+
+        // Scale/alpha: ease from deep ghost toward slightly brighter
         wallSclMult = GHOST_SCALE + eWarm * (WARM_SCALE_MAX - GHOST_SCALE);
         wallAlphaMult = GHOST_ALPHA + eWarm * (WARM_ALPHA_MAX - GHOST_ALPHA);
-        wallColorDrain = 1 - eWarm * 0.3; // starts fully mono, gains 30% warmth
+        wallColorDrain = 1 - eWarm * 0.3;
         wallSuppressAnim = true;
 
-        // Position: in its future ghost slot (it will jump to center when active)
-        const stepsFromActive = groupIdx - activeGroupIdx;
-        const yCenter = activeBottom + (stepsFromActive - 0.5) * gph;
-        wallOffY = yCenter - activeCenterY;
-
       } else if (isCooling) {
-        // ── COOLING: two-phase exhale. Color drains fast, then alpha/scale settle. ──
-        const coolT = timeSinceDone / COOL_DURATION_SEC; // 0→1
+        // ── COOLING: continue spatial exit, then hold at ghost slot ──
+        // The active exit eased wallOffY toward pastGhostOffY.
+        // Cooling picks up from where exit left off and completes the journey.
 
-        // Phase 1: color drain (first 150ms / first 30% of cool)
-        const colorPhase = Math.min(1, timeSinceDone / COOL_COLOR_SEC);
-        wallColorDrain = colorPhase; // 0→1 fast
-
-        // Phase 2: alpha/scale ease to ghost (after color drains)
-        const settleT = Math.max(0, (coolT - 0.3) / 0.7); // 0→1 over remaining 70%
-        const eSettle = settleT * settleT; // easeIn — gentle then fast
-        wallSclMult = 1.0 - eSettle * (1.0 - GHOST_SCALE);
-        wallAlphaMult = 1.0 - eSettle * (1.0 - GHOST_ALPHA);
-
-        // Position: at its past ghost slot (phrase just moved up)
         const stepsFromActive = activeGroupIdx - groupIdx;
-        const yCenter = activeTop - (stepsFromActive - 0.5) * gph;
-        wallOffY = yCenter - activeCenterY;
+        const pastSlotY = activeTop - (stepsFromActive - 0.5) * gph;
+        const pastOffY = pastSlotY - activeCenterY;
 
-        // During cooling, let per-word EXIT animation run (the first part of the exhale)
-        // but suppress entry and beat
-        wallSuppressAnim = false; // exit animations should still be active
+        // How far through the exit was this phrase when it left active?
+        // timeSinceDone = time since group.end. exitDur was the window.
+        const exitDur = group.exitDuration ?? config.exitDuration ?? 0.3;
+
+        if (timeSinceDone < exitDur) {
+          // Exit still running — continue spatial ease
+          const p = Math.min(1, timeSinceDone / Math.max(0.01, exitDur));
+          const e = p * p; // same easeIn as active exit
+          wallOffY = pastOffY * e;
+          wallSclMult = 1.0 - e * (1.0 - GHOST_SCALE);
+          wallAlphaMult = 1.0 - e * (1.0 - GHOST_ALPHA);
+          wallColorDrain = e;
+          wallSuppressAnim = false; // let per-word exit animations run
+        } else {
+          // Exit complete — settled at ghost slot
+          wallOffY = pastOffY;
+          wallSclMult = GHOST_SCALE;
+          wallAlphaMult = GHOST_ALPHA;
+          wallColorDrain = 1;
+          wallSuppressAnim = true;
+        }
 
       } else if (isPast) {
         // ── PAST GHOST: fading memory above the active zone ──
@@ -5752,9 +5803,17 @@ export class LyricDancePlayer {
         const blendedExitSY = (phraseExitState.scaleY ?? 1) * ibf + wordExitBlend.scaleY * bf;
         const blendedExitAlpha = (phraseExitState.alpha ?? 1) * ibf + (wordExitBlend.alpha ?? 1) * bf;
 
-        chunk.x = word.layoutX + heroOffsetX + neighborPushOffsets[wi]
-          + blendedEntryOX + blendedExitOX + phraseBehaviorOX;
-        chunk.y = word.layoutY + (wallSuppressAnim ? 0 : sharedBeatNudgeY) + heroOffsetY
+        // Scale ghost word positions toward canvas center so ghost blocks are compact
+        const cxCenter = this.width / 2;
+        const cyCenter = activeCenterY;
+        const posScl = isActive ? 1.0 : wallSclMult; // ghosts: compact, active: identity
+        const scaledLX = cxCenter + (word.layoutX - cxCenter) * posScl;
+        const scaledLY = cyCenter + (word.layoutY - cyCenter) * posScl;
+
+        chunk.x = scaledLX + (isActive ? heroOffsetX : 0) + (isActive ? neighborPushOffsets[wi] : 0)
+          + (wallSuppressAnim ? 0 : blendedEntryOX) + (wallSuppressAnim ? 0 : blendedExitOX)
+          + (wallSuppressAnim ? 0 : phraseBehaviorOX);
+        chunk.y = scaledLY + (wallSuppressAnim ? 0 : sharedBeatNudgeY) + (isActive ? heroOffsetY : 0)
           + (wallSuppressAnim ? 0 : blendedEntryOY) + (wallSuppressAnim ? 0 : blendedExitOY)
           + (wallSuppressAnim ? 0 : phraseBehaviorOY)
           + wallOffY;
