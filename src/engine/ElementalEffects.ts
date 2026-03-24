@@ -49,7 +49,7 @@ export function drawElementalWord(
     return;
   }
 
-  const hasText = true;
+  const hasText = false;
 
   // ═══ Word-duration intensity envelope ═══
   // Burst on entry, sustain briefly, then particles linger
