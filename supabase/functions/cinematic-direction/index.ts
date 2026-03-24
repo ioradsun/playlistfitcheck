@@ -1342,12 +1342,32 @@ function fillChoreographyDefaults(
   if (!words || words.length === 0) return;
 
   // Build section lookup: time → visualMood
-  const sections: Array<{ startSec: number; endSec: number; visualMood: string }> = [];
-  if (Array.isArray(sceneDirection?.sections)) {
-    for (const s of sceneDirection.sections) {
+  // First try time-based boundaries. If absent, divide song evenly by section count.
+  const rawSections = Array.isArray(sceneDirection?.sections) ? sceneDirection.sections : [];
+  const hasTimeBounds = rawSections.some(
+    (s: any) => typeof s.startSec === "number" && typeof s.endSec === "number"
+  );
+
+  let sections: Array<{ startSec: number; endSec: number; visualMood: string }> = [];
+
+  if (hasTimeBounds) {
+    for (const s of rawSections) {
       if (typeof s.startSec === "number" && typeof s.endSec === "number") {
         sections.push({ startSec: s.startSec, endSec: s.endSec, visualMood: s.visualMood ?? "raw" });
       }
+    }
+  } else if (rawSections.length > 0 && words.length > 0) {
+    // No time boundaries — divide song duration evenly across sections
+    const songStart = words[0].start;
+    const songEnd = words[words.length - 1].end;
+    const songDur = Math.max(1, songEnd - songStart);
+    const secDur = songDur / rawSections.length;
+    for (let i = 0; i < rawSections.length; i++) {
+      sections.push({
+        startSec: songStart + i * secDur,
+        endSec: songStart + (i + 1) * secDur,
+        visualMood: rawSections[i].visualMood ?? "raw",
+      });
     }
   }
 
@@ -1355,7 +1375,8 @@ function fillChoreographyDefaults(
     for (const s of sections) {
       if (timeSec >= s.startSec && timeSec < s.endSec) return s.visualMood;
     }
-    return "raw";
+    // Final fallback: use the first section's mood if any exist
+    return rawSections[0]?.visualMood ?? "raw";
   };
 
   // Mood → default energyTier mapping
