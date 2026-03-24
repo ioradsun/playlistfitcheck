@@ -27,6 +27,7 @@ import {
   type ScenePayload,
 } from "@/lib/sceneCompiler";
 import { enrichSections } from "@/engine/directionResolvers";
+import { getSemanticOverride } from "@/engine/SemanticAnimMapper";
 import { getMoodGrade, buildGradeFilter, type MoodGrade } from "@/engine/moodGrades";
 // getSectionTones removed — song-level grade model
 import { drawElementalWord } from "@/engine/ElementalEffects";
@@ -3671,8 +3672,6 @@ export class LyricDancePlayer {
       // ═══ SINGLE COLOR MODEL: no colored halos behind words ═══
 
       const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
-      const directiveKey = this.cleanWord((chunk.text ?? obj.text) as string);
-      const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
 
       const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
       if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
@@ -3726,61 +3725,7 @@ export class LyricDancePlayer {
         this.ctx.restore();
       }
 
-        // ═══ ELEMENTAL EFFECTS: semantic literalism — the viewer SEES the lyric ═══
-        // Fire on "burn", water on "drown", frost on "cold", smoke on "fade", electric on "shock"
-      if (directive?.elementalClass && chunk.visible && drawAlpha > 0.15 && this._activeMoodConfig.elementalIntensity > 0) {
-          const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
-          const tier = getEffectTier(wordDurMs);
-
-          if (canShowElemental(tier)) {
-            const density = getParticleDensity(tier);
-            const maxParticles = Math.max(2, Math.round(8 * density));
-
-            // Reset transform for elemental effects (they position relative to word)
-            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-            this.ctx.globalAlpha = drawAlpha * density * this._activeMoodConfig.elementalIntensity;
-
-            // entry = word-local time normalized 0→1 for entry animation
-            // Use entryProgress to compute word-local time
-            const wordLocalTime = (chunk.entryProgress ?? 1) < 1
-              ? (chunk.entryProgress ?? 0) * 0.3
-              : 0.8;
-
-            const bubbleXPositions = Array.from({ length: maxParticles }, (_, i) =>
-              (textWidth * sx * camZoom) * (i / Math.max(1, maxParticles - 1))
-            );
-
-            try {
-              drawElementalWord(
-                this.ctx,
-                text,
-                safeFontSize * camZoom,
-                textWidth * sx * camZoom,
-                directive.elementalClass,
-                wordLocalTime,
-                beatPulse,
-                1,
-                null,
-                {
-                  bubbleXPositions,
-                  useBlur: this._qualityTier === 0,
-                  isHeroWord: chunk.isHeroWord ?? false,
-                  effectQuality: this._qualityTier === 0 ? 'high' : 'low',
-                  wordX: clampedDrawX,
-                  wordY: clampedDrawY,
-                  canvasWidth: this.width,
-                  canvasHeight: this.height,
-                  lightingMode: 'dark',
-                },
-              );
-            } catch (e) {
-              console.warn('[LyricEngine] elemental effect error:', e);
-            }
-
-            // Restore alpha for next chunk
-            this.ctx.globalAlpha = 1;
-          }
-        }
+      // Elemental effects moved to phrase-level pass (drawn after all text)
       drawCalls += 1;
     };
 
@@ -3824,6 +3769,113 @@ export class LyricDancePlayer {
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
+
+    // ═══ PHRASE-LEVEL ELEMENTAL EFFECTS ═══
+    // If ANY word in a phrase has an elementalClass, the effect covers the full phrase.
+    // The word is the trigger. The phrase is the canvas.
+    if (this._activeMoodConfig.elementalIntensity > 0 && sortBuf.length > 0) {
+      const phraseMap = new Map<string, {
+        elementalClass: string | null;
+        minX: number; maxX: number; minY: number; maxY: number;
+        maxFontSize: number; totalWidth: number; avgEntryProgress: number;
+      }>();
+
+      for (let ci = 0; ci < sortBuf.length; ci++) {
+        const chunk = sortBuf[ci];
+        if (!chunk.visible || (chunk.alpha ?? 0) < 0.05) continue;
+
+        const idParts = (chunk.id ?? '').split('-');
+        if (idParts.length < 3) continue;
+        const phraseKey = `${idParts[0]}-${idParts[1]}`;
+
+        const directiveKey = this.cleanWord((chunk.text ?? '') as string);
+        const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
+
+        let entry = phraseMap.get(phraseKey);
+        if (!entry) {
+          entry = {
+            elementalClass: null,
+            minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity,
+            maxFontSize: 0, totalWidth: 0, avgEntryProgress: 0,
+          };
+          phraseMap.set(phraseKey, entry);
+        }
+
+        if (directive?.elementalClass && !entry.elementalClass) {
+          entry.elementalClass = directive.elementalClass;
+        }
+
+        const sx = chunk.scaleX ?? chunk.scale ?? 1;
+        const sy = chunk.scaleY ?? chunk.scale ?? 1;
+        const fontSize = chunk.fontSize ?? 36;
+        const chunkObj = this.chunks.get(chunk.id);
+        const halfW = ((chunkObj?.width ?? 40) * sx) / 2;
+        const halfH = (fontSize * sy) / 2;
+        const cx = chunk.x ?? 0;
+        const cy = (chunk.y ?? 0) - this._textVerticalBias;
+
+        entry.minX = Math.min(entry.minX, cx - halfW);
+        entry.maxX = Math.max(entry.maxX, cx + halfW);
+        entry.minY = Math.min(entry.minY, cy - halfH);
+        entry.maxY = Math.max(entry.maxY, cy + halfH);
+        entry.maxFontSize = Math.max(entry.maxFontSize, fontSize);
+        entry.totalWidth = entry.maxX - entry.minX;
+        entry.avgEntryProgress += (chunk.entryProgress ?? 1);
+      }
+
+      const beatPulse = this._lastBeatState?.pulse ?? 0;
+      const lightingMode = this._textBandBrightness > 0.55 ? 'bright' as const : 'dark' as const;
+      const elementalAlpha = this._activeMoodConfig.elementalIntensity;
+
+      for (const [, phrase] of phraseMap) {
+        if (!phrase.elementalClass) continue;
+        if (!Number.isFinite(phrase.minX) || phrase.totalWidth <= 0) continue;
+
+        const phraseCX = (phrase.minX + phrase.maxX) / 2;
+        const phraseCY = (phrase.minY + phrase.maxY) / 2;
+        const phraseW = phrase.totalWidth;
+        const phraseFontSize = phrase.maxFontSize;
+
+        const wordLocalTime = 0.6;
+        const maxParticles = Math.max(3, Math.round(10 * elementalAlpha));
+        const bubbleXPositions = Array.from({ length: maxParticles }, (_, i) =>
+          phraseW * (i / Math.max(1, maxParticles - 1))
+        );
+
+        this.ctx.save();
+        this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+        this.ctx.globalAlpha = elementalAlpha;
+
+        try {
+          drawElementalWord(
+            this.ctx,
+            '',
+            phraseFontSize,
+            phraseW,
+            phrase.elementalClass,
+            wordLocalTime,
+            beatPulse,
+            1,
+            null,
+            {
+              bubbleXPositions,
+              useBlur: this._qualityTier === 0,
+              isHeroWord: true,
+              effectQuality: this._qualityTier === 0 ? 'high' : 'low',
+              wordX: phraseCX,
+              wordY: phraseCY,
+              canvasWidth: this.width,
+              canvasHeight: this.height,
+              lightingMode,
+            },
+          );
+        } catch (e) {
+          console.warn('[LyricEngine] phrase elemental error:', e);
+        }
+
+        this.ctx.restore();
+      }
+    }
 
 
     // Comment comets — after text, before watermark
@@ -4406,22 +4458,44 @@ export class LyricDancePlayer {
     }));
   }
 
-  private toWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives']): Record<string, any> {
+  private toWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives'], words?: Array<{ word: string }> | null): Record<string, any> {
     const map: Record<string, any> = {};
-    if (!wordDirectives) return map;
-    if (Array.isArray(wordDirectives)) {
-      for (const directive of wordDirectives) {
-        const key = String(directive?.word ?? '').trim().toLowerCase();
-        if (!key) continue;
-        map[key] = directive;
+    // ── AI directives (highest priority) ──
+    if (wordDirectives) {
+      if (Array.isArray(wordDirectives)) {
+        for (const directive of wordDirectives) {
+          const key = String(directive?.word ?? '').trim().toLowerCase();
+          if (!key) continue;
+          map[key] = directive;
+        }
+      } else {
+        for (const [key, value] of Object.entries(wordDirectives)) {
+          const clean = key.trim().toLowerCase();
+          if (!clean) continue;
+          map[clean] = value;
+        }
       }
-      return map;
     }
-    for (const [key, value] of Object.entries(wordDirectives)) {
-      const clean = key.trim().toLowerCase();
-      if (!clean) continue;
-      map[clean] = value;
+
+    // ── Semantic auto-map: fill in elementalClass for words the AI didn't annotate ──
+    if (words) {
+      const seen = new Set<string>();
+      for (const w of words) {
+        const clean = w.word.toLowerCase().replace(/[^a-z]/g, '');
+        if (!clean || clean.length < 2 || seen.has(clean)) continue;
+        seen.add(clean);
+        const semantic = getSemanticOverride(clean);
+        if (!semantic?.elementalClass) continue;
+        const existing = map[clean];
+        if (existing?.elementalClass) continue;
+        if (existing) {
+          existing.elementalClass = semantic.elementalClass;
+        } else {
+          map[clean] = { word: clean, elementalClass: semantic.elementalClass, emphasisLevel: 1 };
+        }
+      }
     }
+
     return map;
   }
 
@@ -4433,7 +4507,7 @@ export class LyricDancePlayer {
   private resolvePlayerState(payload: ScenePayload): void {
     const direction = payload.cinematic_direction;
     const chapters = this.toLegacyChapters(direction);
-    const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives);
+    const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives, payload.words as any);
     const durationSec = Math.max(0.01, (payload.songEnd ?? this.audio.duration ?? 1) - (payload.songStart ?? 0));
     const resolved = resolveCinematicState(direction, payload.lines as any[], durationSec);
     const sectionIndex = Math.max(0, Math.min(chapters.length - 1, this.resolveSectionIndex(chapters, this.audio.currentTime, this.audio.duration || 1)));
