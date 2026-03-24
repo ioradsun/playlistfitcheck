@@ -5149,6 +5149,7 @@ export class LyricDancePlayer {
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
     const scene = this.compiledScene;
     if (!scene) return null;
+    const WALLPAPER_ENABLED = false;
 
     if (this._moodTransition) {
       const t = this._moodTransition;
@@ -5238,15 +5239,19 @@ export class LyricDancePlayer {
     const activeGroups = this._activeGroupIndices;
     activeGroups.length = 0;
     if (activeGroupIdx >= 0) {
-      // ═══ WALLPAPER: past ghosts + active + future ghosts ═══
-      const pastStart = Math.max(0, activeGroupIdx - this._ghostCountAbove);
-      for (let gi = pastStart; gi < activeGroupIdx; gi++) {
-        activeGroups.push(gi);
-      }
-      activeGroups.push(activeGroupIdx);
-      const futureEnd = Math.min(groups.length, activeGroupIdx + 1 + this._ghostCountBelow);
-      for (let gi = activeGroupIdx + 1; gi < futureEnd; gi++) {
-        activeGroups.push(gi);
+      if (WALLPAPER_ENABLED) {
+        // ═══ WALLPAPER: past ghosts + active + future ghosts ═══
+        const pastStart = Math.max(0, activeGroupIdx - this._ghostCountAbove);
+        for (let gi = pastStart; gi < activeGroupIdx; gi++) {
+          activeGroups.push(gi);
+        }
+        activeGroups.push(activeGroupIdx);
+        const futureEnd = Math.min(groups.length, activeGroupIdx + 1 + this._ghostCountBelow);
+        for (let gi = activeGroupIdx + 1; gi < futureEnd; gi++) {
+          activeGroups.push(gi);
+        }
+      } else {
+        activeGroups.push(activeGroupIdx);
       }
     }
 
@@ -5290,7 +5295,7 @@ export class LyricDancePlayer {
       const isActive = groupIdx === activeGroupIdx;
       const isPast = groupIdx < activeGroupIdx;
       const isFuture = groupIdx > activeGroupIdx;
-      const isGhost = !isActive;
+      const isGhost = WALLPAPER_ENABLED ? (groupIdx !== activeGroupIdx) : false;
 
       // Time until this group becomes active (negative = already past)
       const timeUntilActive = group.start - tSec;
@@ -5328,7 +5333,7 @@ export class LyricDancePlayer {
       const activeCenterY = activeTop + activeH / 2;
       const gph = this._ghostLineH * 2;
 
-      if (isActive) {
+      if (WALLPAPER_ENABLED && isActive) {
         // ── ACTIVE: spatial journey driven by entry/exit timing ──
         // During entry: ease FROM future ghost slot TO center
         // During steady: at center (identity)
@@ -5379,7 +5384,7 @@ export class LyricDancePlayer {
 
         wallSuppressAnim = false; // per-word entry/exit always runs for active
 
-      } else if (isWarming) {
+      } else if (WALLPAPER_ENABLED && isWarming) {
         // ── WARMING: brightening in place, building anticipation ──
         const warmT = 1 - (timeUntilActive / WARMUP_DURATION_SEC);
         const eWarm = warmT * warmT; // easeIn — slow start, builds tension
@@ -5395,7 +5400,7 @@ export class LyricDancePlayer {
         wallColorDrain = 1 - eWarm * 0.3;
         wallSuppressAnim = true;
 
-      } else if (isCooling) {
+      } else if (WALLPAPER_ENABLED && isCooling) {
         // ── COOLING: continue spatial exit, then hold at ghost slot ──
         // The active exit eased wallOffY toward pastGhostOffY.
         // Cooling picks up from where exit left off and completes the journey.
@@ -5426,7 +5431,7 @@ export class LyricDancePlayer {
           wallSuppressAnim = true;
         }
 
-      } else if (isPast) {
+      } else if (WALLPAPER_ENABLED && isPast) {
         // ── PAST GHOST: fading memory above the active zone ──
         const stepsFromActive = activeGroupIdx - groupIdx;
         const yCenter = activeTop - (stepsFromActive - 0.5) * gph;
@@ -5437,7 +5442,7 @@ export class LyricDancePlayer {
         wallColorDrain = 1;
         wallSuppressAnim = true;
 
-      } else if (isFuture) {
+      } else if (WALLPAPER_ENABLED && isFuture) {
         // ── DEEP FUTURE GHOST: static wallpaper below the active zone ──
         const stepsFromActive = groupIdx - activeGroupIdx;
         const yCenter = activeBottom + (stepsFromActive - 0.5) * gph;
@@ -5471,7 +5476,13 @@ export class LyricDancePlayer {
       // group.end = when the last word finishes being spoken
       // nextGroupStart = when the next phrase begins
       // groupEnd = when this phrase EXITS — always when replacement arrives
-      const groupEnd = nextGroupStart;
+      const groupEnd = (() => {
+        const cg = group as any;
+        if (cg.holdClass === 'long_emotional') {
+          return Math.max(nextGroupStart, group.end + 0.8);
+        }
+        return nextGroupStart;
+      })();
 
       // ═══ LAYOUT: positions are pre-computed by fitTextToViewport at compile time ═══
       // All words have correct layoutX (centered) and layoutY (stacked if wrapped).
@@ -5619,6 +5630,8 @@ export class LyricDancePlayer {
 
         // ── Hero word detection ──
         const isHeroWord = word.isHeroWord === true;
+        const cgHeroType = (group as any).heroType;
+        const effectiveHero = cgHeroType === 'phrase' ? true : isHeroWord;
         const heroDuration = word.wordDuration ?? 0;
         const wordDirective = word.clean ? this.resolvedState.wordDirectivesMap[word.clean] ?? null : null;
         const hasIsolation = Boolean((wordDirective as any)?.isolation);
@@ -5697,9 +5710,14 @@ export class LyricDancePlayer {
 
           heroScaleMult = Math.min(rawEmpScale, maxVpScale, maxOverlapScale);
         }
+        // center_word + impact: fill the screen
+        const cg = group as any;
+        if (cg.composition === 'center_word' && cg.energyTier === 'impact' && group.words.length === 1) {
+          heroScaleMult = Math.max(heroScaleMult, 1.4);
+        }
 
         // ── Hero scale cooldown ──
-        if (isHeroWord && heroScaleMult > 1.2 && this.conductor) {
+        if (effectiveHero && heroScaleMult > 1.2 && this.conductor) {
           const cooldown = this.conductor.getHeroTracker().getCooldownMultiplier(tSec);
           heroScaleMult = 1 + (heroScaleMult - 1) * cooldown;
           if (cooldown >= 0.8) {
@@ -5708,7 +5726,7 @@ export class LyricDancePlayer {
         }
 
         // ── Hero words: extra beat scale on top of shared ──
-        const heroBeatResp = (isHeroWord && _hasBeatResponses)
+        const heroBeatResp = (effectiveHero && _hasBeatResponses)
           ? getBeatResponse(emp, true)
           : null;
         const heroBeatBoost = heroBeatResp
@@ -5719,7 +5737,7 @@ export class LyricDancePlayer {
         // (spotlightAlpha is now phrase-level, so adjust finalAlpha directly for heroes)
 
         const roleAlpha = (lineRole === 'current' || isGhost) ? 1.0 : 0.0;
-        const heroHoldAlpha = (isHeroWord && lineRole === 'current' && tSec > (word.wordStart ?? group.start) + (word.wordDuration ?? 0))
+        const heroHoldAlpha = (effectiveHero && lineRole === 'current' && tSec > (word.wordStart ?? group.start) + (word.wordDuration ?? 0))
           ? 0.75
           : spotlightAlpha;
 
@@ -5728,7 +5746,7 @@ export class LyricDancePlayer {
         let wordGlow = 0;
         if (lineRole === 'current') {
           // Glow scales with intensity: restrained moods = hero-only, cinematic = hero + emphasis
-          if (isHeroWord) wordGlow = 0.3 + config.intensity * 0.5;  // 0.3 at I=0, 0.8 at I=1
+          if (effectiveHero) wordGlow = 0.3 + config.intensity * 0.5;  // 0.3 at I=0, 0.8 at I=1
           else if (emp >= 3 && config.intensity >= 0.5) wordGlow = 0.15 + config.intensity * 0.2;
           if (isSoloHero && groupHasActiveSoloHero) wordGlow = 0.8;
         }
@@ -5855,7 +5873,7 @@ export class LyricDancePlayer {
             } else {
               rawColor = semColor;
             }
-          } else if (isHeroWord) {
+          } else if (effectiveHero) {
             rawColor = this._currentSectionPalette?.accent ?? this._framePalette?.[1] ?? '#FFD700';
           }
 
@@ -5883,7 +5901,7 @@ export class LyricDancePlayer {
           ((phraseEntryState.rotation ?? 0) + (phraseExitState.rotation ?? 0)) * ibf
           + ((wordEntryBlend.rotation ?? 0) + (wordExitBlend.rotation ?? 0)) * bf
         ) * motionCap;
-        chunk.isHeroWord = isHeroWord;
+        chunk.isHeroWord = effectiveHero;
         chunk.wordDuration = word.wordDuration ?? 0;
         chunk.isSoloHero = isSoloHero;
         chunk.letterIndex = word.letterIndex;

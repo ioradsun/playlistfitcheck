@@ -482,7 +482,26 @@ function snapToBeat(timeSec: number, beats: number[]): number {
 }
 
 export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isHeroWord?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; semanticAlphaMax: number; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
-export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; motionBudget?: PhraseMotionBudget; }
+export interface CompiledPhraseGroup {
+  lineIndex: number;
+  groupIndex: number;
+  anchorWordIdx: number;
+  start: number;
+  end: number;
+  words: CompiledWord[];
+  staggerDelay: number;
+  entryDuration: number;
+  exitDuration: number;
+  lingerDuration: number;
+  behaviorIntensity: number;
+  composition: 'stack' | 'line' | 'center_word';
+  bias: 'left' | 'center' | 'right';
+  heroType: 'word' | 'phrase';
+  revealStyle: 'instant' | 'stagger_fast' | 'stagger_slow';
+  holdClass: 'short_hit' | 'medium_groove' | 'long_emotional';
+  energyTier: 'intimate' | 'groove' | 'lift' | 'impact' | 'surprise';
+  motionBudget?: PhraseMotionBudget;
+}
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
 export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
@@ -523,6 +542,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   });
   const lineWordCounters: Record<number, number> = {};
   for (const wm of wordMeta) { lineWordCounters[wm.lineIndex] = lineWordCounters[wm.lineIndex] ?? 0; wm.wordIndex = lineWordCounters[wm.lineIndex]++; }
+  const globalWordIndex = new Map<WordMetaEntry, number>();
+  wordMeta.forEach((wm, idx) => globalWordIndex.set(wm, idx));
 
   const aiPhrases = (payload.cinematic_direction as any)?.phrases as CinematicPhrase[] | undefined;
   const phraseGroups = buildPhraseGroups(wordMeta, aiPhrases);
@@ -601,12 +622,33 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const groupWords = group.words.map(wm =>
       baseTypography.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word
     );
+    // Find matching AI phrase for this group
+    const matchPhrase = (aiPhrases ?? []).find((ap: any) => {
+      const [ps, pe] = ap.wordRange ?? [0, 0];
+      const gs = globalWordIndex.get(group.words[0]) ?? -1;
+      const ge = globalWordIndex.get(group.words[group.words.length - 1]) ?? -1;
+      return ps <= gs && pe >= ge;
+    }) as CinematicPhrase | undefined;
+
+    const composition = matchPhrase?.composition ?? 'line';
+    const bias = matchPhrase?.bias ?? 'center';
 
     const hasHero = group.words.some(wm =>
       (wm.directive?.emphasisLevel ?? 1) >= 4 ||
       wm.directive?.isolation === true ||
       storyboard.get(group.lineIndex)?.heroWord?.toLowerCase() === wm.clean
     );
+
+    // Map composition to maxLines
+    let maxLines: number | undefined;
+    if (composition === 'stack') {
+      maxLines = groupWords.length; // one word per line
+    } else if (composition === 'center_word') {
+      maxLines = 1;
+    }
+    // 'line': use fitTextToViewport default (auto from aspect ratio)
+
+    const targetFill = bias === 'center' ? 0.88 : 0.70;
 
     const layout = fitTextToViewport(
       measureCtx as MeasureContext,
@@ -616,17 +658,24 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       baseTypography.fontFamily,
       baseTypography.fontWeight,
       {
-        ...(layoutMaxLines !== undefined ? { maxLines: layoutMaxLines } : {}),
+        ...(maxLines !== undefined ? { maxLines } : (layoutMaxLines !== undefined ? { maxLines: layoutMaxLines } : {})),
         textTransform: 'none', // already transformed above
         hasHeroWord: hasHero,
+        targetFillRatio: targetFill,
       },
     );
 
-    
+    let biasOffX = 0;
+    if (bias === 'left') biasOffX = -REF_W * 0.15;
+    if (bias === 'right') biasOffX = REF_W * 0.15;
 
     groupLayouts.set(key, {
       fontSize: layout.fontSize,
-      positions: layout.wordPositions.map(wp => ({ x: wp.x, y: wp.y, width: wp.width })),
+      positions: layout.wordPositions.map(wp => ({
+        x: wp.x + biasOffX,
+        y: wp.y,
+        width: wp.width,
+      })),
     });
   }
 
@@ -656,6 +705,40 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const key = `${group.lineIndex}-${group.groupIndex}`;
     const lineStory = storyboard.get(group.lineIndex);
     const groupDur = phraseAnimDurations(group.words.length, Math.round((group.end - group.start) * 1000));
+    const matchPhrase = (aiPhrases ?? []).find((ap: any) => {
+      const [ps, pe] = ap.wordRange ?? [0, 0];
+      const gs = globalWordIndex.get(group.words[0]) ?? -1;
+      const ge = globalWordIndex.get(group.words[group.words.length - 1]) ?? -1;
+      return ps <= gs && pe >= ge;
+    }) as CinematicPhrase | undefined;
+    const composition = matchPhrase?.composition ?? 'line';
+    const bias = matchPhrase?.bias ?? 'center';
+    const revealStyle = matchPhrase?.revealStyle ?? 'instant';
+    const holdClass = matchPhrase?.holdClass ?? 'medium_groove';
+    const energyTier = matchPhrase?.energyTier ?? 'groove';
+    const heroType = matchPhrase?.heroType ?? 'word';
+
+    // Reveal → stagger delay
+    const staggerVal = revealStyle === 'instant' ? 0
+      : revealStyle === 'stagger_fast' ? 0.04
+      : 0.12; // stagger_slow
+
+    // Hold → linger duration
+    const lingerVal = holdClass === 'short_hit' ? 0.1
+      : holdClass === 'long_emotional' ? Math.max(0.8, animParams.linger * 2)
+      : Math.max(0.3, animParams.linger); // medium_groove
+
+    // Energy → entry/exit speed
+    const entryVal = energyTier === 'impact' ? 0.08
+      : energyTier === 'surprise' ? 0.05
+      : energyTier === 'intimate' ? 0.4
+      : energyTier === 'lift' ? groupDur.entryDuration * 0.8
+      : groupDur.entryDuration; // groove
+    const exitVal = energyTier === 'impact' ? 0.15
+      : energyTier === 'surprise' ? 0.1
+      : energyTier === 'intimate' ? 0.5
+      : energyTier === 'lift' ? groupDur.exitDuration * 0.8
+      : groupDur.exitDuration; // groove
     const groupLayout = groupLayouts.get(key);
     const positions = groupLayout?.positions ?? [];
     const groupFontSize = groupLayout?.fontSize ?? 56;
@@ -691,7 +774,26 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       };
       return [base];
     });
-    return { lineIndex: group.lineIndex, groupIndex: group.groupIndex, anchorWordIdx: group.anchorWordIdx, start: group.start, end: group.end, words: wordsCompiled, staggerDelay: groupDur.stagger, entryDuration: groupDur.entryDuration, exitDuration: groupDur.exitDuration, lingerDuration: Math.max(animParams.linger, groupDur.linger), behaviorIntensity: 1, motionBudget: (group as any)._motionBudget ?? undefined };
+    return {
+      lineIndex: group.lineIndex,
+      groupIndex: group.groupIndex,
+      anchorWordIdx: group.anchorWordIdx,
+      start: group.start,
+      end: group.end,
+      words: wordsCompiled,
+      staggerDelay: staggerVal,
+      entryDuration: entryVal,
+      exitDuration: exitVal,
+      lingerDuration: lingerVal,
+      behaviorIntensity: 1,
+      composition,
+      bias,
+      heroType,
+      revealStyle,
+      holdClass,
+      energyTier,
+      motionBudget: (group as any)._motionBudget ?? undefined,
+    };
   }).sort((a, b) => a.start - b.start);
 
   const heat = physicsProfile?.heat ?? 0.5;
