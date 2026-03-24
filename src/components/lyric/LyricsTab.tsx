@@ -109,6 +109,7 @@ interface Props {
   sceneInput?: ReactNode;
   onAudioSubmitted?: (file: File) => void;
   onUploadStarted?: (payload: { file: File; projectId: string | null; title: string }) => void;
+  onTitleChange?: (newTitle: string) => void;
 }
 
 export function LyricsTab({

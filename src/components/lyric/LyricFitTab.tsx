@@ -1744,6 +1744,7 @@ export function LyricFitTab({
             setPipelineStages((prev) => ({ ...prev, transcript: "running" }));
             onUploadStartedProp?.(payload);
           }}
+          onTitleChange={handleTitleChange}
         />
       </div>
       {lyricData && audioFile && (
