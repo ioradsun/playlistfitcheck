@@ -1517,7 +1517,7 @@ serve(async (req) => {
       const sceneResult = await callScene(
         apiKey,
         scenePrefix,
-        userMessage,
+        sceneUserMessage,
         body.audioSections?.length ?? 0,
         body,
         customPrompts.scenePrompt,
