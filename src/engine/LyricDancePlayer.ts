@@ -3750,6 +3750,7 @@ export class LyricDancePlayer {
         elementalClass: string | null;
         minX: number; maxX: number; minY: number; maxY: number;
         maxFontSize: number; totalWidth: number; avgEntryProgress: number;
+        groupStart: number;
       }>();
 
       for (let ci = 0; ci < sortBuf.length; ci++) {
@@ -3769,7 +3770,16 @@ export class LyricDancePlayer {
             elementalClass: null,
             minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity,
             maxFontSize: 0, totalWidth: 0, avgEntryProgress: 0,
+            groupStart: 0,
           };
+          const li = Number(idParts[0]);
+          const gi = Number(idParts[1]);
+          const matchGroup = this.compiledScene?.phraseGroups?.find(
+            (g: any) => g.lineIndex === li && g.groupIndex === gi,
+          );
+          if (matchGroup) {
+            entry.groupStart = matchGroup.start;
+          }
           phraseMap.set(phraseKey, entry);
         }
 
@@ -3808,7 +3818,7 @@ export class LyricDancePlayer {
         const phraseW = phrase.totalWidth;
         const phraseFontSize = phrase.maxFontSize;
 
-        const wordLocalTime = tSec;
+        const wordLocalTime = Math.max(0, tSec - phrase.groupStart);
         const maxParticles = Math.max(3, Math.round(10 * elementalAlpha));
         const bubbleXPositions = Array.from({ length: maxParticles }, (_, i) =>
           phraseW * (i / Math.max(1, maxParticles - 1))
@@ -5353,8 +5363,10 @@ export class LyricDancePlayer {
         // Use the SAME timing as phrase entry/exit
         const _entryPad = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
         const _tSinceAct = tSec - (group.start - _entryPad);
-        const _entryDur = Math.max(this._activeMoodConfig.entryDuration, _entryPad * 0.35);
-        const _exitDur = Math.min(this._activeMoodConfig.exitDuration, Math.max(0.01, group.end - group.start) * 0.35);
+        const _groupEntryDur = group.entryDuration ?? this._activeMoodConfig.entryDuration;
+        const _groupExitDur = group.exitDuration ?? this._activeMoodConfig.exitDuration;
+        const _entryDur = Math.max(_groupEntryDur, _entryPad * 0.35);
+        const _exitDur = Math.min(_groupExitDur, Math.max(0.01, group.end - group.start) * 0.35);
         const _phraseRem = nextGroupStart - tSec;
 
         // Entry: ease from future ghost to center
@@ -5544,11 +5556,13 @@ export class LyricDancePlayer {
 
       const wordCount = group.words.length;
       const motionCap = LEGIBILITY.motionCapForDensity(wordCount);
-      const phraseExitDuration = Math.min(config.exitDuration, phraseDuration * 0.35);
+      const groupExitDur = group.exitDuration ?? config.exitDuration;
+      const phraseExitDuration = Math.min(groupExitDur, phraseDuration * 0.35);
 
       const entryPad = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
       const timeSinceActivation = tSec - (group.start - entryPad);
-      const phraseEntryDuration = Math.max(config.entryDuration, entryPad * 0.35);
+      const groupEntryDur = group.entryDuration ?? config.entryDuration;
+      const phraseEntryDuration = Math.max(groupEntryDur, entryPad * 0.35);
 
       let phraseAlpha = 1.0;
       if (timeSinceActivation < phraseEntryDuration) {
@@ -5563,9 +5577,9 @@ export class LyricDancePlayer {
       // ── Phrase-level entry/exit: default for all words ──
       // Solo hero phrases will override these per-word below.
       let phraseEntryState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: phraseAlpha, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isEntering = !wallSuppressAnim && timeSinceActivation < config.entryDuration;
+      const isEntering = !wallSuppressAnim && timeSinceActivation < groupEntryDur;
       if (isEntering) {
-        const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
+        const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, groupEntryDur));
         phraseEntryState = computeMotionEntry(phraseEntryChar, entryProgress, phraseIntensity) as typeof phraseEntryState;
         phraseEntryState.offsetX *= motionCap;
         phraseEntryState.offsetY *= motionCap;
@@ -5574,9 +5588,9 @@ export class LyricDancePlayer {
       }
 
       let phraseExitState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isExiting = !wallSuppressAnim && !suppressExit && phraseRemaining < config.exitDuration && phraseRemaining >= 0;
+      const isExiting = !wallSuppressAnim && !suppressExit && phraseRemaining < groupExitDur && phraseRemaining >= 0;
       if (isExiting) {
-        const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
+        const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, groupExitDur)));
         phraseExitState = computeMotionExit(phraseExitChar as MC, exitProgress, phraseIntensity) as typeof phraseExitState;
         phraseExitState.offsetX *= motionCap;
         phraseExitState.offsetY *= motionCap;
@@ -5724,7 +5738,7 @@ export class LyricDancePlayer {
           // ── Solo hero uses its OWN entry/exit style ──
           // The word IS the phrase — its compiled animation replaces the treatment's.
           if (isEntering) {
-            const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
+            const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, groupEntryDur));
             phraseEntryState = computeMotionEntry(((word as any).entryStyle as MotionCharacter) ?? phraseEntryChar, entryProgress, phraseIntensity) as typeof phraseEntryState;
             phraseEntryState.offsetX *= motionCap;
             phraseEntryState.offsetY *= motionCap;
@@ -5732,7 +5746,7 @@ export class LyricDancePlayer {
             phraseEntryState.alpha *= phraseAlpha;
           }
           if (isExiting) {
-            const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
+            const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, groupExitDur)));
             phraseExitState = computeMotionExit(((word as any).exitStyle as MotionCharacter) ?? (suppressExit ? 'snap' : phraseExitChar as MC), exitProgress, phraseIntensity) as typeof phraseExitState;
             phraseExitState.offsetX *= motionCap;
             phraseExitState.offsetY *= motionCap;
@@ -5824,7 +5838,7 @@ export class LyricDancePlayer {
           wordBlendFactor = Math.min(1.0, (emp - 2) / 3); // 0.33, 0.67, 1.0
 
           if (isEntering) {
-            const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
+            const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, groupEntryDur));
             const rawState = computeMotionEntry(((word as any).entryStyle as MotionCharacter) ?? phraseEntryChar, entryProgress, phraseIntensity * 0.7);
             wordEntryBlend = {
               offsetX: (rawState.offsetX ?? 0) * motionCap,
@@ -5839,7 +5853,7 @@ export class LyricDancePlayer {
             };
           }
           if (isExiting) {
-            const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
+            const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, groupExitDur)));
             const rawState = computeMotionExit(((word as any).exitStyle as MotionCharacter) ?? (phraseExitChar as MC), exitProgress, phraseIntensity * 0.7);
             wordExitBlend = {
               offsetX: (rawState.offsetX ?? 0) * motionCap,
@@ -5944,8 +5958,8 @@ export class LyricDancePlayer {
 
         chunk.glow = isGhost ? 0 : Math.min(wordGlow, effectiveGlowCap / 20);
         chunk.emphasisLevel = emp;
-        chunk.entryProgress = isEntering ? Math.max(0, Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration))) : 1;
-        chunk.exitProgress = isExiting ? Math.max(0, Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)))) : 0;
+        chunk.entryProgress = isEntering ? Math.max(0, Math.min(1, timeSinceActivation / Math.max(0.01, groupEntryDur))) : 1;
+        chunk.exitProgress = isExiting ? Math.max(0, Math.min(1, 1 - (phraseRemaining / Math.max(0.01, groupExitDur)))) : 0;
         chunk.skewX = (
           ((phraseEntryState.skewX ?? 0) + (phraseExitState.skewX ?? 0)) * ibf
           + ((wordEntryBlend.skewX ?? 0) + (wordExitBlend.skewX ?? 0)) * bf
