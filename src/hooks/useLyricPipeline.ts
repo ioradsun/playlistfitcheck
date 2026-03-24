@@ -1309,7 +1309,6 @@ export function useLyricPipeline({
     },
     [
       lyricData,
-      generationStatus.cinematicDirection,
       beatGrid,
       renderData,
       words,
