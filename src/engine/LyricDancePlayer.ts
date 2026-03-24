@@ -3069,17 +3069,12 @@ export class LyricDancePlayer {
   private _resolveAndCachePalette(secIdx: number): string[] {
     const raw = this._resolveCurrentPalette(secIdx);
     this._currentSectionPalette = deserializeSectionPalette(raw);
-    // ── Lyric video contrast guarantee ──
-    // If mood grading will darken the background, override to white text
-    // regardless of what the raw image palette decided.
-    const gradeForPalette = (this as any)._activeMoodGrade as { brightness: number } | undefined;
-    if (gradeForPalette && gradeForPalette.brightness < 0.55) {
-      this._currentSectionPalette = {
-        ...this._currentSectionPalette,
-        isLight: false,
-        textBase: '#ffffff',
-      };
-    }
+    // ── Lyric video: always white text on dark background ──
+    this._currentSectionPalette = {
+      ...this._currentSectionPalette,
+      isLight: false,
+      textBase: '#ffffff',
+    };
     return raw;
   }
 
