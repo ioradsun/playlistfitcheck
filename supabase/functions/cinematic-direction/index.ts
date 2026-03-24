@@ -110,6 +110,53 @@ HERO WORD:
   The most concrete, imageable word in the phrase.
   Nouns and strong verbs. Not pronouns, articles, or filler.
 
+CHOREOGRAPHY:
+  For every phrase, decide how it lives on screen.
+  These are composition decisions, not animation decisions.
+  The goal: make the song's rhythm visible through layout variety.
+
+  For each phrase, output these fields:
+
+  "composition": how the words are arranged
+    "line"        — all words in one horizontal row. DEFAULT. Use for: steady rhythm, fast sections, readability.
+    "stack"       — one word per row, vertical column. Use for: building moments, intimate verses, deliberate pacing.
+    "center_word" — ONLY for single-word phrases. Word fills the screen. Use for: impact, hooks, isolated emphasis.
+
+  "bias": where the arrangement sits
+    "left" | "center" | "right"
+    Alternate across adjacent phrases for visual rhythm. Don't center everything.
+
+  "heroType": what carries emphasis
+    "word"   — the heroWord is visually emphasized (default)
+    "phrase" — the entire phrase is treated as one emphasis unit (good for short 2-3 word impact phrases)
+
+  "revealStyle": how the phrase appears
+    "instant"      — hard cut, all words at once. Use for: impact, chorus, confidence.
+    "stagger_fast" — words appear in rapid sequence (~40ms apart). Use for: groove, rhythm, building.
+    "stagger_slow" — words appear with more space (~120ms apart). Use for: intimate, suspense.
+
+  "holdClass": how long the phrase emotionally owns the screen
+    "short_hit"       — replaced quickly. Use for: rapid-fire, ad-libs, transitions.
+    "medium_groove"   — comfortable readable hold. Use for: most lines.
+    "long_emotional"  — holds with authority even if audio is short. Use for: hooks, key lines, single-word impact.
+
+  "energyTier": the phrase's role in the song's momentum
+    "intimate"  — quiet, spacious
+    "groove"    — steady backbone
+    "lift"      — building anticipation
+    "impact"    — chorus, hook, statement
+    "surprise"  — break the pattern (use sparingly, max 2-3 per song)
+
+  RULES:
+  - center_word is ONLY valid for single-word phrases. Never use it for 2+ word phrases.
+  - Impact moments should be simpler and larger, not busier.
+  - Vary bias across adjacent phrases. Three phrases in a row with bias "center" is flat.
+  - Chorus: prioritize clarity and confidence. Usually "line" + "instant" + "impact".
+  - Verses: vary between "line" and "stack", alternate bias.
+  - Do not default every phrase to center + line + instant. That is wallpaper.
+  - When lyrics repeat (chorus/hook), use the SAME choreography each time.
+  - Ratio: 70% familiar patterns, 20% variation, 10% surprise.
+
 WORD DIRECTIVES:
   Tag emotionally significant words:
     "word": lowercase, "emphasisLevel": 1-5
@@ -123,7 +170,7 @@ WORD DIRECTIVES:
   elementalClass needs >=140ms. isolation needs >=700ms.
 
 Return ONLY valid JSON. No markdown.
-{ "phrases": [{ "wordRange": [start, end], "heroWord": "WORD" }],
+{ "phrases": [{ "wordRange": [start, end], "heroWord": "WORD", "composition": "line", "bias": "center", "heroType": "word", "revealStyle": "instant", "holdClass": "medium_groove", "energyTier": "groove" }],
   "wordDirectives": [{ "word": "soul", "emphasisLevel": 3 }] }
 `;
 
@@ -1031,6 +1078,27 @@ function validateWords(
         ? Math.max(p.wordRange[0], Math.round(p.wordRange[1]))
         : p.wordRange[0];
     if (p.heroWord && typeof p.heroWord !== "string") delete p.heroWord;
+
+    // Choreography: validate enums, conservative defaults
+    const COMP = ["stack", "line", "center_word"];
+    const BIAS = ["left", "center", "right"];
+    const HERO_TYPE = ["word", "phrase"];
+    const REVEAL = ["instant", "stagger_fast", "stagger_slow"];
+    const HOLD = ["short_hit", "medium_groove", "long_emotional"];
+    const ENERGY = ["intimate", "groove", "lift", "impact", "surprise"];
+
+    if (!COMP.includes(p.composition)) p.composition = "line";
+    if (!BIAS.includes(p.bias)) p.bias = "center";
+    if (!HERO_TYPE.includes(p.heroType)) p.heroType = "word";
+    if (!REVEAL.includes(p.revealStyle)) p.revealStyle = "instant";
+    if (!HOLD.includes(p.holdClass)) p.holdClass = "medium_groove";
+    if (!ENERGY.includes(p.energyTier)) p.energyTier = "groove";
+
+    // center_word is only valid for single-word phrases
+    const phraseWordCount = p.wordRange[1] - p.wordRange[0] + 1;
+    if (p.composition === "center_word" && phraseWordCount > 1) {
+      p.composition = "line";
+    }
   }
 
   // Storyboard — backward compat
@@ -1376,6 +1444,28 @@ async function callWords(
     result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
     // 5. Validate + fill heroWords
     fillMissingHeroWords(result.value.phrases, words);
+
+    // Safety net: very short single-word phrases get impact treatment if AI didn't decide
+    if (words) {
+      for (const phrase of result.value.phrases) {
+        const [s, e] = phrase.wordRange;
+        const wc = e - s + 1;
+        if (wc !== 1) continue;
+        if (s >= words.length) continue;
+        const durMs = Math.round((words[s].end - words[s].start) * 1000);
+        // Only promote single words under 500ms that AI left as default
+        if (
+          durMs < 500 &&
+          phrase.composition === "line" &&
+          phrase.holdClass === "medium_groove"
+        ) {
+          phrase.composition = "center_word";
+          phrase.holdClass = "long_emotional";
+          phrase.energyTier = "impact";
+          phrase.revealStyle = "instant";
+        }
+      }
+    }
   }
 
   if (

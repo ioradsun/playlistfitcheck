@@ -86,6 +86,18 @@ export interface CinematicPhrase {
   heroWord?: string;
   /** @deprecated — use wordRange with global indices instead */
   lineIndex?: number;
+  /** How words are arranged on screen */
+  composition?: "stack" | "line" | "center_word";
+  /** Where the arrangement sits on canvas */
+  bias?: "left" | "center" | "right";
+  /** What carries visual emphasis */
+  heroType?: "word" | "phrase";
+  /** How the phrase appears */
+  revealStyle?: "instant" | "stagger_fast" | "stagger_slow";
+  /** How long it holds emotionally — renderer maps to actual timing */
+  holdClass?: "short_hit" | "medium_groove" | "long_emotional";
+  /** Role in the song's momentum */
+  energyTier?: "intimate" | "groove" | "lift" | "impact" | "surprise";
 }
 
 export interface StoryboardEntry {
