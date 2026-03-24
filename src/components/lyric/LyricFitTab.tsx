@@ -154,7 +154,15 @@ export function LyricFitTab({
     preloadEssentia();
   }, []);
 
-  const [hasRealAudio, setHasRealAudio] = useState(false);
+  const handleTitleChange = useCallback((newTitle: string) => {
+    setLyricData((prev) => prev ? { ...prev, title: newTitle } : prev);
+    // Persist to DB if we have a saved project
+    const id = savedIdRef.current;
+    if (id) {
+      supabase.from("saved_lyrics").update({ title: newTitle, updated_at: new Date().toISOString() } as any).eq("id", id).then(() => {});
+    }
+  }, []);
+
   const [savedId, setSavedId] = useState<string | null>(
     initialLyric?.id ?? null,
   );
