@@ -1424,24 +1424,25 @@ async function persist(
   }
 }
 
-/** Fetch custom prompts from ai_prompts table, falling back to hardcoded defaults. */
+/** Fetch custom prompts + model from ai_prompts table, falling back to hardcoded defaults. */
 async function loadCustomPrompts(): Promise<{
   fullPrompt: string;
   scenePrompt: string;
   wordPrompt: string;
+  model: string;
 }> {
+  const defaults = {
+    fullPrompt: CINEMATIC_DIRECTION_PROMPT,
+    scenePrompt: SCENE_DIRECTION_PROMPT,
+    wordPrompt: WORD_DIRECTION_PROMPT,
+    model: PRIMARY_MODEL,
+  };
   const sbUrl = Deno.env.get("SUPABASE_URL");
   const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!sbUrl || !sbKey) {
-    return {
-      fullPrompt: CINEMATIC_DIRECTION_PROMPT,
-      scenePrompt: SCENE_DIRECTION_PROMPT,
-      wordPrompt: WORD_DIRECTION_PROMPT,
-    };
-  }
+  if (!sbUrl || !sbKey) return defaults;
 
   try {
-    const slugs = ["cinematic-direction", "cinematic-scene", "cinematic-words"];
+    const slugs = ["cinematic-direction", "cinematic-scene", "cinematic-words", "analysis-model"];
     const res = await fetch(
       `${sbUrl}/rest/v1/ai_prompts?slug=in.(${slugs.join(",")})&select=slug,prompt`,
       {
@@ -1453,11 +1454,7 @@ async function loadCustomPrompts(): Promise<{
     );
     if (!res.ok) {
       console.warn("[cinematic-direction] Failed to load custom prompts, using defaults");
-      return {
-        fullPrompt: CINEMATIC_DIRECTION_PROMPT,
-        scenePrompt: SCENE_DIRECTION_PROMPT,
-        wordPrompt: WORD_DIRECTION_PROMPT,
-      };
+      return defaults;
     }
 
     const rows: Array<{ slug: string; prompt: string }> = await res.json();
@@ -1467,14 +1464,11 @@ async function loadCustomPrompts(): Promise<{
       fullPrompt: bySlug["cinematic-direction"] || CINEMATIC_DIRECTION_PROMPT,
       scenePrompt: bySlug["cinematic-scene"] || SCENE_DIRECTION_PROMPT,
       wordPrompt: bySlug["cinematic-words"] || WORD_DIRECTION_PROMPT,
+      model: bySlug["analysis-model"]?.trim() || PRIMARY_MODEL,
     };
   } catch (e) {
     console.warn("[cinematic-direction] Error loading custom prompts:", e);
-    return {
-      fullPrompt: CINEMATIC_DIRECTION_PROMPT,
-      scenePrompt: SCENE_DIRECTION_PROMPT,
-      wordPrompt: WORD_DIRECTION_PROMPT,
-    };
+    return defaults;
   }
 }
 
