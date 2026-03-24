@@ -591,6 +591,30 @@ export function LyricFitTab({
     }
   }, [initialLyric]);
 
+  // ── Dedicated dance ID lookup — waits for auth to resolve ──────────
+  // The hydration effect runs once on mount, but `user` may be null (auth loading).
+  // This separate effect fires when user becomes available and looks up the dance row.
+  const danceIdLookedUpRef = useRef(!!pipelineDanceId);
+  useEffect(() => {
+    if (danceIdLookedUpRef.current || pipelineDanceId) return;
+    if (!user || !initialLyric || !cinematicDirection) return;
+    danceIdLookedUpRef.current = true;
+    void (async () => {
+      const { slugify } = await import("@/lib/slugify");
+      const s = slugify(initialLyric.title || "untitled");
+      const { data: d }: any = await supabase
+        .from("shareable_lyric_dances")
+        .select("id, artist_slug, song_slug")
+        .eq("user_id", user.id)
+        .eq("song_slug", s)
+        .maybeSingle();
+      if (d) {
+        setPipelineDanceId(d.id);
+        setPipelineDanceUrl(`/${d.artist_slug}/${d.song_slug}/lyric-dance`);
+      }
+    })();
+  }, [user, initialLyric, cinematicDirection, pipelineDanceId]);
+
   // Auto-generate images on remount when cinematic exists but images don't.
   // startCinematicDirection won't re-run (cinematicTriggeredRef=true), so we
   // need a separate trigger for the image pipeline.
