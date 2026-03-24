@@ -1235,7 +1235,7 @@ export function LyricFitTab({
               const { data: newRow }: any = await supabase
                 .from("shareable_lyric_dances" as any)
                 .select("id")
-                .eq("user_id", user.id)
+                .eq("artist_slug", artistSlugVal)
                 .eq("song_slug", songSlugVal)
                 .maybeSingle();
               resolvedDanceId = newRow?.id ?? null;
