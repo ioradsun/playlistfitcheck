@@ -3808,7 +3808,7 @@ export class LyricDancePlayer {
         const phraseW = phrase.totalWidth;
         const phraseFontSize = phrase.maxFontSize;
 
-        const wordLocalTime = 0.6;
+        const wordLocalTime = tSec;
         const maxParticles = Math.max(3, Math.round(10 * elementalAlpha));
         const bubbleXPositions = Array.from({ length: maxParticles }, (_, i) =>
           phraseW * (i / Math.max(1, maxParticles - 1))
@@ -3817,6 +3817,7 @@ export class LyricDancePlayer {
         this.ctx.save();
         this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
         this.ctx.globalAlpha = elementalAlpha;
+        this.ctx.translate(phraseCX, phraseCY);
 
         try {
           drawElementalWord(
