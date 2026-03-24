@@ -1019,15 +1019,16 @@ export function LyricFitTab({
         }
 
         const sceneDirection = sceneResult.cinematicDirection;
+        const sceneMeta = sceneResult._meta || null;
 
         if (!mountedRef.current) return;
 
-        const enrichedScene = beatGrid
-          ? {
-              ...sceneDirection,
-              beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence },
-            }
-          : { ...sceneDirection };
+        const enrichedScene = {
+          ...(beatGrid
+            ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
+            : { ...sceneDirection }),
+          _meta: { scene: sceneMeta },
+        };
 
         setCinematicDirection(enrichedScene);
 
@@ -1076,11 +1077,13 @@ export function LyricFitTab({
               const { storyboard, wordDirectives, phrases } =
                 wordResult.cinematicDirection;
 
+              const wordMeta = wordResult._meta || null;
               const merged = {
                 ...enrichedScene,
                 storyboard: storyboard || [],
                 wordDirectives: wordDirectives || [],
                 phrases: phrases || [],
+                _meta: { scene: enrichedScene._meta?.scene, words: wordMeta },
               };
               setCinematicDirection(merged);
               cinematicDirectionRef.current = merged;

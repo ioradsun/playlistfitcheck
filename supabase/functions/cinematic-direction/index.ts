@@ -1539,7 +1539,14 @@ serve(async (req) => {
         customPrompts.model,
       );
 
-      return new Response(JSON.stringify({ cinematicDirection: sceneResult }), {
+      return new Response(JSON.stringify({
+        cinematicDirection: sceneResult,
+        _meta: {
+          model: customPrompts.model,
+          scenePromptSource: customPrompts.scenePrompt === SCENE_DIRECTION_PROMPT ? "default" : "admin",
+          scenePromptLength: customPrompts.scenePrompt.length,
+        },
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -1567,7 +1574,14 @@ serve(async (req) => {
         customPrompts.model,
       );
 
-      return new Response(JSON.stringify({ cinematicDirection: wordResult }), {
+      return new Response(JSON.stringify({
+        cinematicDirection: wordResult,
+        _meta: {
+          model: customPrompts.model,
+          wordPromptSource: customPrompts.wordPrompt === WORD_DIRECTION_PROMPT ? "default" : "admin",
+          wordPromptLength: customPrompts.wordPrompt.length,
+        },
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
