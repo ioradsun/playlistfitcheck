@@ -423,7 +423,12 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
       const rightContent = user && lastSavedAt ? (
         <span className="text-[10px] text-muted-foreground shrink-0">✓ Saved {lastSavedAt}</span>
       ) : undefined;
-      onHeaderProject?.({ title, onBack: resetProject, rightContent });
+      onHeaderProject?.({ title, onBack: resetProject, rightContent, onTitleChange: (newTitle) => {
+        setTitle(newTitle);
+        if (projectId) {
+          supabase.from("mix_projects").update({ title: newTitle, updated_at: new Date().toISOString() }).eq("id", projectId).then(() => {});
+        }
+      } });
       return () => onHeaderProject?.(null);
     }
   }, [projectId, title, resetProject, onHeaderProject, user, lastSavedAt]);
