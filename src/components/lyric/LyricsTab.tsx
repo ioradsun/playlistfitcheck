@@ -138,6 +138,7 @@ export function LyricsTab({
   sceneInput,
   onAudioSubmitted,
   onUploadStarted,
+  onTitleChange,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [debugData, setDebugData] = useState<any | null>(null);
