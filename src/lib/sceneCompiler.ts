@@ -551,7 +551,7 @@ function assignWordAnimations(wm: WordMetaEntry, motionDefaults: MotionDefaults,
 
 export type WordEmitterType = 'ember'|'frost'|'spark-burst'|'dust-impact'|'light-rays'|'converge'|'shockwave-ring'|'gold-coins'|'memory-orbs'|'motion-trail'|'dark-absorb'|'none';
 
-export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; wordStart: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isHeroWord?: boolean; heroPresentation?: string; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
+export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; entryStyle: EntryStyle; exitStyle: ExitStyle; behaviorStyle: BehaviorStyle; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isHeroWord?: boolean; heroPresentation?: string; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; semanticScaleX: number; semanticScaleY: number; semanticAlphaMax: number; semanticGlowMult: number; entryDurationMult: number; emitterType: string; trail: string; iconGlyph?: string; iconStyle?: 'outline' | 'filled' | 'ghost'; iconPosition?: 'behind' | 'above' | 'beside' | 'replace'; iconScale?: number; ghostTrail?: boolean; ghostCount?: number; ghostSpacing?: number; ghostDirection?: string; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
 export interface CompiledPhraseGroup { lineIndex: number; groupIndex: number; anchorWordIdx: number; start: number; end: number; words: CompiledWord[]; staggerDelay: number; entryDuration: number; exitDuration: number; lingerDuration: number; behaviorIntensity: number; motionBudget?: PhraseMotionBudget; }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
@@ -749,6 +749,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         layoutX: pos.x,
         layoutY: pos.y,
         baseFontSize: groupFontSize,
+        layoutWidth: pos.width,
         wordStart: snapToBeat(wm.start, beats),
         entryStyle: semantic?.entry ?? motion.entry,
         exitStyle: semantic?.exit ?? motion.exit,
