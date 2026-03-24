@@ -510,23 +510,9 @@ export function LyricFitTab({
       setFitReadiness("ready");
       setFitProgress(100);
       setFitUnlocked(true);
-
-      if (user) {
-        void (async () => {
-          const { slugify } = await import("@/lib/slugify");
-          const s = slugify(initialLyric.title || "untitled");
-          const { data: d }: any = await supabase
-            .from("shareable_lyric_dances")
-            .select("id, artist_slug, song_slug")
-            .eq("user_id", user.id)
-            .eq("song_slug", s)
-            .maybeSingle();
-          if (d) {
-            setPipelineDanceId(d.id);
-            setPipelineDanceUrl(`/${d.artist_slug}/${d.song_slug}/lyric-dance`);
-          }
-        })();
-      }
+      // Dance lookup moved to a dedicated effect (danceIdLookupEffect) that
+      // waits for `user` to be available — avoids being skipped when auth
+      // is still loading at hydration time.
 
       import("@/engine/presetDerivation").then(({ deriveFrameState }) => {
         import("@/engine/presetDerivation").then(({ getTypography }) => {
