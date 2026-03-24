@@ -21,6 +21,7 @@ interface SectionInput {
 
 interface RequestBody {
   lyric_dance_id: string;
+  saved_lyric_id?: string;
   force?: boolean;
 }
 
@@ -274,7 +275,7 @@ serve(async (req) => {
         },
       );
     }
-    const { lyric_dance_id, force } = body;
+    const { lyric_dance_id, saved_lyric_id, force } = body;
 
     if (!lyric_dance_id) {
       return new Response(
@@ -458,7 +459,7 @@ serve(async (req) => {
     if (successCount > 0) {
       const { error: updateError } = await supabase
         .from("shareable_lyric_dances")
-        .update({ section_images: urls })
+        .update({ section_images: urls, updated_at: new Date().toISOString() })
         .eq("id", lyric_dance_id);
 
       if (updateError) {
@@ -466,6 +467,17 @@ serve(async (req) => {
       } else if (allComplete) {
         // Only trigger preview precompute if ALL images are ready
         await triggerPreviewPrecompute(sbUrl, sbKey, lyric_dance_id);
+      }
+      if (saved_lyric_id) {
+        const { error: savedError } = await supabase
+          .from("saved_lyrics")
+          .update({ section_images: urls, updated_at: new Date().toISOString() })
+          .eq("id", saved_lyric_id);
+        if (savedError) {
+          console.error(
+            `[section-images] saved_lyrics update error: ${savedError.message}`,
+          );
+        }
       }
     }
 

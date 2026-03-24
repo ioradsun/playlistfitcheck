@@ -9,6 +9,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
+import { persistQueue } from "@/lib/persistQueue";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import {
   useBeatGrid,
@@ -19,6 +20,13 @@ import type { LyricData, LyricLine } from "./LyricDisplay";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
+import type {
+  FitReadiness,
+  GenerationStatus,
+  PipelineStages,
+  PipelineStageStatus,
+  UseLyricPipelineReturn,
+} from "@/hooks/useLyricPipeline";
 import type { SceneContextResult } from "@/lib/sceneContexts";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
@@ -69,23 +77,7 @@ function extractPeaksFromBuffer(buf: AudioBuffer): WaveformData {
   return { peaks: peaks.map((p) => p / maxPeak), duration: buf.duration };
 }
 
-export type FitReadiness = "not_started" | "running" | "ready" | "error";
-export type GenerationJobStatus = "idle" | "running" | "done" | "error";
-
-export interface GenerationStatus {
-  beatGrid: GenerationJobStatus;
-  renderData: GenerationJobStatus;
-  cinematicDirection: GenerationJobStatus;
-  sectionImages: GenerationJobStatus;
-}
-
-export type PipelineStageStatus = "pending" | "running" | "done";
-export interface PipelineStages {
-  rhythm: PipelineStageStatus;
-  sections: PipelineStageStatus;
-  cinematic: PipelineStageStatus;
-  transcript: PipelineStageStatus;
-}
+export type { FitReadiness, PipelineStages, PipelineStageStatus, GenerationStatus };
 
 interface Props {
   initialLyric?: any;
@@ -156,10 +148,13 @@ export function LyricFitTab({
 
   const handleTitleChange = useCallback((newTitle: string) => {
     setLyricData((prev) => prev ? { ...prev, title: newTitle } : prev);
-    // Persist to DB if we have a saved project
     const id = savedIdRef.current;
     if (id) {
-      supabase.from("saved_lyrics").update({ title: newTitle, updated_at: new Date().toISOString() } as any).eq("id", id).then(() => {});
+      persistQueue.enqueue({
+        table: "saved_lyrics",
+        id,
+        payload: { title: newTitle },
+      });
     }
   }, []);
 
@@ -577,16 +572,12 @@ export function LyricFitTab({
         })
         .catch(() => {
           clearTimeout(audioTimeout);
-          console.warn(
-            "[Pipeline] Audio fetch failed or timed out — using dummy file",
-          );
-          const dummyFile = new File([], filename, { type: "audio/mpeg" });
-          setAudioFile(dummyFile);
+          console.warn("[Pipeline] Audio fetch failed or timed out");
+          setAudioFile(null);
           setHasRealAudio(false);
         });
     } else {
-      const dummyFile = new File([], filename, { type: "audio/mpeg" });
-      setAudioFile(dummyFile);
+      setAudioFile(null);
       setHasRealAudio(false);
     }
   }, [initialLyric]);
@@ -742,7 +733,11 @@ export function LyricFitTab({
         const { data: result, error } = await supabase.functions.invoke(
           "generate-section-images",
           {
-            body: { lyric_dance_id: resolvedDanceId, force: true },
+            body: {
+              lyric_dance_id: resolvedDanceId,
+              saved_lyric_id: savedIdRef.current ?? undefined,
+              force: true,
+            },
           },
         );
         if (error) throw error;
@@ -1334,7 +1329,11 @@ export function LyricFitTab({
 
             const { data: result, error } = await invokeWithTimeout(
               "generate-section-images",
-              { lyric_dance_id: resolvedDanceId, force: true },
+              {
+                lyric_dance_id: resolvedDanceId,
+                saved_lyric_id: savedIdRef.current ?? undefined,
+                force: true,
+              },
               90_000,
             );
             if (error) throw error;
@@ -1354,7 +1353,11 @@ export function LyricFitTab({
               try {
                 const { data: retryResult } = await invokeWithTimeout(
                   "generate-section-images",
-                  { lyric_dance_id: resolvedDanceId, force: true },
+                  {
+                    lyric_dance_id: resolvedDanceId,
+                    saved_lyric_id: savedIdRef.current ?? undefined,
+                    force: true,
+                  },
                   90_000,
                 );
                 const retryUrls: (string | null)[] =
@@ -1669,6 +1672,13 @@ export function LyricFitTab({
   );
 
   const fitDisabled = !transcriptionDone;
+  const pipelineCompat = useMemo(
+    () =>
+      ({
+        retryImages: async () => retryGeneration(),
+      }) as unknown as UseLyricPipelineReturn,
+    [retryGeneration],
+  );
 
   const sceneInputNode = !lyricData ? (
     <div className="space-y-1.5">
@@ -1793,6 +1803,7 @@ export function LyricFitTab({
           }}
         >
           <FitTab
+            pipeline={pipelineCompat}
             lyricData={lyricData}
             audioFile={audioFile}
             hasRealAudio={hasRealAudio}

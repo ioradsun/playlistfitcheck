@@ -54,6 +54,8 @@ import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useVoteGate } from "@/hooks/useVoteGate";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import { preloadImage } from "@/lib/imagePreloadCache";
+import { persistQueue } from "@/lib/persistQueue";
+import type { UseLyricPipelineReturn } from "@/hooks/useLyricPipeline";
 
 const PEAK_SAMPLES = 200;
 
@@ -75,6 +77,7 @@ function extractPeaks(buffer: AudioBuffer, samples: number): number[] {
 }
 
 interface Props {
+  pipeline?: UseLyricPipelineReturn;
   lyricData: LyricData;
   audioFile: File;
   parentWaveform?: WaveformData | null;
@@ -110,6 +113,7 @@ interface Props {
 }
 
 export function FitTab({
+  pipeline,
   lyricData,
   audioFile,
   parentWaveform,
@@ -1233,6 +1237,10 @@ export function FitTab({
   };
 
   const handleGenerateImages = useCallback(async () => {
+    if (pipeline) {
+      await pipeline.retryImages();
+      return;
+    }
     const sections =
       cinematicDirection?.sections && Array.isArray(cinematicDirection.sections)
         ? cinematicDirection.sections
@@ -1259,7 +1267,11 @@ export function FitTab({
       const { data: result, error } = await supabase.functions.invoke(
         "generate-section-images",
         {
-          body: { lyric_dance_id: publishedDanceId, force: true },
+          body: {
+            lyric_dance_id: publishedDanceId,
+            saved_lyric_id: savedId ?? undefined,
+            force: true,
+          },
         },
       );
       if (error) throw error;
@@ -1284,10 +1296,11 @@ export function FitTab({
       onImageGenerationStatusChange?.(allComplete ? "done" : "error");
 
       if (savedId && urls.length > 0) {
-        void supabase
-          .from("saved_lyrics")
-          .update({ section_images: urls as any })
-          .eq("id", savedId);
+        persistQueue.enqueue({
+          table: "saved_lyrics",
+          id: savedId,
+          payload: { section_images: urls as any },
+        });
       }
 
       const validUrls = urls.filter(
@@ -1297,27 +1310,30 @@ export function FitTab({
         try {
           const palettes = await computeAutoPalettesFromUrls(validUrls);
           if (palettes && palettes.length > 0) {
-            void supabase
-              .from("shareable_lyric_dances" as any)
-              .update({
+            persistQueue.enqueue({
+              table: "shareable_lyric_dances",
+              id: publishedDanceId,
+              payload: {
                 section_images: urls as any,
                 auto_palettes: palettes as any,
                 palette: palettes[0] ?? undefined,
-              })
-              .eq("id", publishedDanceId);
+              },
+            });
           }
         } catch (paletteErr) {
           console.error("[FitTab] Auto palette generation failed:", paletteErr);
-          void supabase
-            .from("shareable_lyric_dances" as any)
-            .update({ section_images: urls as any })
-            .eq("id", publishedDanceId);
+          persistQueue.enqueue({
+            table: "shareable_lyric_dances",
+            id: publishedDanceId,
+            payload: { section_images: urls as any },
+          });
         }
       } else {
-        void supabase
-          .from("shareable_lyric_dances" as any)
-          .update({ section_images: urls as any })
-          .eq("id", publishedDanceId);
+        persistQueue.enqueue({
+          table: "shareable_lyric_dances",
+          id: publishedDanceId,
+          payload: { section_images: urls as any },
+        });
       }
 
       toast.success(`Generated ${doneCount}/${sections.length} section images`);
@@ -1337,6 +1353,7 @@ export function FitTab({
     publishedDanceId,
     savedId,
     sectionImageUrls,
+    pipeline,
   ]);
 
   const handleRetryImages = useCallback(() => {
