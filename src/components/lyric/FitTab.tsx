@@ -1409,8 +1409,16 @@ export function FitTab({
               {user?.email === "sunpatel@gmail.com" && cinematicDirection && (
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(JSON.stringify(cinematicDirection, null, 2));
-                    toast.success("Cinematic direction copied to clipboard");
+                    const meta = cinematicDirection._meta;
+                    const debugInfo = {
+                      _meta: meta || "no meta available",
+                      cinematicDirection,
+                    };
+                    navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
+                    const model = meta?.scene?.model || meta?.words?.model || "unknown";
+                    const sceneSource = meta?.scene?.scenePromptSource || "?";
+                    const wordSource = meta?.words?.wordPromptSource || "?";
+                    toast.success(`Copied — model: ${model} | scene: ${sceneSource} | words: ${wordSource}`);
                   }}
                   className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border border-border/40 hover:border-primary/40 text-muted-foreground hover:text-primary rounded-lg px-3 py-2.5"
                 >
