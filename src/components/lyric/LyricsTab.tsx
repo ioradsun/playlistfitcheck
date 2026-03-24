@@ -18,8 +18,11 @@ import { LyricSkeleton } from "./LyricSkeleton";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { ReactNode } from "react";
 import { AuthNudge } from "@/components/ui/AuthNudge";
+import { persistQueue } from "@/lib/persistQueue";
 
 const MAX_RAW_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+const MAX_TRANSCRIBE_ATTEMPTS = 2;
+const TRANSCRIBE_RETRY_DELAY_MS = 3000;
 
 // ── Transcription fingerprint cache ──────────────────────────────────────────
 // Key: hash of file size + name + first 64KB of content
@@ -211,9 +214,7 @@ export function LyricsTab({
       try {
         // Check transcription cache first
         const fingerprint = await computeAudioFingerprint(file);
-        // DEV: transcript cache disabled for testing — always re-transcribe
-        // const cached = getCachedTranscript(fingerprint);
-        const cached = null as ReturnType<typeof getCachedTranscript>;
+        const cached = getCachedTranscript(fingerprint);
         if (cached && cached.lines?.length > 0) {
           // Cache hit — skip the edge function entirely
           const newLyricData: LyricData = {
@@ -235,16 +236,17 @@ export function LyricsTab({
             sessionAudio.set("lyric", projectId, file, { ttlMs: 20 * 60 * 1000 });
             onSavedId?.(projectId);
             onProjectSaved?.();
-            // Non-blocking DB persist
-            void supabase.from("saved_lyrics").upsert({
+            persistQueue.enqueue({
+              table: "saved_lyrics",
               id: projectId,
-              user_id: user?.id,
-              title: resolveProjectTitle(cached.title, file.name),
-              lines: cached.lines,
-              words: cached.words ?? null,
-              filename: file.name,
-              updated_at: new Date().toISOString(),
-            } as any);
+              payload: {
+                user_id: user?.id,
+                title: resolveProjectTitle(cached.title, file.name),
+                lines: cached.lines,
+                words: cached.words ?? null,
+                filename: file.name,
+              },
+            });
           } else {
             sessionAudio.set("lyric", "__unsaved__", file, { ttlMs: 5 * 60 * 1000 });
           }
@@ -273,52 +275,51 @@ export function LyricsTab({
         const transcribeAbort = new AbortController();
         transcribeTimeout = setTimeout(() => transcribeAbort.abort(), 120_000); // 2 min for large files
 
-        let response: Response;
-        if (storageAudioUrl) {
-          // Fast path: send URL, edge function fetches from same datacenter
-          
-          response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
-            {
-              method: "POST",
-              headers: {
-                apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                "Content-Type": "application/json",
+        let response: Response | null = null;
+        for (let attempt = 1; attempt <= MAX_TRANSCRIBE_ATTEMPTS; attempt++) {
+          if (storageAudioUrl) {
+            response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
+              {
+                method: "POST",
+                headers: {
+                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  audioUrl: storageAudioUrl,
+                  format: uploadFile.name.split(".").pop()?.toLowerCase() || "webm",
+                  analysisModel,
+                  transcriptionModel,
+                  ...(referenceLyrics?.trim() ? { referenceLyrics: referenceLyrics.trim() } : {}),
+                }),
+                signal: transcribeAbort.signal,
               },
-              body: JSON.stringify({
-                audioUrl: storageAudioUrl,
-                format: uploadFile.name.split(".").pop()?.toLowerCase() || "webm",
-                analysisModel,
-                transcriptionModel,
-                ...(referenceLyrics?.trim() ? { referenceLyrics: referenceLyrics.trim() } : {}),
-              }),
-              signal: transcribeAbort.signal,
-            },
-          );
-        } else {
-          // Fallback: multipart upload (anonymous users without storage)
-          
-          const formData = new FormData();
-          formData.append("audio", uploadFile, uploadFile.name);
-          formData.append("analysisModel", analysisModel);
-          formData.append("transcriptionModel", transcriptionModel);
-          if (referenceLyrics?.trim()) {
-            formData.append("referenceLyrics", referenceLyrics.trim());
+            );
+          } else {
+            const formData = new FormData();
+            formData.append("audio", uploadFile, uploadFile.name);
+            formData.append("analysisModel", analysisModel);
+            formData.append("transcriptionModel", transcriptionModel);
+            if (referenceLyrics?.trim()) formData.append("referenceLyrics", referenceLyrics.trim());
+            response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
+              {
+                method: "POST",
+                headers: {
+                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                },
+                body: formData,
+                signal: transcribeAbort.signal,
+              },
+            );
           }
-          response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
-            {
-              method: "POST",
-              headers: {
-                apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-              },
-              body: formData,
-              signal: transcribeAbort.signal,
-            },
-          );
+          if (response.ok || response.status < 500 || attempt === MAX_TRANSCRIBE_ATTEMPTS) break;
+          await new Promise((resolve) => setTimeout(resolve, TRANSCRIBE_RETRY_DELAY_MS));
         }
+        if (!response) throw new Error("Transcription response was empty");
 
 
         if (!response.ok) {
@@ -336,16 +337,16 @@ export function LyricsTab({
         if (user && projectId) {
           
           // Non-blocking — don't let DB persist block the UI
-          void supabase.from("saved_lyrics").upsert({
+          persistQueue.enqueue({
+            table: "saved_lyrics",
             id: projectId,
-            user_id: user.id,
-            title: resolveProjectTitle(data.title, file.name),
-            lines: data.lines,
-            words: data.words ?? null,
-            filename: file.name,
-            updated_at: new Date().toISOString(),
-          } as any).then(({ error }) => {
-            // post-transcription upsert failed
+            payload: {
+              user_id: user.id,
+              title: resolveProjectTitle(data.title, file.name),
+              lines: data.lines,
+              words: data.words ?? null,
+              filename: file.name,
+            },
           });
         }
 
@@ -386,6 +387,14 @@ export function LyricsTab({
         await quota.increment();
       } catch (e) {
         clearTimeout(transcribeTimeout);
+        if (projectId) {
+          await supabase.from("saved_lyrics").delete().eq("id", projectId);
+        }
+        setLyricData(null);
+        setLines([]);
+        setAudioFile(null);
+        setHasRealAudio(false);
+        setSavedId(null);
         const msg = e instanceof Error
           ? (e.name === "AbortError" ? "Transcription timed out — try a shorter file or try again" : e.message)
           : "Failed to transcribe lyrics";

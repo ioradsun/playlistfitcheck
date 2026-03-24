@@ -32,6 +32,28 @@ interface GeminiInsights {
   mood?: { value: string; confidence: number };
 }
 
+function isRetryableHttpError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /error\s5\d{2}/i.test(error.message);
+}
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 1,
+  delayMs = 2000,
+): Promise<T> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === retries || !isRetryableHttpError(error)) throw error;
+      console.warn(`[Pipeline] lyric-transcribe retry ${i + 1}/${retries}`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw new Error("Unreachable retry state");
+}
+
 // ── ElevenLabs Scribe: word-level granularity with diarization ───────────────
 async function runScribe(
   audioBytes: Uint8Array,
@@ -804,7 +826,9 @@ serve(async (req) => {
     let transcribePromise: Promise<{ words: WhisperWord[]; segments: Array<{ start: number; end: number; text: string }>; rawText: string; duration: number }>;
 
     if (useAssemblyAI) {
-      transcribePromise = runAssemblyAI(audioRawBytes!, ext, mimeType, ASSEMBLYAI_API_KEY!);
+      transcribePromise = withRetry(
+        () => runAssemblyAI(audioRawBytes!, ext, mimeType, ASSEMBLYAI_API_KEY!),
+      );
     } else if (useGeminiTranscription) {
       // Gemini needs base64 — encode only here
       if (!audioBase64 && audioRawBytes) {
@@ -815,10 +839,21 @@ serve(async (req) => {
         }
         audioBase64 = btoa(binary);
       }
-      transcribePromise = runGeminiTranscribe(audioBase64!, mimeType, LOVABLE_API_KEY, geminiTranscribeModel, editorMode ? referenceLyrics!.trim() : undefined);
+      transcribePromise = withRetry(
+        () =>
+          runGeminiTranscribe(
+            audioBase64!,
+            mimeType,
+            LOVABLE_API_KEY,
+            geminiTranscribeModel,
+            editorMode ? referenceLyrics!.trim() : undefined,
+          ),
+      );
     } else {
       // Scribe: raw bytes, no base64 needed
-      transcribePromise = runScribe(audioRawBytes!, ext, mimeType, ELEVENLABS_API_KEY!);
+      transcribePromise = withRetry(
+        () => runScribe(audioRawBytes!, ext, mimeType, ELEVENLABS_API_KEY!),
+      );
     }
 
     const [transcribeResult] = await Promise.allSettled([transcribePromise]);
