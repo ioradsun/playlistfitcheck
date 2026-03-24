@@ -371,6 +371,11 @@ You may add up to 5 additional short words if narratively critical (title words,
 `;
 }
 
+interface WordSegment {
+  startIdx: number;
+  endIdx: number;
+}
+
 interface ValidationResult {
   ok: boolean;
   errors: string[];
@@ -1497,19 +1502,22 @@ serve(async (req) => {
     const scenePrefix = buildScenePrefix(body.scene_context);
 
     if (body.mode === "scene") {
-      const userMessage = buildUserMessage(
-        title,
-        artist,
-        lines,
-        listenerScene,
-        body.audioSections,
-        undefined,
-        bpm,
-      );
+      // Build user message for scene mode inline
+      const sectionList = (body.audioSections || [])
+        .map((s: any, i: number) => `  Section ${i + 1}: "${s.label || `Section ${i + 1}`}" (${fmt(s.start)}–${fmt(s.end)})`)
+        .join("\n");
+      const sceneUserMessage = [
+        `Song: "${title}" by ${artist}`,
+        bpm ? `BPM: ${bpm}` : "",
+        listenerScene ? `Listener scene: ${listenerScene}` : "",
+        `\nLyrics:\n${lines.map((l) => l.text).join("\n")}`,
+        sectionList ? `\nAudio sections:\n${sectionList}` : "",
+      ].filter(Boolean).join("\n");
+
       const sceneResult = await callScene(
         apiKey,
         scenePrefix,
-        userMessage,
+        sceneUserMessage,
         body.audioSections?.length ?? 0,
         body,
         customPrompts.scenePrompt,
