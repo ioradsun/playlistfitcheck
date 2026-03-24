@@ -5349,7 +5349,7 @@ export class LyricDancePlayer {
       // ── Phrase-level entry/exit: default for all words ──
       // Solo hero phrases will override these per-word below.
       let phraseEntryState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: phraseAlpha, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isEntering = timeSinceActivation < config.entryDuration;
+      const isEntering = !isOnDeck && timeSinceActivation < config.entryDuration;
       if (isEntering) {
         const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
         phraseEntryState = computeMotionEntry(config.character, entryProgress, config.intensity) as typeof phraseEntryState;
@@ -5360,7 +5360,7 @@ export class LyricDancePlayer {
       }
 
       let phraseExitState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isExiting = phraseRemaining < config.exitDuration && phraseRemaining >= 0;
+      const isExiting = !isOnDeck && phraseRemaining < config.exitDuration && phraseRemaining >= 0;
       if (isExiting) {
         const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
         phraseExitState = computeMotionExit(config.character, exitProgress, config.intensity) as typeof phraseExitState;
