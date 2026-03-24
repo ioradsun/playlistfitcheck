@@ -20,12 +20,13 @@ import type { LyricData, LyricLine } from "./LyricDisplay";
 import { LyricFitToggle, type LyricFitView } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
-import type {
-  FitReadiness,
-  GenerationStatus,
-  PipelineStages,
-  PipelineStageStatus,
-  UseLyricPipelineReturn,
+import {
+  usePipelineScheduler,
+  type FitReadiness,
+  type GenerationStatus,
+  type PipelineStages,
+  type PipelineStageStatus,
+  type UseLyricPipelineReturn,
 } from "@/hooks/useLyricPipeline";
 import type { SceneContextResult } from "@/lib/sceneContexts";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -127,16 +128,6 @@ export function LyricFitTab({
     null,
   );
   const [resolvingScene, setResolvingScene] = useState(false);
-  const [fitUnlocked, setFitUnlocked] = useState(() => {
-    if (!initialLyric) return false;
-    const rd = (initialLyric as any).render_data;
-    return !!(
-      (initialLyric as any).beat_grid &&
-      ((initialLyric as any).cinematic_direction ||
-        rd?.cinematicDirection ||
-        rd?.cinematic_direction)
-    );
-  });
   const [lyricData, setLyricData] = useState<LyricData | null>(initLyricData);
   const [audioFile, setAudioFile] = useState<File | null>(() => {
     if (!initialLyric?.id) return null;
@@ -211,64 +202,6 @@ export function LyricFitTab({
   const cinematicDirectionRef = useRef(cinematicDirection);
   cinematicDirectionRef.current = cinematicDirection;
   // bgImageUrl and frameState removed — V3 derives from cinematicDirection
-
-  const [fitReadiness, setFitReadiness] = useState<FitReadiness>(() => {
-    if (!initialLyric) return "not_started";
-    const rd = (initialLyric as any).render_data;
-    const hasBeatGrid = !!(initialLyric as any).beat_grid;
-    const hasCinematic = !!(
-      (initialLyric as any).cinematic_direction ||
-      rd?.cinematicDirection ||
-      rd?.cinematic_direction
-    );
-    return hasBeatGrid && hasCinematic ? "ready" : "not_started";
-  });
-  const [fitProgress, setFitProgress] = useState(() => {
-    if (!initialLyric) return 0;
-    const rd = (initialLyric as any).render_data;
-    const hasBeatGrid = !!(initialLyric as any).beat_grid;
-    const hasCinematic = !!(
-      (initialLyric as any).cinematic_direction ||
-      rd?.cinematicDirection ||
-      rd?.cinematic_direction
-    );
-    return hasBeatGrid && hasCinematic ? 100 : 0;
-  });
-  const [fitStageLabel, setFitStageLabel] = useState("");
-  const [pipelineStages, setPipelineStages] = useState<PipelineStages>({
-    rhythm: "pending",
-    sections: "pending",
-    cinematic: "pending",
-    transcript: "pending",
-  });
-  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>(
-    () => {
-      if (!initialLyric) {
-        return {
-          beatGrid: "idle",
-          renderData: "done",
-          cinematicDirection: "idle",
-          sectionImages: "idle",
-        };
-      }
-      const rd = (initialLyric as any).render_data;
-      const hasBeatGrid = !!(initialLyric as any).beat_grid;
-      const hasCinematic = !!(
-        (initialLyric as any).cinematic_direction ||
-        rd?.cinematicDirection ||
-        rd?.cinematic_direction
-      );
-      const hasImages =
-        Array.isArray((initialLyric as any).section_images) &&
-        (initialLyric as any).section_images.some(Boolean);
-      return {
-        beatGrid: hasBeatGrid ? "done" : "idle",
-        renderData: "done",
-        cinematicDirection: hasCinematic ? "done" : "idle",
-        sectionImages: hasImages ? "done" : "idle",
-      };
-    },
-  );
 
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [waveformData, setWaveformData] = useState<WaveformData | null>(null);
@@ -822,42 +755,6 @@ export function LyricFitTab({
     });
   }, [sectionImageUrls]);
 
-  const startBeatAnalysis = useCallback(
-    async (targetAudioFile: File) => {
-      if (!targetAudioFile || targetAudioFile.size === 0) return;
-
-      if (!audioBuffer) {
-        try {
-          const ctx = new AudioContext();
-          const ab = await targetAudioFile.arrayBuffer();
-          const buf = await ctx.decodeAudioData(ab);
-
-          setAudioBuffer(buf);
-          setAudioBufferReady(true);
-          setWaveformData(extractPeaksFromBuffer(buf));
-          ctx.close();
-        } catch {}
-      }
-
-      if (beatGrid) {
-        setBeatGridDone(true);
-        setGenerationStatus((prev) =>
-          prev.beatGrid === "done" ? prev : { ...prev, beatGrid: "done" },
-        );
-        return;
-      }
-      if (
-        generationStatus.beatGrid === "running" ||
-        generationStatus.beatGrid === "done"
-      )
-        return;
-
-      setGenerationStatus((prev) => ({ ...prev, beatGrid: "running" }));
-      setPipelineStages((prev) => ({ ...prev, rhythm: "running" }));
-    },
-    [beatGrid, generationStatus.beatGrid, audioBuffer],
-  );
-
   // ── Hook Detection (parallel, non-blocking) ──
   const hookDetectionRunRef = useRef(false);
   const startHookDetection = useCallback(async () => {
@@ -1408,38 +1305,87 @@ export function LyricFitTab({
     ],
   );
 
-  const pipelineTriggeredRef = useRef(
-    !!(
-      initialLyric &&
-      (initialLyric as any).beat_grid &&
-      ((initialLyric as any).cinematic_direction ||
-        (initialLyric as any).render_data?.cinematicDirection ||
-        (initialLyric as any).render_data?.cinematic_direction)
-    ),
-  );
-  const [pipelineRetryCount, setPipelineRetryCount] = useState(0);
-  const cinematicTriggeredRef = useRef(
-    !!(
-      initialLyric &&
-      ((initialLyric as any).cinematic_direction ||
-        (initialLyric as any).render_data?.cinematicDirection ||
-        (initialLyric as any).render_data?.cinematic_direction)
-    ),
-  );
-  useEffect(() => {
-    if (!transcriptionDone || !beatGridDone || !lines?.length) return;
-    if (cinematicTriggeredRef.current) return;
-    cinematicTriggeredRef.current = true;
-    const force = pipelineRetryCount > 0;
-
-    void startCinematicDirection(lines, force);
-  }, [
+  const scheduler = usePipelineScheduler({
+    initialLyric,
     transcriptionDone,
     beatGridDone,
     lines,
-    pipelineRetryCount,
+    words,
+    renderData,
+    beatGrid,
+    cinematicDirection,
+    audioFile,
+    savedIdRef,
+    hookDetectionRunRef,
+    imageRetriggerRef,
+    setRenderData,
+    setCinematicDirection,
+    setSectionImageUrls,
+    setSectionImageProgress,
+    setSectionImageError,
+    setPipelineDanceId,
+    setPipelineDanceUrl,
     startCinematicDirection,
-  ]);
+    startHookDetection,
+  });
+
+  const {
+    generationStatus,
+    setGenerationStatus,
+    fitReadiness,
+    setFitReadiness,
+    fitProgress,
+    setFitProgress,
+    fitStageLabel,
+    setFitStageLabel,
+    pipelineStages,
+    setPipelineStages,
+    fitUnlocked,
+    setFitUnlocked,
+    pipelineRetryCount,
+    pipelineTriggeredRef,
+    cinematicTriggeredRef,
+    retryGeneration,
+    handleImageGenerationStatusChange,
+    handleSectionImagesGenerated,
+    handleSectionImagesError,
+  } = scheduler;
+
+  const startBeatAnalysis = useCallback(
+    async (targetAudioFile: File) => {
+      if (!targetAudioFile || targetAudioFile.size === 0) return;
+
+      if (!audioBuffer) {
+        try {
+          const ctx = new AudioContext();
+          const ab = await targetAudioFile.arrayBuffer();
+          const buf = await ctx.decodeAudioData(ab);
+
+          setAudioBuffer(buf);
+          setAudioBufferReady(true);
+          setWaveformData(extractPeaksFromBuffer(buf));
+          ctx.close();
+        } catch {}
+      }
+
+      if (beatGrid) {
+        setBeatGridDone(true);
+        setGenerationStatus((prev) =>
+          prev.beatGrid === "done" ? prev : { ...prev, beatGrid: "done" },
+        );
+        return;
+      }
+      if (
+        generationStatus.beatGrid === "running" ||
+        generationStatus.beatGrid === "done"
+      )
+        return;
+
+      setGenerationStatus((prev) => ({ ...prev, beatGrid: "running" }));
+      setPipelineStages((prev) => ({ ...prev, rhythm: "running" }));
+    },
+    [beatGrid, generationStatus.beatGrid, audioBuffer, setGenerationStatus, setPipelineStages],
+  );
 
   // ── Fork 1: Beat grid starts when audio file is submitted (parallel with transcription) ──
   // Called from onAudioSubmitted callback, not from an effect waiting on lines.
@@ -1451,193 +1397,6 @@ export function LyricFitTab({
     },
     [startBeatAnalysis],
   );
-
-  // ── Fork 2: Initialize renderData when lyrics arrive ──
-  useEffect(() => {
-    if (!lines?.length) return;
-    if (renderData && beatGrid && cinematicDirectionRef.current) {
-      pipelineTriggeredRef.current = true;
-      setGenerationStatus({
-        beatGrid: "done",
-        renderData: "done",
-        cinematicDirection: "done",
-        sectionImages: "done",
-      });
-      return;
-    }
-    if (!pipelineTriggeredRef.current) {
-      pipelineTriggeredRef.current = true;
-
-      if (!renderData) {
-        const stub = {
-          source: "presetDerivation",
-          generatedAt: new Date().toISOString(),
-        };
-        setRenderData(stub);
-        if (savedIdRef.current) {
-          persistQueue.enqueue({
-            table: "saved_lyrics",
-            id: savedIdRef.current,
-            payload: { render_data: stub },
-          });
-        }
-      }
-    }
-  }, [lines, pipelineRetryCount, renderData, beatGrid]);
-
-  // ── Fork 3: Hook detection starts when transcription + beat grid ready ──
-  useEffect(() => {
-    if (!transcriptionDone || !beatGridDone) return;
-    if (!words?.length || !lines?.length) return;
-
-    void startHookDetection();
-  }, [transcriptionDone, beatGridDone, words, lines, startHookDetection]);
-
-  useEffect(() => {
-    // Core pipeline jobs — these must complete for Fit tab to be usable
-    const coreStatuses = [
-      generationStatus.beatGrid,
-      generationStatus.renderData,
-      generationStatus.cinematicDirection,
-    ];
-    const allCoreDone = coreStatuses.every((v) => v === "done");
-    // Images are non-blocking — only core jobs (beat/render/cinematic) gate readiness
-    const hasCoreRunning = coreStatuses.includes("running");
-    const hasError = coreStatuses.includes("error");
-
-    if (allCoreDone && !hasCoreRunning) {
-      setFitReadiness("ready");
-      setFitProgress(100);
-      setFitStageLabel("Ready");
-      setPipelineStages((prev) => ({ ...prev, transcript: "done" }));
-      return;
-    }
-    if (hasCoreRunning) {
-      setFitReadiness("running");
-      if (
-        generationStatus.renderData === "running" ||
-        generationStatus.beatGrid === "running"
-      ) {
-        setFitStageLabel("Analyzing song...");
-      } else if (generationStatus.cinematicDirection === "running") {
-        setFitStageLabel("Creating cinematic direction...");
-      } else if (generationStatus.sectionImages === "running") {
-        setFitStageLabel("Generating artwork...");
-      } else {
-        setFitStageLabel("Building your Fit…");
-      }
-      setPipelineStages((prev) => ({ ...prev, transcript: "running" }));
-      return;
-    }
-    if (hasError) {
-      setFitReadiness("error");
-      setFitStageLabel("Background generation failed");
-      setPipelineStages((prev) => ({ ...prev, transcript: "pending" }));
-      return;
-    }
-    const allStatuses = Object.values(generationStatus);
-    if (allStatuses.some((v) => v === "done") && !allCoreDone) {
-      setFitReadiness("running");
-      setFitStageLabel("Finalizing background jobs…");
-      return;
-    }
-
-    setFitReadiness("not_started");
-    setFitProgress(0);
-    setFitStageLabel("");
-    setPipelineStages({
-      rhythm: "pending",
-      sections: "pending",
-      cinematic: "pending",
-      transcript: "pending",
-    });
-  }, [generationStatus]);
-
-  const retryGeneration = useCallback(() => {
-    if (!audioFile || !lines.length) return;
-
-    // Keep: beatGrid (same audio = same BPM/beats), audioBuffer, transcriptionDone, lines, words
-    // Clear cinematicDirection, renderData, images
-    setRenderData(null);
-    setCinematicDirection(null);
-    setSectionImageUrls([]);
-    setSectionImageProgress(null);
-    setSectionImageError(null);
-    setGenerationStatus((prev) => ({
-      beatGrid: prev.beatGrid === "done" ? "done" : "idle",
-      renderData: "done",
-      cinematicDirection: "idle",
-      sectionImages: "idle",
-    }));
-    pipelineTriggeredRef.current = false;
-    cinematicTriggeredRef.current = false;
-    hookDetectionRunRef.current = false;
-    imageRetriggerRef.current = false;
-
-    if (savedIdRef.current) {
-      persistQueue.enqueue({
-        table: "saved_lyrics",
-        id: savedIdRef.current!,
-        payload: {
-          render_data: { cinematicDirection: null },
-          cinematic_direction: null,
-        },
-      });
-      persistQueue.enqueue({
-        table: "saved_lyrics",
-        id: savedIdRef.current!,
-        payload: { section_images: null },
-      });
-    }
-
-    // Bump retry counter → re-triggers Fork 2 + section pipeline + cinematic effects
-    setTimeout(() => {
-      setPipelineRetryCount((c) => c + 1);
-    }, 100);
-  }, [audioFile, lines]);
-
-  const handleImageGenerationStatusChange = useCallback(
-    (status: "idle" | "running" | "done" | "error") => {
-      setGenerationStatus((prev) => ({ ...prev, sectionImages: status }));
-      if (status === "running") setSectionImageError(null);
-      if (status === "idle") {
-        setSectionImageUrls([]);
-        setSectionImageProgress(null);
-        setSectionImageError(null);
-      }
-    },
-    [],
-  );
-
-  const handleSectionImagesGenerated = useCallback(
-    ({
-      urls,
-      total,
-      error,
-    }: {
-      urls: (string | null)[];
-      total: number;
-      error?: string | null;
-    }) => {
-      setSectionImageUrls(urls);
-      setSectionImageProgress({
-        done: urls.filter(Boolean).length,
-        total,
-      });
-      setSectionImageError(error ?? null);
-    },
-    [],
-  );
-
-  const handleSectionImagesError = useCallback((error: string | null) => {
-    setSectionImageError(error);
-  }, []);
-
-  useEffect(() => {
-    if (fitUnlocked || fitReadiness === "ready") {
-      setFitUnlocked(true);
-    }
-  }, [fitUnlocked, fitReadiness]);
 
   const handleViewChange = useCallback(
     (nextView: LyricFitView) => {
