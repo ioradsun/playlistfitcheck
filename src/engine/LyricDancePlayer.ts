@@ -5406,7 +5406,7 @@ export class LyricDancePlayer {
 
         // How far through the exit was this phrase when it left active?
         // timeSinceDone = time since group.end. exitDur was the window.
-        const exitDur = group.exitDuration ?? config.exitDuration ?? 0.3;
+        const exitDur = group.exitDuration ?? this._activeMoodConfig.exitDuration ?? 0.3;
 
         if (timeSinceDone < exitDur) {
           // Exit still running — continue spatial ease
