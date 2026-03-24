@@ -106,30 +106,6 @@ export interface StoryboardEntry {
 export interface WordDirective {
   word: string;
   emphasisLevel: number;
-  // v2 fields
-  /** @deprecated Phase 0 — engine derives entry from emphasisLevel */
-  entry?: string | null;
-  /** @deprecated Phase 0 — engine derives behavior from beat sync */
-  behavior?: string | null;
-  /** @deprecated Phase 0 — engine derives exit from emphasisLevel */
-  exit?: string | null;
-  /** @deprecated Phase 0 — removed, only elementalClass used */
-  trail?: string | null;
-  /** @deprecated Phase 0 — removed */
-  ghostTrail?: boolean;
-  /** @deprecated Phase 0 — removed */
-  ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial' | null;
-  /** @deprecated Phase 0 — removed */
-  letterSequence?: boolean;
-  /** @deprecated Phase 0 — removed, elementalClass covers visible effects */
-  visualMetaphor?: string | null;
-  /** @deprecated Phase 0 — replaced by isolation flag */
-  heroPresentation?: 'inline-scale' | 'delayed-reveal' | 'isolation' | 'vertical-lift' | 'vertical-drop' | 'tracking-expand' | 'dim-surroundings' | null;
-  // v1 legacy fields
-  kineticClass?:
-    | 'RUNNING' | 'FALLING' | 'SPINNING' | 'FLOATING' | 'SHAKING' | 'RISING'
-    | 'BREAKING' | 'HIDING' | 'NEGATION' | 'CRYING' | 'SCREAMING' | 'WHISPERING'
-    | 'IMPACT' | 'TENDER' | 'STILL' | null;
   elementalClass?:
     | 'FIRE' | 'WATER' | 'FROST' | 'SMOKE' | 'ELECTRIC'
     | 'ICE' | 'RAIN' | 'NEON' | null; // ICE/RAIN/NEON kept for legacy compat

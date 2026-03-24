@@ -34,15 +34,10 @@ import { drawElementalWord } from "@/engine/ElementalEffects";
 import { getEffectTier, canShowElemental, canShowHeroGlow, getParticleDensity, getGlowCap } from "@/engine/timeTiers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
-  isExactHeroTokenMatch,
   normalizeToken,
-  resolveCinematicState,
-  type ResolvedLineSettings,
-  type ResolvedWordSettings,
 } from "@/engine/cinematicResolver";
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
-import { computeTimingBudgets, type GroupTimingBudget, type WordTimingBudget } from "@/engine/EffectBudgeter";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
@@ -549,14 +544,7 @@ type ChunkState = {
 type ResolvedPlayerState = {
   chapters: any[];
   wordDirectivesMap: Record<string, any>;
-  lineSettings: Record<number, ResolvedLineSettings>;
-  wordSettings: Record<string, ResolvedWordSettings>;
-  particleConfig: {
-    texture: string;
-    system: string;
-    density: number;
-    speed: number;
-  };
+  particleConfig: { texture: string; system: string; density: number; speed: number };
 };
 
 type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
@@ -575,23 +563,15 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     skewX?: number;
     blur?: number;
     rotation?: number;
-    ghostTrail?: boolean;
-    ghostCount?: number;
-    ghostSpacing?: number;
-    ghostDirection?: 'up' | 'down' | 'left' | 'right' | 'radial';
-    heroTrackingExpand?: boolean;
     frozen?: boolean;
     fontSize?: number;
     fontWeight?: number;
     fontFamily?: string;
     isAnchor?: boolean;
     color?: string;
-    entryStyle?: string;
-    exitStyle?: string;
     emphasisLevel?: number;
     entryProgress?: number;
     exitProgress?: number;
-    behavior?: string;
     letterIndex?: number;
     letterTotal?: number;
     letterDelay?: number;
@@ -600,11 +580,6 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     isHeroWord?: boolean;
     wordDuration?: number;
     visible: boolean;
-    entryOffsetY?: number;
-    entryOffsetX?: number;
-    entryScale?: number;
-    exitOffsetY?: number;
-    exitScale?: number;
   }>;
 };
 
@@ -1331,8 +1306,6 @@ export class LyricDancePlayer {
   public resolvedState: ResolvedPlayerState = {
     chapters: [],
     wordDirectivesMap: {},
-    lineSettings: {},
-    wordSettings: {},
     particleConfig: { texture: 'dust', system: 'dust', density: 0.8, speed: 0.5 },
   };
   
@@ -1352,17 +1325,6 @@ export class LyricDancePlayer {
   private _lastFont = '';
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
-  private _collisionCellSize = 96;
-  private _collisionCols = 0;
-  private _collisionRows = 0;
-  private _collisionCellHeads = new Int32Array(0);
-  private _collisionCellStamp = new Uint32Array(0);
-  private _collisionNext = new Int32Array(0);
-  private _collisionCellX = new Int32Array(0);
-  private _collisionCellY = new Int32Array(0);
-  private _collisionStamp = 1;
-  private _pairsTestedLast = 0;
-  private _pairsCollidingLast = 0;
 
   // ═══ Compiled Scene (replaces timeline) ═══
   private compiledScene: CompiledScene | null = null;
@@ -1374,10 +1336,6 @@ export class LyricDancePlayer {
   private _lastSubsystemResponse: SubsystemResponse | null = null;
   private _activeGroupCursor = 0;
   private _activeGroupCursorTime = -1;
-
-  // ═══ EffectBudgeter — compile-time timing guarantees ═══
-  private timingBudgets: GroupTimingBudget[] = [];
-  private _wordBudgetMap: Map<string, WordTimingBudget> = new Map();
 
   // ═══ Instance-level bake cache (no globals) ═══
   private _bakeLock = false;
@@ -1535,8 +1493,6 @@ export class LyricDancePlayer {
   private activeSectionIndex = -1;
   private _activeMoodConfig: MoodMotionConfig = DEFAULT_MOOD_CONFIG;
   private _moodTransition: MoodTransition | null = null;
-  private _spectacleBudget = 1.0;
-  private _lastSpectacleMs = 0;
 
   // ═══ Pre-computed hero word schedule for camera lookahead ═══
   private _heroSchedule: Array<{ startSec: number; endSec: number; emphasis: number; word: string }> = [];
@@ -1840,13 +1796,6 @@ export class LyricDancePlayer {
           this.cameraRig.setSectionMods(compiled.sectionMods);
         }
 
-        // ═══ V2: Compute timing budgets ═══
-        if (compiled.phraseGroups?.length > 0 && this.conductor) {
-          this.timingBudgets = computeTimingBudgets(compiled.phraseGroups as any, this.conductor);
-          this._buildWordBudgetMap();
-          
-        }
-
         // Build chunk cache from compiled scene
         this._buildChunkCacheFromScene(compiled);
 
@@ -1915,14 +1864,6 @@ export class LyricDancePlayer {
     this.ctx.fillRect(0, 0, this.width, this.height);
     this.perfMarks.tFirstFrameDrawn = this.perfMarks.tFirstFrameDrawn ?? performance.now();
     this.markFirstPaintOnce();
-  }
-
-  setCollisionGridCellSize(nextSize: number): void {
-    if (!Number.isFinite(nextSize)) return;
-    this._collisionCellSize = Math.max(32, Math.min(512, Math.round(nextSize)));
-    if (this.width < 250) {
-      this._collisionCellSize = Math.min(this._collisionCellSize, 48);
-    }
   }
 
   getBootMetrics(): {
@@ -2474,7 +2415,6 @@ export class LyricDancePlayer {
     this._textMetricsCache.clear();
     // ═══ V2: Recompute timing budgets with conductor ═══
     if (this.compiledScene?.phraseGroups?.length > 0 && this.conductor) {
-      this.timingBudgets = computeTimingBudgets(this.compiledScene.phraseGroups as any, this.conductor);
       this._buildWordBudgetMap();
     }
     this.buildBgCache();
@@ -2544,7 +2484,6 @@ export class LyricDancePlayer {
     this._buildChunkCacheFromScene(this.compiledScene);
     this._textMetricsCache.clear();
     if (this.compiledScene?.phraseGroups?.length > 0 && this.conductor) {
-      this.timingBudgets = computeTimingBudgets(this.compiledScene.phraseGroups as any, this.conductor);
       this._buildWordBudgetMap();
     }
     this._updateViewportScale();
@@ -2734,15 +2673,6 @@ export class LyricDancePlayer {
     }
   }
 
-  /** Build O(1) lookup from wordId → WordTimingBudget for evaluateFrame. */
-  private _buildWordBudgetMap(): void {
-    this._wordBudgetMap.clear();
-    for (const group of this.timingBudgets) {
-      for (const wb of group.words) {
-        this._wordBudgetMap.set(wb.wordId, wb);
-      }
-    }
-  }
 
   private stopHealthMonitor(): void {
     if (this.healthCheckInterval) {
@@ -3674,7 +3604,7 @@ export class LyricDancePlayer {
       const centerX = rawDrawX;
       const centerY = rawDrawY;
 
-      const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : ((chunk.entryScale ?? 1) * (chunk.exitScale ?? 1));
+      const baseScale = Number.isFinite(chunk.scale) ? (chunk.scale as number) : 1;
       const sxRaw = Number.isFinite(chunk.scaleX) ? (chunk.scaleX as number) : baseScale;
       const syRaw = Number.isFinite(chunk.scaleY) ? (chunk.scaleY as number) : baseScale;
       const sx = Number.isFinite(sxRaw) ? sxRaw : 1;
@@ -4038,23 +3968,9 @@ export class LyricDancePlayer {
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'top';
     this.ctx.fillText(`fps(avg): ${this.frameBudget.fpsAvg.toFixed(1)}  dt(avg): ${this.frameBudget.dtAvgMs.toFixed(2)}ms`, x + 8, y + 8);
-    this.ctx.fillText(`entities: ${this._sortBuffer.length}  pairs: ${this._pairsTestedLast}  hits: ${this._pairsCollidingLast}`, x + 8, y + 26);
+    this.ctx.fillText(`entities: ${this._sortBuffer.length}  pairs: 0  hits: 0`, x + 8, y + 26);
     this.ctx.fillText(`drawCalls: ${this.debugState.drawCalls}  qualityTier: ${this._qualityTier}`, x + 8, y + 44);
     this.ctx.restore();
-  }
-
-  private ensureCollisionBuffers(entityCount: number, cellCount: number): void {
-    if (this._collisionNext.length < entityCount) {
-      const nextSize = Math.max(entityCount, this._collisionNext.length * 2, 64);
-      this._collisionNext = new Int32Array(nextSize);
-      this._collisionCellX = new Int32Array(nextSize);
-      this._collisionCellY = new Int32Array(nextSize);
-    }
-    if (this._collisionCellHeads.length < cellCount) {
-      const headSize = Math.max(cellCount, this._collisionCellHeads.length * 2, 128);
-      this._collisionCellHeads = new Int32Array(headSize);
-      this._collisionCellStamp = new Uint32Array(headSize);
-    }
   }
 
   private drawWatermark(): void {
@@ -4530,7 +4446,6 @@ export class LyricDancePlayer {
     const chapters = this.toLegacyChapters(direction);
     const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives, payload.words as any);
     const durationSec = Math.max(0.01, (payload.songEnd ?? this.audio.duration ?? 1) - (payload.songStart ?? 0));
-    const resolved = resolveCinematicState(direction, payload.lines as any[], durationSec);
     const sectionIndex = Math.max(0, Math.min(chapters.length - 1, this.resolveSectionIndex(chapters, this.audio.currentTime, this.audio.duration || 1)));
     const currentSection = chapters[sectionIndex];
     this.cameraRig.setSectionFromMood(
@@ -4544,8 +4459,6 @@ export class LyricDancePlayer {
     this.resolvedState = {
       chapters,
       wordDirectivesMap,
-      lineSettings: resolved.lineSettings,
-      wordSettings: resolved.wordSettings,
       particleConfig: {
         texture,
         system: texture,
@@ -5474,7 +5387,6 @@ export class LyricDancePlayer {
 
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
-        const resolvedWord = this.resolvedState.wordSettings[word.clean] ?? null;
         const isAnchor = wi === group.anchorWordIdx;
 
         // ── Word timing: is this word currently being spoken? ──
@@ -5740,12 +5652,9 @@ export class LyricDancePlayer {
         }
 
         chunk.glow = Math.min(wordGlow, effectiveGlowCap / 20);
-        chunk.entryStyle = config.character as any;
-        chunk.exitStyle = config.character as any;
         chunk.emphasisLevel = emp;
         chunk.entryProgress = isEntering ? Math.max(0, Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration))) : 1;
         chunk.exitProgress = isExiting ? Math.max(0, Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)))) : 0;
-        chunk.behavior = 'none' as any;
         chunk.skewX = (
           ((phraseEntryState.skewX ?? 0) + (phraseExitState.skewX ?? 0)) * ibf
           + ((wordEntryBlend.skewX ?? 0) + (wordExitBlend.skewX ?? 0)) * bf
@@ -5758,11 +5667,6 @@ export class LyricDancePlayer {
           ((phraseEntryState.rotation ?? 0) + (phraseExitState.rotation ?? 0)) * ibf
           + ((wordEntryBlend.rotation ?? 0) + (wordExitBlend.rotation ?? 0)) * bf
         ) * motionCap;
-        chunk.ghostTrail = false;
-        chunk.ghostCount = 0;
-        chunk.ghostSpacing = 0;
-        chunk.ghostDirection = undefined;
-        chunk.heroTrackingExpand = false;
         chunk.isHeroWord = isHeroWord;
         chunk.wordDuration = word.wordDuration ?? 0;
         chunk.isSoloHero = isSoloHero;
@@ -5771,11 +5675,6 @@ export class LyricDancePlayer {
         chunk.letterDelay = word.letterDelay ?? 0;
         chunk.isLetterChunk = word.isLetterChunk;
         chunk.frozen = false;
-        chunk.entryOffsetY = 0;
-        chunk.entryOffsetX = 0;
-        chunk.entryScale = 1;
-        chunk.exitOffsetY = 0;
-        chunk.exitScale = 1;
         ci++;
       }
     }
@@ -5804,142 +5703,6 @@ export class LyricDancePlayer {
     frame.particles = [];
     return frame;
   }
-
-  private solveConstraints(
-    bounds: ChunkBounds[],
-    wallLeft: number,
-    wallRight: number,
-    wallTop: number,
-    wallBottom: number,
-  ): void {
-    const isCompact = (wallRight - wallLeft) < 250;
-    const MAX_ITERS = isCompact ? 8 : 4;
-    this._pairsTestedLast = 0;
-    this._pairsCollidingLast = 0;
-    const cellSize = this._collisionCellSize;
-    const cols = Math.max(1, Math.ceil((wallRight - wallLeft) / cellSize));
-    const rows = Math.max(1, Math.ceil((wallBottom - wallTop) / cellSize));
-    this._collisionCols = cols;
-    this._collisionRows = rows;
-    const cellCount = cols * rows;
-    this.ensureCollisionBuffers(bounds.length, cellCount);
-
-    for (let iter = 0; iter < MAX_ITERS; iter += 1) {
-      let hadCollision = false;
-      let hadWallProjection = false;
-      this._collisionStamp = (this._collisionStamp + 1) >>> 0;
-      if (this._collisionStamp === 0) {
-        this._collisionCellStamp.fill(0);
-        this._collisionStamp = 1;
-      }
-      const stamp = this._collisionStamp;
-
-      for (let i = 0; i < bounds.length; i += 1) {
-        const b = bounds[i];
-        const minX = wallLeft + b.halfW;
-        const maxX = wallRight - b.halfW;
-        const minY = wallTop + b.halfH;
-        const maxY = wallBottom - b.halfH;
-        const nextX = Math.max(minX, Math.min(maxX, b.cx));
-        const nextY = Math.max(minY, Math.min(maxY, b.cy));
-        if (nextX !== b.cx || nextY !== b.cy) {
-          b.cx = nextX;
-          b.cy = nextY;
-          hadWallProjection = true;
-        }
-
-        const cellX = Math.max(0, Math.min(cols - 1, ((b.cx - wallLeft) / cellSize) | 0));
-        const cellY = Math.max(0, Math.min(rows - 1, ((b.cy - wallTop) / cellSize) | 0));
-        this._collisionCellX[i] = cellX;
-        this._collisionCellY[i] = cellY;
-        const cellIdx = (cellY * cols) + cellX;
-        if (this._collisionCellStamp[cellIdx] !== stamp) {
-          this._collisionCellStamp[cellIdx] = stamp;
-          this._collisionCellHeads[cellIdx] = -1;
-        }
-        this._collisionNext[i] = this._collisionCellHeads[cellIdx];
-        this._collisionCellHeads[cellIdx] = i;
-      }
-
-      for (let i = 0; i < bounds.length; i += 1) {
-        const a = bounds[i];
-        const baseCellX = this._collisionCellX[i];
-        const baseCellY = this._collisionCellY[i];
-        const radX = Math.min(cols - 1, Math.max(1, Math.ceil((a.halfW * 2) / cellSize)));
-        const radY = Math.min(rows - 1, Math.max(1, Math.ceil((a.halfH * 2) / cellSize)));
-
-        for (let oy = -radY; oy <= radY; oy += 1) {
-          const ny = baseCellY + oy;
-          if (ny < 0 || ny >= rows) continue;
-          for (let ox = -radX; ox <= radX; ox += 1) {
-            const nx = baseCellX + ox;
-            if (nx < 0 || nx >= cols) continue;
-            const cellIdx = ny * cols + nx;
-            if (this._collisionCellStamp[cellIdx] !== stamp) continue;
-
-            let j = this._collisionCellHeads[cellIdx];
-            while (j !== -1) {
-              if (j <= i) {
-                j = this._collisionNext[j];
-                continue;
-              }
-
-              this._pairsTestedLast += 1;
-              const b = bounds[j];
-              const dx = a.cx - b.cx;
-              const dy = a.cy - b.cy;
-              const overlapX = (a.halfW + b.halfW) - Math.abs(dx);
-              const overlapY = (a.halfH + b.halfH) - Math.abs(dy);
-              if (overlapX <= 0 || overlapY <= 0) {
-                j = this._collisionNext[j];
-                continue;
-              }
-
-              hadCollision = true;
-              this._pairsCollidingLast += 1;
-
-              let moveA = 0.5;
-              let moveB = 0.5;
-              if (a.priority < b.priority) {
-                moveA = 0.2;
-                moveB = 0.8;
-              } else if (b.priority < a.priority) {
-                moveA = 0.8;
-                moveB = 0.2;
-              }
-
-              if (overlapX < overlapY) {
-                const sign = dx >= 0 ? 1 : -1;
-                const sep = overlapX;
-                a.cx += sign * sep * moveA;
-                b.cx -= sign * sep * moveB;
-              } else {
-                const sign = dy >= 0 ? 1 : -1;
-                const sep = overlapY;
-                a.cy += sign * sep * moveA;
-                b.cy -= sign * sep * moveB;
-              }
-
-              j = this._collisionNext[j];
-            }
-          }
-        }
-      }
-
-      if (!hadCollision && !hadWallProjection) break;
-    }
-
-    for (let i = 0; i < bounds.length; i += 1) {
-      const b = bounds[i];
-      const minX = wallLeft + b.halfW;
-      const maxX = wallRight - b.halfW;
-      const minY = wallTop + b.halfH;
-      const maxY = wallBottom - b.halfH;
-      b.cx = Math.max(minX, Math.min(maxX, b.cx));
-      b.cy = Math.max(minY, Math.min(maxY, b.cy));
-    }
-  }
-
 
 
   /** Draw background gradient to an arbitrary ctx (used for snapshot baking) */
@@ -6099,15 +5862,13 @@ export class LyricDancePlayer {
 
   private _buildHeroSchedule(): void {
     const words = this.data.words ?? [];
-    const ws = this.resolvedState.wordSettings;
     const wdm = this.resolvedState.wordDirectivesMap;
     const schedule: typeof this._heroSchedule = [];
 
     for (const w of words) {
       const clean = normalizeToken(w.word);
-      const resolved = ws[clean];
       const directive = wdm[clean];
-      const emphasis = resolved?.emphasisLevel ?? directive?.emphasisLevel ?? 0;
+      const emphasis = directive?.emphasisLevel ?? 0;
       const duration = w.end - w.start;
       // Only solo-eligible heroes drive camera lookahead
       if (emphasis >= 4 && duration >= 0.5) {

@@ -17,16 +17,14 @@
  * "Falling" drops. "Gold" is gold. No ambiguity.
  */
 
-import type { EntryStyle, ExitStyle, BehaviorStyle } from '@/lib/sceneCompiler';
+import type { MotionCharacter } from '@/lib/sceneCompiler';
 
 // ═══════════════════════════════════════════════════════════════
 // Public interface
 // ═══════════════════════════════════════════════════════════════
 
 export interface SemanticOverride {
-  entry?: EntryStyle;
-  exit?: ExitStyle;
-  behavior?: BehaviorStyle;
+  motionCharacter?: MotionCharacter;
   colorOverride?: string;
   /** Extra glow multiplier (stacks with existing glow pipeline) */
   glowMult?: number;
@@ -118,7 +116,7 @@ const ROTATION_WORDS = ['spin', 'spinning', 'twist', 'twisting', 'turn', 'turnin
 
 function matchRotation(w: string): SemanticOverride | null {
   if (ROTATION_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'spin-in', exit: 'spin-out', behavior: 'pendulum' };
+    return { motionCharacter: 'drift' };
   }
   return null;
 }
@@ -129,12 +127,12 @@ const RISE_WORDS = ['rise', 'rising', 'fly', 'flying', 'soar', 'soaring', 'float
 function matchVerticalMotion(w: string): SemanticOverride | null {
   // Rising
   if (RISE_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'rise', exit: 'soar', behavior: 'float' };
+    return { motionCharacter: 'rise' };
   }
   // Falling
   const FALL_WORDS = ['fall', 'falling', 'drop', 'dropping', 'sink', 'sinking', 'plunge', 'dive', 'down', 'descend', 'crash', 'collapse', 'tumble', 'gravity'];
   if (FALL_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'drop', exit: 'gravity-fall' };
+    return { motionCharacter: 'slam' };
   }
   return null;
 }
@@ -145,10 +143,10 @@ const DRIFT_WORDS = ['drift', 'drifting', 'glide', 'gliding', 'sail', 'sailing',
 
 function matchHorizontalMotion(w: string): SemanticOverride | null {
   if (RUSH_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'punch-in', exit: 'punch-out', behavior: 'lean' };
+    return { motionCharacter: 'drift' };
   }
   if (DRIFT_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'drift-in', exit: 'drift-up', behavior: 'float' };
+    return { motionCharacter: 'drift' };
   }
   return null;
 }
@@ -158,7 +156,7 @@ const IMPACT_WORDS = ['slam', 'smash', 'hit', 'punch', 'kick', 'stomp', 'pound',
 
 function matchImpact(w: string): SemanticOverride | null {
   if (IMPACT_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'slam-down', exit: 'shatter', behavior: 'vibrate' };
+    return { motionCharacter: 'slam' };
   }
   return null;
 }
@@ -168,7 +166,7 @@ const EXPLODE_WORDS = ['explode', 'explosion', 'bomb', 'boom', 'blast', 'rocket'
 
 function matchExplosion(w: string): SemanticOverride | null {
   if (EXPLODE_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'explode-in', exit: 'scatter-fly', glowMult: 1.5 };
+    return { motionCharacter: 'bloom', glowMult: 1.5 };
   }
   return null;
 }
@@ -179,7 +177,7 @@ const WATER_WORDS = ['wave', 'waves', 'ocean', 'surf', 'surfing', 'surfin', 'tid
 
 function matchWater(w: string): SemanticOverride | null {
   if (WATER_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'melt-in', exit: 'evaporate', behavior: 'float', colorOverride: '#38BDF8', elementalClass: 'WATER' };
+    return { motionCharacter: 'drift', colorOverride: '#38BDF8', elementalClass: 'WATER' };
   }
   return null;
 }
@@ -189,7 +187,7 @@ const FIRE_WORDS = ['fire', 'flame', 'flames', 'burn', 'burning', 'blaze', 'blaz
 
 function matchFire(w: string): SemanticOverride | null {
   if (FIRE_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'rise', exit: 'burn-out', behavior: 'flicker', colorOverride: '#FF8C00', glowMult: 2.0, elementalClass: 'FIRE' };
+    return { motionCharacter: 'rise', colorOverride: '#FF8C00', glowMult: 2.0, elementalClass: 'FIRE' };
   }
   return null;
 }
@@ -199,7 +197,7 @@ const COLD_WORDS = ['freeze', 'frozen', 'ice', 'icy', 'cold', 'frost', 'frosty',
 
 function matchCold(w: string): SemanticOverride | null {
   if (COLD_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'snap-in', exit: 'freeze-crack', behavior: 'freeze', colorOverride: '#A8D8EA', elementalClass: 'FROST' };
+    return { motionCharacter: 'snap', colorOverride: '#A8D8EA', elementalClass: 'FROST' };
   }
   return null;
 }
@@ -209,7 +207,7 @@ const LIGHT_WORDS = ['light', 'lights', 'shine', 'shining', 'shiny', 'glow', 'gl
 
 function matchLight(w: string): SemanticOverride | null {
   if (LIGHT_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'bloom', exit: 'burn-out', colorOverride: '#FFD700', glowMult: 2.5, elementalClass: 'ELECTRIC' };
+    return { motionCharacter: 'bloom', colorOverride: '#FFD700', glowMult: 2.5, elementalClass: 'ELECTRIC' };
   }
   return null;
 }
@@ -219,7 +217,7 @@ const DARK_WORDS = ['dark', 'darkness', 'shadow', 'shadows', 'midnight', 'night'
 
 function matchDark(w: string): SemanticOverride | null {
   if (DARK_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'surface', exit: 'vanish', colorOverride: '#2D2D3F', glowMult: 0, elementalClass: 'SMOKE' };
+    return { motionCharacter: 'whisper', colorOverride: '#2D2D3F', glowMult: 0, elementalClass: 'SMOKE' };
   }
   return null;
 }
@@ -230,10 +228,10 @@ const SMALL_WORDS = ['small', 'tiny', 'little', 'micro', 'mini', 'atom', 'ant', 
 
 function matchSize(w: string): SemanticOverride | null {
   if (BIG_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'explode-in', exit: 'dissolve' };
+    return { motionCharacter: 'bloom' };
   }
   if (SMALL_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'whisper', exit: 'evaporate' };
+    return { motionCharacter: 'whisper' };
   }
   return null;
 }
@@ -243,7 +241,7 @@ const SNAP_WORDS = ['snap', 'instant', 'sudden', 'blink', 'click', 'now', 'stop'
 
 function matchSpeed(w: string): SemanticOverride | null {
   if (SNAP_WORDS.some(r => w === r)) {
-    return { entry: 'snap-in', exit: 'snap-out' };
+    return { motionCharacter: 'snap' };
   }
   return null;
 }
@@ -253,7 +251,7 @@ const GENTLE_WORDS = ['soft', 'gentle', 'quiet', 'silence', 'silent', 'peace', '
 
 function matchGentle(w: string): SemanticOverride | null {
   if (GENTLE_WORDS.some(r => w === r || (r.length >= 5 && w.startsWith(r)))) {
-    return { entry: 'whisper', exit: 'exhale', behavior: 'float' };
+    return { motionCharacter: 'whisper' };
   }
   return null;
 }
@@ -263,7 +261,7 @@ const TREMOR_WORDS = ['shake', 'shaking', 'shaky', 'tremble', 'trembling', 'shiv
 
 function matchTremor(w: string): SemanticOverride | null {
   if (TREMOR_WORDS.some(r => w === r || (r.length >= 5 && w.startsWith(r)))) {
-    return { entry: 'shatter-in', behavior: 'vibrate' };
+    return { motionCharacter: 'slam' };
   }
   return null;
 }
@@ -273,7 +271,7 @@ const WEIGHT_WORDS = ['heavy', 'weight', 'load', 'loaded', 'burden', 'anchor', '
 
 function matchWeight(w: string): SemanticOverride | null {
   if (WEIGHT_WORDS.some(r => w === r || (r.length >= 5 && w.startsWith(r)))) {
-    return { entry: 'stomp', exit: 'gravity-fall' };
+    return { motionCharacter: 'slam' };
   }
   return null;
 }
@@ -283,7 +281,7 @@ const VANISH_WORDS = ['ghost', 'vanish', 'disappear', 'invisible', 'phantom', 'f
 
 function matchDisappear(w: string): SemanticOverride | null {
   if (VANISH_WORDS.some(r => w === r || (r.length >= 5 && w.startsWith(r)))) {
-    return { entry: 'materialize', exit: 'vanish', behavior: 'flicker' };
+    return { motionCharacter: 'whisper' };
   }
   return null;
 }
@@ -293,7 +291,7 @@ const GROWTH_WORDS = ['grow', 'growing', 'bloom', 'blooming', 'blossom', 'flower
 
 function matchGrowth(w: string): SemanticOverride | null {
   if (GROWTH_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { entry: 'bloom', exit: 'evaporate', behavior: 'grow' };
+    return { motionCharacter: 'bloom' };
   }
   return null;
 }
@@ -303,7 +301,7 @@ const TIME_WORDS = ['time', 'patience', 'patient', 'wait', 'waiting', 'forever',
 
 function matchTime(w: string): SemanticOverride | null {
   if (TIME_WORDS.some(r => w === r || (r.length >= 5 && w.startsWith(r)))) {
-    return { entry: 'breathe-in', exit: 'linger', behavior: 'pulse' };
+    return { motionCharacter: 'whisper' };
   }
   return null;
 }
