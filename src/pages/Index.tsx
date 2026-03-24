@@ -1371,6 +1371,7 @@ const Index = () => {
             <>
               {headerProject.onTitleChange ? (
                 <input
+                  key={headerProject.title}
                   className="text-xs font-semibold bg-transparent border-none outline-none focus:ring-1 focus:ring-primary/40 rounded px-1 -ml-1 min-w-0 flex-1"
                   defaultValue={headerProject.title}
                   onBlur={(e) => {

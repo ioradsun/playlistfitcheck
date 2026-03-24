@@ -109,6 +109,7 @@ interface Props {
   sceneInput?: ReactNode;
   onAudioSubmitted?: (file: File) => void;
   onUploadStarted?: (payload: { file: File; projectId: string | null; title: string }) => void;
+  onTitleChange?: (newTitle: string) => void;
 }
 
 export function LyricsTab({
@@ -137,6 +138,7 @@ export function LyricsTab({
   sceneInput,
   onAudioSubmitted,
   onUploadStarted,
+  onTitleChange,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [debugData, setDebugData] = useState<any | null>(null);
@@ -439,9 +441,7 @@ export function LyricsTab({
             if (lyricData) setLyricData({ ...lyricData, lines: newLines });
           }}
           onHeaderProject={onHeaderProject}
-          onTitleChange={(newTitle) => {
-            if (lyricData) setLyricData({ ...lyricData, title: newTitle });
-          }}
+          onTitleChange={onTitleChange}
         />
       </div>
     );
