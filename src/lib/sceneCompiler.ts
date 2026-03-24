@@ -696,7 +696,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       },
     );
 
-    console.log('[LAYOUT]', groupWords.join(' '), '→ fontSize:', layout.fontSize, 'positions:', layout.wordPositions.length, 'canvasW:', REF_W, 'canvasH:', REF_H);
+    
 
     groupLayouts.set(key, {
       fontSize: layout.fontSize,
