@@ -5343,6 +5343,9 @@ export class LyricDancePlayer {
         phraseAlpha = Math.max(0, phraseRemaining / Math.max(0.01, phraseExitDuration));
       }
 
+      // On-deck: promote system is sole authority on alpha/position/scale
+      if (isOnDeck) phraseAlpha = 1.0;
+
       // ── Phrase-level entry/exit: default for all words ──
       // Solo hero phrases will override these per-word below.
       let phraseEntryState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: phraseAlpha, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
