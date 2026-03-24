@@ -3594,7 +3594,7 @@ export class LyricDancePlayer {
       const safeFontSize = Math.max(viewportMinFont, Math.round(baseFontSize) || 36);
       const fontWeight = chunk.fontWeight ?? 700;
       const family = chunk.fontFamily ?? resolvedFont;
-      const text = chunk.text ?? obj.text;
+      const text = LyricDancePlayer.stripDisplayPunctuation(chunk.text ?? obj.text);
 
       const measureFont = `${fontWeight} ${safeFontSize}px ${family}`;
       const textWidth = this.getCachedMetrics(text, measureFont).width;
@@ -4422,12 +4422,13 @@ export class LyricDancePlayer {
       for (const word of group.words) {
         const fontStr = `${word.fontWeight} 42px ${word.fontFamily}`;
         if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
+        const displayText = LyricDancePlayer.stripDisplayPunctuation(word.text);
         this.chunks.set(word.id, {
           id: word.id,
-          text: word.text,
+          text: displayText,
           color: word.color,
           font: fontStr,
-          width: measureCtx.measureText(word.text).width,
+          width: measureCtx.measureText(displayText).width,
         });
       }
     }
@@ -5831,6 +5832,14 @@ export class LyricDancePlayer {
 
   private cleanWord(text: string): string {
     return text.replace(/[^a-zA-Z'']/g, '').toLowerCase();
+  }
+
+  /** Strip punctuation for canvas display — keeps apostrophes/hyphens inside words.
+   *  Raw text stays intact on the word data for closed-captioning / lyrics tab. */
+  private static stripDisplayPunctuation(text: string): string {
+    return text
+      .replace(/^[^a-zA-Z0-9'']+/, '')   // leading punctuation
+      .replace(/[^a-zA-Z0-9'']+$/, '');   // trailing punctuation
   }
 
   // ═══ Hero schedule: pre-computed for SOLO heroes (≥500ms, emphasis ≥4) ═══
