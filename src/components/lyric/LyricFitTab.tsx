@@ -163,6 +163,7 @@ export function LyricFitTab({
     }
   }, []);
 
+  const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(
     initialLyric?.id ?? null,
   );
