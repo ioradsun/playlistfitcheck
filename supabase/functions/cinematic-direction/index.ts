@@ -1536,6 +1536,7 @@ serve(async (req) => {
         body.audioSections?.length ?? 0,
         body,
         customPrompts.scenePrompt,
+        customPrompts.model,
       );
 
       return new Response(JSON.stringify({ cinematicDirection: sceneResult }), {
@@ -1563,6 +1564,7 @@ serve(async (req) => {
         body.words,
         bpm,
         customPrompts.wordPrompt,
+        customPrompts.model,
       );
 
       return new Response(JSON.stringify({ cinematicDirection: wordResult }), {
