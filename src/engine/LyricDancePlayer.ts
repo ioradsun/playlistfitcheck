@@ -1499,6 +1499,7 @@ export class LyricDancePlayer {
   private _heroLookaheadMs = 400; // anticipate hero words 400ms before they appear
   private activeSectionTexture = 'dust';
   private chunkActiveSinceMs: Map<string, number> = new Map();
+  private _previousGroupIdx: number = -1;
 
 
   // Health monitor + adaptive quality
@@ -5209,15 +5210,31 @@ export class LyricDancePlayer {
       activeGroupIdx = cursor;
     }
 
+    // Clear departed group once transition window has passed
+    if (this._previousGroupIdx >= 0 && this._previousGroupIdx < activeGroupIdx) {
+      const transWindow = 0.42 * 0.55 + 0.1; // TRANSITION_MS * DEPART_RATIO + buffer
+      const activeStart = groups[activeGroupIdx]?.start ?? 0;
+      const activeEntryPad = (groups[activeGroupIdx]?.words?.length ?? 1) * 0.05 + 0.2;
+      if (tSec > activeStart - activeEntryPad + transWindow) {
+        this._previousGroupIdx = activeGroupIdx; // no longer departing
+      }
+    }
+
     const activeGroups = this._activeGroupIndices;
     activeGroups.length = 0;
     if (activeGroupIdx >= 0) {
-      activeGroups.push(activeGroupIdx);
-      // ═══ TELEPROMPTER: on-deck phrase always visible below ═══
+      // ═══ TELEPROMPTER: departing phrase persists during transition ═══
+      // Detect cursor advance: if activeGroupIdx changed, the previous group departs
+      if (this._previousGroupIdx >= 0 && this._previousGroupIdx !== activeGroupIdx) {
+        activeGroups.push(this._previousGroupIdx); // departing (ai=0)
+      }
+      activeGroups.push(activeGroupIdx);            // active or promoting (ai=0 or 1)
+      // On-deck phrase always visible below
       const onDeckIdx = activeGroupIdx + 1;
       if (onDeckIdx < groups.length) {
-        activeGroups.push(onDeckIdx);
+        activeGroups.push(onDeckIdx);               // on-deck (last)
       }
+      this._previousGroupIdx = activeGroupIdx;
     }
 
     const primaryLineIndex = activeGroupIdx >= 0
@@ -5250,41 +5267,80 @@ export class LyricDancePlayer {
       const groupIdx = activeGroups[ai];
       const group = groups[groupIdx];
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
-      // ═══ TELEPROMPTER: promote animation state ═══
-      // Two-layer system: promote (macro position/scale) + entry style (micro flourish)
-      //
-      // On-deck (ai > 0):   promoteT = 0 → sits below at small/dim
-      // Entering (ai === 0): promoteT eases 0→1 during entry window → rises to center
-      // Active (ai === 0):   promoteT = 1 → fully at center, promote layer is identity
-      //
-      // First phrase in song (groupIdx === 0) skips promote — no previous on-deck state.
-      const isOnDeck = ai > 0;
+      // ═══ TELEPROMPTER: role-based transition choreography ═══
+      // Three roles: departing (old active fading out), active (current/promoting), on-deck (preview)
+      // activeGroups order: [departing?, active, on-deck?]
+      // Determine role from position in activeGroups array:
+      const isLastInActive = ai === activeGroups.length - 1;
+      const hasOnDeck = activeGroups.length >= 2 && activeGroups[activeGroups.length - 1] > activeGroupIdx;
+      const isOnDeck = hasOnDeck && isLastInActive;
+      const isDeparting = activeGroups.length >= 2 && ai === 0 && groupIdx < activeGroupIdx;
+
+      // Tunable constants — the numbers that define the feel
+      const ONDECK_Y_PCT = 0.73;      // on-deck sits at 73% of canvas height
+      const ONDECK_SCALE = 0.50;       // half size
+      const ONDECK_ALPHA = 0.28;       // visible but not competing
+      const TRANSITION_MS = 420;       // total transition duration
+      const DEPART_RATIO = 0.55;       // old exits in 55% of transition time
+      const ONDECK_DELAY_RATIO = 0.40; // new on-deck appears at 40% into transition
+
+      // Active center position (Y as fraction of canvas height)
+      const ACTIVE_Y_PCT = 0.46;
+
+      // Convert to pixel offsets from the layout center
+      const onDeckOffY = (ONDECK_Y_PCT - ACTIVE_Y_PCT) * this.height;
+      const departOffY = -0.05 * this.height; // drift up slightly
+
+      const transitionSec = TRANSITION_MS / 1000;
+
+      let promoteOffY = 0;
+      let promoteSclMult = 1.0;
+      let promoteAlphaMult = 1.0;
       const skipPromote = groupIdx === 0;
 
-      const PROMOTE_OFFSET_Y = this.height * 0.28;
-      const PROMOTE_SCALE = 0.5;
-      const PROMOTE_ALPHA = 0.25;
+      if (isDeparting) {
+        // ── DEPARTING: yield fast, get out of the way ──
+        // Progress: how far into the departure are we?
+        const departStart = groups[activeGroupIdx].start
+          - (groups[activeGroupIdx].words.length * (groups[activeGroupIdx].staggerDelay ?? 0.05) + 0.2);
+        const departDur = transitionSec * DEPART_RATIO;
+        const tDepart = Math.min(1, Math.max(0, (tSec - departStart) / Math.max(0.01, departDur)));
+        const eDepart = tDepart * tDepart; // easeIn — slow start, fast finish
+        promoteOffY = eDepart * departOffY;
+        promoteSclMult = 1.0 - eDepart * 0.15; // shrink to 85%
+        promoteAlphaMult = 1.0 - eDepart; // fade to 0
 
-      let promoteT = 1.0; // default: fully promoted (no effect)
-      if (isOnDeck) {
-        promoteT = 0.0;
+      } else if (isOnDeck) {
+        // ── ON-DECK: static preview below ──
+        // Check if we're in the "appear" phase (new on-deck fading in)
+        const prevGroupEnd = (groupIdx > 0) ? groups[groupIdx - 1].start : 0;
+        const appearStart = prevGroupEnd; // roughly when the transition started
+        const appearDelay = transitionSec * ONDECK_DELAY_RATIO;
+        const appearDur = transitionSec * 0.6;
+        const tAppear = Math.min(1, Math.max(0, (tSec - appearStart - appearDelay) / Math.max(0.01, appearDur)));
+        const eAppear = 1 - (1 - tAppear) * (1 - tAppear); // easeOut
+
+        promoteOffY = onDeckOffY;
+        promoteSclMult = ONDECK_SCALE;
+        // If this on-deck just appeared, fade in; otherwise stay at preview alpha
+        promoteAlphaMult = ONDECK_ALPHA * eAppear;
+        // For on-deck that's been visible a while, eAppear = 1, so alpha = ONDECK_ALPHA
+
       } else if (!skipPromote) {
-        // Active group: ease promote during entry window
+        // ── ACTIVE (promoting from on-deck): the star of the transition ──
         const entryPadForPromote = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
-        const tSinceActivate = tSec - (group.start - entryPadForPromote);
-        const promoteDur = Math.max(0.25, group.entryDuration ?? 0.3);
-        if (tSinceActivate < promoteDur) {
-          const raw = Math.max(0, Math.min(1, tSinceActivate / promoteDur));
-          promoteT = 1 - Math.pow(1 - raw, 3); // easeOutCubic
-        }
+        const promoteStart = group.start - entryPadForPromote;
+        const tPromote = Math.min(1, Math.max(0, (tSec - promoteStart) / Math.max(0.01, transitionSec)));
+        const ePromote = 1 - Math.pow(1 - tPromote, 3); // easeOutCubic — confident arrival
+
+        promoteOffY = (1 - ePromote) * onDeckOffY;
+        promoteSclMult = ONDECK_SCALE + ePromote * (1 - ONDECK_SCALE);
+        promoteAlphaMult = ONDECK_ALPHA + ePromote * (1 - ONDECK_ALPHA);
       }
+      // else: first phrase, skipPromote=true, all multipliers stay at identity (1.0)
 
-      const promoteOffY = (1 - promoteT) * PROMOTE_OFFSET_Y;
-      const promoteSclMult = PROMOTE_SCALE + promoteT * (1 - PROMOTE_SCALE);
-      const promoteAlphaMult = PROMOTE_ALPHA + promoteT * (1 - PROMOTE_ALPHA);
-
-      // On-deck phrases: no beat response, no behavior — just a quiet preview
-      if (isOnDeck) {
+      // On-deck/departing phrases: no beat response, no behavior — just a quiet preview/exit
+      if (isOnDeck || isDeparting) {
         // Override the treatment for this iteration to suppress motion
         // We'll zero out beat and behavior contributions in the word loop
       }
@@ -5344,12 +5400,12 @@ export class LyricDancePlayer {
       }
 
       // On-deck: promote system is sole authority on alpha/position/scale
-      if (isOnDeck) phraseAlpha = 1.0;
+      if (isOnDeck || isDeparting) phraseAlpha = 1.0;
 
       // ── Phrase-level entry/exit: default for all words ──
       // Solo hero phrases will override these per-word below.
       let phraseEntryState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: phraseAlpha, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isEntering = timeSinceActivation < config.entryDuration;
+      const isEntering = !isOnDeck && !isDeparting && timeSinceActivation < config.entryDuration;
       if (isEntering) {
         const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
         phraseEntryState = computeMotionEntry(config.character, entryProgress, config.intensity) as typeof phraseEntryState;
@@ -5360,7 +5416,7 @@ export class LyricDancePlayer {
       }
 
       let phraseExitState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isExiting = phraseRemaining < config.exitDuration && phraseRemaining >= 0;
+      const isExiting = !isOnDeck && !isDeparting && phraseRemaining < config.exitDuration && phraseRemaining >= 0;
       if (isExiting) {
         const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
         phraseExitState = computeMotionExit(config.character, exitProgress, config.intensity) as typeof phraseExitState;
@@ -5453,8 +5509,8 @@ export class LyricDancePlayer {
         // ═══ PHRASE-LEVEL SPOTLIGHT: all words white, hero words accent ═══
         // No per-word color switching — strobes at fast BPM.
         // Phrase is the unit. All words full white. Hero words get section accent.
-        const spotlightAlpha = isOnDeck
-          ? 1.0  // promote system controls on-deck opacity
+        const spotlightAlpha = (isOnDeck || isDeparting)
+          ? 1.0
           : lineRole !== 'current'
             ? 0.30
             : wordState === 'upcoming' ? 0.30 : 1.0;
@@ -5560,12 +5616,12 @@ export class LyricDancePlayer {
         // Hero words hold at higher opacity after being spoken
         // (spotlightAlpha is now phrase-level, so adjust finalAlpha directly for heroes)
 
-        const roleAlpha = (lineRole === 'current' || isOnDeck) ? 1.0 : 0.0;
+        const roleAlpha = (lineRole === 'current' || isOnDeck || isDeparting) ? 1.0 : 0.0;
         const heroHoldAlpha = (isHeroWord && lineRole === 'current' && tSec > (word.wordStart ?? group.start) + (word.wordDuration ?? 0))
           ? 0.75
           : spotlightAlpha;
 
-        const totalScale = isOnDeck ? 1.0 : Math.min(1.6, sharedBeatScale + heroBeatBoost);
+        const totalScale = (isOnDeck || isDeparting) ? 1.0 : Math.min(1.6, sharedBeatScale + heroBeatBoost);
 
         let wordGlow = 0;
         if (lineRole === 'current') {
@@ -5647,8 +5703,8 @@ export class LyricDancePlayer {
 
         chunk.x = word.layoutX + heroOffsetX + neighborPushOffsets[wi]
           + blendedEntryOX + blendedExitOX + phraseBehaviorOX;
-        chunk.y = word.layoutY + (isOnDeck ? 0 : sharedBeatNudgeY) + heroOffsetY
-          + blendedEntryOY + blendedExitOY + (isOnDeck ? 0 : phraseBehaviorOY)
+        chunk.y = word.layoutY + ((isOnDeck || isDeparting) ? 0 : sharedBeatNudgeY) + heroOffsetY
+          + blendedEntryOY + blendedExitOY + ((isOnDeck || isDeparting) ? 0 : phraseBehaviorOY)
           + promoteOffY;
         chunk.fontSize = word.baseFontSize;
 
