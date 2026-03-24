@@ -3863,14 +3863,12 @@ export class LyricDancePlayer {
         this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
         this.ctx.globalAlpha = elementalAlpha;
         this.ctx.translate(phrase.minX, phraseCY);
-        // Set font for fillText calls inside drawElementalWord
-        this.ctx.font = `${this.compiledScene?.baseFontWeight ?? 600} ${phraseFontSize}px "${this.compiledScene?.baseFontFamily ?? 'Montserrat'}", sans-serif`;
         this.ctx.textBaseline = 'middle';
 
         try {
           drawElementalWord(
             this.ctx,
-            phrase.text,
+            '',
             phraseFontSize,
             phraseW,
             phrase.elementalClass,
