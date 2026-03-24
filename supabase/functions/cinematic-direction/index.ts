@@ -389,6 +389,10 @@ You may add up to 5 additional short words if narratively critical (title words,
 interface WordSegment {
   startIdx: number;
   endIdx: number;
+  words: Array<{ word: string; start: number; end: number }>;
+  durationMs: number;
+  wordCount: number;
+  pauses: Array<{ afterWordIdx: number; gapMs: number }>;
 }
 
 interface ValidationResult {
