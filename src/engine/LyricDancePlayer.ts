@@ -5747,9 +5747,6 @@ export class LyricDancePlayer {
     return frame;
       }
 
-      // On-deck: promote system is sole authority on alpha/position/scale
-      if (isOnDeck) phraseAlpha = 1.0;
-
   /** Draw background gradient to an arbitrary ctx (used for snapshot baking) */
   private _drawBackgroundToCtx(ctx: CanvasRenderingContext2D, frame: ScaledKeyframe): void {
     const saved = this.ctx;
