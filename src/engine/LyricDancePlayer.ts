@@ -1499,7 +1499,10 @@ export class LyricDancePlayer {
   private _heroLookaheadMs = 400; // anticipate hero words 400ms before they appear
   private activeSectionTexture = 'dust';
   private chunkActiveSinceMs: Map<string, number> = new Map();
-  private _previousGroupIdx: number = -1;
+  /** Wallpaper: how many ghost phrases fit above/below the active zone */
+  private _ghostCountAbove: number = 0;
+  private _ghostCountBelow: number = 0;
+  private _ghostLineH: number = 20;
 
 
   // Health monitor + adaptive quality
@@ -1771,6 +1774,7 @@ export class LyricDancePlayer {
         // Compile the scene
         const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
         this.compiledScene = compiled;
+        this._recomputeGhostCapacity();
         this._markCompiledViewport(this.width || 960, this.height || 540);
 
         // ═══ V2: Create BeatConductor with full audio analysis ═══
@@ -1915,6 +1919,7 @@ export class LyricDancePlayer {
       this.resize(cw, ch);
       const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
+      this._recomputeGhostCapacity();
       this._markCompiledViewport(this.width || 960, this.height || 540);
       this._buildChunkCacheFromScene(compiled);
       this._updateViewportScale();
@@ -2272,11 +2277,26 @@ export class LyricDancePlayer {
       const sizeChanged = w !== prevCompiledW || h !== prevCompiledH;
       if (sizeChanged) {
         this.compiledScene = compileScene(this.payload, { viewportWidth: w, viewportHeight: h });
+        this._recomputeGhostCapacity();
         this._buildChunkCacheFromScene(this.compiledScene);
         this._markCompiledViewport(w, h);
         this._textMetricsCache.clear();
       }
     }
+  }
+
+  private _recomputeGhostCapacity(): void {
+    const h = this.height || 540;
+    const w = this.width || 960;
+    const isP = h > w;
+    const activeTop = h * (isP ? 0.17 : 0.15);
+    const activeH = h * (isP ? 0.58 : 0.65);
+    const activeBottom = activeTop + activeH;
+    const GHOST_SCALE = 0.35;
+    this._ghostLineH = Math.round(48 * GHOST_SCALE * 1.4);
+    const gph = this._ghostLineH * 2;
+    this._ghostCountAbove = Math.max(0, Math.floor((activeTop - h * 0.03) / gph));
+    this._ghostCountBelow = Math.max(0, Math.floor((h - activeBottom - h * 0.06) / gph));
   }
 
   /** Apply current effective DPR to canvas backing-store dimensions.
@@ -2348,6 +2368,7 @@ export class LyricDancePlayer {
     this.songEndSec = payload.songEnd;
     const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this.compiledScene = compiled;
+    this._recomputeGhostCapacity();
     this._buildChunkCacheFromScene(compiled);
     this._markCompiledViewport(this.width || 960, this.height || 540);
 
@@ -2410,6 +2431,7 @@ export class LyricDancePlayer {
     this._songGrade = null; // cinematic direction changed — recompute grade
     this.resolvePlayerState(this.payload);
     this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
+    this._recomputeGhostCapacity();
     this._markCompiledViewport(this.width || 960, this.height || 540);
     this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
@@ -2478,6 +2500,7 @@ export class LyricDancePlayer {
     this.songStartSec = payload.songStart;
     this.songEndSec = payload.songEnd;
     this.compiledScene = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
+    this._recomputeGhostCapacity();
     this._markCompiledViewport(this.width || 960, this.height || 540);
     this._buildChunkCacheFromScene(this.compiledScene);
     this._textMetricsCache.clear();
@@ -2510,6 +2533,7 @@ export class LyricDancePlayer {
       this.payload = { ...this.payload, auto_palettes: palettes };
       const compiled = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
+      this._recomputeGhostCapacity();
       this._markCompiledViewport(this.width || 960, this.height || 540);
       this._buildChunkCacheFromScene(compiled);
       this._textMetricsCache.clear();
@@ -2738,6 +2762,7 @@ export class LyricDancePlayer {
         // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
         if (this.payload && this.compiledScene) {
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
+          this._recomputeGhostCapacity();
           this._buildChunkCacheFromScene(this.compiledScene);
         }
       }
@@ -5210,31 +5235,19 @@ export class LyricDancePlayer {
       activeGroupIdx = cursor;
     }
 
-    // Clear departed group once transition window has passed
-    if (this._previousGroupIdx >= 0 && this._previousGroupIdx < activeGroupIdx) {
-      const transWindow = 0.42 * 0.55 + 0.1; // TRANSITION_MS * DEPART_RATIO + buffer
-      const activeStart = groups[activeGroupIdx]?.start ?? 0;
-      const activeEntryPad = (groups[activeGroupIdx]?.words?.length ?? 1) * 0.05 + 0.2;
-      if (tSec > activeStart - activeEntryPad + transWindow) {
-        this._previousGroupIdx = activeGroupIdx; // no longer departing
-      }
-    }
-
     const activeGroups = this._activeGroupIndices;
     activeGroups.length = 0;
     if (activeGroupIdx >= 0) {
-      // ═══ TELEPROMPTER: departing phrase persists during transition ═══
-      // Detect cursor advance: if activeGroupIdx changed, the previous group departs
-      if (this._previousGroupIdx >= 0 && this._previousGroupIdx !== activeGroupIdx) {
-        activeGroups.push(this._previousGroupIdx); // departing (ai=0)
+      // ═══ WALLPAPER: past ghosts + active + future ghosts ═══
+      const pastStart = Math.max(0, activeGroupIdx - this._ghostCountAbove);
+      for (let gi = pastStart; gi < activeGroupIdx; gi++) {
+        activeGroups.push(gi);
       }
-      activeGroups.push(activeGroupIdx);            // active or promoting (ai=0 or 1)
-      // On-deck phrase always visible below
-      const onDeckIdx = activeGroupIdx + 1;
-      if (onDeckIdx < groups.length) {
-        activeGroups.push(onDeckIdx);               // on-deck (last)
+      activeGroups.push(activeGroupIdx);
+      const futureEnd = Math.min(groups.length, activeGroupIdx + 1 + this._ghostCountBelow);
+      for (let gi = activeGroupIdx + 1; gi < futureEnd; gi++) {
+        activeGroups.push(gi);
       }
-      this._previousGroupIdx = activeGroupIdx;
     }
 
     const primaryLineIndex = activeGroupIdx >= 0
@@ -5263,86 +5276,125 @@ export class LyricDancePlayer {
     if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
     const chunks = this._evalChunks;
 
-    for (let ai = 0; ai < activeGroups.length; ai++) {
-      const groupIdx = activeGroups[ai];
+    for (const groupIdx of activeGroups) {
       const group = groups[groupIdx];
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
-      // ═══ TELEPROMPTER: role-based transition choreography ═══
-      // Three roles: departing (old active fading out), active (current/promoting), on-deck (preview)
-      // activeGroups order: [departing?, active, on-deck?]
-      // Determine role from position in activeGroups array:
-      const isLastInActive = ai === activeGroups.length - 1;
-      const hasOnDeck = activeGroups.length >= 2 && activeGroups[activeGroups.length - 1] > activeGroupIdx;
-      const isOnDeck = hasOnDeck && isLastInActive;
-      const isDeparting = activeGroups.length >= 2 && ai === 0 && groupIdx < activeGroupIdx;
+      // ═══ WALLPAPER: five-state lifecycle ═══
+      //
+      // 1. DEEP GHOST (future, far)  — 8% alpha, 35% scale, monochrome, static
+      // 2. WARMING (next-up, <800ms) — smooth ease: alpha 8→25%, scale 35→55%, faint warmth
+      // 3. ACTIVE                    — full per-word entry/exit/beat/hero (unchanged)
+      // 4. COOLING (just finished)   — per-word exit fires, color drains, settles to ghost
+      // 5. PAST GHOST (above)        — ghost alpha fading with distance, monochrome, static
 
-      // Tunable constants — the numbers that define the feel
-      const ONDECK_Y_PCT = 0.73;      // on-deck sits at 73% of canvas height
-      const ONDECK_SCALE = 0.50;       // half size
-      const ONDECK_ALPHA = 0.28;       // visible but not competing
-      const TRANSITION_MS = 420;       // total transition duration
-      const DEPART_RATIO = 0.55;       // old exits in 55% of transition time
-      const ONDECK_DELAY_RATIO = 0.40; // new on-deck appears at 40% into transition
+      const isActive = groupIdx === activeGroupIdx;
+      const isPast = groupIdx < activeGroupIdx;
+      const isFuture = groupIdx > activeGroupIdx;
+      const isGhost = !isActive;
 
-      // Active center position (Y as fraction of canvas height)
-      const ACTIVE_Y_PCT = 0.46;
+      // Time until this group becomes active (negative = already past)
+      const timeUntilActive = group.start - tSec;
+      // Time since this group finished being active
+      const activeDoneAt = group.end; // when last word finishes
+      const timeSinceDone = tSec - activeDoneAt;
 
-      // Convert to pixel offsets from the layout center
-      const onDeckOffY = (ONDECK_Y_PCT - ACTIVE_Y_PCT) * this.height;
-      const departOffY = -0.05 * this.height; // drift up slightly
+      // Is this the next-up phrase within warming range?
+      const WARMUP_DURATION_SEC = 0.8; // ~2 beats at 131 BPM
+      const isWarming = isFuture && (groupIdx === activeGroupIdx + 1) && timeUntilActive <= WARMUP_DURATION_SEC && timeUntilActive > 0;
 
-      const transitionSec = TRANSITION_MS / 1000;
+      // Is this the just-finished phrase still cooling?
+      const COOL_DURATION_SEC = 0.5;
+      const COOL_COLOR_SEC = 0.15; // color drains in first 150ms
+      const isCooling = isPast && (groupIdx === activeGroupIdx - 1) && timeSinceDone >= 0 && timeSinceDone < COOL_DURATION_SEC;
 
-      let promoteOffY = 0;
-      let promoteSclMult = 1.0;
-      let promoteAlphaMult = 1.0;
-      const skipPromote = groupIdx === 0;
+      // Ghost visual constants
+      const GHOST_SCALE = 0.35;
+      const GHOST_ALPHA = 0.08;
+      const WARM_ALPHA_MAX = 0.25;
+      const WARM_SCALE_MAX = 0.55;
+      const PAST_FADE_RATE = 0.30;
 
-      if (isDeparting) {
-        // ── DEPARTING: yield fast, get out of the way ──
-        // Progress: how far into the departure are we?
-        const departStart = groups[activeGroupIdx].start
-          - (groups[activeGroupIdx].words.length * (groups[activeGroupIdx].staggerDelay ?? 0.05) + 0.2);
-        const departDur = transitionSec * DEPART_RATIO;
-        const tDepart = Math.min(1, Math.max(0, (tSec - departStart) / Math.max(0.01, departDur)));
-        const eDepart = tDepart * tDepart; // easeIn — slow start, fast finish
-        promoteOffY = eDepart * departOffY;
-        promoteSclMult = 1.0 - eDepart * 0.15; // shrink to 85%
-        promoteAlphaMult = 1.0 - eDepart; // fade to 0
+      // Compute per-group visual state
+      let wallOffY = 0;
+      let wallSclMult = 1.0;
+      let wallAlphaMult = 1.0;
+      let wallColorDrain = 0; // 0 = full color, 1 = fully monochrome
+      let wallSuppressAnim = false; // true = no entry/exit/beat/behavior
 
-      } else if (isOnDeck) {
-        // ── ON-DECK: static preview below ──
-        // Check if we're in the "appear" phase (new on-deck fading in)
-        const prevGroupEnd = (groupIdx > 0) ? groups[groupIdx - 1].start : 0;
-        const appearStart = prevGroupEnd; // roughly when the transition started
-        const appearDelay = transitionSec * ONDECK_DELAY_RATIO;
-        const appearDur = transitionSec * 0.6;
-        const tAppear = Math.min(1, Math.max(0, (tSec - appearStart - appearDelay) / Math.max(0.01, appearDur)));
-        const eAppear = 1 - (1 - tAppear) * (1 - tAppear); // easeOut
+      const h = this.height || 540;
+      const isPortrait = h > (this.width || 960);
+      const activeTop = h * (isPortrait ? 0.17 : 0.15);
+      const activeH = h * (isPortrait ? 0.58 : 0.65);
+      const activeBottom = activeTop + activeH;
+      const activeCenterY = activeTop + activeH / 2;
+      const gph = this._ghostLineH * 2;
 
-        promoteOffY = onDeckOffY;
-        promoteSclMult = ONDECK_SCALE;
-        // If this on-deck just appeared, fade in; otherwise stay at preview alpha
-        promoteAlphaMult = ONDECK_ALPHA * eAppear;
-        // For on-deck that's been visible a while, eAppear = 1, so alpha = ONDECK_ALPHA
+      if (isActive) {
+        // ── ACTIVE: identity. Everything passes through. ──
+        wallSclMult = 1.0;
+        wallAlphaMult = 1.0;
+        wallColorDrain = 0;
+        wallSuppressAnim = false;
 
-      } else if (!skipPromote) {
-        // ── ACTIVE (promoting from on-deck): the star of the transition ──
-        const entryPadForPromote = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
-        const promoteStart = group.start - entryPadForPromote;
-        const tPromote = Math.min(1, Math.max(0, (tSec - promoteStart) / Math.max(0.01, transitionSec)));
-        const ePromote = 1 - Math.pow(1 - tPromote, 3); // easeOutCubic — confident arrival
+      } else if (isWarming) {
+        // ── WARMING: the plié. Smooth ease from ghost to coiled state. ──
+        // warmT: 0 = just entered warming range, 1 = about to activate
+        const warmT = 1 - (timeUntilActive / WARMUP_DURATION_SEC);
+        const eWarm = warmT * warmT; // easeIn — slow start, builds tension
 
-        promoteOffY = (1 - ePromote) * onDeckOffY;
-        promoteSclMult = ONDECK_SCALE + ePromote * (1 - ONDECK_SCALE);
-        promoteAlphaMult = ONDECK_ALPHA + ePromote * (1 - ONDECK_ALPHA);
-      }
-      // else: first phrase, skipPromote=true, all multipliers stay at identity (1.0)
+        wallSclMult = GHOST_SCALE + eWarm * (WARM_SCALE_MAX - GHOST_SCALE);
+        wallAlphaMult = GHOST_ALPHA + eWarm * (WARM_ALPHA_MAX - GHOST_ALPHA);
+        wallColorDrain = 1 - eWarm * 0.3; // starts fully mono, gains 30% warmth
+        wallSuppressAnim = true;
 
-      // On-deck/departing phrases: no beat response, no behavior — just a quiet preview/exit
-      if (isOnDeck || isDeparting) {
-        // Override the treatment for this iteration to suppress motion
-        // We'll zero out beat and behavior contributions in the word loop
+        // Position: in its future ghost slot (it will jump to center when active)
+        const stepsFromActive = groupIdx - activeGroupIdx;
+        const yCenter = activeBottom + (stepsFromActive - 0.5) * gph;
+        wallOffY = yCenter - activeCenterY;
+
+      } else if (isCooling) {
+        // ── COOLING: two-phase exhale. Color drains fast, then alpha/scale settle. ──
+        const coolT = timeSinceDone / COOL_DURATION_SEC; // 0→1
+
+        // Phase 1: color drain (first 150ms / first 30% of cool)
+        const colorPhase = Math.min(1, timeSinceDone / COOL_COLOR_SEC);
+        wallColorDrain = colorPhase; // 0→1 fast
+
+        // Phase 2: alpha/scale ease to ghost (after color drains)
+        const settleT = Math.max(0, (coolT - 0.3) / 0.7); // 0→1 over remaining 70%
+        const eSettle = settleT * settleT; // easeIn — gentle then fast
+        wallSclMult = 1.0 - eSettle * (1.0 - GHOST_SCALE);
+        wallAlphaMult = 1.0 - eSettle * (1.0 - GHOST_ALPHA);
+
+        // Position: at its past ghost slot (phrase just moved up)
+        const stepsFromActive = activeGroupIdx - groupIdx;
+        const yCenter = activeTop - (stepsFromActive - 0.5) * gph;
+        wallOffY = yCenter - activeCenterY;
+
+        // During cooling, let per-word EXIT animation run (the first part of the exhale)
+        // but suppress entry and beat
+        wallSuppressAnim = false; // exit animations should still be active
+
+      } else if (isPast) {
+        // ── PAST GHOST: fading memory above the active zone ──
+        const stepsFromActive = activeGroupIdx - groupIdx;
+        const yCenter = activeTop - (stepsFromActive - 0.5) * gph;
+        wallOffY = yCenter - activeCenterY;
+        const ageFactor = Math.pow(1 - PAST_FADE_RATE, stepsFromActive - 1);
+        wallAlphaMult = GHOST_ALPHA * ageFactor;
+        wallSclMult = GHOST_SCALE;
+        wallColorDrain = 1;
+        wallSuppressAnim = true;
+
+      } else if (isFuture) {
+        // ── DEEP FUTURE GHOST: static wallpaper below the active zone ──
+        const stepsFromActive = groupIdx - activeGroupIdx;
+        const yCenter = activeBottom + (stepsFromActive - 0.5) * gph;
+        wallOffY = yCenter - activeCenterY;
+        wallAlphaMult = GHOST_ALPHA;
+        wallSclMult = GHOST_SCALE;
+        wallColorDrain = 1;
+        wallSuppressAnim = true;
       }
 
       // ═══ ACTIVE CHUNK ONLY: non-current groups are already filtered out above ═══
@@ -5399,13 +5451,12 @@ export class LyricDancePlayer {
         phraseAlpha = Math.max(0, phraseRemaining / Math.max(0.01, phraseExitDuration));
       }
 
-      // On-deck: promote system is sole authority on alpha/position/scale
-      if (isOnDeck || isDeparting) phraseAlpha = 1.0;
+      if (isGhost) phraseAlpha = 1.0;
 
       // ── Phrase-level entry/exit: default for all words ──
       // Solo hero phrases will override these per-word below.
       let phraseEntryState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: phraseAlpha, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isEntering = !isOnDeck && !isDeparting && timeSinceActivation < config.entryDuration;
+      const isEntering = !wallSuppressAnim && timeSinceActivation < config.entryDuration;
       if (isEntering) {
         const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
         phraseEntryState = computeMotionEntry(config.character, entryProgress, config.intensity) as typeof phraseEntryState;
@@ -5416,7 +5467,7 @@ export class LyricDancePlayer {
       }
 
       let phraseExitState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isExiting = !isOnDeck && !isDeparting && phraseRemaining < config.exitDuration && phraseRemaining >= 0;
+      const isExiting = !wallSuppressAnim && phraseRemaining < config.exitDuration && phraseRemaining >= 0;
       if (isExiting) {
         const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
         phraseExitState = computeMotionExit(config.character, exitProgress, config.intensity) as typeof phraseExitState;
@@ -5509,7 +5560,7 @@ export class LyricDancePlayer {
         // ═══ PHRASE-LEVEL SPOTLIGHT: all words white, hero words accent ═══
         // No per-word color switching — strobes at fast BPM.
         // Phrase is the unit. All words full white. Hero words get section accent.
-        const spotlightAlpha = (isOnDeck || isDeparting)
+        const spotlightAlpha = isGhost
           ? 1.0
           : lineRole !== 'current'
             ? 0.30
@@ -5616,12 +5667,12 @@ export class LyricDancePlayer {
         // Hero words hold at higher opacity after being spoken
         // (spotlightAlpha is now phrase-level, so adjust finalAlpha directly for heroes)
 
-        const roleAlpha = (lineRole === 'current' || isOnDeck || isDeparting) ? 1.0 : 0.0;
+        const roleAlpha = (lineRole === 'current' || isGhost) ? 1.0 : 0.0;
         const heroHoldAlpha = (isHeroWord && lineRole === 'current' && tSec > (word.wordStart ?? group.start) + (word.wordDuration ?? 0))
           ? 0.75
           : spotlightAlpha;
 
-        const totalScale = (isOnDeck || isDeparting) ? 1.0 : Math.min(1.6, sharedBeatScale + heroBeatBoost);
+        const totalScale = (wallSuppressAnim || isGhost) ? 1.0 : Math.min(1.6, sharedBeatScale + heroBeatBoost);
 
         let wordGlow = 0;
         if (lineRole === 'current') {
@@ -5643,7 +5694,7 @@ export class LyricDancePlayer {
         let wordExitBlend = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
         let wordBlendFactor = 0;
 
-        if (!isSoloHero && emp >= 3 && lineRole === 'current' && (word as any).entryStyle) {
+        if (!isSoloHero && emp >= 3 && lineRole === 'current' && !wallSuppressAnim && (word as any).entryStyle) {
           wordBlendFactor = Math.min(1.0, (emp - 2) / 3); // 0.33, 0.67, 1.0
 
           if (isEntering) {
@@ -5703,9 +5754,10 @@ export class LyricDancePlayer {
 
         chunk.x = word.layoutX + heroOffsetX + neighborPushOffsets[wi]
           + blendedEntryOX + blendedExitOX + phraseBehaviorOX;
-        chunk.y = word.layoutY + ((isOnDeck || isDeparting) ? 0 : sharedBeatNudgeY) + heroOffsetY
-          + blendedEntryOY + blendedExitOY + ((isOnDeck || isDeparting) ? 0 : phraseBehaviorOY)
-          + promoteOffY;
+        chunk.y = word.layoutY + (wallSuppressAnim ? 0 : sharedBeatNudgeY) + heroOffsetY
+          + (wallSuppressAnim ? 0 : blendedEntryOY) + (wallSuppressAnim ? 0 : blendedExitOY)
+          + (wallSuppressAnim ? 0 : phraseBehaviorOY)
+          + wallOffY;
         chunk.fontSize = word.baseFontSize;
 
         // Alpha: blend entry and exit, then multiply by spotlight and role
@@ -5716,42 +5768,47 @@ export class LyricDancePlayer {
             word.semanticAlphaMax,
             blendedAnimAlpha * heroHoldAlpha * roleAlpha,
           );
-        chunk.alpha = Math.max(0, Math.min(1, recalcFinalAlpha * promoteAlphaMult));
+        chunk.alpha = Math.max(0, Math.min(1, recalcFinalAlpha * wallAlphaMult));
 
         const phraseAnimScaleX = blendedEntrySX * blendedExitSX * phraseBehaviorSX;
         const phraseAnimScaleY = blendedEntrySY * blendedExitSY * phraseBehaviorSY;
-        chunk.scaleX = totalScale * heroScaleMult * phraseAnimScaleX * promoteSclMult;
-        chunk.scaleY = totalScale * heroScaleMult * phraseAnimScaleY * promoteSclMult;
+        chunk.scaleX = totalScale * heroScaleMult * phraseAnimScaleX * wallSclMult;
+        chunk.scaleY = totalScale * heroScaleMult * phraseAnimScaleY * wallSclMult;
         chunk.scale = 1;
-        chunk.visible = (recalcFinalAlpha * promoteAlphaMult) > 0.01;
+        chunk.visible = (recalcFinalAlpha * wallAlphaMult) > 0.01;
         chunk.fontWeight = emphasisWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = isAnchor;
 
         // ── Color: active word = accent color, context = base white/dark ──
         {
-          const bgIsLight = this._currentSectionPalette.isLight;
-          const baseColor = this._currentSectionPalette.textBase;
+          const bgIsLight = this._currentSectionPalette?.isLight ?? (this._textBandBrightness > 0.55);
+          const baseColor = this._currentSectionPalette?.textBase ?? (bgIsLight ? '#1a1a2e' : '#f0f0f0');
 
+          let rawColor = baseColor;
           if (word.hasSemanticColor) {
             const semColor = word.color;
             const semLum = this._hexLuminance(semColor);
             if (bgIsLight && semLum > 0.7) {
-              chunk.color = this._blendHex(semColor, this._currentSectionPalette.textBase, 0.35);
+              rawColor = this._blendHex(semColor, '#1a1a2e', 0.35);
             } else if (!bgIsLight && semLum < 0.1) {
-              chunk.color = this._blendHex(semColor, this._currentSectionPalette.textBase, 0.35);
+              rawColor = this._blendHex(semColor, '#f0f0f0', 0.35);
             } else {
-              chunk.color = semColor;
+              rawColor = semColor;
             }
           } else if (isHeroWord) {
-            chunk.color = this._currentSectionPalette.textAccent;
+            rawColor = this._currentSectionPalette?.accent ?? this._framePalette?.[1] ?? '#FFD700';
+          }
+
+          // Wallpaper color drain: blend toward monochrome baseColor
+          if (wallColorDrain > 0 && rawColor !== baseColor) {
+            chunk.color = this._blendHex(rawColor, baseColor, wallColorDrain);
           } else {
-            // All other words: base color (white on dark bg, dark on light bg)
-            chunk.color = baseColor;
+            chunk.color = rawColor;
           }
         }
 
-        chunk.glow = Math.min(wordGlow, effectiveGlowCap / 20);
+        chunk.glow = isGhost ? 0 : Math.min(wordGlow, effectiveGlowCap / 20);
         chunk.emphasisLevel = emp;
         chunk.entryProgress = isEntering ? Math.max(0, Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration))) : 1;
         chunk.exitProgress = isExiting ? Math.max(0, Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)))) : 0;
