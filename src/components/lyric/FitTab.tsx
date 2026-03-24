@@ -508,7 +508,7 @@ export function FitTab({
     ) : undefined;
     onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent, onTitleChange });
     return () => onHeaderProject(null);
-  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onRetry]);
+  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onRetry, onTitleChange]);
   // CinematicDirectionCard extracted to top-level — see below FitTab
 
   // ── Live transcript sync ──────────────────────────────────────────────
