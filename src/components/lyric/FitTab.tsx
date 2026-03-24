@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import {
   Loader2,
   RefreshCw,

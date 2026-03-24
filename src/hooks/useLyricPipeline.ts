@@ -959,12 +959,16 @@ export function useLyricPipeline({
         });
         return;
       }
-      if (
-        !force &&
-        (generationStatus.cinematicDirection === "running" ||
-          generationStatus.cinematicDirection === "done")
-      )
-        return;
+      {
+        let shouldSkip = false;
+        setGenerationStatus((prev) => {
+          if (!force && (prev.cinematicDirection === "running" || prev.cinematicDirection === "done")) {
+            shouldSkip = true;
+          }
+          return prev;
+        });
+        if (shouldSkip) return;
+      }
 
       setGenerationStatus((prev) => ({
         ...prev,
@@ -1305,7 +1309,6 @@ export function useLyricPipeline({
     },
     [
       lyricData,
-      generationStatus.cinematicDirection,
       beatGrid,
       renderData,
       words,
