@@ -106,6 +106,7 @@ interface Props {
   sectionImageUrls?: (string | null)[];
   sectionImageProgress?: { done: number; total: number } | null;
   sectionImageError?: string | null;
+  onTitleChange?: (newTitle: string) => void;
 }
 
 export function FitTab({
@@ -134,6 +135,7 @@ export function FitTab({
   sectionImageUrls = [],
   sectionImageProgress = null,
   sectionImageError = null,
+  onTitleChange,
 }: Props) {
   const { user, profile } = useAuth();
   const { canCreate, credits, required, spendCredits } = useVoteGate();
@@ -504,9 +506,9 @@ export function FitTab({
         </button>
       </div>
     ) : undefined;
-    onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent });
+    onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent, onTitleChange });
     return () => onHeaderProject(null);
-  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onRetry]);
+  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onRetry, onTitleChange]);
   // CinematicDirectionCard extracted to top-level — see below FitTab
 
   // ── Live transcript sync ──────────────────────────────────────────────

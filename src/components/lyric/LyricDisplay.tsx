@@ -141,8 +141,10 @@ interface Props {
       title: string;
       onBack: () => void;
       rightContent?: React.ReactNode;
+      onTitleChange?: (newTitle: string) => void;
     } | null,
   ) => void;
+  onTitleChange?: (newTitle: string) => void;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -302,6 +304,7 @@ export function LyricDisplay({
   onReuploadAudio,
   onLinesChange,
   onHeaderProject,
+  onTitleChange,
 }: Props) {
   const { user, roles } = useAuth();
   const siteCopy = useSiteCopy();
@@ -977,7 +980,7 @@ export function LyricDisplay({
         )}
       </>
     );
-    onHeaderProject?.({ title, onBack, rightContent });
+    onHeaderProject?.({ title, onBack, rightContent, onTitleChange });
     return () => onHeaderProject?.(null);
   }, [
     data.title,
@@ -987,6 +990,7 @@ export function LyricDisplay({
     saveStatus,
     user,
     isAdmin,
+    onTitleChange,
     ]);
 
   // ── Render ────────────────────────────────────────────────────────────────

@@ -79,6 +79,7 @@ export type HeaderProjectSetter = (
     title: string;
     onBack: () => void;
     rightContent?: ReactNode;
+    onTitleChange?: (newTitle: string) => void;
   } | null,
 ) => void;
 
@@ -438,6 +439,9 @@ export function LyricsTab({
             if (lyricData) setLyricData({ ...lyricData, lines: newLines });
           }}
           onHeaderProject={onHeaderProject}
+          onTitleChange={(newTitle) => {
+            if (lyricData) setLyricData({ ...lyricData, title: newTitle });
+          }}
         />
       </div>
     );
