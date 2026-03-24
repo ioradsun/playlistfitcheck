@@ -5347,8 +5347,8 @@ export class LyricDancePlayer {
         // Use the SAME timing as phrase entry/exit
         const _entryPad = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
         const _tSinceAct = tSec - (group.start - _entryPad);
-        const _entryDur = Math.max(config.entryDuration, _entryPad * 0.35);
-        const _exitDur = Math.min(config.exitDuration, phraseDuration * 0.35);
+        const _entryDur = Math.max(this._activeMoodConfig.entryDuration, _entryPad * 0.35);
+        const _exitDur = Math.min(this._activeMoodConfig.exitDuration, Math.max(0.01, group.end - group.start) * 0.35);
         const _phraseRem = nextGroupStart - tSec;
 
         // Entry: ease from future ghost to center
@@ -5406,7 +5406,7 @@ export class LyricDancePlayer {
 
         // How far through the exit was this phrase when it left active?
         // timeSinceDone = time since group.end. exitDur was the window.
-        const exitDur = group.exitDuration ?? config.exitDuration ?? 0.3;
+        const exitDur = group.exitDuration ?? this._activeMoodConfig.exitDuration ?? 0.3;
 
         if (timeSinceDone < exitDur) {
           // Exit still running — continue spatial ease
