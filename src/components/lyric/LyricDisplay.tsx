@@ -990,6 +990,7 @@ export function LyricDisplay({
     saveStatus,
     user,
     isAdmin,
+    onTitleChange,
     ]);
 
   // ── Render ────────────────────────────────────────────────────────────────
