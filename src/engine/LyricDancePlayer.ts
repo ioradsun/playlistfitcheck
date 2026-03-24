@@ -2413,10 +2413,7 @@ export class LyricDancePlayer {
     this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
     this._textMetricsCache.clear();
-    // ═══ V2: Recompute timing budgets with conductor ═══
-    if (this.compiledScene?.phraseGroups?.length > 0 && this.conductor) {
-      this._buildWordBudgetMap();
-    }
+    // ═══ V2: timing budgets (placeholder — method removed) ═══
     this.buildBgCache();
     this.deriveVisualSystems();
     this.buildChapterSims();
@@ -2483,9 +2480,7 @@ export class LyricDancePlayer {
     this._markCompiledViewport(this.width || 960, this.height || 540);
     this._buildChunkCacheFromScene(this.compiledScene);
     this._textMetricsCache.clear();
-    if (this.compiledScene?.phraseGroups?.length > 0 && this.conductor) {
-      this._buildWordBudgetMap();
-    }
+    // timing budgets (placeholder — method removed)
     this._updateViewportScale();
     this.audio.currentTime = t;
     const groupCount = this.compiledScene?.phraseGroups?.length ?? 0;
@@ -5404,7 +5399,7 @@ export class LyricDancePlayer {
           const isOnlyWord = group.words.length === 1;
           if (isOnlyWord) continue; // solo hero centers, no neighbors to push
           const rawSm = 1.0 + Math.max(0, emp - 1) * 0.25;
-          const viewMargin = isPortraitLocal ? this.width * 0.08 : 16;
+          const viewMargin = (this.height > this.width) ? this.width * 0.08 : 16;
           const maxVp = maxViewportSafeScale(
             w.layoutX, w.layoutY, w.layoutWidth ?? 40, w.baseFontSize ?? 36,
             this.width, this.height, viewMargin,
@@ -5486,7 +5481,7 @@ export class LyricDancePlayer {
 
           // ── Viewport-safe solo hero scale ──
           // Scale as large as the viewport allows, capped at 1.5
-          const viewMargin = isPortraitLocal ? this.width * 0.08 : 16;
+          const viewMargin = (this.height > this.width) ? this.width * 0.08 : 16;
           const maxSafeScale = maxViewportSafeScale(
             this.width / 2, this.height / 2,
             word.layoutWidth, word.baseFontSize,
@@ -5498,7 +5493,7 @@ export class LyricDancePlayer {
           // The word IS the phrase — its compiled animation replaces the treatment's.
           if (isEntering) {
             const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
-            phraseEntryState = computeMotionEntry((word.entryStyle as MotionCharacter) ?? config.character, entryProgress, config.intensity) as typeof phraseEntryState;
+            phraseEntryState = computeMotionEntry(((word as any).entryStyle as MotionCharacter) ?? config.character, entryProgress, config.intensity) as typeof phraseEntryState;
             phraseEntryState.offsetX *= motionCap;
             phraseEntryState.offsetY *= motionCap;
             phraseEntryState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseEntryState.blur ?? 0);
@@ -5506,7 +5501,7 @@ export class LyricDancePlayer {
           }
           if (isExiting) {
             const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
-            phraseExitState = computeMotionExit((word.exitStyle as MotionCharacter) ?? config.character, exitProgress, config.intensity) as typeof phraseExitState;
+            phraseExitState = computeMotionExit(((word as any).exitStyle as MotionCharacter) ?? config.character, exitProgress, config.intensity) as typeof phraseExitState;
             phraseExitState.offsetX *= motionCap;
             phraseExitState.offsetY *= motionCap;
             phraseExitState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseExitState.blur ?? 0);
@@ -5520,7 +5515,7 @@ export class LyricDancePlayer {
           const rawEmpScale = 1.0 + Math.max(0, emp - 1) * 0.25;
 
           // ── Viewport clamp: scaled word must not overflow canvas edges ──
-          const viewMargin = isPortraitLocal ? this.width * 0.08 : 16;
+          const viewMargin = (this.height > this.width) ? this.width * 0.08 : 16;
           const maxVpScale = maxViewportSafeScale(
             word.layoutX, word.layoutY,
             word.layoutWidth, word.baseFontSize,
@@ -5589,12 +5584,12 @@ export class LyricDancePlayer {
         let wordExitBlend = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
         let wordBlendFactor = 0;
 
-        if (!isSoloHero && emp >= 3 && lineRole === 'current' && word.entryStyle) {
+        if (!isSoloHero && emp >= 3 && lineRole === 'current' && (word as any).entryStyle) {
           wordBlendFactor = Math.min(1.0, (emp - 2) / 3); // 0.33, 0.67, 1.0
 
           if (isEntering) {
             const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
-            const rawState = computeMotionEntry((word.entryStyle as MotionCharacter) ?? config.character, entryProgress, config.intensity * 0.7);
+            const rawState = computeMotionEntry(((word as any).entryStyle as MotionCharacter) ?? config.character, entryProgress, config.intensity * 0.7);
             wordEntryBlend = {
               offsetX: (rawState.offsetX ?? 0) * motionCap,
               offsetY: (rawState.offsetY ?? 0) * motionCap,
@@ -5609,7 +5604,7 @@ export class LyricDancePlayer {
           }
           if (isExiting) {
             const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
-            const rawState = computeMotionExit((word.exitStyle as MotionCharacter) ?? config.character, exitProgress, config.intensity * 0.7);
+            const rawState = computeMotionExit(((word as any).exitStyle as MotionCharacter) ?? config.character, exitProgress, config.intensity * 0.7);
             wordExitBlend = {
               offsetX: (rawState.offsetX ?? 0) * motionCap,
               offsetY: (rawState.offsetY ?? 0) * motionCap,

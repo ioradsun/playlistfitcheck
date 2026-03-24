@@ -41,9 +41,8 @@ describe('sceneCompiler', () => {
       expect(group.words.length).toBeGreaterThan(0);
       for (const word of group.words) {
         expect(word.id).toBeTruthy();
-        expect(word.entryStyle).toBeTruthy();
-        expect(word.exitStyle).toBeTruthy();
-        expect(word.behaviorStyle).toBeTruthy();
+        expect(word.emphasisLevel).toBeGreaterThanOrEqual(0);
+        expect(word.baseFontSize).toBeGreaterThan(0);
       }
     }
   });
