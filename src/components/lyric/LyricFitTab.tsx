@@ -1781,6 +1781,7 @@ export function LyricFitTab({
             sectionImageUrls={sectionImageUrls}
             sectionImageProgress={sectionImageProgress}
             sectionImageError={sectionImageError}
+            onTitleChange={handleTitleChange}
           />
         </div>
       )}
