@@ -439,9 +439,7 @@ export function LyricsTab({
             if (lyricData) setLyricData({ ...lyricData, lines: newLines });
           }}
           onHeaderProject={onHeaderProject}
-          onTitleChange={(newTitle) => {
-            if (lyricData) setLyricData({ ...lyricData, title: newTitle });
-          }}
+          onTitleChange={onTitleChange}
         />
       </div>
     );
