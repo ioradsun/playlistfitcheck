@@ -111,51 +111,48 @@ HERO WORD:
   Nouns and strong verbs. Not pronouns, articles, or filler.
 
 CHOREOGRAPHY:
-  For every phrase, decide how it lives on screen.
-  These are composition decisions, not animation decisions.
-  The goal: make the song's rhythm visible through layout variety.
-
-  For each phrase, output these fields:
-
-  "composition": how the words are arranged
-    "line"        — all words in one horizontal row. DEFAULT. Use for: steady rhythm, fast sections, readability.
-    "stack"       — one word per row, vertical column. Use for: building moments, intimate verses, deliberate pacing.
-    "center_word" — ONLY for single-word phrases. Word fills the screen. Use for: impact, hooks, isolated emphasis.
-
-  "bias": where the arrangement sits
-    "left" | "center" | "right"
-    Alternate across adjacent phrases for visual rhythm. Don't center everything.
-
-  "heroType": what carries emphasis
-    "word"   — the heroWord is visually emphasized (default)
-    "phrase" — the entire phrase is treated as one emphasis unit (good for short 2-3 word impact phrases)
-
-  "revealStyle": how the phrase appears
-    "instant"      — hard cut, all words at once. Use for: impact, chorus, confidence.
-    "stagger_fast" — words appear in rapid sequence (~40ms apart). Use for: groove, rhythm, building.
-    "stagger_slow" — words appear with more space (~120ms apart). Use for: intimate, suspense.
-
-  "holdClass": how long the phrase emotionally owns the screen
-    "short_hit"       — replaced quickly. Use for: rapid-fire, ad-libs, transitions.
-    "medium_groove"   — comfortable readable hold. Use for: most lines.
-    "long_emotional"  — holds with authority even if audio is short. Use for: hooks, key lines, single-word impact.
-
-  "energyTier": the phrase's role in the song's momentum
-    "intimate"  — quiet, spacious
-    "groove"    — steady backbone
-    "lift"      — building anticipation
-    "impact"    — chorus, hook, statement
-    "surprise"  — break the pattern (use sparingly, max 2-3 per song)
-
+  Most phrases are default: horizontal line, center, instant reveal, medium hold.
+  You do NOT output choreography for default phrases.
+  
+  Your job: pick ~15-25 MOMENTS that break the pattern.
+  Only output choreography fields on phrases that DIFFER from the default.
+  
+  The vocabulary:
+  
+  "composition": "line" (default) | "stack" (vertical column) | "center_word" (single word fills screen — 1 word ONLY)
+  "bias": "center" (default) | "left" | "right"
+  "heroType": "word" (default) | "phrase" (entire phrase emphasized — good for short impact phrases)
+  "revealStyle": "instant" (default) | "stagger_fast" (rapid sequence) | "stagger_slow" (deliberate pacing)
+  "holdClass": "medium_groove" (default) | "short_hit" (quick turnover) | "long_emotional" (holds with authority)
+  "energyTier": "groove" (default) | "intimate" | "lift" | "impact" | "surprise"
+  
+  WHAT DESERVES A MOMENT:
+  - Single-word impact phrases (EARTH, H.O.E.s) → center_word + long_emotional + impact
+  - First phrase of a new verse or section → stagger_slow + intimate (sets the tone)
+  - Chorus/hook phrases → energyTier "impact"
+  - A phrase that answers or contrasts the one before it → flip the bias (left↔right)
+  - An emotional peak → long_emotional
+  - A phrase that builds tension → stack + lift
+  - A phrase that needs space to breathe → long_emotional + intimate
+  - A rapid-fire sequence → short_hit for each phrase in the run
+  - 2-3 surprise moments per song → surprise tier (use VERY sparingly)
+  
+  WHAT STAYS DEFAULT (no choreography output needed):
+  - Standard verse lines with steady rhythm
+  - Phrases that don't need special layout or timing
+  - Anything that works fine as a centered horizontal line with instant reveal
+  
+  DEFAULT PHRASE (no choreography fields):
+  { "wordRange": [0, 1], "heroWord": "Tell" }
+  
+  MOMENT PHRASE (only the fields that differ):
+  { "wordRange": [43, 43], "heroWord": "H.O.E.s", "composition": "center_word", "holdClass": "long_emotional", "energyTier": "impact" }
+  
   RULES:
-  - center_word is ONLY valid for single-word phrases. Never use it for 2+ word phrases.
-  - Impact moments should be simpler and larger, not busier.
-  - Vary bias across adjacent phrases. Three phrases in a row with bias "center" is flat.
-  - Chorus: prioritize clarity and confidence. Usually "line" + "instant" + "impact".
-  - Verses: vary between "line" and "stack", alternate bias.
-  - Do not default every phrase to center + line + instant. That is wallpaper.
-  - When lyrics repeat (chorus/hook), use the SAME choreography each time.
-  - Ratio: 70% familiar patterns, 20% variation, 10% surprise.
+  - center_word is ONLY for single-word phrases. Never 2+ words.
+  - Only output choreography fields that differ from default. Don't output "composition": "line" — that's the default.
+  - When lyrics repeat (chorus/hook), tag the SAME moments each time.
+  - Aim for 15-25 moments in a typical song. Not every phrase is special.
 
 WORD DIRECTIVES:
   Tag emotionally significant words:
@@ -170,7 +167,7 @@ WORD DIRECTIVES:
   elementalClass needs >=140ms. isolation needs >=700ms.
 
 Return ONLY valid JSON. No markdown.
-{ "phrases": [{ "wordRange": [start, end], "heroWord": "WORD", "composition": "line", "bias": "center", "heroType": "word", "revealStyle": "instant", "holdClass": "medium_groove", "energyTier": "groove" }],
+{ "phrases": [{ "wordRange": [start, end], "heroWord": "WORD" }, { "wordRange": [43, 43], "heroWord": "H.O.E.s", "composition": "center_word", "holdClass": "long_emotional", "energyTier": "impact" }],
   "wordDirectives": [{ "word": "soul", "emphasisLevel": 3 }] }
 `;
 
@@ -1318,6 +1315,186 @@ async function callScene(
   return result.value;
 }
 
+/**
+ * Fill smart choreography defaults for phrases the AI left bare.
+ * The AI picks ~20 moments. This function fills the remaining ~65 phrases
+ * with contextually appropriate defaults based on:
+ * - word count and duration (short phrases get different treatment)
+ * - position in song (first/last phrases of sections)
+ * - section visual mood (from sceneDirection)
+ * - alternating bias for visual rhythm
+ */
+function fillChoreographyDefaults(
+  phrases: Array<{
+    wordRange: [number, number];
+    heroWord?: string;
+    composition?: string;
+    bias?: string;
+    heroType?: string;
+    revealStyle?: string;
+    holdClass?: string;
+    energyTier?: string;
+  }>,
+  words: Array<{ word: string; start: number; end: number }>,
+  wordDirs: Array<{ word?: string; emphasisLevel?: number; isolation?: boolean }>,
+  sceneDirection: Record<string, any>,
+): void {
+  if (!words || words.length === 0) return;
+
+  // Build section lookup: time → visualMood
+  const sections: Array<{ startSec: number; endSec: number; visualMood: string }> = [];
+  if (Array.isArray(sceneDirection?.sections)) {
+    for (const s of sceneDirection.sections) {
+      if (typeof s.startSec === "number" && typeof s.endSec === "number") {
+        sections.push({ startSec: s.startSec, endSec: s.endSec, visualMood: s.visualMood ?? "raw" });
+      }
+    }
+  }
+
+  const getSectionMood = (timeSec: number): string => {
+    for (const s of sections) {
+      if (timeSec >= s.startSec && timeSec < s.endSec) return s.visualMood;
+    }
+    return "raw";
+  };
+
+  // Mood → default energyTier mapping
+  const moodToEnergy: Record<string, string> = {
+    intimate: "intimate", vulnerable: "intimate", dreamy: "intimate",
+    anthemic: "impact", triumphant: "impact", aggressive: "impact",
+    hypnotic: "lift", eerie: "lift", hopeful: "lift",
+    melancholy: "groove", nostalgic: "groove", raw: "groove", defiant: "groove",
+    euphoric: "impact",
+  };
+
+  // Build emphasis lookup
+  const emphasisMap = new Map<string, number>();
+  for (const wd of wordDirs) {
+    if (wd.word && wd.emphasisLevel) {
+      emphasisMap.set(wd.word.toLowerCase().replace(/[^a-z0-9]/g, ""), wd.emphasisLevel);
+    }
+  }
+
+  // Track bias for alternation
+  let lastBias = "center";
+
+  for (let i = 0; i < phrases.length; i++) {
+    const phrase = phrases[i];
+    const [s, e] = phrase.wordRange;
+    const wc = e - s + 1;
+
+    // Skip phrases the AI already choreographed (any non-default field present)
+    const hasAIChoreography = phrase.composition !== undefined
+      || phrase.bias !== undefined
+      || phrase.heroType !== undefined
+      || phrase.revealStyle !== undefined
+      || phrase.holdClass !== undefined
+      || phrase.energyTier !== undefined;
+
+    // After validation, missing fields get defaults ('line', 'center', etc.)
+    // So check if ALL fields are at their default values
+    const isAllDefault = phrase.composition === "line"
+      && phrase.bias === "center"
+      && phrase.heroType === "word"
+      && phrase.revealStyle === "instant"
+      && phrase.holdClass === "medium_groove"
+      && phrase.energyTier === "groove";
+
+    // If AI set any non-default value, respect it entirely
+    if (hasAIChoreography && !isAllDefault) {
+      lastBias = phrase.bias ?? "center";
+      continue;
+    }
+
+    // ── Compute context ──
+    const startSec = s < words.length ? words[s].start : 0;
+    const endSec = e < words.length ? words[e].end : startSec;
+    const durationMs = Math.round((endSec - startSec) * 1000);
+    const sectionMood = getSectionMood(startSec);
+
+    // Hero word emphasis
+    const heroClean = (phrase.heroWord ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const heroEmphasis = emphasisMap.get(heroClean) ?? 1;
+
+    // Is this the first phrase or last phrase?
+    const isFirst = i === 0;
+    const isLast = i === phrases.length - 1;
+
+    // Is this at a section boundary? Check if previous phrase was in a different section
+    const prevStartSec = i > 0 && phrases[i - 1].wordRange[0] < words.length
+      ? words[phrases[i - 1].wordRange[0]].start
+      : -1;
+    const isSectionStart = prevStartSec >= 0 && getSectionMood(prevStartSec) !== sectionMood;
+
+    // ── Apply defaults by context ──
+
+    // Single-word phrases under 500ms → center_word + impact
+    if (wc === 1 && durationMs < 500) {
+      phrase.composition = "center_word";
+      phrase.holdClass = "long_emotional";
+      phrase.energyTier = "impact";
+      phrase.revealStyle = "instant";
+      lastBias = "center";
+      phrase.bias = "center";
+      continue;
+    }
+
+    // Section start → set the tone
+    if (isSectionStart || isFirst) {
+      phrase.revealStyle = "stagger_slow";
+      phrase.energyTier = moodToEnergy[sectionMood] ?? "groove";
+      if (wc <= 3) {
+        phrase.holdClass = "long_emotional";
+      }
+    }
+
+    // Map section mood to energy tier (if not already set by section-start logic)
+    if (phrase.energyTier === "groove") {
+      phrase.energyTier = moodToEnergy[sectionMood] ?? "groove";
+    }
+
+    // Short phrases (2-3 words) with high emphasis → phrase-level hero
+    if (wc <= 3 && heroEmphasis >= 3) {
+      phrase.heroType = "phrase";
+    }
+
+    // Stack for 4+ word phrases in intimate/vulnerable sections
+    if (wc >= 4 && (sectionMood === "intimate" || sectionMood === "vulnerable" || sectionMood === "dreamy")) {
+      phrase.composition = "stack";
+      phrase.revealStyle = "stagger_slow";
+    }
+
+    // Alternate bias for visual rhythm (only for non-stack, non-center_word)
+    if (phrase.composition === "line") {
+      if (lastBias === "center") {
+        // 40% chance to shift left or right
+        const phraseHash = (s * 7 + e * 13) % 10;
+        if (phraseHash < 2) {
+          phrase.bias = "left";
+        } else if (phraseHash < 4) {
+          phrase.bias = "right";
+        }
+        // else stays center
+      } else {
+        // After a left/right, usually go back to center
+        phrase.bias = "center";
+      }
+    }
+    lastBias = phrase.bias ?? "center";
+
+    // Last phrase → long emotional hold
+    if (isLast) {
+      phrase.holdClass = "long_emotional";
+      phrase.energyTier = "intimate";
+    }
+
+    // Fast phrases (under 400ms, multi-word) → short_hit
+    if (wc >= 2 && durationMs < 400) {
+      phrase.holdClass = "short_hit";
+    }
+  }
+}
+
 async function callWords(
   apiKey: string,
   title: string,
@@ -1444,28 +1621,8 @@ async function callWords(
     result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
     // 5. Validate + fill heroWords
     fillMissingHeroWords(result.value.phrases, words);
-
-    // Safety net: very short single-word phrases get impact treatment if AI didn't decide
-    if (words) {
-      for (const phrase of result.value.phrases) {
-        const [s, e] = phrase.wordRange;
-        const wc = e - s + 1;
-        if (wc !== 1) continue;
-        if (s >= words.length) continue;
-        const durMs = Math.round((words[s].end - words[s].start) * 1000);
-        // Only promote single words under 500ms that AI left as default
-        if (
-          durMs < 500 &&
-          phrase.composition === "line" &&
-          phrase.holdClass === "medium_groove"
-        ) {
-          phrase.composition = "center_word";
-          phrase.holdClass = "long_emotional";
-          phrase.energyTier = "impact";
-          phrase.revealStyle = "instant";
-        }
-      }
-    }
+    // 6. Smart choreography defaults for phrases the AI left bare
+    fillChoreographyDefaults(result.value.phrases, words, wordDirs, sceneDirection);
   }
 
   if (
