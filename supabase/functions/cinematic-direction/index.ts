@@ -831,6 +831,72 @@ function enforcePhraseLimits(
 }
 
 /**
+ * Split words with isolation: true out of multi-word phrases into solo phrases.
+ * These words deserve their own screen moment — the solo hero system centers them.
+ * If they stay inside a multi-word phrase, they cause show-hide-show flicker.
+ */
+function splitIsolatedWords(
+  phrases: Array<{ wordRange: [number, number]; heroWord?: string }>,
+  words: Array<{ word: string; start: number; end: number }>,
+  wordDirectives: Array<{ word?: string; isolation?: boolean }>,
+): Array<{ wordRange: [number, number]; heroWord?: string }> {
+  // Build a set of isolated word stems
+  const isolationSet = new Set<string>();
+  for (const wd of wordDirectives) {
+    if (wd.isolation && wd.word) {
+      isolationSet.add(wd.word.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    }
+  }
+  if (isolationSet.size === 0) return phrases;
+
+  const result: Array<{ wordRange: [number, number]; heroWord?: string }> = [];
+
+  for (const phrase of phrases) {
+    const [start, end] = phrase.wordRange;
+
+    // Already a single-word phrase — keep as-is
+    if (start === end) {
+      result.push(phrase);
+      continue;
+    }
+
+    // Scan for isolated words in this phrase
+    let segStart = start;
+    for (let i = start; i <= end; i++) {
+      if (i >= words.length) continue;
+      const clean = words[i].word.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const durMs = Math.round((words[i].end - words[i].start) * 1000);
+
+      if (isolationSet.has(clean) && durMs >= 350) {
+        // Push words before the isolated word as their own phrase
+        if (i > segStart) {
+          result.push({
+            wordRange: [segStart, i - 1],
+            heroWord: phrase.heroWord,
+          });
+        }
+        // Push the isolated word as a solo phrase
+        result.push({
+          wordRange: [i, i],
+          heroWord: words[i].word.toUpperCase().replace(/[^A-Z0-9'.,-]/g, ""),
+        });
+        segStart = i + 1;
+      }
+    }
+
+    // Push remaining words after the last isolated word
+    if (segStart <= end) {
+      result.push({
+        wordRange: [segStart, end],
+        heroWord: phrase.heroWord,
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
  * Ensure every word belongs to exactly one phrase.
  * Fills gaps left by the AI with mechanical phrases.
  */
@@ -1896,11 +1962,17 @@ async function callWords(
   if (words && Array.isArray(result.value.phrases)) {
     // 1. Hard cap: split any phrase over 6 words
     result.value.phrases = enforcePhraseLimits(result.value.phrases, words, 6);
-    // 2. Merge orphan single-word phrases (< 350ms) into neighbors
+    // 2. Split isolated words into their own solo phrases
+    const wordDirs = Array.isArray(result.value.wordDirectives)
+      ? result.value.wordDirectives
+      : [];
+    result.value.phrases = splitIsolatedWords(result.value.phrases, words, wordDirs);
+    // 3. Merge orphan single-word phrases (< 350ms) into neighbors
+    //    (isolated words ≥ 350ms survive because mergeOrphanPhrases skips ≥350ms)
     result.value.phrases = mergeOrphanPhrases(result.value.phrases, words);
-    // 3. Fill gaps left by merging or AI omissions
+    // 4. Fill gaps left by splitting
     result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
-    // 4. Every phrase must have a heroWord for accent color
+    // 5. Every phrase must have a validated heroWord
     fillMissingHeroWords(result.value.phrases, words);
   }
 
