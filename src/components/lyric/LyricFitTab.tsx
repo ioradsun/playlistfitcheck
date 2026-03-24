@@ -161,9 +161,7 @@ export function LyricFitTab({
     if (id) {
       supabase.from("saved_lyrics").update({ title: newTitle, updated_at: new Date().toISOString() } as any).eq("id", id).then(() => {});
     }
-    // Update sidebar item label instantly
-    onOptimisticItem?.({ id: id ?? "__unsaved__", label: newTitle, meta: "", type: "lyricfit" });
-  }, [onOptimisticItem]);
+  }, []);
 
   const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(
