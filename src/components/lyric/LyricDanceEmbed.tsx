@@ -8,7 +8,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
-import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
@@ -346,11 +345,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         if (!effectiveShowCover && !isWaiting) toggleMute(e);
       }}
     >
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={!isBattleMode ? { bottom: 60, height: 'calc(100% - 60px)' } : undefined} />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
       <canvas
         ref={textCanvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none"
-        style={!isBattleMode ? { bottom: 60, height: 'calc(100% - 60px)' } : undefined}
       />
 
       {!isBattleMode && (
@@ -418,7 +416,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       {!isBattleMode && !reactionPanelOpen && (
         <div
           className="absolute bottom-0 left-0 right-0 z-[450]"
-          style={{ background: "#0a0a0a" }}
+          style={{ background: "rgba(10, 10, 10, 0.85)" }}
           onClick={(e) => e.stopPropagation()}
         >
           {reelsMode && artistName && effectiveShowCover && (
@@ -452,13 +450,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               </span>
             </div>
           )}
-          {!effectiveShowCover && !isWaiting && data && !(window as any).__LYRIC_DANCE_LIGHTNING_BAR && (
-            <LyricDanceProgressBar
-              player={player}
-              data={data}
-              palette={palette}
-            />
-          )}
+          {/* Progress bar removed — in-canvas wick bar provides progress indication */}
           <CardBottomBar
             variant={reelsMode ? "fullscreen" : "embedded"}
             votedSide={votedSide}
