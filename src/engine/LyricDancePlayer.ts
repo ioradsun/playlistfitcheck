@@ -3764,137 +3764,74 @@ export class LyricDancePlayer {
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'alphabetic';
 
-    // ═══ PHRASE-LEVEL ELEMENTAL EFFECTS ═══
-    // If ANY word in a phrase has an elementalClass, the effect covers the full phrase.
-    // The word is the trigger. The phrase is the canvas.
+    // ═══ PER-WORD ELEMENTAL EFFECTS ═══
+    // For each visible word with an elementalClass directive, render the effect
+    // directly on that word using screen blend mode (additive glow, no duplicate).
     if (this._activeMoodConfig.elementalIntensity > 0 && sortBuf.length > 0) {
-      const phraseMap = new Map<string, {
-        elementalClass: string | null;
-        minX: number; maxX: number; minY: number; maxY: number;
-        maxFontSize: number; totalWidth: number; avgEntryProgress: number;
-        groupStart: number;
-        groupEnd: number;
-        text: string;
-        words: string[];
-        visibleChunkCount: number;
-      }>();
+      const beatPulse = this._lastBeatState?.pulse ?? 0;
+      const lightingMode = this._textBandBrightness > 0.55 ? 'bright' as const : 'dark' as const;
+      const elementalAlpha = Math.max(this._activeMoodConfig.elementalIntensity, 0.5);
 
       for (let ci = 0; ci < sortBuf.length; ci++) {
         const chunk = sortBuf[ci];
         if (!chunk.visible || (chunk.alpha ?? 0) < 0.05) continue;
 
-        const idParts = (chunk.id ?? '').split('-');
-        if (idParts.length < 3) continue;
-        const phraseKey = `${idParts[0]}-${idParts[1]}`;
-
+        // Look up this word's elemental class from directives
         const directiveKey = this.cleanWord((chunk.text ?? '') as string);
-        const directive = directiveKey ? this.resolvedState.wordDirectivesMap[directiveKey] ?? null : null;
+        if (!directiveKey) continue;
+        const directive = this.resolvedState.wordDirectivesMap[directiveKey] ?? null;
+        if (!directive?.elementalClass) continue;
 
-        let entry = phraseMap.get(phraseKey);
-        if (!entry) {
-          entry = {
-            elementalClass: null,
-            minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity,
-            maxFontSize: 0, totalWidth: 0, avgEntryProgress: 0,
-            groupStart: 0,
-            groupEnd: 0,
-            text: '',
-            words: [],
-            visibleChunkCount: 0,
-          };
-          const li = Number(idParts[0]);
-          const gi = Number(idParts[1]);
-          const matchGroup = this.compiledScene?.phraseGroups?.find(
-            (g: any) => g.lineIndex === li && g.groupIndex === gi,
-          );
-          if (matchGroup) {
-            entry.groupStart = matchGroup.start;
-            entry.groupEnd = matchGroup.end;
-          }
-          phraseMap.set(phraseKey, entry);
-        }
+        const wordText = (chunk.text ?? '') as string;
+        if (!wordText) continue;
 
-        if (directive?.elementalClass && !entry.elementalClass) {
-          entry.elementalClass = directive.elementalClass;
-        }
-
+        // Word geometry
         const sx = chunk.scaleX ?? chunk.scale ?? 1;
-        const sy = chunk.scaleY ?? chunk.scale ?? 1;
         const fontSize = chunk.fontSize ?? 36;
         const chunkObj = this.chunks.get(chunk.id);
-        const halfW = ((chunkObj?.width ?? 40) * sx) / 2;
-        const halfH = (fontSize * sy) / 2;
-        const cx = chunk.x ?? 0;
-        const cy = (chunk.y ?? 0) - this._textVerticalBias;
+        const wordWidth = (chunkObj?.width ?? 40) * sx;
+        const halfW = wordWidth / 2;
+        const centerX = chunk.x ?? 0;
+        const centerY = (chunk.y ?? 0) - this._textVerticalBias;
+        // drawElementalWord draws from x=0 as left edge, so translate to left edge
+        const leftX = centerX - halfW;
 
-        entry.minX = Math.min(entry.minX, cx - halfW);
-        entry.maxX = Math.max(entry.maxX, cx + halfW);
-        entry.minY = Math.min(entry.minY, cy - halfH);
-        entry.maxY = Math.max(entry.maxY, cy + halfH);
-        entry.maxFontSize = Math.max(entry.maxFontSize, fontSize);
-        entry.totalWidth = entry.maxX - entry.minX;
-        entry.avgEntryProgress += (chunk.entryProgress ?? 1);
-        entry.visibleChunkCount += 1;
-
-        // Collect word text for elemental rendering
-        if (chunk.text) {
-          entry.words.push(chunk.text as string);
+        // Word timing — time since this word's phrase started
+        const idParts = (chunk.id ?? '').split('-');
+        let groupStart = 0;
+        if (idParts.length >= 2 && this.compiledScene?.phraseGroups) {
+          const li = Number(idParts[0]);
+          const gi = Number(idParts[1]);
+          for (const g of this.compiledScene.phraseGroups) {
+            if (g.lineIndex === li && g.groupIndex === gi) {
+              groupStart = g.start;
+              break;
+            }
+          }
         }
-      }
+        const wordLocalTime = Math.max(0, tSec - groupStart);
 
-      // Build phrase text for elemental rendering
-      for (const [, entry] of phraseMap) {
-        entry.text = entry.words.join(' ');
-      }
-
-      const beatPulse = this._lastBeatState?.pulse ?? 0;
-      const lightingMode = this._textBandBrightness > 0.55 ? 'bright' as const : 'dark' as const;
-      const elementalAlpha = Math.max(this._activeMoodConfig.elementalIntensity, 0.5);
-
-      for (const [phraseKey, phrase] of phraseMap) {
-        phrase.text = phrase.text.replace(/\s+/g, ' ').trim();
-        const avgEntryProgress = phrase.visibleChunkCount > 0
-          ? phrase.avgEntryProgress / phrase.visibleChunkCount
-          : 1;
-        const timingStart = phrase.groupStart;
-        const timingEnd = Math.max(timingStart + 0.01, phrase.groupEnd || timingStart + 0.6);
-        const normalizedPhaseTime = Math.max(0, Math.min(1, (tSec - timingStart) / Math.max(0.01, timingEnd - timingStart)));
-        const wordLocalTime = Math.max(0, Math.min(1.8, normalizedPhaseTime * 0.95 + (1 - avgEntryProgress) * 0.25));
-        const skipped = !phrase.elementalClass
-          || !phrase.text
-          || !Number.isFinite(phrase.minX)
-          || phrase.totalWidth <= 0;
-        if (DEBUG_ELEMENTAL_TRACE) {
-          console.log(
-            `[ElementalTrace] key=${phraseKey} text="${phrase.text}" class=${phrase.elementalClass ?? 'none'} local=${wordLocalTime.toFixed(3)} bounds=(${phrase.minX.toFixed(1)},${phrase.minY.toFixed(1)})-(${phrase.maxX.toFixed(1)},${phrase.maxY.toFixed(1)}) skipped=${skipped}`,
-          );
-        }
-        if (skipped) continue;
-
-        const phraseCY = (phrase.minY + phrase.maxY) / 2;
-        const phraseW = phrase.totalWidth;
-        const phraseFontSize = phrase.maxFontSize;
-
-        const maxParticles = Math.max(3, Math.round(10 * elementalAlpha));
-        const bubbleXPositions = Array.from({ length: maxParticles }, (_, i) =>
-          phraseW * (i / Math.max(1, maxParticles - 1))
+        // Particle spread for this single word
+        const particleCount = Math.max(3, Math.round(8 * elementalAlpha));
+        const bubbleXPositions = Array.from({ length: particleCount }, (_, i) =>
+          wordWidth * (i / Math.max(1, particleCount - 1))
         );
 
         this.ctx.save();
         this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
         this.ctx.globalCompositeOperation = 'screen';
-        this.ctx.globalAlpha = elementalAlpha * 0.7;
-        this.ctx.translate(phrase.minX, phraseCY);
+        this.ctx.globalAlpha = elementalAlpha * (chunk.alpha ?? 1);
+        this.ctx.translate(leftX, centerY);
         this.ctx.textBaseline = 'middle';
-        this.ctx.font = `${this.compiledScene?.baseFontWeight ?? 600} ${phraseFontSize}px "${this.compiledScene?.baseFontFamily ?? 'Montserrat'}", sans-serif`;
+        this.ctx.font = `${chunk.fontWeight ?? 600} ${fontSize}px "${this.compiledScene?.baseFontFamily ?? 'Montserrat'}", sans-serif`;
 
         try {
           drawElementalWord(
             this.ctx,
-            phrase.text,
-            phraseFontSize,
-            phraseW,
-            phrase.elementalClass,
+            wordText,
+            fontSize,
+            wordWidth,
+            directive.elementalClass,
             wordLocalTime,
             beatPulse,
             1,
@@ -3902,22 +3839,23 @@ export class LyricDancePlayer {
             {
               bubbleXPositions,
               useBlur: this._qualityTier === 0,
-              isHeroWord: true,
+              isHeroWord: (directive.emphasisLevel ?? 0) >= 3,
               effectQuality: this._qualityTier === 0 ? 'high' : 'low',
-              wordX: phrase.minX,
-              wordY: phraseCY,
+              wordX: leftX,
+              wordY: centerY,
               canvasWidth: this.width,
               canvasHeight: this.height,
               lightingMode,
             },
           );
         } catch (e) {
-          console.warn('[LyricEngine] phrase elemental error:', e);
+          // silently skip — don't spam console every frame
         }
 
         this.ctx.restore();
       }
     }
+
 
 
     // Comment comets — after text, before watermark
