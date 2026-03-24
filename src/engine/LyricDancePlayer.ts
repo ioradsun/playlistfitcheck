@@ -1221,6 +1221,7 @@ interface HeroDecompBurst {
   duration: number;     // ms
   originX: number;
   originY: number;
+  elementalClass?: string;
 }
 
 interface CommentChunk {
@@ -3618,6 +3619,19 @@ export class LyricDancePlayer {
         this.spawnDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, spawnColor, frameNowMs);
       }
 
+      // ═══ ELEMENTAL DECOMPOSITION: element-themed burst when tagged words exit ═══
+      if (exit > 0.01 && exit < 0.3 && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2) {
+        const dKey = this.cleanWord((chunk.text ?? '') as string);
+        const dir = dKey ? this.resolvedState.wordDirectivesMap[dKey] ?? null : null;
+        if (dir?.elementalClass) {
+          this._heroDecompSpawned.add(chunk.id);
+          const spawnX = Number.isFinite(chunk.x) ? Math.max(clampMinX, Math.min(clampMaxX, chunk.x as number)) : this.width / 2;
+          const spawnY = Number.isFinite(chunk.y) ? Math.max(clampMinY, Math.min(clampMaxY, (chunk.y as number) - this._textVerticalBias)) : this.height / 2;
+          const spawnFontSize = Number.isFinite(chunk.fontSize) ? Math.max(viewportMinFont, Math.round(chunk.fontSize as number) || 36) : 36;
+          this.spawnElementalDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, dir.elementalClass, frameNowMs);
+        }
+      }
+
       const obj = this.chunks.get(chunk.id);
       if (!obj) return;
 
@@ -4233,8 +4247,179 @@ export class LyricDancePlayer {
     });
 
     // Cap active bursts
-    if (this._heroDecompBursts.length > 4) {
-      this._heroDecompBursts = this._heroDecompBursts.slice(-4);
+    if (this._heroDecompBursts.length > 6) {
+      this._heroDecompBursts = this._heroDecompBursts.slice(-6);
+    }
+  }
+
+
+  private spawnElementalDecompBurst(
+    wordId: string, cx: number, cy: number, fontSize: number,
+    elementalClass: string, nowMs: number,
+  ): void {
+    const particles: HeroDecompParticle[] = [];
+    const spread = fontSize * 1.0;
+
+    // Element-specific particle recipes
+    switch (elementalClass) {
+      case 'FROST':
+      case 'ICE': {
+        // Ice crystals that drift outward slowly, sparkling
+        const count = 20 + Math.floor(Math.random() * 10);
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 20 + Math.random() * 60;
+          const shape: HeroDecompParticle['shape'] =
+            i < count * 0.6 ? 'shard' : i < count * 0.85 ? 'glow' : 'dust';
+          particles.push({
+            x: cx + (Math.random() - 0.5) * spread,
+            y: cy + (Math.random() - 0.5) * fontSize * 0.4,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed * 0.6 - 15, // slight drift up
+            size: shape === 'shard' ? (4 + Math.random() * 7) : (2 + Math.random() * 4),
+            alpha: 0.8 + Math.random() * 0.2,
+            rotation: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 3,
+            life: 1.0,
+            color: `hsl(${200 + Math.random() * 20}, ${60 + Math.random() * 30}%, ${70 + Math.random() * 25}%)`,
+            shape,
+          });
+        }
+        this._heroDecompBursts.push({
+          wordId, particles, startTime: nowMs,
+          duration: 1800, // frost lingers — 1.8s
+          originX: cx, originY: cy, elementalClass,
+        });
+        break;
+      }
+
+      case 'FIRE': {
+        // Embers that rise (negative gravity), glow orange/red
+        const count = 25 + Math.floor(Math.random() * 10);
+        for (let i = 0; i < count; i++) {
+          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.8; // mostly upward
+          const speed = 30 + Math.random() * 80;
+          const shape: HeroDecompParticle['shape'] =
+            i < count * 0.3 ? 'shard' : i < count * 0.7 ? 'glow' : 'dust';
+          particles.push({
+            x: cx + (Math.random() - 0.5) * spread,
+            y: cy + (Math.random() - 0.5) * fontSize * 0.3,
+            vx: Math.cos(angle) * speed * (0.5 + Math.random()),
+            vy: Math.sin(angle) * speed * (0.8 + Math.random()) - 40, // strong upward
+            size: shape === 'glow' ? (3 + Math.random() * 6) : (2 + Math.random() * 4),
+            alpha: 0.9 + Math.random() * 0.1,
+            rotation: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 6,
+            life: 1.0,
+            color: `hsl(${Math.random() * 30 + 10}, ${80 + Math.random() * 20}%, ${50 + Math.random() * 30}%)`,
+            shape,
+          });
+        }
+        this._heroDecompBursts.push({
+          wordId, particles, startTime: nowMs,
+          duration: 1400, // fire burns fast — 1.4s
+          originX: cx, originY: cy, elementalClass,
+        });
+        break;
+      }
+
+      case 'WATER':
+      case 'RAIN': {
+        // Droplets that fall with gravity, blue tones
+        const count = 18 + Math.floor(Math.random() * 8);
+        for (let i = 0; i < count; i++) {
+          const angle = Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.6; // mostly downward
+          const speed = 20 + Math.random() * 50;
+          const shape: HeroDecompParticle['shape'] =
+            i < count * 0.5 ? 'glow' : i < count * 0.8 ? 'dust' : 'shard';
+          particles.push({
+            x: cx + (Math.random() - 0.5) * spread,
+            y: cy + (Math.random() - 0.5) * fontSize * 0.3,
+            vx: Math.cos(angle) * speed * 0.4,
+            vy: Math.sin(angle) * speed * 0.6 + 10, // fall down
+            size: shape === 'glow' ? (3 + Math.random() * 5) : (1.5 + Math.random() * 3),
+            alpha: 0.7 + Math.random() * 0.3,
+            rotation: 0,
+            rotSpeed: 0,
+            life: 1.0,
+            color: `hsl(${200 + Math.random() * 20}, ${50 + Math.random() * 30}%, ${55 + Math.random() * 30}%)`,
+            shape,
+          });
+        }
+        this._heroDecompBursts.push({
+          wordId, particles, startTime: nowMs,
+          duration: 1200,
+          originX: cx, originY: cy, elementalClass,
+        });
+        break;
+      }
+
+      case 'SMOKE': {
+        // Wisps that float upward very slowly, fade to nothing
+        const count = 15 + Math.floor(Math.random() * 8);
+        for (let i = 0; i < count; i++) {
+          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.5;
+          const speed = 10 + Math.random() * 30; // very slow
+          particles.push({
+            x: cx + (Math.random() - 0.5) * spread,
+            y: cy + (Math.random() - 0.5) * fontSize * 0.4,
+            vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 15,
+            vy: -10 - Math.random() * 20, // gentle rise
+            size: 4 + Math.random() * 8, // larger, softer
+            alpha: 0.4 + Math.random() * 0.3, // starts translucent
+            rotation: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 1.5, // slow spin
+            life: 1.0,
+            color: `hsl(0, 0%, ${55 + Math.random() * 30}%)`,
+            shape: i < count * 0.3 ? 'glow' : 'dust',
+          });
+        }
+        this._heroDecompBursts.push({
+          wordId, particles, startTime: nowMs,
+          duration: 2000, // smoke lingers longest — 2s
+          originX: cx, originY: cy, elementalClass,
+        });
+        break;
+      }
+
+      case 'ELECTRIC': {
+        // Bright sparks that scatter fast in all directions, short lived
+        const count = 22 + Math.floor(Math.random() * 12);
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 60 + Math.random() * 150; // fast scatter
+          particles.push({
+            x: cx + (Math.random() - 0.5) * spread * 0.6,
+            y: cy + (Math.random() - 0.5) * fontSize * 0.3,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: 2 + Math.random() * 4,
+            alpha: 0.9 + Math.random() * 0.1,
+            rotation: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 12, // fast spin
+            life: 1.0,
+            color: `hsl(${190 + Math.random() * 40}, ${70 + Math.random() * 30}%, ${65 + Math.random() * 30}%)`,
+            shape: i < count * 0.5 ? 'glow' : 'shard',
+          });
+        }
+        this._heroDecompBursts.push({
+          wordId, particles, startTime: nowMs,
+          duration: 800, // electric is fast — 0.8s
+          originX: cx, originY: cy, elementalClass,
+        });
+        break;
+      }
+
+      default: {
+        // Fallback: generic white shatter
+        this.spawnDecompBurst(wordId, cx, cy, fontSize, '#ffffff', nowMs);
+        return;
+      }
+    }
+
+    // Cap active bursts
+    if (this._heroDecompBursts.length > 6) {
+      this._heroDecompBursts = this._heroDecompBursts.slice(-6);
     }
   }
 
@@ -4243,7 +4428,7 @@ export class LyricDancePlayer {
 
     const nowMs = frameNowSec * 1000;
     const dt = Math.min(0.05, this._frameDt); // capped delta
-    const gravity = 180; // pixels/sec²
+    const BASE_GRAVITY = 180;
 
     this.ctx.save();
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
@@ -4253,6 +4438,14 @@ export class LyricDancePlayer {
       const burst = this._heroDecompBursts[bi];
       const elapsed = nowMs - burst.startTime;
       const burstT = Math.min(1, elapsed / burst.duration);
+
+      // Element-specific gravity
+      let gravity = BASE_GRAVITY;
+      if (burst.elementalClass === 'FIRE') gravity = -60;       // embers rise
+      else if (burst.elementalClass === 'SMOKE') gravity = -25;  // smoke drifts up
+      else if (burst.elementalClass === 'FROST') gravity = 40;   // crystals drift slowly
+      else if (burst.elementalClass === 'WATER') gravity = 220;  // droplets fall fast
+      else if (burst.elementalClass === 'ELECTRIC') gravity = 0; // sparks float
 
       if (burstT >= 1) {
         this._heroDecompBursts.splice(bi, 1);
@@ -4264,7 +4457,15 @@ export class LyricDancePlayer {
       if (elapsed < 80) {
         const flashAlpha = (1 - elapsed / 80) * 0.6;
         this.ctx.globalAlpha = flashAlpha;
-        this.ctx.fillStyle = '#ffffff';
+        // Element-themed flash
+        switch (burst.elementalClass) {
+          case 'FROST': case 'ICE': this.ctx.fillStyle = '#a0d4ff'; break;
+          case 'FIRE': this.ctx.fillStyle = '#ff6622'; break;
+          case 'WATER': case 'RAIN': this.ctx.fillStyle = '#4488cc'; break;
+          case 'SMOKE': this.ctx.fillStyle = '#888888'; break;
+          case 'ELECTRIC': this.ctx.fillStyle = '#66ccff'; break;
+          default: this.ctx.fillStyle = '#ffffff'; break;
+        }
         this.ctx.beginPath();
         this.ctx.arc(burst.originX, burst.originY, 20 + (elapsed / 80) * 40, 0, Math.PI * 2);
         this.ctx.fill();
