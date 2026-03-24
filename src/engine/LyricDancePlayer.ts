@@ -5557,7 +5557,7 @@ export class LyricDancePlayer {
         // Hero words hold at higher opacity after being spoken
         // (spotlightAlpha is now phrase-level, so adjust finalAlpha directly for heroes)
 
-        const roleAlpha = lineRole === 'current' ? 1.0 : 0.0;
+        const roleAlpha = (lineRole === 'current' || isOnDeck) ? 1.0 : 0.0;
         const heroHoldAlpha = (isHeroWord && lineRole === 'current' && tSec > (word.wordStart ?? group.start) + (word.wordDuration ?? 0))
           ? 0.75
           : spotlightAlpha;
