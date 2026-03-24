@@ -725,7 +725,7 @@ export function FitTab({
             cinematic_direction: cinematicDirection || null,
             words: words ?? null,
             auto_palettes: danceNeedsRegeneration
-              ? null
+              ? (publishAutoPalettes ?? null)
               : (publishAutoPalettes ?? null),
             beat_grid: beatGrid
               ? {
@@ -737,12 +737,12 @@ export function FitTab({
             palette: derivePaletteFromDirection({
               ...cinematicDirection,
               auto_palettes: danceNeedsRegeneration
-                ? null
+                ? (publishAutoPalettes ?? null)
                 : (publishAutoPalettes ?? null),
             }),
             section_images: danceNeedsRegeneration
-              ? null
-              : (existingDance?.section_images ?? null),
+              ? (sectionImageUrls.some(Boolean) ? sectionImageUrls : null)
+              : (existingDance?.section_images ?? sectionImageUrls ?? null),
           },
           { onConflict: "artist_slug,song_slug" },
         );
@@ -1161,7 +1161,11 @@ export function FitTab({
 
     const sections = (cinematicDirection as any)?.sections;
     if (Array.isArray(sections) && sections.length > 0) {
-      if (generationStatus.sectionImages !== "done") return false;
+      if (
+        generationStatus.sectionImages !== "done" &&
+        generationStatus.sectionImages !== "error"
+      )
+        return false;
     }
 
     if (
@@ -1199,13 +1203,15 @@ export function FitTab({
     (generationStatus.sectionImages === "done" ||
       generationStatus.sectionImages === "error");
 
+  // Refetch dance data when core pipeline finishes OR when image URLs arrive/change
   useEffect(() => {
-    if (!allGenDone || !publishedDanceId) return;
+    if (!publishedDanceId) return;
+    if (!allGenDone && !sectionImageUrls.some(Boolean)) return;
     const timer = setTimeout(() => {
       refetchDanceData();
     }, 300);
     return () => clearTimeout(timer);
-  }, [allGenDone, publishedDanceId, refetchDanceData]);
+  }, [allGenDone, publishedDanceId, refetchDanceData, sectionImageUrls]);
 
   const allReady =
     generationStatus.beatGrid === "done" &&
@@ -1444,11 +1450,13 @@ export function FitTab({
                   <span className="text-[10px] font-mono text-white/25 tracking-wider uppercase">
                     {!prefetchedDanceData
                       ? "loading..."
-                      : !prefetchedDanceData.section_images?.every(Boolean)
-                        ? `images ${prefetchedDanceData.section_images?.filter(Boolean)?.length ?? 0}/${(prefetchedDanceData.cinematic_direction as any)?.sections?.length ?? "?"}`
-                        : !fontReady
-                          ? "loading font..."
-                          : "preparing player..."}
+                      : generationStatus.sectionImages === "running"
+                        ? `images ${sectionImageUrls.filter(Boolean).length}/${(cinematicDirection as any)?.sections?.length ?? "?"}`
+                        : generationStatus.sectionImages === "error"
+                          ? "images incomplete — loading player..."
+                          : !fontReady
+                            ? "loading font..."
+                            : "preparing player..."}
                   </span>
                 </div>
               )}
