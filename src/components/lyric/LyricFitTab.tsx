@@ -362,16 +362,17 @@ export function LyricFitTab({
 
     // Persist beat_grid so we skip Essentia on next load
     if (savedIdRef.current) {
-      void supabase
-        .from("saved_lyrics")
-        .update({
+      persistQueue.enqueue({
+        table: "saved_lyrics",
+        id: savedIdRef.current,
+        payload: {
           beat_grid: {
             bpm: detectedGrid.bpm,
             beats: detectedGrid.beats,
             confidence: detectedGrid.confidence,
-          } as any,
-        })
-        .eq("id", savedIdRef.current);
+          },
+        },
+      });
     }
   }, [detectedGrid, beatGrid]);
 
@@ -450,7 +451,7 @@ export function LyricFitTab({
     savedIdRef.current = savedId;
   }, [savedId]);
 
-  // (persist effect moved below persistRenderData definition)
+  // (persist effect moved below render_data persistence effect)
 
   // Hydrate remaining state from initialLyric (analysis data, audio file, etc.)
   // lyricData/lines/savedId/fmlyLines/versionMeta/words are already set via useState initializers
@@ -750,10 +751,11 @@ export function LyricFitTab({
         setSectionImageError(null);
 
         if (savedIdRef.current && urls.length > 0) {
-          void supabase
-            .from("saved_lyrics")
-            .update({ section_images: urls as any })
-            .eq("id", savedIdRef.current);
+          persistQueue.enqueue({
+            table: "saved_lyrics",
+            id: savedIdRef.current,
+            payload: { section_images: urls },
+          });
         }
 
         setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
@@ -776,54 +778,6 @@ export function LyricFitTab({
     words,
   ]);
 
-  const persistRenderData = useCallback(
-    async (
-      id: string,
-      payload: Record<string, unknown>,
-      attempt = 1,
-    ): Promise<boolean> => {
-      try {
-        const { data: updated, error } = await supabase
-          .from("saved_lyrics")
-          .update({
-            render_data: payload as any,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", id)
-          .select("id")
-          .maybeSingle();
-        if (error) {
-          console.warn(
-            "[persistRenderData] error attempt",
-            attempt,
-            error.message,
-          );
-          if (attempt < 3) return persistRenderData(id, payload, attempt + 1);
-          return false;
-        }
-        if (!updated) {
-          console.warn(
-            "[persistRenderData] no row matched attempt",
-            attempt,
-            id,
-          );
-          if (attempt < 3) {
-            await new Promise((r) => setTimeout(r, 1000));
-            return persistRenderData(id, payload, attempt + 1);
-          }
-          return false;
-        }
-
-        return true;
-      } catch (e) {
-        console.warn("[persistRenderData] exception attempt", attempt, e);
-        if (attempt < 3) return persistRenderData(id, payload, attempt + 1);
-        return false;
-      }
-    },
-    [],
-  );
-
   // Persist render_data whenever we have both a saved project and computed DNA
   // Only persist when renderData changes (not cinematicDirection alone — that's handled in startCinematicDirection)
   useEffect(() => {
@@ -841,13 +795,16 @@ export function LyricFitTab({
     }
     if (pipelineDanceId) payload.pipelineDanceId = pipelineDanceId;
     if (pipelineDanceUrl) payload.pipelineDanceUrl = pipelineDanceUrl;
-    persistRenderData(savedIdRef.current, payload);
+    persistQueue.enqueue({
+      table: "saved_lyrics",
+      id: savedIdRef.current,
+      payload: { render_data: payload },
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     savedId,
     renderData,
     waveformData,
-    persistRenderData,
     pipelineDanceId,
     pipelineDanceUrl,
   ]);
@@ -858,13 +815,11 @@ export function LyricFitTab({
   useEffect(() => {
     if (!savedIdRef.current) return;
     if (!sectionImageUrls.length || !sectionImageUrls.some(Boolean)) return;
-    void supabase
-      .from("saved_lyrics")
-      .update({
-        section_images: sectionImageUrls as any,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", savedIdRef.current);
+    persistQueue.enqueue({
+      table: "saved_lyrics",
+      id: savedIdRef.current,
+      payload: { section_images: sectionImageUrls },
+    });
   }, [sectionImageUrls]);
 
   const startBeatAnalysis = useCallback(
@@ -957,7 +912,11 @@ export function LyricFitTab({
           secondHookJustification: hookResult.secondHookJustification || null,
         };
         if (savedIdRef.current) {
-          void persistRenderData(savedIdRef.current, updated);
+          persistQueue.enqueue({
+            table: "saved_lyrics",
+            id: savedIdRef.current,
+            payload: { render_data: updated },
+          });
         }
         return updated;
       });
@@ -968,7 +927,6 @@ export function LyricFitTab({
     beatGrid,
     audioDurationSec,
     renderData?.hook,
-    persistRenderData,
     hottestHooksEnabled,
   ]);
 
@@ -1070,7 +1028,14 @@ export function LyricFitTab({
           };
           setRenderData(updatedRenderData);
           if (savedIdRef.current) {
-            void persistRenderData(savedIdRef.current, updatedRenderData);
+            persistQueue.enqueue({
+              table: "saved_lyrics",
+              id: savedIdRef.current,
+              payload: {
+                render_data: updatedRenderData,
+                cinematic_direction: enrichedScene,
+              },
+            });
           }
         }
 
@@ -1119,7 +1084,14 @@ export function LyricFitTab({
                     ...(prev || {}),
                     cinematicDirection: merged,
                   };
-                  void persistRenderData(savedIdRef.current!, updated);
+                  persistQueue.enqueue({
+                    table: "saved_lyrics",
+                    id: savedIdRef.current!,
+                    payload: {
+                      render_data: updated,
+                      cinematic_direction: merged,
+                    },
+                  });
                   return updated;
                 });
               }
@@ -1286,17 +1258,19 @@ export function LyricFitTab({
                   : `Generated ${finalUrls.filter(Boolean).length}/${dirSections.length} images. Retry to fill missing sections.`,
               );
               if (savedIdRef.current && finalUrls.length > 0) {
-                void supabase
-                  .from("saved_lyrics")
-                  .update({ section_images: finalUrls as any })
-                  .eq("id", savedIdRef.current);
+                persistQueue.enqueue({
+                  table: "saved_lyrics",
+                  id: savedIdRef.current,
+                  payload: { section_images: finalUrls },
+                });
               }
 
               if (resolvedDanceId && finalUrls.some(Boolean)) {
-                void supabase
-                  .from("shareable_lyric_dances" as any)
-                  .update({ section_images: finalUrls as any })
-                  .eq("id", resolvedDanceId);
+                persistQueue.enqueue({
+                  table: "shareable_lyric_dances",
+                  id: resolvedDanceId,
+                  payload: { section_images: finalUrls },
+                });
               }
 
 
@@ -1310,13 +1284,14 @@ export function LyricFitTab({
                     await import("@/lib/autoPalette");
                   const palettes = await computeAutoPalettesFromUrls(validUrls);
                   if (palettes && palettes.length > 0) {
-                    void supabase
-                      .from("shareable_lyric_dances" as any)
-                      .update({
-                        auto_palettes: palettes as any,
+                    persistQueue.enqueue({
+                      table: "shareable_lyric_dances",
+                      id: resolvedDanceId,
+                      payload: {
+                        auto_palettes: palettes,
                         palette: palettes[0] ?? undefined,
-                      } as any)
-                      .eq("id", resolvedDanceId);
+                      },
+                    });
                   }
                 } catch (paletteErr) {
                   console.error(
@@ -1426,7 +1401,6 @@ export function LyricFitTab({
       generationStatus.cinematicDirection,
       beatGrid,
       renderData,
-      persistRenderData,
       words,
       user,
       audioFile,
@@ -1500,11 +1474,16 @@ export function LyricFitTab({
           generatedAt: new Date().toISOString(),
         };
         setRenderData(stub);
-        if (savedIdRef.current)
-          void persistRenderData(savedIdRef.current, stub);
+        if (savedIdRef.current) {
+          persistQueue.enqueue({
+            table: "saved_lyrics",
+            id: savedIdRef.current,
+            payload: { render_data: stub },
+          });
+        }
       }
     }
-  }, [lines, pipelineRetryCount, renderData, beatGrid, persistRenderData]);
+  }, [lines, pipelineRetryCount, renderData, beatGrid]);
 
   // ── Fork 3: Hook detection starts when transcription + beat grid ready ──
   useEffect(() => {
@@ -1596,18 +1575,26 @@ export function LyricFitTab({
     imageRetriggerRef.current = false;
 
     if (savedIdRef.current) {
-      persistRenderData(savedIdRef.current, { cinematicDirection: null });
-      void supabase
-        .from("saved_lyrics")
-        .update({ section_images: null } as any)
-        .eq("id", savedIdRef.current);
+      persistQueue.enqueue({
+        table: "saved_lyrics",
+        id: savedIdRef.current!,
+        payload: {
+          render_data: { cinematicDirection: null },
+          cinematic_direction: null,
+        },
+      });
+      persistQueue.enqueue({
+        table: "saved_lyrics",
+        id: savedIdRef.current!,
+        payload: { section_images: null },
+      });
     }
 
     // Bump retry counter → re-triggers Fork 2 + section pipeline + cinematic effects
     setTimeout(() => {
       setPipelineRetryCount((c) => c + 1);
     }, 100);
-  }, [audioFile, lines, persistRenderData]);
+  }, [audioFile, lines]);
 
   const handleImageGenerationStatusChange = useCallback(
     (status: "idle" | "running" | "done" | "error") => {
