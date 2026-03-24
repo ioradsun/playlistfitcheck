@@ -857,6 +857,21 @@ export function LyricFitTab({
     pipelineDanceUrl,
   ]);
 
+  // ── Persist section_images to saved_lyrics whenever they change ──
+  // Centralized save replaces scattered fire-and-forget writes.
+  // This catches images regardless of which pipeline path produced them.
+  useEffect(() => {
+    if (!savedIdRef.current) return;
+    if (!sectionImageUrls.length || !sectionImageUrls.some(Boolean)) return;
+    void supabase
+      .from("saved_lyrics")
+      .update({
+        section_images: sectionImageUrls as any,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", savedIdRef.current);
+  }, [sectionImageUrls]);
+
   const startBeatAnalysis = useCallback(
     async (targetAudioFile: File) => {
       if (!targetAudioFile || targetAudioFile.size === 0) return;
@@ -1118,6 +1133,8 @@ export function LyricFitTab({
         })();
 
         const imagePromise = (async () => {
+          // Block the remount retrigger — this pipeline instance owns image generation
+          imageRetriggerRef.current = true;
           const dirSections = enrichedScene?.sections;
           if (!mountedRef.current) return;
           if (
@@ -1502,19 +1519,18 @@ export function LyricFitTab({
       generationStatus.cinematicDirection,
     ];
     const allCoreDone = coreStatuses.every((v) => v === "done");
-    // Images are non-blocking — generated in background, don't prevent "ready" state
-    const allValues = Object.values(generationStatus);
-    const hasRunning = allValues.includes("running");
+    // Images are non-blocking — only core jobs (beat/render/cinematic) gate readiness
+    const hasCoreRunning = coreStatuses.includes("running");
     const hasError = coreStatuses.includes("error");
 
-    if (allCoreDone && !hasRunning) {
+    if (allCoreDone && !hasCoreRunning) {
       setFitReadiness("ready");
       setFitProgress(100);
       setFitStageLabel("Ready");
       setPipelineStages((prev) => ({ ...prev, transcript: "done" }));
       return;
     }
-    if (hasRunning) {
+    if (hasCoreRunning) {
       setFitReadiness("running");
       if (
         generationStatus.renderData === "running" ||
@@ -1537,7 +1553,8 @@ export function LyricFitTab({
       setPipelineStages((prev) => ({ ...prev, transcript: "pending" }));
       return;
     }
-    if (allValues.some((v) => v === "done")) {
+    const allStatuses = Object.values(generationStatus);
+    if (allStatuses.some((v) => v === "done") && !allCoreDone) {
       setFitReadiness("running");
       setFitStageLabel("Finalizing background jobs…");
       return;
@@ -1573,6 +1590,7 @@ export function LyricFitTab({
     pipelineTriggeredRef.current = false;
     cinematicTriggeredRef.current = false;
     hookDetectionRunRef.current = false;
+    imageRetriggerRef.current = false;
 
     if (savedIdRef.current) {
       persistRenderData(savedIdRef.current, { cinematicDirection: null });
@@ -1748,6 +1766,7 @@ export function LyricFitTab({
             cinematicTriggeredRef.current = false;
             pipelineTriggeredRef.current = false;
             hookDetectionRunRef.current = false;
+            imageRetriggerRef.current = false;
             onNewProject?.();
           }}
           onHeaderProject={activeTab === "lyrics" ? onHeaderProject : undefined}
