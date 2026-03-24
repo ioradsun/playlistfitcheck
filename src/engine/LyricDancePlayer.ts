@@ -3797,7 +3797,7 @@ export class LyricDancePlayer {
 
       const beatPulse = this._lastBeatState?.pulse ?? 0;
       const lightingMode = this._textBandBrightness > 0.55 ? 'bright' as const : 'dark' as const;
-      const elementalAlpha = this._activeMoodConfig.elementalIntensity;
+      const elementalAlpha = Math.max(this._activeMoodConfig.elementalIntensity, 0.5);
 
       for (const [, phrase] of phraseMap) {
         if (!phrase.elementalClass) continue;
@@ -5497,6 +5497,50 @@ export class LyricDancePlayer {
       const phraseDuration = Math.max(0.01, group.end - group.start);
       const phraseRemaining = groupEnd - tSec;
       const config = this._activeMoodConfig;
+
+      // ═══ PER-PHRASE CHOREOGRAPHY: energyTier drives motion character ═══
+      const cg = group as any;
+      const energyTier: string = cg.energyTier ?? 'groove';
+      const heroType: string = cg.heroType ?? 'word';
+
+      type MC = import('@/lib/sceneCompiler').MotionCharacter;
+
+      // Entry character: how the phrase arrives
+      const ENERGY_ENTRY: Record<string, MC> = {
+        intimate: 'whisper',
+        groove: config.character as MC,
+        lift: 'rise',
+        impact: 'snap',
+        surprise: 'bloom',
+      };
+      const phraseEntryChar: MC = ENERGY_ENTRY[energyTier] ?? (config.character as MC);
+
+      // Exit character: how the phrase leaves
+      // impact → no exit animation (hard cut by next phrase)
+      // surprise → snap out (instant gone)
+      // lift → drift upward (energy keeps climbing)
+      // intimate → whisper out (gentle fade)
+      // groove → section default
+      const ENERGY_EXIT: Record<string, MC | 'none'> = {
+        intimate: 'whisper',
+        groove: config.character as MC,
+        lift: 'drift',
+        impact: 'none',       // no exit — next phrase hard-cuts over this one
+        surprise: 'snap',
+      };
+      const phraseExitChar = ENERGY_EXIT[energyTier] ?? (config.character as MC);
+      const suppressExit = phraseExitChar === 'none';
+
+      // Intensity scaling per energy tier
+      const ENERGY_INTENSITY: Record<string, number> = {
+        intimate: 0.3,
+        groove: config.intensity,
+        lift: config.intensity * 0.8,
+        impact: 1.0,
+        surprise: 0.9,
+      };
+      const phraseIntensity = ENERGY_INTENSITY[energyTier] ?? config.intensity;
+
       const wordCount = group.words.length;
       const motionCap = LEGIBILITY.motionCapForDensity(wordCount);
       const phraseExitDuration = Math.min(config.exitDuration, phraseDuration * 0.35);
@@ -5521,7 +5565,7 @@ export class LyricDancePlayer {
       const isEntering = !wallSuppressAnim && timeSinceActivation < config.entryDuration;
       if (isEntering) {
         const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
-        phraseEntryState = computeMotionEntry(config.character, entryProgress, config.intensity) as typeof phraseEntryState;
+        phraseEntryState = computeMotionEntry(phraseEntryChar, entryProgress, phraseIntensity) as typeof phraseEntryState;
         phraseEntryState.offsetX *= motionCap;
         phraseEntryState.offsetY *= motionCap;
         phraseEntryState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseEntryState.blur ?? 0);
@@ -5529,10 +5573,10 @@ export class LyricDancePlayer {
       }
 
       let phraseExitState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isExiting = !wallSuppressAnim && phraseRemaining < config.exitDuration && phraseRemaining >= 0;
+      const isExiting = !wallSuppressAnim && !suppressExit && phraseRemaining < config.exitDuration && phraseRemaining >= 0;
       if (isExiting) {
         const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
-        phraseExitState = computeMotionExit(config.character, exitProgress, config.intensity) as typeof phraseExitState;
+        phraseExitState = computeMotionExit(phraseExitChar as MC, exitProgress, phraseIntensity) as typeof phraseExitState;
         phraseExitState.offsetX *= motionCap;
         phraseExitState.offsetY *= motionCap;
         phraseExitState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseExitState.blur ?? 0);
@@ -5619,6 +5663,16 @@ export class LyricDancePlayer {
           wordState = 'spoken';
         }
 
+        // ═══ REVEAL GATE: stagger-based word visibility ═══
+        const stagger = group.staggerDelay ?? 0;
+        const phraseEntryStart = group.start - entryPad;
+        const wordRevealTime = phraseEntryStart + wi * stagger;
+        const isRevealed = stagger < 0.005 || tSec >= wordRevealTime;
+        const WORD_FADE_SEC = 0.08;
+        const wordRevealT = !isRevealed ? 0
+          : stagger < 0.005 ? 1
+          : Math.min(1, (tSec - wordRevealTime) / WORD_FADE_SEC);
+
         // ═══ PHRASE-LEVEL SPOTLIGHT: all words white, hero words accent ═══
         // No per-word color switching — strobes at fast BPM.
         // Phrase is the unit. All words full white. Hero words get section accent.
@@ -5626,12 +5680,15 @@ export class LyricDancePlayer {
           ? 1.0
           : lineRole !== 'current'
             ? 0.30
-            : wordState === 'upcoming' ? 0.30 : 1.0;
+            : !isRevealed
+              ? 0
+              : wordState === 'upcoming'
+                ? 0.30 * wordRevealT
+                : wordRevealT;
 
         // ── Hero word detection ──
         const isHeroWord = word.isHeroWord === true;
-        const cgHeroType = (group as any).heroType;
-        const effectiveHero = cgHeroType === 'phrase' ? true : isHeroWord;
+        const effectiveHero = heroType === 'phrase' ? true : isHeroWord;
         const heroDuration = word.wordDuration ?? 0;
         const wordDirective = word.clean ? this.resolvedState.wordDirectivesMap[word.clean] ?? null : null;
         const hasIsolation = Boolean((wordDirective as any)?.isolation);
@@ -5667,7 +5724,7 @@ export class LyricDancePlayer {
           // The word IS the phrase — its compiled animation replaces the treatment's.
           if (isEntering) {
             const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
-            phraseEntryState = computeMotionEntry(((word as any).entryStyle as MotionCharacter) ?? config.character, entryProgress, config.intensity) as typeof phraseEntryState;
+            phraseEntryState = computeMotionEntry(((word as any).entryStyle as MotionCharacter) ?? phraseEntryChar, entryProgress, phraseIntensity) as typeof phraseEntryState;
             phraseEntryState.offsetX *= motionCap;
             phraseEntryState.offsetY *= motionCap;
             phraseEntryState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseEntryState.blur ?? 0);
@@ -5675,7 +5732,7 @@ export class LyricDancePlayer {
           }
           if (isExiting) {
             const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
-            phraseExitState = computeMotionExit(((word as any).exitStyle as MotionCharacter) ?? config.character, exitProgress, config.intensity) as typeof phraseExitState;
+            phraseExitState = computeMotionExit(((word as any).exitStyle as MotionCharacter) ?? (suppressExit ? 'snap' : phraseExitChar as MC), exitProgress, phraseIntensity) as typeof phraseExitState;
             phraseExitState.offsetX *= motionCap;
             phraseExitState.offsetY *= motionCap;
             phraseExitState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseExitState.blur ?? 0);
@@ -5711,7 +5768,6 @@ export class LyricDancePlayer {
           heroScaleMult = Math.min(rawEmpScale, maxVpScale, maxOverlapScale);
         }
         // center_word + impact: fill the screen
-        const cg = group as any;
         if (cg.composition === 'center_word' && cg.energyTier === 'impact' && group.words.length === 1) {
           heroScaleMult = Math.max(heroScaleMult, 1.4);
         }
@@ -5763,12 +5819,12 @@ export class LyricDancePlayer {
         let wordExitBlend = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
         let wordBlendFactor = 0;
 
-        if (!isSoloHero && emp >= 3 && lineRole === 'current' && !wallSuppressAnim && (word as any).entryStyle) {
+        if (!isSoloHero && emp >= 3 && lineRole === 'current' && !wallSuppressAnim && heroType === 'word' && isRevealed && (word as any).entryStyle) {
           wordBlendFactor = Math.min(1.0, (emp - 2) / 3); // 0.33, 0.67, 1.0
 
           if (isEntering) {
             const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, config.entryDuration));
-            const rawState = computeMotionEntry(((word as any).entryStyle as MotionCharacter) ?? config.character, entryProgress, config.intensity * 0.7);
+            const rawState = computeMotionEntry(((word as any).entryStyle as MotionCharacter) ?? phraseEntryChar, entryProgress, phraseIntensity * 0.7);
             wordEntryBlend = {
               offsetX: (rawState.offsetX ?? 0) * motionCap,
               offsetY: (rawState.offsetY ?? 0) * motionCap,
@@ -5783,7 +5839,7 @@ export class LyricDancePlayer {
           }
           if (isExiting) {
             const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, config.exitDuration)));
-            const rawState = computeMotionExit(((word as any).exitStyle as MotionCharacter) ?? config.character, exitProgress, config.intensity * 0.7);
+            const rawState = computeMotionExit(((word as any).exitStyle as MotionCharacter) ?? (phraseExitChar as MC), exitProgress, phraseIntensity * 0.7);
             wordExitBlend = {
               offsetX: (rawState.offsetX ?? 0) * motionCap,
               offsetY: (rawState.offsetY ?? 0) * motionCap,
