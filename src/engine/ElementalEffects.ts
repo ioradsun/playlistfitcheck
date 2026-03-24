@@ -49,6 +49,8 @@ export function drawElementalWord(
     return;
   }
 
+  const hasText = word.length > 0;
+
   // ═══ Word-duration intensity envelope ═══
   // Burst on entry, sustain briefly, then particles linger
   const rampIn = Math.min(1, currentTime / 0.12);         // 0→1 in 120ms
@@ -70,7 +72,7 @@ export function drawElementalWord(
       if (mode === "bright") {
         // Bright: visible wave distortion + water drops + ripples
         ctx.fillStyle = colorOverride ?? "#1a3a5c";
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
 
         // Refractive wave — visible
         ctx.save();
@@ -78,7 +80,7 @@ export function drawElementalWord(
         const waveAmp = 2.5 + beatIntensity * 2;
         const waveOff = Math.sin(t * 2.5) * waveAmp;
         ctx.fillStyle = "#2255aa";
-        ctx.fillText(word, waveOff, 0.8);
+        if (hasText) ctx.fillText(word, waveOff, 0.8);
         ctx.restore();
 
         // Visible ripples beneath word
@@ -111,7 +113,7 @@ export function drawElementalWord(
       } else {
         // Dark: blue glow, bubbles, drips
         ctx.fillStyle = colorOverride ?? "#4A6B8C";
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
 
         // Wet sheen overlay
         ctx.save();
@@ -163,14 +165,14 @@ export function drawElementalWord(
       if (mode === "bright") {
         // Bright: visible heat shimmer + red/orange tint
         ctx.fillStyle = colorOverride ?? "#2a0a00";
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
 
         // Heat shimmer — visible displacement
         ctx.save();
         ctx.globalAlpha *= 0.2 + beatIntensity * 0.15;
         const shimmerY = Math.sin(t * 6) * 2.5;
         ctx.fillStyle = "#cc3300";
-        ctx.fillText(word, 0, shimmerY);
+        if (hasText) ctx.fillText(word, 0, shimmerY);
         ctx.restore();
 
         // Red-orange tint at edges
@@ -183,7 +185,7 @@ export function drawElementalWord(
         heatGrad.addColorStop(0.5, "rgba(220,60,0,0.05)");
         heatGrad.addColorStop(1, "rgba(255,120,0,0.20)");
         ctx.fillStyle = heatGrad;
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
         ctx.restore();
 
         // Rising heat lines — visible
@@ -217,7 +219,7 @@ export function drawElementalWord(
       } else {
         // Dark: orange bloom, embers, additive flame gradient
         ctx.fillStyle = "#1a0800";
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
 
         ctx.save();
         ctx.beginPath();
@@ -231,7 +233,7 @@ export function drawElementalWord(
         fireGrad.addColorStop(1, "#ffffff");
         ctx.fillStyle = fireGrad;
         ctx.globalAlpha *= 0.85;
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
         ctx.globalAlpha /= 0.85;
         ctx.restore();
 
@@ -255,13 +257,13 @@ export function drawElementalWord(
       if (mode === "bright") {
         // Bright: visible shadow depth + drift + smoke wisps
         ctx.fillStyle = colorOverride ?? "#333";
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
 
         // Deep shadow
         ctx.save();
         ctx.globalAlpha *= 0.25;
         ctx.fillStyle = "#553388";
-        ctx.fillText(word, 2, 2);
+        if (hasText) ctx.fillText(word, 2, 2);
         ctx.restore();
 
         // Drifting echo
@@ -270,7 +272,7 @@ export function drawElementalWord(
         const driftAlpha = 0.15 + 0.08 * Math.sin(t * 2.5);
         ctx.globalAlpha *= driftAlpha;
         ctx.fillStyle = "#6644aa";
-        ctx.fillText(word, drift, -1);
+        if (hasText) ctx.fillText(word, drift, -1);
         ctx.restore();
 
         // Rising wisps (visible in bright mode too)
@@ -291,7 +293,7 @@ export function drawElementalWord(
         // Dark: expanding smoke, visible base
         ctx.globalAlpha *= 0.85;
         ctx.fillStyle = colorOverride ?? "#aa99cc";
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
         ctx.globalAlpha /= 0.85;
 
         const smokeAge = (t * 0.4) % 1;
@@ -316,21 +318,21 @@ export function drawElementalWord(
       if (mode === "bright") {
         // Bright: visible electric tint, flicker, spark particles
         ctx.fillStyle = colorOverride ?? "#0a0a0a";
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
 
         // Strong inner shadow
         ctx.save();
         ctx.globalAlpha *= 0.2;
         ctx.fillStyle = "#003366";
-        ctx.fillText(word, 1, 1);
+        if (hasText) ctx.fillText(word, 1, 1);
         ctx.restore();
 
         // Visible electric tint — colored edge glow
         ctx.save();
         ctx.globalAlpha *= 0.2 + beatIntensity * 0.15;
         ctx.fillStyle = "#0088ff";
-        ctx.fillText(word, -0.8, 0);
-        ctx.fillText(word, 0.8, 0);
+        if (hasText) ctx.fillText(word, -0.8, 0);
+        if (hasText) ctx.fillText(word, 0.8, 0);
         ctx.restore();
 
         // Flicker — random bright flash
@@ -338,7 +340,7 @@ export function drawElementalWord(
           ctx.save();
           ctx.globalAlpha *= 0.4;
           ctx.fillStyle = "#4488ff";
-          ctx.fillText(word, 0, 0);
+          if (hasText) ctx.fillText(word, 0, 0);
           ctx.restore();
         }
 
@@ -366,7 +368,7 @@ export function drawElementalWord(
         ctx.fillStyle = glow;
         ctx.fillRect(-glowRadius * 0.4, -fontSize - glowRadius * 0.6, wordWidth + glowRadius * 0.8, glowRadius * 1.4);
         ctx.fillStyle = "#ffffff";
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
 
         const orbCount = isHeroWord ? 3 : 2;
         for (let i = 0; i < orbCount; i += 1) {
@@ -403,7 +405,7 @@ export function drawElementalWord(
       if (mode === "bright") {
         // Bright: visible frost sweep + crystalline edges + ice crystals
         ctx.fillStyle = colorOverride ?? "#1a3040";
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
 
         // Desaturation sweep — visible white wash
         ctx.save();
@@ -416,15 +418,15 @@ export function drawElementalWord(
         sweepGrad.addColorStop(0.5, "rgba(200,230,255,0.35)");
         sweepGrad.addColorStop(1, "rgba(255,255,255,0)");
         ctx.fillStyle = sweepGrad;
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
         ctx.restore();
 
         // Visible crystalline edge
         ctx.save();
         ctx.globalAlpha *= 0.2;
         ctx.fillStyle = "#66aadd";
-        ctx.fillText(word, -0.7, -0.7);
-        ctx.fillText(word, 0.7, 0.7);
+        if (hasText) ctx.fillText(word, -0.7, -0.7);
+        if (hasText) ctx.fillText(word, 0.7, 0.7);
         ctx.restore();
 
         // Ice crystals — visible
@@ -451,7 +453,7 @@ export function drawElementalWord(
       } else {
         // Dark: blue outer glow, crystals, cold breath mist
         ctx.fillStyle = colorOverride ?? "#A8D8EA";
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
 
         // Frost shimmer overlay
         ctx.save();
@@ -468,7 +470,7 @@ export function drawElementalWord(
         frostShimmer.addColorStop(0.7 + Math.cos(t * 0.9) * 0.1, "rgba(200,230,255,0.25)");
         frostShimmer.addColorStop(1, "rgba(255,255,255,0.0)");
         ctx.fillStyle = frostShimmer;
-        ctx.fillText(word, 0, 0);
+        if (hasText) ctx.fillText(word, 0, 0);
         ctx.restore();
 
         // Ice crystals
@@ -515,7 +517,7 @@ export function drawElementalWord(
     }
 
     default:
-      ctx.fillText(word, 0, 0);
+      if (hasText) ctx.fillText(word, 0, 0);
       break;
   }
 
