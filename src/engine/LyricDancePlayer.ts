@@ -5196,21 +5196,15 @@ export class LyricDancePlayer {
       // ═══ ACTIVE CHUNK ONLY: non-current groups are already filtered out above ═══
       const lineRole = group.lineIndex === primaryLineIndex ? 'current' : 'offscreen';
 
-      // Pre-scan: single-word phrases can have an active SOLO hero.
       let groupHasActiveSoloHero = false;
-      if (lineRole === 'current' && group.words.length === 1) {
-        // Only check for solo hero if this is a single-word phrase
+      if (group.words.length === 1) {
         const hw = group.words[0];
-        if (hw.isHeroWord || (hw as any).isolation) {
-          const hDur = hw.wordDuration ?? 0;
-          if ((hw.isHeroWord && hDur >= 0.5) || ((hw as any).isolation && hDur >= 0.7)) {
-            const hwStagger = Math.max(0, (hw.wordStart ?? group.start) - group.start);
-            const hwStart = group.start + hwStagger;
-            const hwEnd = group.end + group.lingerDuration;
-            if (tSec >= hwStart + 0.08 && tSec < hwEnd) {
-              groupHasActiveSoloHero = true;
-            }
-          }
+        const hwIsHero = hw.isHeroWord === true;
+        const hwDur = hw.wordDuration ?? 0;
+        const hwDirective = hw.clean ? this.resolvedState.wordDirectivesMap[hw.clean] ?? null : null;
+        const hwIsolation = Boolean((hwDirective as any)?.isolation);
+        if ((hwIsHero && hwDur >= 0.5) || (hwIsolation && hwDur >= 0.7)) {
+          groupHasActiveSoloHero = true;
         }
       }
 
@@ -5336,12 +5330,11 @@ export class LyricDancePlayer {
         const heroDuration = word.wordDuration ?? 0;
         const wordDirective = word.clean ? this.resolvedState.wordDirectivesMap[word.clean] ?? null : null;
         const hasIsolation = Boolean((wordDirective as any)?.isolation);
-        // ═══ SOLO HERO: only for single-word phrases ═══
-        // Multi-word phrases already highlight the hero in accent color.
+        // Solo hero only for single-word phrases.
+        // Multi-word phrases highlight the hero inline with accent color.
         // Soloing a word INSIDE a multi-word phrase causes:
         //   1. Show-hide-show flicker (phrase → solo word → phrase ghost)
         //   2. Word pile-up (multiple ≥500ms words all center to same position)
-        // Solo centering only makes sense when the phrase IS one word.
         const isOnlyWordInPhrase = group.words.length === 1;
         const isSoloHero = isOnlyWordInPhrase && ((isHeroWord && heroDuration >= 0.5) || (hasIsolation && heroDuration >= 0.7));
         const emp = word.emphasisLevel ?? 0;

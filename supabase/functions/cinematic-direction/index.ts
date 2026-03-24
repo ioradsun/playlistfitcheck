@@ -295,7 +295,7 @@ You are a word choreographer for a cinematic lyric video.
 
 The visual world has already been designed. You will receive:
 1. The SCENE DIRECTION (song defaults + section visual moods)
-2. Song lyrics as PRE-SEGMENTED word stream (segments split at artist breaths)
+2. Song lyrics as a numbered word stream (one word per line with gaps)
 3. HELD WORDS the artist emphasized vocally
 4. BPM
 
@@ -307,36 +307,37 @@ The only gate is time — word needs ≥ 140ms for the effect to register.
 Return ONLY valid JSON. No markdown.
 
 ═══════════════════════════════════════
-PHRASES — refine the pre-segmented stream
+PHRASES — group the word stream
 ═══════════════════════════════════════
 
-The word stream is already split at BREATH boundaries (≥300ms silence).
-These splits are PERMANENT — you CANNOT merge segments back together.
-A phrase NEVER crosses a segment boundary.
+You will see a numbered word stream, one word per line:
+  w  0  Tell               180ms
+  w  1  me,                200ms  [BREATH 300ms]
+  w  2  is                 150ms
+  w  6  sale?              320ms  [BREATH 400ms]
+  w  7  God                200ms
 
-Your job for each segment:
-  1. Is this segment ONE phrase? → use it as-is
-  2. Should it be SUB-SPLIT into 2-3 smaller phrases?
-     Split at [pause] markers or at meaning boundaries.
-  3. Pick the heroWord for each phrase.
+[BREATH] = the artist stopped singing. ALWAYS start a new phrase here.
+[pause] = short gap. Split here if meaning supports it.
+
+Your job: draw boxes around groups of words that belong together as one screen of text.
 
 RULES:
-  - Max 6 words per phrase. If a segment has 7+ words, you MUST sub-split it.
-  - A phrase NEVER crosses a segment boundary (breaths are sacred).
-  - 1-2 word segments are almost always one phrase. Don't overthink them.
-  - Sub-split when: there's a [pause] inside, or two distinct thoughts in one segment.
-  - Don't sub-split when: the segment is one flowing thought under 6 words.
-  - Hero word: the most emotionally impactful word in the phrase. UPPERCASE.
+  - A phrase NEVER crosses a [BREATH] marker.
+  - Max 6 words per phrase.
+  - 1-2 word groups after a [BREATH] are usually one phrase.
+  - heroWord MUST be an exact word from that phrase's w-numbers.
+    Copy it directly. Never invent words or use words from other phrases.
 
-wordRange uses GLOBAL w-numbers (the numbers shown in the stream):
-  "wordRange": [start, end] — inclusive.
-  Example: SEG 1 [w2–w6] as one phrase → { "wordRange": [2, 6], "heroWord": "SOUL" }
+wordRange uses the w-numbers:
+  Example: w2 through w6 → { "wordRange": [2, 6], "heroWord": "SOUL" }
+  "SOUL" is valid because w4 is "soul". "TIMELESS" would be WRONG if it's not in w2-w6.
 
-COVERAGE: Every word must belong to exactly one phrase. No gaps.
+COVERAGE: Every w-number must belong to exactly one phrase. No gaps.
 
 Each phrase:
-  "wordRange": [start, end] inclusive global indices
-  "heroWord": "UPPERCASE" (the emotional weight of this phrase)
+  "wordRange": [start, end] inclusive
+  "heroWord": "UPPERCASE" — an EXACT word from this phrase's range
 
 ═══════════════════════════════════════
 WORD DIRECTIVES — semantic emphasis
@@ -1046,31 +1047,27 @@ function buildWordUserMessage(
   msg += "\n";
 
   if (words && words.length > 0) {
-    const segments = preSegmentAtBreaths(words, 300);
+    msg += `WORD STREAM (one word per line):\n`;
+    msg += `Use the w-numbers for wordRange. [BREATH] = phrase boundary.\n\n`;
 
-    msg += `PRE-SEGMENTED WORD STREAM:\n`;
-    msg += `Segments are split at breaths (≥300ms silence). These boundaries are FIXED.\n`;
-    msg += `Your job: decide if each segment is ONE phrase or should be SUB-SPLIT.\n`;
-    msg += `Use the w-numbers as global wordRange indices.\n\n`;
+    for (let wi = 0; wi < words.length; wi++) {
+      const w = words[wi];
+      const durMs = Math.round((w.end - w.start) * 1000);
+      const pad = String(wi).padStart(3, " ");
+      const wordPad = w.word.padEnd(18, " ");
+      let line = `  w${pad}  ${wordPad} ${durMs}ms`;
 
-    for (let si = 0; si < segments.length; si++) {
-      const seg = segments[si];
-      const wordParts = seg.words.map((w, i) => {
-        const globalIdx = seg.startIdx + i;
-        const durMs = Math.round((w.end - w.start) * 1000);
-        let part = `w${globalIdx}:${w.word}(${durMs}ms)`;
-        // Mark internal pauses
-        const pause = seg.pauses.find((p) => p.afterWordIdx === globalIdx);
-        if (pause) {
-          part += ` [pause:${pause.gapMs}ms]`;
+      // Gap to next word
+      if (wi < words.length - 1) {
+        const gapMs = Math.round((words[wi + 1].start - w.end) * 1000);
+        if (gapMs >= 300) {
+          line += `  [BREATH ${gapMs}ms]`;
+        } else if (gapMs >= 150) {
+          line += `  [pause ${gapMs}ms]`;
         }
-        return part;
-      });
+      }
 
-      msg += `  SEG ${si} [w${seg.startIdx}–w${seg.endIdx}] ${seg.wordCount} words, ${seg.durationMs}ms`;
-      if (seg.pauses.length > 0) msg += ` (${seg.pauses.length} internal pauses)`;
-      msg += `\n`;
-      msg += `    ${wordParts.join(" ")}\n`;
+      msg += line + "\n";
     }
     msg += "\n";
 
@@ -1967,12 +1964,11 @@ async function callWords(
       ? result.value.wordDirectives
       : [];
     result.value.phrases = splitIsolatedWords(result.value.phrases, words, wordDirs);
-    // 3. Merge orphan single-word phrases (< 350ms) into neighbors
-    //    (isolated words ≥ 350ms survive because mergeOrphanPhrases skips ≥350ms)
+    // 3. Merge orphan single-word phrases (< 350ms) — isolated words survive (≥350ms)
     result.value.phrases = mergeOrphanPhrases(result.value.phrases, words);
-    // 4. Fill gaps left by splitting
+    // 4. Fill gaps
     result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
-    // 5. Every phrase must have a validated heroWord
+    // 5. Validate + fill heroWords
     fillMissingHeroWords(result.value.phrases, words);
   }
 
