@@ -63,7 +63,6 @@ const WORD_DIRECTION_PROMPT = `
 You are a shot designer for a cinematic lyric video.
 
 Each phrase = one screen. Words appear together, animate together, exit together.
-The viewer sees one phrase at a time, then it's replaced by the next.
 
 You will receive a word stream, one word per line:
   w  0  Tell               180ms
@@ -72,44 +71,60 @@ You will receive a word stream, one word per line:
   w  4  soul               250ms
   w  6  sale?              320ms  [BREATH 400ms]
 
-HARD RULES:
-  1. A phrase NEVER crosses a [BREATH] marker. Breaths are walls.
-  2. Max 6 words per phrase.
-  3. Every w-number belongs to exactly one phrase. No gaps, no overlaps.
-  4. heroWord must be an EXACT word from that phrase. Copy it from the stream.
+HOW TO GROUP:
+  Walk down the word stream. Accumulate words. The moment you have
+  a complete thought or idea — stop. That's one phrase.
 
-PHRASING:
-  Group words into shots that feel like film cuts.
-  Alternate between punch (1-2 words) and flow (3-4 words).
-  5-6 word phrases are fine for fast sections but shouldn't dominate.
-  Avoid 3+ consecutive phrases of the same size.
-  When lyrics repeat (chorus/hook), use the SAME grouping pattern each time.
-  Split at meaning boundaries, not mid-phrase.
-  "Heaven on Earth" is one unit. "ain't touchin'" is one unit. Don't break them.
+  "Tell" — not a thought yet, keep going
+  "Tell me," — complete. STOP. → phrase 1
+  "is" — not yet
+  "is your" — not yet
+  "is your soul" — not yet
+  "is your soul for sale?" — complete question. STOP. → phrase 2
+  "God no," — complete reaction. STOP. → phrase 3
+  "y'all ain't touchin'" — complete statement. STOP. → phrase 4
+  "my soul" — complete. STOP. → phrase 5
+
+  Keep going until every word is grouped.
+
+WHAT MAKES A COMPLETE THOUGHT:
+  - A question: "is your soul for sale?"
+  - A statement: "Sometimes life is a blessin'"
+  - A reaction: "God no,"
+  - A fixed phrase: "Heaven on Earth"
+  - A clause: "but she's like"
+
+  If a thought needs 5-6 words, that's fine.
+  If a thought is 1-2 words, that's fine too.
+  The size follows the meaning. Don't force it.
+
+HARD RULES:
+  1. Never cross a [BREATH] marker. Start a new phrase after every breath.
+  2. Max 6 words. If a thought is longer, find the natural break
+     ("Sometimes y'all gotta play" + "in the dirt").
+  3. Every w-number belongs to exactly one phrase. No gaps.
+  4. heroWord is an EXACT word from the phrase. Copy it from the stream.
+  5. When lyrics repeat (chorus/hook), use the SAME grouping each time.
 
 HERO WORD:
   The most concrete, imageable word in the phrase.
-  Prefer nouns and strong verbs over pronouns, connectors, or filler.
-  If a phrase is 1 word, that word is the hero.
+  Nouns and strong verbs. Not pronouns, articles, or filler.
 
 WORD DIRECTIVES:
   Tag emotionally significant words:
-    "word": lowercase
-    "emphasisLevel": 1-5
+    "word": lowercase, "emphasisLevel": 1-5
     "elementalClass": FIRE | WATER | FROST | SMOKE | ELECTRIC
-    "isolation": true (word >=700ms, gets its own screen)
+    "isolation": true (word >=700ms, solo screen)
 
-  Semantic literalism: if it burns -> FIRE, drowns -> WATER,
-  freezes -> FROST, fades -> SMOKE, electrifies -> ELECTRIC.
+  If it burns -> FIRE. Drowns -> WATER. Freezes -> FROST.
+  Fades -> SMOKE. Electrifies -> ELECTRIC.
 
-  Time gates: emphasisLevel 4-5 needs >=350ms. elementalClass needs >=140ms.
-  isolation needs >=700ms. Skip words under 140ms.
-
-OUTPUT FORMAT:
-  { "phrases": [{ "wordRange": [start, end], "heroWord": "WORD" }, ...],
-    "wordDirectives": [{ "word": "soul", "emphasisLevel": 3 }, ...] }
+  Time gates: emphasisLevel 4-5 needs >=350ms.
+  elementalClass needs >=140ms. isolation needs >=700ms.
 
 Return ONLY valid JSON. No markdown.
+{ "phrases": [{ "wordRange": [start, end], "heroWord": "WORD" }],
+  "wordDirectives": [{ "word": "soul", "emphasisLevel": 3 }] }
 `;
 
 interface LyricLine {
