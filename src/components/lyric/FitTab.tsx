@@ -106,6 +106,7 @@ interface Props {
   sectionImageUrls?: (string | null)[];
   sectionImageProgress?: { done: number; total: number } | null;
   sectionImageError?: string | null;
+  onTitleChange?: (newTitle: string) => void;
 }
 
 export function FitTab({
@@ -504,7 +505,7 @@ export function FitTab({
         </button>
       </div>
     ) : undefined;
-    onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent });
+    onHeaderProject({ title, onBack: onBack ?? (() => {}), rightContent, onTitleChange });
     return () => onHeaderProject(null);
   }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onRetry]);
   // CinematicDirectionCard extracted to top-level — see below FitTab
