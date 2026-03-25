@@ -28,6 +28,7 @@ import { getSemanticOverride } from "@/engine/SemanticAnimMapper";
 import { getMoodGrade, buildGradeFilter, type MoodGrade } from "@/engine/moodGrades";
 // getSectionTones removed — song-level grade model
 import { drawElementalWord } from "@/engine/ElementalEffects";
+import { drawElementalExit, createExitState, type ElementalExitState } from '@/engine/ElementalExits';
 import { getEffectTier, canShowElemental, canShowHeroGlow, getParticleDensity, getGlowCap } from "@/engine/timeTiers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
@@ -1374,6 +1375,7 @@ export class LyricDancePlayer {
   // Hero word decomposition bursts
   private _heroDecompBursts: HeroDecompBurst[] = [];
   private _heroDecompSpawned: Set<string> = new Set(); // track which words already burst
+  private _elementalExitStates = new Map<string, ElementalExitState>();
 
   // Playback
   private rafHandle = 0;
@@ -1906,6 +1908,7 @@ export class LyricDancePlayer {
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
+    this._elementalExitStates.clear();
   }
 
   seekTo(timeSec: number): void {
@@ -2261,6 +2264,7 @@ export class LyricDancePlayer {
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
+    this._elementalExitStates.clear();
     this._bgSnapshotSection = -1;
   }
 
@@ -3473,10 +3477,11 @@ export class LyricDancePlayer {
         this.spawnDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, spawnColor, frameNowMs);
       }
 
+      const dKey = this.cleanWord((chunk.text ?? '') as string);
+      const dir = dKey ? this.resolvedState.wordDirectivesMap[dKey] ?? null : null;
+
       // ═══ ELEMENTAL DECOMPOSITION: element-themed burst when tagged words exit ═══
       if (exit > 0.01 && exit < 0.3 && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2) {
-        const dKey = this.cleanWord((chunk.text ?? '') as string);
-        const dir = dKey ? this.resolvedState.wordDirectivesMap[dKey] ?? null : null;
         if (dir?.elementalClass) {
           this._heroDecompSpawned.add(chunk.id);
           const spawnX = Number.isFinite(chunk.x) ? Math.max(clampMinX, Math.min(clampMaxX, chunk.x as number)) : this.width / 2;
@@ -3484,6 +3489,50 @@ export class LyricDancePlayer {
           const spawnFontSize = Number.isFinite(chunk.fontSize) ? Math.max(viewportMinFont, Math.round(chunk.fontSize as number) || 36) : 36;
           this.spawnElementalDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, dir.elementalClass, frameNowMs);
         }
+      }
+
+      // ═══ ELEMENTAL EXIT RENDERER ═══
+      if (exit > 0 && dir?.elementalClass && this._qualityTier < 2) {
+        // Get or create per-word exit state
+        let exitState = this._elementalExitStates.get(chunk.id);
+        if (!exitState) {
+          exitState = createExitState();
+          this._elementalExitStates.set(chunk.id, exitState);
+        }
+
+        const exitCx = Number.isFinite(chunk.x)
+          ? Math.max(clampMinX, Math.min(clampMaxX, chunk.x as number))
+          : this.width / 2;
+        const exitCy = Number.isFinite(chunk.y)
+          ? Math.max(clampMinY, Math.min(clampMaxY, (chunk.y as number) - this._textVerticalBias))
+          : this.height / 2;
+        const exitFontSize = Number.isFinite(chunk.fontSize)
+          ? Math.max(viewportMinFont, Math.round(chunk.fontSize as number) || 36)
+          : 36;
+        const exitWordWidth = (this.chunks.get(chunk.id)?.width ?? 40)
+          * (chunk.scaleX ?? chunk.scale ?? 1);
+        const exitBeatEnergy = this._lastBeatState?.energy ?? 0.5;
+
+        this.ctx.save();
+        this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+        drawElementalExit(
+          this.ctx,
+          dir.elementalClass,
+          (chunk.text ?? '') as string,
+          exitCx,
+          exitCy,
+          exitFontSize,
+          exitWordWidth,
+          exit,
+          exitState,
+          exitBeatEnergy,
+        );
+        this.ctx.restore();
+      }
+
+      // Clean up exit state when word fully exits
+      if (exit >= 0.99) {
+        this._elementalExitStates.delete(chunk.id);
       }
 
       const obj = this.chunks.get(chunk.id);
