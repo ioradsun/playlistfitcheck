@@ -4722,32 +4722,9 @@ export class LyricDancePlayer {
 
       // ── Hero neighbor push (keeps hero from overlapping neighbors on same line) ──
       const neighborPushOffsets: number[] = new Array(group.words.length).fill(0);
-      {
-        let heroWi = -1;
-        let heroScale = 1.0;
-        for (let wi = 0; wi < group.words.length; wi++) {
-          const w = group.words[wi];
-          if (!w.isHeroWord) continue;
-          if (group.words.length === 1) continue;
-          const ws = wordAnimStates[wi];
-          if (ws.heroScaleMult > heroScale) {
-            heroScale = ws.heroScaleMult;
-            heroWi = wi;
-          }
-        }
-        if (heroWi >= 0 && heroScale > 1.01) {
-          const heroWord = group.words[heroWi];
-          const heroHalfExpansion = (heroWord.layoutWidth ?? 0) * (heroScale - 1) * 0.5;
-          const heroLineY = heroWord.layoutY;
-          for (let wi = 0; wi < group.words.length; wi++) {
-            if (wi === heroWi) continue;
-            const w = group.words[wi];
-            if (Math.abs(w.layoutY - heroLineY) > 4) continue;
-            const side = w.layoutX > heroWord.layoutX ? 1 : -1;
-            neighborPushOffsets[wi] = side * heroHalfExpansion;
-          }
-        }
-      }
+      // Neighbor push removed — at 1.04x scale the overlap is invisible.
+      // The push displacement was more jarring than the overlap it fixed.
+
 
       // ── Build chunks ──
       for (let wi = 0; wi < group.words.length; wi++) {

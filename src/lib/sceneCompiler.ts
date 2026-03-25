@@ -680,10 +680,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   // On resize, the scene recompiles with the new dimensions.
   const REF_W = vw;
   const REF_H = vh;
-  // fitTextToViewport auto-selects maxLines based on aspect ratio internally
-  // No override needed — let it use its default.
-  const layoutMaxLines = undefined;
-
   // Pre-compute layout for each group using fitTextToViewport
   const groupLayouts = new Map<string, { fontSize: number; positions: Array<{ x: number; y: number; width: number }> }>();
 
@@ -709,14 +705,13 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       storyboard.get(group.lineIndex)?.heroWord?.toLowerCase() === wm.clean
     );
 
-    // Map composition to maxLines
-    let maxLines: number | undefined;
+    // Map composition to maxLines — never wrap
+    let maxLines: number;
     if (composition === 'stack') {
-      maxLines = groupWords.length; // one word per line
-    } else if (composition === 'center_word') {
-      maxLines = 1;
+      maxLines = groupWords.length; // one word per line (vertical)
+    } else {
+      maxLines = 1; // center_word AND line: single horizontal line, font shrinks to fit
     }
-    // 'line': use fitTextToViewport default (auto from aspect ratio)
 
     const targetFill = 0.88;
 
@@ -728,7 +723,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       baseTypography.fontFamily,
       baseTypography.fontWeight,
       {
-        ...(maxLines !== undefined ? { maxLines } : (layoutMaxLines !== undefined ? { maxLines: layoutMaxLines } : {})),
+        maxLines,
         textTransform: 'none', // already transformed above
         hasHeroWord: hasHero,
         targetFillRatio: targetFill,
