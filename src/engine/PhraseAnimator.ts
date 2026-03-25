@@ -123,25 +123,13 @@ export function computeWordState(
     heroOffsetY = canvasHeight / 2 - word.layoutY;
   }
 
-  // ── Traveling wave: smooth scale cursor ──
-  // Peak at the word being spoken, tapers to neighbors.
-  // bleedZone = word's half-duration + 150ms overlap → smooth handoff.
-  const wordMid = (wordStart + nextWordStart) / 2;
-  const wordHalfDur = Math.max(0.05, (nextWordStart - wordStart) / 2);
-  const bleedZone = wordHalfDur + 0.15;
-  const dist = Math.abs(tSec - wordMid);
-  const proximity = Math.max(0, 1 - dist / bleedZone);
-  // Smoothstep: round peak, not triangular
-  const eased = proximity * proximity * (3 - 2 * proximity);
-  const waveScale = 1.0 + eased * 0.06;
-
   return {
     isRevealed: true, revealProgress: 1, wordRevealTime: group.start,
     wordState, spotlightAlpha: 1.0,
     isHeroWord, effectiveHero, isSoloHero,
     heroScaleMult: 1.0, heroOffsetX, heroOffsetY, soloHeroHidden,
     centerWordScale: 1.0, revealRise: 0,
-    waveScale, ghostPreview: false,
+    waveScale: wordState === 'active' ? 1.06 : 1.0, ghostPreview: false,
     bounceAmplitude: 0, heroSuppressionFactor: 1.0,
     heroSuppressed: false,
   };
@@ -157,8 +145,8 @@ export function computeChunkAnim(
   // Alpha: always 1.0. Solo hero hidden = 0.
   const alpha = wordAnim.soloHeroHidden ? 0 : 1.0;
 
-  // ── Scale: traveling wave (reading cursor) × push-in ──
-  const scale = wordAnim.waveScale * phrase.pushInScale;
+  // ── Scale: active word 1.06x at timestamp ──
+  const scale = wordAnim.waveScale * (phrase.pushInScale ?? 1.0);
 
   return {
     alpha,
