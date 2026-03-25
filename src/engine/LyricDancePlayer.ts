@@ -1234,6 +1234,7 @@ export class LyricDancePlayer {
 
   // ═══ Compiled Scene (replaces timeline) ═══
   private compiledScene: CompiledScene | null = null;
+  private _debugModeLogged = false;
 
   // ═══ BeatConductor — single rhythmic driver ═══
   private conductor: BeatConductor | null = null;
@@ -5442,6 +5443,35 @@ export class LyricDancePlayer {
       const phraseState = computePhraseState(
         group, nextGroupStart, tSec, beatForAnim, this.width,
       );
+
+      // DEBUG: log first phrase's presentation mode once
+      if (groupIdx === 0 && !this._debugModeLogged) {
+        this._debugModeLogged = true;
+        const g = group as any;
+        console.log('[LyricDance DEBUG] First phrase:', {
+          presentationMode: g.presentationMode,
+          entryCharacter: g.entryCharacter,
+          exitCharacter: g.exitCharacter,
+          ghostPreview: g.ghostPreview,
+          vibrateOnHold: g.vibrateOnHold,
+          elementalWash: g.elementalWash,
+          composition: g.composition,
+          revealStyle: g.revealStyle,
+          staggerDelay: g.staggerDelay,
+        });
+        const allGroups = this.compiledScene?.phraseGroups ?? [];
+        console.table(allGroups.slice(0, 8).map((gg: any, i: number) => ({
+          idx: i,
+          mode: gg.presentationMode ?? 'UNDEF',
+          entry: gg.entryCharacter ?? 'UNDEF',
+          ghost: gg.ghostPreview ?? false,
+          vibrate: gg.vibrateOnHold ?? false,
+          wash: gg.elementalWash ?? false,
+          comp: gg.composition,
+          reveal: gg.revealStyle,
+          stagger: gg.staggerDelay,
+        })));
+      }
 
       const groupHasActiveSoloHero = detectSoloHero(group, tSec);
 
