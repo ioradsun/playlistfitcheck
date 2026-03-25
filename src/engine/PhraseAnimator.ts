@@ -25,14 +25,6 @@ import {
 // Types
 // ─────────────────────────────────────────
 
-/** Mood config subset — only the fields PhraseAnimator needs */
-export interface AnimMoodConfig {
-  character: MotionCharacter;
-  intensity: number;
-  entryDuration: number;
-  exitDuration: number;
-}
-
 /** Beat state subset */
 export interface AnimBeatState {
   pulse: number; // 0..1 beat intensity
@@ -137,29 +129,30 @@ const BEAT_NUDGE_BASE = 8; // EXTREME: visible bounce
 const BEAT_SCALE_BASE = 1.0; // base scale (1.0 = no beat effect)
 const BEAT_SCALE_MULT = 0.08; // EXTREME: visible pulse
 
-// ── Per-mode timing: self-contained, no moodConfig dependency ──
-// Each mode type defines its own entry/exit duration and intensity.
-// These are tuned for VISIBLE motion at each mode's character.
-const MODE_TIMING: Record<string, { entryDur: number; exitDur: number; intensity: number }> = {
-  // HORIZONTAL REVEAL: stagger is the entry, but phrase needs time to settle
-  horizontal: { entryDur: 0.5, exitDur: 0.35, intensity: 0.8 },
-  // VERTICAL STACK: slower reveal, deliberate pacing
-  stack:      { entryDur: 0.6, exitDur: 0.4,  intensity: 0.7 },
-  // GHOST PREVIEW: whisper fade-in, gentle exit
-  ghost:      { entryDur: 0.5, exitDur: 0.4,  intensity: 0.5 },
-  // VIBRATE DISSOLVE: bloom entry, no exit (dissolves)
-  vibrate:    { entryDur: 0.4, exitDur: 0.0,  intensity: 0.9 },
-  // ELEMENTAL WASH: snap in (instant), no exit (decomps)
-  wash:       { entryDur: 0.1, exitDur: 0.0,  intensity: 1.0 },
-  // IMPACT CUT: snap in, no exit
-  impact:     { entryDur: 0.05, exitDur: 0.0, intensity: 1.0 },
-  // HORIZ DRIFT variant: longer entry for the rise
-  horiz_drift:{ entryDur: 0.6, exitDur: 0.35, intensity: 0.8 },
+// ── Self-contained timing per presentation mode ──
+// Each mode defines its own entry/exit duration and intensity.
+// Zero dependency on LyricDancePlayer's mood config.
+const MODE_TIMING: Record<string, { entryDur: number; exitDur: number; intensity: number; character: MotionCharacter; exitChar: MotionCharacter | 'none' }> = {
+  horizontal: { entryDur: 0.5,  exitDur: 0.35, intensity: 0.8, character: 'drift',   exitChar: 'drift' },
+  stack:      { entryDur: 0.6,  exitDur: 0.4,  intensity: 0.7, character: 'rise',    exitChar: 'drift' },
+  ghost:      { entryDur: 0.5,  exitDur: 0.4,  intensity: 0.5, character: 'whisper', exitChar: 'whisper' },
+  vibrate:    { entryDur: 0.4,  exitDur: 0.0,  intensity: 0.9, character: 'bloom',   exitChar: 'none' },
+  wash:       { entryDur: 0.1,  exitDur: 0.0,  intensity: 1.0, character: 'snap',    exitChar: 'none' },
+  impact:     { entryDur: 0.05, exitDur: 0.0,  intensity: 1.0, character: 'snap',    exitChar: 'none' },
+  horiz_drift:{ entryDur: 0.6,  exitDur: 0.35, intensity: 0.8, character: 'rise',    exitChar: 'drift' },
 };
 
-function getModeTiming(presentationMode: string | undefined): { entryDur: number; exitDur: number; intensity: number } | null {
-  if (!presentationMode) return null;
-  // Extract base mode from variant name (e.g., 'horiz_left' → 'horizontal', 'stack_center' → 'stack')
+// AI moment defaults (no presentation mode card)
+const AI_MOMENT_DEFAULTS = {
+  entryDur: 0.35,
+  exitDur: 0.25,
+  intensity: 0.7,
+  character: 'drift' as MotionCharacter,
+  exitChar: 'drift' as MotionCharacter | 'none',
+};
+
+function getModeTiming(presentationMode: string | undefined): typeof AI_MOMENT_DEFAULTS {
+  if (!presentationMode || presentationMode === 'ai_moment') return AI_MOMENT_DEFAULTS;
   if (presentationMode === 'horiz_drift') return MODE_TIMING.horiz_drift;
   if (presentationMode.startsWith('horiz')) return MODE_TIMING.horizontal;
   if (presentationMode.startsWith('stack')) return MODE_TIMING.stack;
@@ -167,7 +160,7 @@ function getModeTiming(presentationMode: string | undefined): { entryDur: number
   if (presentationMode.startsWith('vibrate')) return MODE_TIMING.vibrate;
   if (presentationMode.startsWith('wash')) return MODE_TIMING.wash;
   if (presentationMode.startsWith('impact')) return MODE_TIMING.impact;
-  return null; // ai_moment or unknown → use moodConfig fallback
+  return AI_MOMENT_DEFAULTS;
 }
 
 /** Motion cap for word count — limits motion magnitude for dense phrases */
@@ -179,57 +172,22 @@ function motionCap(wordCount: number): number {
 // Energy tier → motion character mapping
 // ─────────────────────────────────────────
 
-function resolveEntryCharacter(group: CompiledPhraseGroup, moodConfig: AnimMoodConfig): MotionCharacter {
-  // Presentation mode specifies entry character directly
-  if (group.entryCharacter) {
-    return group.entryCharacter as MotionCharacter;
-  }
-  // Fallback: energyTier mapping (for AI moments without entryCharacter)
-  switch (group.energyTier) {
-    case 'intimate':
-      return 'whisper';
-    case 'lift':
-      return 'rise';
-    case 'impact':
-      return 'snap';
-    case 'surprise':
-      return 'bloom';
-    default:
-      return moodConfig.character;
-  }
+function resolveEntryCharacter(group: CompiledPhraseGroup): MotionCharacter {
+  // 1. Card specifies directly
+  if (group.entryCharacter) return group.entryCharacter as MotionCharacter;
+  // 2. Mode defaults
+  const timing = getModeTiming(group.presentationMode);
+  return timing.character;
 }
 
-function resolveExitCharacter(group: CompiledPhraseGroup, moodConfig: AnimMoodConfig): MotionCharacter | 'none' {
-  if (group.exitCharacter) {
-    return group.exitCharacter as MotionCharacter | 'none';
-  }
-  switch (group.energyTier) {
-    case 'intimate':
-      return 'whisper';
-    case 'lift':
-      return 'drift';
-    case 'impact':
-      return 'none';
-    case 'surprise':
-      return 'snap';
-    default:
-      return moodConfig.character;
-  }
+function resolveExitCharacter(group: CompiledPhraseGroup): MotionCharacter | 'none' {
+  if (group.exitCharacter) return group.exitCharacter as MotionCharacter | 'none';
+  const timing = getModeTiming(group.presentationMode);
+  return timing.exitChar;
 }
 
-function resolveMotionIntensity(group: CompiledPhraseGroup, sectionDefault: number): number {
-  // Presentation mode: self-contained intensity
-  const modeTiming = getModeTiming(group.presentationMode);
-  if (modeTiming) return modeTiming.intensity;
-
-  // AI moment fallback
-  switch (group.energyTier) {
-    case 'intimate':  return 0.3;
-    case 'lift':      return sectionDefault * 0.8;
-    case 'impact':    return 1.0;
-    case 'surprise':  return 0.9;
-    default:          return sectionDefault;
-  }
+function resolveMotionIntensity(group: CompiledPhraseGroup): number {
+  return getModeTiming(group.presentationMode).intensity;
 }
 
 // ─────────────────────────────────────────
@@ -281,7 +239,6 @@ export function computePhraseState(
   group: CompiledPhraseGroup,
   nextGroupStart: number,
   tSec: number,
-  moodConfig: AnimMoodConfig,
   beatState: AnimBeatState | null,
   canvasWidth: number,
 ): PhraseAnimState {
@@ -295,17 +252,13 @@ export function computePhraseState(
     groupEnd = nextGroupStart;
   }
 
-  // ── Entry/exit timing: mode-specific or moodConfig fallback ──
+  // ── Entry/exit timing: mode-specific ──
   const phraseDuration = Math.max(0.01, group.end - group.start);
   const staggerDelay = group.staggerDelay ?? 0;
   const entryPad = group.words.length * (staggerDelay || 0.05) + 0.2;
   const modeTiming = getModeTiming(group.presentationMode);
-  const groupEntryDur = modeTiming
-    ? modeTiming.entryDur   // self-contained: mode defines its own timing
-    : Math.max(0.3, group.entryDuration ?? moodConfig.entryDuration);
-  const groupExitDur = modeTiming
-    ? modeTiming.exitDur
-    : Math.max(0.25, group.exitDuration ?? moodConfig.exitDuration);
+  const groupEntryDur = modeTiming.entryDur;
+  const groupExitDur = modeTiming.exitDur;
   const timeSinceActivation = tSec - (group.start - entryPad);
   const phraseRemaining = groupEnd - tSec;
 
@@ -317,10 +270,10 @@ export function computePhraseState(
       : 0;
 
   // ── Motion character from energyTier ──
-  const entryCharacter = resolveEntryCharacter(group, moodConfig);
-  const exitCharacter = resolveExitCharacter(group, moodConfig);
+  const entryCharacter = resolveEntryCharacter(group);
+  const exitCharacter = resolveExitCharacter(group);
   const suppressExit = exitCharacter === 'none';
-  const motionIntensity = resolveMotionIntensity(group, moodConfig.intensity);
+  const motionIntensity = resolveMotionIntensity(group);
   const pMode = group.presentationMode ?? '';
   const isRevealMode = pMode.startsWith('horiz') || pMode.startsWith('stack');
 
