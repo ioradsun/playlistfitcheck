@@ -26,7 +26,6 @@ function mkGroup(overrides: Partial<CompiledPhraseGroup>): CompiledPhraseGroup {
         isHeroWord: false,
         isAnchor: true,
         color: '#fff',
-        hasSemanticColor: false,
         isFiller: false,
         emphasisLevel: 1,
       },
