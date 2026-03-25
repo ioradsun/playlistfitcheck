@@ -957,7 +957,7 @@ export function useLyricPipeline({
   const startCinematicDirection = useCallback(
     async (sourceLines: LyricLine[], force = false) => {
       if (!lyricData || !sourceLines.length) return;
-      if (!force && cinematicDirectionRef.current) {
+      if (false && !force && cinematicDirectionRef.current) {
         setGenerationStatus((prev) => {
           const next = { ...prev };
           if (next.cinematicDirection !== "done")
