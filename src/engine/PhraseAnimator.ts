@@ -73,6 +73,28 @@ export function computeWordState(
   tSec: number, groupHasActiveSoloHero: boolean,
   canvasWidth: number, canvasHeight: number,
 ): WordAnimState {
+  const state: WordAnimState = {
+    wordState: 'upcoming',
+    waveScale: 1.0,
+    isSoloHero: false,
+    soloHeroHidden: false,
+    heroOffsetX: 0,
+    heroOffsetY: 0,
+  };
+  computeWordStateInto(
+    word, wordIndex, group, tSec, groupHasActiveSoloHero, canvasWidth, canvasHeight, state,
+  );
+  return state;
+}
+
+
+/** Write word state into pre-allocated target — zero allocation per call */
+export function computeWordStateInto(
+  word: CompiledWord, wordIndex: number, group: CompiledPhraseGroup,
+  tSec: number, groupHasActiveSoloHero: boolean,
+  canvasWidth: number, canvasHeight: number,
+  target: WordAnimState,
+): void {
   const wordStart = word.wordStart ?? group.start;
   const nextWordStart = wordIndex + 1 < group.words.length
     ? (group.words[wordIndex + 1].wordStart ?? group.end) : group.end;
@@ -89,22 +111,19 @@ export function computeWordState(
   const isHeroWord = word.isHeroWord === true;
   const isOnlyWordInPhrase = group.words.length === 1;
   const isSoloHero = isOnlyWordInPhrase && isHeroWord && (word.wordDuration ?? 0) >= 0.5;
-  const soloHeroHidden = !isSoloHero && groupHasActiveSoloHero;
 
-  let heroOffsetX = 0; let heroOffsetY = 0;
+  target.wordState = wordState;
+  target.waveScale = wordState === 'active' ? 1.06 : 1.0;
+  target.isSoloHero = isSoloHero;
+  target.soloHeroHidden = !isSoloHero && groupHasActiveSoloHero;
+
   if (isSoloHero) {
-    heroOffsetX = canvasWidth / 2 - word.layoutX;
-    heroOffsetY = canvasHeight / 2 - word.layoutY;
+    target.heroOffsetX = canvasWidth / 2 - word.layoutX;
+    target.heroOffsetY = canvasHeight / 2 - word.layoutY;
+  } else {
+    target.heroOffsetX = 0;
+    target.heroOffsetY = 0;
   }
-
-  return {
-    wordState,
-    waveScale: wordState === 'active' ? 1.06 : 1.0,
-    isSoloHero,
-    soloHeroHidden,
-    heroOffsetX,
-    heroOffsetY,
-  };
 }
 
 // ─── 4. Final chunk animation ───────────────────────────────

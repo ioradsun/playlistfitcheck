@@ -41,10 +41,10 @@ import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalett
 import {
   resolveActiveGroup,
   computePhraseState,
-  computeWordState,
-  computeChunkAnim,
+  computeWordStateInto,
   detectSoloHero,
   type AnimBeatState,
+  type WordAnimState,
 } from '@/engine/PhraseAnimator';
 
 const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-04-PERF';
@@ -518,22 +518,16 @@ const VIS_H = 64;
 class BeatVisSim {
   private visCanvas: HTMLCanvasElement;
   private visCtx: CanvasRenderingContext2D;
-  private buf: Uint8ClampedArray;
-  private imageData: ImageData;
   private bars: Float32Array;
   private barSeeds: Float32Array;
   private palette: [number, number, number];
-  private style: BarVisStyle = 'flame';
   private lastBeatIndex = -1;
-  private flickerPhase = 0;
 
   constructor(accent: string) {
     this.visCanvas = document.createElement('canvas');
     this.visCanvas.width = VIS_W;
     this.visCanvas.height = VIS_H;
     this.visCtx = this.visCanvas.getContext('2d')!;
-    this.imageData = this.visCtx.createImageData(VIS_W, VIS_H);
-    this.buf = this.imageData.data;
     this.bars = new Float32Array(VIS_W);
     this.barSeeds = new Float32Array(VIS_W);
     for (let i = 0; i < VIS_W; i++) {
@@ -549,20 +543,17 @@ class BeatVisSim {
   }
 
   setAccent(hex: string): void { this.palette = this.hexToRgb(hex); }
-  setStyle(s: BarVisStyle): void { this.style = s; }
+  setStyle(_s: BarVisStyle): void { /* styles removed — single clean look */ }
 
   update(energy: number, pulse: number, hitStrength: number, _beatPhase: number, beatIndex: number): void {
     const W = VIS_W;
     const H = VIS_H;
-    const buf = this.buf;
+    const ctx = this.visCtx;
 
-    for (let i = 0; i < W * H * 4; i += 4) {
-      buf[i] = 0; buf[i + 1] = 0; buf[i + 2] = 0; buf[i + 3] = 0;
-    }
+    ctx.clearRect(0, 0, W, H);
 
     const isNewBeat = beatIndex !== this.lastBeatIndex;
     this.lastBeatIndex = beatIndex;
-    this.flickerPhase += 0.15 + energy * 0.3;
 
     const [pr, pg, pb] = this.palette;
     const drive = energy * 0.55 + (pulse * energy) * 0.35 + hitStrength * 0.10;
@@ -572,73 +563,28 @@ class BeatVisSim {
       const centerBias = 0.5 + 0.5 * (1.0 - Math.abs(nx - 0.5) * 2.0);
       const variation = 0.7 + this.barSeeds[x] * 0.6;
       const target = drive * centerBias * variation;
-      if (target > this.bars[x]) {
-        this.bars[x] += (target - this.bars[x]) * 0.75;
-      } else {
-        this.bars[x] += (target - this.bars[x]) * 0.12;
-      }
+      this.bars[x] += ((target > this.bars[x]) ? 0.75 : 0.12) * (target - this.bars[x]);
     }
 
-    const style = this.style;
     for (let x = 0; x < W; x++) {
       const barH = Math.floor(this.bars[x] * H * 0.92);
       if (barH < 1) continue;
-      const seed = this.barSeeds[x];
 
-      for (let y = H - 1; y >= H - barH && y >= 0; y--) {
-        const t = (H - y) / Math.max(1, barH);
-        const idx = (y * W + x) * 4;
+      const t = 0.6;
+      const r = Math.min(255, Math.floor(pr * (0.4 + t * 0.6)));
+      const g = Math.min(255, Math.floor(pg * (0.3 + t * 0.4)));
+      const b = Math.floor(pb * (0.2 + t * 0.15));
+      const a = 0.60 + t * 0.35;
 
-        if (style === 'flame') {
-          const flicker = t > 0.6 ? Math.sin(this.flickerPhase * 3 + seed * 40 + x * 0.7) * 0.3 : 0;
-          const tipShift = Math.max(0, t - 0.5) * 2;
-          const r = Math.min(255, Math.floor(pr * (0.4 + t * 0.6) + tipShift * (255 - pr) * 0.6));
-          const g = Math.min(255, Math.floor(pg * (0.3 + t * 0.4) + tipShift * Math.max(0, 180 - pg) * 0.3));
-          const b = Math.floor(pb * (0.2 + t * 0.15) * (1 - tipShift * 0.7));
-          const a = Math.min(255, Math.floor((230 + flicker * 25) * (0.60 + t * 0.35) * (1 - flicker * 0.10)));
-          buf[idx] = r; buf[idx + 1] = g; buf[idx + 2] = Math.max(0, b); buf[idx + 3] = a;
-        } else if (style === 'neon') {
-          const bright = 0.6 + t * 0.4;
-          const glow = 1.0;
-          buf[idx] = Math.min(255, Math.floor(pr * bright * glow + 40 * t));
-          buf[idx + 1] = Math.min(255, Math.floor(pg * bright * glow + 30 * t));
-          buf[idx + 2] = Math.min(255, Math.floor(pb * bright * glow + 60 * t));
-          buf[idx + 3] = Math.min(255, Math.floor(220 * (0.55 + t * 0.40)));
-        } else if (style === 'smoke') {
-          const wisp = t > 0.4 ? Math.sin(this.flickerPhase * 1.5 + seed * 30 + x * 0.5) * 0.25 * t : 0;
-          const fade = t > 0.7 ? 1.0 - (t - 0.7) / 0.3 : 1.0;
-          const grey = 0.5 + t * 0.3;
-          buf[idx] = Math.min(255, Math.floor((pr * 0.3 + 180 * 0.7) * grey));
-          buf[idx + 1] = Math.min(255, Math.floor((pg * 0.3 + 170 * 0.7) * grey));
-          buf[idx + 2] = Math.min(255, Math.floor((pb * 0.3 + 175 * 0.7) * grey));
-          buf[idx + 3] = Math.min(255, Math.floor(185 * fade * (0.45 + t * 0.30 + wisp)));
-        } else {
-          const bright = 0.35 + t * 0.65;
-          buf[idx] = Math.min(255, Math.floor(pr * bright + 50 * t));
-          buf[idx + 1] = Math.min(255, Math.floor(pg * bright + 50 * t));
-          buf[idx + 2] = Math.min(255, Math.floor(pb * bright + 50 * t));
-          buf[idx + 3] = Math.min(255, Math.floor(210 * (0.55 + t * 0.40)));
-        }
-      }
+      ctx.fillStyle = `rgba(${r},${g},${b},${a.toFixed(2)})`;
+      ctx.fillRect(x, H - barH, 1, barH);
     }
 
     if (isNewBeat && hitStrength > 0.3) {
-      const flashAlpha = Math.min(200, Math.floor(hitStrength * 155));
-      const fr = style === 'flame' ? Math.min(255, pr + 80) : pr;
-      const fg = style === 'flame' ? Math.min(255, Math.floor(pg * 0.7 + 60)) : pg;
-      const fb = style === 'flame' ? Math.floor(pb * 0.3) : pb;
-      for (let x = 0; x < W; x++) {
-        for (let y = H - 3; y < H; y++) {
-          const idx = (y * W + x) * 4;
-          buf[idx] = Math.max(buf[idx], Math.min(255, fr));
-          buf[idx + 1] = Math.max(buf[idx + 1], Math.min(255, fg));
-          buf[idx + 2] = Math.max(buf[idx + 2], Math.min(255, fb));
-          buf[idx + 3] = Math.max(buf[idx + 3], flashAlpha);
-        }
-      }
+      const flashAlpha = Math.min(0.8, hitStrength * 0.6);
+      ctx.fillStyle = `rgba(${Math.min(255, pr + 80)},${Math.min(255, Math.floor(pg * 0.7 + 60))},${Math.floor(pb * 0.3)},${flashAlpha.toFixed(2)})`;
+      ctx.fillRect(0, H - 3, W, 3);
     }
-
-    this.visCtx.putImageData(this.imageData, 0, 0);
   }
 
   get canvas(): HTMLCanvasElement { return this.visCanvas; }
@@ -1211,6 +1157,8 @@ export class LyricDancePlayer {
   // Runtime evaluator state
   private _evalChunkPool: Array<ScaledKeyframe['chunks'][number]> = [];
   private _activeGroupIndices: number[] = [];
+  /** Reusable buffer for per-word animation states — avoids per-frame allocation */
+  private _wordAnimBuffer: WordAnimState[] = [];
 
   // ML layout cache removed — fitTextToViewport handles all layout at compile time
 
@@ -3335,19 +3283,14 @@ export class LyricDancePlayer {
     const drawChunkText = (chunk: ScaledKeyframe['chunks'][number]) => {
       if (!chunk.visible) return;
 
-      const obj = this.chunks.get(chunk.id);
-      if (!obj) return;
-
-      const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
-      const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y - this._textVerticalBias : 0;
-      const rawDrawX = chunkBaseX;
-      const rawDrawY = chunkBaseY;
+      const rawDrawX = Number.isFinite(chunk.x) ? chunk.x : 0;
+      const rawDrawY = Number.isFinite(chunk.y) ? chunk.y - this._textVerticalBias : 0;
 
       const baseFontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
       const safeFontSize = Math.max(viewportMinFont, Math.round(baseFontSize) || 36);
       const fontWeight = chunk.fontWeight ?? 700;
       const family = chunk.fontFamily ?? resolvedFont;
-      const text = LyricDancePlayer.stripDisplayPunctuation(chunk.text ?? obj.text);
+      const text = chunk.text;
 
       const measureFont = `${fontWeight} ${safeFontSize}px ${family}`;
       const textWidth = this.getCachedMetrics(text, measureFont).width;
@@ -4685,37 +4628,51 @@ export class LyricDancePlayer {
 
       const groupHasActiveSoloHero = detectSoloHero(group, tSec);
 
-      // ── Per-word animation states ──
-      const wordAnimStates = group.words.map((word, wi) =>
-        computeWordState(word, wi, group, tSec, groupHasActiveSoloHero, this.width, this.height),
-      );
+      // ── Per-word animation states (reused buffer) ──
+      const wab = this._wordAnimBuffer;
+      for (let wi = 0; wi < group.words.length; wi++) {
+        if (!wab[wi]) {
+          wab[wi] = {
+            wordState: 'upcoming',
+            waveScale: 1,
+            isSoloHero: false,
+            soloHeroHidden: false,
+            heroOffsetX: 0,
+            heroOffsetY: 0,
+          };
+        }
+        computeWordStateInto(
+          group.words[wi], wi, group, tSec, groupHasActiveSoloHero, this.width, this.height, wab[wi],
+        );
+      }
+      const wordAnimStates = wab;
 
       // ── Build chunks ──
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
         const ws = wordAnimStates[wi];
-        const anim = computeChunkAnim(phraseState, ws);
+        const scale = ws.waveScale * phraseState.pushInScale;
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
 
         chunk.id = word.id;
-        chunk.text = word.text;
+        chunk.text = LyricDancePlayer.stripDisplayPunctuation(word.text);
 
         // Position: layout + animation offsets
-        chunk.x = word.layoutX + anim.offsetX;
-        chunk.y = word.layoutY + anim.offsetY;
+        chunk.x = word.layoutX + ws.heroOffsetX;
+        chunk.y = word.layoutY + ws.heroOffsetY;
 
-        chunk.alpha = anim.alpha;
-        chunk.scaleX = anim.scaleX;
-        chunk.scaleY = anim.scaleY;
+        chunk.alpha = ws.soloHeroHidden ? 0 : 1.0;
+        chunk.scaleX = scale;
+        chunk.scaleY = scale;
         chunk.scale = 1;
-        chunk.visible = anim.visible;
+        chunk.visible = chunk.alpha > 0.01;
         chunk.fontSize = word.baseFontSize;
         chunk.fontWeight = word.fontWeight;
         chunk.fontFamily = word.fontFamily;
-        chunk.rotation = anim.rotation;
-        chunk.skewX = anim.skewX;
+        chunk.rotation = 0;
+        chunk.skewX = 0;
 
         chunk.color = word.color;
 
