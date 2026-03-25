@@ -15,8 +15,6 @@
 import {
   type MotionCharacter,
   type AnimState,
-  computeMotionEntry,
-  computeMotionExit,
   type CompiledPhraseGroup,
   type CompiledWord,
 } from '@/lib/sceneCompiler';
@@ -61,10 +59,10 @@ export interface PhraseAnimState {
   vibrateOnHold: boolean;     // ramp vibration during hold
   elementalWash: boolean;     // color sweep during hold
 
-  // Entry motion result (from computeMotionEntry)
+  // Entry motion result (identity; kept for compatibility)
   entry: AnimState;
 
-  // Exit motion result (from computeMotionExit)
+  // Exit motion result (identity; kept for compatibility)
   exit: AnimState;
 
   // Bias-driven entry slide
@@ -163,33 +161,6 @@ function getModeTiming(presentationMode: string | undefined): typeof AI_MOMENT_D
   return AI_MOMENT_DEFAULTS;
 }
 
-/** Motion cap for word count — limits motion magnitude for dense phrases */
-function motionCap(wordCount: number): number {
-  return 1.0; // EXTREME: full motion for all word counts
-}
-
-// ─────────────────────────────────────────
-// Energy tier → motion character mapping
-// ─────────────────────────────────────────
-
-function resolveEntryCharacter(group: CompiledPhraseGroup): MotionCharacter {
-  // 1. Card specifies directly
-  if (group.entryCharacter) return group.entryCharacter as MotionCharacter;
-  // 2. Mode defaults
-  const timing = getModeTiming(group.presentationMode);
-  return timing.character;
-}
-
-function resolveExitCharacter(group: CompiledPhraseGroup): MotionCharacter | 'none' {
-  if (group.exitCharacter) return group.exitCharacter as MotionCharacter | 'none';
-  const timing = getModeTiming(group.presentationMode);
-  return timing.exitChar;
-}
-
-function resolveMotionIntensity(group: CompiledPhraseGroup): number {
-  return getModeTiming(group.presentationMode).intensity;
-}
-
 // ─────────────────────────────────────────
 // 1. Resolve active group (cursor logic)
 // ─────────────────────────────────────────
@@ -252,76 +223,29 @@ export function computePhraseState(
     groupEnd = nextGroupStart;
   }
 
-  // ── Entry/exit timing: mode-specific ──
-  const phraseDuration = Math.max(0.01, group.end - group.start);
+  // ── Timing used for stagger reveal and phrase activation window ──
   const staggerDelay = group.staggerDelay ?? 0;
   const entryPad = group.words.length * (staggerDelay || 0.05) + 0.2;
+  // Keep mode timing lookup for forward compatibility and intensity mapping.
   const modeTiming = getModeTiming(group.presentationMode);
-  const groupEntryDur = modeTiming.entryDur;
-  const groupExitDur = modeTiming.exitDur;
+  // ── No entry/exit animation. Phrase appears instantly, holds, gets replaced. ──
   const timeSinceActivation = tSec - (group.start - entryPad);
   const phraseRemaining = groupEnd - tSec;
+  void timeSinceActivation;
+  void phraseRemaining;
 
-  const isEntering = timeSinceActivation >= 0 && timeSinceActivation < groupEntryDur;
-  const entryProgress = isEntering
-    ? Math.min(1, timeSinceActivation / Math.max(0.01, groupEntryDur))
-    : timeSinceActivation >= groupEntryDur
-      ? 1
-      : 0;
+  // Stagger reveal still needs timing — words appear one at a time
+  const isEntering = false;  // no entry animation
+  const isExiting = false;   // no exit animation
+  const entryProgress = 1;   // always fully entered
+  const exitProgress = 0;    // never exiting
+  const suppressExit = true; // suppress all exit
 
-  // ── Motion character from energyTier ──
-  const entryCharacter = resolveEntryCharacter(group);
-  const exitCharacter = resolveExitCharacter(group);
-  const suppressExit = exitCharacter === 'none';
-  const motionIntensity = resolveMotionIntensity(group);
-  const pMode = group.presentationMode ?? '';
-  const isRevealMode = pMode.startsWith('horiz') || pMode.startsWith('stack');
-
-  const phraseExitDuration = Math.min(groupExitDur, phraseDuration * 0.35);
-  // Never go fully transparent on exit — hold at 30% minimum until next phrase takes over.
-  // The cursor guarantees this group stays active until nextGroupStart.
-  // But the exit alpha can reach 0 while the next phrase's words aren't visible yet.
-  // Fix: clamp exit so the phrase never fully disappears.
-  const isExiting = !suppressExit && phraseRemaining < phraseExitDuration && phraseRemaining >= 0;
-  const exitProgress = isExiting
-    ? Math.min(1, 1 - phraseRemaining / Math.max(0.01, phraseExitDuration))
-    : 0;
-
-  // ── Compute entry transform ──
-  // For reveal modes: suppress phrase-level motion. The per-word stagger IS the entry.
-  // For all-at-once modes: phrase-level entry motion plays normally.
-  const cap = motionCap(group.words.length);
-  let entry: AnimState;
-  if (isEntering && !isRevealMode) {
-    entry = computeMotionEntry(entryCharacter, entryProgress, motionIntensity);
-    entry = {
-      ...entry,
-      offsetX: entry.offsetX * cap,
-      offsetY: entry.offsetY * cap,
-      blur: Math.min(0.3, entry.blur),
-    };
-  } else {
-    entry = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-  }
-
-  // ── Compute exit transform ──
-  let exit: AnimState;
-  if (isExiting && !suppressExit) {
-    exit = computeMotionExit(exitCharacter as MotionCharacter, exitProgress, motionIntensity);
-    exit = {
-      ...exit,
-      offsetX: exit.offsetX * cap,
-      offsetY: exit.offsetY * cap,
-      blur: Math.min(0.3, exit.blur),
-    };
-  } else {
-    exit = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-  }
-
-  // ── Bias-driven entry slide ──
-  let biasEntryOffsetX = 0;
-  // No positional entry — words appear in place
-  // Bias only affects layout position (already handled by compiler)
+  // Identity transforms — no motion
+  const noMotion: AnimState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
+  const entry = noMotion;
+  const exit = noMotion;
+  const biasEntryOffsetX = 0;
 
   // ── Beat response ──
   const pulse = beatState?.pulse ?? 0;
@@ -334,10 +258,8 @@ export function computePhraseState(
   const beatNudgeY = pulse * BEAT_NUDGE_BASE * beatMultiplier;
   const beatScale = BEAT_SCALE_BASE + pulse * BEAT_SCALE_MULT * beatMultiplier;
 
-  // ── Reveal anchor: mode-aware ──
-  const revealAnchor = isRevealMode
-    ? group.start                   // stagger begins at first word
-    : group.start - entryPad;       // visible during entry motion
+  // All words visible from phrase activation (no reveal gating)
+  const revealAnchor = group.start - entryPad;
 
   return {
     composition,
@@ -353,9 +275,9 @@ export function computePhraseState(
     isExiting,
     exitProgress,
     suppressExit,
-    entryCharacter,
-    exitCharacter,
-    motionIntensity,
+    entryCharacter: group.entryCharacter ?? 'drift',
+    exitCharacter: group.exitCharacter ?? 'none',
+    motionIntensity: modeTiming.intensity,
     presentationMode: group.presentationMode ?? 'horiz_center',
     ghostPreview: group.ghostPreview ?? false,
     vibrateOnHold: group.vibrateOnHold ?? false,
@@ -418,38 +340,15 @@ export function computeWordState(
     wordState = 'spoken';
   }
 
-  // ── Spotlight alpha: mode-aware ──
-  const mode = phrase.presentationMode ?? '';
-  const isRevealMode = mode.startsWith('horiz') || mode.startsWith('stack');
-  const isImpactOrWashOrVibrate = mode.startsWith('impact') || mode.startsWith('wash') || mode.startsWith('vibrate');
-
+  // ── Spotlight alpha: simple per-word state ──
   let spotlightAlpha: number;
-  if (phrase.ghostPreview) {
-    // GHOST: all words visible. Active pops. Spoken settles.
-    if (wordState === 'active') spotlightAlpha = 1.0;
-    else if (wordState === 'spoken') spotlightAlpha = 0.80;
-    else spotlightAlpha = 0.20;
-
-  } else if (isRevealMode) {
-    // REVEAL: invisible until stagger, then full.
-    if (!isRevealed) spotlightAlpha = 0;
-    else if (wordState === 'active') spotlightAlpha = 1.0;
-    else if (wordState === 'spoken') spotlightAlpha = 0.65;
-    else spotlightAlpha = revealProgress;
-
-  } else if (isImpactOrWashOrVibrate) {
-    // IMPACT/WASH/VIBRATE: all words fully visible immediately.
+  if (wordState === 'active') {
     spotlightAlpha = 1.0;
-
+  } else if (wordState === 'spoken') {
+    spotlightAlpha = 0.7;
   } else {
-    // Fallback (ai_moment, unknown modes)
-    if (!isRevealed) {
-      spotlightAlpha = 0;
-    } else if (wordState === 'upcoming') {
-      spotlightAlpha = 0.30 * revealProgress;
-    } else {
-      spotlightAlpha = revealProgress;
-    }
+    // upcoming
+    spotlightAlpha = 0.4;
   }
 
   // ── Hero detection ──
@@ -525,49 +424,19 @@ export function computeChunkAnim(
   // keep signature stable for future word-specific adjustments
   void word;
 
-  // ── ALPHA: mode-aware, no accidental zeroing ──
+  // ── ALPHA: simple. Phrase is on screen = words are visible. ──
+  // Active word = full brightness. Spoken = slightly dimmed. Upcoming = dimmer.
+  // No entry fade, no exit fade. Hero directive decomp handled separately.
   let alpha: number;
-  const mode = phrase.presentationMode ?? '';
-  const isRevealMode = mode.startsWith('horiz') || mode.startsWith('stack');
-
   if (wordAnim.soloHeroHidden) {
     alpha = 0;
-
-  } else if (isRevealMode) {
-    // REVEAL MODES: stagger controls visibility. Words invisible until revealed.
-    if (!wordAnim.isRevealed) {
-      alpha = 0;
-    } else if (wordAnim.wordState === 'active') {
-      alpha = 1.0;
-    } else if (wordAnim.wordState === 'spoken') {
-      alpha = 0.65;
-    } else {
-      alpha = wordAnim.revealProgress;
-    }
-
-  } else if (phrase.ghostPreview) {
-    // GHOST: all words visible from start. No revealProgress gate.
-    if (phrase.isEntering) {
-      const baseAlpha = wordAnim.wordState === 'active' ? 1.0
-        : wordAnim.wordState === 'spoken' ? 0.8 : 0.2;
-      alpha = phrase.entry.alpha * baseAlpha;
-    } else if (phrase.isExiting && !phrase.suppressExit) {
-      alpha = phrase.exit.alpha * wordAnim.spotlightAlpha;
-    } else {
-      alpha = wordAnim.spotlightAlpha;
-    }
-
+  } else if (wordAnim.wordState === 'active') {
+    alpha = 1.0;
+  } else if (wordAnim.wordState === 'spoken') {
+    alpha = 0.7;
   } else {
-    // IMPACT / WASH / VIBRATE / AI_MOMENT:
-    // All words visible. Entry alpha = character's own curve.
-    // NO revealProgress multiplication.
-    if (phrase.isEntering) {
-      alpha = phrase.entry.alpha * wordAnim.spotlightAlpha;
-    } else if (phrase.isExiting && !phrase.suppressExit) {
-      alpha = phrase.exit.alpha * wordAnim.spotlightAlpha;
-    } else {
-      alpha = wordAnim.spotlightAlpha;
-    }
+    // upcoming — visible but dimmed
+    alpha = 0.4;
   }
 
   alpha = Math.max(0, Math.min(1, alpha));
@@ -580,45 +449,13 @@ export function computeChunkAnim(
   let scaleX = emphasisScale;
   let scaleY = emphasisScale;
 
-  // Entry motion scale (not for reveal modes)
-  if (phrase.isEntering && !isRevealMode) {
-    scaleX *= phrase.entry.scaleX;
-    scaleY *= phrase.entry.scaleY;
-  }
-
-  // Exit motion scale
-  if (phrase.isExiting && !phrase.suppressExit) {
-    scaleX *= phrase.exit.scaleX;
-    scaleY *= phrase.exit.scaleY;
-  }
-
-  // Beat response scale (small — 1.0 to 1.08)
+  // Beat response scale (subtle pulse on beat)
   scaleX *= phrase.beatScale;
   scaleY *= phrase.beatScale;
 
-  // ── POSITION OFFSET ──
+  // ── POSITION: no entry/exit motion. Words stay in place. ──
   let offsetX = 0;
   let offsetY = 0;
-
-  // For reveal modes: no phrase-level entry motion (stagger IS the entry)
-  if (!isRevealMode) {
-    // Bias entry slide (eases from offset to 0 during entry)
-    if (phrase.isEntering && phrase.biasEntryOffsetX !== 0) {
-      offsetX += phrase.biasEntryOffsetX * (1 - phrase.entryProgress);
-    }
-
-    // Entry motion offset
-    if (phrase.isEntering) {
-      offsetX += phrase.entry.offsetX;
-      offsetY += phrase.entry.offsetY;
-    }
-  }
-
-  // Exit motion offset (applies to all modes)
-  if (phrase.isExiting && !phrase.suppressExit) {
-    offsetX += phrase.exit.offsetX;
-    offsetY += phrase.exit.offsetY;
-  }
 
   // Hero centering offset
   offsetX += wordAnim.heroOffsetX;
