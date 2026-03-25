@@ -2707,7 +2707,7 @@ export class LyricDancePlayer {
         this.cameraRig.setPhraseDamping((activeGroup as any)?.motionBudget?.damping ?? 0);
 
         // CameraRig driven by IntensityRouter — background moves with the beat
-        const camIntensity = mp.cameraBeatMult;
+        const camIntensity = this._motionProfile?.cameraBeatMult ?? 0;
         if (camIntensity > 0.02) {
           this.cameraRig.setAmplitudeScale(camIntensity);
           this.cameraRig.update(deltaMs, beatState, focus);
@@ -3064,7 +3064,7 @@ export class LyricDancePlayer {
     ds.beatIntensity = beatState?.pulse ?? 0;
 
 
-    const particleBeatIntensity = (beatState?.pulse ?? 0) * (1 + mp.bgBeatMult);
+    const particleBeatIntensity = (beatState?.pulse ?? 0) * (1 + (this._motionProfile?.bgBeatMult ?? 0));
     const beatIntensityClamped = Math.max(0, Math.min(1, particleBeatIntensity));
     if (this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
   }
