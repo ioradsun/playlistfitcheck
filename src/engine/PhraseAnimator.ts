@@ -262,12 +262,15 @@ export function computePhraseState(
   }
 
   // ── Entry/exit timing ──
-  // Minimum 0.3s entry so motion is visible (snap is still instant via alpha)
-  const groupEntryDur = Math.max(0.3, group.entryDuration ?? moodConfig.entryDuration);
   const groupExitDur = Math.max(0.25, group.exitDuration ?? moodConfig.exitDuration);
   const phraseDuration = Math.max(0.01, group.end - group.start);
   const staggerDelay = group.staggerDelay ?? 0;
   const entryPad = group.words.length * (staggerDelay || 0.05) + 0.2;
+  // Entry duration must cover the stagger window so motion is visible
+  // during the entire reveal sequence. Min 0.3s, but at least as long
+  // as entryPad * 0.7 so the motion continues while words appear.
+  const baseEntryDur = Math.max(0.3, group.entryDuration ?? moodConfig.entryDuration);
+  const groupEntryDur = Math.max(baseEntryDur, entryPad * 0.7);
   const timeSinceActivation = tSec - (group.start - entryPad);
   const phraseRemaining = groupEnd - tSec;
 
@@ -329,8 +332,10 @@ export function computePhraseState(
   const beatNudgeY = pulse * BEAT_NUDGE_BASE;
   const beatScale = BEAT_SCALE_BASE + pulse * BEAT_SCALE_MULT;
 
-  // ── Reveal anchor ──
-  const revealAnchor = group.start - REVEAL_ANTICIPATION;
+  // ── Reveal anchor: aligned with entry animation start ──
+  // Words must be revealed DURING the entry motion, not after it ends.
+  // Otherwise entry motion plays while words are invisible.
+  const revealAnchor = group.start - entryPad;
 
   return {
     composition,
@@ -411,22 +416,49 @@ export function computeWordState(
     wordState = 'spoken';
   }
 
-  // ── Spotlight alpha ──
+  // ── Spotlight alpha: mode-aware ──
   let spotlightAlpha: number;
+  const mode = phrase.presentationMode ?? 'horiz_center';
+  const isRevealMode = mode.startsWith('horiz') || mode.startsWith('stack');
+  const isImpactMode = mode.startsWith('impact');
+  const isWashMode = mode.startsWith('wash');
+  const isVibrateMode = mode.startsWith('vibrate');
+
   if (phrase.ghostPreview) {
     // GHOST PREVIEW: all words visible at 20% from start
     // Active word: snap to 100%. Spoken: 80%.
-    if (!isRevealed) {
-      spotlightAlpha = 0.20; // ghost visible even before reveal
-    } else if (wordState === 'active') {
+    if (wordState === 'active') {
       spotlightAlpha = 1.0;
     } else if (wordState === 'spoken') {
       spotlightAlpha = 0.80;
     } else {
-      spotlightAlpha = 0.20; // upcoming but revealed — still ghost
+      spotlightAlpha = 0.20; // ghost — always visible at 20%
+    }
+  } else if (isRevealMode) {
+    // HORIZONTAL / VERTICAL STACK REVEAL:
+    // Unrevealed words = INVISIBLE (0). No preview.
+    // Revealed words = FULL alpha (the reveal IS the animation).
+    // Spoken words = slightly dimmed.
+    if (!isRevealed) {
+      spotlightAlpha = 0;
+    } else if (wordState === 'active') {
+      spotlightAlpha = revealProgress; // fades in via stagger
+    } else if (wordState === 'spoken') {
+      spotlightAlpha = 0.75 * revealProgress; // spoken = slightly dimmed
+    } else {
+      // upcoming but revealed — in reveal modes, stagger-revealed words
+      // are immediately full. The stagger IS the pacing.
+      spotlightAlpha = revealProgress;
+    }
+  } else if (isImpactMode || isWashMode || isVibrateMode) {
+    // IMPACT / WASH / VIBRATE: all words fully visible immediately
+    if (!isRevealed) {
+      spotlightAlpha = 0;
+    } else {
+      spotlightAlpha = 1.0; // all visible, no dim upcoming
     }
   } else {
-    // Normal modes: unrevealed = invisible
+    // Fallback (ai_moment, unknown modes)
     if (!isRevealed) {
       spotlightAlpha = 0;
     } else if (wordState === 'upcoming') {
