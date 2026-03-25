@@ -102,6 +102,9 @@ export interface WordAnimState {
 
   // Per-word reveal rise (px offset that eases to 0 as word fades in)
   revealRise: number;
+
+  /** Smooth 0→1→0 proximity wave for active word emphasis */
+  waveScale: number;
 }
 
 /** Final render-ready state per word */
@@ -123,12 +126,12 @@ export interface ChunkAnimState {
 const WORD_FADE_SEC = 0.15; // 150ms per-word fade in after stagger reveal
 const REVEAL_ANTICIPATION = 0.1; // 100ms before group.start
 const CENTER_WORD_SCALE = 1.0; // layout fills viewport — no additional scale needed
-const BEAT_NUDGE_BASE = 3.5; // toned down from 8px to keep lyrics readable
+const BEAT_NUDGE_BASE = 2.0; // subtle nod — person nodding to the beat, not bouncing
 const BEAT_SCALE_BASE = 1.0; // base scale (1.0 = no beat effect)
-const BEAT_SCALE_MULT = 0.03; // reduced pulse expansion for cinematic subtlety
-const BEAT_RESPONSE_DAMPING_EXPONENT = 0.72; // smooths spikes: 0..1 pulse -> softer curve
-const BEAT_NUDGE_MAX = 6; // hard clamp so words never drift too far vertically
-const BEAT_SCALE_MAX = 1.045; // hard clamp to prevent aggressive beat popping
+const BEAT_SCALE_MULT = 0.008; // near-zero pulse expansion — nod is positional, not scale
+const BEAT_RESPONSE_DAMPING_EXPONENT = 0.6; // softer damping for gentler nod curve
+const BEAT_NUDGE_MAX = 3; // tight clamp — nod is 1-3px, never more
+const BEAT_SCALE_MAX = 1.015; // barely perceptible scale pulse
 const REVEAL_RISE_PX = 8; // reduced per-word rise during stagger reveal (was 15)
 const WORD_OFFSET_Y_MAX = 12; // safety clamp for total vertical offset in readable range
 
@@ -249,14 +252,23 @@ export function computePhraseState(
 
   // ── Beat response ──
   const rawPulse = beatState?.pulse ?? 0;
+  const phase = beatState?.phase ?? 0;
   const pulse = Math.pow(Math.max(0, Math.min(1, rawPulse)), BEAT_RESPONSE_DAMPING_EXPONENT);
-  // Chorus beat escalation: each return of the chorus hits harder
-  const CHORUS_BEAT_SCALE = [1.0, 1.3, 1.6, 2.0];
+
+  // ── Head-nod curve: fast attack on downbeat, slow float back up ──
+  // phase=0 is the downbeat. Nod snaps down quickly, returns slowly.
+  // pow(1-phase, 2.5) gives sharp attack at phase=0, gentle decay toward phase=1.
+  const nodCurve = Math.pow(Math.max(0, 1 - phase), 2.5);
+
+  // Chorus escalation: each chorus return nods slightly harder (capped)
+  const CHORUS_BEAT_SCALE = [1.0, 1.15, 1.3, 1.45];
   const chorusRepeat = group.chorusRepeat ?? 0;
   const beatMultiplier = chorusRepeat > 0
     ? CHORUS_BEAT_SCALE[Math.min(chorusRepeat - 1, 3)]
     : 1.0;
-  const beatNudgeY = Math.min(BEAT_NUDGE_MAX, pulse * BEAT_NUDGE_BASE * beatMultiplier);
+
+  // Nod = pulse gates whether we nod at all, nodCurve shapes the motion
+  const beatNudgeY = Math.min(BEAT_NUDGE_MAX, pulse * nodCurve * BEAT_NUDGE_BASE * beatMultiplier);
   const beatScale = Math.min(BEAT_SCALE_MAX, BEAT_SCALE_BASE + pulse * BEAT_SCALE_MULT * beatMultiplier);
 
   // All words visible from phrase start
@@ -346,10 +358,10 @@ export function computeWordState(
   if (wordState === 'active') {
     spotlightAlpha = 1.0;
   } else if (wordState === 'spoken') {
-    spotlightAlpha = 0.85;
+    spotlightAlpha = 1.0;
   } else {
-    // upcoming
-    spotlightAlpha = 0.3;
+    // upcoming — visible but dimmed
+    spotlightAlpha = 0.5;
   }
 
   // ── Hero detection ──
@@ -364,11 +376,25 @@ export function computeWordState(
   // Hidden when another word in the group is soloing
   const soloHeroHidden = !isSoloHero && groupHasActiveSoloHero;
 
-  // ── Hero scale ──
+  // ── Hero scale (wave-based for multi-word phrases) ──
   const emp = word.emphasisLevel ?? 0;
   let heroScaleMult = 1.0;
   if (effectiveHero && !isSoloHero) {
-    heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.10;
+    // Use the same wave proximity as active word emphasis.
+    // Hero emphasis scales with the wave — peaks when the word is being spoken,
+    // gently ramps for neighbors. Maintains spacing because neighborPushOffsets
+    // in LyricDancePlayer reads heroScaleMult each frame.
+    const heroWordStart = word.wordStart ?? group.start;
+    const heroNextStart = wordIndex + 1 < group.words.length
+      ? (group.words[wordIndex + 1].wordStart ?? group.end)
+      : group.end;
+    const heroMid = (heroWordStart + heroNextStart) / 2;
+    const heroHalfDur = Math.max(0.05, (heroNextStart - heroWordStart) / 2);
+    const heroBleed = heroHalfDur + 0.2;
+    const heroDist = Math.abs(tSec - heroMid);
+    const heroProx = Math.max(0, 1 - heroDist / heroBleed);
+    const heroEased = heroProx * heroProx * (3 - 2 * heroProx);
+    heroScaleMult = 1.0 + heroEased * Math.max(0, emp - 1) * 0.12;
   }
 
   // Solo hero offset (center screen)
@@ -391,6 +417,25 @@ export function computeWordState(
     revealRise = isRevealed ? (1 - revealProgress) * REVEAL_RISE_PX : REVEAL_RISE_PX;
   }
 
+  // ── Wave scale: smooth gaussian-like swell centered on word's active window ──
+  // Instead of hard snap (active=big, spoken=small), compute a continuous
+  // proximity value that peaks when the word is being spoken and gently
+  // ramps up/down for neighboring words. Feels like a wave gliding across.
+  const wordStartTime = word.wordStart ?? group.start;
+  const nextWordStartTime = wordIndex + 1 < group.words.length
+    ? (group.words[wordIndex + 1].wordStart ?? group.end)
+    : group.end;
+  const wordMid = (wordStartTime + nextWordStartTime) / 2;
+  const wordHalfDur = Math.max(0.05, (nextWordStartTime - wordStartTime) / 2);
+  // Bleed zone: wave influence extends 60% into neighboring words
+  const bleedZone = wordHalfDur + 0.15;
+  const dist = Math.abs(tSec - wordMid);
+  const proximity = Math.max(0, 1 - dist / bleedZone);
+  // Smoothstep for organic ease-in/ease-out
+  const eased = proximity * proximity * (3 - 2 * proximity);
+  // Scale range: 1.0 (rest) → 1.10 (active peak). Subtle bump, not jarring.
+  const waveScale = 1.0 + eased * 0.10;
+
   return {
     isRevealed,
     revealProgress,
@@ -406,6 +451,7 @@ export function computeWordState(
     soloHeroHidden,
     centerWordScale,
     revealRise,
+    waveScale,
   };
 }
 
@@ -434,10 +480,10 @@ export function computeChunkAnim(
   } else if (wordAnim.wordState === 'active') {
     alpha = 1.0;
   } else if (wordAnim.wordState === 'spoken') {
-    alpha = 0.85;
+    alpha = 1.0;
   } else {
-    // upcoming
-    alpha = 0.3; // upcoming — dim, not yet spoken
+    // upcoming — visible but dimmed, not yet spoken
+    alpha = 0.5;
   }
 
   alpha = Math.max(0, Math.min(1, alpha));
@@ -447,10 +493,8 @@ export function computeChunkAnim(
   // Adding ANY scale on top causes overflow. Only non-center_word gets hero boost.
   const isCenterWord = wordAnim.centerWordScale > 1.01;
   const emphasisScale = isCenterWord ? 1.0 : wordAnim.heroScaleMult;
-  const waveScale = isCenterWord ? 1.0
-    : wordAnim.wordState === 'active'  ? 1.12
-    : wordAnim.wordState === 'spoken'  ? 1.0
-    : 0.92; // upcoming
+  // Wave scale: smooth time-based swell (computed in computeWordState)
+  const waveScale = isCenterWord ? 1.0 : wordAnim.waveScale;
   let scaleX = emphasisScale * waveScale;
   let scaleY = emphasisScale * waveScale;
 
