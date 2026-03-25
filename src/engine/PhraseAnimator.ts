@@ -552,10 +552,7 @@ export function computeChunkAnim(
         : wordAnim.wordState === 'spoken' ? 0.8 : 0.2;
       alpha = phrase.entry.alpha * baseAlpha;
     } else if (phrase.isExiting && !phrase.suppressExit) {
-      // Never-blank: outgoing phrase holds at minimum 25% alpha
-      // This prevents blank canvas between phrases
-      const exitAlpha = Math.max(0.25, phrase.exit.alpha);
-      alpha = exitAlpha * wordAnim.spotlightAlpha;
+      alpha = phrase.exit.alpha * wordAnim.spotlightAlpha;
     } else {
       alpha = wordAnim.spotlightAlpha;
     }
@@ -567,21 +564,12 @@ export function computeChunkAnim(
     if (phrase.isEntering) {
       alpha = phrase.entry.alpha * wordAnim.spotlightAlpha;
     } else if (phrase.isExiting && !phrase.suppressExit) {
-      // Never-blank: outgoing phrase holds at minimum 25% alpha
-      // This prevents blank canvas between phrases
-      const exitAlpha = Math.max(0.25, phrase.exit.alpha);
-      alpha = exitAlpha * wordAnim.spotlightAlpha;
+      alpha = phrase.exit.alpha * wordAnim.spotlightAlpha;
     } else {
       alpha = wordAnim.spotlightAlpha;
     }
   }
 
-  // Never-blank floor: if the phrase is the active cursor group,
-  // it should never be fully invisible. Minimum 15% alpha.
-  // (soloHeroHidden and unrevealed-in-reveal-mode can still be 0)
-  if (alpha > 0 && alpha < 0.15 && !wordAnim.soloHeroHidden) {
-    alpha = 0.15;
-  }
   alpha = Math.max(0, Math.min(1, alpha));
 
   // ── SCALE: center_word = no extra scale. Others = hero emphasis. ──
