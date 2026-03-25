@@ -98,6 +98,18 @@ export interface CinematicPhrase {
   holdClass?: "short_hit" | "medium_groove" | "long_emotional";
   /** Role in the song's momentum */
   energyTier?: "intimate" | "groove" | "lift" | "impact" | "surprise";
+  /** Presentation mode from the shuffled card deck */
+  presentationMode?: string;
+  /** How the phrase enters */
+  entryCharacter?: string;
+  /** How the phrase exits */
+  exitCharacter?: string;
+  /** Whether to show a ghost preview of upcoming text */
+  ghostPreview?: boolean;
+  /** Whether the text vibrates during its hold */
+  vibrateOnHold?: boolean;
+  /** Whether an elemental wash effect plays */
+  elementalWash?: boolean;
 }
 
 export interface StoryboardEntry {
