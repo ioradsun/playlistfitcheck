@@ -19,8 +19,6 @@ import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
 import {
   compileScene,
-  computeMotionEntry,
-  computeMotionExit,
   type MotionCharacter,
   type CompiledScene,
   type Keyframe,
@@ -42,6 +40,15 @@ import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
 import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalette";
+import {
+  resolveActiveGroup,
+  computePhraseState,
+  computeWordState,
+  computeChunkAnim,
+  detectSoloHero,
+  type AnimMoodConfig,
+  type AnimBeatState,
+} from '@/engine/PhraseAnimator';
 
 const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-04-PERF';
 const DEBUG_ELEMENTAL_TRACE = false;
@@ -1501,12 +1508,6 @@ export class LyricDancePlayer {
   private _heroLookaheadMs = 400; // anticipate hero words 400ms before they appear
   private activeSectionTexture = 'dust';
   private chunkActiveSinceMs: Map<string, number> = new Map();
-  /** Wallpaper: how many ghost phrases fit above/below the active zone */
-  private _ghostCountAbove: number = 0;
-  private _ghostCountBelow: number = 0;
-  private _ghostLineH: number = 20;
-
-
   // Health monitor + adaptive quality
   private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
   private frameCount = 0;
@@ -1776,7 +1777,6 @@ export class LyricDancePlayer {
         // Compile the scene
         const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
         this.compiledScene = compiled;
-        this._recomputeGhostCapacity();
         this._markCompiledViewport(this.width || 960, this.height || 540);
 
         // ═══ V2: Create BeatConductor with full audio analysis ═══
@@ -1921,7 +1921,6 @@ export class LyricDancePlayer {
       this.resize(cw, ch);
       const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
-      this._recomputeGhostCapacity();
       this._markCompiledViewport(this.width || 960, this.height || 540);
       this._buildChunkCacheFromScene(compiled);
       this._updateViewportScale();
@@ -2279,26 +2278,11 @@ export class LyricDancePlayer {
       const sizeChanged = w !== prevCompiledW || h !== prevCompiledH;
       if (sizeChanged) {
         this.compiledScene = compileScene(this.payload, { viewportWidth: w, viewportHeight: h });
-        this._recomputeGhostCapacity();
         this._buildChunkCacheFromScene(this.compiledScene);
         this._markCompiledViewport(w, h);
         this._textMetricsCache.clear();
       }
     }
-  }
-
-  private _recomputeGhostCapacity(): void {
-    const h = this.height || 540;
-    const w = this.width || 960;
-    const isP = h > w;
-    const activeTop = h * (isP ? 0.17 : 0.15);
-    const activeH = h * (isP ? 0.58 : 0.65);
-    const activeBottom = activeTop + activeH;
-    const GHOST_SCALE = 0.35;
-    this._ghostLineH = Math.round(48 * GHOST_SCALE * 1.4);
-    const gph = this._ghostLineH * 2;
-    this._ghostCountAbove = Math.max(0, Math.floor((activeTop - h * 0.03) / gph));
-    this._ghostCountBelow = Math.max(0, Math.floor((h - activeBottom - h * 0.06) / gph));
   }
 
   /** Apply current effective DPR to canvas backing-store dimensions.
@@ -2370,7 +2354,6 @@ export class LyricDancePlayer {
     this.songEndSec = payload.songEnd;
     const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this.compiledScene = compiled;
-    this._recomputeGhostCapacity();
     this._buildChunkCacheFromScene(compiled);
     this._markCompiledViewport(this.width || 960, this.height || 540);
 
@@ -2433,7 +2416,6 @@ export class LyricDancePlayer {
     this._songGrade = null; // cinematic direction changed — recompute grade
     this.resolvePlayerState(this.payload);
     this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
-    this._recomputeGhostCapacity();
     this._markCompiledViewport(this.width || 960, this.height || 540);
     this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
@@ -2502,7 +2484,6 @@ export class LyricDancePlayer {
     this.songStartSec = payload.songStart;
     this.songEndSec = payload.songEnd;
     this.compiledScene = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
-    this._recomputeGhostCapacity();
     this._markCompiledViewport(this.width || 960, this.height || 540);
     this._buildChunkCacheFromScene(this.compiledScene);
     this._textMetricsCache.clear();
@@ -2535,7 +2516,6 @@ export class LyricDancePlayer {
       this.payload = { ...this.payload, auto_palettes: palettes };
       const compiled = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
-      this._recomputeGhostCapacity();
       this._markCompiledViewport(this.width || 960, this.height || 540);
       this._buildChunkCacheFromScene(compiled);
       this._textMetricsCache.clear();
@@ -2764,7 +2744,6 @@ export class LyricDancePlayer {
         // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
         if (this.payload && this.compiledScene) {
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
-          this._recomputeGhostCapacity();
           this._buildChunkCacheFromScene(this.compiledScene);
         }
       }
@@ -5482,7 +5461,6 @@ export class LyricDancePlayer {
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
     const scene = this.compiledScene;
     if (!scene) return null;
-    const WALLPAPER_ENABLED = false;
 
     if (this._moodTransition) {
       const t = this._moodTransition;
@@ -5533,67 +5511,19 @@ export class LyricDancePlayer {
 
     const groups = scene.phraseGroups;
 
-    // ═══ SINGLE CURSOR: find active group in O(1) amortized ═══
-    // Groups are sorted by start time. Time moves forward.
-    // Cursor advances when time crosses the current group's end.
-    let cursor = this._activeGroupCursor;
-
-    // Handle seek (time jumped backward)
-    if (tSec < this._activeGroupCursorTime - 0.5) {
-      cursor = 0;
-    }
+    // ═══ ACTIVE GROUP: PhraseAnimator resolves cursor + never-blank ═══
+    const { activeIdx: activeGroupIdx, cursor: newCursor } = resolveActiveGroup(
+      groups, tSec, this._activeGroupCursor, this._activeGroupCursorTime,
+    );
+    this._activeGroupCursor = newCursor;
     this._activeGroupCursorTime = tSec;
 
-    // ═══ NEVER-BLANK: cursor stays on current group until NEXT group is ready ═══
-    // Don't advance past a group just because its linger/exit expired.
-    // Hold it (as a 30% ghost) until the next group's entry window begins.
-    while (cursor < groups.length - 1) {
-      const next = groups[cursor + 1];
-      const nextEntryPad = next.words.length * (next.staggerDelay ?? 0.05) + 0.2;
-      const nextVisStart = next.start - nextEntryPad;
-      if (tSec >= nextVisStart) {
-        cursor++;
-      } else {
-        break;
-      }
-    }
-    this._activeGroupCursor = cursor;
-
-    // ═══ NEVER-BLANK: cursor group is ALWAYS active ═══
-    // The cursor only advances when the next group is ready.
-    // So if the cursor is on a group, that group is active — either being
-    // spoken, lingering, or held as a 30% ghost until replacement arrives.
-    let activeGroupIdx = -1;
-    const cursorGroup = groups[cursor];
-    if (cursorGroup) {
-      activeGroupIdx = cursor;
-    }
-
+    // Only the active phrase renders — no wallpaper ghosts
     const activeGroups = this._activeGroupIndices;
     activeGroups.length = 0;
     if (activeGroupIdx >= 0) {
-      if (WALLPAPER_ENABLED) {
-        // ═══ WALLPAPER: past ghosts + active + future ghosts ═══
-        const pastStart = Math.max(0, activeGroupIdx - this._ghostCountAbove);
-        for (let gi = pastStart; gi < activeGroupIdx; gi++) {
-          activeGroups.push(gi);
-        }
-        activeGroups.push(activeGroupIdx);
-        const futureEnd = Math.min(groups.length, activeGroupIdx + 1 + this._ghostCountBelow);
-        for (let gi = activeGroupIdx + 1; gi < futureEnd; gi++) {
-          activeGroups.push(gi);
-        }
-      } else {
-        activeGroups.push(activeGroupIdx);
-      }
+      activeGroups.push(activeGroupIdx);
     }
-
-    const primaryLineIndex = activeGroupIdx >= 0
-      ? groups[activeGroupIdx].lineIndex
-      : -1;
-    const _roleLines = this.data.lyrics ?? [];
-
-    // Line transition easing removed — active chunk always at center
 
     // ═══ BEAT-TO-TEXT: lazy subsystem response cache ═══
     type SR = import('@/engine/BeatConductor').SubsystemResponse;
@@ -5617,685 +5547,119 @@ export class LyricDancePlayer {
     for (const groupIdx of activeGroups) {
       const group = groups[groupIdx];
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
-      // ═══ WALLPAPER: five-state lifecycle ═══
-      //
-      // 1. DEEP GHOST (future, far)  — 8% alpha, 35% scale, monochrome, static
-      // 2. WARMING (next-up, <800ms) — smooth ease: alpha 8→25%, scale 35→55%, faint warmth
-      // 3. ACTIVE                    — full per-word entry/exit/beat/hero (unchanged)
-      // 4. COOLING (just finished)   — per-word exit fires, color drains, settles to ghost
-      // 5. PAST GHOST (above)        — ghost alpha fading with distance, monochrome, static
 
-      const isActive = groupIdx === activeGroupIdx;
-      const isPast = groupIdx < activeGroupIdx;
-      const isFuture = groupIdx > activeGroupIdx;
-      const isGhost = WALLPAPER_ENABLED ? (groupIdx !== activeGroupIdx) : false;
-
-      // Time until this group becomes active (negative = already past)
-      const timeUntilActive = group.start - tSec;
-      // Time since this group finished being active
-      const activeDoneAt = group.end; // when last word finishes
-      const timeSinceDone = tSec - activeDoneAt;
-
-      // Is this the next-up phrase within warming range?
-      const WARMUP_DURATION_SEC = 0.8; // ~2 beats at 131 BPM
-      const isWarming = isFuture && (groupIdx === activeGroupIdx + 1) && timeUntilActive <= WARMUP_DURATION_SEC && timeUntilActive > 0;
-
-      // Is this the just-finished phrase still cooling?
-      const COOL_DURATION_SEC = 0.5;
-      const isCooling = isPast && (groupIdx === activeGroupIdx - 1) && timeSinceDone >= 0 && timeSinceDone < COOL_DURATION_SEC;
-
-      // Ghost visual constants
-      const GHOST_SCALE = 0.35;
-      const GHOST_ALPHA = 0.08;
-      const WARM_ALPHA_MAX = 0.25;
-      const WARM_SCALE_MAX = 0.55;
-      const PAST_FADE_RATE = 0.30;
-
-      // Compute per-group visual state
-      let wallOffY = 0;
-      let wallSclMult = 1.0;
-      let wallAlphaMult = 1.0;
-      let wallColorDrain = 0; // 0 = full color, 1 = fully monochrome
-      let wallSuppressAnim = false; // true = no entry/exit/beat/behavior
-
-      const h = this.height || 540;
-      const isPortrait = h > (this.width || 960);
-      const activeTop = h * (isPortrait ? 0.17 : 0.15);
-      const activeH = h * (isPortrait ? 0.58 : 0.65);
-      const activeBottom = activeTop + activeH;
-      const activeCenterY = activeTop + activeH / 2;
-      const gph = this._ghostLineH * 2;
-
-      if (WALLPAPER_ENABLED && isActive) {
-        // ── ACTIVE: spatial journey driven by entry/exit timing ──
-        // During entry: ease FROM future ghost slot TO center
-        // During steady: at center (identity)
-        // During exit: ease FROM center TO past ghost slot
-
-        // Where was this phrase as a future ghost?
-        // It was 1 step below active, so stepsFromActive = 1
-        const futureSlotY = activeBottom + 0.5 * gph;
-        const futureOffY = futureSlotY - activeCenterY;
-
-        // Where will this phrase go as a past ghost?
-        // It will be 1 step above active, so stepsFromActive = 1
-        const pastSlotY = activeTop - 0.5 * gph;
-        const pastOffY = pastSlotY - activeCenterY;
-
-        // Use the SAME timing as phrase entry/exit
-        const _entryPad = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
-        const _tSinceAct = tSec - (group.start - _entryPad);
-        const _groupEntryDur = group.entryDuration ?? this._activeMoodConfig.entryDuration;
-        const _groupExitDur = group.exitDuration ?? this._activeMoodConfig.exitDuration;
-        const _entryDur = Math.max(_groupEntryDur, _entryPad * 0.35);
-        const _exitDur = Math.min(_groupExitDur, Math.max(0.01, group.end - group.start) * 0.35);
-        const _phraseRem = nextGroupStart - tSec;
-
-        // Entry: ease from future ghost to center
-        if (_tSinceAct < _entryDur && _tSinceAct >= 0) {
-          const p = Math.min(1, _tSinceAct / Math.max(0.01, _entryDur));
-          const e = 1 - Math.pow(1 - p, 3); // easeOutCubic
-          wallOffY = futureOffY * (1 - e);
-          wallSclMult = GHOST_SCALE + e * (1 - GHOST_SCALE);
-          wallAlphaMult = GHOST_ALPHA + e * (1 - GHOST_ALPHA);
-          wallColorDrain = 1 - e; // mono → full color during entry
-        }
-        // Exit: ease from center to past ghost
-        else if (_phraseRem < _exitDur && _phraseRem >= 0) {
-          const p = Math.min(1, 1 - (_phraseRem / Math.max(0.01, _exitDur)));
-          const e = p * p; // easeIn — reluctant start, fast finish
-          wallOffY = pastOffY * e;
-          wallSclMult = 1.0 - e * (1.0 - GHOST_SCALE);
-          wallAlphaMult = 1.0 - e * (1.0 - GHOST_ALPHA);
-          wallColorDrain = e; // full color → mono during exit
-        }
-        // Steady: at center
-        else {
-          wallOffY = 0;
-          wallSclMult = 1.0;
-          wallAlphaMult = 1.0;
-          wallColorDrain = 0;
-        }
-
-        wallSuppressAnim = false; // per-word entry/exit always runs for active
-
-      } else if (WALLPAPER_ENABLED && isWarming) {
-        // ── WARMING: brightening in place, building anticipation ──
-        const warmT = 1 - (timeUntilActive / WARMUP_DURATION_SEC);
-        const eWarm = warmT * warmT; // easeIn — slow start, builds tension
-
-        // Position: at its future ghost slot (seamless handoff to active entry)
-        const stepsFromActive = groupIdx - activeGroupIdx;
-        const futureSlotY = activeBottom + (stepsFromActive - 0.5) * gph;
-        wallOffY = futureSlotY - activeCenterY;
-
-        // Scale/alpha: ease from deep ghost toward slightly brighter
-        wallSclMult = GHOST_SCALE + eWarm * (WARM_SCALE_MAX - GHOST_SCALE);
-        wallAlphaMult = GHOST_ALPHA + eWarm * (WARM_ALPHA_MAX - GHOST_ALPHA);
-        wallColorDrain = 1 - eWarm * 0.3;
-        wallSuppressAnim = true;
-
-      } else if (WALLPAPER_ENABLED && isCooling) {
-        // ── COOLING: continue spatial exit, then hold at ghost slot ──
-        // The active exit eased wallOffY toward pastGhostOffY.
-        // Cooling picks up from where exit left off and completes the journey.
-
-        const stepsFromActive = activeGroupIdx - groupIdx;
-        const pastSlotY = activeTop - (stepsFromActive - 0.5) * gph;
-        const pastOffY = pastSlotY - activeCenterY;
-
-        // How far through the exit was this phrase when it left active?
-        // timeSinceDone = time since group.end. exitDur was the window.
-        const exitDur = group.exitDuration ?? this._activeMoodConfig.exitDuration ?? 0.3;
-
-        if (timeSinceDone < exitDur) {
-          // Exit still running — continue spatial ease
-          const p = Math.min(1, timeSinceDone / Math.max(0.01, exitDur));
-          const e = p * p; // same easeIn as active exit
-          wallOffY = pastOffY * e;
-          wallSclMult = 1.0 - e * (1.0 - GHOST_SCALE);
-          wallAlphaMult = 1.0 - e * (1.0 - GHOST_ALPHA);
-          wallColorDrain = e;
-          wallSuppressAnim = false; // let per-word exit animations run
-        } else {
-          // Exit complete — settled at ghost slot
-          wallOffY = pastOffY;
-          wallSclMult = GHOST_SCALE;
-          wallAlphaMult = GHOST_ALPHA;
-          wallColorDrain = 1;
-          wallSuppressAnim = true;
-        }
-
-      } else if (WALLPAPER_ENABLED && isPast) {
-        // ── PAST GHOST: fading memory above the active zone ──
-        const stepsFromActive = activeGroupIdx - groupIdx;
-        const yCenter = activeTop - (stepsFromActive - 0.5) * gph;
-        wallOffY = yCenter - activeCenterY;
-        const ageFactor = Math.pow(1 - PAST_FADE_RATE, stepsFromActive - 1);
-        wallAlphaMult = GHOST_ALPHA * ageFactor;
-        wallSclMult = GHOST_SCALE;
-        wallColorDrain = 1;
-        wallSuppressAnim = true;
-
-      } else if (WALLPAPER_ENABLED && isFuture) {
-        // ── DEEP FUTURE GHOST: static wallpaper below the active zone ──
-        const stepsFromActive = groupIdx - activeGroupIdx;
-        const yCenter = activeBottom + (stepsFromActive - 0.5) * gph;
-        wallOffY = yCenter - activeCenterY;
-        wallAlphaMult = GHOST_ALPHA;
-        wallSclMult = GHOST_SCALE;
-        wallColorDrain = 1;
-        wallSuppressAnim = true;
-      }
-
-      // ═══ ACTIVE CHUNK ONLY: non-current groups are already filtered out above ═══
-      const lineRole = group.lineIndex === primaryLineIndex ? 'current' : 'offscreen';
-
-      let groupHasActiveSoloHero = false;
-      if (group.words.length === 1) {
-        const hw = group.words[0];
-        const hwIsHero = hw.isHeroWord === true;
-        const hwDur = hw.wordDuration ?? 0;
-        const hwDirective = hw.clean ? this.resolvedState.wordDirectivesMap[hw.clean] ?? null : null;
-        const hwIsolation = Boolean((hwDirective as any)?.isolation);
-        if ((hwIsHero && hwDur >= 0.5) || (hwIsolation && hwDur >= 0.7)) {
-          groupHasActiveSoloHero = true;
-        }
-      }
-
-      // ═══ NEVER-BLANK CANVAS: phrase holds until the next phrase arrives ═══
-      // The outgoing phrase dims to context (30% ghost) and holds.
-      // When the next phrase's entry fade begins, the old one fades out.
-      // No gap. No blank canvas. Crossfade between phrases.
-      //
-      // group.end = when the last word finishes being spoken
-      // nextGroupStart = when the next phrase begins
-      // groupEnd = when this phrase EXITS — always when replacement arrives
-      const groupEnd = (() => {
-        const cg = group as any;
-        if (cg.holdClass === 'long_emotional') {
-          return Math.max(nextGroupStart, group.end + 0.8);
-        }
-        return nextGroupStart;
-      })();
-
-      // ═══ LAYOUT: positions are pre-computed by fitTextToViewport at compile time ═══
-      // All words have correct layoutX (centered) and layoutY (stacked if wrapped).
-      // No runtime re-layout needed. No dual path. No ML cache.
-
-      // ═══ PHRASE-LEVEL MOTION MODEL ═══
-      // The phrase is the unit. All words enter together, breathe together, exit together.
-      // Within the phrase, the ACTIVE word (currently being spoken) is ACCENT COLOR.
-      // Context words are 30% opacity gray ghosts — visible but not competing.
-
-      // ── Phrase-level envelope: one fade-in, one fade-out for the whole group ──
-      const phraseDuration = Math.max(0.01, group.end - group.start);
-      const phraseRemaining = groupEnd - tSec;
-      const config = this._activeMoodConfig;
-
-      // ═══ PER-PHRASE CHOREOGRAPHY: energyTier drives motion character ═══
-      const cg = group as any;
-      const energyTier: string = cg.energyTier ?? 'groove';
-      const heroType: string = cg.heroType ?? 'word';
-
-      type MC = import('@/lib/sceneCompiler').MotionCharacter;
-
-      // Entry character: how the phrase arrives
-      const ENERGY_ENTRY: Record<string, MC> = {
-        intimate: 'whisper',
-        groove: config.character as MC,
-        lift: 'rise',
-        impact: 'snap',
-        surprise: 'bloom',
+      // ── Phrase animation state from PhraseAnimator ──
+      const moodForAnim: AnimMoodConfig = {
+        character: this._activeMoodConfig.character,
+        intensity: this._activeMoodConfig.intensity,
+        entryDuration: this._activeMoodConfig.entryDuration,
+        exitDuration: this._activeMoodConfig.exitDuration,
       };
-      const phraseEntryChar: MC = ENERGY_ENTRY[energyTier] ?? (config.character as MC);
-
-      // Exit character: how the phrase leaves
-      // impact → no exit animation (hard cut by next phrase)
-      // surprise → snap out (instant gone)
-      // lift → drift upward (energy keeps climbing)
-      // intimate → whisper out (gentle fade)
-      // groove → section default
-      const ENERGY_EXIT: Record<string, MC | 'none'> = {
-        intimate: 'whisper',
-        groove: config.character as MC,
-        lift: 'drift',
-        impact: 'none',       // no exit — next phrase hard-cuts over this one
-        surprise: 'snap',
-      };
-      const phraseExitChar = ENERGY_EXIT[energyTier] ?? (config.character as MC);
-      const suppressExit = phraseExitChar === 'none';
-
-      // Intensity scaling per energy tier
-      const ENERGY_INTENSITY: Record<string, number> = {
-        intimate: 0.3,
-        groove: config.intensity,
-        lift: config.intensity * 0.8,
-        impact: 1.0,
-        surprise: 0.9,
-      };
-      const phraseIntensity = ENERGY_INTENSITY[energyTier] ?? config.intensity;
-
-      const wordCount = group.words.length;
-      const motionCap = LEGIBILITY.motionCapForDensity(wordCount);
-      const groupExitDur = group.exitDuration ?? config.exitDuration;
-      const phraseExitDuration = Math.min(groupExitDur, phraseDuration * 0.35);
-
-      const entryPad = group.words.length * (group.staggerDelay ?? 0.05) + 0.2;
-      const timeSinceActivation = tSec - (group.start - entryPad);
-      const groupEntryDur = group.entryDuration ?? config.entryDuration;
-      const phraseEntryDuration = Math.max(groupEntryDur, entryPad * 0.35);
-
-      let phraseAlpha = 1.0;
-      if (timeSinceActivation < phraseEntryDuration) {
-        phraseAlpha = Math.max(0, Math.min(1, timeSinceActivation / Math.max(0.01, phraseEntryDuration)));
-      }
-      if (phraseRemaining < phraseExitDuration) {
-        phraseAlpha = Math.max(0, phraseRemaining / Math.max(0.01, phraseExitDuration));
-      }
-
-      if (isGhost) phraseAlpha = 1.0;
-
-      // ── Phrase-level entry/exit: default for all words ──
-      // Solo hero phrases will override these per-word below.
-      let phraseEntryState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: phraseAlpha, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isEntering = !wallSuppressAnim && timeSinceActivation < groupEntryDur;
-      if (isEntering) {
-        const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, groupEntryDur));
-        phraseEntryState = computeMotionEntry(phraseEntryChar, entryProgress, phraseIntensity) as typeof phraseEntryState;
-        phraseEntryState.offsetX *= motionCap;
-        phraseEntryState.offsetY *= motionCap;
-        phraseEntryState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseEntryState.blur ?? 0);
-      }
-
-      let phraseExitState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-      const isExiting = !wallSuppressAnim && !suppressExit && phraseRemaining < groupExitDur && phraseRemaining >= 0;
-      if (isExiting) {
-        const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, groupExitDur)));
-        phraseExitState = computeMotionExit(phraseExitChar as MC, exitProgress, phraseIntensity) as typeof phraseExitState;
-        phraseExitState.offsetX *= motionCap;
-        phraseExitState.offsetY *= motionCap;
-        phraseExitState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseExitState.blur ?? 0);
-      }
-
-      // Behavior removed — beat nudge Y provides rhythmic motion.
-      const phraseBehaviorOX = 0, phraseBehaviorOY = 0, phraseBehaviorSX = 1, phraseBehaviorSY = 1;
-
-      const phraseDurSec = Math.max(0.1, group.end - group.start);
-      const wordsPerSec = wordCount / phraseDurSec;
-      const glowCapForSpeed = LEGIBILITY.glowCapAtSpeed(wordsPerSec);
-      const effectiveGlowCap = Math.min(config.glowCap, glowCapForSpeed);
-
-      // ── Shared beat response: the whole phrase breathes together ──
-      const sharedBeatResp = _hasBeatResponses
-        ? getBeatResponse(1, false)  // emphasis=1 (baseline), not hero
+      const beatForAnim: AnimBeatState | null = beatState
+        ? { pulse: beatState.pulse ?? 0, phase: beatState.phase ?? 0 }
         : null;
-      const sharedBeatScale = sharedBeatResp ? sharedBeatResp.wordScale : 1.0;
-      const sharedBeatNudgeY = sharedBeatResp ? sharedBeatResp.wordNudgeY * 0.3 : 0; // gentle — whole phrase lifts
 
-      // ── Hero neighbor push: pre-pass to find hero and compute per-word X offsets ──
-      // When the hero word scales up, words on the same line are pushed outward.
+      const phraseState = computePhraseState(
+        group, nextGroupStart, tSec, moodForAnim, beatForAnim, this.width,
+      );
+
+      const groupHasActiveSoloHero = detectSoloHero(group, tSec);
+
+      // ── Per-word animation states ──
+      const wordAnimStates = group.words.map((word, wi) =>
+        computeWordState(word, wi, group, phraseState, tSec, groupHasActiveSoloHero, this.width, this.height),
+      );
+
+      // ── Hero neighbor push (keeps hero from overlapping neighbors on same line) ──
       const neighborPushOffsets: number[] = new Array(group.words.length).fill(0);
       {
-        // Find the hero word index and its scale for this frame
         let heroWi = -1;
         let heroScale = 1.0;
         for (let wi = 0; wi < group.words.length; wi++) {
           const w = group.words[wi];
-          const emp = w.emphasisLevel ?? 0;
-          const isHero = w.isHeroWord === true;
-          if (!isHero) continue;
-          // Replicate heroScaleMult formula (no solo hero — that's handled separately)
-          const isOnlyWord = group.words.length === 1;
-          if (isOnlyWord) continue; // solo hero centers, no neighbors to push
-          const rawSm = 1.0 + Math.max(0, emp - 1) * 0.25;
-          const viewMargin = (this.height > this.width) ? this.width * 0.08 : 16;
-          const maxVp = maxViewportSafeScale(
-            w.layoutX, w.layoutY, w.layoutWidth ?? 40, w.baseFontSize ?? 36,
-            this.width, this.height, viewMargin,
-          );
-          const sm = Math.min(rawSm, maxVp);
-          if (sm > heroScale) { heroScale = sm; heroWi = wi; }
+          if (!w.isHeroWord) continue;
+          if (group.words.length === 1) continue;
+          const ws = wordAnimStates[wi];
+          if (ws.heroScaleMult > heroScale) {
+            heroScale = ws.heroScaleMult;
+            heroWi = wi;
+          }
         }
-
         if (heroWi >= 0 && heroScale > 1.01) {
           const heroWord = group.words[heroWi];
           const heroHalfExpansion = (heroWord.layoutWidth ?? 0) * (heroScale - 1) * 0.5;
           const heroLineY = heroWord.layoutY;
-
           for (let wi = 0; wi < group.words.length; wi++) {
             if (wi === heroWi) continue;
             const w = group.words[wi];
-            // Only push words on the same wrapped line as the hero
             if (Math.abs(w.layoutY - heroLineY) > 4) continue;
-            // Push direction: right-of-hero → positive X, left-of-hero → negative X
             const side = w.layoutX > heroWord.layoutX ? 1 : -1;
             neighborPushOffsets[wi] = side * heroHalfExpansion;
           }
         }
       }
 
+      // ── Color resolution (stays in renderer — needs palette access) ──
+      const bgIsLight = this._currentSectionPalette?.isLight ?? false;
+      const baseColor = this._currentSectionPalette?.textBase ?? '#ffffff';
+
+      // ── Build chunks ──
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
-        const isAnchor = wi === group.anchorWordIdx;
+        const ws = wordAnimStates[wi];
+        const anim = computeChunkAnim(word, phraseState, ws);
 
-        // ── Word timing: is this word currently being spoken? ──
-        const wordStart = word.wordStart ?? group.start;
-        const nextWordStart = (wi + 1 < group.words.length)
-          ? (group.words[wi + 1].wordStart ?? group.end)
-          : group.end;
-
-        let wordState: 'upcoming' | 'active' | 'spoken';
-        if (tSec < wordStart) {
-          // Before this word's start time — but if NO word in the phrase
-          // has started yet, the FIRST word should be active so the phrase
-          // doesn't fade in as a gray blob with no accent highlight.
-          wordState = (wi === 0 && tSec < (group.words[0].wordStart ?? group.start))
-            ? 'active'   // first word lights up during phrase entry
-            : 'upcoming';
-        } else if (tSec < nextWordStart) {
-          wordState = 'active';
-        } else {
-          wordState = 'spoken';
-        }
-
-        // ═══ REVEAL GATE: stagger-based word visibility ═══
-        const stagger = group.staggerDelay ?? 0;
-        // Reveal starts at group.start (when first word is spoken), not entryPad before
-        const revealAnchor = group.start - 0.1; // tiny 100ms anticipation
-        const wordRevealTime = revealAnchor + wi * stagger;
-        const isRevealed = stagger < 0.005 || tSec >= wordRevealTime;
-        const WORD_FADE_SEC = 0.08;
-        const wordRevealT = !isRevealed ? 0
-          : stagger < 0.005 ? 1
-          : Math.min(1, (tSec - wordRevealTime) / WORD_FADE_SEC);
-
-        // ═══ PHRASE-LEVEL SPOTLIGHT: all words white, hero words accent ═══
-        // No per-word color switching — strobes at fast BPM.
-        // Phrase is the unit. All words full white. Hero words get section accent.
-        const spotlightAlpha = isGhost
-          ? 1.0
-          : lineRole !== 'current'
-            ? 0.30
-            : !isRevealed
-              ? 0
-              : wordState === 'upcoming'
-                ? 0.30 * wordRevealT
-                : wordRevealT;
-
-        // ── Hero word detection ──
-        const isHeroWord = word.isHeroWord === true;
-        const effectiveHero = heroType === 'phrase' ? true : isHeroWord;
-        const heroDuration = word.wordDuration ?? 0;
-        const wordDirective = word.clean ? this.resolvedState.wordDirectivesMap[word.clean] ?? null : null;
-        const hasIsolation = Boolean((wordDirective as any)?.isolation);
-        // Solo hero only for single-word phrases.
-        // Multi-word phrases highlight the hero inline with accent color.
-        // Soloing a word INSIDE a multi-word phrase causes:
-        //   1. Show-hide-show flicker (phrase → solo word → phrase ghost)
-        //   2. Word pile-up (multiple ≥500ms words all center to same position)
-        const isOnlyWordInPhrase = group.words.length === 1;
-        const isSoloHero = isOnlyWordInPhrase && ((isHeroWord && heroDuration >= 0.5) || (hasIsolation && heroDuration >= 0.7));
-        const emp = word.emphasisLevel ?? 0;
-
-        // ── Solo hero: center screen, hide other words ──
-        let heroOffsetX = 0;
-        let heroOffsetY = 0;
-        let heroScaleMult = 1.0;
-
-        if (isSoloHero && lineRole === 'current' && groupHasActiveSoloHero) {
-          heroOffsetX = (this.width / 2) - word.layoutX;
-          heroOffsetY = (this.height / 2) - word.layoutY;
-
-          // ── Viewport-safe solo hero scale ──
-          // Scale as large as the viewport allows, capped at 1.5
-          const viewMargin = (this.height > this.width) ? this.width * 0.08 : 16;
-          const maxSafeScale = maxViewportSafeScale(
-            this.width / 2, this.height / 2,
-            word.layoutWidth, word.baseFontSize,
-            this.width, this.height, viewMargin,
-          );
-          heroScaleMult = Math.min(1.5, maxSafeScale);
-
-          // ── Solo hero uses its OWN entry/exit style ──
-          // The word IS the phrase — its compiled animation replaces the treatment's.
-          if (isEntering) {
-            const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, groupEntryDur));
-            phraseEntryState = computeMotionEntry(((word as any).entryStyle as MotionCharacter) ?? phraseEntryChar, entryProgress, phraseIntensity) as typeof phraseEntryState;
-            phraseEntryState.offsetX *= motionCap;
-            phraseEntryState.offsetY *= motionCap;
-            phraseEntryState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseEntryState.blur ?? 0);
-          }
-          if (isExiting) {
-            const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, groupExitDur)));
-            phraseExitState = computeMotionExit(((word as any).exitStyle as MotionCharacter) ?? (suppressExit ? 'snap' : phraseExitChar as MC), exitProgress, phraseIntensity) as typeof phraseExitState;
-            phraseExitState.offsetX *= motionCap;
-            phraseExitState.offsetY *= motionCap;
-            phraseExitState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseExitState.blur ?? 0);
-          }
-        }
-
-        const soloHeroHidden = !isSoloHero && lineRole === 'current' && groupHasActiveSoloHero;
-
-        // ── Emphasis-based inline scaling (non-solo hero words) ──
-        if (!isSoloHero || !groupHasActiveSoloHero) {
-          const rawEmpScale = 1.0 + Math.max(0, emp - 1) * 0.25;
-
-          // ── Viewport clamp: scaled word must not overflow canvas edges ──
-          const viewMargin = (this.height > this.width) ? this.width * 0.08 : 16;
-          const maxVpScale = maxViewportSafeScale(
-            word.layoutX, word.layoutY,
-            word.layoutWidth, word.baseFontSize,
-            this.width, this.height, viewMargin,
-          );
-
-          // ── Overlap clamp: scaled word must not collide with neighbors ──
-          // Build a lightweight scale array for this phrase (1.0 for non-heroes)
-          const wordScales = group.words.map((w: any) => {
-            if (w === word) return rawEmpScale;
-            const wEmp = w.emphasisLevel ?? 0;
-            return 1.0 + Math.max(0, wEmp - 1) * 0.25;
-          });
-          const minGap = word.baseFontSize * 0.15; // minimum gap between word edges
-          const maxOverlapScale = maxNonOverlapScale(
-            wi, group.words as any, wordScales, minGap,
-          );
-
-          heroScaleMult = Math.min(rawEmpScale, maxVpScale, maxOverlapScale);
-        }
-        // center_word + impact: fill the screen
-        if (cg.composition === 'center_word' && cg.energyTier === 'impact' && group.words.length === 1) {
-          heroScaleMult = Math.max(heroScaleMult, 1.4);
-        }
-
-        // ── Hero scale cooldown ──
-        if (effectiveHero && heroScaleMult > 1.2 && this.conductor) {
-          const cooldown = this.conductor.getHeroTracker().getCooldownMultiplier(tSec);
-          heroScaleMult = 1 + (heroScaleMult - 1) * cooldown;
-          if (cooldown >= 0.8) {
-            this.conductor.getHeroTracker().recordHeroEvent(tSec, emp);
-          }
-        }
-
-        // ── Hero words: extra beat scale on top of shared ──
-        const heroBeatResp = (effectiveHero && _hasBeatResponses)
-          ? getBeatResponse(emp, true)
-          : null;
-        const heroBeatBoost = heroBeatResp
-          ? Math.max(0, heroBeatResp.wordScale - 1.0) * 0.5  // 50% of hero-level beat response
-          : 0;
-
-        // Hero words hold at higher opacity after being spoken
-        // (spotlightAlpha is now phrase-level, so adjust finalAlpha directly for heroes)
-
-        const roleAlpha = (lineRole === 'current' || isGhost) ? 1.0 : 0.0;
-        const heroHoldAlpha = (effectiveHero && lineRole === 'current' && tSec > (word.wordStart ?? group.start) + (word.wordDuration ?? 0))
-          ? 0.75
-          : spotlightAlpha;
-
-        const totalScale = (wallSuppressAnim || isGhost) ? 1.0 : Math.min(1.6, sharedBeatScale + heroBeatBoost);
-
-        let wordGlow = 0;
-        if (lineRole === 'current') {
-          // Glow scales with intensity: restrained moods = hero-only, cinematic = hero + emphasis
-          if (effectiveHero) wordGlow = 0.3 + config.intensity * 0.5;  // 0.3 at I=0, 0.8 at I=1
-          else if (emp >= 3 && config.intensity >= 0.5) wordGlow = 0.15 + config.intensity * 0.2;
-          if (isSoloHero && groupHasActiveSoloHero) wordGlow = 0.8;
-        }
-
-        const emphasisWeight = Math.min(900, (word.fontWeight ?? 400) + Math.max(0, emp - 1) * 100);
-
-        // ── Per-word entry/exit blend for high-emphasis words in multi-word phrases ──
-        // The hero word gets its own animation character, blended proportionally to emphasis.
-        // emp 1-2: pure phrase animation (no per-word motion)
-        // emp 3: 33% word + 67% phrase
-        // emp 4: 67% word + 33% phrase
-        // emp 5: 100% word (fully independent entry/exit)
-        let wordEntryBlend = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-        let wordExitBlend = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
-        let wordBlendFactor = 0;
-
-        if (!isSoloHero && emp >= 3 && lineRole === 'current' && !wallSuppressAnim && heroType === 'word' && isRevealed && (word as any).entryStyle) {
-          wordBlendFactor = Math.min(1.0, (emp - 2) / 3); // 0.33, 0.67, 1.0
-
-          if (isEntering) {
-            const entryProgress = Math.min(1, timeSinceActivation / Math.max(0.01, groupEntryDur));
-            const rawState = computeMotionEntry(((word as any).entryStyle as MotionCharacter) ?? phraseEntryChar, entryProgress, phraseIntensity * 0.7);
-            wordEntryBlend = {
-              offsetX: (rawState.offsetX ?? 0) * motionCap,
-              offsetY: (rawState.offsetY ?? 0) * motionCap,
-              scaleX: rawState.scaleX ?? 1,
-              scaleY: rawState.scaleY ?? 1,
-              alpha: rawState.alpha ?? 1,
-              skewX: rawState.skewX ?? 0,
-              glowMult: rawState.glowMult ?? 0,
-              blur: Math.min(LEGIBILITY.maxTextBlur, rawState.blur ?? 0),
-              rotation: rawState.rotation ?? 0,
-            };
-          }
-          if (isExiting) {
-            const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, groupExitDur)));
-            const rawState = computeMotionExit(((word as any).exitStyle as MotionCharacter) ?? (phraseExitChar as MC), exitProgress, phraseIntensity * 0.7);
-            wordExitBlend = {
-              offsetX: (rawState.offsetX ?? 0) * motionCap,
-              offsetY: (rawState.offsetY ?? 0) * motionCap,
-              scaleX: rawState.scaleX ?? 1,
-              scaleY: rawState.scaleY ?? 1,
-              alpha: rawState.alpha ?? 1,
-              skewX: rawState.skewX ?? 0,
-              glowMult: rawState.glowMult ?? 0,
-              blur: Math.min(LEGIBILITY.maxTextBlur, rawState.blur ?? 0),
-              rotation: rawState.rotation ?? 0,
-            };
-          }
-        }
-
-        // ── Build chunk ──
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
+
         chunk.id = word.id;
         chunk.text = word.text;
 
-        // ── Blend phrase-level and word-level entry/exit ──
-        // wordBlendFactor: 0 = pure phrase, 1 = pure word (only >0 for emp ≥ 3)
-        const bf = wordBlendFactor;
-        const ibf = 1 - bf;
+        // Position: layout + animation offsets + neighbor push
+        chunk.x = word.layoutX + anim.offsetX + neighborPushOffsets[wi];
+        chunk.y = word.layoutY + anim.offsetY;
 
-        const blendedEntryOX = phraseEntryState.offsetX * ibf + wordEntryBlend.offsetX * bf;
-        const blendedEntryOY = phraseEntryState.offsetY * ibf + wordEntryBlend.offsetY * bf;
-        const blendedEntrySX = phraseEntryState.scaleX * ibf + wordEntryBlend.scaleX * bf;
-        const blendedEntrySY = phraseEntryState.scaleY * ibf + wordEntryBlend.scaleY * bf;
-        const blendedEntryAlpha = (phraseEntryState.alpha ?? phraseAlpha) * ibf + (wordEntryBlend.alpha ?? 1) * bf;
-
-        const blendedExitOX = (phraseExitState.offsetX ?? 0) * ibf + wordExitBlend.offsetX * bf;
-        const blendedExitOY = (phraseExitState.offsetY ?? 0) * ibf + wordExitBlend.offsetY * bf;
-        const blendedExitSX = (phraseExitState.scaleX ?? 1) * ibf + wordExitBlend.scaleX * bf;
-        const blendedExitSY = (phraseExitState.scaleY ?? 1) * ibf + wordExitBlend.scaleY * bf;
-        const blendedExitAlpha = (phraseExitState.alpha ?? 1) * ibf + (wordExitBlend.alpha ?? 1) * bf;
-
-        // Scale ghost word positions toward canvas center so ghost blocks are compact
-        const cxCenter = this.width / 2;
-        const cyCenter = activeCenterY;
-        const posScl = isActive ? 1.0 : wallSclMult; // ghosts: compact, active: identity
-        const scaledLX = cxCenter + (word.layoutX - cxCenter) * posScl;
-        const scaledLY = cyCenter + (word.layoutY - cyCenter) * posScl;
-
-        chunk.x = scaledLX + (isActive ? heroOffsetX : 0) + (isActive ? neighborPushOffsets[wi] : 0)
-          + (wallSuppressAnim ? 0 : blendedEntryOX) + (wallSuppressAnim ? 0 : blendedExitOX)
-          + (wallSuppressAnim ? 0 : phraseBehaviorOX);
-        chunk.y = scaledLY + (wallSuppressAnim ? 0 : sharedBeatNudgeY) + (isActive ? heroOffsetY : 0)
-          + (wallSuppressAnim ? 0 : blendedEntryOY) + (wallSuppressAnim ? 0 : blendedExitOY)
-          + (wallSuppressAnim ? 0 : phraseBehaviorOY)
-          + wallOffY;
-        chunk.fontSize = word.baseFontSize;
-
-        // Alpha: blend entry and exit, then multiply by spotlight and role
-        const blendedAnimAlpha = blendedEntryAlpha * blendedExitAlpha;
-        const recalcFinalAlpha = soloHeroHidden
-          ? 0
-          : Math.min(
-            word.semanticAlphaMax,
-            blendedAnimAlpha * heroHoldAlpha * roleAlpha,
-          );
-        chunk.alpha = Math.max(0, Math.min(1, recalcFinalAlpha * wallAlphaMult));
-
-        const phraseAnimScaleX = blendedEntrySX * blendedExitSX * phraseBehaviorSX;
-        const phraseAnimScaleY = blendedEntrySY * blendedExitSY * phraseBehaviorSY;
-        chunk.scaleX = totalScale * heroScaleMult * phraseAnimScaleX * wallSclMult;
-        chunk.scaleY = totalScale * heroScaleMult * phraseAnimScaleY * wallSclMult;
+        chunk.alpha = anim.alpha;
+        chunk.scaleX = anim.scaleX;
+        chunk.scaleY = anim.scaleY;
         chunk.scale = 1;
-        chunk.visible = (recalcFinalAlpha * wallAlphaMult) > 0.01;
-        chunk.fontWeight = emphasisWeight;
+        chunk.visible = anim.visible;
+        chunk.fontSize = word.baseFontSize;
+        chunk.fontWeight = ws.effectiveHero ? Math.min(900, word.fontWeight + 100) : word.fontWeight;
         chunk.fontFamily = word.fontFamily;
-        chunk.isAnchor = isAnchor;
+        chunk.isAnchor = word.isAnchor;
+        chunk.rotation = anim.rotation;
+        chunk.skewX = anim.skewX;
+        chunk.blur = 0; // clean — no per-word blur
 
-        // ── Color: active word = accent color, context = base white/dark ──
+        // Color: base → semantic → accent → elemental (handled in drawChunkText)
         {
-          const bgIsLight = this._currentSectionPalette?.isLight ?? (this._textBandBrightness > 0.55);
-          const baseColor = this._currentSectionPalette?.textBase ?? (bgIsLight ? '#111111' : '#ffffff');
-
           let rawColor = baseColor;
           if (word.hasSemanticColor) {
             const semColor = word.color;
-            const semLum = this._hexLuminance(semColor);
-            if (bgIsLight && semLum > 0.7) {
-              rawColor = this._blendHex(semColor, '#1a1a2e', 0.35);
-            } else if (!bgIsLight && semLum < 0.1) {
-              rawColor = this._blendHex(semColor, '#ffffff', 0.35);
-            } else {
-              rawColor = semColor;
-            }
-          } else if (effectiveHero) {
+            rawColor = bgIsLight
+              ? this._blendHex(semColor, '#1a1a2e', 0.35)
+              : this._blendHex(semColor, '#ffffff', 0.35);
+          }
+          if (ws.effectiveHero && ws.wordState === 'active') {
             rawColor = this._currentSectionPalette?.accent ?? this._framePalette?.[1] ?? '#FFD700';
           }
-
-          // Wallpaper color drain: blend toward monochrome baseColor
-          if (wallColorDrain > 0 && rawColor !== baseColor) {
-            chunk.color = this._blendHex(rawColor, baseColor, wallColorDrain);
-          } else {
-            chunk.color = rawColor;
-          }
+          chunk.color = rawColor;
         }
 
-        chunk.glow = isGhost ? 0 : Math.min(wordGlow, effectiveGlowCap / 20);
-        chunk.emphasisLevel = emp;
-        chunk.entryProgress = isEntering ? Math.max(0, Math.min(1, timeSinceActivation / Math.max(0.01, groupEntryDur))) : 1;
-        chunk.exitProgress = isExiting ? Math.max(0, Math.min(1, 1 - (phraseRemaining / Math.max(0.01, groupExitDur)))) : 0;
-        chunk.skewX = (
-          ((phraseEntryState.skewX ?? 0) + (phraseExitState.skewX ?? 0)) * ibf
-          + ((wordEntryBlend.skewX ?? 0) + (wordExitBlend.skewX ?? 0)) * bf
-        ) * motionCap;
-        chunk.blur = Math.min(LEGIBILITY.maxTextBlur,
-          ((phraseEntryState.blur ?? 0) + (phraseExitState.blur ?? 0)) * ibf
-          + ((wordEntryBlend.blur ?? 0) + (wordExitBlend.blur ?? 0)) * bf,
-        );
-        chunk.rotation = (
-          ((phraseEntryState.rotation ?? 0) + (phraseExitState.rotation ?? 0)) * ibf
-          + ((wordEntryBlend.rotation ?? 0) + (wordExitBlend.rotation ?? 0)) * bf
-        ) * motionCap;
-        chunk.isHeroWord = effectiveHero;
+        // Glow (hero words only, capped)
+        const glowCap = this._activeMoodConfig.glowCap;
+        const heroBeatResp = ws.effectiveHero ? getBeatResponse(word.emphasisLevel ?? 1, true) : null;
+        const glowPulse = heroBeatResp?.wordGlow ?? beatState?.pulse ?? 0;
+        chunk.glow = ws.effectiveHero ? Math.min(glowPulse * 0.5, glowCap / 20) : 0;
+
+        // Metadata for elemental/decomp
+        chunk.emphasisLevel = word.emphasisLevel;
+        chunk.entryProgress = phraseState.isEntering ? phraseState.entryProgress : 1;
+        chunk.exitProgress = phraseState.isExiting ? phraseState.exitProgress : 0;
+        chunk.isHeroWord = ws.effectiveHero;
         chunk.wordDuration = word.wordDuration ?? 0;
-        chunk.isSoloHero = isSoloHero;
+        chunk.isSoloHero = ws.isSoloHero;
         chunk.letterIndex = word.letterIndex;
         chunk.letterTotal = word.letterTotal;
         chunk.letterDelay = word.letterDelay ?? 0;
