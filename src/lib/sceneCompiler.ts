@@ -914,14 +914,19 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const groupFontSize = groupLayout?.fontSize ?? 56;
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const pos = positions[wi] ?? { x: REF_W / 2, y: REF_H / 2, width: 40 };
-      const elClass = (wm.directive as any)?.elementalClass ?? null;
       const ELEMENTAL_COLORS: Record<string, string> = {
         FROST: '#66bbff', ICE: '#66bbff',
         FIRE: '#ff8833',
         WATER: '#3399ff', RAIN: '#3399ff',
         SMOKE: '#aaaaaa',
         ELECTRIC: '#00ddff',
+        LIGHT: '#fffde0',
+        VOID: '#cc88ff',
+        METAL: '#cccccc',
+        COSMIC: '#bb88ff',
       };
+      const elClass = (wm.directive as any)?.elementalClass
+        ?? null;
       const base: CompiledWord = {
         id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
         text: baseTypography.textTransform === 'uppercase'

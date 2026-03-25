@@ -350,7 +350,7 @@ export function computeWordState(
     spotlightAlpha = 0.85;
   } else {
     // upcoming
-    spotlightAlpha = 0.35;
+    spotlightAlpha = 0.3;
   }
 
   // ── Hero detection ──
@@ -369,7 +369,7 @@ export function computeWordState(
   const emp = word.emphasisLevel ?? 0;
   let heroScaleMult = 1.0;
   if (effectiveHero && !isSoloHero) {
-    heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.05; // emp5 = 1.20x, emp3 = 1.10x
+    heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.10;
   }
 
   // Solo hero offset (center screen)
@@ -378,7 +378,7 @@ export function computeWordState(
   if (isSoloHero) {
     heroOffsetX = canvasWidth / 2 - word.layoutX;
     heroOffsetY = canvasHeight / 2 - word.layoutY;
-    heroScaleMult = Math.max(heroScaleMult, 1.15); // solo hero: visible but safe
+    heroScaleMult = Math.max(heroScaleMult, 1.35);
   }
 
   // ── Composition scale boost ──
@@ -438,7 +438,7 @@ export function computeChunkAnim(
     alpha = 0.85;
   } else {
     // upcoming
-    alpha = 0.35;
+    alpha = 0.3; // upcoming — dim, not yet spoken
   }
 
   alpha = Math.max(0, Math.min(1, alpha));
