@@ -271,10 +271,7 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
         splitGroups.sort((a, b) => a.start - b.start);
         splitGroups.forEach((g, i) => { g.groupIndex = i; });
 
-        return splitGroups.map((g) => ({
-          ...g,
-          end: Math.max(g.end, g.start + MIN_GROUP_DURATION),
-        }));
+        return splitGroups;
       }
     } else {
       const groups: PhraseGroup[] = [];
@@ -350,10 +347,7 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
           groups.sort((a, b) => a.start - b.start);
         }
 
-        return groups.map((g) => ({
-          ...g,
-          end: Math.max(g.end, g.start + MIN_GROUP_DURATION),
-        }));
+        return groups;
       }
     }
   }
@@ -810,10 +804,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
 
-    const phraseHeroClean = (matchPhrase?.heroWord ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const hasHero = group.words.some(wm =>
       wm.isHeroWord === true ||
-      (phraseHeroClean && wm.clean === phraseHeroClean) ||
       wm.directive?.isolation === true ||
       storyboard.get(group.lineIndex)?.heroWord?.toLowerCase() === wm.clean
     );
@@ -940,7 +932,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         fontWeight: baseTypography.fontWeight,
         fontFamily: baseTypography.fontFamily,
         isHeroWord: wm.isHeroWord === true
-          || (matchPhrase?.heroWord?.toLowerCase().replace(/[^a-z0-9]/g, '') === wm.clean)
           || (wm.directive as any)?.isolation === true
           || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, ''))
           || (Math.max(0, wm.end - wm.start) >= 0.5),

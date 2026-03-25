@@ -183,12 +183,11 @@ export function resolveActiveGroup(
     cursor = 0;
   }
 
-  // Advance cursor: move forward when next group's entry window begins
+  // Advance cursor strictly from phrase timing data:
+  // current phrase remains active through its indexed end time.
   while (cursor < groups.length - 1) {
-    const next = groups[cursor + 1];
-    const nextEntryPad = next.words.length * (next.staggerDelay ?? 0.05) + 0.2;
-    const nextVisStart = next.start - nextEntryPad;
-    if (tSec >= nextVisStart) {
+    const current = groups[cursor];
+    if (tSec >= current.end) {
       cursor++;
     } else {
       break;
@@ -215,13 +214,10 @@ export function computePhraseState(
 ): PhraseAnimState {
   const { composition, bias, revealStyle, holdClass, energyTier, heroType } = group;
 
-  // ── Group end: extended by holdClass ──
-  let groupEnd: number;
-  if (holdClass === 'long_emotional') {
-    groupEnd = Math.max(nextGroupStart, group.end + 0.8);
-  } else {
-    groupEnd = nextGroupStart;
-  }
+  // ── Group timing: strictly derived from compiled phrase word bounds ──
+  // start = first word start, end = last word end
+  void nextGroupStart;
+  const groupEnd = group.end;
 
   // ── Timing used for stagger reveal and phrase activation window ──
   const staggerDelay = group.staggerDelay ?? 0;
