@@ -116,14 +116,22 @@ export function computeWordState(
   const isSoloHero = isOnlyWordInPhrase && isHeroWord && (word.wordDuration ?? 0) >= 0.5;
   const soloHeroHidden = !isSoloHero && groupHasActiveSoloHero;
 
-  // ── Hero scale: the breath (max 1.05, not 1.18) ──
+  // ── Hero scale: gentle bell curve breath ──
+  // Smooth sine half-wave over the word's duration + 150ms tail.
+  // Rises gradually, peaks at center, falls gradually. Never snaps.
   let heroScaleMult = 1.0;
-  if (effectiveHero && !isSoloHero && wordState === 'active') {
-    const heroDurSec = Math.max(0.05, nextWordStart - wordStart);
-    const heroProgress = Math.max(0, Math.min(1, (tSec - wordStart) / heroDurSec));
-    // Ease-out: fast start, gentle settle. Like a deep breath in.
-    const breathCurve = 1 - Math.pow(1 - Math.min(heroProgress / 0.4, 1), 2.5);
-    heroScaleMult = 1.0 + breathCurve * 0.05 * mp.textHeroMult;
+  if (effectiveHero && !isSoloHero) {
+    const heroDurSec = Math.max(0.1, nextWordStart - wordStart);
+    // Extend the breath 150ms past the word end for smooth descent
+    const breathWindow = heroDurSec + 0.15;
+    const elapsed = tSec - wordStart;
+
+    if (elapsed >= 0 && elapsed < breathWindow) {
+      const t = elapsed / breathWindow;
+      // Sine half-wave: gradual rise, peak near center, gradual fall
+      const bell = Math.sin(t * Math.PI);
+      heroScaleMult = 1.0 + bell * 0.04 * mp.textHeroMult;
+    }
   }
 
   // Solo hero offset (center screen)
@@ -137,8 +145,10 @@ export function computeWordState(
   const centerWordScale = phrase.composition === 'center_word' ? 1.0 : 1.0;
 
   // ── Hero suppression: room goes quiet ──
-  // When a hero word is active, every OTHER word in the phrase dims.
-  const heroSuppressed = activeHeroWordIndex >= 0 && wordIndex !== activeHeroWordIndex;
+  // Hero suppression only dims UPCOMING words. Active and spoken stay at 1.0.
+  const heroSuppressed = activeHeroWordIndex >= 0
+    && wordIndex !== activeHeroWordIndex
+    && wordState === 'upcoming';
 
   return {
     isRevealed, revealProgress, wordRevealTime,
@@ -168,15 +178,15 @@ export function computeChunkAnim(
   } else if (!wordAnim.isRevealed) {
     // Unrevealed: invisible, or faint ghost if preview mode
     alpha = wordAnim.ghostPreview ? 0.12 : 0;
-  } else if (wordAnim.heroSuppressed) {
-    // Room goes quiet: other words dim when hero is active
-    alpha = 0.25;
   } else if (wordAnim.wordState === 'active') {
-    // Spotlight: brightest thing on screen
+    // Spotlight: brightest thing on screen. NEVER suppressed.
     alpha = 1.0;
   } else if (wordAnim.wordState === 'spoken') {
-    // Already said: stays bright, eyes move forward
+    // Already said: stays bright. NEVER suppressed. Eyes move forward.
     alpha = 1.0;
+  } else if (wordAnim.heroSuppressed) {
+    // Upcoming + hero active: room goes quiet
+    alpha = 0.25;
   } else {
     // Upcoming: waiting to be spoken
     alpha = 0.35;
