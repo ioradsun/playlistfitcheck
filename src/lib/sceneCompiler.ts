@@ -191,7 +191,7 @@ interface TypographyProfile {
 
 export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
 interface WordDirectiveLike { word?: string; colorOverride?: string; emphasisLevel?: number; elementalClass?: string; isolation?: boolean; }
-interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; }
+interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; isHeroWord?: boolean; }
 export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; phraseHeroWord?: string; }
 type StoryboardEntryLike = { lineIndex?: number; heroWord?: string; shotType?: string; };
 
@@ -278,6 +278,17 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
         const phraseWords = wordMeta.slice(safeStart, safeEnd + 1);
         if (phraseWords.length === 0) continue;
 
+        // Mark hero word in wordMeta
+        if (phrase.heroWord) {
+          const heroClean = phrase.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '');
+          for (const wm of phraseWords) {
+            if (wm.clean === heroClean) {
+              wm.isHeroWord = true;
+              break;
+            }
+          }
+        }
+
         // lineIndex derived from first word (for backward compat with storyboard, palette, etc.)
         const lineIndex = phraseWords[0].lineIndex;
 
@@ -348,6 +359,17 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
 
         const phraseWords = lineWords.slice(safeStart, safeEnd + 1);
         if (phraseWords.length === 0) continue;
+
+        // Mark hero word in wordMeta
+        if (phrase.heroWord) {
+          const heroClean = phrase.heroWord.toLowerCase().replace(/[^a-z0-9]/g, '');
+          for (const wm of phraseWords) {
+            if (wm.clean === heroClean) {
+              wm.isHeroWord = true;
+              break;
+            }
+          }
+        }
 
         const grp: PhraseGroup = {
           words: phraseWords,
@@ -480,6 +502,232 @@ function snapToBeat(timeSec: number, beats: number[]): number {
   return minDist <= 0.08 ? best : timeSec;
 }
 
+type PresentationMode =
+  | 'horiz_center' | 'horiz_left' | 'horiz_right'
+  | 'stack_center' | 'stack_left' | 'stack_right'
+  | 'ghost_center' | 'ghost_left' | 'ghost_right'
+  | 'vibrate_smoke' | 'vibrate_element'
+  | 'wash_lr' | 'wash_rl' | 'wash_center'
+  | 'impact_center' | 'impact_left' | 'impact_right'
+  | 'horiz_drift';
+
+const MODE_CARDS: Array<{
+  mode: PresentationMode;
+  baseMode: string;
+  composition: string;
+  bias: string;
+  revealStyle: string;
+  entryCharacter: string;
+  exitCharacter: string;
+  holdClass: string;
+  ghostPreview: boolean;
+  vibrateOnHold: boolean;
+  elementalWash: boolean;
+}> = [
+  { mode: 'horiz_center',  baseMode: 'horizontal', composition: 'line', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'horiz_left',    baseMode: 'horizontal', composition: 'line', bias: 'left',   revealStyle: 'stagger_fast', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'horiz_right',   baseMode: 'horizontal', composition: 'line', bias: 'right',  revealStyle: 'stagger_fast', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'stack_center',  baseMode: 'stack', composition: 'stack', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'rise',  exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'stack_left',    baseMode: 'stack', composition: 'stack', bias: 'left',   revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'stack_right',   baseMode: 'stack', composition: 'stack', bias: 'right',  revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'ghost_center',  baseMode: 'ghost', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
+  { mode: 'ghost_left',    baseMode: 'ghost', composition: 'line', bias: 'left',   revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
+  { mode: 'ghost_right',   baseMode: 'ghost', composition: 'line', bias: 'right',  revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
+  { mode: 'vibrate_smoke',   baseMode: 'vibrate', composition: 'center_word', bias: 'center', revealStyle: 'instant', entryCharacter: 'bloom', exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: true, elementalWash: false },
+  { mode: 'vibrate_element', baseMode: 'vibrate', composition: 'center_word', bias: 'center', revealStyle: 'instant', entryCharacter: 'bloom', exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: true, elementalWash: false },
+  { mode: 'wash_lr',     baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
+  { mode: 'wash_rl',     baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
+  { mode: 'wash_center', baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
+  { mode: 'impact_center', baseMode: 'impact', composition: 'line',   bias: 'center', revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'impact_left',   baseMode: 'impact', composition: 'line',   bias: 'left',   revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'impact_right',  baseMode: 'impact', composition: 'line',   bias: 'right',  revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'horiz_drift', baseMode: 'horizontal', composition: 'line', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'rise', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+];
+
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const result = [...arr];
+  let s = seed;
+  for (let i = result.length - 1; i > 0; i--) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const j = s % (i + 1);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return Math.abs(hash);
+}
+
+function assignPresentationModes(
+  phraseGroups: PhraseGroup[],
+  wordMeta: WordMetaEntry[],
+  aiPhrases?: CinematicPhrase[],
+): void {
+  if (!aiPhrases || aiPhrases.length === 0 || wordMeta.length === 0 || phraseGroups.length === 0) return;
+
+  const songSeed = hashString(
+    (wordMeta[0]?.word ?? '') + (wordMeta[wordMeta.length - 1]?.word ?? '') + aiPhrases.length,
+  );
+
+  let deck = seededShuffle(
+    Array.from({ length: MODE_CARDS.length }, (_, i) => i),
+    songSeed,
+  );
+  let deckPos = 0;
+  let deckNumber = 0;
+  let lastBaseMode = '';
+
+  const hasElementalWord = (startIdx: number, endIdx: number): boolean => {
+    for (let wi = startIdx; wi <= endIdx && wi < wordMeta.length; wi++) {
+      if (wordMeta[wi]?.directive?.elementalClass) return true;
+    }
+    return false;
+  };
+
+  for (let i = 0; i < aiPhrases.length; i++) {
+    const phrase = aiPhrases[i];
+    const [s, e] = phrase.wordRange ?? [0, 0];
+    const wc = Math.max(1, e - s + 1);
+    const hasElemental = hasElementalWord(s, e);
+
+    const hasAIChoreography =
+      (phrase.composition !== undefined && phrase.composition !== 'line') ||
+      (phrase.bias !== undefined && phrase.bias !== 'center') ||
+      (phrase.heroType !== undefined && phrase.heroType !== 'word') ||
+      (phrase.revealStyle !== undefined && phrase.revealStyle !== 'instant') ||
+      (phrase.holdClass !== undefined && phrase.holdClass !== 'medium_groove') ||
+      (phrase.energyTier !== undefined && phrase.energyTier !== 'groove');
+
+    if (hasAIChoreography) {
+      phrase.presentationMode = 'ai_moment';
+      phrase.ghostPreview = false;
+      phrase.vibrateOnHold = false;
+      phrase.elementalWash = false;
+      lastBaseMode = 'ai_moment';
+      continue;
+    }
+
+    let cardIdx = -1;
+    let attempts = 0;
+    while (attempts < MODE_CARDS.length * 2) {
+      if (deckPos >= deck.length) {
+        deckNumber++;
+        deck = seededShuffle(
+          Array.from({ length: MODE_CARDS.length }, (_, idx) => idx),
+          songSeed + deckNumber * 7919,
+        );
+        deckPos = 0;
+      }
+
+      const candidate = deck[deckPos];
+      const card = MODE_CARDS[candidate];
+      deckPos++;
+      attempts++;
+
+      if (card.baseMode === lastBaseMode) continue;
+      if (card.baseMode === 'vibrate' && wc > 2) continue;
+      if (card.baseMode === 'stack' && wc < 3) continue;
+      if (card.baseMode === 'impact' && wc >= 5) continue;
+      if (card.composition === 'center_word' && wc > 2) continue;
+
+      cardIdx = candidate;
+      break;
+    }
+
+    if (cardIdx < 0) cardIdx = 0;
+    const card = MODE_CARDS[cardIdx];
+    lastBaseMode = card.baseMode;
+
+    phrase.presentationMode = card.mode;
+    phrase.composition = card.composition as CinematicPhrase['composition'];
+    phrase.bias = card.bias as CinematicPhrase['bias'];
+    phrase.revealStyle = card.revealStyle as CinematicPhrase['revealStyle'];
+    phrase.holdClass = card.holdClass as CinematicPhrase['holdClass'];
+    phrase.entryCharacter = card.entryCharacter;
+    phrase.exitCharacter = card.exitCharacter;
+    phrase.ghostPreview = card.ghostPreview;
+    phrase.vibrateOnHold = card.vibrateOnHold;
+    phrase.elementalWash = card.elementalWash;
+
+    if (wc === 1 && card.baseMode !== 'vibrate' && card.baseMode !== 'wash') {
+      if (i % 2 === 0) {
+        phrase.presentationMode = 'impact_center';
+        phrase.composition = 'center_word';
+        phrase.entryCharacter = 'snap';
+        phrase.exitCharacter = 'none';
+        phrase.vibrateOnHold = false;
+        phrase.elementalWash = false;
+        phrase.ghostPreview = false;
+      } else {
+        phrase.presentationMode = 'vibrate_smoke';
+        phrase.composition = 'center_word';
+        phrase.entryCharacter = 'bloom';
+        phrase.exitCharacter = 'none';
+        phrase.vibrateOnHold = true;
+        phrase.elementalWash = false;
+        phrase.ghostPreview = false;
+      }
+      phrase.holdClass = 'long_emotional';
+      phrase.bias = 'center';
+      phrase.revealStyle = 'instant';
+      lastBaseMode = i % 2 === 0 ? 'impact' : 'vibrate';
+    }
+
+    if (i === 0) {
+      phrase.presentationMode = 'horiz_center';
+      phrase.composition = 'line';
+      phrase.bias = 'center';
+      phrase.revealStyle = 'stagger_slow';
+      phrase.entryCharacter = 'drift';
+      phrase.exitCharacter = 'drift';
+      phrase.holdClass = 'long_emotional';
+      phrase.ghostPreview = false;
+      phrase.vibrateOnHold = false;
+      phrase.elementalWash = false;
+      lastBaseMode = 'horizontal';
+    }
+
+    if (i === aiPhrases.length - 1) {
+      if (wc <= 2) {
+        phrase.presentationMode = 'vibrate_element';
+        phrase.composition = 'center_word';
+        phrase.entryCharacter = 'bloom';
+        phrase.exitCharacter = 'none';
+        phrase.vibrateOnHold = true;
+        phrase.elementalWash = false;
+      } else {
+        phrase.presentationMode = 'wash_lr';
+        phrase.entryCharacter = 'snap';
+        phrase.exitCharacter = 'none';
+        phrase.elementalWash = true;
+        phrase.vibrateOnHold = false;
+      }
+      phrase.holdClass = 'long_emotional';
+      phrase.ghostPreview = false;
+    }
+
+    if (hasElemental && !phrase.elementalWash && card.baseMode !== 'vibrate') {
+      const elHash = (s * 31 + e * 17 + i * 7) % 10;
+      if (elHash < 5) {
+        phrase.presentationMode = 'wash_lr';
+        phrase.entryCharacter = 'snap';
+        phrase.exitCharacter = 'none';
+        phrase.elementalWash = true;
+        phrase.holdClass = 'long_emotional';
+        phrase.vibrateOnHold = false;
+        phrase.ghostPreview = false;
+        lastBaseMode = 'wash';
+      }
+    }
+  }
+}
+
 export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isHeroWord?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; semanticAlphaMax: number; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
 export interface CompiledPhraseGroup {
   lineIndex: number;
@@ -506,12 +754,34 @@ export interface CompiledPhraseGroup {
   ghostPreview?: boolean;
   vibrateOnHold?: boolean;
   elementalWash?: boolean;
+  /** verse | chorus | bridge | outro — from AI */
+  sectionLabel?: string;
+  /** Chorus repeat number (1 = first time, 2 = second, etc.) */
+  chorusRepeat?: number;
+  /** Semantic word effect from AI (on hero word) */
+  heroEffect?: {
+    type: string;
+    direction?: string;
+    amount?: number;
+    color?: string;
+    animated?: boolean;
+    decomp?: string;
+  };
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
 export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
 
 const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
+
+function computeEmphasisFromDuration(durationSec: number): number {
+  const ms = durationSec * 1000;
+  if (ms < 150) return 1;
+  if (ms < 250) return 2;
+  if (ms < 400) return 3;
+  if (ms < 600) return 4;
+  return 5;
+}
 
 function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): string[] {
   if (payload.auto_palettes?.length) {
@@ -552,6 +822,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
   const aiPhrases = (payload.cinematic_direction as any)?.phrases as CinematicPhrase[] | undefined;
   const phraseGroups = buildPhraseGroups(wordMeta, aiPhrases);
+  // Assign presentation modes at compile time (moved from edge function)
+  assignPresentationModes(phraseGroups, wordMeta, aiPhrases);
   const storyboardRaw = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
   // Convert to map keyed by lineIndex — the raw array is sparse (15-25 entries for a 40-line song)
   const storyboard = new Map<number, StoryboardEntryLike>();
@@ -638,8 +910,10 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const composition = matchPhrase?.composition ?? 'line';
     const bias = matchPhrase?.bias ?? 'center';
 
+    const phraseHeroClean = (matchPhrase?.heroWord ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const hasHero = group.words.some(wm =>
-      (wm.directive?.emphasisLevel ?? 1) >= 4 ||
+      wm.isHeroWord === true ||
+      (phraseHeroClean && wm.clean === phraseHeroClean) ||
       wm.directive?.isolation === true ||
       storyboard.get(group.lineIndex)?.heroWord?.toLowerCase() === wm.clean
     );
@@ -747,7 +1021,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const groupLayout = groupLayouts.get(key);
     const positions = groupLayout?.positions ?? [];
     const groupFontSize = groupLayout?.fontSize ?? 56;
-    const phraseHeroClean = (group.phraseHeroWord ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       // ═══ Semantic auto-map: word meaning → color/glow (the word IS the directive) ═══
       const autoSemantic = getSemanticOverride(wm.clean);
@@ -764,16 +1037,16 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         wordStart: snapToBeat(wm.start, beats),
         fontWeight: baseTypography.fontWeight,
         fontFamily: baseTypography.fontFamily,
-        isHeroWord: (wm.directive?.emphasisLevel ?? 1) >= 4
+        isHeroWord: wm.isHeroWord === true
+          || (matchPhrase?.heroWord?.toLowerCase().replace(/[^a-z0-9]/g, '') === wm.clean)
           || (wm.directive as any)?.isolation === true
           || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, ''))
-          || (phraseHeroClean && wm.clean === phraseHeroClean)
           || (Math.max(0, wm.end - wm.start) >= 0.5),
         isAnchor: wi === group.anchorWordIdx,
         color: autoSemantic?.colorOverride ?? resolveV3Palette(payload, ((wm.start + (payload.lines[group.lineIndex]?.end ?? wm.start)) * 0.5 - payload.songStart) / Math.max(0.01, payload.songEnd - payload.songStart))[2] ?? '#ffffff',
         hasSemanticColor: Boolean(autoSemantic?.colorOverride),
         isFiller: isFillerWord(wm.word),
-        emphasisLevel: wm.directive?.emphasisLevel ?? 1,
+        emphasisLevel: computeEmphasisFromDuration(wm.end - wm.start),
         wordDuration: Math.max(0, wm.end - wm.start),
         semanticAlphaMax: 1,
       };
@@ -804,8 +1077,23 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       ghostPreview: matchPhrase?.ghostPreview ?? false,
       vibrateOnHold: matchPhrase?.vibrateOnHold ?? false,
       elementalWash: matchPhrase?.elementalWash ?? false,
+      sectionLabel: matchPhrase?.section ?? 'verse',
+      heroEffect: matchPhrase?.effect ?? undefined,
     };
   }).sort((a, b) => a.start - b.start);
+
+  // Compute chorus repeat numbers
+  let chorusCount = 0;
+  let lastWasChorus = false;
+  for (const group of compiledGroups) {
+    if (group.sectionLabel === 'chorus') {
+      if (!lastWasChorus) chorusCount++;
+      group.chorusRepeat = chorusCount;
+      lastWasChorus = true;
+    } else {
+      lastWasChorus = false;
+    }
+  }
 
   const heat = physicsProfile?.heat ?? 0.5;
   const beatResponse = physicsProfile?.beatResponse ?? 'pulse';

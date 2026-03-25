@@ -12,163 +12,101 @@ const FALLBACK_MODEL = "google/gemini-2.5-flash";
 const CINEMATIC_DIRECTION_PROMPT = `(deprecated — use mode: "scene" + mode: "words")`;
 
 const SCENE_DIRECTION_PROMPT = `
-You are a film director designing the visual world for a lyric video.
+You are a film director designing backgrounds for a lyric video.
 
 You will receive:
-1. Song lyrics with timestamps
-2. Audio-detected sections with roles
-3. A listener scene — the emotional seed
+1. Song lyrics
+2. Audio-detected sections
 
-THE LISTENER SCENE IS YOUR ANCHOR.
-Root ALL section descriptions in this world.
-If none is provided, infer one from the lyrics.
-
-Return ONLY valid JSON. No markdown.
-
-═══════════════════════════════════════
-SONG IDENTITY
-═══════════════════════════════════════
-
-REQUIRED:
-- "description": single evocative sentence (max 15 words) — what this song sounds/feels like
-- "mood": single dominant emotional word
-
-OPTIONAL:
-- "meaning": { "theme": string, "summary": string, "imagery": [strings] }
-
-PRESETS:
+For the song:
+- "description": single evocative sentence (max 15 words)
 - "sceneTone": "dark" | "light" | "mixed"
-- "typography": "bold-impact" | "clean-modern" | "elegant-serif" | "raw-condensed" | "whisper-soft" | "tech-mono" | "display-heavy" | "editorial-light"
-- "texture": "fire" | "rain" | "snow" | "smoke" | "dust" | "stars" | "glare"
-- "emotionalArc": "slow-burn" | "surge" | "collapse" | "dawn" | "eruption"
-
-═══════════════════════════════════════
-SECTIONS
-═══════════════════════════════════════
 
 For EACH section:
 - "sectionIndex": integer
-- "description": vivid 1-sentence scene rooted in the listener's world
-- "visualMood": "intimate" | "anthemic" | "dreamy" | "aggressive" | "melancholy" | "euphoric" | "eerie" | "vulnerable" | "triumphant" | "nostalgic" | "defiant" | "hopeful" | "raw" | "hypnotic"
+- "description": vivid 1-sentence visual scene rooted in the song's world
 - "dominantColor": bold hex (#RRGGBB), unique per section
 
-OPTIONAL per section:
-- "texture": override song default
-- "atmosphereState": "still" | "drifting" | "falling" | "swirling"
+Return ONLY valid JSON. No markdown.
 
-Return JSON only.
+{
+  "description": "A chilling descent from emotional peaks into cold isolation",
+  "sceneTone": "dark",
+  "sections": [
+    { "sectionIndex": 1, "description": "A solitary figure in a frosting room", "dominantColor": "#A5B4FC" }
+  ]
+}
 `;
 
 const WORD_DIRECTION_PROMPT = `
-You are a shot designer for a cinematic lyric video.
+You are a lyric video director grouping words into screen-sized phrases.
 
-Each phrase = one screen. Words appear together, animate together, exit together.
+Each phrase = one screen. Words appear together, exit together.
 
-You will receive a word stream, one word per line:
+You will receive a word stream:
   w  0  Tell               180ms
   w  1  me,                200ms  [BREATH 300ms]
   w  2  is                 150ms
-  w  4  soul               250ms
-  w  6  sale?              320ms  [BREATH 400ms]
 
-HOW TO GROUP:
-  Walk down the word stream. Accumulate words. The moment you have
-  a complete thought or idea — stop. That's one phrase.
+GROUP BY THOUGHT BREAKS:
+  "Tell me," → complete thought. STOP. → phrase 1
+  "is your soul for sale?" → complete question. STOP. → phrase 2
 
-  "Tell" — not a thought yet, keep going
-  "Tell me," — complete. STOP. → phrase 1
-  "is" — not yet
-  "is your" — not yet
-  "is your soul" — not yet
-  "is your soul for sale?" — complete question. STOP. → phrase 2
-  "God no," — complete reaction. STOP. → phrase 3
-  "y'all ain't touchin'" — complete statement. STOP. → phrase 4
-  "my soul" — complete. STOP. → phrase 5
-
-  Keep going until every word is grouped.
-
-WHAT MAKES A COMPLETE THOUGHT:
-  - A question: "is your soul for sale?"
-  - A statement: "Sometimes life is a blessin'"
-  - A reaction: "God no,"
-  - A fixed phrase: "Heaven on Earth"
-  - A clause: "but she's like"
-
-  If a thought needs 5-6 words, that's fine.
-  If a thought is 1-2 words, that's fine too.
-  The size follows the meaning. Don't force it.
+  A thought can be 1-6 words. Size follows meaning.
 
 HARD RULES:
-  1. Never cross a [BREATH] marker. Start a new phrase after every breath.
-  2. Max 6 words. If a thought is longer, find the natural break
-     ("Sometimes y'all gotta play" + "in the dirt").
+  1. Never cross a [BREATH] marker.
+  2. Max 6 words per phrase.
   3. Every w-number belongs to exactly one phrase. No gaps.
-  4. heroWord is an EXACT word from the phrase. Copy it from the stream.
-  5. When lyrics repeat (chorus/hook), use the SAME grouping each time.
+  4. heroWord must be an EXACT word from the stream.
+  5. Repeated lyrics (chorus/hook) use the SAME grouping each time.
 
 HERO WORD:
-  The most concrete, imageable word in the phrase.
+  The most concrete, visual, imageable word in the phrase.
   Nouns and strong verbs. Not pronouns, articles, or filler.
+  Must be >= 200ms duration (check the timestamps).
+  If no word qualifies, pick the longest word.
 
-CHOREOGRAPHY:
-  Most phrases are default: horizontal line, center, instant reveal, medium hold.
-  You do NOT output choreography for default phrases.
-  
-  Your job: pick ~15-25 MOMENTS that break the pattern.
-  Only output choreography fields on phrases that DIFFER from the default.
-  
-  The vocabulary:
-  
-  "composition": "line" (default) | "stack" (vertical column) | "center_word" (single word fills screen — 1 word ONLY)
-  "bias": "center" (default) | "left" | "right"
-  "heroType": "word" (default) | "phrase" (entire phrase emphasized — good for short impact phrases)
-  "revealStyle": "instant" (default) | "stagger_fast" (rapid sequence) | "stagger_slow" (deliberate pacing)
-  "holdClass": "medium_groove" (default) | "short_hit" (quick turnover) | "long_emotional" (holds with authority)
-  "energyTier": "groove" (default) | "intimate" | "lift" | "impact" | "surprise"
-  
-  WHAT DESERVES A MOMENT:
-  - Single-word impact phrases (EARTH, H.O.E.s) → center_word + long_emotional + impact
-  - First phrase of a new verse or section → stagger_slow + intimate (sets the tone)
-  - Chorus/hook phrases → energyTier "impact"
-  - A phrase that answers or contrasts the one before it → flip the bias (left↔right)
-  - An emotional peak → long_emotional
-  - A phrase that builds tension → stack + lift
-  - A phrase that needs space to breathe → long_emotional + intimate
-  - A rapid-fire sequence → short_hit for each phrase in the run
-  - 2-3 surprise moments per song → surprise tier (use VERY sparingly)
-  
-  WHAT STAYS DEFAULT (no choreography output needed):
-  - Standard verse lines with steady rhythm
-  - Phrases that don't need special layout or timing
-  - Anything that works fine as a centered horizontal line with instant reveal
-  
-  DEFAULT PHRASE (no choreography fields):
-  { "wordRange": [0, 1], "heroWord": "Tell" }
-  
-  MOMENT PHRASE (only the fields that differ):
-  { "wordRange": [43, 43], "heroWord": "H.O.E.s", "composition": "center_word", "holdClass": "long_emotional", "energyTier": "impact" }
-  
-  RULES:
-  - center_word is ONLY for single-word phrases. Never 2+ words.
-  - Only output choreography fields that differ from default. Don't output "composition": "line" — that's the default.
-  - When lyrics repeat (chorus/hook), tag the SAME moments each time.
-  - Aim for 15-25 moments in a typical song. Not every phrase is special.
+SECTION LABELS:
+  Mark each phrase as verse, chorus, bridge, or outro.
+  Chorus = repeated lyrics (appears 2+ times in the song).
+  If the same words come back, it's chorus.
 
-WORD DIRECTIVES:
-  Tag emotionally significant words:
-    "word": lowercase, "emphasisLevel": 1-5
-    "elementalClass": FIRE | WATER | FROST | SMOKE | ELECTRIC
-    "isolation": true (word >=700ms, solo screen)
+HERO WORD EFFECTS (optional, ~15-25 per song):
+  For hero words that evoke a clear visual, describe what the word LOOKS LIKE.
+  The effect appears INSIDE the letter shapes (not around them).
 
-  If it burns -> FIRE. Drowns -> WATER. Freezes -> FROST.
-  Fades -> SMOKE. Electrifies -> ELECTRIC.
+  Structured fields:
+    type: fill | gradient | crack | flicker | edge_glow | drip | sweep | outline | echo | drift | weight | fade
+    direction: left | right | top | bottom | center | edges
+    amount: 0-100 (percentage)
+    color: hex color matching the word's feeling
+    animated: true if effect progresses over hold duration
+    decomp: what word dissolves into on exit — frost | fire | water | smoke | sparks | shatter | dust | none
 
-  Time gates: emphasisLevel 4-5 needs >=350ms.
-  elementalClass needs >=140ms. isolation needs >=700ms.
+  Examples:
+    "half" → { type: "fill", direction: "left", amount: 50, color: "#FFD700" }
+    "crashing" → { type: "crack", direction: "top", animated: true, decomp: "shatter" }
+    "frozen" → { type: "sweep", direction: "edges", color: "#88ccff", decomp: "frost" }
+    "sinking" → { type: "fill", direction: "bottom", color: "#2255cc", animated: true, decomp: "water" }
+    "burning" → { type: "gradient", direction: "bottom", color: "#ff4400", animated: true, decomp: "fire" }
+    "electric" → { type: "flicker", color: "#00ddff", decomp: "sparks" }
+    "hollow" → { type: "outline", color: "#ffffff" }
+    "echo" → { type: "echo", direction: "left", amount: 3 }
+    "heavy" → { type: "weight", direction: "bottom", animated: true }
+    "fading" → { type: "fade", direction: "center", amount: 80, animated: true, decomp: "smoke" }
+
+  Most hero words get NO effect. Only tag when meaning clearly maps to a visual.
 
 Return ONLY valid JSON. No markdown.
-{ "phrases": [{ "wordRange": [start, end], "heroWord": "WORD" }, { "wordRange": [43, 43], "heroWord": "H.O.E.s", "composition": "center_word", "holdClass": "long_emotional", "energyTier": "impact" }],
-  "wordDirectives": [{ "word": "soul", "emphasisLevel": 3 }] }
+{
+  "phrases": [
+    { "wordRange": [0, 1], "heroWord": "Tell", "section": "verse" },
+    { "wordRange": [35, 40], "heroWord": "snowing", "section": "verse", "effect": { "type": "drip", "direction": "top", "color": "#ffffff", "animated": true, "decomp": "frost" } },
+    { "wordRange": [104, 109], "heroWord": "Heaven", "section": "chorus" }
+  ],
+  "hookPhrase": "Heaven on Earth"
+}
 `;
 
 interface LyricLine {
@@ -554,72 +492,6 @@ function enforcePhraseLimits(
 }
 
 /**
- * Split words with isolation: true out of multi-word phrases into solo phrases.
- * These words deserve their own screen moment — the solo hero system centers them.
- * If they stay inside a multi-word phrase, they cause show-hide-show flicker.
- */
-function splitIsolatedWords(
-  phrases: Array<{ wordRange: [number, number]; heroWord?: string }>,
-  words: Array<{ word: string; start: number; end: number }>,
-  wordDirectives: Array<{ word?: string; isolation?: boolean }>,
-): Array<{ wordRange: [number, number]; heroWord?: string }> {
-  // Build a set of isolated word stems
-  const isolationSet = new Set<string>();
-  for (const wd of wordDirectives) {
-    if (wd.isolation && wd.word) {
-      isolationSet.add(wd.word.toLowerCase().replace(/[^a-z0-9]/g, ""));
-    }
-  }
-  if (isolationSet.size === 0) return phrases;
-
-  const result: Array<{ wordRange: [number, number]; heroWord?: string }> = [];
-
-  for (const phrase of phrases) {
-    const [start, end] = phrase.wordRange;
-
-    // Already a single-word phrase — keep as-is
-    if (start === end) {
-      result.push(phrase);
-      continue;
-    }
-
-    // Scan for isolated words in this phrase
-    let segStart = start;
-    for (let i = start; i <= end; i++) {
-      if (i >= words.length) continue;
-      const clean = words[i].word.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const durMs = Math.round((words[i].end - words[i].start) * 1000);
-
-      if (isolationSet.has(clean) && durMs >= 350) {
-        // Push words before the isolated word as their own phrase
-        if (i > segStart) {
-          result.push({
-            wordRange: [segStart, i - 1],
-            heroWord: phrase.heroWord,
-          });
-        }
-        // Push the isolated word as a solo phrase
-        result.push({
-          wordRange: [i, i],
-          heroWord: words[i].word.toUpperCase().replace(/[^A-Z0-9'.,-]/g, ""),
-        });
-        segStart = i + 1;
-      }
-    }
-
-    // Push remaining words after the last isolated word
-    if (segStart <= end) {
-      result.push({
-        wordRange: [segStart, end],
-        heroWord: phrase.heroWord,
-      });
-    }
-  }
-
-  return result;
-}
-
-/**
  * Ensure every word belongs to exactly one phrase.
  * Fills gaps left by the AI with mechanical phrases.
  */
@@ -760,10 +632,9 @@ function buildWordUserMessage(
 
   msg += `SCENE DIRECTION (harmonize with this):\n`;
   msg += `sceneTone: ${sceneDirection.sceneTone || "dark"}\n`;
-  msg += `emotionalArc: ${sceneDirection.emotionalArc || "slow-burn"}\n`;
   if (Array.isArray(sceneDirection.sections)) {
     for (const s of sceneDirection.sections) {
-      msg += `  Section ${s.sectionIndex}: ${s.visualMood || "?"} (${s.dominantColor || "?"})\n`;
+      msg += `  Section ${s.sectionIndex}: ${s.description || "?"} (${s.dominantColor || "?"})\n`;
     }
   }
   msg += "\n";
@@ -803,7 +674,7 @@ function buildWordUserMessage(
     msg += "\n";
   }
 
-  msg += "Return JSON only: { phrases: [...], wordDirectives: [...] }";
+  msg += "Return JSON only: { phrases: [...], hookPhrase?: string }";
   return msg;
 }
 
@@ -1058,14 +929,12 @@ function validateWords(
   const errors: string[] = [];
   const v = { ...raw };
 
-  // Phrases
+  void words;
   if (!Array.isArray(v.phrases)) v.phrases = [];
   for (const p of v.phrases) {
-    // lineIndex no longer required — phrases use global wordRange
     if (!Array.isArray(p.wordRange) || p.wordRange.length !== 2) {
       p.wordRange = [0, 0];
     }
-    // Ensure indices are numbers
     p.wordRange[0] =
       typeof p.wordRange[0] === "number"
         ? Math.max(0, Math.round(p.wordRange[0]))
@@ -1074,103 +943,38 @@ function validateWords(
       typeof p.wordRange[1] === "number"
         ? Math.max(p.wordRange[0], Math.round(p.wordRange[1]))
         : p.wordRange[0];
+
     if (p.heroWord && typeof p.heroWord !== "string") delete p.heroWord;
 
-    // Choreography: validate enums, conservative defaults
-    const COMP = ["stack", "line", "center_word"];
-    const BIAS = ["left", "center", "right"];
-    const HERO_TYPE = ["word", "phrase"];
-    const REVEAL = ["instant", "stagger_fast", "stagger_slow"];
-    const HOLD = ["short_hit", "medium_groove", "long_emotional"];
-    const ENERGY = ["intimate", "groove", "lift", "impact", "surprise"];
-
-    if (!COMP.includes(p.composition)) p.composition = "line";
-    if (!BIAS.includes(p.bias)) p.bias = "center";
-    if (!HERO_TYPE.includes(p.heroType)) p.heroType = "word";
-    if (!REVEAL.includes(p.revealStyle)) p.revealStyle = "instant";
-    if (!HOLD.includes(p.holdClass)) p.holdClass = "medium_groove";
-    if (!ENERGY.includes(p.energyTier)) p.energyTier = "groove";
-
-    // center_word is only valid for single-word phrases
-    const phraseWordCount = p.wordRange[1] - p.wordRange[0] + 1;
-    if (p.composition === "center_word" && phraseWordCount > 1) {
-      p.composition = "line";
+    if (
+      p.section !== undefined &&
+      !["verse", "chorus", "bridge", "outro"].includes(p.section)
+    ) {
+      delete p.section;
     }
-  }
 
-  // Storyboard — backward compat
-  if (!Array.isArray(v.storyboard)) v.storyboard = [];
-  for (const entry of v.storyboard) {
-    delete entry.shotType;
-    delete entry.entryStyle;
-    delete entry.exitStyle;
-  }
-
-  // Word directives
-  if (!Array.isArray(v.wordDirectives)) {
-    if (v.wordDirectives && typeof v.wordDirectives === "object") {
-      v.wordDirectives = Object.values(v.wordDirectives);
-    } else {
-      v.wordDirectives = [];
-    }
-  }
-
-  // Word duration lookup
-  const wordDurMap = new Map<string, number>();
-  if (words) {
-    for (const w of words) {
-      const clean = w.word.replace(/[^a-zA-Z]/g, "").toLowerCase();
-      if (clean) {
-        const dur = Math.round((w.end - w.start) * 1000);
-        const existing = wordDurMap.get(clean);
-        if (!existing || dur > existing) wordDurMap.set(clean, dur);
+    if (p.effect !== undefined) {
+      if (!p.effect || typeof p.effect !== "object") {
+        delete p.effect;
+      } else {
+        if (typeof p.effect.type !== "string") delete p.effect;
+        if (p.effect) {
+          if (p.effect.direction !== undefined && typeof p.effect.direction !== "string") delete p.effect.direction;
+          if (p.effect.amount !== undefined) {
+            const n = Number(p.effect.amount);
+            if (Number.isFinite(n)) p.effect.amount = Math.max(0, Math.min(100, Math.round(n)));
+            else delete p.effect.amount;
+          }
+          if (p.effect.color !== undefined && (typeof p.effect.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(p.effect.color))) delete p.effect.color;
+          if (p.effect.animated !== undefined) p.effect.animated = Boolean(p.effect.animated);
+          if (p.effect.decomp !== undefined && typeof p.effect.decomp !== "string") delete p.effect.decomp;
+        }
       }
     }
   }
 
-  for (const wd of v.wordDirectives) {
-    if (typeof wd.emphasisLevel === "number") {
-      wd.emphasisLevel = Math.min(5, Math.max(1, Math.round(wd.emphasisLevel)));
-    } else {
-      wd.emphasisLevel = 2;
-    }
-    if (
-      wd.elementalClass &&
-      !(ENUMS.elementalClass as readonly string[]).includes(wd.elementalClass)
-    )
-      delete wd.elementalClass;
-    if (wd.elementalClass === "none") delete wd.elementalClass;
-
-    // Time-gate only
-    const clean = (wd.word || "").replace(/[^a-zA-Z]/g, "").toLowerCase();
-    const dur = wordDurMap.get(clean) ?? 999;
-    if (dur < 140) {
-      wd.emphasisLevel = 1;
-      delete wd.elementalClass;
-      delete wd.isolation;
-    }
-    if (dur < 350) {
-      delete wd.elementalClass;
-      if (wd.emphasisLevel > 3) wd.emphasisLevel = 3;
-      delete wd.isolation;
-    }
-    if (dur < 700 && wd.isolation) delete wd.isolation;
-
-    for (const f of [
-      "entry",
-      "exit",
-      "behavior",
-      "trail",
-      "ghostTrail",
-      "ghostDirection",
-      "letterSequence",
-      "visualMetaphor",
-      "heroPresentation",
-      "kineticClass",
-      "colorOverride",
-    ]) {
-      delete (wd as any)[f];
-    }
+  if (v.hookPhrase !== undefined && typeof v.hookPhrase !== "string") {
+    delete v.hookPhrase;
   }
 
   return {
@@ -1178,8 +982,7 @@ function validateWords(
     errors,
     value: {
       phrases: v.phrases,
-      storyboard: v.storyboard,
-      wordDirectives: v.wordDirectives,
+      hookPhrase: v.hookPhrase,
     },
   };
 }
@@ -1274,7 +1077,7 @@ async function callScene(
             {
               role: "user",
               content:
-                "Your previous response was malformed or truncated. Return ONLY valid JSON with sceneTone, typography, texture, emotionalArc, and sections array. No markdown. No explanation.",
+                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", and "sections" array. No markdown. No explanation.',
             },
           ],
           response_format: { type: "json_object" },
@@ -1315,317 +1118,12 @@ async function callScene(
   return result.value;
 }
 
-/**
- * Fill smart choreography defaults for phrases the AI left bare.
- * The AI picks ~20 moments. This function fills the remaining ~65 phrases
- * with contextually appropriate defaults based on:
- * - word count and duration (short phrases get different treatment)
- * - position in song (first/last phrases of sections)
- * - section visual mood (from sceneDirection)
- * - alternating bias for visual rhythm
- */
-// ═══ PRESENTATION MODES: 18-card seeded shuffle deck ═══
-
-type PresentationMode =
-  | 'horiz_center' | 'horiz_left' | 'horiz_right'
-  | 'stack_center' | 'stack_left' | 'stack_right'
-  | 'ghost_center' | 'ghost_left' | 'ghost_right'
-  | 'vibrate_smoke' | 'vibrate_element'
-  | 'wash_lr' | 'wash_rl' | 'wash_center'
-  | 'impact_center' | 'impact_left' | 'impact_right'
-  | 'horiz_drift';
-
-const MODE_CARDS: Array<{
-  mode: PresentationMode;
-  baseMode: string;
-  composition: string;
-  bias: string;
-  revealStyle: string;
-  entryCharacter: string;
-  exitCharacter: string;
-  holdClass: string;
-  ghostPreview: boolean;
-  vibrateOnHold: boolean;
-  elementalWash: boolean;
-}> = [
-  // HORIZONTAL REVEAL × 3
-  { mode: 'horiz_center',  baseMode: 'horizontal', composition: 'line', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'horiz_left',    baseMode: 'horizontal', composition: 'line', bias: 'left',   revealStyle: 'stagger_fast', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'horiz_right',   baseMode: 'horizontal', composition: 'line', bias: 'right',  revealStyle: 'stagger_fast', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-
-  // VERTICAL STACK × 3
-  { mode: 'stack_center',  baseMode: 'stack', composition: 'stack', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'rise',  exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'stack_left',    baseMode: 'stack', composition: 'stack', bias: 'left',   revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'stack_right',   baseMode: 'stack', composition: 'stack', bias: 'right',  revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-
-  // GHOST PREVIEW × 3
-  { mode: 'ghost_center',  baseMode: 'ghost', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
-  { mode: 'ghost_left',    baseMode: 'ghost', composition: 'line', bias: 'left',   revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
-  { mode: 'ghost_right',   baseMode: 'ghost', composition: 'line', bias: 'right',  revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
-
-  // VIBRATE DISSOLVE × 2
-  { mode: 'vibrate_smoke',   baseMode: 'vibrate', composition: 'center_word', bias: 'center', revealStyle: 'instant', entryCharacter: 'bloom', exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: true, elementalWash: false },
-  { mode: 'vibrate_element', baseMode: 'vibrate', composition: 'center_word', bias: 'center', revealStyle: 'instant', entryCharacter: 'bloom', exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: true, elementalWash: false },
-
-  // ELEMENTAL WASH × 3
-  { mode: 'wash_lr',     baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
-  { mode: 'wash_rl',     baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
-  { mode: 'wash_center', baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
-
-  // IMPACT CUT × 3
-  { mode: 'impact_center', baseMode: 'impact', composition: 'line',   bias: 'center', revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'impact_left',   baseMode: 'impact', composition: 'line',   bias: 'left',   revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'impact_right',  baseMode: 'impact', composition: 'line',   bias: 'right',  revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-
-  // HORIZONTAL + DRIFT entry (variant for more motion)
-  { mode: 'horiz_drift', baseMode: 'horizontal', composition: 'line', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'rise', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-];
-
-function seededShuffle<T>(arr: T[], seed: number): T[] {
-  const result = [...arr];
-  let s = seed;
-  for (let i = result.length - 1; i > 0; i--) {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    const j = s % (i + 1);
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
-}
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash = hash & hash;
-  }
-  return Math.abs(hash);
-}
-
-function assignPresentationModes(
-  phrases: Array<{
-    wordRange: [number, number];
-    heroWord?: string;
-    composition?: string;
-    bias?: string;
-    heroType?: string;
-    revealStyle?: string;
-    holdClass?: string;
-    energyTier?: string;
-    presentationMode?: string;
-    entryCharacter?: string;
-    exitCharacter?: string;
-    ghostPreview?: boolean;
-    vibrateOnHold?: boolean;
-    elementalWash?: boolean;
-  }>,
-  words: Array<{ word: string; start: number; end: number }>,
-  wordDirs: Array<{ word?: string; emphasisLevel?: number; elementalClass?: string; isolation?: boolean }>,
-  sceneDirection: Record<string, any>,
-): void {
-  if (!words || words.length === 0 || phrases.length === 0) return;
-
-  void sceneDirection;
-
-  // Build elemental lookup
-  const elementalMap = new Map<string, string>();
-  for (const wd of wordDirs) {
-    if (wd.word && wd.elementalClass) {
-      elementalMap.set(wd.word.toLowerCase().replace(/[^a-z0-9]/g, ""), wd.elementalClass);
-    }
-  }
-
-  // Seed from song content (first word + last word + phrase count = deterministic per song)
-  const songSeed = hashString(
-    (words[0]?.word ?? '') + (words[words.length - 1]?.word ?? '') + phrases.length,
-  );
-
-  // Build shuffled deck
-  let deck = seededShuffle(
-    Array.from({ length: MODE_CARDS.length }, (_, i) => i),
-    songSeed,
-  );
-  let deckPos = 0;
-  let deckNumber = 0;
-  let lastBaseMode = '';
-
-  for (let i = 0; i < phrases.length; i++) {
-    const phrase = phrases[i];
-    const [s, e] = phrase.wordRange;
-    const wc = e - s + 1;
-
-    // Check if AI already choreographed this phrase (has non-default fields)
-    const hasAIChoreography =
-      (phrase.composition !== undefined && phrase.composition !== 'line') ||
-      (phrase.bias !== undefined && phrase.bias !== 'center') ||
-      (phrase.heroType !== undefined && phrase.heroType !== 'word') ||
-      (phrase.revealStyle !== undefined && phrase.revealStyle !== 'instant') ||
-      (phrase.holdClass !== undefined && phrase.holdClass !== 'medium_groove') ||
-      (phrase.energyTier !== undefined && phrase.energyTier !== 'groove');
-
-    if (hasAIChoreography) {
-      // AI moment — preserve. Map to closest presentation mode for metadata.
-      phrase.presentationMode = 'ai_moment';
-      phrase.ghostPreview = false;
-      phrase.vibrateOnHold = false;
-      phrase.elementalWash = false;
-      lastBaseMode = 'ai_moment';
-      continue;
-    }
-
-    // Check if any word in this phrase has an elemental class
-    const hasElemental = (() => {
-      for (let wi = s; wi <= e && wi < words.length; wi++) {
-        const clean = words[wi].word.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (elementalMap.has(clean)) return true;
-      }
-      return false;
-    })();
-
-    // ── Deal from deck with constraints ──
-    let cardIdx = -1;
-    let attempts = 0;
-
-    while (attempts < MODE_CARDS.length * 2) {
-      if (deckPos >= deck.length) {
-        deckNumber++;
-        deck = seededShuffle(
-          Array.from({ length: MODE_CARDS.length }, (_, i) => i),
-          songSeed + deckNumber * 7919,
-        );
-        deckPos = 0;
-      }
-
-      const candidate = deck[deckPos];
-      const card = MODE_CARDS[candidate];
-      deckPos++;
-      attempts++;
-
-      // Constraint 1: no same base mode back-to-back
-      if (card.baseMode === lastBaseMode) continue;
-
-      // Constraint 2: vibrate only for 1-2 word phrases
-      if (card.baseMode === 'vibrate' && wc > 2) continue;
-
-      // Constraint 3: stack needs 3+ words
-      if (card.baseMode === 'stack' && wc < 3) continue;
-
-      // Constraint 4: impact not for 5+ word phrases
-      if (card.baseMode === 'impact' && wc >= 5) continue;
-
-      // Constraint 5: center_word composition only for 1-2 word phrases
-      if (card.composition === 'center_word' && wc > 2) continue;
-
-      cardIdx = candidate;
-      break;
-    }
-
-    // Fallback
-    if (cardIdx < 0) cardIdx = 0; // horiz_center
-
-    const card = MODE_CARDS[cardIdx];
-    lastBaseMode = card.baseMode;
-
-    // ── Apply card to phrase ──
-    phrase.presentationMode = card.mode;
-    phrase.composition = card.composition;
-    phrase.bias = card.bias;
-    phrase.revealStyle = card.revealStyle;
-    phrase.holdClass = card.holdClass;
-    phrase.entryCharacter = card.entryCharacter;
-    phrase.exitCharacter = card.exitCharacter;
-    phrase.ghostPreview = card.ghostPreview;
-    phrase.vibrateOnHold = card.vibrateOnHold;
-    phrase.elementalWash = card.elementalWash;
-
-    // ── Mode-specific adjustments ──
-
-    // Single words in center_word: 1.5x scale hint
-    if (wc === 1) {
-      if (card.baseMode !== 'vibrate' && card.baseMode !== 'wash') {
-        // Alternate between impact and vibrate for single words
-        if (i % 2 === 0) {
-          phrase.presentationMode = 'impact_center';
-          phrase.composition = 'center_word';
-          phrase.entryCharacter = 'snap';
-          phrase.exitCharacter = 'none';
-          phrase.vibrateOnHold = false;
-          phrase.elementalWash = false;
-          phrase.ghostPreview = false;
-        } else {
-          phrase.presentationMode = 'vibrate_smoke';
-          phrase.composition = 'center_word';
-          phrase.entryCharacter = 'bloom';
-          phrase.exitCharacter = 'none';
-          phrase.vibrateOnHold = true;
-          phrase.elementalWash = false;
-          phrase.ghostPreview = false;
-        }
-        phrase.holdClass = 'long_emotional';
-        phrase.bias = 'center';
-        phrase.revealStyle = 'instant';
-        lastBaseMode = i % 2 === 0 ? 'impact' : 'vibrate';
-      }
-    }
-
-    // Override: first phrase always horiz_center with stagger_slow
-    if (i === 0) {
-      phrase.presentationMode = 'horiz_center';
-      phrase.composition = 'line';
-      phrase.bias = 'center';
-      phrase.revealStyle = 'stagger_slow';
-      phrase.entryCharacter = 'drift';
-      phrase.exitCharacter = 'drift';
-      phrase.holdClass = 'long_emotional';
-      phrase.ghostPreview = false;
-      phrase.vibrateOnHold = false;
-      phrase.elementalWash = false;
-      lastBaseMode = 'horizontal';
-    }
-
-    // Override: last phrase always dramatic
-    if (i === phrases.length - 1) {
-      if (wc <= 2) {
-        phrase.presentationMode = 'vibrate_element';
-        phrase.composition = 'center_word';
-        phrase.entryCharacter = 'bloom';
-        phrase.exitCharacter = 'none';
-        phrase.vibrateOnHold = true;
-        phrase.elementalWash = false;
-      } else {
-        phrase.presentationMode = 'wash_lr';
-        phrase.entryCharacter = 'snap';
-        phrase.exitCharacter = 'none';
-        phrase.elementalWash = true;
-        phrase.vibrateOnHold = false;
-      }
-      phrase.holdClass = 'long_emotional';
-      phrase.ghostPreview = false;
-    }
-
-    // Elemental phrases: prefer wash if near a wash slot
-    if (hasElemental && !phrase.elementalWash && card.baseMode !== 'vibrate') {
-      // 50% chance to upgrade to elemental wash
-      const elHash = (s * 31 + e * 17 + i * 7) % 10;
-      if (elHash < 5) {
-        phrase.presentationMode = 'wash_lr';
-        phrase.entryCharacter = 'snap';
-        phrase.exitCharacter = 'none';
-        phrase.elementalWash = true;
-        phrase.holdClass = 'long_emotional';
-        phrase.vibrateOnHold = false;
-        phrase.ghostPreview = false;
-        lastBaseMode = 'wash';
-      }
-    }
-  }
-}
-
 async function callWords(
   apiKey: string,
   title: string,
   artist: string,
   lines: LyricLine[],
-  sceneDirection: Record<string, any>,
+  _sceneDirection: Record<string, any>,
   words?: Array<{ word: string; start: number; end: number }>,
   bpm?: number,
   wordSystemPrompt: string = WORD_DIRECTION_PROMPT,
@@ -1635,7 +1133,7 @@ async function callWords(
     title,
     artist,
     lines,
-    sceneDirection,
+    _sceneDirection,
     words,
     bpm,
   );
@@ -1708,7 +1206,7 @@ async function callWords(
       {
         role: "user",
         content:
-          'Your previous response was malformed or truncated. Return ONLY valid JSON: { "phrases": [...], "wordDirectives": [...] }. No markdown. No explanation.',
+          'Your previous response was malformed or truncated. Return ONLY valid JSON: { "phrases": [...], "hookPhrase": "..." }. No markdown. No explanation.',
       },
     ];
 
@@ -1735,30 +1233,21 @@ async function callWords(
   if (words && Array.isArray(result.value.phrases)) {
     // 1. Hard cap: split any phrase over 6 words
     result.value.phrases = enforcePhraseLimits(result.value.phrases, words, 6);
-    // 2. Split isolated words into their own solo phrases
-    const wordDirs = Array.isArray(result.value.wordDirectives)
-      ? result.value.wordDirectives
-      : [];
-    result.value.phrases = splitIsolatedWords(result.value.phrases, words, wordDirs);
-    // 3. Merge orphan single-word phrases (< 350ms) — isolated words survive (≥350ms)
+    // 2. Merge orphan single-word phrases (< 350ms)
     result.value.phrases = mergeOrphanPhrases(result.value.phrases, words);
-    // 4. Fill gaps
+    // 3. Fill gaps
     result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
-    // 5. Validate + fill heroWords
+    // 4. Validate + fill heroWords
     fillMissingHeroWords(result.value.phrases, words);
-    // 6. Assign presentation modes for phrases the AI left bare
-    assignPresentationModes(result.value.phrases, words, wordDirs, sceneDirection);
   }
 
   if (
     !Array.isArray(result.value.phrases) ||
-    result.value.phrases.length === 0 ||
-    !Array.isArray(result.value.wordDirectives) ||
-    result.value.wordDirectives.length === 0
+    result.value.phrases.length === 0
   ) {
     throw {
       status: 422,
-      message: "Word direction returned empty phrases or wordDirectives",
+      message: "Word direction returned empty phrases",
     };
   }
 

@@ -30,6 +30,7 @@ export interface CinematicDirection {
   /** AI-grouped phrases: which words appear on screen together.
    *  Each phrase is one "reading beat" — a complete thought the viewer reads and absorbs. */
   phrases?: CinematicPhrase[];
+  hookPhrase?: string;
 
   // ── Legacy fields (deprecated — use resolvers instead) ─────
   /** @deprecated Use emotionalArc + resolvers */
@@ -84,31 +85,42 @@ export interface CinematicPhrase {
   wordRange: [number, number];
   /** Most impactful word in this phrase — UPPERCASE. Optional. */
   heroWord?: string;
+  /** NEW: section label from AI */
+  section?: 'verse' | 'chorus' | 'bridge' | 'outro';
+  /** NEW: semantic word effect on hero word */
+  effect?: {
+    type: string;
+    direction?: string;
+    amount?: number;
+    color?: string;
+    animated?: boolean;
+    decomp?: string;
+  };
   /** @deprecated — use wordRange with global indices instead */
   lineIndex?: number;
-  /** How words are arranged on screen */
+  /** KEPT: layout (assigned by client) */
   composition?: "stack" | "line" | "center_word";
-  /** Where the arrangement sits on canvas */
+  /** KEPT: layout (assigned by client) */
   bias?: "left" | "center" | "right";
-  /** What carries visual emphasis */
+  /** DEPRECATED: no longer in AI output */
   heroType?: "word" | "phrase";
-  /** How the phrase appears */
+  /** KEPT: layout (assigned by client) */
   revealStyle?: "instant" | "stagger_fast" | "stagger_slow";
-  /** How long it holds emotionally — renderer maps to actual timing */
+  /** KEPT: layout (assigned by client) */
   holdClass?: "short_hit" | "medium_groove" | "long_emotional";
-  /** Role in the song's momentum */
+  /** DEPRECATED: no longer in AI output */
   energyTier?: "intimate" | "groove" | "lift" | "impact" | "surprise";
-  /** Presentation mode from the shuffled card deck */
+  /** KEPT: assigned by client-side shuffle deck */
   presentationMode?: string;
-  /** How the phrase enters */
+  /** KEPT: assigned by client-side shuffle deck */
   entryCharacter?: string;
-  /** How the phrase exits */
+  /** KEPT: assigned by client-side shuffle deck */
   exitCharacter?: string;
-  /** Whether to show a ghost preview of upcoming text */
+  /** KEPT: assigned by client-side shuffle deck */
   ghostPreview?: boolean;
-  /** Whether the text vibrates during its hold */
+  /** KEPT: assigned by client-side shuffle deck */
   vibrateOnHold?: boolean;
-  /** Whether an elemental wash effect plays */
+  /** KEPT: assigned by client-side shuffle deck */
   elementalWash?: boolean;
 }
 
