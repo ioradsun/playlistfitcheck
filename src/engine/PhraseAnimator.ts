@@ -124,7 +124,7 @@ export interface ChunkAnimState {
 
 const WORD_FADE_SEC = 0.15; // 150ms per-word fade in after stagger reveal
 const REVEAL_ANTICIPATION = 0.1; // 100ms before group.start
-const CENTER_WORD_SCALE = 2.2; // center_word fills the screen
+const CENTER_WORD_SCALE = 1.15; // layout already fills viewport — this is a subtle boost
 const BEAT_NUDGE_BASE = 8; // EXTREME: visible bounce
 const BEAT_SCALE_BASE = 1.0; // base scale (1.0 = no beat effect)
 const BEAT_SCALE_MULT = 0.08; // EXTREME: visible pulse
@@ -468,7 +468,7 @@ export function computeWordState(
   const emp = word.emphasisLevel ?? 0;
   let heroScaleMult = 1.0;
   if (effectiveHero && !isSoloHero) {
-    heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.25; // more dramatic hero emphasis
+    heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.08; // subtle: emp5 = 1.32x, emp3 = 1.16x
   }
 
   // Solo hero offset (center screen)
@@ -477,7 +477,7 @@ export function computeWordState(
   if (isSoloHero) {
     heroOffsetX = canvasWidth / 2 - word.layoutX;
     heroOffsetY = canvasHeight / 2 - word.layoutY;
-    heroScaleMult = Math.max(heroScaleMult, 1.8); // solo hero dominates
+    heroScaleMult = Math.max(heroScaleMult, 1.3); // solo hero stands out but fits viewport
   }
 
   // ── Composition scale boost ──
@@ -584,13 +584,12 @@ export function computeChunkAnim(
   }
   alpha = Math.max(0, Math.min(1, alpha));
 
-  // ── SCALE ──
-  let scaleX = 1.0;
-  let scaleY = 1.0;
-
-  // Composition: center_word boost
-  scaleX *= wordAnim.centerWordScale;
-  scaleY *= wordAnim.centerWordScale;
+  // ── SCALE: use MAX of centerWord vs hero (don't multiply both) ──
+  // The layout system already sizes words for the viewport.
+  // These are ADDITIONAL emphasis — they should not stack.
+  const emphasisScale = Math.max(wordAnim.centerWordScale, wordAnim.heroScaleMult);
+  let scaleX = emphasisScale;
+  let scaleY = emphasisScale;
 
   // Entry motion scale (not for reveal modes)
   if (phrase.isEntering && !isRevealMode) {
@@ -604,11 +603,7 @@ export function computeChunkAnim(
     scaleY *= phrase.exit.scaleY;
   }
 
-  // Hero emphasis
-  scaleX *= wordAnim.heroScaleMult;
-  scaleY *= wordAnim.heroScaleMult;
-
-  // Beat
+  // Beat response scale (small — 1.0 to 1.08)
   scaleX *= phrase.beatScale;
   scaleY *= phrase.beatScale;
 
