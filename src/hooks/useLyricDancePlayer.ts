@@ -81,6 +81,8 @@ export function useLyricDancePlayer(
         { bootMode, preloadedImages },
       );
       playerRef.current = p;
+      // DEBUG: expose player for console inspection
+      (window as any).__ldp = p;
       setPlayer(p);
 
       ro = new ResizeObserver((entries) => {
