@@ -1299,12 +1299,16 @@ export class LyricDancePlayer {
   private _bgParallaxY = 0;
   private _bgParallaxZoom = 1;
   private _bgParallaxRot = 0;
-  private static readonly BG_PARALLAX_DEPTH = 0.12;
-  private static readonly BG_PARALLAX_ALPHA = 0.07;
+  private static readonly BG_PARALLAX_DEPTH = 0.20;
+  // Alpha is adaptive — slower in quiet sections, faster when beats are strong
+  private static readonly BG_PARALLAX_ALPHA_SLOW = 0.07;
+  private static readonly BG_PARALLAX_ALPHA_FAST = 0.30;
   // ═══ Breathing vignette — Fincher/Cronenweth eye funnel ═══
   private _vignetteCanvas: HTMLCanvasElement | null = null;
   private _vignetteKey = '';        // tracks canvas size for invalidation
   private _vignetteEnergy = 0.5;    // smoothed energy for vignette breathing
+  private _bgBeatBrightnessBoost = 0;
+  private _vignetteBeatPulse = 0;
   // ═══ Per-frame caches — computed once in tick(), reused everywhere ═══
   private _frameSectionIdx = -1;
   private _framePalette: string[] | null = null;
@@ -2700,12 +2704,11 @@ export class LyricDancePlayer {
 
         const _activeGIdx2 = this._activeGroupIndices[0] ?? -1;
         const activeGroup = _activeGIdx2 >= 0 ? this.compiledScene?.phraseGroups[_activeGIdx2] : null;
-        const activeGroupWordCount = activeGroup?.words?.length ?? 0;
         this.cameraRig.setPhraseDamping((activeGroup as any)?.motionBudget?.damping ?? 0);
 
-        const camIntensity = this._activeEffects.cameraIntensity
-          * LEGIBILITY.cameraCapForDensity(activeGroupWordCount);
-        if (camIntensity > 0.05) {
+        // CameraRig driven by IntensityRouter — background moves with the beat
+        const camIntensity = mp.cameraBeatMult;
+        if (camIntensity > 0.02) {
           this.cameraRig.setAmplitudeScale(camIntensity);
           this.cameraRig.update(deltaMs, beatState, focus);
         } else {
@@ -3061,7 +3064,8 @@ export class LyricDancePlayer {
     ds.beatIntensity = beatState?.pulse ?? 0;
 
 
-    const beatIntensityClamped = Math.max(0, Math.min(1, beatState?.pulse ?? 0));
+    const particleBeatIntensity = (beatState?.pulse ?? 0) * (1 + mp.bgBeatMult);
+    const beatIntensityClamped = Math.max(0, Math.min(1, particleBeatIntensity));
     if (this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
   }
 
@@ -3188,7 +3192,9 @@ export class LyricDancePlayer {
     if (this._bgSnapshot) {
       const subjectT = this.cameraRig.getSubjectTransform();
       const depth = LyricDancePlayer.BG_PARALLAX_DEPTH * this._bgSectionParallaxMult;
-      const alpha = LyricDancePlayer.BG_PARALLAX_ALPHA;
+      const bgBeat = this._bgSectionBeatMult;
+      const alpha = LyricDancePlayer.BG_PARALLAX_ALPHA_SLOW
+        + bgBeat * (LyricDancePlayer.BG_PARALLAX_ALPHA_FAST - LyricDancePlayer.BG_PARALLAX_ALPHA_SLOW);
 
       const bgBeatGate = Math.max(0.05, this._bgSectionBeatMult);
       const targetX = subjectT.offsetX * depth * bgBeatGate;
@@ -4199,9 +4205,8 @@ export class LyricDancePlayer {
     // Emotional intensity: use a fixed mid-level — no per-section variation
     const intensity = 0.5;
 
-    // Beat response — subtle brightness pulse on beats
-    // Background brightness pulse — direct from BeatConductor
-    const beatMod = this._lastBeatState?.pulse ?? 0;
+    // Beat response amplified by IntensityRouter section intensity
+    const beatMod = this._bgBeatBrightnessBoost;
 
     const filterStr = buildGradeFilter(activeGrade, intensity, beatMod);
 
@@ -4604,6 +4609,15 @@ export class LyricDancePlayer {
     this._bgSectionParallaxMult = mp.bgParallaxMult;
     this._bgSectionBeatMult = mp.bgBeatMult;
 
+    // Beat-driven background responses
+    const rawPulse = beatState?.pulse ?? 0;
+    const hitStr = beatState?.hitStrength ?? 0;
+    const beatFlash = Math.max(rawPulse, hitStr) * mp.bgBeatMult;
+    this._bgBeatBrightnessBoost += (beatFlash - this._bgBeatBrightnessBoost) * 0.4;
+
+    const vignetteBeat = rawPulse * mp.bgBeatMult * 0.15;
+    this._vignetteBeatPulse += (vignetteBeat - this._vignetteBeatPulse) * 0.35;
+
     if (beatIndex !== this._lastBeatIndex && beatIndex >= 0) {
       this._lastBeatIndex = beatIndex;
     }
@@ -4915,7 +4929,8 @@ export class LyricDancePlayer {
     // Low energy (quiet verse) → higher alpha → heavier vignette → intimate
     // High energy (loud chorus) → lower alpha → lighter vignette → expansive
     // Range: 0.35 (loud) to 0.75 (quiet)
-    const alpha = (0.75 - this._vignetteEnergy * 0.40) * strength;
+    const baseAlpha = (0.75 - this._vignetteEnergy * 0.40) * strength;
+    const alpha = Math.max(0, baseAlpha - this._vignetteBeatPulse);
     if (alpha < 0.02) return;
 
     this.ctx.globalAlpha = alpha;
