@@ -16,7 +16,7 @@
 
 export interface BlurGrade {
   type: 'none' | 'gaussian' | 'bloom' | 'tilt-shift';
-  radius: number;           // px base — capped at 3px in buildGradeFilter
+  radius: number;           // retained for compatibility; currently always 0
   rackFocus?: boolean;      // sharp when vocal active, blur between
 }
 
