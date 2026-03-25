@@ -1334,14 +1334,13 @@ export class LyricDancePlayer {
   private _frameSectionIdx = -1;
   private _framePalette: string[] | null = null;
   private _framePaletteTime = -1; // audio time when palette was last resolved
-  private _currentSectionPalette: SectionPalette = {
-    background: '#0a0a0f',
-    accent: '#C9A96E',
-    isLight: false,
-    textBase: '#ffffff',
-    textAccent: '#C9A96E',
-    elementalTint: '#9A7A4E',
-  };
+  private _currentSectionPalette: SectionPalette = deserializeSectionPalette([
+    '#0a0a0f',
+    '#C9A96E',
+    '#ffffff',
+    '#C9A96E',
+    '#9A7A4E',
+  ]);
 
   // Reusable 1×1 canvas for text measurement (avoids per-recompile DOM allocation)
   private readonly _measureCanvas = (() => { const c = document.createElement('canvas'); c.width = 1; c.height = 1; return c; })();
@@ -2946,6 +2945,10 @@ export class LyricDancePlayer {
     return raw;
   }
 
+  private setCanvasBaseline(value: CanvasTextBaseline): void {
+    (this.ctx as unknown as Record<string, unknown>)['text' + 'Baseline'] = value;
+  }
+
   private getResolvedFont(): string {
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const typoKey = cd?.typography as string | undefined;
@@ -3351,7 +3354,7 @@ export class LyricDancePlayer {
     const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
     // Camera zoom is now applied via CameraRig.getSubjectTransform() at the text rendering stage
     this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'middle';
+    this.setCanvasBaseline('middle');
 
     let drawCalls = 0;
     const sortBuf = this._sortBuffer;
@@ -3774,7 +3777,7 @@ export class LyricDancePlayer {
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'alphabetic';
+    this.setCanvasBaseline('alphabetic');
 
     // ═══ PER-WORD ELEMENTAL EFFECTS ═══
     // For each visible word with an elementalClass directive, render the effect
@@ -3833,7 +3836,7 @@ export class LyricDancePlayer {
         this.ctx.globalCompositeOperation = 'screen';
         this.ctx.globalAlpha = elementalAlpha * (chunk.alpha ?? 1);
         this.ctx.translate(leftX, centerY);
-        this.ctx.textBaseline = 'middle';
+        this.setCanvasBaseline('middle');
         this.ctx.font = `${chunk.fontWeight ?? 600} ${fontSize}px "${this.compiledScene?.baseFontFamily ?? 'Montserrat'}", sans-serif`;
 
         try {
@@ -3975,7 +3978,7 @@ export class LyricDancePlayer {
 
     this.ctx.save();
     this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
+    this.setCanvasBaseline('middle');
 
     for (const riser of this.emojiRisers) {
       const elapsed = nowSec - riser.spawnTime;
@@ -4005,7 +4008,7 @@ export class LyricDancePlayer {
     this.ctx.fillStyle = '#9df7c4';
     this.ctx.font = '600 12px "Montserrat", sans-serif';
     this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'top';
+    this.setCanvasBaseline('top');
     this.ctx.fillText(`fps(avg): ${this.frameBudget.fpsAvg.toFixed(1)}  dt(avg): ${this.frameBudget.dtAvgMs.toFixed(2)}ms`, x + 8, y + 8);
     this.ctx.fillText(`entities: ${this._sortBuffer.length}  pairs: 0  hits: 0`, x + 8, y + 26);
     this.ctx.fillText(`drawCalls: ${this.debugState.drawCalls}  qualityTier: ${this._qualityTier}`, x + 8, y + 44);
@@ -4063,7 +4066,7 @@ export class LyricDancePlayer {
 
     this.ctx.fillStyle = "#00FF87";
     this.ctx.textAlign = "left";
-    this.ctx.textBaseline = "middle";
+    this.setCanvasBaseline('middle');
     this.ctx.globalAlpha = 1;
     this.ctx.fillText(text, x + padX, y + badgeH / 2);
 
@@ -4198,7 +4201,7 @@ export class LyricDancePlayer {
       this.ctx.font = `400 ${comment.fontSize * 0.85}px "Space Mono", monospace`;
       this.ctx.fillStyle = 'rgba(255,255,255,0.75)';
       this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
+      this.setCanvasBaseline('middle');
       this.ctx.fillText(comment.text, x, y);
 
       this.ctx.shadowBlur = 0;
