@@ -35,6 +35,7 @@ import {
   normalizeToken,
 } from "@/engine/cinematicResolver";
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
+import { IntensityRouter, type MotionProfile } from '@/engine/IntensityRouter';
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage } from "@/lib/imagePreloadCache";
@@ -46,6 +47,7 @@ import {
   computeWordState,
   computeChunkAnim,
   detectSoloHero,
+  findActiveHeroWordIndex,
   type AnimBeatState,
 } from '@/engine/PhraseAnimator';
 
@@ -1260,6 +1262,11 @@ export class LyricDancePlayer {
   private _frameDt = 1.0;          // normalized dt (1.0 = 60fps), set by tick()
   private _lastRawTime = 0;
   private _timeInitialized = false;
+  private _intensityRouter = new IntensityRouter();
+  private _motionProfile: MotionProfile | null = null;
+  private _textSyncFraction = 0;
+  private _bgSectionParallaxMult = 1;
+  private _bgSectionBeatMult = 0;
 
   // Viewport scale (replaces timelineScale for runtime use)
   private _viewportSx = 1;
@@ -1904,6 +1911,7 @@ export class LyricDancePlayer {
     this.cameraRig.reset();
     this._activeGroupCursor = 0;
     this._activeGroupCursorTime = -1;
+    this._intensityRouter.reset();
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
@@ -2260,6 +2268,7 @@ export class LyricDancePlayer {
     this.cameraRig.reset();
     this._activeGroupCursor = 0;
     this._activeGroupCursorTime = -1;
+    this._intensityRouter.reset();
     this._resetBgParallax();
     this._heroDecompBursts.length = 0;
     this._heroDecompSpawned.clear();
@@ -3245,11 +3254,12 @@ export class LyricDancePlayer {
     // Disney multiplane principle: far objects have mass.
     if (this._bgSnapshot) {
       const subjectT = this.cameraRig.getSubjectTransform();
-      const depth = LyricDancePlayer.BG_PARALLAX_DEPTH;
+      const depth = LyricDancePlayer.BG_PARALLAX_DEPTH * this._bgSectionParallaxMult;
       const alpha = LyricDancePlayer.BG_PARALLAX_ALPHA;
 
-      const targetX = subjectT.offsetX * depth;
-      const targetY = subjectT.offsetY * depth;
+      const bgBeatGate = Math.max(0.05, this._bgSectionBeatMult);
+      const targetX = subjectT.offsetX * depth * bgBeatGate;
+      const targetY = subjectT.offsetY * depth * bgBeatGate;
       const targetZoom = 1 + (subjectT.zoom - 1) * depth;
       const targetRot = subjectT.rotation * depth;
 
@@ -3423,10 +3433,11 @@ export class LyricDancePlayer {
     // NOT applied as a parent transform, because setTransform() replaces the
     // entire matrix and would wipe any parent zoom.
     // camT was already read above for wall computation — reuse it
-    const camZoom = 1.0; // zoom disabled — fitTextToViewport sizes text to fill canvas, zoom fights that
-    const camShakeX = camT.offsetX;
-    const camShakeY = camT.offsetY;
-    const camRotation = camT.rotation;
+    const camZoom = 1.0;
+    const syncFrac = this._textSyncFraction;
+    const camShakeX = camT.offsetX * syncFrac;
+    const camShakeY = camT.offsetY * syncFrac;
+    const camRotation = camT.rotation * syncFrac;
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
@@ -5268,6 +5279,20 @@ export class LyricDancePlayer {
     const beatPulse = beatState?.pulse ?? 0;
     const beatPhase = beatState?.phase ?? 0;
 
+    // ═══ INTENSITY ROUTER: derive motion profile from audio signal ═══
+    const frameDt = Math.max(0.001, Math.min(0.1, this._frameDt * 16.67 / 1000));
+    if (beatState) {
+      this._motionProfile = this._intensityRouter.update(beatState, frameDt);
+    }
+    const mp: MotionProfile = this._motionProfile ?? {
+      intensity: 0, textNodMult: 0.5, textWaveMult: 0.6, textHeroMult: 1.0,
+      bgBeatMult: 0, bgParallaxMult: 0.2, cameraBeatMult: 0, cameraShakeMult: 0,
+      textSyncFraction: 0, particleDensityMult: 0.2, particleSpeedMult: 0.3,
+    };
+    this._textSyncFraction = mp.textSyncFraction;
+    this._bgSectionParallaxMult = mp.bgParallaxMult;
+    this._bgSectionBeatMult = mp.bgBeatMult;
+
     if (beatIndex !== this._lastBeatIndex && beatIndex >= 0) {
       this._lastBeatIndex = beatIndex;
     }
@@ -5288,8 +5313,8 @@ export class LyricDancePlayer {
     const intensity = Math.max(0, Math.min(1, arcFn(songProgress)));
     const intensityScaleMult = 1.0;
 
-    let driftX = Math.sin(tSec * 0.15) * 8 * sx;
-    let driftY = Math.cos(tSec * 0.12) * 5 * sy;
+    let driftX = 0;
+    let driftY = 0;
 
     const groups = scene.phraseGroups;
 
@@ -5337,7 +5362,7 @@ export class LyricDancePlayer {
         : null;
 
       const phraseState = computePhraseState(
-        group, nextGroupStart, tSec, beatForAnim, this.width,
+        group, nextGroupStart, tSec, beatForAnim, this.width, mp,
       );
 
       if (!this._debugModeLogged && groupIdx === activeGroups[activeGroups.length - 1]) {
@@ -5379,8 +5404,9 @@ export class LyricDancePlayer {
       const groupHasActiveSoloHero = detectSoloHero(group, tSec);
 
       // ── Per-word animation states ──
+      const activeHeroWi = findActiveHeroWordIndex(group, tSec);
       const wordAnimStates = group.words.map((word, wi) =>
-        computeWordState(word, wi, group, phraseState, tSec, groupHasActiveSoloHero, this.width, this.height),
+        computeWordState(word, wi, group, phraseState, tSec, groupHasActiveSoloHero, this.width, this.height, mp, activeHeroWi),
       );
 
       // ── Hero neighbor push (keeps hero from overlapping neighbors on same line) ──
@@ -5416,49 +5442,12 @@ export class LyricDancePlayer {
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
         const ws = wordAnimStates[wi];
-        const anim = computeChunkAnim(word, phraseState, ws);
+        const anim = computeChunkAnim(word, phraseState, ws, beatPhase, mp.intensity);
 
-        // ── Vibrate on hold: add time-based offset ──
-        let vibrateX = 0;
-        let vibrateY = 0;
-        if (phraseState.vibrateOnHold && !phraseState.isEntering && !phraseState.isExiting) {
-          const holdStart = phraseState.groupStart;
-          const holdEnd = phraseState.groupEnd;
-          const holdDur = Math.max(0.01, holdEnd - holdStart);
-          const holdProgress = Math.max(0, Math.min(1, (tSec - holdStart) / holdDur));
+        const vibrateX = 0;
+        const vibrateY = 0;
 
-          const freq = 3 + holdProgress * 10; // 3Hz → 13Hz (less frantic on hold)
-          const amp = 0.75 + holdProgress * 3.25;   // ±0.75px → ±4px (reduced travel)
-          vibrateX = Math.sin(tSec * freq * Math.PI * 2) * amp;
-          vibrateY = Math.cos(tSec * freq * Math.PI * 2 * 0.7) * amp * 0.2;
-
-          // Keep hold vibration within a readability-safe envelope.
-          vibrateX = Math.max(-4, Math.min(4, vibrateX));
-          vibrateY = Math.max(-2, Math.min(2, vibrateY));
-
-          // Scale ramp: 1.0 → 1.07x during hold (subtle emphasis, not zoomy).
-          const vibrateScale = 1.0 + holdProgress * 0.07;
-          anim.scaleX *= vibrateScale;
-          anim.scaleY *= vibrateScale;
-
-          // Fade at end: word dissolves starting at 85%
-          if (holdProgress > 0.85) {
-            const fadeProgress = (holdProgress - 0.85) / 0.15;
-            anim.alpha *= (1 - fadeProgress);
-          }
-        }
-
-        // ── Ghost preview: scale bounce on active word ──
-        let ghostBounce = 1.0;
-        if (phraseState.ghostPreview && ws.wordState === 'active') {
-          const wordStart = word.wordStart ?? group.start;
-          const timeSinceActive = tSec - wordStart;
-          if (timeSinceActive < 0.15) {
-            // 0→0.15s: bounce 1.0 → 1.04 → 1.0
-            const bounceT = timeSinceActive / 0.15;
-            ghostBounce = 1.0 + 0.04 * Math.sin(bounceT * Math.PI);
-          }
-        }
+        const ghostBounce = 1.0;
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
