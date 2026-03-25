@@ -3055,10 +3055,15 @@ export class LyricDancePlayer {
     // freeing frame budget for jitter-free text animation.
     const curSection = this._frameSectionIdx;
     const nowMsBg = performance.now();
+    const snapshotDimsMismatch = this._bgSnapshot
+      ? (this._bgSnapshot.width !== Math.floor(this.width * this._effectiveDpr)
+        || this._bgSnapshot.height !== Math.floor(this.height * this._effectiveDpr))
+      : false;
     const snapshotStale =
       curSection !== this._bgSnapshotSection
       || qTier !== this._bgSnapshotQTier
       || (nowMsBg - this._bgLastBakeMs > this._bgRebakeIntervalMs)
+      || snapshotDimsMismatch
       || this.isExporting; // always rebake during export — CPU doesn't matter, quality does
 
     if (snapshotStale) {
@@ -4136,10 +4141,10 @@ export class LyricDancePlayer {
         this.ctx.translate(this.width / 2 + panX, this.height / 2 + panY);
         this.ctx.scale(zoom, zoom);
         this.ctx.translate(-this.width / 2, -this.height / 2);
-        this.ctx.drawImage(drawCurrent, ox, oy, ow, oh);
+        this._drawImageCoverCropped(this.ctx, drawCurrent, ox, oy, ow, oh);
         this.ctx.restore();
       } else {
-        this.ctx.drawImage(drawCurrent, ox, oy, ow, oh);
+        this._drawImageCoverCropped(this.ctx, drawCurrent, ox, oy, ow, oh);
       }
 
       this.ctx.restore(); // restore filter state
@@ -4170,10 +4175,10 @@ export class LyricDancePlayer {
         this.ctx.translate(this.width / 2 + nextPanX, this.height / 2 + nextPanY);
         this.ctx.scale(nextZoom, nextZoom);
         this.ctx.translate(-this.width / 2, -this.height / 2);
-        this.ctx.drawImage(drawNext, onx, ony, onw, onh);
+        this._drawImageCoverCropped(this.ctx, drawNext, onx, ony, onw, onh);
         this.ctx.restore();
       } else {
-        this.ctx.drawImage(drawNext, onx, ony, onw, onh);
+        this._drawImageCoverCropped(this.ctx, drawNext, onx, ony, onw, onh);
       }
 
       this.ctx.restore();
