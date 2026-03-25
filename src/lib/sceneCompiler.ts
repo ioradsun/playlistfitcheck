@@ -41,8 +41,6 @@ export type ScenePayload = {
   songEnd: number;
 };
 
-export function easeOut(t: number): number { return 1 - Math.pow(1 - t, 3); }
-export function easeIn(t: number): number { return Math.pow(t, 3); }
 export function easeOutBack(t: number): number {
   const c1 = 1.70158;
   const c3 = c1 + 1;
@@ -66,120 +64,6 @@ export interface AnimState {
 // ═══ V3 Motion Characters ═══
 // Six perceptually distinct animations. Entry = character forward. Exit = character reversed.
 export type MotionCharacter = 'slam' | 'rise' | 'drift' | 'snap' | 'bloom' | 'whisper';
-
-/**
- * Compute entry animation state for a motion character.
- * progress: 0 = start of entry, 1 = fully entered
- * intensity: 0..1 scales motion magnitude (from mood config)
- */
-export function computeMotionEntry(character: MotionCharacter, progress: number, intensity: number): AnimState {
-  const ep = easeOut(Math.min(1, progress));
-  const I = Math.max(0, Math.min(1, intensity));
-
-  switch (character) {
-    case 'slam': {
-      // Drop from above. Squash on landing.
-      const squash = ep > 0.85 ? (1 - ep) * 10 * I : 0;
-      return {
-        offsetX: 0,
-        offsetY: 0, // words appear in place — no drop
-        scaleX: 1 + squash * 0.15,
-        scaleY: 1 - squash * 0.15,
-        alpha: Math.min(1, progress * 6),
-        skewX: 0,
-        glowMult: ep > 0.85 ? (1 - ep) * 4 * I : 0,
-        blur: 0,
-        rotation: 0,
-      };
-    }
-    case 'rise': {
-      // Float up from below.
-      return {
-        offsetX: 0,
-        offsetY: 0, // words appear in place — no vertical float
-        scaleX: 1,
-        scaleY: 1,
-        alpha: easeOut(Math.min(1, progress * 2)),
-        skewX: 0,
-        glowMult: 0,
-        blur: 0,
-        rotation: 0,
-      };
-    }
-    case 'drift': {
-      // Slide from left with parallax skew.
-      return {
-        offsetX: 0, // words appear in place — no horizontal slide
-        offsetY: 0,
-        scaleX: 1,
-        scaleY: 1,
-        alpha: easeOut(Math.min(1, progress * 2)),
-        skewX: 0, // no skew — clean appearance
-        glowMult: 0,
-        blur: 0,
-        rotation: 0,
-      };
-    }
-    case 'snap': {
-      // Instant appear.
-      return {
-        offsetX: 0, offsetY: 0,
-        scaleX: 1, scaleY: 1,
-        alpha: progress > 0.01 ? 1 : 0,
-        skewX: 0, glowMult: 0, blur: 0, rotation: 0,
-      };
-    }
-    case 'bloom': {
-      // Scale from center with glow burst.
-      const s = 0.5 + ep * 0.5;
-      return {
-        offsetX: 0, offsetY: 0,
-        scaleX: s,
-        scaleY: s,
-        alpha: easeOut(Math.min(1, progress * 1.5)),
-        skewX: 0,
-        glowMult: (1 - ep) * 2.5 * I,
-        blur: 0,
-        rotation: 0,
-      };
-    }
-    case 'whisper': {
-      // Slow fade. Subtle scale shift.
-      return {
-        offsetX: 0, offsetY: 0,
-        scaleX: 0.96 + ep * 0.04,
-        scaleY: 0.96 + ep * 0.04,
-        alpha: easeIn(Math.min(1, progress * 0.8)),
-        skewX: 0, glowMult: 0, blur: 0, rotation: 0,
-      };
-    }
-    default: {
-      // Fallback = whisper
-      return {
-        offsetX: 0, offsetY: 0,
-        scaleX: 0.96 + ep * 0.04, scaleY: 0.96 + ep * 0.04,
-        alpha: easeIn(Math.min(1, progress * 0.8)),
-        skewX: 0, glowMult: 0, blur: 0, rotation: 0,
-      };
-    }
-  }
-}
-
-/**
- * Compute exit animation state. This is the entry played in reverse
- * with directional fields flipped — guaranteed visual symmetry.
- */
-export function computeMotionExit(character: MotionCharacter, progress: number, intensity: number): AnimState {
-  // progress: 0 = still visible, 1 = fully exited
-  // Run entry in reverse: entry at (1-progress) gives the "unwinding" state
-  const reversed = computeMotionEntry(character, 1 - progress, intensity);
-  // Exit uses alpha/scale only — no positional movement.
-  reversed.offsetX = 0;
-  reversed.offsetY = 0;
-  reversed.skewX *= -1;
-  reversed.rotation *= -1;
-  return reversed;
-}
 
 interface TypographyProfile {
   fontFamily: string;

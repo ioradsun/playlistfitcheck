@@ -5408,17 +5408,6 @@ export class LyricDancePlayer {
     activeGroups.length = 0;
     if (activeGroupIdx >= 0) {
       activeGroups.push(activeGroupIdx);
-
-      // ── OVERLAP: also render the PREVIOUS group if it's still exiting ──
-      // This creates a brief crossfade instead of a blank gap.
-      if (activeGroupIdx > 0) {
-        const prevGroup = groups[activeGroupIdx - 1];
-        const prevExitEnd = prevGroup.end + (prevGroup.exitDuration ?? 0.3) + (prevGroup.lingerDuration ?? 0.1);
-        if (tSec < prevExitEnd) {
-          // Previous group is still in its exit window — render it too
-          activeGroups.unshift(activeGroupIdx - 1);
-        }
-      }
     }
 
     // ═══ BEAT-TO-TEXT: lazy subsystem response cache ═══
