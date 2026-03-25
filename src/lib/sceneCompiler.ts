@@ -726,8 +726,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
     // Reveal → stagger delay
     const staggerVal = revealStyle === 'instant' ? 0
-      : revealStyle === 'stagger_fast' ? 0.04
-      : 0.12; // stagger_slow
+      : revealStyle === 'stagger_fast' ? 0.12   // was 0.04 — too fast to see
+      : 0.25; // stagger_slow — was 0.12 — deliberate pacing
 
     // Hold → linger duration
     const lingerVal = holdClass === 'short_hit' ? 0.1

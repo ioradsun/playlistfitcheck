@@ -109,6 +109,9 @@ export interface WordAnimState {
 
   // Composition scale boost
   centerWordScale: number; // 1.4 for center_word, 1.0 otherwise
+
+  // Per-word reveal rise (px offset that eases to 0 as word fades in)
+  revealRise: number;
 }
 
 /** Final render-ready state per word */
@@ -127,7 +130,7 @@ export interface ChunkAnimState {
 // Constants
 // ─────────────────────────────────────────
 
-const WORD_FADE_SEC = 0.2; // EXTREME: slow visible fade per word
+const WORD_FADE_SEC = 0.15; // 150ms per-word fade in after stagger reveal
 const REVEAL_ANTICIPATION = 0.1; // 100ms before group.start
 const CENTER_WORD_SCALE = 1.8; // EXTREME: center_word is huge
 const BEAT_NUDGE_BASE = 8; // EXTREME: visible bounce
@@ -286,6 +289,8 @@ export function computePhraseState(
   const exitCharacter = resolveExitCharacter(group, moodConfig);
   const suppressExit = exitCharacter === 'none';
   const motionIntensity = resolveMotionIntensity(group, moodConfig.intensity);
+  const pMode = group.presentationMode ?? '';
+  const isRevealMode = pMode.startsWith('horiz') || pMode.startsWith('stack');
 
   const phraseExitDuration = Math.min(groupExitDur, phraseDuration * 0.35);
   const isExiting = !suppressExit && phraseRemaining < phraseExitDuration && phraseRemaining >= 0;
@@ -294,9 +299,11 @@ export function computePhraseState(
     : 0;
 
   // ── Compute entry transform ──
+  // For reveal modes: suppress phrase-level motion. The per-word stagger IS the entry.
+  // For all-at-once modes: phrase-level entry motion plays normally.
   const cap = motionCap(group.words.length);
   let entry: AnimState;
-  if (isEntering) {
+  if (isEntering && !isRevealMode) {
     entry = computeMotionEntry(entryCharacter, entryProgress, motionIntensity);
     entry = {
       ...entry,
@@ -332,10 +339,14 @@ export function computePhraseState(
   const beatNudgeY = pulse * BEAT_NUDGE_BASE;
   const beatScale = BEAT_SCALE_BASE + pulse * BEAT_SCALE_MULT;
 
-  // ── Reveal anchor: aligned with entry animation start ──
-  // Words must be revealed DURING the entry motion, not after it ends.
-  // Otherwise entry motion plays while words are invisible.
-  const revealAnchor = group.start - entryPad;
+  // ── Reveal anchor: mode-aware ──
+  // REVEAL MODES (horiz, stack): stagger IS the entry. Words reveal at group.start.
+  //   The stagger timing is the visual event. No phrase-level entry motion needed.
+  // ALL-AT-ONCE MODES (ghost, impact, wash, vibrate): words visible early.
+  //   Phrase-level entry motion plays while words are already showing.
+  const revealAnchor = isRevealMode
+    ? group.start          // stagger starts when phrase starts
+    : group.start - 0.05;  // tiny anticipation for non-stagger modes
 
   return {
     composition,
@@ -435,19 +446,17 @@ export function computeWordState(
       spotlightAlpha = 0.20; // ghost — always visible at 20%
     }
   } else if (isRevealMode) {
-    // HORIZONTAL / VERTICAL STACK REVEAL:
-    // Unrevealed words = INVISIBLE (0). No preview.
-    // Revealed words = FULL alpha (the reveal IS the animation).
-    // Spoken words = slightly dimmed.
+    // REVEAL MODES: unrevealed = invisible. Revealed = full.
+    // The stagger creates the visual rhythm. Spoken words slightly dim.
     if (!isRevealed) {
-      spotlightAlpha = 0;
+      spotlightAlpha = 0;       // invisible until stagger reveals
     } else if (wordState === 'active') {
-      spotlightAlpha = revealProgress; // fades in via stagger
+      spotlightAlpha = 1.0;     // active word = full white
     } else if (wordState === 'spoken') {
-      spotlightAlpha = 0.75 * revealProgress; // spoken = slightly dimmed
+      spotlightAlpha = 0.65;    // spoken = noticeably dimmed
     } else {
-      // upcoming but revealed — in reveal modes, stagger-revealed words
-      // are immediately full. The stagger IS the pacing.
+      // upcoming but revealed by stagger — full visibility
+      // (stagger already controls WHEN this happens)
       spotlightAlpha = revealProgress;
     }
   } else if (isImpactMode || isWashMode || isVibrateMode) {
@@ -499,6 +508,14 @@ export function computeWordState(
   // ── Composition scale boost ──
   const centerWordScale = phrase.composition === 'center_word' ? CENTER_WORD_SCALE : 1.0;
 
+  // Per-word micro-animation for reveal modes:
+  // Each word rises slightly when it's revealed (the stagger IS the motion)
+  let revealRise = 0;
+  if (!phrase.ghostPreview && phrase.staggerDelay >= 0.005) {
+    // Words rise 15px over their reveal fade
+    revealRise = isRevealed ? (1 - revealProgress) * 15 : 15;
+  }
+
   return {
     isRevealed,
     revealProgress,
@@ -513,6 +530,7 @@ export function computeWordState(
     heroOffsetY,
     soloHeroHidden,
     centerWordScale,
+    revealRise,
   };
 }
 
@@ -608,6 +626,9 @@ export function computeChunkAnim(
 
   // Beat nudge
   offsetY += phrase.beatNudgeY;
+
+  // Per-word reveal rise (stagger modes only)
+  offsetY += wordAnim.revealRise;
 
   // ── ROTATION / SKEW ──
   let rotation = 0;
