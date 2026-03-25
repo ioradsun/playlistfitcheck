@@ -4579,20 +4579,32 @@ export class LyricDancePlayer {
     const rawPulse = beatState?.pulse ?? 0;
     const beatPhaseNow = beatState?.phase ?? 0;
     const hitStr = beatState?.hitStrength ?? 0;
+    const beatStrength = beatState?.strength ?? 0.5;
+    const beatEnergy = beatState?.energy ?? 0.3;
     void beatPhaseNow;
 
-    // Pulse envelope: sharp attack on beat, smooth decay
-    // Using pulse (gaussian on beat) gives a natural bell shape
+    // ═══ DYNAMIC PULSE: each beat's zoom scales with its strength ═══
+    // pulseEnvelope = WHEN (Gaussian timing signal, 0→1→0 per beat)
+    // beatDynamic = HOW MUCH (this specific beat's strength)
+    // bgPulseAmplitude = CEILING (section-level max from IntensityRouter)
     const pulseEnvelope = Math.max(rawPulse, hitStr * 0.8);
-    // Zoom = 1.0 + amplitude × envelope
-    this._bgPulseZoom = 1.0 + mp.bgPulseAmplitude * pulseEnvelope;
 
-    // Brightness flash — proportional to pulse × intensity
-    const beatFlash = pulseEnvelope * mp.intensity;
+    // Per-beat dynamic: combine beat strength + hit onset + instant energy.
+    // Downbeats hit harder. Strong onsets hit harder. Louder moments hit harder.
+    const beatDynamic = Math.min(1.0,
+      beatStrength * 0.4     // positional: downbeat=0.4, offbeat=0.16
+      + hitStr * 0.35        // onset: strong transient = big punch
+      + beatEnergy * 0.25,   // instant energy: louder = bigger
+    );
+
+    // Final zoom = ceiling × timing × per-beat-strength
+    this._bgPulseZoom = 1.0 + mp.bgPulseAmplitude * pulseEnvelope * beatDynamic;
+
+    // Brightness flash and vignette also scale per-beat
+    const beatFlash = pulseEnvelope * beatDynamic * mp.intensity;
     this._bgBeatBrightnessBoost += (beatFlash - this._bgBeatBrightnessBoost) * 0.5;
 
-    // Vignette opens on beat
-    const vignetteBeat = pulseEnvelope * mp.intensity * 0.20;
+    const vignetteBeat = pulseEnvelope * beatDynamic * mp.intensity * 0.20;
     this._vignetteBeatPulse += (vignetteBeat - this._vignetteBeatPulse) * 0.35;
 
     if (beatIndex !== this._lastBeatIndex && beatIndex >= 0) {

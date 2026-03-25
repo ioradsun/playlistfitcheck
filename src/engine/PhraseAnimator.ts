@@ -103,9 +103,12 @@ export function computeWordState(
   void mp; void activeHeroWordIndex;
 
   // ── Reveal timing (stagger only — no fade, instant pop) ──
+  // Use actual Whisper word timestamp for reveal — exact sync with audio.
+  // Ghost preview (staggerDelay=0): all words revealed from group start.
+  // Stagger reveal: each word appears at its actual spoken time.
   const wordRevealTime = phrase.staggerDelay < 0.005
     ? phrase.revealAnchor
-    : phrase.revealAnchor + wordIndex * phrase.staggerDelay;
+    : word.wordStart ?? phrase.revealAnchor;
   const isRevealed = tSec >= wordRevealTime;
 
   // ── Word timing state ──
