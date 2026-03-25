@@ -91,6 +91,7 @@ const TYPOGRAPHY_PROFILES: Record<string, TypographyProfile> = {
 };
 
 const FILLER_WORDS = new Set(['a','an','the','to','of','and','or','but','in','on','at','for','with','from','by','up','down','is','am','are','was','were','be','been','being','it','its','that','this','these','those','i','you','he','she','we','they']);
+const CONNECTOR_WORDS = new Set(['i', 'you', 'we', 'they', 'he', 'she', 'it', 'and', 'but', 'or', 'so', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by', 'if', 'when', 'while', 'that']);
 const MIN_GROUP_DURATION = 0.5;
 const MAX_GROUP_SIZE = 5;
 
@@ -389,8 +390,9 @@ function mechanicalGrouping(wordMeta: WordMetaEntry[]): PhraseGroup[] {
       const isNaturalBreak = /[,\.!?;]$/.test(wm.word);
       const isMaxSize = current.length >= MAX_GROUP_SIZE;
       const isLast = i === words.length - 1;
+      const isConnector = CONNECTOR_WORDS.has(wm.word.replace(/[^a-zA-Z']/g, '').toLowerCase());
       if (isLast) flushGroup();
-      else if ((isNaturalBreak || isMaxSize) && duration >= MIN_GROUP_DURATION) flushGroup();
+      else if ((isNaturalBreak || isMaxSize) && duration >= MIN_GROUP_DURATION && !isConnector) flushGroup();
     }
   }
   groups.sort((a, b) => a.start - b.start);

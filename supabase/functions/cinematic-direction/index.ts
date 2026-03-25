@@ -26,6 +26,16 @@ For EACH section:
 - "sectionIndex": integer
 - "description": vivid 1-sentence visual scene rooted in the song's world
 - "dominantColor": bold hex (#RRGGBB), unique per section
+- "visualMood": one of: intimate | anthemic | dreamy | aggressive | melancholy | euphoric | nostalgic | triumphant | raw | ethereal | haunted | celestial | noir | rebellious
+- "texture": particle effect for atmosphere. One of: dust | embers | smoke | rain | snow | stars | fireflies | petals | ash | crystals | confetti | lightning | bubbles | moths | glare | glitch
+
+Choose texture to match the section's mood and imagery:
+  Emotional/quiet: dust, fireflies, moths, stars
+  Warm/intense: embers, smoke, ash
+  Cold/ethereal: snow, crystals, rain
+  Celebratory: confetti, petals, glare
+  Dark/edgy: lightning, glitch, smoke
+  Dreamy/magical: fireflies, bubbles, stars, petals
 
 Return ONLY valid JSON. No markdown.
 
@@ -33,7 +43,7 @@ Return ONLY valid JSON. No markdown.
   "description": "A chilling descent from emotional peaks into cold isolation",
   "sceneTone": "dark",
   "sections": [
-    { "sectionIndex": 1, "description": "A solitary figure in a frosting room", "dominantColor": "#A5B4FC" }
+    { "sectionIndex": 1, "description": "A solitary figure in a frosting room", "dominantColor": "#A5B4FC", "visualMood": "melancholy", "texture": "snow" }
   ]
 }
 `;
@@ -51,72 +61,36 @@ You will receive a word stream:
 GROUP BY THOUGHT BREAKS:
   "Tell me," → complete thought. STOP. → phrase 1
   "is your soul for sale?" → complete question. STOP. → phrase 2
-
   A thought can be 1-6 words. Size follows meaning.
 
 HARD RULES:
-  1. ALWAYS start a new phrase after a [BREATH] or [pause] marker. Never group words across a pause.
+  1. ALWAYS start a new phrase after a [BREATH] or [pause] marker.
   2. Max 6 words per phrase.
   3. Every w-number belongs to exactly one phrase. No gaps, no overlaps.
-  4. heroWord must be EXACT from the stream but with trailing punctuation stripped (no commas, periods, etc).
+  4. heroWord: the longest non-filler word in the phrase. UPPERCASE. Strip trailing punctuation.
+  5. NEVER end a phrase on a connector word. These words start the NEXT thought:
+     - Pronouns: I, you, we, they, he, she, it
+     - Conjunctions: and, but, or, so, because, if, when, while, that
+     - Articles: the, a, an
+     - Prepositions: in, on, at, to, for, of, with, from
+     
+     BAD:  "cut the rope and I" / "won't look back"
+     GOOD: "cut the rope" / "and I won't look back"
+     
+     BAD:  "I know that the" / "world is on fire"  
+     GOOD: "I know that" / "the world is on fire"
 
-SECTION LABELS (REQUIRED on every phrase — no exceptions):
+SECTION LABELS (REQUIRED on every phrase):
   "section": "verse" | "chorus" | "bridge" | "outro"
   Chorus = repeated lyrics that appear 2+ times in the song.
-  If the exact same words come back later, those phrases are chorus.
-  Everything else is verse unless it's clearly a bridge or outro.
-  EVERY phrase MUST have a section field. This is not optional.
-
-HERO WORD:
-  The most concrete, visual, imageable word in the phrase.
-  
-  GOOD hero words: nouns (mountain, glass, fire, ocean, money, city, rocket)
-                    strong verbs (crashing, burning, surfing, breaking)
-                    vivid adjectives (frozen, golden, hollow, heavy)
-  
-  BAD hero words — NEVER pick these:
-    pronouns: I, you, my, me, we, they, it, her, him, his, your
-    articles: the, a, an
-    prepositions: in, on, at, to, for, of, with, from
-    conjunctions: and, but, or, so, if
-    generic verbs: is, was, been, am, are, have, had, do, did, get, got, going, want
-    filler: yeah, oh, ooh, yo, uh, like, just, that, this, what, been, should, would, could
-    
-  If a phrase has NO concrete/visual word, pick the LONGEST non-filler word.
-  heroWord must be >= 200ms duration (check the timestamps).
-  Strip trailing punctuation from heroWord: write "DOCTOR" not "DOCTOR,"
-
-HERO WORD EFFECTS (optional, ~15-25 per song):
-  For hero words that evoke a clear visual, describe what the word LOOKS LIKE.
-  The effect appears INSIDE the letter shapes.
-
-  Structured fields:
-    type: fill | gradient | crack | flicker | edge_glow | drip | sweep | outline | echo | drift | weight | fade
-    direction: left | right | top | bottom | center | edges
-    amount: 0-100 (percentage)
-    color: hex color matching the word's feeling
-    animated: true if effect progresses over hold duration
-    decomp: what word dissolves into on exit — frost | fire | water | smoke | sparks | shatter | dust | none
-
-  Examples:
-    "half" → { type: "fill", direction: "left", amount: 50, color: "#FFD700" }
-    "crashing" → { type: "crack", direction: "top", animated: true, decomp: "shatter" }
-    "frozen" → { type: "sweep", direction: "edges", color: "#88ccff", decomp: "frost" }
-
-  Most hero words get NO effect. Only tag when meaning clearly maps to a visual.
-
-hookPhrase (REQUIRED):
-  The most repeated phrase text in the song — usually the chorus hook.
-  Example: "surfing on a wave"
+  EVERY phrase MUST have a section field.
 
 Return ONLY valid JSON. No markdown.
 {
   "phrases": [
-    { "wordRange": [0, 1], "heroWord": "Tell", "section": "verse" },
-    { "wordRange": [35, 40], "heroWord": "snowing", "section": "verse", "effect": { "type": "drip", "direction": "top", "color": "#ffffff", "animated": true, "decomp": "frost" } },
-    { "wordRange": [104, 109], "heroWord": "Heaven", "section": "chorus" }
-  ],
-  "hookPhrase": "surfing on a wave"
+    { "wordRange": [0, 2], "heroWord": "TELL", "section": "verse" },
+    { "wordRange": [3, 7], "heroWord": "SOUL", "section": "verse" }
+  ]
 }
 `;
 
@@ -189,11 +163,14 @@ const ENUMS = {
     "hopeful",
     "raw",
     "hypnotic",
+    "ethereal",
+    "haunted",
+    "celestial",
+    "noir",
+    "rebellious",
   ],
-  texture: ["fire", "rain", "snow", "smoke", "dust", "stars", "glare"],
+  texture: ["dust", "embers", "smoke", "rain", "snow", "stars", "fireflies", "petals", "ash", "crystals", "confetti", "lightning", "bubbles", "moths", "glare", "glitch", "fire"],
   emotionalArc: ["slow-burn", "surge", "collapse", "dawn", "eruption"],
-  elementalClass: ["FIRE", "WATER", "FROST", "SMOKE", "ELECTRIC"],
-  atmosphereState: ["still", "drifting", "falling", "swirling"],
 } as const;
 
 const LYRIC_FILLER = new Set([
@@ -478,9 +455,12 @@ function enforcePhraseLimits(
 
     for (let i = start; i < end; i++) {
       if (i + 1 >= words.length) continue;
+      const lastWord = words[i].word.replace(/[^a-zA-Z']/g, "").toLowerCase();
+      const isConnector = CONNECTORS.has(lastWord);
       const gap = words[i + 1].start - words[i].end;
-      if (gap > bestGap) {
-        bestGap = gap;
+      const effectiveGap = isConnector ? 0 : gap;
+      if (effectiveGap > bestGap) {
+        bestGap = effectiveGap;
         bestSplitIdx = i;
       }
     }
@@ -627,6 +607,49 @@ function mergeOrphanPhrases(
   return sorted;
 }
 
+const CONNECTORS = new Set([
+  "i", "you", "we", "they", "he", "she", "it", "im", "i'm",
+  "and", "but", "or", "so", "because", "if", "when", "while", "that", "then",
+  "the", "a", "an",
+  "in", "on", "at", "to", "for", "of", "with", "from", "by",
+  "won't", "dont", "don't", "can't", "didn't", "isn't", "wasn't",
+  "couldn't", "wouldn't", "shouldn't", "ain't", "wont", "cant", "didnt",
+]);
+
+function repairPhraseBoundaries(
+  phrases: Array<{ wordRange: [number, number]; heroWord?: string; section?: string }>,
+  words: Array<{ word: string; start: number; end: number }>,
+): Array<{ wordRange: [number, number]; heroWord?: string; section?: string }> {
+  if (phrases.length < 2 || words.length === 0) return phrases;
+  const sorted = [...phrases].sort((a, b) => a.wordRange[0] - b.wordRange[0]);
+  let changed = true;
+  let iterations = 0;
+
+  while (changed && iterations < 3) {
+    changed = false;
+    iterations++;
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const phrase = sorted[i];
+      const next = sorted[i + 1];
+      const lastWordIdx = phrase.wordRange[1];
+      if (phrase.wordRange[0] >= phrase.wordRange[1]) continue;
+      if (lastWordIdx < words.length) {
+        const lastWord = words[lastWordIdx].word.replace(/[^a-zA-Z']/g, "").toLowerCase();
+        if (CONNECTORS.has(lastWord)) {
+          phrase.wordRange[1] = lastWordIdx - 1;
+          next.wordRange[0] = lastWordIdx;
+          changed = true;
+          if (phrase.heroWord) {
+            const heroClean = phrase.heroWord.toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (heroClean === lastWord) phrase.heroWord = undefined;
+          }
+        }
+      }
+    }
+  }
+  return sorted.filter((p) => p.wordRange[0] <= p.wordRange[1]);
+}
+
 function buildWordUserMessage(
   title: string,
   artist: string,
@@ -685,8 +708,8 @@ function buildWordUserMessage(
     msg += "\n";
   }
 
-  msg += "Return JSON only. EVERY phrase needs section. hookPhrase is REQUIRED.\n";
-  msg += '{ "phrases": [{ "wordRange": [0,1], "heroWord": "word", "section": "verse" }], "hookPhrase": "the hook" }';
+  msg += "Return JSON only. EVERY phrase needs section.\n";
+  msg += '{ "phrases": [{ "wordRange": [0,2], "heroWord": "WORD", "section": "verse" }] }';
   return msg;
 }
 
@@ -778,15 +801,9 @@ function validateScene(
 
   const DEFAULTS: Record<string, string> = {
     sceneTone: "dark",
-    typography: "clean-modern",
-    texture: "dust",
-    emotionalArc: "slow-burn",
   };
   for (const key of [
     "sceneTone",
-    "typography",
-    "texture",
-    "emotionalArc",
   ] as const) {
     const allowed = ENUMS[key] as readonly string[];
     if (!allowed.includes(v[key])) {
@@ -870,18 +887,18 @@ function validateScene(
           ? `${mood} scene: ${lyricsExcerpt}`
           : `${mood} cinematic landscape`;
       }
-      if (
-        s.texture !== undefined &&
-        !(ENUMS.texture as readonly string[]).includes(s.texture)
-      )
-        delete s.texture;
-      if (
-        s.atmosphereState !== undefined &&
-        !(ENUMS.atmosphereState as readonly string[]).includes(
-          s.atmosphereState,
-        )
-      )
-        delete s.atmosphereState;
+      if (!s.texture || !(ENUMS.texture as readonly string[]).includes(s.texture)) {
+        const moodTextureMap: Record<string, string> = {
+          intimate: "fireflies", anthemic: "embers", dreamy: "stars",
+          aggressive: "smoke", melancholy: "rain", euphoric: "confetti",
+          eerie: "moths", vulnerable: "dust", triumphant: "glare",
+          nostalgic: "dust", defiant: "lightning", hopeful: "petals",
+          raw: "ash", hypnotic: "fireflies",
+          ethereal: "crystals", haunted: "smoke", celestial: "stars",
+          noir: "smoke", rebellious: "embers",
+        };
+        s.texture = moodTextureMap[s.visualMood] || "dust";
+      }
       delete s.motion;
       delete s.atmosphere;
       delete s.typography;
@@ -965,24 +982,7 @@ function validateWords(
       delete p.section;
     }
 
-    if (p.effect !== undefined) {
-      if (!p.effect || typeof p.effect !== "object") {
-        delete p.effect;
-      } else {
-        if (typeof p.effect.type !== "string") delete p.effect;
-        if (p.effect) {
-          if (p.effect.direction !== undefined && typeof p.effect.direction !== "string") delete p.effect.direction;
-          if (p.effect.amount !== undefined) {
-            const n = Number(p.effect.amount);
-            if (Number.isFinite(n)) p.effect.amount = Math.max(0, Math.min(100, Math.round(n)));
-            else delete p.effect.amount;
-          }
-          if (p.effect.color !== undefined && (typeof p.effect.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(p.effect.color))) delete p.effect.color;
-          if (p.effect.animated !== undefined) p.effect.animated = Boolean(p.effect.animated);
-          if (p.effect.decomp !== undefined && typeof p.effect.decomp !== "string") delete p.effect.decomp;
-        }
-      }
-    }
+    delete p.effect;
   }
 
   if (v.hookPhrase !== undefined && typeof v.hookPhrase !== "string") {
@@ -1089,7 +1089,7 @@ async function callScene(
             {
               role: "user",
               content:
-                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", and "sections" array. No markdown. No explanation.',
+                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", and "sections" array. Each section needs: sectionIndex, description, dominantColor, visualMood, texture. No markdown.',
             },
           ],
           response_format: { type: "json_object" },
@@ -1251,6 +1251,9 @@ async function callWords(
     result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
     // 4. Validate + fill heroWords
     fillMissingHeroWords(result.value.phrases, words);
+    if (words && words.length > 0) {
+      result.value.phrases = repairPhraseBoundaries(result.value.phrases, words);
+    }
   }
 
   if (
