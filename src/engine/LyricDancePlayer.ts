@@ -4601,12 +4601,14 @@ export class LyricDancePlayer {
       // ── Phrase animation state from PhraseAnimator ──
       // Mood config is ONLY used as fallback for ai_moment phrases (no presentation mode).
       // Presentation mode cards are self-contained — they define their own timing + intensity.
+      const prevGroupEnd = (groupIdx > 0) ? groups[groupIdx - 1].end : -Infinity;
+
       const beatForAnim: AnimBeatState | null = beatState
         ? { pulse: beatState.pulse ?? 0, phase: beatState.phase ?? 0 }
         : null;
 
       const phraseState = computePhraseState(
-        group, nextGroupStart, tSec, beatForAnim, this.width, mp,
+        group, nextGroupStart, prevGroupEnd, tSec, beatForAnim, this.width, mp,
       );
 
       if (!this._debugModeLogged && groupIdx === activeGroups[activeGroups.length - 1]) {

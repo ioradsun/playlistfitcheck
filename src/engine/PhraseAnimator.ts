@@ -12,6 +12,8 @@ export interface PhraseAnimState {
   groupEnd: number;
   heroType: 'word' | 'phrase';
   pushInScale: number;
+  /** 0-1 alpha for exit/entry transitions. 1.0 when no transition active. */
+  transitionAlpha: number;
 }
 
 export interface WordAnimState {
@@ -30,6 +32,9 @@ export interface ChunkAnimState {
 }
 
 export interface AnimBeatState { pulse: number; phase: number; }
+const EXIT_DURATION = 0.5;   // 500ms zoom-through exit
+const ENTRY_DURATION = 0.3;  // 300ms pull-back entry
+const GAP_THRESHOLD = 0.75;  // 750ms minimum gap to trigger transition
 
 // ─── 1. Resolve active group ────────────────────────────────
 export function resolveActiveGroup(
@@ -43,20 +48,64 @@ export function resolveActiveGroup(
 
 // ─── 2. Phrase state ────────────────────────────────────────
 export function computePhraseState(
-  group: CompiledPhraseGroup, nextGroupStart: number, tSec: number,
+  group: CompiledPhraseGroup, nextGroupStart: number, prevGroupEnd: number, tSec: number,
   beatState: AnimBeatState | null, canvasWidth: number, mp: MotionProfile,
 ): PhraseAnimState {
-  void nextGroupStart;
-  void beatState;
-  void canvasWidth;
-  void mp;
+  void beatState; void canvasWidth; void mp;
 
   const phraseDur = Math.max(0.01, group.end - group.start);
+  const gapAfter = nextGroupStart - group.end;
+  const gapBefore = group.start - prevGroupEnd;
+
+  // ── Phase 1: Push-in during active phrase ──
   let pushInScale = 1.0;
-  if (phraseDur >= 1.0) {
-    const elapsed = Math.max(0, tSec - group.start);
-    const progress = Math.min(1, elapsed / phraseDur);
-    pushInScale = 1.0 + Math.sqrt(progress) * 0.02;
+  let transitionAlpha = 1.0;
+
+  if (tSec < group.start) {
+    // ── ENTRY: pull-back from zoomed in ──
+    // Only if there was a 750ms+ gap before this phrase
+    if (gapBefore >= GAP_THRESHOLD) {
+      const entryStart = group.start - ENTRY_DURATION;
+      if (tSec >= entryStart) {
+        // progress: 0 (just starting) → 1 (at group.start)
+        const t = (tSec - entryStart) / ENTRY_DURATION;
+        // Ease-out: decelerating, settles into place
+        const eased = 1 - (1 - t) * (1 - t);
+        // Scale: 1.4 → 1.0
+        pushInScale = 1.4 - eased * 0.4;
+        // Alpha: 0 → 1
+        transitionAlpha = eased;
+      } else {
+        // Before entry window — invisible
+        transitionAlpha = 0;
+        pushInScale = 1.4;
+      }
+    }
+  } else if (tSec >= group.end && gapAfter >= GAP_THRESHOLD) {
+    // ── EXIT: zoom-through, accelerating away ──
+    const exitElapsed = tSec - group.end;
+    if (exitElapsed < EXIT_DURATION) {
+      // progress: 0 (just ended) → 1 (fully gone)
+      const t = exitElapsed / EXIT_DURATION;
+      // Ease-in: accelerating — rushes past you
+      const eased = t * t * t;
+      // Scale: 1.02 → 2.5 (exponential feeling)
+      pushInScale = 1.02 + eased * 1.48;
+      // Alpha: 1 → 0
+      transitionAlpha = 1 - t * t;
+    } else {
+      // Past exit window — invisible
+      transitionAlpha = 0;
+      pushInScale = 2.5;
+    }
+  } else {
+    // ── ACTIVE: normal push-in ──
+    if (phraseDur >= 1.0) {
+      const elapsed = Math.max(0, tSec - group.start);
+      const progress = Math.min(1, elapsed / phraseDur);
+      pushInScale = 1.0 + Math.sqrt(progress) * 0.02;
+    }
+    transitionAlpha = 1.0;
   }
 
   return {
@@ -64,6 +113,7 @@ export function computePhraseState(
     groupEnd: group.end,
     heroType: group.heroType ?? 'word',
     pushInScale,
+    transitionAlpha,
   };
 }
 
@@ -153,7 +203,8 @@ export function computeWordStateInto(
 export function computeChunkAnim(
   phrase: PhraseAnimState, wordAnim: WordAnimState,
 ): ChunkAnimState {
-  const alpha = wordAnim.soloHeroHidden ? 0 : 1.0;
+  const baseAlpha = wordAnim.soloHeroHidden ? 0 : 1.0;
+  const alpha = baseAlpha * phrase.transitionAlpha;
   const scale = wordAnim.waveScale * phrase.pushInScale;
 
   return {
