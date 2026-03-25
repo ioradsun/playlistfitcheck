@@ -26,9 +26,9 @@ export interface MotionProfile {
   particleSpeedMult: number;
 }
 
-const ENERGY_TAU = 2.0;
-const BRIGHTNESS_TAU = 3.0;
-const TREND_TAU = 4.0;
+const ENERGY_TAU = 0.8; // responds to section changes within ~1 beat at 120bpm
+const BRIGHTNESS_TAU = 1.2; // mood shifts track within ~2 beats
+const TREND_TAU = 2.0; // trend stays slow — building/dropping is the only slow signal
 
 const CAMERA_THRESHOLD = 0.3;
 const SYNC_THRESHOLD = 0.7;
