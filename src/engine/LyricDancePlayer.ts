@@ -2939,12 +2939,6 @@ export class LyricDancePlayer {
   private _resolveAndCachePalette(secIdx: number): string[] {
     const raw = this._resolveCurrentPalette(secIdx);
     this._currentSectionPalette = deserializeSectionPalette(raw);
-    // ── Lyric video: always white text on dark background ──
-    this._currentSectionPalette = {
-      ...this._currentSectionPalette,
-      isLight: false,
-      textBase: '#ffffff',
-    };
     return raw;
   }
 
@@ -3540,42 +3534,7 @@ export class LyricDancePlayer {
       const hasGlow = glowBlur >= 0.01;
       if (hasGlow !== glowPass) return;
       this.ctx.globalAlpha = drawAlpha;
-      // Lyric video safety net: if background is dark, ensure text is bright
-      let textColor = chunk.color ?? '#ffffff';
-      if (!this._currentSectionPalette?.isLight) {
-        // Dark background — check if text color is too dark
-        const _r = parseInt(textColor.slice(1, 3), 16) || 0;
-        const _g = parseInt(textColor.slice(3, 5), 16) || 0;
-        const _b = parseInt(textColor.slice(5, 7), 16) || 0;
-        const _lum = (0.299 * _r + 0.587 * _g + 0.114 * _b) / 255;
-        if (_lum < 0.5) textColor = '#ffffff';
-      }
-      // Elemental words get a tinted base color
-      let _wordColor = textColor;
-      const _etKey = this.cleanWord((chunk.text ?? '') as string);
-      const _etDir = _etKey ? this.resolvedState.wordDirectivesMap[_etKey] ?? null : null;
-      if (_etDir?.elementalClass) {
-        switch (_etDir.elementalClass) {
-          case 'FROST':
-          case 'ICE':
-            _wordColor = '#66bbff';
-            break;
-          case 'FIRE':
-            _wordColor = '#ff8833';
-            break;
-          case 'WATER':
-          case 'RAIN':
-            _wordColor = '#3399ff';
-            break;
-          case 'SMOKE':
-            _wordColor = '#aaaaaa';
-            break;
-          case 'ELECTRIC':
-            _wordColor = '#00ddff';
-            break;
-        }
-      }
-      this.ctx.fillStyle = _wordColor;
+      this.ctx.fillStyle = chunk.color ?? '#ffffff';
 
       const dpr = this._effectiveDpr;
       const heroDrawX = Math.round(drawX * dpr) / dpr;
@@ -5094,17 +5053,6 @@ export class LyricDancePlayer {
     const lb = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
     return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
   }
-
-  /** Blend two hex colors by t (0 = a, 1 = b) */
-  private _blendHex(a: string, b: string, t: number): string {
-    const pa = a.replace('#', '');
-    const pb = b.replace('#', '');
-    const r = Math.round(parseInt(pa.substring(0, 2), 16) * (1 - t) + parseInt(pb.substring(0, 2), 16) * t);
-    const g = Math.round(parseInt(pa.substring(2, 4), 16) * (1 - t) + parseInt(pb.substring(2, 4), 16) * t);
-    const bl = Math.round(parseInt(pa.substring(4, 6), 16) * (1 - t) + parseInt(pb.substring(4, 6), 16) * t);
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
-  }
-
   private renderFilmGrain(intensity: number, size: number): void {
     const grainW = Math.ceil(this.width / Math.max(1, size * 2));
     const grainH = Math.ceil(this.height / Math.max(1, size * 2));
@@ -5516,10 +5464,6 @@ export class LyricDancePlayer {
         }
       }
 
-      // ── Color resolution (stays in renderer — needs palette access) ──
-      const bgIsLight = this._currentSectionPalette?.isLight ?? false;
-      const baseColor = this._currentSectionPalette?.textBase ?? '#ffffff';
-
       // ── Build chunks ──
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
@@ -5596,59 +5540,7 @@ export class LyricDancePlayer {
         chunk.skewX = anim.skewX;
         chunk.blur = 0; // clean — no per-word blur
 
-        // Color: base → semantic → accent → elemental (handled in drawChunkText)
-        {
-          let rawColor = baseColor;
-          if (word.hasSemanticColor) {
-            const semColor = word.color;
-            rawColor = bgIsLight
-              ? this._blendHex(semColor, '#1a1a2e', 0.35)
-              : this._blendHex(semColor, '#ffffff', 0.35);
-          }
-          if (ws.effectiveHero && ws.wordState === 'active') {
-            rawColor = this._currentSectionPalette?.accent ?? this._framePalette?.[1] ?? '#FFD700';
-          }
-          chunk.color = rawColor;
-        }
-
-        // ── Elemental wash: white → element color over hold ──
-        if (phraseState.elementalWash) {
-          const holdStart = phraseState.groupStart;
-          const holdEnd = phraseState.groupEnd;
-          const holdDur = Math.max(0.01, holdEnd - holdStart);
-          const holdProgress = Math.max(0, Math.min(1, (tSec - holdStart) / holdDur));
-
-          if (holdProgress < 0.4) {
-            // Phase 1: white
-            chunk.color = '#ffffff';
-          } else if (holdProgress < 0.8) {
-            // Phase 2: sweep — each word transitions at different time
-            const washProgress = (holdProgress - 0.4) / 0.4;
-            const wordWashStart = wi / Math.max(1, group.words.length - 1);
-            const wordWash = Math.max(0, Math.min(1, (washProgress - wordWashStart * 0.5) * 2.5));
-
-            // Find elemental color for this word (or FROST default)
-            const wClean = word.clean || '';
-            const wDir = wClean ? (this.resolvedState?.wordDirectivesMap?.[wClean] ?? null) : null;
-            const elClass = (wDir as any)?.elementalClass ?? 'FROST';
-            const elColors: Record<string, string> = {
-              FROST: '#66bbff', FIRE: '#ff8833', WATER: '#3399ff',
-              SMOKE: '#aaaaaa', ELECTRIC: '#00ddff', ICE: '#66bbff',
-            };
-            const targetColor = elColors[elClass] ?? '#66bbff';
-            chunk.color = this._blendHex('#ffffff', targetColor, wordWash);
-          } else {
-            // Phase 3: fully colored
-            const wClean = word.clean || '';
-            const wDir = wClean ? (this.resolvedState?.wordDirectivesMap?.[wClean] ?? null) : null;
-            const elClass = (wDir as any)?.elementalClass ?? 'FROST';
-            const elColors: Record<string, string> = {
-              FROST: '#66bbff', FIRE: '#ff8833', WATER: '#3399ff',
-              SMOKE: '#aaaaaa', ELECTRIC: '#00ddff', ICE: '#66bbff',
-            };
-            chunk.color = elColors[elClass] ?? '#66bbff';
-          }
-        }
+        chunk.color = word.color ?? '#ffffff';
 
         // Glow (hero words only, capped)
         const glowCap = this._activeEffects.glowCap;

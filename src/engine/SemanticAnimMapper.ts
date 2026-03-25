@@ -25,7 +25,6 @@ import type { MotionCharacter } from '@/lib/sceneCompiler';
 
 export interface SemanticOverride {
   motionCharacter?: MotionCharacter;
-  colorOverride?: string;
   /** Extra glow multiplier (stacks with existing glow pipeline) */
   glowMult?: number;
   /** Elemental particle class — spreads to the entire phrase at render time */
@@ -42,8 +41,7 @@ export function getSemanticOverride(word: string): SemanticOverride | null {
 
   // Walk the rule categories in priority order.
   // First match wins — categories are ordered from most specific to most general.
-  return matchColor(clean)
-    ?? matchRotation(clean)
+  return matchRotation(clean)
     ?? matchVerticalMotion(clean)
     ?? matchHorizontalMotion(clean)
     ?? matchImpact(clean)
@@ -71,44 +69,6 @@ export function getSemanticOverride(word: string): SemanticOverride | null {
 // Pattern: Set of stems/words → SemanticOverride
 // Uses startsWith for stems (e.g. "burn" matches "burning", "burned")
 // Uses exact match for short/ambiguous words (e.g. "red", "up")
-
-// ── COLORS ────────────────────────────────────────────────────
-// "The word is 'red', it should turn red."
-
-const COLOR_MAP: [string[], string][] = [
-  [['red'],                           '#EF4444'],
-  [['blue'],                          '#3B82F6'],
-  [['green'],                         '#22C55E'],
-  [['gold', 'golden'],               '#FFD700'],
-  [['purple'],                        '#A855F7'],
-  [['pink'],                          '#EC4899'],
-  [['orange'],                        '#F97316'],
-  [['yellow'],                        '#FBBF24'],
-  [['white'],                         '#FFFFFF'],
-  [['black'],                         '#1A1A2E'],
-  [['silver'],                        '#C0C0C0'],
-  [['crimson'],                       '#DC143C'],
-  [['scarlet'],                       '#FF2400'],
-  [['violet'],                        '#8B5CF6'],
-  [['neon'],                          '#39FF14'],
-  [['ruby'],                          '#E0115F'],
-  [['emerald'],                       '#50C878'],
-  [['sapphire'],                      '#0F52BA'],
-  [['copper'],                        '#B87333'],
-  [['bronze'],                        '#CD7F32'],
-  [['ivory'],                         '#FFFFF0'],
-  [['grey', 'gray'],                  '#9CA3AF'],
-  [['blood', 'bleed', 'bleeding'],    '#8B0000'],
-];
-
-function matchColor(w: string): SemanticOverride | null {
-  for (const [words, color] of COLOR_MAP) {
-    if (words.some(c => w === c || (c.length >= 4 && w.startsWith(c)))) {
-      return { colorOverride: color, glowMult: 0.5 };
-    }
-  }
-  return null;
-}
 
 // ── ROTATION ──────────────────────────────────────────────────
 // "Clockwork spun around like a clock."
@@ -177,7 +137,7 @@ const WATER_WORDS = ['wave', 'waves', 'ocean', 'surf', 'surfing', 'surfin', 'tid
 
 function matchWater(w: string): SemanticOverride | null {
   if (WATER_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { motionCharacter: 'drift', colorOverride: '#38BDF8', elementalClass: 'WATER' };
+    return { motionCharacter: 'drift', elementalClass: 'WATER' };
   }
   return null;
 }
@@ -187,7 +147,7 @@ const FIRE_WORDS = ['fire', 'flame', 'flames', 'burn', 'burning', 'blaze', 'blaz
 
 function matchFire(w: string): SemanticOverride | null {
   if (FIRE_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { motionCharacter: 'rise', colorOverride: '#FF8C00', glowMult: 2.0, elementalClass: 'FIRE' };
+    return { motionCharacter: 'rise', glowMult: 2.0, elementalClass: 'FIRE' };
   }
   return null;
 }
@@ -197,7 +157,7 @@ const COLD_WORDS = ['freeze', 'frozen', 'ice', 'icy', 'cold', 'frost', 'frosty',
 
 function matchCold(w: string): SemanticOverride | null {
   if (COLD_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { motionCharacter: 'snap', colorOverride: '#A8D8EA', elementalClass: 'FROST' };
+    return { motionCharacter: 'snap', elementalClass: 'FROST' };
   }
   return null;
 }
@@ -207,7 +167,7 @@ const LIGHT_WORDS = ['light', 'lights', 'shine', 'shining', 'shiny', 'glow', 'gl
 
 function matchLight(w: string): SemanticOverride | null {
   if (LIGHT_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { motionCharacter: 'bloom', colorOverride: '#FFD700', glowMult: 2.5, elementalClass: 'ELECTRIC' };
+    return { motionCharacter: 'bloom', glowMult: 2.5, elementalClass: 'ELECTRIC' };
   }
   return null;
 }
@@ -217,7 +177,7 @@ const DARK_WORDS = ['dark', 'darkness', 'shadow', 'shadows', 'midnight', 'night'
 
 function matchDark(w: string): SemanticOverride | null {
   if (DARK_WORDS.some(r => w === r || (r.length >= 4 && w.startsWith(r)))) {
-    return { motionCharacter: 'whisper', colorOverride: '#2D2D3F', glowMult: 0, elementalClass: 'SMOKE' };
+    return { motionCharacter: 'whisper', glowMult: 0, elementalClass: 'SMOKE' };
   }
   return null;
 }

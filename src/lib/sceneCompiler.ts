@@ -3,7 +3,6 @@ import { enrichSections } from "@/engine/directionResolvers";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { FrameRenderState } from "@/engine/presetDerivation";
-import { getSemanticOverride } from "@/engine/SemanticAnimMapper";
 import { fitTextToViewport, type MeasureContext } from "@/engine/textLayout";
 import {
   deriveAllSectionMods,
@@ -74,7 +73,7 @@ interface TypographyProfile {
 }
 
 export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
-interface WordDirectiveLike { word?: string; colorOverride?: string; emphasisLevel?: number; elementalClass?: string; isolation?: boolean; }
+interface WordDirectiveLike { word?: string; emphasisLevel?: number; elementalClass?: string; isolation?: boolean; }
 interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; isHeroWord?: boolean; }
 export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; phraseHeroWord?: string; }
 type StoryboardEntryLike = { lineIndex?: number; heroWord?: string; shotType?: string; };
@@ -608,7 +607,7 @@ function assignPresentationModes(
   }
 }
 
-export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; color: string; hasSemanticColor?: boolean; isHeroWord?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; semanticAlphaMax: number; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
+export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; color: string; isHeroWord?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; semanticAlphaMax: number; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
 export interface CompiledPhraseGroup {
   lineIndex: number;
   groupIndex: number;
@@ -914,9 +913,15 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const positions = groupLayout?.positions ?? [];
     const groupFontSize = groupLayout?.fontSize ?? 56;
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
-      // ═══ Semantic auto-map: word meaning → color/glow (the word IS the directive) ═══
-      const autoSemantic = getSemanticOverride(wm.clean);
       const pos = positions[wi] ?? { x: REF_W / 2, y: REF_H / 2, width: 40 };
+      const elClass = (wm.directive as any)?.elementalClass ?? null;
+      const ELEMENTAL_COLORS: Record<string, string> = {
+        FROST: '#66bbff', ICE: '#66bbff',
+        FIRE: '#ff8833',
+        WATER: '#3399ff', RAIN: '#3399ff',
+        SMOKE: '#aaaaaa',
+        ELECTRIC: '#00ddff',
+      };
       const base: CompiledWord = {
         id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
         text: baseTypography.textTransform === 'uppercase'
@@ -936,8 +941,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
           || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, ''))
           || (Math.max(0, wm.end - wm.start) >= 0.5),
         isAnchor: wi === group.anchorWordIdx,
-        color: autoSemantic?.colorOverride ?? resolveV3Palette(payload, ((wm.start + (payload.lines[group.lineIndex]?.end ?? wm.start)) * 0.5 - payload.songStart) / Math.max(0.01, payload.songEnd - payload.songStart))[2] ?? '#ffffff',
-        hasSemanticColor: Boolean(autoSemantic?.colorOverride),
+        color: elClass ? (ELEMENTAL_COLORS[elClass] ?? '#ffffff') : '#ffffff',
         isFiller: isFillerWord(wm.word),
         emphasisLevel: computeEmphasisFromDuration(wm.end - wm.start),
         wordDuration: Math.max(0, wm.end - wm.start),
