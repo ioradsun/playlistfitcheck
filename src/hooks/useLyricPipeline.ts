@@ -1126,11 +1126,9 @@ export function useLyricPipeline({
                   .eq("artist_slug", _artistSlug)
                   .eq("song_slug", _songSlug)
                   .eq("user_id", user.id)
-                  .then(() => {
-                    console.log('[Pipeline] Persisted word-level data to shareable_lyric_dances');
-                  })
-                  .catch((err: any) => {
-                    console.warn('[Pipeline] Failed to persist word data to dance row:', err);
+                  .then(({ error }) => {
+                    if (error) console.warn('[Pipeline] Failed to persist word data to dance row:', error);
+                    else console.log('[Pipeline] Persisted word-level data to shareable_lyric_dances');
                   });
               }
             }
