@@ -325,8 +325,14 @@ export function computePhraseState(
 
   // ── Beat response ──
   const pulse = beatState?.pulse ?? 0;
-  const beatNudgeY = pulse * BEAT_NUDGE_BASE;
-  const beatScale = BEAT_SCALE_BASE + pulse * BEAT_SCALE_MULT;
+  // Chorus beat escalation: each return of the chorus hits harder
+  const CHORUS_BEAT_SCALE = [1.0, 1.3, 1.6, 2.0];
+  const chorusRepeat = group.chorusRepeat ?? 0;
+  const beatMultiplier = chorusRepeat > 0
+    ? CHORUS_BEAT_SCALE[Math.min(chorusRepeat - 1, 3)]
+    : 1.0;
+  const beatNudgeY = pulse * BEAT_NUDGE_BASE * beatMultiplier;
+  const beatScale = BEAT_SCALE_BASE + pulse * BEAT_SCALE_MULT * beatMultiplier;
 
   // ── Reveal anchor: mode-aware ──
   const revealAnchor = isRevealMode

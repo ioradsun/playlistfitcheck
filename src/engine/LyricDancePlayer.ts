@@ -55,7 +55,7 @@ const DEBUG_ELEMENTAL_TRACE = false;
 // CINEMATIC TREATMENT SYSTEM
 // ═══════════════════════════════════════════════════════════════
 //
-// Layer 1: Treatment table (visualMood → base config)
+// Layer 1: Derive section effects directly from audio energy + beat density.
 // Layer 2: Arc scaling (section position → intensity multiplier)
 // Layer 3: Spectacle budget (runtime cooldown → downgrades)
 // Layer 4: Legibility ceilings (hard caps → readability wins)
@@ -70,33 +70,22 @@ interface SectionEffectsConfig {
   vignetteStrength: number;
 }
 
-const SECTION_EFFECTS: Record<string, SectionEffectsConfig> = {
-  // ── Restrained ──
-  raw:         { elementalIntensity: 0.3, glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.4, particleSpeed: 0.4, beatBarStyle: 'light', vignetteStrength: 0.5 },
-  vulnerable:  { elementalIntensity: 0.3, glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.4, particleSpeed: 0.3, beatBarStyle: 'smoke', vignetteStrength: 0.7 },
-  melancholy:  { elementalIntensity: 0.3, glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.5, particleSpeed: 0.35, beatBarStyle: 'smoke', vignetteStrength: 0.7 },
-  intimate:    { elementalIntensity: 0.3, glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.4, particleSpeed: 0.3, beatBarStyle: 'light', vignetteStrength: 0.8 },
-  nostalgic:   { elementalIntensity: 0.3, glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.5, particleSpeed: 0.3, beatBarStyle: 'smoke', vignetteStrength: 0.6 },
-
-  // ── Dynamic ──
-  aggressive:  { elementalIntensity: 0.7, glowCap: 10, cameraIntensity: 0.6, particleDensity: 0.8, particleSpeed: 0.9, beatBarStyle: 'flame', vignetteStrength: 0.4 },
-  defiant:     { elementalIntensity: 0.6, glowCap: 10, cameraIntensity: 0.5, particleDensity: 0.7, particleSpeed: 0.8, beatBarStyle: 'flame', vignetteStrength: 0.3 },
-  eerie:       { elementalIntensity: 0.6, glowCap: 8,  cameraIntensity: 0.3, particleDensity: 0.6, particleSpeed: 0.5, beatBarStyle: 'smoke', vignetteStrength: 0.7 },
-  hypnotic:    { elementalIntensity: 0.5, glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.7, particleSpeed: 0.5, beatBarStyle: 'neon',  vignetteStrength: 0.5 },
-  hopeful:     { elementalIntensity: 0.5, glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.7, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.3 },
-
-  // ── Cinematic ──
-  euphoric:    { elementalIntensity: 1.0, glowCap: 16, cameraIntensity: 0.9, particleDensity: 1.2, particleSpeed: 1.0, beatBarStyle: 'flame', vignetteStrength: 0.2 },
-  dreamy:      { elementalIntensity: 0.8, glowCap: 14, cameraIntensity: 0.5, particleDensity: 1.0, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.3 },
-  triumphant:  { elementalIntensity: 1.0, glowCap: 16, cameraIntensity: 0.8, particleDensity: 1.2, particleSpeed: 1.2, beatBarStyle: 'flame', vignetteStrength: 0.15 },
-  anthemic:    { elementalIntensity: 0.9, glowCap: 14, cameraIntensity: 0.7, particleDensity: 1.1, particleSpeed: 1.0, beatBarStyle: 'flame', vignetteStrength: 0.2 },
-};
-
-const DEFAULT_EFFECTS: SectionEffectsConfig = SECTION_EFFECTS.raw;
-
-function getEffectsConfig(visualMood: string | undefined): SectionEffectsConfig {
-  return SECTION_EFFECTS[visualMood ?? 'raw'] ?? DEFAULT_EFFECTS;
+function computeEffectsFromEnergy(avgEnergy: number, beatDensity: number): SectionEffectsConfig {
+  // Two numbers in → full config out. No mood vocabulary needed.
+  const e = Math.max(0, Math.min(1, avgEnergy));
+  const d = Math.max(0, Math.min(10, beatDensity));
+  return {
+    elementalIntensity: 0.3 + e * 0.7,
+    glowCap: 4 + Math.round(e * 12),
+    cameraIntensity: e * 0.8,
+    particleDensity: Math.max(0.5, 0.4 + e * 0.8),
+    particleSpeed: 0.3 + d * 0.15 + e * 0.4,
+    beatBarStyle: e > 0.7 ? 'flame' : e > 0.4 ? 'neon' : 'smoke' as const,
+    vignetteStrength: 0.8 - e * 0.5,
+  };
 }
+
+const DEFAULT_EFFECTS: SectionEffectsConfig = computeEffectsFromEnergy(0.3, 2);
 
 interface EffectsTransition {
   from: SectionEffectsConfig;
@@ -3052,8 +3041,10 @@ export class LyricDancePlayer {
     if (sectionIndex !== this.activeSectionIndex) {
       this.activeSectionIndex = sectionIndex;
 
-      const sectionMood = (section as any)?.visualMood as string | undefined;
-      const baseEffects = getEffectsConfig(sectionMood);
+      // Derive effects from audio energy — no mood table
+      const sectionEnergy = (section as any)?.avgEnergy ?? 0.3;
+      const sectionDensity = (section as any)?.beatDensity ?? 2;
+      const baseEffects = computeEffectsFromEnergy(sectionEnergy, sectionDensity);
 
       this._effectsTransition = {
         from: { ...this._activeEffects },
