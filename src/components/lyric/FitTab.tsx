@@ -7,7 +7,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import {
   Loader2,
   RefreshCw,
@@ -30,6 +29,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
+import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";

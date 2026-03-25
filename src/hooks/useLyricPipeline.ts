@@ -555,6 +555,14 @@ export function useLyricPipeline({
   const [sectionImageError, setSectionImageError] = useState<string | null>(null);
   const cinematicDirectionRef = useRef(cinematicDirection);
   cinematicDirectionRef.current = cinematicDirection;
+  // Ref for generationStatus — allows startCinematicDirection (defined before
+  // the scheduler call) to read the latest value without a declaration-order issue.
+  const generationStatusRef = useRef<GenerationStatus>({
+    beatGrid: "idle",
+    renderData: "done",
+    cinematicDirection: "idle",
+    sectionImages: "idle",
+  });
 
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [waveformData, setWaveformData] = useState<WaveformData | null>(null);
@@ -960,14 +968,12 @@ export function useLyricPipeline({
         return;
       }
       {
-        let shouldSkip = false;
-        setGenerationStatus((prev) => {
-          if (!force && (prev.cinematicDirection === "running" || prev.cinematicDirection === "done")) {
-            shouldSkip = true;
-          }
-          return prev;
-        });
-        if (shouldSkip) return;
+        if (
+          !force &&
+          (generationStatusRef.current.cinematicDirection === "running" ||
+            generationStatusRef.current.cinematicDirection === "done")
+        )
+          return;
       }
 
       setGenerationStatus((prev) => ({
@@ -1362,6 +1368,7 @@ export function useLyricPipeline({
     handleSectionImagesGenerated,
     handleSectionImagesError,
   } = scheduler;
+  generationStatusRef.current = generationStatus;
 
   const startBeatAnalysis = useCallback(
     async (targetAudioFile: File) => {
