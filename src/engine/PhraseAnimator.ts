@@ -1,8 +1,10 @@
 /**
- * PhraseAnimator.ts — Alpha spotlight engine.
+ * PhraseAnimator.ts — Typewriter reveal + cinematic push-in.
  *
- * Text doesn't move. Text is the anchor. Alpha is the only emphasis tool.
- * Active word = brightest. Hero = room goes quiet (neighbors dim). Beat = background only.
+ * All visible text is alpha 1.0. No dimming. No spotlight. No suppression.
+ * Stagger reveal = words pop in one by one at full brightness.
+ * Ghost preview = all words visible at full brightness from start.
+ * Long phrases (>1s) get a slow push-in: 1.0 → 1.02 zoom over duration.
  */
 import { type MotionCharacter, type AnimState, type CompiledPhraseGroup, type CompiledWord } from '@/lib/sceneCompiler';
 import type { MotionProfile } from '@/engine/IntensityRouter';
@@ -24,6 +26,8 @@ export interface PhraseAnimState {
   entry: AnimState; exit: AnimState; biasEntryOffsetX: number;
   beatNudgeY: number; beatScale: number;
   staggerDelay: number; revealAnchor: number;
+  /** 1.0 → 1.02 slow zoom for phrases held >1s */
+  pushInScale: number;
 }
 
 export interface WordAnimState {
@@ -34,7 +38,6 @@ export interface WordAnimState {
   soloHeroHidden: boolean; centerWordScale: number; revealRise: number;
   waveScale: number; ghostPreview: boolean;
   bounceAmplitude: number; heroSuppressionFactor: number;
-  /** True when a hero word is active and this word should dim */
   heroSuppressed: boolean;
 }
 
@@ -60,11 +63,23 @@ export function computePhraseState(
   beatState: AnimBeatState | null, canvasWidth: number, mp: MotionProfile,
 ): PhraseAnimState {
   const { composition, bias, revealStyle, holdClass, energyTier, heroType } = group;
-  void nextGroupStart; void canvasWidth; void mp; void beatState; void tSec;
+  void nextGroupStart; void canvasWidth; void mp; void beatState;
   const staggerDelay = group.staggerDelay ?? 0;
   const noMotion: AnimState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
 
-  // No text motion. Beat lives in background only.
+  // ── Slow push-in for phrases held >1 second ──
+  // Like a camera slowly pushing in on the dialogue.
+  // 1.0 → 1.02 over the phrase duration. Ease-out (fast start, gentle settle).
+  const phraseDur = Math.max(0.01, group.end - group.start);
+  let pushInScale = 1.0;
+  if (phraseDur >= 1.0) {
+    const elapsed = Math.max(0, tSec - group.start);
+    const progress = Math.min(1, elapsed / phraseDur);
+    // Ease-out: sqrt curve — fast early, settles toward end
+    const eased = Math.sqrt(progress);
+    pushInScale = 1.0 + eased * 0.02;
+  }
+
   return {
     composition, bias, revealStyle, holdClass, energyTier, heroType,
     groupStart: group.start, groupEnd: group.end,
@@ -73,9 +88,9 @@ export function computePhraseState(
     motionIntensity: 0, presentationMode: group.presentationMode ?? 'horiz_center',
     ghostPreview: group.ghostPreview ?? false, vibrateOnHold: false, elementalWash: false,
     entry: noMotion, exit: noMotion, biasEntryOffsetX: 0,
-    beatNudgeY: 0,   // no Y motion on text
-    beatScale: 1.0,  // no scale pulse on text
+    beatNudgeY: 0, beatScale: 1.0,
     staggerDelay, revealAnchor: group.start,
+    pushInScale,
   };
 }
 
@@ -85,13 +100,13 @@ export function computeWordState(
   phrase: PhraseAnimState, tSec: number, groupHasActiveSoloHero: boolean,
   canvasWidth: number, canvasHeight: number, mp: MotionProfile, activeHeroWordIndex: number,
 ): WordAnimState {
-  // ── Reveal timing ──
+  void mp; void activeHeroWordIndex;
+
+  // ── Reveal timing (stagger only — no fade, instant pop) ──
   const wordRevealTime = phrase.staggerDelay < 0.005
     ? phrase.revealAnchor
     : phrase.revealAnchor + wordIndex * phrase.staggerDelay;
   const isRevealed = tSec >= wordRevealTime;
-  // Instant reveal — no fade. Exact timestamps mean exact alpha.
-  const revealProgress = isRevealed ? 1 : 0;
 
   // ── Word timing state ──
   const wordStart = word.wordStart ?? group.start;
@@ -106,79 +121,54 @@ export function computeWordState(
     wordState = 'spoken';
   }
 
-  // ── Hero detection ──
+  // ── Hero detection (for solo centering only) ──
   const isHeroWord = word.isHeroWord === true;
   const effectiveHero = phrase.heroType === 'phrase' ? true : isHeroWord;
   const isOnlyWordInPhrase = group.words.length === 1;
   const isSoloHero = isOnlyWordInPhrase && isHeroWord && (word.wordDuration ?? 0) >= 0.5;
   const soloHeroHidden = !isSoloHero && groupHasActiveSoloHero;
 
-  // ── No hero scale — alpha spotlight is the only emphasis tool ──
-  // Scale changes on individual words break readability and shift layout.
-  // center_word layout already sizes solo words to fill the canvas.
-  const heroScaleMult = 1.0;
-
-  // Solo hero offset (center screen)
+  // Solo hero offset (center screen) — no extra scale
   let heroOffsetX = 0; let heroOffsetY = 0;
   if (isSoloHero) {
     heroOffsetX = canvasWidth / 2 - word.layoutX;
     heroOffsetY = canvasHeight / 2 - word.layoutY;
   }
 
-  const centerWordScale = phrase.composition === 'center_word' ? 1.0 : 1.0;
-
-  // ── Hero suppression: room goes quiet ──
-  // Hero suppression only dims UPCOMING words. Active and spoken stay at 1.0.
-  const heroSuppressed = activeHeroWordIndex >= 0
-    && wordIndex !== activeHeroWordIndex
-    && wordState === 'upcoming';
-
   return {
-    isRevealed, revealProgress, wordRevealTime,
+    isRevealed, revealProgress: isRevealed ? 1 : 0, wordRevealTime,
     wordState, spotlightAlpha: 1.0,
     isHeroWord, effectiveHero, isSoloHero,
-    heroScaleMult, heroOffsetX, heroOffsetY, soloHeroHidden,
-    centerWordScale, revealRise: 0, // no position shift on reveal
-    waveScale: 1.0, // no wave scale
-    ghostPreview: phrase.ghostPreview,
-    bounceAmplitude: 0, // no bounce
-    heroSuppressionFactor: 1.0, // unused now
-    heroSuppressed,
+    heroScaleMult: 1.0, heroOffsetX, heroOffsetY, soloHeroHidden,
+    centerWordScale: 1.0, revealRise: 0,
+    waveScale: 1.0, ghostPreview: phrase.ghostPreview,
+    bounceAmplitude: 0, heroSuppressionFactor: 1.0,
+    heroSuppressed: false,
   };
 }
 
-// ─── 4. Final chunk animation: alpha only emphasis ───────────
+// ─── 4. Final chunk animation ───────────────────────────────
 export function computeChunkAnim(
   word: CompiledWord, phrase: PhraseAnimState, wordAnim: WordAnimState,
   beatPhase: number, intensity: number,
 ): ChunkAnimState {
-  void word; void beatPhase; void intensity; void phrase;
+  void word; void beatPhase; void intensity;
 
-  // ── Alpha: the ONLY emphasis tool ──
+  // ── Alpha: binary. Visible = 1.0. Not visible = 0. ──
   let alpha: number;
   if (wordAnim.soloHeroHidden) {
     alpha = 0;
   } else if (!wordAnim.isRevealed) {
-    // Unrevealed: invisible, or faint ghost if preview mode
-    alpha = wordAnim.ghostPreview ? 0.12 : 0;
-  } else if (wordAnim.wordState === 'active') {
-    // Spotlight: brightest thing on screen. NEVER suppressed.
-    alpha = 1.0;
-  } else if (wordAnim.wordState === 'spoken') {
-    // Already said: stays bright. NEVER suppressed. Eyes move forward.
-    alpha = 1.0;
-  } else if (wordAnim.heroSuppressed) {
-    // Upcoming + hero active: room goes quiet
-    alpha = 0.25;
+    // Stagger: invisible until reveal time
+    // Ghost preview: all words revealed from start (staggerDelay = 0), so this = 0
+    alpha = 0;
   } else {
-    // Upcoming: waiting to be spoken
-    alpha = 0.35;
+    // Visible = full brightness. Always. No dimming. No spotlight.
+    alpha = 1.0;
   }
 
-  alpha = Math.max(0, Math.min(1, alpha));
-
-  // ── Scale: fixed at 1.0 (no hero scaling) ──
-  const scale = wordAnim.heroScaleMult;
+  // ── Scale: phrase-level push-in only ──
+  const scale = phrase.pushInScale;
 
   return {
     alpha,
