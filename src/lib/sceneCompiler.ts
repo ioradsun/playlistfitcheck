@@ -623,12 +623,12 @@ function hashString(str: string): number {
 function assignPresentationModes(
   phraseGroups: PhraseGroup[],
   wordMeta: WordMetaEntry[],
-  aiPhrases?: CinematicPhrase[],
+  _aiPhrases?: CinematicPhrase[],
 ): void {
-  if (!aiPhrases || aiPhrases.length === 0 || wordMeta.length === 0 || phraseGroups.length === 0) return;
+  if (phraseGroups.length === 0 || wordMeta.length === 0) return;
 
   const songSeed = hashString(
-    (wordMeta[0]?.word ?? '') + (wordMeta[wordMeta.length - 1]?.word ?? '') + aiPhrases.length,
+    (wordMeta[0]?.word ?? '') + (wordMeta[wordMeta.length - 1]?.word ?? '') + phraseGroups.length,
   );
 
   let deck = seededShuffle(
@@ -639,35 +639,9 @@ function assignPresentationModes(
   let deckNumber = 0;
   let lastBaseMode = '';
 
-  const hasElementalWord = (startIdx: number, endIdx: number): boolean => {
-    for (let wi = startIdx; wi <= endIdx && wi < wordMeta.length; wi++) {
-      if (wordMeta[wi]?.directive?.elementalClass) return true;
-    }
-    return false;
-  };
-
-  for (let i = 0; i < aiPhrases.length; i++) {
-    const phrase = aiPhrases[i];
-    const [s, e] = phrase.wordRange ?? [0, 0];
-    const wc = Math.max(1, e - s + 1);
-    const hasElemental = hasElementalWord(s, e);
-
-    const hasAIChoreography =
-      (phrase.composition !== undefined && phrase.composition !== 'line') ||
-      (phrase.bias !== undefined && phrase.bias !== 'center') ||
-      (phrase.heroType !== undefined && phrase.heroType !== 'word') ||
-      (phrase.revealStyle !== undefined && phrase.revealStyle !== 'instant') ||
-      (phrase.holdClass !== undefined && phrase.holdClass !== 'medium_groove') ||
-      (phrase.energyTier !== undefined && phrase.energyTier !== 'groove');
-
-    if (hasAIChoreography) {
-      phrase.presentationMode = 'ai_moment';
-      phrase.ghostPreview = false;
-      phrase.vibrateOnHold = false;
-      phrase.elementalWash = false;
-      lastBaseMode = 'ai_moment';
-      continue;
-    }
+  for (let i = 0; i < phraseGroups.length; i++) {
+    const group = phraseGroups[i];
+    const wc = group.words.length;
 
     let cardIdx = -1;
     let attempts = 0;
@@ -700,85 +674,57 @@ function assignPresentationModes(
     const card = MODE_CARDS[cardIdx];
     lastBaseMode = card.baseMode;
 
-    phrase.presentationMode = card.mode;
-    phrase.composition = card.composition as CinematicPhrase['composition'];
-    phrase.bias = card.bias as CinematicPhrase['bias'];
-    phrase.revealStyle = card.revealStyle as CinematicPhrase['revealStyle'];
-    phrase.holdClass = card.holdClass as CinematicPhrase['holdClass'];
-    phrase.entryCharacter = card.entryCharacter;
-    phrase.exitCharacter = card.exitCharacter;
-    phrase.ghostPreview = card.ghostPreview;
-    phrase.vibrateOnHold = card.vibrateOnHold;
-    phrase.elementalWash = card.elementalWash;
+    const g = group as any;
+    g.presentationMode = card.mode;
+    g.composition = card.composition;
+    g.bias = card.bias;
+    g.revealStyle = card.revealStyle;
+    g.holdClass = card.holdClass;
+    g.entryCharacter = card.entryCharacter;
+    g.exitCharacter = card.exitCharacter;
+    g.ghostPreview = card.ghostPreview;
+    g.vibrateOnHold = card.vibrateOnHold;
+    g.elementalWash = card.elementalWash;
 
-    if (wc === 1 && card.baseMode !== 'vibrate' && card.baseMode !== 'wash') {
-      if (i % 2 === 0) {
-        phrase.presentationMode = 'impact_center';
-        phrase.composition = 'center_word';
-        phrase.entryCharacter = 'snap';
-        phrase.exitCharacter = 'none';
-        phrase.vibrateOnHold = false;
-        phrase.elementalWash = false;
-        phrase.ghostPreview = false;
-      } else {
-        phrase.presentationMode = 'vibrate_smoke';
-        phrase.composition = 'center_word';
-        phrase.entryCharacter = 'bloom';
-        phrase.exitCharacter = 'none';
-        phrase.vibrateOnHold = true;
-        phrase.elementalWash = false;
-        phrase.ghostPreview = false;
+    if (wc === 1) {
+      if (card.baseMode !== 'vibrate' && card.baseMode !== 'wash') {
+        if (i % 2 === 0) {
+          g.presentationMode = 'impact_center';
+          g.composition = 'center_word';
+          g.entryCharacter = 'snap';
+          g.exitCharacter = 'none';
+        } else {
+          g.presentationMode = 'vibrate_smoke';
+          g.composition = 'center_word';
+          g.entryCharacter = 'bloom';
+          g.exitCharacter = 'none';
+          g.vibrateOnHold = true;
+        }
       }
-      phrase.holdClass = 'long_emotional';
-      phrase.bias = 'center';
-      phrase.revealStyle = 'instant';
-      lastBaseMode = i % 2 === 0 ? 'impact' : 'vibrate';
     }
 
     if (i === 0) {
-      phrase.presentationMode = 'horiz_center';
-      phrase.composition = 'line';
-      phrase.bias = 'center';
-      phrase.revealStyle = 'stagger_slow';
-      phrase.entryCharacter = 'drift';
-      phrase.exitCharacter = 'drift';
-      phrase.holdClass = 'long_emotional';
-      phrase.ghostPreview = false;
-      phrase.vibrateOnHold = false;
-      phrase.elementalWash = false;
-      lastBaseMode = 'horizontal';
+      g.presentationMode = 'horiz_center';
+      g.composition = 'line';
+      g.bias = 'center';
+      g.revealStyle = 'stagger_slow';
+      g.entryCharacter = 'drift';
+      g.exitCharacter = 'drift';
     }
 
-    if (i === aiPhrases.length - 1) {
+    if (i === phraseGroups.length - 1) {
       if (wc <= 2) {
-        phrase.presentationMode = 'vibrate_element';
-        phrase.composition = 'center_word';
-        phrase.entryCharacter = 'bloom';
-        phrase.exitCharacter = 'none';
-        phrase.vibrateOnHold = true;
-        phrase.elementalWash = false;
+        g.presentationMode = 'vibrate_smoke';
+        g.composition = 'center_word';
+        g.entryCharacter = 'bloom';
+        g.exitCharacter = 'none';
+        g.vibrateOnHold = true;
       } else {
-        phrase.presentationMode = 'wash_lr';
-        phrase.entryCharacter = 'snap';
-        phrase.exitCharacter = 'none';
-        phrase.elementalWash = true;
-        phrase.vibrateOnHold = false;
-      }
-      phrase.holdClass = 'long_emotional';
-      phrase.ghostPreview = false;
-    }
-
-    if (hasElemental && !phrase.elementalWash && card.baseMode !== 'vibrate') {
-      const elHash = (s * 31 + e * 17 + i * 7) % 10;
-      if (elHash < 5) {
-        phrase.presentationMode = 'wash_lr';
-        phrase.entryCharacter = 'snap';
-        phrase.exitCharacter = 'none';
-        phrase.elementalWash = true;
-        phrase.holdClass = 'long_emotional';
-        phrase.vibrateOnHold = false;
-        phrase.ghostPreview = false;
-        lastBaseMode = 'wash';
+        g.presentationMode = 'wash_lr';
+        g.elementalWash = true;
+        g.entryCharacter = 'snap';
+        g.exitCharacter = 'none';
+        g.holdClass = 'long_emotional';
       }
     }
   }
@@ -977,8 +923,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       return ps <= gs && pe >= ge;
     }) as CinematicPhrase | undefined;
 
-    const composition = matchPhrase?.composition ?? 'line';
-    const bias = matchPhrase?.bias ?? 'center';
+    const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
+    const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
 
     const phraseHeroClean = (matchPhrase?.heroWord ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const hasHero = group.words.some(wm =>
@@ -1060,10 +1006,10 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       const ge = globalWordIndex.get(group.words[group.words.length - 1]) ?? -1;
       return ps <= gs && pe >= ge;
     }) as CinematicPhrase | undefined;
-    const composition = matchPhrase?.composition ?? 'line';
-    const bias = matchPhrase?.bias ?? 'center';
-    const revealStyle = matchPhrase?.revealStyle ?? 'instant';
-    const holdClass = matchPhrase?.holdClass ?? 'medium_groove';
+    const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
+    const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
+    const revealStyle = (group as any).revealStyle ?? matchPhrase?.revealStyle ?? 'instant';
+    const holdClass = (group as any).holdClass ?? matchPhrase?.holdClass ?? 'medium_groove';
     const energyTier = matchPhrase?.energyTier ?? 'groove';
     const heroType = matchPhrase?.heroType ?? 'word';
 
@@ -1143,12 +1089,14 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       holdClass,
       energyTier,
       motionBudget: (group as any)._motionBudget ?? undefined,
-      presentationMode: matchPhrase?.presentationMode ?? undefined,
-      entryCharacter: matchPhrase?.entryCharacter ?? undefined,
-      exitCharacter: matchPhrase?.exitCharacter ?? undefined,
-      ghostPreview: matchPhrase?.ghostPreview ?? false,
-      vibrateOnHold: matchPhrase?.vibrateOnHold ?? false,
-      elementalWash: matchPhrase?.elementalWash ?? false,
+      // Presentation mode: read from group (set by assignPresentationModes directly)
+      presentationMode: (group as any).presentationMode ?? undefined,
+      entryCharacter: (group as any).entryCharacter ?? undefined,
+      exitCharacter: (group as any).exitCharacter ?? undefined,
+      ghostPreview: (group as any).ghostPreview ?? false,
+      vibrateOnHold: (group as any).vibrateOnHold ?? false,
+      elementalWash: (group as any).elementalWash ?? false,
+      // Section label + effect: still from matchPhrase (AI data)
       sectionLabel: matchPhrase?.section ?? 'verse',
       heroEffect: matchPhrase?.effect ?? undefined,
     };
