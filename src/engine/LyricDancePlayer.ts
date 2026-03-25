@@ -137,7 +137,7 @@ const LEGIBILITY = {
   maxForegroundAlphaOverText: 0.12,
   glowCapAtSpeed: (wordsPerSec: number): number => Math.max(4, 20 - wordsPerSec * 2.5),
   cameraCapForDensity: (wordCount: number): number => wordCount > 5 ? 0.4 : wordCount > 3 ? 0.7 : 1.0,
-  motionCapForDensity: (wordCount: number): number => wordCount > 5 ? 0.3 : wordCount > 3 ? 0.6 : 1.0,
+  motionCapForDensity: (wordCount: number): number => wordCount > 5 ? 0.5 : wordCount > 3 ? 0.75 : 1.0,
 };
 
 /**
@@ -5906,7 +5906,6 @@ export class LyricDancePlayer {
         phraseEntryState.offsetX *= motionCap;
         phraseEntryState.offsetY *= motionCap;
         phraseEntryState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseEntryState.blur ?? 0);
-        phraseEntryState.alpha *= phraseAlpha;
       }
 
       let phraseExitState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
@@ -6002,8 +6001,9 @@ export class LyricDancePlayer {
 
         // ═══ REVEAL GATE: stagger-based word visibility ═══
         const stagger = group.staggerDelay ?? 0;
-        const phraseEntryStart = group.start - entryPad;
-        const wordRevealTime = phraseEntryStart + wi * stagger;
+        // Reveal starts at group.start (when first word is spoken), not entryPad before
+        const revealAnchor = group.start - 0.1; // tiny 100ms anticipation
+        const wordRevealTime = revealAnchor + wi * stagger;
         const isRevealed = stagger < 0.005 || tSec >= wordRevealTime;
         const WORD_FADE_SEC = 0.08;
         const wordRevealT = !isRevealed ? 0
@@ -6065,7 +6065,6 @@ export class LyricDancePlayer {
             phraseEntryState.offsetX *= motionCap;
             phraseEntryState.offsetY *= motionCap;
             phraseEntryState.blur = Math.min(LEGIBILITY.maxTextBlur, phraseEntryState.blur ?? 0);
-            phraseEntryState.alpha *= phraseAlpha;
           }
           if (isExiting) {
             const exitProgress = Math.min(1, 1 - (phraseRemaining / Math.max(0.01, groupExitDur)));
