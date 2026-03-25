@@ -5535,13 +5535,17 @@ export class LyricDancePlayer {
           const holdDur = Math.max(0.01, holdEnd - holdStart);
           const holdProgress = Math.max(0, Math.min(1, (tSec - holdStart) / holdDur));
 
-          const freq = 4 + holdProgress * 16; // 4Hz → 20Hz
-          const amp = 1 + holdProgress * 7;   // ±1px → ±8px
+          const freq = 3 + holdProgress * 10; // 3Hz → 13Hz (less frantic on hold)
+          const amp = 0.75 + holdProgress * 3.25;   // ±0.75px → ±4px (reduced travel)
           vibrateX = Math.sin(tSec * freq * Math.PI * 2) * amp;
-          vibrateY = Math.cos(tSec * freq * Math.PI * 2 * 0.7) * amp * 0.3;
+          vibrateY = Math.cos(tSec * freq * Math.PI * 2 * 0.7) * amp * 0.2;
 
-          // Scale ramp: 1.0 → 1.15x during hold
-          const vibrateScale = 1.0 + holdProgress * 0.15;
+          // Keep hold vibration within a readability-safe envelope.
+          vibrateX = Math.max(-4, Math.min(4, vibrateX));
+          vibrateY = Math.max(-2, Math.min(2, vibrateY));
+
+          // Scale ramp: 1.0 → 1.07x during hold (subtle emphasis, not zoomy).
+          const vibrateScale = 1.0 + holdProgress * 0.07;
           anim.scaleX *= vibrateScale;
           anim.scaleY *= vibrateScale;
 
@@ -5558,9 +5562,9 @@ export class LyricDancePlayer {
           const wordStart = word.wordStart ?? group.start;
           const timeSinceActive = tSec - wordStart;
           if (timeSinceActive < 0.15) {
-            // 0→0.15s: bounce 1.0 → 1.08 → 1.0
+            // 0→0.15s: bounce 1.0 → 1.04 → 1.0
             const bounceT = timeSinceActive / 0.15;
-            ghostBounce = 1.0 + 0.08 * Math.sin(bounceT * Math.PI);
+            ghostBounce = 1.0 + 0.04 * Math.sin(bounceT * Math.PI);
           }
         }
 
@@ -5573,6 +5577,11 @@ export class LyricDancePlayer {
         // Position: layout + animation offsets + neighbor push
         chunk.x = word.layoutX + anim.offsetX + neighborPushOffsets[wi] + vibrateX;
         chunk.y = word.layoutY + anim.offsetY + vibrateY;
+
+        // Last-word stability rule: keep phrase-ending words calmer and anchored.
+        if (wi === group.words.length - 1) {
+          chunk.y = word.layoutY + (chunk.y - word.layoutY) * 0.35;
+        }
 
         chunk.alpha = anim.alpha;
         chunk.scaleX = anim.scaleX * ghostBounce;
