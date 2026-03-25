@@ -339,14 +339,12 @@ export function computePhraseState(
   const beatNudgeY = pulse * BEAT_NUDGE_BASE;
   const beatScale = BEAT_SCALE_BASE + pulse * BEAT_SCALE_MULT;
 
-  // ── Reveal anchor: mode-aware ──
-  // REVEAL MODES (horiz, stack): stagger IS the entry. Words reveal at group.start.
-  //   The stagger timing is the visual event. No phrase-level entry motion needed.
-  // ALL-AT-ONCE MODES (ghost, impact, wash, vibrate): words visible early.
-  //   Phrase-level entry motion plays while words are already showing.
-  const revealAnchor = isRevealMode
-    ? group.start          // stagger starts when phrase starts
-    : group.start - 0.05;  // tiny anticipation for non-stagger modes
+  const isRevealModeForAnchor = isRevealMode;
+  // Reveal modes: stagger starts exactly at group.start.
+  // Other modes: tiny anticipation so words are visible when entry motion starts.
+  const revealAnchor = isRevealModeForAnchor
+    ? group.start
+    : group.start - entryPad;  // visible from entry start
 
   return {
     composition,
@@ -428,44 +426,28 @@ export function computeWordState(
   }
 
   // ── Spotlight alpha: mode-aware ──
-  let spotlightAlpha: number;
-  const mode = phrase.presentationMode ?? 'horiz_center';
+  const mode = phrase.presentationMode ?? '';
   const isRevealMode = mode.startsWith('horiz') || mode.startsWith('stack');
-  const isImpactMode = mode.startsWith('impact');
-  const isWashMode = mode.startsWith('wash');
-  const isVibrateMode = mode.startsWith('vibrate');
+  const isImpactOrWashOrVibrate = mode.startsWith('impact') || mode.startsWith('wash') || mode.startsWith('vibrate');
 
+  let spotlightAlpha: number;
   if (phrase.ghostPreview) {
-    // GHOST PREVIEW: all words visible at 20% from start
-    // Active word: snap to 100%. Spoken: 80%.
-    if (wordState === 'active') {
-      spotlightAlpha = 1.0;
-    } else if (wordState === 'spoken') {
-      spotlightAlpha = 0.80;
-    } else {
-      spotlightAlpha = 0.20; // ghost — always visible at 20%
-    }
+    // GHOST: all words visible. Active pops. Spoken settles.
+    if (wordState === 'active') spotlightAlpha = 1.0;
+    else if (wordState === 'spoken') spotlightAlpha = 0.80;
+    else spotlightAlpha = 0.20;
+
   } else if (isRevealMode) {
-    // REVEAL MODES: unrevealed = invisible. Revealed = full.
-    // The stagger creates the visual rhythm. Spoken words slightly dim.
-    if (!isRevealed) {
-      spotlightAlpha = 0;       // invisible until stagger reveals
-    } else if (wordState === 'active') {
-      spotlightAlpha = 1.0;     // active word = full white
-    } else if (wordState === 'spoken') {
-      spotlightAlpha = 0.65;    // spoken = noticeably dimmed
-    } else {
-      // upcoming but revealed by stagger — full visibility
-      // (stagger already controls WHEN this happens)
-      spotlightAlpha = revealProgress;
-    }
-  } else if (isImpactMode || isWashMode || isVibrateMode) {
-    // IMPACT / WASH / VIBRATE: all words fully visible immediately
-    if (!isRevealed) {
-      spotlightAlpha = 0;
-    } else {
-      spotlightAlpha = 1.0; // all visible, no dim upcoming
-    }
+    // REVEAL: invisible until stagger, then full.
+    if (!isRevealed) spotlightAlpha = 0;
+    else if (wordState === 'active') spotlightAlpha = 1.0;
+    else if (wordState === 'spoken') spotlightAlpha = 0.65;
+    else spotlightAlpha = revealProgress;
+
+  } else if (isImpactOrWashOrVibrate) {
+    // IMPACT/WASH/VIBRATE: all words fully visible immediately.
+    spotlightAlpha = 1.0;
+
   } else {
     // Fallback (ai_moment, unknown modes)
     if (!isRevealed) {
@@ -550,22 +532,65 @@ export function computeChunkAnim(
   // keep signature stable for future word-specific adjustments
   void word;
 
-  // ── ALPHA: priority chain ──
+  // ── ALPHA: mode-aware priority chain ──
+  //
+  // KEY INSIGHT: revealProgress must NOT gate entry alpha for non-reveal modes.
+  // Entry animation runs from group.start - entryPad to group.start - entryPad + entryDur.
+  // Word reveal happens at group.start - 0.1 (REVEAL_ANTICIPATION).
+  // If we multiply by revealProgress during entry, words are invisible while moving.
+  //
+  // For GHOST/IMPACT/WASH/VIBRATE modes: words should be visible during entry.
+  //   Their visibility comes from the phrase entry alpha (motion character).
+  // For REVEAL modes (horiz/stack): suppress phrase entry motion.
+  //   Words appear via stagger — the stagger IS the visual event.
+
   let alpha: number;
+  const mode = phrase.presentationMode ?? '';
+  const isRevealMode = mode.startsWith('horiz') || mode.startsWith('stack');
 
   if (wordAnim.soloHeroHidden) {
     alpha = 0;
-  } else if (!wordAnim.isRevealed) {
-    alpha = 0;
+
+  } else if (isRevealMode) {
+    // ── REVEAL MODES: stagger controls visibility. No phrase-level entry motion. ──
+    // Words are invisible until their stagger time, then fade in via revealProgress.
+    if (!wordAnim.isRevealed) {
+      alpha = 0;
+    } else if (wordAnim.wordState === 'active') {
+      alpha = 1.0;
+    } else if (wordAnim.wordState === 'spoken') {
+      alpha = 0.65;
+    } else {
+      // upcoming but revealed by stagger
+      alpha = wordAnim.revealProgress;
+    }
+
+  } else if (phrase.ghostPreview) {
+    // ── GHOST PREVIEW: all words visible from start. Active word pops. ──
+    // During entry: ghost alpha × entry character alpha (whisper fade-in).
+    // During hold: spotlight alpha (0.2 ghost, 1.0 active, 0.8 spoken).
+    if (phrase.isEntering) {
+      const baseGhost = wordAnim.wordState === 'active' ? 1.0
+        : wordAnim.wordState === 'spoken' ? 0.8 : 0.2;
+      alpha = phrase.entry.alpha * baseGhost;
+    } else if (phrase.isExiting && !phrase.suppressExit) {
+      alpha = phrase.exit.alpha * wordAnim.spotlightAlpha;
+    } else {
+      alpha = wordAnim.spotlightAlpha;
+    }
+
   } else if (phrase.isEntering) {
-    // Motion character's OWN alpha curve. NOT multiplied by phraseAlpha.
-    // slam: instant pop. whisper: slow fade. bloom: quick scale-up.
-    // The character designs its alpha. We respect it.
-    alpha = phrase.entry.alpha * wordAnim.revealProgress * wordAnim.spotlightAlpha;
+    // ── NON-REVEAL ENTRY (impact, wash, vibrate, ai_moment): ──
+    // All words visible. Alpha = entry character's own curve × spotlight.
+    // NO revealProgress multiplication — words are visible as soon as phrase enters.
+    alpha = phrase.entry.alpha * wordAnim.spotlightAlpha;
+
   } else if (phrase.isExiting && !phrase.suppressExit) {
+    // ── EXIT: exit character alpha × spotlight ──
     alpha = phrase.exit.alpha * wordAnim.spotlightAlpha;
+
   } else {
-    // Active hold — just spotlight
+    // ── ACTIVE HOLD: just spotlight ──
     alpha = wordAnim.spotlightAlpha;
   }
 
@@ -579,8 +604,8 @@ export function computeChunkAnim(
   scaleX *= wordAnim.centerWordScale;
   scaleY *= wordAnim.centerWordScale;
 
-  // Entry motion scale
-  if (phrase.isEntering) {
+  // Entry motion scale (not for reveal modes)
+  if (phrase.isEntering && !isRevealMode) {
     scaleX *= phrase.entry.scaleX;
     scaleY *= phrase.entry.scaleY;
   }
@@ -603,18 +628,21 @@ export function computeChunkAnim(
   let offsetX = 0;
   let offsetY = 0;
 
-  // Bias entry slide (eases from offset to 0 during entry)
-  if (phrase.isEntering && phrase.biasEntryOffsetX !== 0) {
-    offsetX += phrase.biasEntryOffsetX * (1 - phrase.entryProgress);
+  // For reveal modes: no phrase-level entry motion (stagger IS the entry)
+  if (!isRevealMode) {
+    // Bias entry slide (eases from offset to 0 during entry)
+    if (phrase.isEntering && phrase.biasEntryOffsetX !== 0) {
+      offsetX += phrase.biasEntryOffsetX * (1 - phrase.entryProgress);
+    }
+
+    // Entry motion offset
+    if (phrase.isEntering) {
+      offsetX += phrase.entry.offsetX;
+      offsetY += phrase.entry.offsetY;
+    }
   }
 
-  // Entry motion offset
-  if (phrase.isEntering) {
-    offsetX += phrase.entry.offsetX;
-    offsetY += phrase.entry.offsetY;
-  }
-
-  // Exit motion offset
+  // Exit motion offset (applies to all modes)
   if (phrase.isExiting && !phrase.suppressExit) {
     offsetX += phrase.exit.offsetX;
     offsetY += phrase.exit.offsetY;
