@@ -1274,7 +1274,6 @@ export class LyricDancePlayer {
     panEndX: number;
     panEndY: number;
   }> = [];
-  private _bgBlurCurrent = 3;
   /** Song-level grade: computed once, used for entire song — no per-section chaos */
   private _songGrade: MoodGrade | null = null;
   private _grainCanvas: HTMLCanvasElement | null = null;
