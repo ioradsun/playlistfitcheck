@@ -98,4 +98,6 @@ export class IntensityRouter {
     this._prevSmoothEnergy = 0;
     this._trendAccum = 0;
   }
+
+  get smoothedEnergy(): number { return this._smoothEnergy; }
 }

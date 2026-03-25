@@ -24,11 +24,8 @@ import {
   type ScenePayload,
 } from "@/lib/sceneCompiler";
 import { enrichSections } from "@/engine/directionResolvers";
-import { getSemanticOverride } from "@/engine/SemanticAnimMapper";
 import { getMoodGrade, buildGradeFilter, type MoodGrade } from "@/engine/moodGrades";
 // getSectionTones removed — song-level grade model
-import { drawElementalWord } from "@/engine/ElementalEffects";
-import { drawElementalExit, createExitState, type ElementalExitState } from '@/engine/ElementalExits';
 import { getEffectTier, canShowElemental, canShowHeroGlow, getParticleDensity, getGlowCap } from "@/engine/timeTiers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
@@ -64,7 +61,6 @@ const DEBUG_ELEMENTAL_TRACE = false;
 // Layer 4: Legibility ceilings (hard caps → readability wins)
 
 interface SectionEffectsConfig {
-  elementalIntensity: number; // 0..1 — replaces boolean elementalEnabled
   glowCap: number;
   cameraIntensity: number;
   particleDensity: number;
@@ -78,7 +74,6 @@ function computeEffectsFromEnergy(avgEnergy: number, beatDensity: number): Secti
   const e = Math.max(0, Math.min(1, avgEnergy));
   const d = Math.max(0, Math.min(10, beatDensity));
   return {
-    elementalIntensity: 0.3 + e * 0.7,
     glowCap: 4 + Math.round(e * 12),
     cameraIntensity: e * 0.8,
     particleDensity: Math.max(0.5, 0.4 + e * 0.8),
@@ -100,7 +95,6 @@ interface EffectsTransition {
 function lerpEffectsConfig(a: SectionEffectsConfig, b: SectionEffectsConfig, t: number): SectionEffectsConfig {
   const m = (x: number, y: number) => x + (y - x) * t;
   return {
-    elementalIntensity: m(a.elementalIntensity, b.elementalIntensity),
     glowCap: Math.round(m(a.glowCap, b.glowCap)),
     cameraIntensity: m(a.cameraIntensity, b.cameraIntensity),
     particleDensity: m(a.particleDensity, b.particleDensity),
@@ -1096,30 +1090,6 @@ class DynamiteWickBar {
   get canvas(): HTMLCanvasElement { return this.dwbCanvas; }
 }
 
-// ═══ Hero Decomposition Particles ═══
-// When a solo hero word (≥500ms) exits, it "freezes" then shatters into particles.
-interface HeroDecompParticle {
-  x: number; y: number;
-  vx: number; vy: number;
-  size: number;
-  alpha: number;
-  rotation: number;
-  rotSpeed: number;
-  life: number;
-  color: string;
-  shape: 'shard' | 'dust' | 'glow';
-}
-
-interface HeroDecompBurst {
-  wordId: string;
-  particles: HeroDecompParticle[];
-  startTime: number;   // ms
-  duration: number;     // ms
-  originX: number;
-  originY: number;
-  elementalClass?: string;
-}
-
 interface CommentChunk {
   id: string;
   text: string;
@@ -1377,11 +1347,6 @@ export class LyricDancePlayer {
   private emojiStreamEnabled = false;
   private _lastEmojiLineIndex = -1;
   private _emojiSpawnQueue: Array<{ emoji: string; spawnAtSec: number }> = [];
-
-  // Hero word decomposition bursts
-  private _heroDecompBursts: HeroDecompBurst[] = [];
-  private _heroDecompSpawned: Set<string> = new Set(); // track which words already burst
-  private _elementalExitStates = new Map<string, ElementalExitState>();
 
   // Playback
   private rafHandle = 0;
@@ -1902,6 +1867,7 @@ export class LyricDancePlayer {
     const t = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (t - this.songStartSec) * 1000);
     this._beatCursor = 0;
+    this._intensityRouter.reset();
     this._lastBeatIndex = -1;
     this._timeInitialized = false;
     // Layout cache intentionally NOT cleared on seek — layout inputs (words, font,
@@ -1913,9 +1879,6 @@ export class LyricDancePlayer {
     this._activeGroupCursorTime = -1;
     this._intensityRouter.reset();
     this._resetBgParallax();
-    this._heroDecompBursts.length = 0;
-    this._heroDecompSpawned.clear();
-    this._elementalExitStates.clear();
   }
 
   seekTo(timeSec: number): void {
@@ -2261,6 +2224,7 @@ export class LyricDancePlayer {
     // Reset all per-frame tracking
     this.conductor?.resetCursor();
     this._beatCursor = 0;
+    this._intensityRouter.reset();
     this._lastBeatIndex = -1;
     this._timeInitialized = false;
     this._textMetricsCache.clear();
@@ -2270,9 +2234,6 @@ export class LyricDancePlayer {
     this._activeGroupCursorTime = -1;
     this._intensityRouter.reset();
     this._resetBgParallax();
-    this._heroDecompBursts.length = 0;
-    this._heroDecompSpawned.clear();
-    this._elementalExitStates.clear();
     this._bgSnapshotSection = -1;
   }
 
@@ -2665,6 +2626,7 @@ export class LyricDancePlayer {
             this.audio.currentTime = this.data.region_start;
             this.conductor?.resetCursor();
             this._beatCursor = 0;
+            this._intensityRouter.reset();
             this._lastBeatIndex = -1;
           }
         }
@@ -3112,11 +3074,10 @@ export class LyricDancePlayer {
     const config = this._activeEffects;
 
     if (conductorResponse) {
-      this.ambientParticleEngine?.setDensityMultiplier((conductorResponse.particleDensity * 2) * config.particleDensity);
-      this.ambientParticleEngine?.setSpeedMultiplier((conductorResponse.particleSpeed * 2) * config.particleSpeed);
-    } else {
-      this.ambientParticleEngine?.setDensityMultiplier(config.particleDensity * 2);
-      this.ambientParticleEngine?.setSpeedMultiplier(config.particleSpeed * 2);
+      const irDensity = mp.particleDensityMult;
+      const irSpeed = mp.particleSpeedMult;
+      this.ambientParticleEngine?.setDensityMultiplier(irDensity * config.particleDensity);
+      this.ambientParticleEngine?.setSpeedMultiplier(irSpeed * config.particleSpeed);
     }
 
     // ── Minimal debug state (always cheap) ──
@@ -3441,34 +3402,7 @@ export class LyricDancePlayer {
     const camCX = this.width / 2;
     const camCY = this.height / 2;
 
-    const getGlowSettings = (chunk: ScaledKeyframe['chunks'][number], entry: number, drawAlpha: number, beatPulseNow: number) => {
-      const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || chunk.isHeroWord;
-      if (isHeroChunk && entry >= 0.5 && drawAlpha > 0.1) {
-        const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
-        const bloomGlow = baseGlow + (beatPulseNow * (this._lastBeatState?.energy ?? 0.5)) * 0.35;
-        const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
-        const tier = getEffectTier(wordDurMs);
-        const tierGlowCap = canShowHeroGlow(tier) ? getGlowCap(tier) : 0;
-        const blurCap = this._qualityTier < 2 ? Math.min(tierGlowCap, 12) : 0;
-        return {
-          glowColor: chunk.color ?? '#ffffff',
-          glowBlur: Math.min(blurCap, bloomGlow * 12),
-        };
-      }
-      if (chunk.glow > 0) {
-        const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
-        const tier = getEffectTier(wordDurMs);
-        const tierCap = getGlowCap(tier);
-        const glowCap = this._qualityTier < 2 ? Math.min(tierCap, 8) : 0;
-        return {
-          glowColor: chunk.color ?? '#ffffff',
-          glowBlur: Math.min(glowCap, chunk.glow * 12),
-        };
-      }
-      return { glowColor: 'transparent', glowBlur: 0 };
-    };
-
-    const drawChunkText = (chunk: ScaledKeyframe['chunks'][number], glowPass: boolean) => {
+    const drawChunkText = (chunk: ScaledKeyframe['chunks'][number]) => {
       if (!chunk.visible) return;
 
       const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
@@ -3479,75 +3413,6 @@ export class LyricDancePlayer {
       const activeSince = this.chunkActiveSinceMs.get(chunk.id);
       const visibleMs = activeSince != null ? frameNowMs - activeSince : 0;
       if (exit > 0) this.chunkActiveSinceMs.delete(chunk.id);
-
-      // ═══ HERO DECOMPOSITION: spawn shatter burst when solo hero starts exiting ═══
-      // Skip at tier 2+ (spawns dozens of particles per hero word)
-      if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2 && (chunk.wordDuration ?? 0) >= 0.35) {
-        this._heroDecompSpawned.add(chunk.id);
-        const spawnX = Number.isFinite(chunk.x) ? Math.max(clampMinX, Math.min(clampMaxX, chunk.x as number)) : this.width / 2;
-        const spawnY = Number.isFinite(chunk.y) ? Math.max(clampMinY, Math.min(clampMaxY, (chunk.y as number) - this._textVerticalBias)) : this.height / 2;
-        const spawnFontSize = Number.isFinite(chunk.fontSize) ? Math.max(viewportMinFont, Math.round(chunk.fontSize as number) || 36) : 36;
-        const spawnColor = chunk.color ?? '#ffffff';
-        this.spawnDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, spawnColor, frameNowMs);
-      }
-
-      const dKey = this.cleanWord((chunk.text ?? '') as string);
-      const dir = dKey ? this.resolvedState.wordDirectivesMap[dKey] ?? null : null;
-
-      // ═══ ELEMENTAL DECOMPOSITION: element-themed burst when tagged words exit ═══
-      if (exit > 0.01 && exit < 0.3 && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2) {
-        if (dir?.elementalClass) {
-          this._heroDecompSpawned.add(chunk.id);
-          const spawnX = Number.isFinite(chunk.x) ? Math.max(clampMinX, Math.min(clampMaxX, chunk.x as number)) : this.width / 2;
-          const spawnY = Number.isFinite(chunk.y) ? Math.max(clampMinY, Math.min(clampMaxY, (chunk.y as number) - this._textVerticalBias)) : this.height / 2;
-          const spawnFontSize = Number.isFinite(chunk.fontSize) ? Math.max(viewportMinFont, Math.round(chunk.fontSize as number) || 36) : 36;
-          this.spawnElementalDecompBurst(chunk.id, spawnX, spawnY, spawnFontSize, dir.elementalClass, frameNowMs);
-        }
-      }
-
-      // ═══ ELEMENTAL EXIT RENDERER ═══
-      if (exit > 0 && dir?.elementalClass && this._qualityTier < 2) {
-        // Get or create per-word exit state
-        let exitState = this._elementalExitStates.get(chunk.id);
-        if (!exitState) {
-          exitState = createExitState();
-          this._elementalExitStates.set(chunk.id, exitState);
-        }
-
-        const exitCx = Number.isFinite(chunk.x)
-          ? Math.max(clampMinX, Math.min(clampMaxX, chunk.x as number))
-          : this.width / 2;
-        const exitCy = Number.isFinite(chunk.y)
-          ? Math.max(clampMinY, Math.min(clampMaxY, (chunk.y as number) - this._textVerticalBias))
-          : this.height / 2;
-        const exitFontSize = Number.isFinite(chunk.fontSize)
-          ? Math.max(viewportMinFont, Math.round(chunk.fontSize as number) || 36)
-          : 36;
-        const exitWordWidth = (this.chunks.get(chunk.id)?.width ?? 40)
-          * (chunk.scaleX ?? chunk.scale ?? 1);
-        const exitBeatEnergy = this._lastBeatState?.energy ?? 0.5;
-
-        this.ctx.save();
-        this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
-        drawElementalExit(
-          this.ctx,
-          dir.elementalClass,
-          (chunk.text ?? '') as string,
-          exitCx,
-          exitCy,
-          exitFontSize,
-          exitWordWidth,
-          exit,
-          exitState,
-          exitBeatEnergy,
-        );
-        this.ctx.restore();
-      }
-
-      // Clean up exit state when word fully exits
-      if (exit >= 0.99) {
-        this._elementalExitStates.delete(chunk.id);
-      }
 
       const obj = this.chunks.get(chunk.id);
       if (!obj) return;
@@ -3590,12 +3455,6 @@ export class LyricDancePlayer {
 
       const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
       if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
-
-      const beatState = this._lastBeatState;
-      const beatPulse = beatState?.pulse ?? 0;
-      const { glowColor, glowBlur } = getGlowSettings(chunk, entry, drawAlpha, beatPulse);
-      const hasGlow = glowBlur >= 0.01;
-      if (hasGlow !== glowPass) return;
       this.ctx.globalAlpha = drawAlpha;
       this.ctx.fillStyle = chunk.color ?? '#ffffff';
 
@@ -3651,31 +3510,9 @@ export class LyricDancePlayer {
     this._lastShadowBlur = 0;
     this._lastShadowColor = 'transparent';
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
-      drawChunkText(sortBuf[ci], false);
+      drawChunkText(sortBuf[ci]);
     }
 
-    let lastGlowColor = 'transparent';
-    let lastGlowBlur = 0;
-    for (let ci = 0; ci < sortBuf.length; ci += 1) {
-      const chunk = sortBuf[ci];
-      if (!chunk.visible) continue;
-      const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
-      const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
-      const beatPulse = this._lastBeatState?.pulse ?? 0;
-      const { glowColor, glowBlur } = getGlowSettings(chunk, entry, drawAlpha, beatPulse);
-      if (glowBlur < 0.01) continue;
-      if (glowColor !== lastGlowColor) {
-        this.ctx.shadowColor = glowColor;
-        this._lastShadowColor = glowColor;
-        lastGlowColor = glowColor;
-      }
-      if (glowBlur !== lastGlowBlur) {
-        this.ctx.shadowBlur = glowBlur;
-        this._lastShadowBlur = glowBlur;
-        lastGlowBlur = glowBlur;
-      }
-      drawChunkText(chunk, true);
-    }
     this.ctx.shadowBlur = 0;
     this.ctx.shadowColor = 'transparent';
     this.ctx.globalAlpha = 1;
@@ -3687,106 +3524,11 @@ export class LyricDancePlayer {
     this.ctx.textAlign = 'left';
     this.setCanvasBaseline('alphabetic');
 
-    // ═══ PER-WORD ELEMENTAL EFFECTS ═══
-    // For each visible word with an elementalClass directive, render the effect
-    // directly on that word using screen blend mode (additive glow, no duplicate).
-    if (this._activeEffects.elementalIntensity > 0 && sortBuf.length > 0) {
-      const beatPulse = this._lastBeatState?.pulse ?? 0;
-      const lightingMode = this._textBandBrightness > 0.55 ? 'bright' as const : 'dark' as const;
-      const elementalAlpha = Math.max(this._activeEffects.elementalIntensity, 0.5);
-
-      for (let ci = 0; ci < sortBuf.length; ci++) {
-        const chunk = sortBuf[ci];
-        if (!chunk.visible || (chunk.alpha ?? 0) < 0.05) continue;
-
-        // Look up this word's elemental class from directives
-        const directiveKey = this.cleanWord((chunk.text ?? '') as string);
-        if (!directiveKey) continue;
-        const directive = this.resolvedState.wordDirectivesMap[directiveKey] ?? null;
-        if (!directive?.elementalClass) continue;
-
-        const wordText = ''; // text rendering handled inline in main draw path
-
-        // Word geometry
-        const sx = chunk.scaleX ?? chunk.scale ?? 1;
-        const fontSize = chunk.fontSize ?? 36;
-        const chunkObj = this.chunks.get(chunk.id);
-        const wordWidth = (chunkObj?.width ?? 40) * sx;
-        const halfW = wordWidth / 2;
-        const centerX = chunk.x ?? 0;
-        const centerY = (chunk.y ?? 0) - this._textVerticalBias;
-        // drawElementalWord draws from x=0 as left edge, so translate to left edge
-        const leftX = centerX - halfW;
-
-        // Word timing — time since this word's phrase started
-        const idParts = (chunk.id ?? '').split('-');
-        let groupStart = 0;
-        if (idParts.length >= 2 && this.compiledScene?.phraseGroups) {
-          const li = Number(idParts[0]);
-          const gi = Number(idParts[1]);
-          for (const g of this.compiledScene.phraseGroups) {
-            if (g.lineIndex === li && g.groupIndex === gi) {
-              groupStart = g.start;
-              break;
-            }
-          }
-        }
-        const wordLocalTime = Math.max(0, tSec - groupStart);
-
-        // Particle spread for this single word
-        const particleCount = Math.max(3, Math.round(8 * elementalAlpha));
-        const bubbleXPositions = Array.from({ length: particleCount }, (_, i) =>
-          wordWidth * (i / Math.max(1, particleCount - 1))
-        );
-
-        this.ctx.save();
-        this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
-        this.ctx.globalCompositeOperation = 'screen';
-        this.ctx.globalAlpha = elementalAlpha * (chunk.alpha ?? 1);
-        this.ctx.translate(leftX, centerY);
-        this.setCanvasBaseline('middle');
-        this.ctx.font = `${chunk.fontWeight ?? 600} ${fontSize}px "${this.compiledScene?.baseFontFamily ?? 'Montserrat'}", sans-serif`;
-
-        try {
-          drawElementalWord(
-            this.ctx,
-            wordText,
-            fontSize,
-            wordWidth,
-            directive.elementalClass,
-            wordLocalTime,
-            beatPulse,
-            1,
-            {
-              bubbleXPositions,
-              useBlur: this._qualityTier === 0,
-              isHeroWord: (directive.emphasisLevel ?? 0) >= 3,
-              effectQuality: this._qualityTier === 0 ? 'high' : 'low',
-              wordX: leftX,
-              wordY: centerY,
-              canvasWidth: this.width,
-              canvasHeight: this.height,
-              lightingMode,
-            },
-          );
-        } catch (e) {
-          // silently skip — don't spam console every frame
-        }
-
-        this.ctx.restore();
-      }
-    }
-
-
-
     // Comment comets — after text, before watermark
     this.drawComments(frameNowSec);
 
     // Emoji stream — community reactions rising from bottom-right
     this.drawEmojiRisers();
-
-    // ═══ Hero decomposition particles — shatter effect on hero word exit ═══
-    this.updateAndDrawDecomp(frameNowSec);
 
     // ═══ Near-plane particles — Lubezki's envelope ═══
     // Foreground particles (depth >= 0.5) drawn AFTER text.
@@ -4121,315 +3863,9 @@ export class LyricDancePlayer {
   // Hero Decomposition — shatter hero words into particles on exit
   // ────────────────────────────────────────────────────────────
 
-  private spawnDecompBurst(wordId: string, cx: number, cy: number, fontSize: number, color: string, nowMs: number): void {
-    const particles: HeroDecompParticle[] = [];
-    const count = 28 + Math.floor(Math.random() * 12); // 28-40 particles
-    const spread = fontSize * 1.2;
-
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 40 + Math.random() * 120;
-      const shape: HeroDecompParticle['shape'] =
-        i < count * 0.45 ? 'shard' : i < count * 0.8 ? 'dust' : 'glow';
-
-      particles.push({
-        x: cx + (Math.random() - 0.5) * spread,
-        y: cy + (Math.random() - 0.5) * fontSize * 0.6,
-        vx: Math.cos(angle) * speed * (0.6 + Math.random() * 0.8),
-        vy: Math.sin(angle) * speed * (0.5 + Math.random() * 0.7) - 30, // slight upward bias
-        size: shape === 'shard' ? (3 + Math.random() * 6) : shape === 'dust' ? (1.5 + Math.random() * 3) : (2 + Math.random() * 4),
-        alpha: 0.85 + Math.random() * 0.15,
-        rotation: Math.random() * Math.PI * 2,
-        rotSpeed: (Math.random() - 0.5) * 8,
-        life: 1.0,
-        color,
-        shape,
-      });
-    }
-
-    this._heroDecompBursts.push({
-      wordId, particles, startTime: nowMs,
-      duration: 1200, // 1.2 seconds
-      originX: cx, originY: cy,
-    });
-
-    // Cap active bursts
-    if (this._heroDecompBursts.length > 6) {
-      this._heroDecompBursts = this._heroDecompBursts.slice(-6);
-    }
-  }
 
 
-  private spawnElementalDecompBurst(
-    wordId: string, cx: number, cy: number, fontSize: number,
-    elementalClass: string, nowMs: number,
-  ): void {
-    const particles: HeroDecompParticle[] = [];
-    const spread = fontSize * 1.0;
 
-    // Element-specific particle recipes
-    switch (elementalClass) {
-      case 'FROST':
-      case 'ICE': {
-        // Ice crystals that drift outward slowly, sparkling
-        const count = 20 + Math.floor(Math.random() * 10);
-        for (let i = 0; i < count; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 20 + Math.random() * 60;
-          const shape: HeroDecompParticle['shape'] =
-            i < count * 0.6 ? 'shard' : i < count * 0.85 ? 'glow' : 'dust';
-          particles.push({
-            x: cx + (Math.random() - 0.5) * spread,
-            y: cy + (Math.random() - 0.5) * fontSize * 0.4,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed * 0.6 - 15, // slight drift up
-            size: shape === 'shard' ? (4 + Math.random() * 7) : (2 + Math.random() * 4),
-            alpha: 0.8 + Math.random() * 0.2,
-            rotation: Math.random() * Math.PI * 2,
-            rotSpeed: (Math.random() - 0.5) * 3,
-            life: 1.0,
-            color: `hsl(${200 + Math.random() * 20}, ${60 + Math.random() * 30}%, ${70 + Math.random() * 25}%)`,
-            shape,
-          });
-        }
-        this._heroDecompBursts.push({
-          wordId, particles, startTime: nowMs,
-          duration: 1800, // frost lingers — 1.8s
-          originX: cx, originY: cy, elementalClass,
-        });
-        break;
-      }
-
-      case 'FIRE': {
-        // Embers that rise (negative gravity), glow orange/red
-        const count = 25 + Math.floor(Math.random() * 10);
-        for (let i = 0; i < count; i++) {
-          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.8; // mostly upward
-          const speed = 30 + Math.random() * 80;
-          const shape: HeroDecompParticle['shape'] =
-            i < count * 0.3 ? 'shard' : i < count * 0.7 ? 'glow' : 'dust';
-          particles.push({
-            x: cx + (Math.random() - 0.5) * spread,
-            y: cy + (Math.random() - 0.5) * fontSize * 0.3,
-            vx: Math.cos(angle) * speed * (0.5 + Math.random()),
-            vy: Math.sin(angle) * speed * (0.8 + Math.random()) - 40, // strong upward
-            size: shape === 'glow' ? (3 + Math.random() * 6) : (2 + Math.random() * 4),
-            alpha: 0.9 + Math.random() * 0.1,
-            rotation: Math.random() * Math.PI * 2,
-            rotSpeed: (Math.random() - 0.5) * 6,
-            life: 1.0,
-            color: `hsl(${Math.random() * 30 + 10}, ${80 + Math.random() * 20}%, ${50 + Math.random() * 30}%)`,
-            shape,
-          });
-        }
-        this._heroDecompBursts.push({
-          wordId, particles, startTime: nowMs,
-          duration: 1400, // fire burns fast — 1.4s
-          originX: cx, originY: cy, elementalClass,
-        });
-        break;
-      }
-
-      case 'WATER':
-      case 'RAIN': {
-        // Droplets that fall with gravity, blue tones
-        const count = 18 + Math.floor(Math.random() * 8);
-        for (let i = 0; i < count; i++) {
-          const angle = Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.6; // mostly downward
-          const speed = 20 + Math.random() * 50;
-          const shape: HeroDecompParticle['shape'] =
-            i < count * 0.5 ? 'glow' : i < count * 0.8 ? 'dust' : 'shard';
-          particles.push({
-            x: cx + (Math.random() - 0.5) * spread,
-            y: cy + (Math.random() - 0.5) * fontSize * 0.3,
-            vx: Math.cos(angle) * speed * 0.4,
-            vy: Math.sin(angle) * speed * 0.6 + 10, // fall down
-            size: shape === 'glow' ? (3 + Math.random() * 5) : (1.5 + Math.random() * 3),
-            alpha: 0.7 + Math.random() * 0.3,
-            rotation: 0,
-            rotSpeed: 0,
-            life: 1.0,
-            color: `hsl(${200 + Math.random() * 20}, ${50 + Math.random() * 30}%, ${55 + Math.random() * 30}%)`,
-            shape,
-          });
-        }
-        this._heroDecompBursts.push({
-          wordId, particles, startTime: nowMs,
-          duration: 1200,
-          originX: cx, originY: cy, elementalClass,
-        });
-        break;
-      }
-
-      case 'SMOKE': {
-        // Wisps that float upward very slowly, fade to nothing
-        const count = 15 + Math.floor(Math.random() * 8);
-        for (let i = 0; i < count; i++) {
-          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.5;
-          const speed = 10 + Math.random() * 30; // very slow
-          particles.push({
-            x: cx + (Math.random() - 0.5) * spread,
-            y: cy + (Math.random() - 0.5) * fontSize * 0.4,
-            vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 15,
-            vy: -10 - Math.random() * 20, // gentle rise
-            size: 4 + Math.random() * 8, // larger, softer
-            alpha: 0.4 + Math.random() * 0.3, // starts translucent
-            rotation: Math.random() * Math.PI * 2,
-            rotSpeed: (Math.random() - 0.5) * 1.5, // slow spin
-            life: 1.0,
-            color: `hsl(0, 0%, ${55 + Math.random() * 30}%)`,
-            shape: i < count * 0.3 ? 'glow' : 'dust',
-          });
-        }
-        this._heroDecompBursts.push({
-          wordId, particles, startTime: nowMs,
-          duration: 2000, // smoke lingers longest — 2s
-          originX: cx, originY: cy, elementalClass,
-        });
-        break;
-      }
-
-      case 'ELECTRIC': {
-        // Bright sparks that scatter fast in all directions, short lived
-        const count = 22 + Math.floor(Math.random() * 12);
-        for (let i = 0; i < count; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 60 + Math.random() * 150; // fast scatter
-          particles.push({
-            x: cx + (Math.random() - 0.5) * spread * 0.6,
-            y: cy + (Math.random() - 0.5) * fontSize * 0.3,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            size: 2 + Math.random() * 4,
-            alpha: 0.9 + Math.random() * 0.1,
-            rotation: Math.random() * Math.PI * 2,
-            rotSpeed: (Math.random() - 0.5) * 12, // fast spin
-            life: 1.0,
-            color: `hsl(${190 + Math.random() * 40}, ${70 + Math.random() * 30}%, ${65 + Math.random() * 30}%)`,
-            shape: i < count * 0.5 ? 'glow' : 'shard',
-          });
-        }
-        this._heroDecompBursts.push({
-          wordId, particles, startTime: nowMs,
-          duration: 800, // electric is fast — 0.8s
-          originX: cx, originY: cy, elementalClass,
-        });
-        break;
-      }
-
-      default: {
-        // Fallback: generic white shatter
-        this.spawnDecompBurst(wordId, cx, cy, fontSize, '#ffffff', nowMs);
-        return;
-      }
-    }
-
-    // Cap active bursts
-    if (this._heroDecompBursts.length > 6) {
-      this._heroDecompBursts = this._heroDecompBursts.slice(-6);
-    }
-  }
-
-  private updateAndDrawDecomp(frameNowSec: number): void {
-    if (this._heroDecompBursts.length === 0) return;
-
-    const nowMs = frameNowSec * 1000;
-    const dt = Math.min(0.05, this._frameDt); // capped delta
-    const BASE_GRAVITY = 180;
-
-    this.ctx.save();
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
-
-    // Update and draw all active bursts
-    for (let bi = this._heroDecompBursts.length - 1; bi >= 0; bi--) {
-      const burst = this._heroDecompBursts[bi];
-      const elapsed = nowMs - burst.startTime;
-      const burstT = Math.min(1, elapsed / burst.duration);
-
-      // Element-specific gravity
-      let gravity = BASE_GRAVITY;
-      if (burst.elementalClass === 'FIRE') gravity = -60;       // embers rise
-      else if (burst.elementalClass === 'SMOKE') gravity = -25;  // smoke drifts up
-      else if (burst.elementalClass === 'FROST') gravity = 40;   // crystals drift slowly
-      else if (burst.elementalClass === 'WATER') gravity = 220;  // droplets fall fast
-      else if (burst.elementalClass === 'ELECTRIC') gravity = 0; // sparks float
-
-      if (burstT >= 1) {
-        this._heroDecompBursts.splice(bi, 1);
-        this._heroDecompSpawned.delete(burst.wordId);
-        continue;
-      }
-
-      // Flash at burst start (first 80ms)
-      if (elapsed < 80) {
-        const flashAlpha = (1 - elapsed / 80) * 0.6;
-        this.ctx.globalAlpha = flashAlpha;
-        // Element-themed flash
-        switch (burst.elementalClass) {
-          case 'FROST': case 'ICE': this.ctx.fillStyle = '#a0d4ff'; break;
-          case 'FIRE': this.ctx.fillStyle = '#ff6622'; break;
-          case 'WATER': case 'RAIN': this.ctx.fillStyle = '#4488cc'; break;
-          case 'SMOKE': this.ctx.fillStyle = '#888888'; break;
-          case 'ELECTRIC': this.ctx.fillStyle = '#66ccff'; break;
-          default: this.ctx.fillStyle = '#ffffff'; break;
-        }
-        this.ctx.beginPath();
-        this.ctx.arc(burst.originX, burst.originY, 20 + (elapsed / 80) * 40, 0, Math.PI * 2);
-        this.ctx.fill();
-      }
-
-      for (const p of burst.particles) {
-        // Physics
-        p.vy += gravity * dt;
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.rotation += p.rotSpeed * dt;
-
-        // Life decay: shards last longer, dust fades faster
-        const decayRate = p.shape === 'shard' ? 0.7 : p.shape === 'dust' ? 1.2 : 0.9;
-        p.life = Math.max(0, 1 - burstT * decayRate);
-        if (p.life <= 0) continue;
-
-        const alpha = p.alpha * p.life * (1 - burstT * 0.3);
-        if (alpha < 0.01) continue;
-
-        this.ctx.globalAlpha = alpha;
-
-        if (p.shape === 'shard') {
-          // Rotated rectangles — icy shard look
-          this.ctx.save();
-          this.ctx.translate(p.x, p.y);
-          this.ctx.rotate(p.rotation);
-          this.ctx.fillStyle = p.color;
-          this.ctx.shadowColor = p.color;
-          this.ctx.shadowBlur = 4;
-          const w = p.size * 0.4;
-          const h = p.size;
-          this.ctx.fillRect(-w / 2, -h / 2, w, h);
-          this.ctx.restore();
-        } else if (p.shape === 'dust') {
-          // Tiny circles
-          this.ctx.fillStyle = p.color;
-          this.ctx.beginPath();
-          this.ctx.arc(p.x, p.y, p.size * 0.5, 0, Math.PI * 2);
-          this.ctx.fill();
-        } else {
-          // Glow dots — shadowBlur gives the same soft halo with zero allocation.
-          // createRadialGradient allocates a GPU gradient object per particle per frame.
-          const r = p.size;
-          this.ctx.fillStyle = p.color;
-          this.ctx.shadowColor = p.color;
-          this.ctx.shadowBlur = r * 4;
-          this.ctx.beginPath();
-          this.ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-          this.ctx.fill();
-          this.ctx.shadowBlur = 0;
-        }
-      }
-    }
-
-    this.ctx.restore();
-  }
 
   private setResolution(width: number, height: number): void {
     this.width = width;
@@ -4547,25 +3983,6 @@ export class LyricDancePlayer {
           const clean = key.trim().toLowerCase();
           if (!clean) continue;
           map[clean] = value;
-        }
-      }
-    }
-
-    // ── Semantic auto-map: fill in elementalClass for words the AI didn't annotate ──
-    if (words) {
-      const seen = new Set<string>();
-      for (const w of words) {
-        const clean = w.word.toLowerCase().replace(/[^a-z]/g, '');
-        if (!clean || clean.length < 2 || seen.has(clean)) continue;
-        seen.add(clean);
-        const semantic = getSemanticOverride(clean);
-        if (!semantic?.elementalClass) continue;
-        const existing = map[clean];
-        if (existing?.elementalClass) continue;
-        if (existing) {
-          existing.elementalClass = semantic.elementalClass;
-        } else {
-          map[clean] = { word: clean, elementalClass: semantic.elementalClass, emphasisLevel: 1 };
         }
       }
     }
@@ -5581,38 +4998,30 @@ export class LyricDancePlayer {
     }
   }
 
-  private drawLightingOverlay(_frame: ScaledKeyframe, tSec: number): void {
-    const songDuration = Math.max(1, this.songEndSec - this.songStartSec);
-    const songProgress = Math.max(0, Math.min(1, (tSec - this.songStartSec) / songDuration));
-    const cd = this.data.cinematic_direction as any;
-    if (!cd) return;
+  private drawLightingOverlay(_frame: ScaledKeyframe, _tSec: number): void {
+    const intensity = this._motionProfile?.intensity ?? 0;
+    if (intensity < 0.3) return;
 
-    const climaxRatio = cd.climax?.timeRatio ?? 0.75;
-    const climaxRange = 0.08;
-    const distToClimax = Math.abs(songProgress - climaxRatio);
-    if (distToClimax >= climaxRange) return;
-
-    const intensity = (1 - distToClimax / climaxRange) * (cd.climax?.maxLightIntensity ?? 0.6);
-    const alphaKey = Math.round(intensity * 100);
+    const alpha = (intensity - 0.3) * 0.2;
+    const alphaKey = Math.round(alpha * 100);
     const key = `${this.width}-${this.height}-${alphaKey}`;
 
     if (key !== this._lightingOverlayKey || !this._lightingOverlayCanvas) {
       const off = document.createElement('canvas');
-      off.width = this.width;
-      off.height = this.height;
+      off.width = this.width; off.height = this.height;
       const octx = off.getContext('2d')!;
       const grad = octx.createRadialGradient(
         this.width / 2, this.height / 2, 0,
-        this.width / 2, this.height / 2, this.width * 0.6
+        this.width / 2, this.height / 2, this.width * 0.65,
       );
-      grad.addColorStop(0, `rgba(255,255,240,${intensity * 0.15})`);
-      grad.addColorStop(1, 'rgba(255,255,240,0)');
+      grad.addColorStop(0, `rgba(255,245,220,${alpha})`);
+      grad.addColorStop(0.6, `rgba(255,235,200,${alpha * 0.4})`);
+      grad.addColorStop(1, 'rgba(255,230,190,0)');
       octx.fillStyle = grad;
       octx.fillRect(0, 0, this.width, this.height);
       this._lightingOverlayCanvas = off;
       this._lightingOverlayKey = key;
     }
-
     this.ctx.drawImage(this._lightingOverlayCanvas, 0, 0);
   }
 
@@ -5627,8 +5036,8 @@ export class LyricDancePlayer {
     const strength = this._activeEffects.vignetteStrength;
     if (strength < 0.01) return;
     // Smoothed energy for gentle breathing (not beat-by-beat, section-level)
-    const targetEnergy = this._lastBeatState?.energy ?? 0.3;
-    this._vignetteEnergy += (targetEnergy - this._vignetteEnergy) * 0.03; // very slow EMA
+    // Use IntensityRouter's smoothed energy for coherent breathing
+    this._vignetteEnergy = this._intensityRouter.smoothedEnergy;
 
     const w = this.width;
     const h = this.height;
@@ -5683,29 +5092,15 @@ export class LyricDancePlayer {
 
   private _buildHeroSchedule(): void {
     const words = this.data.words ?? [];
-    const wdm = this.resolvedState.wordDirectivesMap;
     const schedule: typeof this._heroSchedule = [];
-
     for (const w of words) {
-      const clean = normalizeToken(w.word);
-      const directive = wdm[clean];
-      const emphasis = directive?.emphasisLevel ?? 0;
       const duration = w.end - w.start;
-      // Only solo-eligible heroes drive camera lookahead
-      if (emphasis >= 4 && duration >= 0.5) {
-        schedule.push({
-          startSec: w.start,
-          endSec: w.end,
-          emphasis,
-          word: w.word,
-        });
+      if (duration >= 0.5) {
+        schedule.push({ startSec: w.start, endSec: w.end, emphasis: duration >= 1.0 ? 5 : 4, word: w.word });
       }
     }
-
-    // Sort by start time
     schedule.sort((a, b) => a.startSec - b.startSec);
     this._heroSchedule = schedule;
-    
   }
 
   /**
