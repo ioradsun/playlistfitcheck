@@ -3405,15 +3405,6 @@ export class LyricDancePlayer {
     const drawChunkText = (chunk: ScaledKeyframe['chunks'][number]) => {
       if (!chunk.visible) return;
 
-      const entry = Math.max(0, Math.min(1, chunk.entryProgress ?? 0));
-      const exit = Math.max(0, Math.min(1, chunk.exitProgress ?? 0));
-      if (entry >= 1.0 && exit === 0) {
-        if (!this.chunkActiveSinceMs.has(chunk.id)) this.chunkActiveSinceMs.set(chunk.id, frameNowMs);
-      }
-      const activeSince = this.chunkActiveSinceMs.get(chunk.id);
-      const visibleMs = activeSince != null ? frameNowMs - activeSince : 0;
-      if (exit > 0) this.chunkActiveSinceMs.delete(chunk.id);
-
       const obj = this.chunks.get(chunk.id);
       if (!obj) return;
 
@@ -3464,13 +3455,6 @@ export class LyricDancePlayer {
       const clampedDrawX = Math.max(clampMinX, Math.min(clampMaxX, heroDrawX));
       const clampedDrawY = Math.max(clampMinY, Math.min(clampMaxY, heroDrawY));
 
-      const needsFilterSaveRestore = false; // per-chunk filter blur disabled — cleaner entry/exit, saves rasterize+filter cycle
-      if (needsFilterSaveRestore) {
-        this.ctx.save();
-        this.ctx.filter = `blur(${(chunk.blur ?? 0) * 12}px)`;
-      }
-      // Ghost trail removed — 1 copy at 12% opacity was invisible, saves fillText calls
-
       const [ma, mb, mc, md, me, mf] = this.computeTransformMatrix(
         camShakeX + camCX + (clampedDrawX - camCX) * camZoom,
         camShakeY + camCY + (clampedDrawY - camCY) * camZoom,
@@ -3481,25 +3465,10 @@ export class LyricDancePlayer {
       );
       this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
-        // ═══ Text stroke for edge contrast in ambiguous zones ═══
-        // Skip at tier 2+ (strokeText is as expensive as fillText)
-      const textStrokeColor = this._qualityTier < 2 ? (chunk as any).textStroke as string | undefined : undefined;
-      if (textStrokeColor) {
-        this.ctx.strokeStyle = textStrokeColor;
-        this.ctx.lineWidth = Math.max(1.5, safeFontSize * 0.03);
-        this.ctx.lineJoin = 'round';
-      }
-
-        // Main text draw
-      if (textStrokeColor) this.ctx.strokeText(text, 0, 0);
+      // Main text draw — single fillText, no stroke, no glow
       this.ctx.fillText(text, 0, 0);
 
       // Inline elemental textures removed — single color doctrine (all text bright white)
-
-      if (needsFilterSaveRestore) {
-        this.ctx.filter = 'none';
-        this.ctx.restore();
-      }
 
       // Elemental effects moved to phrase-level pass (drawn after all text)
       drawCalls += 1;
@@ -4861,11 +4830,6 @@ export class LyricDancePlayer {
         const ws = wordAnimStates[wi];
         const anim = computeChunkAnim(word, phraseState, ws, beatPhase, mp.intensity);
 
-        const vibrateX = 0;
-        const vibrateY = 0;
-
-        const ghostBounce = 1.0;
-
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
 
@@ -4873,21 +4837,16 @@ export class LyricDancePlayer {
         chunk.text = word.text;
 
         // Position: layout + animation offsets + neighbor push
-        chunk.x = word.layoutX + anim.offsetX + neighborPushOffsets[wi] + vibrateX;
-        chunk.y = word.layoutY + anim.offsetY + vibrateY;
-
-        // Last-word stability rule: keep phrase-ending words calmer and anchored.
-        if (wi === group.words.length - 1) {
-          chunk.y = word.layoutY + (chunk.y - word.layoutY) * 0.35;
-        }
+        chunk.x = word.layoutX + anim.offsetX + neighborPushOffsets[wi];
+        chunk.y = word.layoutY + anim.offsetY;
 
         chunk.alpha = anim.alpha;
-        chunk.scaleX = anim.scaleX * ghostBounce;
-        chunk.scaleY = anim.scaleY * ghostBounce;
+        chunk.scaleX = anim.scaleX;
+        chunk.scaleY = anim.scaleY;
         chunk.scale = 1;
         chunk.visible = anim.visible;
         chunk.fontSize = word.baseFontSize;
-        chunk.fontWeight = ws.effectiveHero ? Math.min(900, word.fontWeight + 100) : word.fontWeight;
+        chunk.fontWeight = word.fontWeight;
         chunk.fontFamily = word.fontFamily;
         chunk.isAnchor = word.isAnchor;
         chunk.rotation = anim.rotation;
@@ -4896,23 +4855,9 @@ export class LyricDancePlayer {
 
         chunk.color = word.color;
 
-        // Glow (hero words only, capped)
-        const glowCap = this._activeEffects.glowCap;
-        const heroBeatResp = ws.effectiveHero ? getBeatResponse(word.emphasisLevel ?? 1, true) : null;
-        const glowPulse = heroBeatResp?.wordGlow ?? beatState?.pulse ?? 0;
-        chunk.glow = ws.effectiveHero ? Math.min((glowPulse * (this._lastBeatState?.energy ?? 0.5)) * 0.5, glowCap / 20) : 0;
+        chunk.glow = 0;
 
-        // Metadata for elemental/decomp
-        chunk.emphasisLevel = word.emphasisLevel;
-        chunk.entryProgress = phraseState.isEntering ? phraseState.entryProgress : 1;
-        chunk.exitProgress = phraseState.isExiting ? phraseState.exitProgress : 0;
         chunk.isHeroWord = ws.effectiveHero;
-        chunk.wordDuration = word.wordDuration ?? 0;
-        chunk.isSoloHero = ws.isSoloHero;
-        chunk.letterIndex = word.letterIndex;
-        chunk.letterTotal = word.letterTotal;
-        chunk.letterDelay = word.letterDelay ?? 0;
-        chunk.isLetterChunk = word.isLetterChunk;
         chunk.frozen = false;
         ci++;
       }

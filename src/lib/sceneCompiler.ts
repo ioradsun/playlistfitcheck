@@ -453,16 +453,23 @@ function resolveLayout(wordCount: number, totalChars: number): {
   ghostPreview: boolean;
   revealStyle: 'instant' | 'stagger_fast' | 'stagger_slow';
 } {
+  // 1 word → fills screen
   if (wordCount === 1) {
     return { composition: 'center_word', ghostPreview: false, revealStyle: 'instant' };
   }
+  // 2-3 words → stack if short, line if long. No preview — stagger reveal.
   if (wordCount <= 3) {
     return {
-      composition: totalChars <= 12 ? 'stack' : 'line',
+      composition: totalChars <= 15 ? 'stack' : 'line',
       ghostPreview: false,
       revealStyle: 'stagger_fast',
     };
   }
+  // 4-5 words → line with stagger reveal. No preview — phrase is short enough.
+  if (wordCount <= 5) {
+    return { composition: 'line', ghostPreview: false, revealStyle: 'stagger_slow' };
+  }
+  // 6+ words → line with ghost preview (all words dim, spotlight reads through)
   return { composition: 'line', ghostPreview: true, revealStyle: 'stagger_slow' };
 }
 
