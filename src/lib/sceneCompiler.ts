@@ -74,7 +74,6 @@ export type MotionCharacter = 'slam' | 'rise' | 'drift' | 'snap' | 'bloom' | 'wh
  */
 export function computeMotionEntry(character: MotionCharacter, progress: number, intensity: number): AnimState {
   const ep = easeOut(Math.min(1, progress));
-  const eb = easeOutBack(Math.min(1, progress));
   const I = Math.max(0, Math.min(1, intensity));
 
   switch (character) {
@@ -83,7 +82,7 @@ export function computeMotionEntry(character: MotionCharacter, progress: number,
       const squash = ep > 0.85 ? (1 - ep) * 10 * I : 0;
       return {
         offsetX: 0,
-        offsetY: -(1 - ep) * 80 * I,
+        offsetY: 0, // words appear in place — no drop
         scaleX: 1 + squash * 0.15,
         scaleY: 1 - squash * 0.15,
         alpha: Math.min(1, progress * 6),
@@ -97,7 +96,7 @@ export function computeMotionEntry(character: MotionCharacter, progress: number,
       // Float up from below.
       return {
         offsetX: 0,
-        offsetY: (1 - ep) * 50 * I,
+        offsetY: 0, // words appear in place — no vertical float
         scaleX: 1,
         scaleY: 1,
         alpha: easeOut(Math.min(1, progress * 2)),
@@ -110,12 +109,12 @@ export function computeMotionEntry(character: MotionCharacter, progress: number,
     case 'drift': {
       // Slide from left with parallax skew.
       return {
-        offsetX: (1 - eb) * -100 * I,
+        offsetX: 0, // words appear in place — no horizontal slide
         offsetY: 0,
         scaleX: 1,
         scaleY: 1,
         alpha: easeOut(Math.min(1, progress * 2)),
-        skewX: (1 - ep) * -6 * I,
+        skewX: 0, // no skew — clean appearance
         glowMult: 0,
         blur: 0,
         rotation: 0,
@@ -174,9 +173,9 @@ export function computeMotionExit(character: MotionCharacter, progress: number, 
   // progress: 0 = still visible, 1 = fully exited
   // Run entry in reverse: entry at (1-progress) gives the "unwinding" state
   const reversed = computeMotionEntry(character, 1 - progress, intensity);
-  // Flip direction so exit goes the opposite way
-  reversed.offsetX *= -1;
-  reversed.offsetY *= -1;
+  // Exit uses alpha/scale only — no positional movement.
+  reversed.offsetX = 0;
+  reversed.offsetY = 0;
   reversed.skewX *= -1;
   reversed.rotation *= -1;
   return reversed;

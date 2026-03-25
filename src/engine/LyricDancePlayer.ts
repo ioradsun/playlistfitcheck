@@ -1509,6 +1509,10 @@ export class LyricDancePlayer {
       intensity: 0.5,
       transitionType: "cross-dissolve",
     });
+    if (this.ambientParticleEngine) {
+      this.ambientParticleEngine.setSystem('dust'); // always start with something
+      this.ambientParticleEngine.setDensityMultiplier(0.6);
+    }
   }
 
   private markFirstPaintOnce(): void {
@@ -3064,6 +3068,12 @@ export class LyricDancePlayer {
 
       const texture = section?.texture ?? this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, cd) ?? "dust";
       this.activeSectionTexture = texture;
+      // Guarantee visible atmosphere in every section
+      if (this.ambientParticleEngine) {
+        this.ambientParticleEngine.setSystem(texture);
+        this.ambientParticleEngine.setDensityMultiplier(Math.max(0.5, this._activeEffects.particleDensity));
+        this.ambientParticleEngine.setSpeedMultiplier(Math.max(0.2, this._activeEffects.particleSpeed));
+      }
       const atmosphereState = (section as any)?.atmosphereState as string | undefined;
       if (atmosphereState && this.ambientParticleEngine) {
         switch (atmosphereState) {

@@ -124,7 +124,7 @@ export interface ChunkAnimState {
 
 const WORD_FADE_SEC = 0.15; // 150ms per-word fade in after stagger reveal
 const REVEAL_ANTICIPATION = 0.1; // 100ms before group.start
-const CENTER_WORD_SCALE = 1.8; // EXTREME: center_word is huge
+const CENTER_WORD_SCALE = 2.2; // center_word fills the screen
 const BEAT_NUDGE_BASE = 8; // EXTREME: visible bounce
 const BEAT_SCALE_BASE = 1.0; // base scale (1.0 = no beat effect)
 const BEAT_SCALE_MULT = 0.08; // EXTREME: visible pulse
@@ -278,6 +278,10 @@ export function computePhraseState(
   const isRevealMode = pMode.startsWith('horiz') || pMode.startsWith('stack');
 
   const phraseExitDuration = Math.min(groupExitDur, phraseDuration * 0.35);
+  // Never go fully transparent on exit — hold at 30% minimum until next phrase takes over.
+  // The cursor guarantees this group stays active until nextGroupStart.
+  // But the exit alpha can reach 0 while the next phrase's words aren't visible yet.
+  // Fix: clamp exit so the phrase never fully disappears.
   const isExiting = !suppressExit && phraseRemaining < phraseExitDuration && phraseRemaining >= 0;
   const exitProgress = isExiting
     ? Math.min(1, 1 - phraseRemaining / Math.max(0.01, phraseExitDuration))
@@ -316,8 +320,8 @@ export function computePhraseState(
 
   // ── Bias-driven entry slide ──
   let biasEntryOffsetX = 0;
-  if (bias === 'left') biasEntryOffsetX = -canvasWidth * 0.25;  // EXTREME: slides from 25% offscreen
-  else if (bias === 'right') biasEntryOffsetX = canvasWidth * 0.25;
+  // No positional entry — words appear in place
+  // Bias only affects layout position (already handled by compiler)
 
   // ── Beat response ──
   const pulse = beatState?.pulse ?? 0;
@@ -458,7 +462,7 @@ export function computeWordState(
   const emp = word.emphasisLevel ?? 0;
   let heroScaleMult = 1.0;
   if (effectiveHero && !isSoloHero) {
-    heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.15;
+    heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.25; // more dramatic hero emphasis
   }
 
   // Solo hero offset (center screen)
@@ -467,7 +471,7 @@ export function computeWordState(
   if (isSoloHero) {
     heroOffsetX = canvasWidth / 2 - word.layoutX;
     heroOffsetY = canvasHeight / 2 - word.layoutY;
-    heroScaleMult = Math.max(heroScaleMult, 1.3);
+    heroScaleMult = Math.max(heroScaleMult, 1.8); // solo hero dominates
   }
 
   // ── Composition scale boost ──
@@ -542,7 +546,10 @@ export function computeChunkAnim(
         : wordAnim.wordState === 'spoken' ? 0.8 : 0.2;
       alpha = phrase.entry.alpha * baseAlpha;
     } else if (phrase.isExiting && !phrase.suppressExit) {
-      alpha = phrase.exit.alpha * wordAnim.spotlightAlpha;
+      // Never-blank: outgoing phrase holds at minimum 25% alpha
+      // This prevents blank canvas between phrases
+      const exitAlpha = Math.max(0.25, phrase.exit.alpha);
+      alpha = exitAlpha * wordAnim.spotlightAlpha;
     } else {
       alpha = wordAnim.spotlightAlpha;
     }
@@ -554,12 +561,21 @@ export function computeChunkAnim(
     if (phrase.isEntering) {
       alpha = phrase.entry.alpha * wordAnim.spotlightAlpha;
     } else if (phrase.isExiting && !phrase.suppressExit) {
-      alpha = phrase.exit.alpha * wordAnim.spotlightAlpha;
+      // Never-blank: outgoing phrase holds at minimum 25% alpha
+      // This prevents blank canvas between phrases
+      const exitAlpha = Math.max(0.25, phrase.exit.alpha);
+      alpha = exitAlpha * wordAnim.spotlightAlpha;
     } else {
       alpha = wordAnim.spotlightAlpha;
     }
   }
 
+  // Never-blank floor: if the phrase is the active cursor group,
+  // it should never be fully invisible. Minimum 15% alpha.
+  // (soloHeroHidden and unrevealed-in-reveal-mode can still be 0)
+  if (alpha > 0 && alpha < 0.15 && !wordAnim.soloHeroHidden) {
+    alpha = 0.15;
+  }
   alpha = Math.max(0, Math.min(1, alpha));
 
   // ── SCALE ──
