@@ -1233,6 +1233,7 @@ export class LyricDancePlayer {
   /** Beat-synced zoom pulse — the background breathes with the beat */
   private _bgPulseZoom = 1.0;
   /** Beat nod: uniform Y shift for all text, synced with background pulse */
+  private _textBeatNodX = 0;
   private _textBeatNodY = 0;
   // ═══ Breathing vignette — Fincher/Cronenweth eye funnel ═══
   private _vignetteCanvas: HTMLCanvasElement | null = null;
@@ -2451,6 +2452,7 @@ export class LyricDancePlayer {
 
   private _resetBgParallax(): void {
     this._bgPulseZoom = 1.0;
+    this._textBeatNodX = 0;
     this._textBeatNodY = 0;
   }
 
@@ -3274,7 +3276,7 @@ export class LyricDancePlayer {
     // camT was already read above for wall computation — reuse it
     const camZoom = 1.0;
     const syncFrac = this._textSyncFraction;
-    const camShakeX = camT.offsetX * syncFrac;
+    const camShakeX = camT.offsetX * syncFrac + this._textBeatNodX;
     const camShakeY = camT.offsetY * syncFrac + this._textBeatNodY;
     const camRotation = camT.rotation * syncFrac;
     const camCX = this.width / 2;
@@ -4527,11 +4529,23 @@ export class LyricDancePlayer {
 
     // Final zoom = ceiling × timing × per-beat-strength
     this._bgPulseZoom = 1.0 + mp.bgPulseAmplitude * pulseEnvelope * beatDynamic;
-    // ═══ TEXT BEAT NOD: same signal as background zoom ═══
-    // Uniform Y shift for all text — NOT per-word. Goes into camShakeY.
-    // Background zooms in on beat, text dips down. One pulse, two expressions.
-    this._textBeatNodY = mp.bgPulseAmplitude * pulseEnvelope * beatDynamic * 50;
-    // At bgPulseAmplitude 0.06 × pulse 1.0 = 3px dip (matches 6% zoom feel)
+    // ═══ TEXT BEAT NOD: figure-8 pattern per bar position ═══
+    // Each beat in a 4-beat bar gets a different direction.
+    // Same magnitude, driven by same pulse signal. Musical, not random.
+    //   Beat 1 (downbeat): dip down          (0, 1.0)
+    //   Beat 2:            sway right + dip  (0.7, 0.3)
+    //   Beat 3:            smaller down       (0, 0.8)
+    //   Beat 4:            sway left + dip   (-0.7, 0.3)
+    const barPos = beatIndex >= 0 ? beatIndex % 4 : 0;
+    let nodDirX = 0;
+    let nodDirY = 1.0;
+    if (barPos === 1)      { nodDirX = 0.7; nodDirY = 0.3; }
+    else if (barPos === 2) { nodDirX = 0; nodDirY = 0.8; }
+    else if (barPos === 3) { nodDirX = -0.7; nodDirY = 0.3; }
+
+    const nodMag = mp.bgPulseAmplitude * pulseEnvelope * beatDynamic * 50;
+    this._textBeatNodX = nodMag * nodDirX;
+    this._textBeatNodY = nodMag * nodDirY;
 
     // Brightness flash and vignette also scale per-beat
     const beatFlash = pulseEnvelope * beatDynamic * mp.intensity;
