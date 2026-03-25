@@ -1264,8 +1264,7 @@ export class LyricDancePlayer {
   private _wickSeekOverlay: HTMLDivElement | null = null;
   public wickBarEnabled = false;
   private chapterImages: HTMLImageElement[] = [];
-  /** Pre-blurred versions of chapter images — eliminates per-frame ctx.filter blur() cost */
-  private _preBlurredImages: HTMLCanvasElement[] = [];
+  // Pre-blurred images removed — background renders sharp
   // Ken Burns per-chapter parameters — computed once on image load
   private _kenBurnsParams: Array<{
     zoomStart: number;
@@ -1966,29 +1965,6 @@ export class LyricDancePlayer {
     // word wrapping, row stacking, and layout positions are correct for the
     // export resolution, not the live viewport.
     this.resize(width, height);
-    // Regenerate pre-blurred images at export resolution — avoids fallback to
-    // per-frame ctx.filter blur which is the most expensive background operation.
-    // loadSectionImages() is async but we don't need to await — the first few
-    // export frames will use runtime blur fallback, then pre-blur kicks in.
-    if (this.chapterImages.length > 0) {
-      this._preBlurredImages = this.chapterImages.map((img) => {
-        if (!img.complete || img.naturalWidth === 0) return null as any;
-        const off = document.createElement('canvas');
-        off.width = this.width;
-        off.height = this.height;
-        const octx = off.getContext('2d');
-        if (!octx) return null as any;
-        // Overscan matches drawChapterImage (1.20×)
-        const ow = this.width * 1.20;
-        const oh = this.height * 1.20;
-        const ox = (this.width - ow) / 2;
-        const oy = (this.height - oh) / 2;
-        octx.filter = 'blur(3px)';
-        this._drawImageCoverCropped(octx, img, ox, oy, ow, oh);
-        octx.filter = 'none';
-        return off;
-      });
-    }
     // Re-acquire context with willReadFrequently for fast pixel readback
     this.ctx = this.canvas.getContext('2d', {
       willReadFrequently: true,
@@ -2128,7 +2104,6 @@ export class LyricDancePlayer {
     this._lightingOverlayKey = '';
     this._vignetteCanvas = null;
     this._vignetteKey = '';
-    this._preBlurredImages = []; // invalidate — will use runtime blur fallback until reload
     this._watermarkCache = null; // invalidate — dimensions depend on this.width
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     this.lastSimFrame = -1;
@@ -2452,8 +2427,6 @@ export class LyricDancePlayer {
     this._zeroCanvas(this._beatVisCanvas);
     this.chapterSims = [];
     this.chapterImages = [];
-    this._zeroCanvasList(this._preBlurredImages);
-    this._preBlurredImages = [];
     this._zeroCanvas(this._lightingOverlayCanvas);
     this._lightingOverlayCanvas = null;
     this._zeroCanvas(this._vignetteCanvas);
@@ -4071,21 +4044,17 @@ export class LyricDancePlayer {
     const urls = this.data.section_images ?? [];
     if (this.options?.preloadedImages?.length) {
       this.chapterImages = this.options.preloadedImages;
-      this._preBlurredImages = this.chapterImages.map(() => document.createElement('canvas'));
-      this.chapterImages.forEach((img, i) => this._preBlurSingleImage(img, i));
       this._rebuildKenBurnsParams();
       return;
     }
     if (urls.length === 0) return;
     this.chapterImages = urls.map(() => new Image());
-    this._preBlurredImages = urls.map(() => document.createElement('canvas'));
 
     const loadPromises = urls.map(async (url: string, i: number) => {
       if (!url) return;
       try {
         const img = await preloadImage(url);
         this.chapterImages[i] = img;
-        this._preBlurSingleImage(img, i);
       } catch {
         // leave fallback empty image
       }
@@ -4122,34 +4091,6 @@ export class LyricDancePlayer {
       cropY = Math.round((srcH - cropH) / 2);
     }
     ctx.drawImage(img, cropX, cropY, cropW, cropH, dx, dy, dw, dh);
-  }
-
-  private _preBlurSingleImage(img: HTMLImageElement, index: number): void {
-    if (!img.complete || img.naturalWidth === 0) return;
-    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const cdSections = (cd?.sections as any[]) ?? [];
-    const songGrade = this._songGrade ?? getMoodGrade(cdSections[0]?.visualMood as string | undefined);
-    const blurRadius = Math.min(3, songGrade.blur.radius);
-
-    const off = document.createElement('canvas');
-    off.width = this.width || 960;
-    off.height = this.height || 540;
-    const ctx = off.getContext('2d');
-    if (!ctx) return;
-
-    if (blurRadius > 0.2) ctx.filter = `blur(${blurRadius.toFixed(1)}px)`;
-    const OVERSCAN = 1.25;
-    const ow = off.width * OVERSCAN;
-    const oh = off.height * OVERSCAN;
-    const ox = (off.width - ow) / 2;
-    const oy = (off.height - oh) / 2;
-    this._drawImageCoverCropped(ctx, img, ox, oy, ow, oh);
-    ctx.filter = 'none';
-
-    while (this._preBlurredImages.length <= index) {
-      this._preBlurredImages.push(document.createElement('canvas'));
-    }
-    this._preBlurredImages[index] = off;
   }
 
   private _rebuildKenBurnsParams(): void {
@@ -4228,9 +4169,6 @@ export class LyricDancePlayer {
 
     const current = this.chapterImages[chapterIdx];
     const next = this.chapterImages[nextChapterIdx];
-    const currentBlurred = this._preBlurredImages[chapterIdx];
-    const nextBlurred = this._preBlurredImages[nextChapterIdx];
-
     // ═══ SONG-LEVEL GRADE: one look for the entire song ═══
     // Computed once from the dominant mood, then locked in.
     if (!this._songGrade) {
@@ -4266,22 +4204,13 @@ export class LyricDancePlayer {
     // Background brightness pulse — direct from BeatConductor
     const beatMod = this._lastBeatState?.pulse ?? 0;
 
-    // ═══ PRE-BLURRED PATH: blur is baked into offscreen canvases ═══
-    // Only color adjustments at runtime (brightness, saturate, contrast, hue-rotate)
-    // Pass blurOverride=0 to skip per-frame blur — already baked in
-    const filterStr = buildGradeFilter(activeGrade, intensity, beatMod, 0);
+    const filterStr = buildGradeFilter(activeGrade, intensity, beatMod);
 
-    // Use pre-blurred canvas if available (eliminates per-frame blur cost),
-    // otherwise fall back to original image
-    const drawCurrent = (currentBlurred && currentBlurred.width > 0) ? currentBlurred : current;
-    const useOrigCurrent = drawCurrent === current;
+    const drawCurrent = current;
 
-    if ((useOrigCurrent ? (current?.complete && current.naturalWidth > 0) : true)) {
+    if (current?.complete && current.naturalWidth > 0) {
       this.ctx.save();
-      // If using original (no pre-blur), apply full filter including blur fallback
-      this.ctx.filter = useOrigCurrent
-        ? buildGradeFilter(activeGrade, intensity, beatMod)
-        : filterStr;
+      this.ctx.filter = filterStr;
 
       // ═══ OVERSCAN: draw image 20% larger than canvas to prevent border visibility
       const OVERSCAN = 1.20;
@@ -4316,15 +4245,12 @@ export class LyricDancePlayer {
       this.ctx.restore(); // restore filter state
     }
 
-    const drawNext = (nextBlurred && nextBlurred.width > 0) ? nextBlurred : next;
-    const useOrigNext = drawNext === next;
+    const drawNext = next;
 
-    if ((useOrigNext ? (next?.complete && next.naturalWidth > 0) : true) && blend > 0) {
+    if (next?.complete && next.naturalWidth > 0 && blend > 0) {
       this.ctx.save();
       this.ctx.globalAlpha = blend;
-      this.ctx.filter = useOrigNext
-        ? buildGradeFilter(activeGrade, intensity, beatMod)
-        : filterStr;
+      this.ctx.filter = filterStr;
 
       const OVERSCAN_NEXT = 1.20;
       const onw = this.width * OVERSCAN_NEXT;
