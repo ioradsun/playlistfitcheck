@@ -121,16 +121,16 @@ export interface ChunkAnimState {
 // Constants
 // ─────────────────────────────────────────
 
-const WORD_FADE_SEC = 0.08; // per-word fade-in after stagger reveal
+const WORD_FADE_SEC = 0.2; // EXTREME: slow visible fade per word
 const REVEAL_ANTICIPATION = 0.1; // 100ms before group.start
-const CENTER_WORD_SCALE = 1.4;
-const BEAT_NUDGE_BASE = 3; // px base beat nudge Y
+const CENTER_WORD_SCALE = 1.8; // EXTREME: center_word is huge
+const BEAT_NUDGE_BASE = 8; // EXTREME: visible bounce
 const BEAT_SCALE_BASE = 1.0; // base scale (1.0 = no beat effect)
-const BEAT_SCALE_MULT = 0.04; // max beat scale addition
+const BEAT_SCALE_MULT = 0.08; // EXTREME: visible pulse
 
 /** Motion cap for word count — limits motion magnitude for dense phrases */
 function motionCap(wordCount: number): number {
-  return wordCount > 5 ? 0.5 : wordCount > 3 ? 0.75 : 1.0;
+  return 1.0; // EXTREME: full motion for all word counts
 }
 
 // ─────────────────────────────────────────
@@ -148,7 +148,7 @@ function resolveEntryCharacter(energyTier: string, sectionDefault: MotionCharact
     case 'surprise':
       return 'bloom';
     case 'groove':
-      return sectionDefault;
+      return 'drift'; // ALWAYS visible slide — not snap
     default:
       return sectionDefault;
   }
@@ -165,7 +165,7 @@ function resolveExitCharacter(energyTier: string, sectionDefault: MotionCharacte
     case 'surprise':
       return 'snap';
     case 'groove':
-      return sectionDefault;
+      return 'drift'; // ALWAYS visible slide — not snap
     default:
       return sectionDefault;
   }
@@ -182,7 +182,7 @@ function resolveMotionIntensity(energyTier: string, sectionDefault: number): num
     case 'surprise':
       return 0.9;
     case 'groove':
-      return sectionDefault;
+      return 0.8; // strong visible motion
     default:
       return sectionDefault;
   }
@@ -252,8 +252,9 @@ export function computePhraseState(
   }
 
   // ── Entry/exit timing ──
-  const groupEntryDur = group.entryDuration ?? moodConfig.entryDuration;
-  const groupExitDur = group.exitDuration ?? moodConfig.exitDuration;
+  // Minimum 0.3s entry so motion is visible (snap is still instant via alpha)
+  const groupEntryDur = Math.max(0.3, group.entryDuration ?? moodConfig.entryDuration);
+  const groupExitDur = Math.max(0.25, group.exitDuration ?? moodConfig.exitDuration);
   const phraseDuration = Math.max(0.01, group.end - group.start);
   const staggerDelay = group.staggerDelay ?? 0;
   const entryPad = group.words.length * (staggerDelay || 0.05) + 0.2;
@@ -310,8 +311,8 @@ export function computePhraseState(
 
   // ── Bias-driven entry slide ──
   let biasEntryOffsetX = 0;
-  if (bias === 'left') biasEntryOffsetX = -canvasWidth * 0.12;
-  else if (bias === 'right') biasEntryOffsetX = canvasWidth * 0.12;
+  if (bias === 'left') biasEntryOffsetX = -canvasWidth * 0.25;  // EXTREME: slides from 25% offscreen
+  else if (bias === 'right') biasEntryOffsetX = canvasWidth * 0.25;
 
   // ── Beat response ──
   const pulse = beatState?.pulse ?? 0;

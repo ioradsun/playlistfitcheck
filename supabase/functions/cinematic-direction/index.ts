@@ -1474,6 +1474,14 @@ function fillChoreographyDefaults(
       phrase.energyTier = moodToEnergy[sectionMood] ?? "groove";
     }
 
+    // EXTREME: vary energy tiers more aggressively
+    if (i % 4 === 0 && phrase.energyTier === 'groove') {
+      phrase.energyTier = 'lift';
+    }
+    if (i % 7 === 0 && phrase.energyTier === 'groove') {
+      phrase.energyTier = 'intimate';
+    }
+
     // Short phrases (2-3 words) with high emphasis → phrase-level hero
     if (wc <= 3 && heroEmphasis >= 3) {
       phrase.heroType = "phrase";
@@ -1494,6 +1502,14 @@ function fillChoreographyDefaults(
           phrase.bias = "left";
         } else if (phraseHash < 4) {
           phrase.bias = "right";
+        }
+
+        // EXTREME: more stagger variety
+        if (i % 3 === 0 && phrase.revealStyle === 'instant' && wc >= 3) {
+          phrase.revealStyle = 'stagger_slow';
+        }
+        if (i % 5 === 0 && phrase.revealStyle === 'instant' && wc >= 2) {
+          phrase.revealStyle = 'stagger_fast';
         }
         // else stays center
       } else {

@@ -88,12 +88,12 @@ export function drawElementalWord(
         for (let i = 0; i < rippleCount; i++) {
           const rippleT = (t * 0.4 + i * 0.33) % 1;
           const rippleW = wordWidth * (0.5 + rippleT * 0.6);
-          const rippleAlpha = Math.max(0, 0.25 - rippleT * 0.25);
+          const rippleAlpha = Math.max(0, 0.5 - rippleT * 0.5);
           ctx.save();
           ctx.beginPath();
           ctx.ellipse(wordWidth / 2, fontSize * 0.2 + rippleT * 12, rippleW / 2, 2.5, 0, 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(30,100,200,${rippleAlpha})`;
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = 4;
           ctx.stroke();
           ctx.restore();
         }
@@ -128,7 +128,7 @@ export function drawElementalWord(
         ctx.restore();
 
         // Bubbles rising
-        const bubbleCount = Math.max(1, bubbleXPositions.length || (3 + appearanceCount * 2));
+        const bubbleCount = Math.max(1, bubbleXPositions.length || ((3 + appearanceCount * 2) * 2));
         const bubbleSpeed = 1 + appearanceCount * 0.4;
         const cappedBubbles = Math.min(bubbleCount, effectQuality === "high" ? 12 : 8);
         for (let i = 0; i < cappedBubbles; i += 1) {
@@ -138,7 +138,7 @@ export function drawElementalWord(
           const byOffset = (t * (15 * bubbleSpeed) + i * 20) % 40;
           const by = byBase - byOffset;
           const opacity = Math.max(0, 0.6 - byOffset / 40);
-          drawBubble(ctx, bx, by, 1.5 + i % 3, opacity);
+          drawBubble(ctx, bx, by, (1.5 + i % 3) * 2, opacity);
         }
 
         // Water drips
@@ -208,13 +208,13 @@ export function drawElementalWord(
         ctx.restore();
 
         // Embers even in bright mode
-        const brightEmberCount = 3 + Math.floor(beatIntensity * 3);
+        const brightEmberCount = Math.floor((3 + Math.floor(beatIntensity * 3)) * 1.5);
         for (let i = 0; i < brightEmberCount; i += 1) {
           const ex = (wordWidth * i / brightEmberCount) + Math.sin(t * 5 + i * 1.3) * 6;
           const eyOffset = (t * 20 + i * 12) % 30;
           const ey = -fontSize - eyOffset;
           const eOpacity = Math.max(0, 0.6 - eyOffset / 30);
-          drawEmber(ctx, ex, ey, 1.8 + (i % 2), eOpacity, t * 1000, i);
+          drawEmber(ctx, ex, ey, (1.8 + (i % 2)) * 2, eOpacity, t * 1000, i);
         }
       } else {
         // Dark: orange bloom, embers, additive flame gradient
@@ -238,13 +238,13 @@ export function drawElementalWord(
         ctx.restore();
 
         // Ember particles
-        const emberCount = 4 + Math.floor(beatIntensity * 4);
+        const emberCount = Math.floor((4 + Math.floor(beatIntensity * 4)) * 1.5);
         for (let i = 0; i < emberCount; i += 1) {
           const ex = (wordWidth * i / emberCount) + Math.sin(t * 5 + i * 1.3) * 6;
           const eyOffset = (t * 25 + i * 15) % 35;
           const ey = -fontSize - eyOffset;
           const eOpacity = Math.max(0, 0.8 - eyOffset / 35);
-          drawEmber(ctx, ex, ey, 1.4 + (i % 2), eOpacity, t * 1000, i);
+          drawEmber(ctx, ex, ey, (1.4 + (i % 2)) * 2, eOpacity, t * 1000, i);
         }
       }
       break;
@@ -301,8 +301,8 @@ export function drawElementalWord(
           ctx,
           wordWidth / 2,
           -fontSize / 2,
-          (wordWidth / 2) * (1 + smokeAge * 0.8),
-          Math.max(0, 0.5 - smokeAge * 0.35),
+          ((wordWidth / 2) * (1 + smokeAge * 0.8)) * 2,
+          Math.max(0, (0.5 - smokeAge * 0.35) * 2),
           t * 1000,
           appearanceCount,
         );
@@ -370,11 +370,11 @@ export function drawElementalWord(
         ctx.fillStyle = "#ffffff";
         if (hasText) ctx.fillText(word, 0, 0);
 
-        const orbCount = isHeroWord ? 3 : 2;
+        const orbCount = (isHeroWord ? 3 : 2) * 2;
         for (let i = 0; i < orbCount; i += 1) {
           const ox = (wordWidth * (i + 1)) / (orbCount + 1);
           const oy = -fontSize * (0.55 + i * 0.18);
-          drawNeonOrb(ctx, ox, oy, 2.8 + beatIntensity * 2, 0.35 + beatIntensity * 0.45, t * 1000, neonColor);
+          drawNeonOrb(ctx, ox, oy, (2.8 + beatIntensity * 2) * 2, 0.35 + beatIntensity * 0.45, t * 1000, neonColor);
         }
 
         if (beatIntensity > 0.55) {
@@ -430,13 +430,13 @@ export function drawElementalWord(
         ctx.restore();
 
         // Ice crystals — visible
-        const crystalCount = isHeroWord ? 5 : 3;
+        const crystalCount = isHeroWord ? 12 : 8;
         for (let i = 0; i < crystalCount; i++) {
           const angle = (Math.PI * 2 * i) / crystalCount + t * 0.15;
           const radius = wordWidth * 0.45 + Math.sin(t * 0.4 + i * 2) * 8;
           const cx = wordWidth / 2 + Math.cos(angle) * radius;
           const cy = -fontSize / 2 + Math.sin(angle) * fontSize * 0.4;
-          const size = 3 + Math.sin(t * 1.5 + i) * 1.5;
+          const size = 8 + Math.sin(t * 1.5 + i) * 4;
           ctx.save();
           ctx.translate(cx, cy);
           ctx.rotate(angle);
@@ -446,7 +446,7 @@ export function drawElementalWord(
           ctx.lineTo(0, size);
           ctx.lineTo(-size * 0.5, 0);
           ctx.closePath();
-          ctx.fillStyle = "rgba(100,180,230,0.35)";
+          ctx.fillStyle = "rgba(100,180,230,0.8)";
           ctx.fill();
           ctx.restore();
         }
@@ -474,14 +474,14 @@ export function drawElementalWord(
         ctx.restore();
 
         // Ice crystals
-        const crystalCount = isHeroWord ? 8 : 4;
+        const crystalCount = isHeroWord ? 20 : 12;
         for (let i = 0; i < crystalCount; i += 1) {
           const angle = (Math.PI * 2 * i) / crystalCount + t * 0.15;
           const radius = (wordWidth * 0.55) + Math.sin(t * 0.5 + i * 1.7) * 8;
           const cx = wordWidth / 2 + Math.cos(angle) * radius;
           const cy = -fontSize / 2 + Math.sin(angle) * (fontSize * 0.4 + Math.sin(t * 0.3 + i) * 4);
-          const size = 2 + Math.sin(t * 2 + i * 2.1) * 1.5;
-          const crystalOpacity = 0.3 + Math.sin(t * 1.5 + i * 0.8) * 0.2;
+          const size = 8 + Math.sin(t * 2 + i * 2.1) * 5;
+          const crystalOpacity = 0.7 + Math.sin(t * 1.5 + i * 0.8) * 0.3;
 
           ctx.save();
           ctx.translate(cx, cy);
@@ -499,13 +499,13 @@ export function drawElementalWord(
 
         // Cold breath mist
         if (beatIntensity > 0.3 || isHeroWord) {
-          const mistCount = isHeroWord ? 5 : 3;
+          const mistCount = isHeroWord ? 12 : 8;
           for (let i = 0; i < mistCount; i += 1) {
             const mx = wordWidth * (i / mistCount) + Math.sin(t * 0.7 + i) * 8;
             const mistProgress = (t * 0.35 + i * 0.2) % 1;
             const my = -fontSize - mistProgress * 25;
-            const mistSize = 6 + mistProgress * 12;
-            const mistAlpha = Math.max(0, (0.2 - mistProgress * 0.2));
+            const mistSize = 20 + mistProgress * 30;
+            const mistAlpha = Math.max(0, (0.5 - mistProgress * 0.5));
             ctx.beginPath();
             ctx.arc(mx, my, mistSize, 0, Math.PI * 2);
             ctx.fillStyle = `rgba(200,230,255,${mistAlpha})`;
