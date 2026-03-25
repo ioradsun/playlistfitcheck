@@ -147,7 +147,6 @@ export interface WordDirective {
     | 'ICE' | 'RAIN' | 'NEON' | null; // ICE/RAIN/NEON kept for legacy compat
   /** Word appears alone on screen — requires word duration ≥ 700ms */
   isolation?: boolean;
-  colorOverride?: string | null;
   specialEffect?: string | null;
   evolutionRule?: string | null;
 }
