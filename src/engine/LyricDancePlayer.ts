@@ -3672,20 +3672,20 @@ export class LyricDancePlayer {
         switch (_etDir.elementalClass) {
           case 'FROST':
           case 'ICE':
-            _wordColor = '#c8e8ff';
+            _wordColor = '#66bbff';
             break;
           case 'FIRE':
-            _wordColor = '#ffe0b0';
+            _wordColor = '#ff8833';
             break;
           case 'WATER':
           case 'RAIN':
-            _wordColor = '#b8ddff';
+            _wordColor = '#3399ff';
             break;
           case 'SMOKE':
-            _wordColor = '#dddddd';
+            _wordColor = '#aaaaaa';
             break;
           case 'ELECTRIC':
-            _wordColor = '#ccf0ff';
+            _wordColor = '#00ddff';
             break;
         }
       }
@@ -3749,12 +3749,12 @@ export class LyricDancePlayer {
             frostGrad.addColorStop(0, 'rgba(150,210,255,0)');
             frostGrad.addColorStop(0.5, `rgba(180,230,255,${0.35 + beatPulseEl * 0.15})`);
             frostGrad.addColorStop(1, 'rgba(150,210,255,0)');
-            this.ctx.globalAlpha = drawAlpha * 0.6;
+            this.ctx.globalAlpha = drawAlpha * 1.0;
             this.ctx.fillStyle = frostGrad;
             this.ctx.fillText(text, 0, 0);
 
             // Crystalline edge highlight
-            this.ctx.globalAlpha = drawAlpha * 0.15;
+            this.ctx.globalAlpha = drawAlpha * 0.4;
             this.ctx.fillStyle = '#aaddff';
             this.ctx.fillText(text, -0.7, -0.7);
             this.ctx.fillText(text, 0.7, 0.7);
@@ -3767,13 +3767,13 @@ export class LyricDancePlayer {
             fireGrad.addColorStop(0, `rgba(255,80,0,${0.25 + beatPulseEl * 0.2})`);
             fireGrad.addColorStop(0.5, `rgba(255,160,30,${0.3 + beatPulseEl * 0.15})`);
             fireGrad.addColorStop(1, 'rgba(255,60,0,0.15)');
-            this.ctx.globalAlpha = drawAlpha * 0.5;
+            this.ctx.globalAlpha = drawAlpha * 1.0;
             this.ctx.fillStyle = fireGrad;
             this.ctx.fillText(text, 0, 0);
 
             // Heat distortion — slight offset shimmer
             const heatOff = Math.sin(elTime * 4) * 1.5;
-            this.ctx.globalAlpha = drawAlpha * 0.12;
+            this.ctx.globalAlpha = drawAlpha * 0.4;
             this.ctx.fillStyle = '#ff6622';
             this.ctx.fillText(text, heatOff, -0.5);
             break;
@@ -3784,7 +3784,7 @@ export class LyricDancePlayer {
             // ── Wet sheen: blue gradient sweep ──
             const waveAmp = 2 + beatPulseEl * 2;
             const waveOff = Math.sin(elTime * 2.5) * waveAmp;
-            this.ctx.globalAlpha = drawAlpha * 0.3;
+            this.ctx.globalAlpha = drawAlpha * 0.7;
             this.ctx.fillStyle = '#2266bb';
             this.ctx.fillText(text, waveOff, 0.8);
 
@@ -3793,7 +3793,7 @@ export class LyricDancePlayer {
             sheenGrad.addColorStop(0, 'rgba(100,180,255,0.2)');
             sheenGrad.addColorStop(0.4, 'rgba(100,180,255,0)');
             sheenGrad.addColorStop(1, 'rgba(100,180,255,0.1)');
-            this.ctx.globalAlpha = drawAlpha * 0.4;
+            this.ctx.globalAlpha = drawAlpha * 0.8;
             this.ctx.fillStyle = sheenGrad;
             this.ctx.fillText(text, 0, 0);
             break;
@@ -3802,12 +3802,12 @@ export class LyricDancePlayer {
           case 'SMOKE': {
             // ── Smoke haze: drifting gray overlay ──
             const smokeDrift = Math.sin(elTime * 0.8) * 2;
-            this.ctx.globalAlpha = drawAlpha * 0.2;
+            this.ctx.globalAlpha = drawAlpha * 0.6;
             this.ctx.fillStyle = '#999999';
             this.ctx.fillText(text, smokeDrift, -1);
 
             // Fading edge
-            this.ctx.globalAlpha = drawAlpha * 0.1;
+            this.ctx.globalAlpha = drawAlpha * 0.4;
             this.ctx.fillStyle = '#777777';
             this.ctx.fillText(text, smokeDrift + 1.5, -1.5);
             break;
@@ -3815,13 +3815,13 @@ export class LyricDancePlayer {
 
           case 'ELECTRIC': {
             // ── Electric crackle: bright cyan flashes synced to beat ──
-            const flashIntensity = 0.15 + beatPulseEl * 0.4;
+            const flashIntensity = 0.5 + beatPulseEl * 0.5;
             this.ctx.globalAlpha = drawAlpha * flashIntensity;
             this.ctx.fillStyle = '#44ddff';
             this.ctx.fillText(text, 0, 0);
 
             // Double-edge neon
-            this.ctx.globalAlpha = drawAlpha * 0.12;
+            this.ctx.globalAlpha = drawAlpha * 0.5;
             this.ctx.fillStyle = '#00ffff';
             this.ctx.fillText(text, -0.8, 0);
             this.ctx.fillText(text, 0.8, 0);
