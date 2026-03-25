@@ -1292,6 +1292,8 @@ export class LyricDancePlayer {
   private _bgRebakeIntervalMs = 500; // rebake background every 500ms
   /** Beat-synced zoom pulse — the background breathes with the beat */
   private _bgPulseZoom = 1.0;
+  /** Beat nod: uniform Y shift for all text, synced with background pulse */
+  private _textBeatNodY = 0;
   // ═══ Breathing vignette — Fincher/Cronenweth eye funnel ═══
   private _vignetteCanvas: HTMLCanvasElement | null = null;
   private _vignetteKey = '';        // tracks canvas size for invalidation
@@ -2514,6 +2516,7 @@ export class LyricDancePlayer {
 
   private _resetBgParallax(): void {
     this._bgPulseZoom = 1.0;
+    this._textBeatNodY = 0;
   }
 
   private _handleVisibilityChangeImpl(): void {
@@ -3341,7 +3344,7 @@ export class LyricDancePlayer {
     const camZoom = 1.0;
     const syncFrac = this._textSyncFraction;
     const camShakeX = camT.offsetX * syncFrac;
-    const camShakeY = camT.offsetY * syncFrac;
+    const camShakeY = camT.offsetY * syncFrac + this._textBeatNodY;
     const camRotation = camT.rotation * syncFrac;
     const camCX = this.width / 2;
     const camCY = this.height / 2;
@@ -4599,6 +4602,11 @@ export class LyricDancePlayer {
 
     // Final zoom = ceiling × timing × per-beat-strength
     this._bgPulseZoom = 1.0 + mp.bgPulseAmplitude * pulseEnvelope * beatDynamic;
+    // ═══ TEXT BEAT NOD: same signal as background zoom ═══
+    // Uniform Y shift for all text — NOT per-word. Goes into camShakeY.
+    // Background zooms in on beat, text dips down. One pulse, two expressions.
+    this._textBeatNodY = mp.bgPulseAmplitude * pulseEnvelope * beatDynamic * 50;
+    // At bgPulseAmplitude 0.06 × pulse 1.0 = 3px dip (matches 6% zoom feel)
 
     // Brightness flash and vignette also scale per-beat
     const beatFlash = pulseEnvelope * beatDynamic * mp.intensity;
