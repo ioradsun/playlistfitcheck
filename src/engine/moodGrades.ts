@@ -52,7 +52,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.65,
     contrast: 1.0,
     temperature: 0.2,
-    blur: { type: 'gaussian', radius: 3, rackFocus: true },
+    blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 1.5 },
     motionIntent: 'push-in',
     beatBrightnessGain: 0.02,
@@ -74,7 +74,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.50,
     contrast: 0.85,
     temperature: 0.3,
-    blur: { type: 'bloom', radius: 3 },
+    blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 2.0 },
     motionIntent: 'drift-lateral',
     beatBrightnessGain: 0.01,
@@ -96,7 +96,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.40,
     contrast: 1.0,
     temperature: -0.1,
-    blur: { type: 'gaussian', radius: 2 },
+    blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 1.5 },
     motionIntent: 'drift-down',
     beatBrightnessGain: 0.01,
@@ -107,7 +107,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 1.15,
     contrast: 1.1,
     temperature: 0.2,
-    blur: { type: 'bloom', radius: 3 },
+    blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.0, size: 0 },
     motionIntent: 'pull-out',
     beatBrightnessGain: 0.05,
@@ -118,7 +118,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.30,
     contrast: 1.3,
     temperature: -0.4,
-    blur: { type: 'tilt-shift', radius: 3 },
+    blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 0.8 },
     motionIntent: 'drift-lateral',
     beatBrightnessGain: 0.02,
@@ -129,7 +129,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.50,
     contrast: 0.9,
     temperature: 0.15,
-    blur: { type: 'gaussian', radius: 2, rackFocus: true },
+    blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 1.5 },
     motionIntent: 'breathing',
     beatBrightnessGain: 0.01,
@@ -151,7 +151,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.55,
     contrast: 0.95,
     temperature: 0.35,
-    blur: { type: 'gaussian', radius: 2 },
+    blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 2.0 },
     motionIntent: 'drift-lateral',
     beatBrightnessGain: 0.01,
@@ -173,7 +173,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.70,
     contrast: 1.0,
     temperature: 0.3,
-    blur: { type: 'gaussian', radius: 1 },
+    blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.05, size: 1.0 },
     motionIntent: 'drift-up',
     beatBrightnessGain: 0.03,
@@ -195,7 +195,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     saturation: 0.70,
     contrast: 1.1,
     temperature: -0.1,
-    blur: { type: 'tilt-shift', radius: 3 },
+    blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.05, size: 1.0 },
     motionIntent: 'slow-zoom',
     beatBrightnessGain: 0.02,
@@ -220,7 +220,6 @@ export function getMoodGrade(visualMood: string | undefined | null): MoodGrade {
  * @param grade - The mood grade
  * @param intensityMod - 0-1 from emotional intensity (brightens at climax)
  * @param beatMod - 0-1 from beat spring (brightness pulse on beats)
- * @param blurOverride - optional blur px override (for rack focus)
  */
 // Module-level LRU cache for filter strings — max 12 entries.
 // beatMod changes every frame but is quantized to 0.02 steps so most frames
@@ -231,11 +230,10 @@ export function buildGradeFilter(
   grade: MoodGrade,
   intensityMod: number = 0,
   beatMod: number = 0,
-  blurOverride?: number,
 ): string {
   // Quantize beatMod to 0.02 steps — eliminates cache misses from sub-visual jitter
   const bModQ = Math.round(beatMod * 50) / 50;
-  const key = `${grade.brightness.toFixed(2)}-${grade.saturation.toFixed(2)}-${grade.contrast.toFixed(2)}-${grade.temperature.toFixed(2)}-${intensityMod.toFixed(2)}-${bModQ.toFixed(2)}-${blurOverride ?? 'x'}`;
+  const key = `${grade.brightness.toFixed(2)}-${grade.saturation.toFixed(2)}-${grade.contrast.toFixed(2)}-${grade.temperature.toFixed(2)}-${intensityMod.toFixed(2)}-${bModQ.toFixed(2)}`;
 
   const cached = _gradeFilterCache.get(key);
   if (cached !== undefined) return cached;
@@ -254,12 +252,8 @@ export function buildGradeFilter(
     parts.push(`hue-rotate(${Math.round(grade.temperature * 30)}deg)`);
   }
 
-  // Blur — hard cap at 3px to keep background image sharp
-  const MAX_BLUR_PX = 3;
-  const blurPx = Math.min(MAX_BLUR_PX, blurOverride ?? grade.blur.radius);
-  if (blurPx > 0.2) {
-    parts.push(`blur(${blurPx.toFixed(1)}px)`);
-  }
+  // Blur removed — background images render sharp. Text readability
+  // comes from alpha spotlight + vignette, not depth-of-field.
 
   const result = parts.join(' ');
 
@@ -294,11 +288,7 @@ export function lerpGrade(a: MoodGrade, b: MoodGrade, t: number): MoodGrade {
     saturation: lerp(a.saturation, b.saturation),
     contrast: lerp(a.contrast, b.contrast),
     temperature: lerp(a.temperature, b.temperature),
-    blur: {
-      type: t < 0.5 ? a.blur.type : b.blur.type,
-      radius: lerp(a.blur.radius, b.blur.radius),
-      rackFocus: t < 0.5 ? a.blur.rackFocus : b.blur.rackFocus,
-    },
+    blur: { type: 'none', radius: 0 },
     grain: {
       intensity: lerp(a.grain.intensity, b.grain.intensity),
       size: lerp(a.grain.size, b.grain.size),
