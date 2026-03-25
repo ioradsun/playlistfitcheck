@@ -91,7 +91,7 @@ const TYPOGRAPHY_PROFILES: Record<string, TypographyProfile> = {
 };
 
 const FILLER_WORDS = new Set(['a','an','the','to','of','and','or','but','in','on','at','for','with','from','by','up','down','is','am','are','was','were','be','been','being','it','its','that','this','these','those','i','you','he','she','we','they']);
-const MIN_GROUP_DURATION = 0.4;
+const MIN_GROUP_DURATION = 0.5;
 const MAX_GROUP_SIZE = 5;
 
 
@@ -444,165 +444,58 @@ type PresentationMode =
   | 'impact_center' | 'impact_left' | 'impact_right'
   | 'horiz_drift';
 
-const MODE_CARDS: Array<{
-  mode: PresentationMode;
-  baseMode: string;
-  composition: string;
-  bias: string;
-  revealStyle: string;
-  entryCharacter: string;
-  exitCharacter: string;
-  holdClass: string;
+/**
+ * Layout rules: phrase structure → composition.
+ * Variety comes from lyrics, not randomness.
+ */
+function resolveLayout(wordCount: number, totalChars: number): {
+  composition: 'line' | 'stack' | 'center_word';
   ghostPreview: boolean;
-  vibrateOnHold: boolean;
-  elementalWash: boolean;
-}> = [
-  { mode: 'horiz_center',  baseMode: 'horizontal', composition: 'line', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'horiz_left',    baseMode: 'horizontal', composition: 'line', bias: 'left',   revealStyle: 'stagger_fast', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'horiz_right',   baseMode: 'horizontal', composition: 'line', bias: 'right',  revealStyle: 'stagger_fast', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'stack_center',  baseMode: 'stack', composition: 'stack', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'rise',  exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'stack_left',    baseMode: 'stack', composition: 'stack', bias: 'left',   revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'stack_right',   baseMode: 'stack', composition: 'stack', bias: 'right',  revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'ghost_center',  baseMode: 'ghost', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
-  { mode: 'ghost_left',    baseMode: 'ghost', composition: 'line', bias: 'left',   revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
-  { mode: 'ghost_right',   baseMode: 'ghost', composition: 'line', bias: 'right',  revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
-  { mode: 'vibrate_smoke',   baseMode: 'vibrate', composition: 'center_word', bias: 'center', revealStyle: 'instant', entryCharacter: 'bloom', exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: true, elementalWash: false },
-  { mode: 'vibrate_element', baseMode: 'vibrate', composition: 'center_word', bias: 'center', revealStyle: 'instant', entryCharacter: 'bloom', exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: true, elementalWash: false },
-  { mode: 'wash_lr',     baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
-  { mode: 'wash_rl',     baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
-  { mode: 'wash_center', baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
-  { mode: 'impact_center', baseMode: 'impact', composition: 'line',   bias: 'center', revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'impact_left',   baseMode: 'impact', composition: 'line',   bias: 'left',   revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'impact_right',  baseMode: 'impact', composition: 'line',   bias: 'right',  revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-  { mode: 'horiz_drift', baseMode: 'horizontal', composition: 'line', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'rise', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
-];
-
-function seededShuffle<T>(arr: T[], seed: number): T[] {
-  const result = [...arr];
-  let s = seed;
-  for (let i = result.length - 1; i > 0; i--) {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    const j = s % (i + 1);
-    [result[i], result[j]] = [result[j], result[i]];
+  revealStyle: 'instant' | 'stagger_fast' | 'stagger_slow';
+} {
+  if (wordCount === 1) {
+    return { composition: 'center_word', ghostPreview: false, revealStyle: 'instant' };
   }
-  return result;
-}
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash = hash & hash;
+  if (wordCount <= 3) {
+    return {
+      composition: totalChars <= 12 ? 'stack' : 'line',
+      ghostPreview: false,
+      revealStyle: 'stagger_fast',
+    };
   }
-  return Math.abs(hash);
+  return { composition: 'line', ghostPreview: true, revealStyle: 'stagger_slow' };
 }
 
 function assignPresentationModes(
   phraseGroups: PhraseGroup[],
-  wordMeta: WordMetaEntry[],
+  _wordMeta: WordMetaEntry[],
   _aiPhrases?: CinematicPhrase[],
 ): void {
-  if (phraseGroups.length === 0 || wordMeta.length === 0) return;
-
-  const songSeed = hashString(
-    (wordMeta[0]?.word ?? '') + (wordMeta[wordMeta.length - 1]?.word ?? '') + phraseGroups.length,
-  );
-
-  let deck = seededShuffle(
-    Array.from({ length: MODE_CARDS.length }, (_, i) => i),
-    songSeed,
-  );
-  let deckPos = 0;
-  let deckNumber = 0;
-  let lastBaseMode = '';
-
-  for (let i = 0; i < phraseGroups.length; i++) {
-    const group = phraseGroups[i];
+  for (const group of phraseGroups) {
     const wc = group.words.length;
-
-    let cardIdx = -1;
-    let attempts = 0;
-    while (attempts < MODE_CARDS.length * 2) {
-      if (deckPos >= deck.length) {
-        deckNumber++;
-        deck = seededShuffle(
-          Array.from({ length: MODE_CARDS.length }, (_, idx) => idx),
-          songSeed + deckNumber * 7919,
-        );
-        deckPos = 0;
-      }
-
-      const candidate = deck[deckPos];
-      const card = MODE_CARDS[candidate];
-      deckPos++;
-      attempts++;
-
-      if (card.baseMode === lastBaseMode) continue;
-      if (card.baseMode === 'vibrate' && wc > 2) continue;
-      if (card.baseMode === 'stack' && wc < 3) continue;
-      if (card.baseMode === 'impact' && wc >= 5) continue;
-      if (card.composition === 'center_word' && wc > 2) continue;
-
-      cardIdx = candidate;
-      break;
-    }
-
-    if (cardIdx < 0) cardIdx = 0;
-    const card = MODE_CARDS[cardIdx];
-    lastBaseMode = card.baseMode;
+    const totalChars = group.words.reduce((sum, w) => sum + w.word.length, 0);
+    const layout = resolveLayout(wc, totalChars);
 
     const g = group as any;
-    g.presentationMode = card.mode;
-    g.composition = card.composition;
-    g.bias = card.bias;
-    g.revealStyle = card.revealStyle;
-    g.holdClass = card.holdClass;
-    g.entryCharacter = card.entryCharacter;
-    g.exitCharacter = card.exitCharacter;
-    g.ghostPreview = card.ghostPreview;
-    g.vibrateOnHold = card.vibrateOnHold;
-    g.elementalWash = card.elementalWash;
+    g.composition = layout.composition;
+    g.bias = 'center';
+    g.revealStyle = layout.revealStyle;
+    g.ghostPreview = layout.ghostPreview;
+    g.holdClass = 'medium_groove';
+    g.entryCharacter = 'drift';
+    g.exitCharacter = 'none';
+    g.vibrateOnHold = false;
+    g.elementalWash = false;
 
-    if (wc === 1) {
-      if (card.baseMode !== 'vibrate' && card.baseMode !== 'wash') {
-        if (i % 2 === 0) {
-          g.presentationMode = 'impact_center';
-          g.composition = 'center_word';
-          g.entryCharacter = 'snap';
-          g.exitCharacter = 'none';
-        } else {
-          g.presentationMode = 'vibrate_smoke';
-          g.composition = 'center_word';
-          g.entryCharacter = 'bloom';
-          g.exitCharacter = 'none';
-          g.vibrateOnHold = true;
-        }
-      }
-    }
-
-    if (i === 0) {
+    // Presentation mode name for backward compat
+    if (layout.composition === 'center_word') {
+      g.presentationMode = 'impact_center';
+    } else if (layout.composition === 'stack') {
+      g.presentationMode = 'stack_center';
+    } else if (layout.ghostPreview) {
+      g.presentationMode = 'ghost_center';
+    } else {
       g.presentationMode = 'horiz_center';
-      g.composition = 'line';
-      g.bias = 'center';
-      g.revealStyle = 'stagger_slow';
-      g.entryCharacter = 'drift';
-      g.exitCharacter = 'drift';
-    }
-
-    if (i === phraseGroups.length - 1) {
-      if (wc <= 2) {
-        g.presentationMode = 'vibrate_smoke';
-        g.composition = 'center_word';
-        g.entryCharacter = 'bloom';
-        g.exitCharacter = 'none';
-        g.vibrateOnHold = true;
-      } else {
-        g.presentationMode = 'wash_lr';
-        g.elementalWash = true;
-        g.entryCharacter = 'snap';
-        g.exitCharacter = 'none';
-        g.holdClass = 'long_emotional';
-      }
     }
   }
 }
@@ -818,7 +711,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     }
     // 'line': use fitTextToViewport default (auto from aspect ratio)
 
-    const targetFill = bias === 'center' ? 0.88 : 0.70;
+    const targetFill = 0.88;
 
     const layout = fitTextToViewport(
       measureCtx as MeasureContext,
@@ -835,14 +728,10 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       },
     );
 
-    let biasOffX = 0;
-    if (bias === 'left') biasOffX = -REF_W * 0.15;
-    if (bias === 'right') biasOffX = REF_W * 0.15;
-
     groupLayouts.set(key, {
       fontSize: layout.fontSize,
       positions: layout.wordPositions.map(wp => ({
-        x: wp.x + biasOffX,
+        x: wp.x,
         y: wp.y,
         width: wp.width,
       })),
