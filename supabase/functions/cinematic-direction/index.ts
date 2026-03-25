@@ -1324,7 +1324,84 @@ async function callScene(
  * - section visual mood (from sceneDirection)
  * - alternating bias for visual rhythm
  */
-function fillChoreographyDefaults(
+// ═══ PRESENTATION MODES: 18-card seeded shuffle deck ═══
+
+type PresentationMode =
+  | 'horiz_center' | 'horiz_left' | 'horiz_right'
+  | 'stack_center' | 'stack_left' | 'stack_right'
+  | 'ghost_center' | 'ghost_left' | 'ghost_right'
+  | 'vibrate_smoke' | 'vibrate_element'
+  | 'wash_lr' | 'wash_rl' | 'wash_center'
+  | 'impact_center' | 'impact_left' | 'impact_right'
+  | 'horiz_drift';
+
+const MODE_CARDS: Array<{
+  mode: PresentationMode;
+  baseMode: string;
+  composition: string;
+  bias: string;
+  revealStyle: string;
+  entryCharacter: string;
+  exitCharacter: string;
+  holdClass: string;
+  ghostPreview: boolean;
+  vibrateOnHold: boolean;
+  elementalWash: boolean;
+}> = [
+  // HORIZONTAL REVEAL × 3
+  { mode: 'horiz_center',  baseMode: 'horizontal', composition: 'line', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'horiz_left',    baseMode: 'horizontal', composition: 'line', bias: 'left',   revealStyle: 'stagger_fast', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'horiz_right',   baseMode: 'horizontal', composition: 'line', bias: 'right',  revealStyle: 'stagger_fast', entryCharacter: 'drift', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+
+  // VERTICAL STACK × 3
+  { mode: 'stack_center',  baseMode: 'stack', composition: 'stack', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'rise',  exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'stack_left',    baseMode: 'stack', composition: 'stack', bias: 'left',   revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'stack_right',   baseMode: 'stack', composition: 'stack', bias: 'right',  revealStyle: 'stagger_slow', entryCharacter: 'drift', exitCharacter: 'drift',   holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+
+  // GHOST PREVIEW × 3
+  { mode: 'ghost_center',  baseMode: 'ghost', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
+  { mode: 'ghost_left',    baseMode: 'ghost', composition: 'line', bias: 'left',   revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
+  { mode: 'ghost_right',   baseMode: 'ghost', composition: 'line', bias: 'right',  revealStyle: 'instant', entryCharacter: 'whisper', exitCharacter: 'whisper', holdClass: 'medium_groove', ghostPreview: true, vibrateOnHold: false, elementalWash: false },
+
+  // VIBRATE DISSOLVE × 2
+  { mode: 'vibrate_smoke',   baseMode: 'vibrate', composition: 'center_word', bias: 'center', revealStyle: 'instant', entryCharacter: 'bloom', exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: true, elementalWash: false },
+  { mode: 'vibrate_element', baseMode: 'vibrate', composition: 'center_word', bias: 'center', revealStyle: 'instant', entryCharacter: 'bloom', exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: true, elementalWash: false },
+
+  // ELEMENTAL WASH × 3
+  { mode: 'wash_lr',     baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
+  { mode: 'wash_rl',     baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
+  { mode: 'wash_center', baseMode: 'wash', composition: 'line', bias: 'center', revealStyle: 'instant', entryCharacter: 'snap',  exitCharacter: 'none', holdClass: 'long_emotional', ghostPreview: false, vibrateOnHold: false, elementalWash: true },
+
+  // IMPACT CUT × 3
+  { mode: 'impact_center', baseMode: 'impact', composition: 'line',   bias: 'center', revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'impact_left',   baseMode: 'impact', composition: 'line',   bias: 'left',   revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+  { mode: 'impact_right',  baseMode: 'impact', composition: 'line',   bias: 'right',  revealStyle: 'instant', entryCharacter: 'snap', exitCharacter: 'none', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+
+  // HORIZONTAL + DRIFT entry (variant for more motion)
+  { mode: 'horiz_drift', baseMode: 'horizontal', composition: 'line', bias: 'center', revealStyle: 'stagger_slow', entryCharacter: 'rise', exitCharacter: 'drift', holdClass: 'medium_groove', ghostPreview: false, vibrateOnHold: false, elementalWash: false },
+];
+
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const result = [...arr];
+  let s = seed;
+  for (let i = result.length - 1; i > 0; i--) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const j = s % (i + 1);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return Math.abs(hash);
+}
+
+function assignPresentationModes(
   phrases: Array<{
     wordRange: [number, number];
     heroWord?: string;
@@ -1334,200 +1411,211 @@ function fillChoreographyDefaults(
     revealStyle?: string;
     holdClass?: string;
     energyTier?: string;
+    presentationMode?: string;
+    entryCharacter?: string;
+    exitCharacter?: string;
+    ghostPreview?: boolean;
+    vibrateOnHold?: boolean;
+    elementalWash?: boolean;
   }>,
   words: Array<{ word: string; start: number; end: number }>,
-  wordDirs: Array<{ word?: string; emphasisLevel?: number; isolation?: boolean }>,
+  wordDirs: Array<{ word?: string; emphasisLevel?: number; elementalClass?: string; isolation?: boolean }>,
   sceneDirection: Record<string, any>,
 ): void {
-  if (!words || words.length === 0) return;
+  if (!words || words.length === 0 || phrases.length === 0) return;
 
-  // Build section lookup: time → visualMood
-  // First try time-based boundaries. If absent, divide song evenly by section count.
-  const rawSections = Array.isArray(sceneDirection?.sections) ? sceneDirection.sections : [];
-  const hasTimeBounds = rawSections.some(
-    (s: any) => typeof s.startSec === "number" && typeof s.endSec === "number"
+  void sceneDirection;
+
+  // Build elemental lookup
+  const elementalMap = new Map<string, string>();
+  for (const wd of wordDirs) {
+    if (wd.word && wd.elementalClass) {
+      elementalMap.set(wd.word.toLowerCase().replace(/[^a-z0-9]/g, ""), wd.elementalClass);
+    }
+  }
+
+  // Seed from song content (first word + last word + phrase count = deterministic per song)
+  const songSeed = hashString(
+    (words[0]?.word ?? '') + (words[words.length - 1]?.word ?? '') + phrases.length,
   );
 
-  let sections: Array<{ startSec: number; endSec: number; visualMood: string }> = [];
-
-  if (hasTimeBounds) {
-    for (const s of rawSections) {
-      if (typeof s.startSec === "number" && typeof s.endSec === "number") {
-        sections.push({ startSec: s.startSec, endSec: s.endSec, visualMood: s.visualMood ?? "raw" });
-      }
-    }
-  } else if (rawSections.length > 0 && words.length > 0) {
-    // No time boundaries — divide song duration evenly across sections
-    const songStart = words[0].start;
-    const songEnd = words[words.length - 1].end;
-    const songDur = Math.max(1, songEnd - songStart);
-    const secDur = songDur / rawSections.length;
-    for (let i = 0; i < rawSections.length; i++) {
-      sections.push({
-        startSec: songStart + i * secDur,
-        endSec: songStart + (i + 1) * secDur,
-        visualMood: rawSections[i].visualMood ?? "raw",
-      });
-    }
-  }
-
-  const getSectionMood = (timeSec: number): string => {
-    for (const s of sections) {
-      if (timeSec >= s.startSec && timeSec < s.endSec) return s.visualMood;
-    }
-    // Final fallback: use the first section's mood if any exist
-    return rawSections[0]?.visualMood ?? "raw";
-  };
-
-  // Mood → default energyTier mapping
-  const moodToEnergy: Record<string, string> = {
-    intimate: "intimate", vulnerable: "intimate", dreamy: "intimate",
-    anthemic: "impact", triumphant: "impact", aggressive: "impact",
-    hypnotic: "lift", eerie: "lift", hopeful: "lift",
-    melancholy: "groove", nostalgic: "groove", raw: "groove", defiant: "groove",
-    euphoric: "impact",
-  };
-
-  // Build emphasis lookup
-  const emphasisMap = new Map<string, number>();
-  for (const wd of wordDirs) {
-    if (wd.word && wd.emphasisLevel) {
-      emphasisMap.set(wd.word.toLowerCase().replace(/[^a-z0-9]/g, ""), wd.emphasisLevel);
-    }
-  }
-
-  // Track bias for alternation
-  let lastBias = "center";
+  // Build shuffled deck
+  let deck = seededShuffle(
+    Array.from({ length: MODE_CARDS.length }, (_, i) => i),
+    songSeed,
+  );
+  let deckPos = 0;
+  let deckNumber = 0;
+  let lastBaseMode = '';
 
   for (let i = 0; i < phrases.length; i++) {
     const phrase = phrases[i];
     const [s, e] = phrase.wordRange;
     const wc = e - s + 1;
 
-    // Skip phrases the AI already choreographed (any non-default field present)
-    const hasAIChoreography = phrase.composition !== undefined
-      || phrase.bias !== undefined
-      || phrase.heroType !== undefined
-      || phrase.revealStyle !== undefined
-      || phrase.holdClass !== undefined
-      || phrase.energyTier !== undefined;
+    // Check if AI already choreographed this phrase (has non-default fields)
+    const hasAIChoreography =
+      (phrase.composition !== undefined && phrase.composition !== 'line') ||
+      (phrase.bias !== undefined && phrase.bias !== 'center') ||
+      (phrase.heroType !== undefined && phrase.heroType !== 'word') ||
+      (phrase.revealStyle !== undefined && phrase.revealStyle !== 'instant') ||
+      (phrase.holdClass !== undefined && phrase.holdClass !== 'medium_groove') ||
+      (phrase.energyTier !== undefined && phrase.energyTier !== 'groove');
 
-    // After validation, missing fields get defaults ('line', 'center', etc.)
-    // So check if ALL fields are at their default values
-    const isAllDefault = phrase.composition === "line"
-      && phrase.bias === "center"
-      && phrase.heroType === "word"
-      && phrase.revealStyle === "instant"
-      && phrase.holdClass === "medium_groove"
-      && phrase.energyTier === "groove";
-
-    // If AI set any non-default value, respect it entirely
-    if (hasAIChoreography && !isAllDefault) {
-      lastBias = phrase.bias ?? "center";
+    if (hasAIChoreography) {
+      // AI moment — preserve. Map to closest presentation mode for metadata.
+      phrase.presentationMode = 'ai_moment';
+      phrase.ghostPreview = false;
+      phrase.vibrateOnHold = false;
+      phrase.elementalWash = false;
+      lastBaseMode = 'ai_moment';
       continue;
     }
 
-    // ── Compute context ──
-    const startSec = s < words.length ? words[s].start : 0;
-    const endSec = e < words.length ? words[e].end : startSec;
-    const durationMs = Math.round((endSec - startSec) * 1000);
-    const sectionMood = getSectionMood(startSec);
+    // Check if any word in this phrase has an elemental class
+    const hasElemental = (() => {
+      for (let wi = s; wi <= e && wi < words.length; wi++) {
+        const clean = words[wi].word.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (elementalMap.has(clean)) return true;
+      }
+      return false;
+    })();
 
-    // Hero word emphasis
-    const heroClean = (phrase.heroWord ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const heroEmphasis = emphasisMap.get(heroClean) ?? 1;
+    // ── Deal from deck with constraints ──
+    let cardIdx = -1;
+    let attempts = 0;
 
-    // Is this the first phrase or last phrase?
-    const isFirst = i === 0;
-    const isLast = i === phrases.length - 1;
+    while (attempts < MODE_CARDS.length * 2) {
+      if (deckPos >= deck.length) {
+        deckNumber++;
+        deck = seededShuffle(
+          Array.from({ length: MODE_CARDS.length }, (_, i) => i),
+          songSeed + deckNumber * 7919,
+        );
+        deckPos = 0;
+      }
 
-    // Is this at a section boundary? Check if previous phrase was in a different section
-    const prevStartSec = i > 0 && phrases[i - 1].wordRange[0] < words.length
-      ? words[phrases[i - 1].wordRange[0]].start
-      : -1;
-    const isSectionStart = prevStartSec >= 0 && getSectionMood(prevStartSec) !== sectionMood;
+      const candidate = deck[deckPos];
+      const card = MODE_CARDS[candidate];
+      deckPos++;
+      attempts++;
 
-    // ── Apply defaults by context ──
+      // Constraint 1: no same base mode back-to-back
+      if (card.baseMode === lastBaseMode) continue;
 
-    // Single-word phrases under 500ms → center_word + impact
-    if (wc === 1 && durationMs < 500) {
-      phrase.composition = "center_word";
-      phrase.holdClass = "long_emotional";
-      phrase.energyTier = "impact";
-      phrase.revealStyle = "instant";
-      lastBias = "center";
-      phrase.bias = "center";
-      continue;
+      // Constraint 2: vibrate only for 1-2 word phrases
+      if (card.baseMode === 'vibrate' && wc > 2) continue;
+
+      // Constraint 3: stack needs 3+ words
+      if (card.baseMode === 'stack' && wc < 3) continue;
+
+      // Constraint 4: impact not for 5+ word phrases
+      if (card.baseMode === 'impact' && wc >= 5) continue;
+
+      // Constraint 5: center_word composition only for 1-2 word phrases
+      if (card.composition === 'center_word' && wc > 2) continue;
+
+      cardIdx = candidate;
+      break;
     }
 
-    // Section start → set the tone
-    if (isSectionStart || isFirst) {
-      phrase.revealStyle = "stagger_slow";
-      phrase.energyTier = moodToEnergy[sectionMood] ?? "groove";
-      if (wc <= 3) {
-        phrase.holdClass = "long_emotional";
+    // Fallback
+    if (cardIdx < 0) cardIdx = 0; // horiz_center
+
+    const card = MODE_CARDS[cardIdx];
+    lastBaseMode = card.baseMode;
+
+    // ── Apply card to phrase ──
+    phrase.presentationMode = card.mode;
+    phrase.composition = card.composition;
+    phrase.bias = card.bias;
+    phrase.revealStyle = card.revealStyle;
+    phrase.holdClass = card.holdClass;
+    phrase.entryCharacter = card.entryCharacter;
+    phrase.exitCharacter = card.exitCharacter;
+    phrase.ghostPreview = card.ghostPreview;
+    phrase.vibrateOnHold = card.vibrateOnHold;
+    phrase.elementalWash = card.elementalWash;
+
+    // ── Mode-specific adjustments ──
+
+    // Single words in center_word: 1.5x scale hint
+    if (wc === 1) {
+      if (card.baseMode !== 'vibrate' && card.baseMode !== 'wash') {
+        // Alternate between impact and vibrate for single words
+        if (i % 2 === 0) {
+          phrase.presentationMode = 'impact_center';
+          phrase.composition = 'center_word';
+          phrase.entryCharacter = 'snap';
+          phrase.exitCharacter = 'none';
+          phrase.vibrateOnHold = false;
+          phrase.elementalWash = false;
+          phrase.ghostPreview = false;
+        } else {
+          phrase.presentationMode = 'vibrate_smoke';
+          phrase.composition = 'center_word';
+          phrase.entryCharacter = 'bloom';
+          phrase.exitCharacter = 'none';
+          phrase.vibrateOnHold = true;
+          phrase.elementalWash = false;
+          phrase.ghostPreview = false;
+        }
+        phrase.holdClass = 'long_emotional';
+        phrase.bias = 'center';
+        phrase.revealStyle = 'instant';
+        lastBaseMode = i % 2 === 0 ? 'impact' : 'vibrate';
       }
     }
 
-    // Map section mood to energy tier (if not already set by section-start logic)
-    if (phrase.energyTier === "groove") {
-      phrase.energyTier = moodToEnergy[sectionMood] ?? "groove";
+    // Override: first phrase always horiz_center with stagger_slow
+    if (i === 0) {
+      phrase.presentationMode = 'horiz_center';
+      phrase.composition = 'line';
+      phrase.bias = 'center';
+      phrase.revealStyle = 'stagger_slow';
+      phrase.entryCharacter = 'drift';
+      phrase.exitCharacter = 'drift';
+      phrase.holdClass = 'long_emotional';
+      phrase.ghostPreview = false;
+      phrase.vibrateOnHold = false;
+      phrase.elementalWash = false;
+      lastBaseMode = 'horizontal';
     }
 
-    // EXTREME: vary energy tiers more aggressively
-    if (i % 4 === 0 && phrase.energyTier === 'groove') {
-      phrase.energyTier = 'lift';
-    }
-    if (i % 7 === 0 && phrase.energyTier === 'groove') {
-      phrase.energyTier = 'intimate';
-    }
-
-    // Short phrases (2-3 words) with high emphasis → phrase-level hero
-    if (wc <= 3 && heroEmphasis >= 3) {
-      phrase.heroType = "phrase";
-    }
-
-    // Stack for 4+ word phrases in intimate/vulnerable sections
-    if (wc >= 4 && (sectionMood === "intimate" || sectionMood === "vulnerable" || sectionMood === "dreamy")) {
-      phrase.composition = "stack";
-      phrase.revealStyle = "stagger_slow";
-    }
-
-    // Alternate bias for visual rhythm (only for non-stack, non-center_word)
-    if (phrase.composition === "line") {
-      if (lastBias === "center") {
-        // 40% chance to shift left or right
-        const phraseHash = (s * 7 + e * 13) % 10;
-        if (phraseHash < 2) {
-          phrase.bias = "left";
-        } else if (phraseHash < 4) {
-          phrase.bias = "right";
-        }
-
-        // EXTREME: more stagger variety
-        if (i % 3 === 0 && phrase.revealStyle === 'instant' && wc >= 3) {
-          phrase.revealStyle = 'stagger_slow';
-        }
-        if (i % 5 === 0 && phrase.revealStyle === 'instant' && wc >= 2) {
-          phrase.revealStyle = 'stagger_fast';
-        }
-        // else stays center
+    // Override: last phrase always dramatic
+    if (i === phrases.length - 1) {
+      if (wc <= 2) {
+        phrase.presentationMode = 'vibrate_element';
+        phrase.composition = 'center_word';
+        phrase.entryCharacter = 'bloom';
+        phrase.exitCharacter = 'none';
+        phrase.vibrateOnHold = true;
+        phrase.elementalWash = false;
       } else {
-        // After a left/right, usually go back to center
-        phrase.bias = "center";
+        phrase.presentationMode = 'wash_lr';
+        phrase.entryCharacter = 'snap';
+        phrase.exitCharacter = 'none';
+        phrase.elementalWash = true;
+        phrase.vibrateOnHold = false;
       }
-    }
-    lastBias = phrase.bias ?? "center";
-
-    // Last phrase → long emotional hold
-    if (isLast) {
-      phrase.holdClass = "long_emotional";
-      phrase.energyTier = "intimate";
+      phrase.holdClass = 'long_emotional';
+      phrase.ghostPreview = false;
     }
 
-    // Fast phrases (under 400ms, multi-word) → short_hit
-    if (wc >= 2 && durationMs < 400) {
-      phrase.holdClass = "short_hit";
+    // Elemental phrases: prefer wash if near a wash slot
+    if (hasElemental && !phrase.elementalWash && card.baseMode !== 'vibrate') {
+      // 50% chance to upgrade to elemental wash
+      const elHash = (s * 31 + e * 17 + i * 7) % 10;
+      if (elHash < 5) {
+        phrase.presentationMode = 'wash_lr';
+        phrase.entryCharacter = 'snap';
+        phrase.exitCharacter = 'none';
+        phrase.elementalWash = true;
+        phrase.holdClass = 'long_emotional';
+        phrase.vibrateOnHold = false;
+        phrase.ghostPreview = false;
+        lastBaseMode = 'wash';
+      }
     }
   }
 }
@@ -1658,8 +1746,8 @@ async function callWords(
     result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
     // 5. Validate + fill heroWords
     fillMissingHeroWords(result.value.phrases, words);
-    // 6. Smart choreography defaults for phrases the AI left bare
-    fillChoreographyDefaults(result.value.phrases, words, wordDirs, sceneDirection);
+    // 6. Assign presentation modes for phrases the AI left bare
+    assignPresentationModes(result.value.phrases, words, wordDirs, sceneDirection);
   }
 
   if (

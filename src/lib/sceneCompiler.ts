@@ -501,6 +501,12 @@ export interface CompiledPhraseGroup {
   holdClass: 'short_hit' | 'medium_groove' | 'long_emotional';
   energyTier: 'intimate' | 'groove' | 'lift' | 'impact' | 'surprise';
   motionBudget?: PhraseMotionBudget;
+  presentationMode?: string;
+  entryCharacter?: string;
+  exitCharacter?: string;
+  ghostPreview?: boolean;
+  vibrateOnHold?: boolean;
+  elementalWash?: boolean;
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
@@ -793,6 +799,12 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       holdClass,
       energyTier,
       motionBudget: (group as any)._motionBudget ?? undefined,
+      presentationMode: matchPhrase?.presentationMode ?? undefined,
+      entryCharacter: matchPhrase?.entryCharacter ?? undefined,
+      exitCharacter: matchPhrase?.exitCharacter ?? undefined,
+      ghostPreview: matchPhrase?.ghostPreview ?? false,
+      vibrateOnHold: matchPhrase?.vibrateOnHold ?? false,
+      elementalWash: matchPhrase?.elementalWash ?? false,
     };
   }).sort((a, b) => a.start - b.start);
 

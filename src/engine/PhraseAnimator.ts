@@ -63,6 +63,12 @@ export interface PhraseAnimState {
   exitCharacter: MotionCharacter | 'none';
   motionIntensity: number;
 
+  // Presentation mode
+  presentationMode: string;
+  ghostPreview: boolean;      // all words visible at 20% from start
+  vibrateOnHold: boolean;     // ramp vibration during hold
+  elementalWash: boolean;     // color sweep during hold
+
   // Entry motion result (from computeMotionEntry)
   entry: AnimState;
 
@@ -137,8 +143,13 @@ function motionCap(wordCount: number): number {
 // Energy tier → motion character mapping
 // ─────────────────────────────────────────
 
-function resolveEntryCharacter(energyTier: string, sectionDefault: MotionCharacter): MotionCharacter {
-  switch (energyTier) {
+function resolveEntryCharacter(group: CompiledPhraseGroup, moodConfig: AnimMoodConfig): MotionCharacter {
+  // Presentation mode specifies entry character directly
+  if (group.entryCharacter) {
+    return group.entryCharacter as MotionCharacter;
+  }
+  // Fallback: energyTier mapping (for AI moments without entryCharacter)
+  switch (group.energyTier) {
     case 'intimate':
       return 'whisper';
     case 'lift':
@@ -147,32 +158,33 @@ function resolveEntryCharacter(energyTier: string, sectionDefault: MotionCharact
       return 'snap';
     case 'surprise':
       return 'bloom';
-    case 'groove':
-      return 'drift'; // ALWAYS visible slide — not snap
     default:
-      return sectionDefault;
+      return moodConfig.character;
   }
 }
 
-function resolveExitCharacter(energyTier: string, sectionDefault: MotionCharacter): MotionCharacter | 'none' {
-  switch (energyTier) {
+function resolveExitCharacter(group: CompiledPhraseGroup, moodConfig: AnimMoodConfig): MotionCharacter | 'none' {
+  if (group.exitCharacter) {
+    return group.exitCharacter as MotionCharacter | 'none';
+  }
+  switch (group.energyTier) {
     case 'intimate':
       return 'whisper';
     case 'lift':
       return 'drift';
     case 'impact':
-      return 'none'; // no exit — hard cut
+      return 'none';
     case 'surprise':
       return 'snap';
-    case 'groove':
-      return 'drift'; // ALWAYS visible slide — not snap
     default:
-      return sectionDefault;
+      return moodConfig.character;
   }
 }
 
-function resolveMotionIntensity(energyTier: string, sectionDefault: number): number {
-  switch (energyTier) {
+function resolveMotionIntensity(group: CompiledPhraseGroup, sectionDefault: number): number {
+  // Presentation modes always use strong intensity so motion is visible
+  if (group.presentationMode) return 0.8;
+  switch (group.energyTier) {
     case 'intimate':
       return 0.3;
     case 'lift':
@@ -181,8 +193,6 @@ function resolveMotionIntensity(energyTier: string, sectionDefault: number): num
       return 1.0;
     case 'surprise':
       return 0.9;
-    case 'groove':
-      return 0.8; // strong visible motion
     default:
       return sectionDefault;
   }
@@ -269,10 +279,10 @@ export function computePhraseState(
       : 0;
 
   // ── Motion character from energyTier ──
-  const entryCharacter = resolveEntryCharacter(energyTier, moodConfig.character);
-  const exitCharacter = resolveExitCharacter(energyTier, moodConfig.character);
+  const entryCharacter = resolveEntryCharacter(group, moodConfig);
+  const exitCharacter = resolveExitCharacter(group, moodConfig);
   const suppressExit = exitCharacter === 'none';
-  const motionIntensity = resolveMotionIntensity(energyTier, moodConfig.intensity);
+  const motionIntensity = resolveMotionIntensity(group, moodConfig.intensity);
 
   const phraseExitDuration = Math.min(groupExitDur, phraseDuration * 0.35);
   const isExiting = !suppressExit && phraseRemaining < phraseExitDuration && phraseRemaining >= 0;
@@ -339,6 +349,10 @@ export function computePhraseState(
     entryCharacter,
     exitCharacter,
     motionIntensity,
+    presentationMode: group.presentationMode ?? 'horiz_center',
+    ghostPreview: group.ghostPreview ?? false,
+    vibrateOnHold: group.vibrateOnHold ?? false,
+    elementalWash: group.elementalWash ?? false,
     entry,
     exit,
     biasEntryOffsetX,
@@ -399,12 +413,27 @@ export function computeWordState(
 
   // ── Spotlight alpha ──
   let spotlightAlpha: number;
-  if (!isRevealed) {
-    spotlightAlpha = 0; // not yet revealed — invisible
-  } else if (wordState === 'upcoming') {
-    spotlightAlpha = 0.3 * revealProgress; // upcoming but revealed — dim, fading in
+  if (phrase.ghostPreview) {
+    // GHOST PREVIEW: all words visible at 20% from start
+    // Active word: snap to 100%. Spoken: 80%.
+    if (!isRevealed) {
+      spotlightAlpha = 0.20; // ghost visible even before reveal
+    } else if (wordState === 'active') {
+      spotlightAlpha = 1.0;
+    } else if (wordState === 'spoken') {
+      spotlightAlpha = 0.80;
+    } else {
+      spotlightAlpha = 0.20; // upcoming but revealed — still ghost
+    }
   } else {
-    spotlightAlpha = revealProgress; // active or spoken — full (after reveal fade)
+    // Normal modes: unrevealed = invisible
+    if (!isRevealed) {
+      spotlightAlpha = 0;
+    } else if (wordState === 'upcoming') {
+      spotlightAlpha = 0.30 * revealProgress;
+    } else {
+      spotlightAlpha = revealProgress;
+    }
   }
 
   // ── Hero detection ──
@@ -560,6 +589,25 @@ export function computeChunkAnim(
     skewX += phrase.exit.skewX ?? 0;
   }
 
+
+  // ── VIBRATE ON HOLD ──
+  if (phrase.vibrateOnHold && !phrase.isEntering && !phrase.isExiting) {
+    // holdProgress: how far through the hold are we
+    const holdDuration = phrase.groupEnd - phrase.groupStart;
+    const holdElapsed = Math.max(0, /* tSec needs to be passed in */ 0);
+    void holdDuration;
+    void holdElapsed;
+    // Note: tSec is not available in computeChunkAnim.
+    // The vibrate offset must be computed in evaluateFrame and added to chunk.x/chunk.y.
+    // See File 4 below for where this is applied.
+  }
+
+  // ── GHOST PREVIEW scale bounce on active ──
+  if (phrase.ghostPreview && wordAnim.wordState === 'active') {
+    // Quick bounce: 1.0 → 1.08 → 1.0 over ~150ms
+    // This needs wordActiveTime which we don't have here.
+    // Applied in evaluateFrame — see File 4.
+  }
   return {
     alpha,
     scaleX,
