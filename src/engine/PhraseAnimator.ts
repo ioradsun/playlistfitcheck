@@ -108,12 +108,35 @@ export function computeWordStateInto(
     wordState = 'spoken';
   }
 
+  // ── Active word envelope: fast attack, hold, gentle release ──
+  // Attack starts 80ms before wordStart so peak arrives on time.
+  // Release takes 120ms after word ends — no snap-off.
+  const ATTACK_SEC = 0.08;
+  const RELEASE_SEC = 0.12;
+  const rampStart = wordStart - ATTACK_SEC;
+  const rampEnd = nextWordStart;
+
+  let envelope = 0;
+  if (tSec >= rampStart && tSec < wordStart) {
+    // Anticipation: ramp 0→1 over 80ms (ease-in: accelerating)
+    const t = (tSec - rampStart) / ATTACK_SEC;
+    envelope = t * t;
+  } else if (tSec >= wordStart && tSec < rampEnd) {
+    // Active: hold at peak
+    envelope = 1.0;
+  } else if (tSec >= rampEnd && tSec < rampEnd + RELEASE_SEC) {
+    // Release: decay 1→0 over 120ms (ease-out: decelerating)
+    const t = 1.0 - (tSec - rampEnd) / RELEASE_SEC;
+    envelope = t * t;
+  }
+  const waveScale = 1.0 + envelope * 0.06;
+
   const isHeroWord = word.isHeroWord === true;
   const isOnlyWordInPhrase = group.words.length === 1;
   const isSoloHero = isOnlyWordInPhrase && isHeroWord && (word.wordDuration ?? 0) >= 0.5;
 
   target.wordState = wordState;
-  target.waveScale = wordState === 'active' ? 1.06 : 1.0;
+  target.waveScale = waveScale;
   target.isSoloHero = isSoloHero;
   target.soloHeroHidden = !isSoloHero && groupHasActiveSoloHero;
 
