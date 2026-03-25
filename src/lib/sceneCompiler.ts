@@ -448,29 +448,20 @@ type PresentationMode =
  * Layout rules: phrase structure → composition.
  * Variety comes from lyrics, not randomness.
  */
-function resolveLayout(wordCount: number, totalChars: number): {
-  composition: 'line' | 'stack' | 'center_word';
+function resolveLayout(wordCount: number): {
+  composition: 'line';
   ghostPreview: boolean;
-  revealStyle: 'instant' | 'stagger_fast' | 'stagger_slow';
+  revealStyle: 'instant';
+  maxLines: number | undefined;
 } {
-  // 1 word → fills screen
-  if (wordCount === 1) {
-    return { composition: 'center_word', ghostPreview: false, revealStyle: 'instant' };
-  }
-  // 2-3 words → stack if short, line if long. No preview — stagger reveal.
-  if (wordCount <= 3) {
-    return {
-      composition: totalChars <= 15 ? 'stack' : 'line',
-      ghostPreview: false,
-      revealStyle: 'stagger_fast',
-    };
-  }
-  // 4-5 words → line with stagger reveal. No preview — phrase is short enough.
-  if (wordCount <= 5) {
-    return { composition: 'line', ghostPreview: false, revealStyle: 'stagger_slow' };
-  }
-  // 6+ words → line with ghost preview (all words dim, spotlight reads through)
-  return { composition: 'line', ghostPreview: true, revealStyle: 'stagger_slow' };
+  // All words visible immediately. No reveal. No stagger.
+  // < 4 words: single horizontal line. 4+: natural horizontal wrapping.
+  return {
+    composition: 'line',
+    ghostPreview: false,
+    revealStyle: 'instant',
+    maxLines: wordCount < 4 ? 1 : undefined,
+  };
 }
 
 function assignPresentationModes(
@@ -480,30 +471,19 @@ function assignPresentationModes(
 ): void {
   for (const group of phraseGroups) {
     const wc = group.words.length;
-    const totalChars = group.words.reduce((sum, w) => sum + w.word.length, 0);
-    const layout = resolveLayout(wc, totalChars);
-
+    const layout = resolveLayout(wc);
     const g = group as any;
-    g.composition = layout.composition;
+    g.composition = 'line';
     g.bias = 'center';
-    g.revealStyle = layout.revealStyle;
-    g.ghostPreview = layout.ghostPreview;
+    g.revealStyle = 'instant';
+    g.ghostPreview = false;
     g.holdClass = 'medium_groove';
     g.entryCharacter = 'drift';
     g.exitCharacter = 'none';
     g.vibrateOnHold = false;
     g.elementalWash = false;
-
-    // Presentation mode name for backward compat
-    if (layout.composition === 'center_word') {
-      g.presentationMode = 'impact_center';
-    } else if (layout.composition === 'stack') {
-      g.presentationMode = 'stack_center';
-    } else if (layout.ghostPreview) {
-      g.presentationMode = 'ghost_center';
-    } else {
-      g.presentationMode = 'horiz_center';
-    }
+    g.presentationMode = 'horiz_center';
+    g._resolvedMaxLines = layout.maxLines; // pass to layout computation
   }
 }
 
@@ -705,16 +685,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       storyboard.get(group.lineIndex)?.heroWord?.toLowerCase() === wm.clean
     );
 
-    // Map composition to maxLines
-    const ghostPreview = (group as any).ghostPreview ?? false;
-    let maxLines: number | undefined;
-    if (composition === 'stack') {
-      maxLines = groupWords.length; // one word per line (vertical)
-    } else if (ghostPreview) {
-      maxLines = undefined; // preview: auto-wrap, all words visible, spotlight reads through
-    } else {
-      maxLines = 1; // center_word and line without preview: single line, font shrinks to fit
-    }
+    // maxLines resolved by resolveLayout: <4 words = 1 line, 4+ = auto wrap
+    const maxLines: number | undefined = (group as any)._resolvedMaxLines;
 
     const targetFill = 0.88;
 

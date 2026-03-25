@@ -1,10 +1,9 @@
 /**
- * PhraseAnimator.ts — Typewriter reveal + cinematic push-in.
+ * PhraseAnimator.ts — Simplest possible lyric engine.
  *
- * All visible text is alpha 1.0. No dimming. No spotlight. No suppression.
- * Stagger reveal = words pop in one by one at full brightness.
- * Ghost preview = all words visible at full brightness from start.
- * Long phrases (>1s) get a slow push-in: 1.0 → 1.02 zoom over duration.
+ * All words visible at alpha 1.0. No reveal. No stagger. No dimming.
+ * Text nods with the beat — same signal as background zoom pulse.
+ * Long phrases (>1s) get a slow cinematic push-in.
  */
 import { type MotionCharacter, type AnimState, type CompiledPhraseGroup, type CompiledWord } from '@/lib/sceneCompiler';
 import type { MotionProfile } from '@/engine/IntensityRouter';
@@ -26,7 +25,6 @@ export interface PhraseAnimState {
   entry: AnimState; exit: AnimState; biasEntryOffsetX: number;
   beatNudgeY: number; beatScale: number;
   staggerDelay: number; revealAnchor: number;
-  /** 1.0 → 1.02 slow zoom for phrases held >1s */
   pushInScale: number;
 }
 
@@ -63,22 +61,24 @@ export function computePhraseState(
   beatState: AnimBeatState | null, canvasWidth: number, mp: MotionProfile,
 ): PhraseAnimState {
   const { composition, bias, revealStyle, holdClass, energyTier, heroType } = group;
-  void nextGroupStart; void canvasWidth; void mp; void beatState;
-  const staggerDelay = group.staggerDelay ?? 0;
+  void nextGroupStart; void canvasWidth;
   const noMotion: AnimState = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1, alpha: 1, skewX: 0, glowMult: 0, blur: 0, rotation: 0 };
 
-  // ── Slow push-in for phrases held >1 second ──
-  // Like a camera slowly pushing in on the dialogue.
-  // 1.0 → 1.02 over the phrase duration. Ease-out (fast start, gentle settle).
+  // ── Push-in for phrases >1s ──
   const phraseDur = Math.max(0.01, group.end - group.start);
   let pushInScale = 1.0;
   if (phraseDur >= 1.0) {
     const elapsed = Math.max(0, tSec - group.start);
     const progress = Math.min(1, elapsed / phraseDur);
-    // Ease-out: sqrt curve — fast early, settles toward end
-    const eased = Math.sqrt(progress);
-    pushInScale = 1.0 + eased * 0.02;
+    pushInScale = 1.0 + Math.sqrt(progress) * 0.02;
   }
+
+  // ── Beat nod: same signal as background zoom ──
+  // Text dips down on beat, returns between beats. Synced exactly with background pulse.
+  // beatNudgeY is computed here from beatState, applied to all words equally.
+  const rawPulse = beatState?.pulse ?? 0;
+  const nodPx = rawPulse * mp.bgPulseAmplitude * 50;
+  // 50px multiplier: at bgPulseAmplitude 0.06 × pulse 1.0 = 3px dip (matches 6% zoom feel)
 
   return {
     composition, bias, revealStyle, holdClass, energyTier, heroType,
@@ -86,10 +86,11 @@ export function computePhraseState(
     isEntering: false, entryProgress: 1, isExiting: false, exitProgress: 0, suppressExit: true,
     entryCharacter: 'drift' as MotionCharacter, exitCharacter: 'none',
     motionIntensity: 0, presentationMode: group.presentationMode ?? 'horiz_center',
-    ghostPreview: group.ghostPreview ?? false, vibrateOnHold: false, elementalWash: false,
+    ghostPreview: false, vibrateOnHold: false, elementalWash: false,
     entry: noMotion, exit: noMotion, biasEntryOffsetX: 0,
-    beatNudgeY: 0, beatScale: 1.0,
-    staggerDelay, revealAnchor: group.start,
+    beatNudgeY: nodPx,
+    beatScale: 1.0,
+    staggerDelay: 0, revealAnchor: group.start,
     pushInScale,
   };
 }
@@ -100,38 +101,27 @@ export function computeWordState(
   phrase: PhraseAnimState, tSec: number, groupHasActiveSoloHero: boolean,
   canvasWidth: number, canvasHeight: number, mp: MotionProfile, activeHeroWordIndex: number,
 ): WordAnimState {
-  void mp; void activeHeroWordIndex;
+  void mp; void activeHeroWordIndex; void wordIndex; void tSec;
 
-  // ── Reveal timing (stagger only — no fade, instant pop) ──
-  // Use actual Whisper word timestamp for reveal — exact sync with audio.
-  // Ghost preview (staggerDelay=0): all words revealed from group start.
-  // Stagger reveal: each word appears at its actual spoken time.
-  const wordRevealTime = phrase.staggerDelay < 0.005
-    ? phrase.revealAnchor
-    : word.wordStart ?? phrase.revealAnchor;
-  const isRevealed = tSec >= wordRevealTime;
-
-  // ── Word timing state ──
+  // All words visible immediately. No reveal timing.
   const wordStart = word.wordStart ?? group.start;
   const nextWordStart = wordIndex + 1 < group.words.length
     ? (group.words[wordIndex + 1].wordStart ?? group.end) : group.end;
   let wordState: 'upcoming' | 'active' | 'spoken';
   if (tSec < wordStart) {
-    wordState = wordIndex === 0 && tSec < (group.words[0].wordStart ?? group.start) ? 'active' : 'upcoming';
+    wordState = wordIndex === 0 ? 'active' : 'upcoming';
   } else if (tSec < nextWordStart) {
     wordState = 'active';
   } else {
     wordState = 'spoken';
   }
 
-  // ── Hero detection (for solo centering only) ──
+  // Solo hero centering (1-word phrases centered on screen)
   const isHeroWord = word.isHeroWord === true;
   const effectiveHero = phrase.heroType === 'phrase' ? true : isHeroWord;
   const isOnlyWordInPhrase = group.words.length === 1;
   const isSoloHero = isOnlyWordInPhrase && isHeroWord && (word.wordDuration ?? 0) >= 0.5;
   const soloHeroHidden = !isSoloHero && groupHasActiveSoloHero;
-
-  // Solo hero offset (center screen) — no extra scale
   let heroOffsetX = 0; let heroOffsetY = 0;
   if (isSoloHero) {
     heroOffsetX = canvasWidth / 2 - word.layoutX;
@@ -139,12 +129,12 @@ export function computeWordState(
   }
 
   return {
-    isRevealed, revealProgress: isRevealed ? 1 : 0, wordRevealTime,
+    isRevealed: true, revealProgress: 1, wordRevealTime: group.start,
     wordState, spotlightAlpha: 1.0,
     isHeroWord, effectiveHero, isSoloHero,
     heroScaleMult: 1.0, heroOffsetX, heroOffsetY, soloHeroHidden,
     centerWordScale: 1.0, revealRise: 0,
-    waveScale: 1.0, ghostPreview: phrase.ghostPreview,
+    waveScale: 1.0, ghostPreview: false,
     bounceAmplitude: 0, heroSuppressionFactor: 1.0,
     heroSuppressed: false,
   };
@@ -157,28 +147,19 @@ export function computeChunkAnim(
 ): ChunkAnimState {
   void word; void beatPhase; void intensity;
 
-  // ── Alpha: binary. Visible = 1.0. Not visible = 0. ──
-  let alpha: number;
-  if (wordAnim.soloHeroHidden) {
-    alpha = 0;
-  } else if (!wordAnim.isRevealed) {
-    // Stagger: invisible until reveal time
-    // Ghost preview: all words revealed from start (staggerDelay = 0), so this = 0
-    alpha = 0;
-  } else {
-    // Visible = full brightness. Always. No dimming. No spotlight.
-    alpha = 1.0;
-  }
+  // Alpha: always 1.0. Solo hero hidden = 0.
+  const alpha = wordAnim.soloHeroHidden ? 0 : 1.0;
 
-  // ── Scale: phrase-level push-in only ──
+  // Scale: push-in only (phrase-level)
   const scale = phrase.pushInScale;
+
+  // Y offset: hero centering + beat nod (synced with background zoom)
+  const offsetY = wordAnim.heroOffsetY + phrase.beatNudgeY;
 
   return {
     alpha,
-    scaleX: scale,
-    scaleY: scale,
-    offsetX: wordAnim.heroOffsetX,
-    offsetY: wordAnim.heroOffsetY,
+    scaleX: scale, scaleY: scale,
+    offsetX: wordAnim.heroOffsetX, offsetY,
     rotation: 0, skewX: 0,
     visible: alpha > 0.01,
   };
