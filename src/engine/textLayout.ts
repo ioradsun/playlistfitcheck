@@ -241,13 +241,14 @@ export function fitTextToViewport(
   const minFont = options?.minFontPx ?? 16;
   const slot = options?.slot ?? null;
   const transform = options?.textTransform ?? 'none';
-  const hasHero = options?.hasHeroWord ?? false;
+  // hasHeroWord no longer affects layout — hero scale was removed
+  void options?.hasHeroWord;
 
   // ── Available space ──
   const edgePad = Math.max(6, Math.round(canvasW * EDGE_PAD_RATIO));
   const availW = (canvasW - edgePad * 2) * targetFill;
-  // Reserve horizontal space for hero emphasis scaling
-  const layoutW = hasHero ? availW / 1.15 : availW;
+  // Hero scale removed — no width reservation needed
+  const layoutW = availW;
 
   const slotH = slot?.height ?? canvasH * 0.65;
   const slotCenterY = slot?.yCenter ?? canvasH * 0.5;
@@ -293,11 +294,9 @@ export function fitTextToViewport(
   };
 
   // ── Binary search for the LARGEST font that fits ──
-  // For single words, ceiling is higher — fill the screen
-  const singleWord = displayWords.length === 1;
-  const maxFontCeiling = singleWord
-    ? Math.min(availH * 0.75, availW * 0.9)
-    : Math.min(availH * 0.55, canvasW * 0.5);
+  // Same ceiling for all phrases — let the width constraint do the work.
+  // Short phrases fill the screen. Long phrases shrink to fit.
+  const maxFontCeiling = Math.min(availH * 0.75, availW * 0.9);
 
   let lo = minFont;
   let hi = Math.max(minFont, Math.floor(maxFontCeiling));

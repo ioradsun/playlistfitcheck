@@ -44,8 +44,6 @@ export interface ChunkAnimState {
   visible: boolean;
 }
 
-const WORD_FADE_SEC = 0.15;
-
 // ─── 1. Resolve active group ────────────────────────────────
 export function resolveActiveGroup(
   groups: CompiledPhraseGroup[], tSec: number, cursor: number, prevTime: number,
@@ -92,9 +90,8 @@ export function computeWordState(
     ? phrase.revealAnchor
     : phrase.revealAnchor + wordIndex * phrase.staggerDelay;
   const isRevealed = tSec >= wordRevealTime;
-  const revealProgress = !isRevealed ? 0
-    : phrase.staggerDelay < 0.005 ? 1
-    : Math.min(1, (tSec - wordRevealTime) / WORD_FADE_SEC);
+  // Instant reveal — no fade. Exact timestamps mean exact alpha.
+  const revealProgress = isRevealed ? 1 : 0;
 
   // ── Word timing state ──
   const wordStart = word.wordStart ?? group.start;
@@ -178,10 +175,6 @@ export function computeChunkAnim(
     alpha = 0.35;
   }
 
-  // Reveal fade-in
-  if (wordAnim.isRevealed && wordAnim.revealProgress < 1.0) {
-    alpha *= wordAnim.revealProgress;
-  }
   alpha = Math.max(0, Math.min(1, alpha));
 
   // ── Scale: fixed at 1.0 (no hero scaling) ──
