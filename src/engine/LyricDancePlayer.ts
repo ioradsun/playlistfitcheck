@@ -5609,6 +5609,44 @@ export class LyricDancePlayer {
         const ws = wordAnimStates[wi];
         const anim = computeChunkAnim(word, phraseState, ws);
 
+        // ── Vibrate on hold: add time-based offset ──
+        let vibrateX = 0;
+        let vibrateY = 0;
+        if (phraseState.vibrateOnHold && !phraseState.isEntering && !phraseState.isExiting) {
+          const holdStart = phraseState.groupStart;
+          const holdEnd = phraseState.groupEnd;
+          const holdDur = Math.max(0.01, holdEnd - holdStart);
+          const holdProgress = Math.max(0, Math.min(1, (tSec - holdStart) / holdDur));
+
+          const freq = 4 + holdProgress * 16; // 4Hz → 20Hz
+          const amp = 1 + holdProgress * 7;   // ±1px → ±8px
+          vibrateX = Math.sin(tSec * freq * Math.PI * 2) * amp;
+          vibrateY = Math.cos(tSec * freq * Math.PI * 2 * 0.7) * amp * 0.3;
+
+          // Scale ramp: 1.0 → 1.15x during hold
+          const vibrateScale = 1.0 + holdProgress * 0.15;
+          anim.scaleX *= vibrateScale;
+          anim.scaleY *= vibrateScale;
+
+          // Fade at end: word dissolves starting at 85%
+          if (holdProgress > 0.85) {
+            const fadeProgress = (holdProgress - 0.85) / 0.15;
+            anim.alpha *= (1 - fadeProgress);
+          }
+        }
+
+        // ── Ghost preview: scale bounce on active word ──
+        let ghostBounce = 1.0;
+        if (phraseState.ghostPreview && ws.wordState === 'active') {
+          const wordStart = word.wordStart ?? group.start;
+          const timeSinceActive = tSec - wordStart;
+          if (timeSinceActive < 0.15) {
+            // 0→0.15s: bounce 1.0 → 1.08 → 1.0
+            const bounceT = timeSinceActive / 0.15;
+            ghostBounce = 1.0 + 0.08 * Math.sin(bounceT * Math.PI);
+          }
+        }
+
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
 
@@ -5616,12 +5654,12 @@ export class LyricDancePlayer {
         chunk.text = word.text;
 
         // Position: layout + animation offsets + neighbor push
-        chunk.x = word.layoutX + anim.offsetX + neighborPushOffsets[wi];
-        chunk.y = word.layoutY + anim.offsetY;
+        chunk.x = word.layoutX + anim.offsetX + neighborPushOffsets[wi] + vibrateX;
+        chunk.y = word.layoutY + anim.offsetY + vibrateY;
 
         chunk.alpha = anim.alpha;
-        chunk.scaleX = anim.scaleX;
-        chunk.scaleY = anim.scaleY;
+        chunk.scaleX = anim.scaleX * ghostBounce;
+        chunk.scaleY = anim.scaleY * ghostBounce;
         chunk.scale = 1;
         chunk.visible = anim.visible;
         chunk.fontSize = word.baseFontSize;
@@ -5645,6 +5683,45 @@ export class LyricDancePlayer {
             rawColor = this._currentSectionPalette?.accent ?? this._framePalette?.[1] ?? '#FFD700';
           }
           chunk.color = rawColor;
+        }
+
+        // ── Elemental wash: white → element color over hold ──
+        if (phraseState.elementalWash) {
+          const holdStart = phraseState.groupStart;
+          const holdEnd = phraseState.groupEnd;
+          const holdDur = Math.max(0.01, holdEnd - holdStart);
+          const holdProgress = Math.max(0, Math.min(1, (tSec - holdStart) / holdDur));
+
+          if (holdProgress < 0.4) {
+            // Phase 1: white
+            chunk.color = '#ffffff';
+          } else if (holdProgress < 0.8) {
+            // Phase 2: sweep — each word transitions at different time
+            const washProgress = (holdProgress - 0.4) / 0.4;
+            const wordWashStart = wi / Math.max(1, group.words.length - 1);
+            const wordWash = Math.max(0, Math.min(1, (washProgress - wordWashStart * 0.5) * 2.5));
+
+            // Find elemental color for this word (or FROST default)
+            const wClean = word.clean || '';
+            const wDir = wClean ? (this.resolvedState?.wordDirectivesMap?.[wClean] ?? null) : null;
+            const elClass = (wDir as any)?.elementalClass ?? 'FROST';
+            const elColors: Record<string, string> = {
+              FROST: '#66bbff', FIRE: '#ff8833', WATER: '#3399ff',
+              SMOKE: '#aaaaaa', ELECTRIC: '#00ddff', ICE: '#66bbff',
+            };
+            const targetColor = elColors[elClass] ?? '#66bbff';
+            chunk.color = this._blendHex('#ffffff', targetColor, wordWash);
+          } else {
+            // Phase 3: fully colored
+            const wClean = word.clean || '';
+            const wDir = wClean ? (this.resolvedState?.wordDirectivesMap?.[wClean] ?? null) : null;
+            const elClass = (wDir as any)?.elementalClass ?? 'FROST';
+            const elColors: Record<string, string> = {
+              FROST: '#66bbff', FIRE: '#ff8833', WATER: '#3399ff',
+              SMOKE: '#aaaaaa', ELECTRIC: '#00ddff', ICE: '#66bbff',
+            };
+            chunk.color = elColors[elClass] ?? '#66bbff';
+          }
         }
 
         // Glow (hero words only, capped)
