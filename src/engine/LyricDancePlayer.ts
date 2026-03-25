@@ -19,7 +19,6 @@ import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
 import {
   compileScene,
-  type MotionCharacter,
   type CompiledScene,
   type Keyframe,
   type ScenePayload,
@@ -46,7 +45,6 @@ import {
   computeWordState,
   computeChunkAnim,
   detectSoloHero,
-  type AnimMoodConfig,
   type AnimBeatState,
 } from '@/engine/PhraseAnimator';
 
@@ -62,11 +60,7 @@ const DEBUG_ELEMENTAL_TRACE = false;
 // Layer 3: Spectacle budget (runtime cooldown → downgrades)
 // Layer 4: Legibility ceilings (hard caps → readability wins)
 
-interface MoodMotionConfig {
-  character: MotionCharacter;
-  intensity: number;          // 0..1 — scales motion magnitude
-  entryDuration: number;
-  exitDuration: number;
+interface SectionEffectsConfig {
   elementalIntensity: number; // 0..1 — replaces boolean elementalEnabled
   glowCap: number;
   cameraIntensity: number;
@@ -76,66 +70,51 @@ interface MoodMotionConfig {
   vignetteStrength: number;
 }
 
-const MOOD_MOTION: Record<string, MoodMotionConfig> = {
+const SECTION_EFFECTS: Record<string, SectionEffectsConfig> = {
   // ── Restrained ──
-  raw:         { character: 'snap',    intensity: 0.4,  entryDuration: 0.1,  exitDuration: 0.1,  elementalIntensity: 0.2,  glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.4, particleSpeed: 0.4, beatBarStyle: 'light', vignetteStrength: 0.5 },
-  vulnerable:  { character: 'whisper', intensity: 0.35, entryDuration: 0.35, exitDuration: 0.35, elementalIntensity: 0.25, glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.4, particleSpeed: 0.3, beatBarStyle: 'smoke', vignetteStrength: 0.7 },
-  melancholy:  { character: 'drift',   intensity: 0.3,  entryDuration: 0.4,  exitDuration: 0.35, elementalIntensity: 0.3,  glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.5, particleSpeed: 0.35, beatBarStyle: 'smoke', vignetteStrength: 0.7 },
-  intimate:    { character: 'whisper', intensity: 0.3,  entryDuration: 0.4,  exitDuration: 0.4,  elementalIntensity: 0.25, glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.4, particleSpeed: 0.3, beatBarStyle: 'light', vignetteStrength: 0.8 },
-  nostalgic:   { character: 'bloom',   intensity: 0.3,  entryDuration: 0.35, exitDuration: 0.35, elementalIntensity: 0.3,  glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.5, particleSpeed: 0.3, beatBarStyle: 'smoke', vignetteStrength: 0.6 },
+  raw:         { elementalIntensity: 0.3, glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.4, particleSpeed: 0.4, beatBarStyle: 'light', vignetteStrength: 0.5 },
+  vulnerable:  { elementalIntensity: 0.3, glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.4, particleSpeed: 0.3, beatBarStyle: 'smoke', vignetteStrength: 0.7 },
+  melancholy:  { elementalIntensity: 0.3, glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.5, particleSpeed: 0.35, beatBarStyle: 'smoke', vignetteStrength: 0.7 },
+  intimate:    { elementalIntensity: 0.3, glowCap: 4,  cameraIntensity: 0,   particleDensity: 0.4, particleSpeed: 0.3, beatBarStyle: 'light', vignetteStrength: 0.8 },
+  nostalgic:   { elementalIntensity: 0.3, glowCap: 6,  cameraIntensity: 0.1, particleDensity: 0.5, particleSpeed: 0.3, beatBarStyle: 'smoke', vignetteStrength: 0.6 },
 
   // ── Dynamic ──
-  aggressive:  { character: 'slam',    intensity: 0.8,  entryDuration: 0.18, exitDuration: 0.2,  elementalIntensity: 0.7,  glowCap: 10, cameraIntensity: 0.6, particleDensity: 0.8, particleSpeed: 0.9, beatBarStyle: 'flame', vignetteStrength: 0.4 },
-  defiant:     { character: 'drift',   intensity: 0.7,  entryDuration: 0.15, exitDuration: 0.18, elementalIntensity: 0.6,  glowCap: 10, cameraIntensity: 0.5, particleDensity: 0.7, particleSpeed: 0.8, beatBarStyle: 'flame', vignetteStrength: 0.3 },
-  eerie:       { character: 'bloom',   intensity: 0.5,  entryDuration: 0.3,  exitDuration: 0.25, elementalIntensity: 0.6,  glowCap: 8,  cameraIntensity: 0.3, particleDensity: 0.6, particleSpeed: 0.5, beatBarStyle: 'smoke', vignetteStrength: 0.7 },
-  hypnotic:    { character: 'bloom',   intensity: 0.5,  entryDuration: 0.3,  exitDuration: 0.3,  elementalIntensity: 0.5,  glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.7, particleSpeed: 0.5, beatBarStyle: 'neon',  vignetteStrength: 0.5 },
-  hopeful:     { character: 'rise',    intensity: 0.6,  entryDuration: 0.25, exitDuration: 0.25, elementalIntensity: 0.5,  glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.7, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.3 },
+  aggressive:  { elementalIntensity: 0.7, glowCap: 10, cameraIntensity: 0.6, particleDensity: 0.8, particleSpeed: 0.9, beatBarStyle: 'flame', vignetteStrength: 0.4 },
+  defiant:     { elementalIntensity: 0.6, glowCap: 10, cameraIntensity: 0.5, particleDensity: 0.7, particleSpeed: 0.8, beatBarStyle: 'flame', vignetteStrength: 0.3 },
+  eerie:       { elementalIntensity: 0.6, glowCap: 8,  cameraIntensity: 0.3, particleDensity: 0.6, particleSpeed: 0.5, beatBarStyle: 'smoke', vignetteStrength: 0.7 },
+  hypnotic:    { elementalIntensity: 0.5, glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.7, particleSpeed: 0.5, beatBarStyle: 'neon',  vignetteStrength: 0.5 },
+  hopeful:     { elementalIntensity: 0.5, glowCap: 8,  cameraIntensity: 0.4, particleDensity: 0.7, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.3 },
 
   // ── Cinematic ──
-  euphoric:    { character: 'bloom',   intensity: 1.0,  entryDuration: 0.2,  exitDuration: 0.2,  elementalIntensity: 1.0,  glowCap: 16, cameraIntensity: 0.9, particleDensity: 1.2, particleSpeed: 1.0, beatBarStyle: 'flame', vignetteStrength: 0.2 },
-  dreamy:      { character: 'bloom',   intensity: 0.7,  entryDuration: 0.3,  exitDuration: 0.3,  elementalIntensity: 0.8,  glowCap: 14, cameraIntensity: 0.5, particleDensity: 1.0, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.3 },
-  triumphant:  { character: 'slam',    intensity: 1.0,  entryDuration: 0.2,  exitDuration: 0.25, elementalIntensity: 1.0,  glowCap: 16, cameraIntensity: 0.8, particleDensity: 1.2, particleSpeed: 1.2, beatBarStyle: 'flame', vignetteStrength: 0.15 },
-  anthemic:    { character: 'rise',    intensity: 0.9,  entryDuration: 0.18, exitDuration: 0.22, elementalIntensity: 0.9,  glowCap: 14, cameraIntensity: 0.7, particleDensity: 1.1, particleSpeed: 1.0, beatBarStyle: 'flame', vignetteStrength: 0.2 },
+  euphoric:    { elementalIntensity: 1.0, glowCap: 16, cameraIntensity: 0.9, particleDensity: 1.2, particleSpeed: 1.0, beatBarStyle: 'flame', vignetteStrength: 0.2 },
+  dreamy:      { elementalIntensity: 0.8, glowCap: 14, cameraIntensity: 0.5, particleDensity: 1.0, particleSpeed: 0.6, beatBarStyle: 'neon',  vignetteStrength: 0.3 },
+  triumphant:  { elementalIntensity: 1.0, glowCap: 16, cameraIntensity: 0.8, particleDensity: 1.2, particleSpeed: 1.2, beatBarStyle: 'flame', vignetteStrength: 0.15 },
+  anthemic:    { elementalIntensity: 0.9, glowCap: 14, cameraIntensity: 0.7, particleDensity: 1.1, particleSpeed: 1.0, beatBarStyle: 'flame', vignetteStrength: 0.2 },
 };
 
-const DEFAULT_MOOD_CONFIG: MoodMotionConfig = MOOD_MOTION.raw;
+const DEFAULT_EFFECTS: SectionEffectsConfig = SECTION_EFFECTS.raw;
 
-function getMoodConfig(visualMood: string | undefined): MoodMotionConfig {
-  return MOOD_MOTION[visualMood ?? 'raw'] ?? DEFAULT_MOOD_CONFIG;
+function getEffectsConfig(visualMood: string | undefined): SectionEffectsConfig {
+  return SECTION_EFFECTS[visualMood ?? 'raw'] ?? DEFAULT_EFFECTS;
 }
 
-type ArcLevel = 'restrained' | 'build' | 'payoff' | 'aftermath';
-
-function getArcLevel(sectionIndex: number, totalSections: number, tier: string): ArcLevel {
-  if (totalSections <= 1) return 'payoff';
-  const position = sectionIndex / (totalSections - 1);
-  if (position < 0.12) return 'restrained';
-  if (position > 0.88) return 'aftermath';
-  if (tier === 'cinematic') return 'payoff';
-  if (position > 0.35 && position < 0.75) return 'build';
-  return 'restrained';
-}
-
-const ARC_MULTIPLIER: Record<ArcLevel, number> = { restrained: 0.7, build: 0.85, payoff: 1.0, aftermath: 0.6 };
-
-interface MoodTransition {
-  from: MoodMotionConfig;
-  to: MoodMotionConfig;
+interface EffectsTransition {
+  from: SectionEffectsConfig;
+  to: SectionEffectsConfig;
   startMs: number;
   durationMs: number;
 }
 
-function lerpMoodConfig(a: MoodMotionConfig, b: MoodMotionConfig, t: number): MoodMotionConfig {
-  const eased = t * t * (3 - 2 * t);
+function lerpEffectsConfig(a: SectionEffectsConfig, b: SectionEffectsConfig, t: number): SectionEffectsConfig {
+  const m = (x: number, y: number) => x + (y - x) * t;
   return {
-    ...b,
-    intensity: a.intensity + (b.intensity - a.intensity) * eased,
-    glowCap: a.glowCap + (b.glowCap - a.glowCap) * eased,
-    cameraIntensity: a.cameraIntensity + (b.cameraIntensity - a.cameraIntensity) * eased,
-    particleDensity: a.particleDensity + (b.particleDensity - a.particleDensity) * eased,
-    particleSpeed: a.particleSpeed + (b.particleSpeed - a.particleSpeed) * eased,
-    vignetteStrength: a.vignetteStrength + (b.vignetteStrength - a.vignetteStrength) * eased,
-    elementalIntensity: a.elementalIntensity + (b.elementalIntensity - a.elementalIntensity) * eased,
+    elementalIntensity: m(a.elementalIntensity, b.elementalIntensity),
+    glowCap: Math.round(m(a.glowCap, b.glowCap)),
+    cameraIntensity: m(a.cameraIntensity, b.cameraIntensity),
+    particleDensity: m(a.particleDensity, b.particleDensity),
+    particleSpeed: m(a.particleSpeed, b.particleSpeed),
+    beatBarStyle: t < 0.5 ? a.beatBarStyle : b.beatBarStyle,
+    vignetteStrength: m(a.vignetteStrength, b.vignetteStrength),
   };
 }
 
@@ -144,89 +123,7 @@ const LEGIBILITY = {
   maxForegroundAlphaOverText: 0.12,
   glowCapAtSpeed: (wordsPerSec: number): number => Math.max(4, 20 - wordsPerSec * 2.5),
   cameraCapForDensity: (wordCount: number): number => wordCount > 5 ? 0.4 : wordCount > 3 ? 0.7 : 1.0,
-  motionCapForDensity: (wordCount: number): number => wordCount > 5 ? 0.5 : wordCount > 3 ? 0.75 : 1.0,
 };
-
-/**
- * Compute the maximum uniform scale that keeps a word fully inside the viewport.
- *
- * First principles: a word rendered at (cx, cy) with measured width `w` and
- * fontSize `f`, scaled by S, occupies the bounding box:
- *
- *   left   = cx - (w * S / 2)
- *   right  = cx + (w * S / 2)
- *   top    = cy - (f * S * 0.6)   // ascent ≈ 60% of fontSize
- *   bottom = cy + (f * S * 0.4)   // descent ≈ 40% of fontSize
- *
- * For the box to fit inside [margin, viewW - margin] × [margin, viewH - margin]:
- *
- *   S ≤ (cx - margin) * 2 / w          (left edge)
- *   S ≤ ((viewW - margin) - cx) * 2 / w (right edge)
- *   S ≤ (cy - margin) / (f * 0.6)       (top edge)
- *   S ≤ ((viewH - margin) - cy) / (f * 0.4) (bottom edge)
- *
- * Returns the minimum of all four constraints, floored at 1.0.
- */
-function maxViewportSafeScale(
-  cx: number, cy: number,
-  wordWidth: number, fontSize: number,
-  viewW: number, viewH: number,
-  margin: number,
-): number {
-  if (wordWidth <= 0 || fontSize <= 0) return 1.0;
-  const halfW = wordWidth / 2;
-  const ascent = fontSize * 0.6;
-  const descent = fontSize * 0.4;
-  const maxFromLeft = (cx - margin) / halfW;
-  const maxFromRight = (viewW - margin - cx) / halfW;
-  const maxFromTop = (cy - margin) / ascent;
-  const maxFromBottom = (viewH - margin - cy) / descent;
-  return Math.max(1.0, Math.min(maxFromLeft, maxFromRight, maxFromTop, maxFromBottom));
-}
-
-/**
- * Compute the maximum scale for a hero word such that it doesn't overlap
- * its nearest neighbors on the same wrapped line.
- *
- * First principles: two words on the same line with centers cx_i, cx_j
- * and widths w_i, w_j, scaled S_i, S_j respectively, overlap when:
- *
- *   (cx_i + w_i * S_i / 2) + minGap > (cx_j - w_j * S_j / 2)
- *
- * For the hero word (index h) with neighbors, we solve for S_h:
- *
- *   S_h ≤ (|cx_neighbor - cx_hero| - w_neighbor * S_neighbor / 2 - minGap) * 2 / w_hero
- *
- * We check both left and right neighbors and return the tighter constraint.
- */
-function maxNonOverlapScale(
-  heroIdx: number,
-  words: Array<{ layoutX: number; layoutY: number; layoutWidth: number; baseFontSize: number }>,
-  wordScales: number[],
-  minGap: number,
-): number {
-  const hero = words[heroIdx];
-  const heroHalfW = hero.layoutWidth / 2;
-  if (heroHalfW <= 0) return 10;
-
-  let maxScale = 10;
-
-  for (let i = 0; i < words.length; i++) {
-    if (i === heroIdx) continue;
-    const w = words[i];
-    if (Math.abs(w.layoutY - hero.layoutY) > 4) continue;
-
-    const neighborHalfW = (w.layoutWidth * (wordScales[i] ?? 1)) / 2;
-    const dist = Math.abs(w.layoutX - hero.layoutX);
-    const available = dist - neighborHalfW - minGap;
-    if (available <= 0) continue;
-
-    const maxS = (available * 2) / hero.layoutWidth;
-    if (maxS < maxScale) maxScale = maxS;
-  }
-
-  return Math.max(1.0, maxScale);
-}
 
 // ──────────────────────────────────────────────────────────────
 // Types expected by ShareableLyricDance.tsx
@@ -1500,8 +1397,8 @@ export class LyricDancePlayer {
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
   private ambientParticleEngine: ParticleEngine | null = null;
   private activeSectionIndex = -1;
-  private _activeMoodConfig: MoodMotionConfig = DEFAULT_MOOD_CONFIG;
-  private _moodTransition: MoodTransition | null = null;
+  private _activeEffects: SectionEffectsConfig = DEFAULT_EFFECTS;
+  private _effectsTransition: EffectsTransition | null = null;
 
   // ═══ Pre-computed hero word schedule for camera lookahead ═══
   private _heroSchedule: Array<{ startSec: number; endSec: number; emphasis: number; word: string }> = [];
@@ -2866,7 +2763,7 @@ export class LyricDancePlayer {
         const activeGroupWordCount = activeGroup?.words?.length ?? 0;
         this.cameraRig.setPhraseDamping((activeGroup as any)?.motionBudget?.damping ?? 0);
 
-        const camIntensity = this._activeMoodConfig.cameraIntensity
+        const camIntensity = this._activeEffects.cameraIntensity
           * LEGIBILITY.cameraCapForDensity(activeGroupWordCount);
         if (camIntensity > 0.05) {
           this.cameraRig.setAmplitudeScale(camIntensity);
@@ -3151,30 +3048,17 @@ export class LyricDancePlayer {
       this.activeSectionIndex = sectionIndex;
 
       const sectionMood = (section as any)?.visualMood as string | undefined;
-      const baseConfig = getMoodConfig(sectionMood);
-      const totalSections = chapters.length;
-      const arcLevel = getArcLevel(sectionIndex, totalSections, baseConfig.intensity >= 0.8 ? 'cinematic' : baseConfig.intensity >= 0.5 ? 'dynamic' : 'restrained');
-      const arcMult = ARC_MULTIPLIER[arcLevel];
-      const arcScaled: MoodMotionConfig = {
-        ...baseConfig,
-        intensity: baseConfig.intensity * arcMult,
-        glowCap: Math.round(baseConfig.glowCap * arcMult),
-        cameraIntensity: baseConfig.cameraIntensity * arcMult,
-        particleDensity: baseConfig.particleDensity * arcMult,
-        particleSpeed: baseConfig.particleSpeed * Math.max(0.3, arcMult),
-        vignetteStrength: baseConfig.vignetteStrength + (1 - arcMult) * 0.15,
-        elementalIntensity: baseConfig.elementalIntensity * arcMult,
-      };
+      const baseEffects = getEffectsConfig(sectionMood);
 
-      this._moodTransition = {
-        from: { ...this._activeMoodConfig },
-        to: arcScaled,
+      this._effectsTransition = {
+        from: { ...this._activeEffects },
+        to: baseEffects,
         startMs: performance.now(),
         durationMs: 500,
       };
 
       if (this._globalBeatVis) {
-        this._globalBeatVis.setStyle(arcScaled.beatBarStyle);
+        this._globalBeatVis.setStyle(baseEffects.beatBarStyle);
       }
 
       const texture = section?.texture ?? this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, cd) ?? "dust";
@@ -3213,7 +3097,7 @@ export class LyricDancePlayer {
     const conductorResponse = beatState ? this.conductor?.getSubsystemResponse(beatState, 2) ?? null : null;
     this._lastSubsystemResponse = conductorResponse;
 
-    const config = this._activeMoodConfig;
+    const config = this._activeEffects;
 
     if (conductorResponse) {
       this.ambientParticleEngine?.setDensityMultiplier((conductorResponse.particleDensity * 2) * config.particleDensity);
@@ -3584,7 +3468,7 @@ export class LyricDancePlayer {
 
       // ═══ HERO DECOMPOSITION: spawn shatter burst when solo hero starts exiting ═══
       // Skip at tier 2+ (spawns dozens of particles per hero word)
-      if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && this._activeMoodConfig.intensity >= 0.8 && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2 && (chunk.wordDuration ?? 0) >= 0.35) {
+      if (exit > 0.01 && exit < 0.3 && chunk.isSoloHero && !this._heroDecompSpawned.has(chunk.id) && this._qualityTier < 2 && (chunk.wordDuration ?? 0) >= 0.35) {
         this._heroDecompSpawned.add(chunk.id);
         const spawnX = Number.isFinite(chunk.x) ? Math.max(clampMinX, Math.min(clampMaxX, chunk.x as number)) : this.width / 2;
         const spawnY = Number.isFinite(chunk.y) ? Math.max(clampMinY, Math.min(clampMaxY, (chunk.y as number) - this._textVerticalBias)) : this.height / 2;
@@ -3885,10 +3769,10 @@ export class LyricDancePlayer {
     // ═══ PER-WORD ELEMENTAL EFFECTS ═══
     // For each visible word with an elementalClass directive, render the effect
     // directly on that word using screen blend mode (additive glow, no duplicate).
-    if (this._activeMoodConfig.elementalIntensity > 0 && sortBuf.length > 0) {
+    if (this._activeEffects.elementalIntensity > 0 && sortBuf.length > 0) {
       const beatPulse = this._lastBeatState?.pulse ?? 0;
       const lightingMode = this._textBandBrightness > 0.55 ? 'bright' as const : 'dark' as const;
-      const elementalAlpha = Math.max(this._activeMoodConfig.elementalIntensity, 0.5);
+      const elementalAlpha = Math.max(this._activeEffects.elementalIntensity, 0.5);
 
       for (let ci = 0; ci < sortBuf.length; ci++) {
         const chunk = sortBuf[ci];
@@ -5462,12 +5346,12 @@ export class LyricDancePlayer {
     const scene = this.compiledScene;
     if (!scene) return null;
 
-    if (this._moodTransition) {
-      const t = this._moodTransition;
+    if (this._effectsTransition) {
+      const t = this._effectsTransition;
       const elapsed = performance.now() - t.startMs;
       const progress = Math.min(1, elapsed / t.durationMs);
-      this._activeMoodConfig = lerpMoodConfig(t.from, t.to, progress);
-      if (progress >= 1) this._moodTransition = null;
+      this._activeEffects = lerpEffectsConfig(t.from, t.to, progress);
+      if (progress >= 1) this._effectsTransition = null;
     }
 
     const deltaMs = this._frameDt * 16.67;
@@ -5551,18 +5435,12 @@ export class LyricDancePlayer {
       // ── Phrase animation state from PhraseAnimator ──
       // Mood config is ONLY used as fallback for ai_moment phrases (no presentation mode).
       // Presentation mode cards are self-contained — they define their own timing + intensity.
-      const moodForAnim: AnimMoodConfig = {
-        character: this._activeMoodConfig.character,
-        intensity: this._activeMoodConfig.intensity,
-        entryDuration: this._activeMoodConfig.entryDuration,
-        exitDuration: this._activeMoodConfig.exitDuration,
-      };
       const beatForAnim: AnimBeatState | null = beatState
         ? { pulse: beatState.pulse ?? 0, phase: beatState.phase ?? 0 }
         : null;
 
       const phraseState = computePhraseState(
-        group, nextGroupStart, tSec, moodForAnim, beatForAnim, this.width,
+        group, nextGroupStart, tSec, beatForAnim, this.width,
       );
 
       const groupHasActiveSoloHero = detectSoloHero(group, tSec);
@@ -5727,7 +5605,7 @@ export class LyricDancePlayer {
         }
 
         // Glow (hero words only, capped)
-        const glowCap = this._activeMoodConfig.glowCap;
+        const glowCap = this._activeEffects.glowCap;
         const heroBeatResp = ws.effectiveHero ? getBeatResponse(word.emphasisLevel ?? 1, true) : null;
         const glowPulse = heroBeatResp?.wordGlow ?? beatState?.pulse ?? 0;
         chunk.glow = ws.effectiveHero ? Math.min(glowPulse * 0.5, glowCap / 20) : 0;
@@ -5871,7 +5749,7 @@ export class LyricDancePlayer {
    * The audience never sees the vignette. They feel claustrophobia and release.
    */
   private drawVignette(): void {
-    const strength = this._activeMoodConfig.vignetteStrength;
+    const strength = this._activeEffects.vignetteStrength;
     if (strength < 0.01) return;
     // Smoothed energy for gentle breathing (not beat-by-beat, section-level)
     const targetEnergy = this._lastBeatState?.energy ?? 0.3;
