@@ -1,6 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { computeChunkAnim, computePhraseState, computeWordState, resolveActiveGroup } from '@/engine/PhraseAnimator';
 import type { CompiledPhraseGroup } from '@/lib/sceneCompiler';
+import type { MotionProfile } from '@/engine/IntensityRouter';
+
+const defaultMp: MotionProfile = {
+  intensity: 0.5,
+  textNodMult: 1.0,
+  textWaveMult: 1.0,
+  textHeroMult: 1.0,
+  bgBeatMult: 0,
+  bgParallaxMult: 0.7,
+  cameraBeatMult: 0,
+  cameraShakeMult: 0,
+  textSyncFraction: 0,
+  particleDensityMult: 1.0,
+  particleSpeedMult: 1.0,
+};
 
 function mkGroup(overrides: Partial<CompiledPhraseGroup>): CompiledPhraseGroup {
   return {
@@ -27,8 +42,8 @@ function mkGroup(overrides: Partial<CompiledPhraseGroup>): CompiledPhraseGroup {
         isAnchor: true,
         color: '#fff',
         isFiller: false,
-      emphasisLevel: 1,
-      semanticAlphaMax: 1,
+        emphasisLevel: 1,
+        semanticAlphaMax: 1,
       },
     ],
     staggerDelay: 0.12,
@@ -62,14 +77,14 @@ describe('PhraseAnimator timing', () => {
 
   it('uses group.end as phrase end (not next group start)', () => {
     const group = mkGroup({ start: 2.0, end: 2.8, holdClass: 'long_emotional' });
-    const state = computePhraseState(group, 2.3, 2.5, null, 1080);
+    const state = computePhraseState(group, 2.3, 2.5, null, 1080, defaultMp);
     expect(state.groupStart).toBe(2.0);
     expect(state.groupEnd).toBe(2.8);
   });
 
   it('dampens and clamps beat-driven movement for readability', () => {
     const group = mkGroup({ chorusRepeat: 4 });
-    const state = computePhraseState(group, Infinity, 0.4, { pulse: 1, phase: 0 }, 1080);
+    const state = computePhraseState(group, Infinity, 0.4, { pulse: 1, phase: 0 }, 1080, defaultMp);
 
     // pulse at max still lands in constrained range.
     expect(state.beatNudgeY).toBeLessThanOrEqual(6);
@@ -78,9 +93,9 @@ describe('PhraseAnimator timing', () => {
 
   it('clamps total word vertical offset after beat + reveal contributions', () => {
     const group = mkGroup({ staggerDelay: 0.12 });
-    const phraseState = computePhraseState(group, Infinity, 0.05, { pulse: 1, phase: 0 }, 1080);
-    const wordState = computeWordState(group.words[0], 0, group, phraseState, 0.05, false, 1080, 1920);
-    const chunk = computeChunkAnim(group.words[0], phraseState, wordState);
+    const phraseState = computePhraseState(group, Infinity, 0.05, { pulse: 1, phase: 0 }, 1080, defaultMp);
+    const wordState = computeWordState(group.words[0], 0, group, phraseState, 0.05, false, 1080, 1920, defaultMp, -1);
+    const chunk = computeChunkAnim(group.words[0], phraseState, wordState, 0, 1);
 
     expect(chunk.offsetY).toBeLessThanOrEqual(12);
     expect(chunk.offsetY).toBeGreaterThanOrEqual(-12);

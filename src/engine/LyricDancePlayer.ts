@@ -3074,8 +3074,8 @@ export class LyricDancePlayer {
     const config = this._activeEffects;
 
     if (conductorResponse) {
-      const irDensity = mp.particleDensityMult;
-      const irSpeed = mp.particleSpeedMult;
+      const irDensity = (this._motionProfile ?? { particleDensityMult: 1 }).particleDensityMult;
+      const irSpeed = (this._motionProfile ?? { particleSpeedMult: 1 }).particleSpeedMult;
       this.ambientParticleEngine?.setDensityMultiplier(irDensity * config.particleDensity);
       this.ambientParticleEngine?.setSpeedMultiplier(irSpeed * config.particleSpeed);
     }
