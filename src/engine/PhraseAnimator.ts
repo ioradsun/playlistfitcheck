@@ -2,8 +2,7 @@
  * PhraseAnimator.ts — Simplest possible lyric engine.
  *
  * All words visible at alpha 1.0. No reveal. No stagger. No dimming.
- * Text nods with the beat — same signal as background zoom pulse.
- * Long phrases (>1s) get a slow cinematic push-in.
+ * Traveling wave scale = reading cursor. Beat nod syncs with background. Push-in for long holds.
  */
 import { type MotionCharacter, type AnimState, type CompiledPhraseGroup, type CompiledWord } from '@/lib/sceneCompiler';
 import type { MotionProfile } from '@/engine/IntensityRouter';
@@ -101,7 +100,7 @@ export function computeWordState(
   phrase: PhraseAnimState, tSec: number, groupHasActiveSoloHero: boolean,
   canvasWidth: number, canvasHeight: number, mp: MotionProfile, activeHeroWordIndex: number,
 ): WordAnimState {
-  void mp; void activeHeroWordIndex; void wordIndex; void tSec;
+  void mp; void activeHeroWordIndex;
 
   // All words visible immediately. No reveal timing.
   const wordStart = word.wordStart ?? group.start;
@@ -128,13 +127,25 @@ export function computeWordState(
     heroOffsetY = canvasHeight / 2 - word.layoutY;
   }
 
+  // ── Traveling wave: smooth scale cursor ──
+  // Peak at the word being spoken, tapers to neighbors.
+  // bleedZone = word's half-duration + 150ms overlap → smooth handoff.
+  const wordMid = (wordStart + nextWordStart) / 2;
+  const wordHalfDur = Math.max(0.05, (nextWordStart - wordStart) / 2);
+  const bleedZone = wordHalfDur + 0.15;
+  const dist = Math.abs(tSec - wordMid);
+  const proximity = Math.max(0, 1 - dist / bleedZone);
+  // Smoothstep: round peak, not triangular
+  const eased = proximity * proximity * (3 - 2 * proximity);
+  const waveScale = 1.0 + eased * 0.06;
+
   return {
     isRevealed: true, revealProgress: 1, wordRevealTime: group.start,
     wordState, spotlightAlpha: 1.0,
     isHeroWord, effectiveHero, isSoloHero,
     heroScaleMult: 1.0, heroOffsetX, heroOffsetY, soloHeroHidden,
     centerWordScale: 1.0, revealRise: 0,
-    waveScale: 1.0, ghostPreview: false,
+    waveScale, ghostPreview: false,
     bounceAmplitude: 0, heroSuppressionFactor: 1.0,
     heroSuppressed: false,
   };
@@ -150,8 +161,8 @@ export function computeChunkAnim(
   // Alpha: always 1.0. Solo hero hidden = 0.
   const alpha = wordAnim.soloHeroHidden ? 0 : 1.0;
 
-  // Scale: push-in only (phrase-level)
-  const scale = phrase.pushInScale;
+  // ── Scale: traveling wave (reading cursor) × push-in ──
+  const scale = wordAnim.waveScale * phrase.pushInScale;
 
   // Y offset: hero centering + beat nod (synced with background zoom)
   const offsetY = wordAnim.heroOffsetY + phrase.beatNudgeY;
