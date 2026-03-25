@@ -188,11 +188,11 @@ export function resolveActiveGroup(
     cursor = 0;
   }
 
-  // Advance cursor strictly from phrase timing data:
-  // current phrase remains active through its indexed end time.
+  // Advance cursor: swap to next phrase when its first word starts.
+  // No early entry — the current phrase holds until replaced.
   while (cursor < groups.length - 1) {
-    const current = groups[cursor];
-    if (tSec >= current.end) {
+    const next = groups[cursor + 1];
+    if (tSec >= next.start) {
       cursor++;
     } else {
       break;
@@ -224,13 +224,12 @@ export function computePhraseState(
   void nextGroupStart;
   const groupEnd = group.end;
 
-  // ── Timing used for stagger reveal and phrase activation window ──
+  // ── Timing used for phrase activation window ──
   const staggerDelay = group.staggerDelay ?? 0;
-  const entryPad = group.words.length * (staggerDelay || 0.05) + 0.2;
   // Keep mode timing lookup for forward compatibility and intensity mapping.
   const modeTiming = getModeTiming(group.presentationMode);
   // ── No entry/exit animation. Phrase appears instantly, holds, gets replaced. ──
-  const timeSinceActivation = tSec - (group.start - entryPad);
+  const timeSinceActivation = tSec - group.start;
   const phraseRemaining = groupEnd - tSec;
   void timeSinceActivation;
   void phraseRemaining;
@@ -260,8 +259,8 @@ export function computePhraseState(
   const beatNudgeY = Math.min(BEAT_NUDGE_MAX, pulse * BEAT_NUDGE_BASE * beatMultiplier);
   const beatScale = Math.min(BEAT_SCALE_MAX, BEAT_SCALE_BASE + pulse * BEAT_SCALE_MULT * beatMultiplier);
 
-  // All words visible from phrase activation (no reveal gating)
-  const revealAnchor = group.start - entryPad;
+  // All words visible from phrase start
+  const revealAnchor = group.start;
 
   return {
     composition,
