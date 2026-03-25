@@ -2,7 +2,7 @@
  * PhraseAnimator.ts — Alpha spotlight engine.
  *
  * Text doesn't move. Text is the anchor. Alpha is the only emphasis tool.
- * Active word = brightest. Hero = room goes quiet + 5% breath. Beat = background only.
+ * Active word = brightest. Hero = room goes quiet (neighbors dim). Beat = background only.
  */
 import { type MotionCharacter, type AnimState, type CompiledPhraseGroup, type CompiledWord } from '@/lib/sceneCompiler';
 import type { MotionProfile } from '@/engine/IntensityRouter';
@@ -116,30 +116,16 @@ export function computeWordState(
   const isSoloHero = isOnlyWordInPhrase && isHeroWord && (word.wordDuration ?? 0) >= 0.5;
   const soloHeroHidden = !isSoloHero && groupHasActiveSoloHero;
 
-  // ── Hero scale: gentle bell curve breath ──
-  // Smooth sine half-wave over the word's duration + 150ms tail.
-  // Rises gradually, peaks at center, falls gradually. Never snaps.
-  let heroScaleMult = 1.0;
-  if (effectiveHero && !isSoloHero) {
-    const heroDurSec = Math.max(0.1, nextWordStart - wordStart);
-    // Extend the breath 150ms past the word end for smooth descent
-    const breathWindow = heroDurSec + 0.15;
-    const elapsed = tSec - wordStart;
-
-    if (elapsed >= 0 && elapsed < breathWindow) {
-      const t = elapsed / breathWindow;
-      // Sine half-wave: gradual rise, peak near center, gradual fall
-      const bell = Math.sin(t * Math.PI);
-      heroScaleMult = 1.0 + bell * 0.04 * mp.textHeroMult;
-    }
-  }
+  // ── No hero scale — alpha spotlight is the only emphasis tool ──
+  // Scale changes on individual words break readability and shift layout.
+  // center_word layout already sizes solo words to fill the canvas.
+  const heroScaleMult = 1.0;
 
   // Solo hero offset (center screen)
   let heroOffsetX = 0; let heroOffsetY = 0;
   if (isSoloHero) {
     heroOffsetX = canvasWidth / 2 - word.layoutX;
     heroOffsetY = canvasHeight / 2 - word.layoutY;
-    heroScaleMult = Math.max(heroScaleMult, 1.15);
   }
 
   const centerWordScale = phrase.composition === 'center_word' ? 1.0 : 1.0;
@@ -164,7 +150,7 @@ export function computeWordState(
   };
 }
 
-// ─── 4. Final chunk animation: alpha + hero breath ──────────
+// ─── 4. Final chunk animation: alpha only emphasis ───────────
 export function computeChunkAnim(
   word: CompiledWord, phrase: PhraseAnimState, wordAnim: WordAnimState,
   beatPhase: number, intensity: number,
@@ -198,7 +184,7 @@ export function computeChunkAnim(
   }
   alpha = Math.max(0, Math.min(1, alpha));
 
-  // ── Scale: only hero breath (1.0 → 1.05) ──
+  // ── Scale: fixed at 1.0 (no hero scaling) ──
   const scale = wordAnim.heroScaleMult;
 
   return {
