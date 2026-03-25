@@ -347,10 +347,10 @@ export function computeWordState(
   if (wordState === 'active') {
     spotlightAlpha = 1.0;
   } else if (wordState === 'spoken') {
-    spotlightAlpha = 0.7;
+    spotlightAlpha = 0.85;
   } else {
     // upcoming
-    spotlightAlpha = 0.4;
+    spotlightAlpha = 0.35;
   }
 
   // ── Hero detection ──
@@ -435,10 +435,10 @@ export function computeChunkAnim(
   } else if (wordAnim.wordState === 'active') {
     alpha = 1.0;
   } else if (wordAnim.wordState === 'spoken') {
-    alpha = 0.7;
+    alpha = 0.85;
   } else {
-    // upcoming — visible but dimmed
-    alpha = 0.4;
+    // upcoming
+    alpha = 0.35;
   }
 
   alpha = Math.max(0, Math.min(1, alpha));
@@ -448,8 +448,12 @@ export function computeChunkAnim(
   // Adding ANY scale on top causes overflow. Only non-center_word gets hero boost.
   const isCenterWord = wordAnim.centerWordScale > 1.01;
   const emphasisScale = isCenterWord ? 1.0 : wordAnim.heroScaleMult;
-  let scaleX = emphasisScale;
-  let scaleY = emphasisScale;
+  const waveScale = isCenterWord ? 1.0
+    : wordAnim.wordState === 'active'  ? 1.12
+    : wordAnim.wordState === 'spoken'  ? 1.0
+    : 0.92; // upcoming
+  let scaleX = emphasisScale * waveScale;
+  let scaleY = emphasisScale * waveScale;
 
   // Beat response scale (subtle pulse on beat)
   scaleX *= phrase.beatScale;

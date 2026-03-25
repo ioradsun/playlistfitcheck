@@ -16,7 +16,6 @@ export function drawElementalWord(
   currentTime: number, // word-local: 0 = word just appeared
   beatIntensity: number,
   appearanceCount: number,
-  colorOverride: string | null,
   options?: {
     bubbleXPositions?: number[];
     useBlur?: boolean;
@@ -71,7 +70,7 @@ export function drawElementalWord(
     case "RAIN": {
       if (mode === "bright") {
         // Bright: visible wave distortion + water drops + ripples
-        ctx.fillStyle = colorOverride ?? "#1a3a5c";
+        ctx.fillStyle = "#1a3a5c";
         if (hasText) ctx.fillText(word, 0, 0);
 
         // Refractive wave — visible
@@ -112,7 +111,7 @@ export function drawElementalWord(
         }
       } else {
         // Dark: blue glow, bubbles, drips
-        ctx.fillStyle = colorOverride ?? "#4A6B8C";
+        ctx.fillStyle = "#4A6B8C";
         if (hasText) ctx.fillText(word, 0, 0);
 
         // Wet sheen overlay
@@ -164,7 +163,7 @@ export function drawElementalWord(
     case "FIRE": {
       if (mode === "bright") {
         // Bright: visible heat shimmer + red/orange tint
-        ctx.fillStyle = colorOverride ?? "#2a0a00";
+        ctx.fillStyle = "#2a0a00";
         if (hasText) ctx.fillText(word, 0, 0);
 
         // Heat shimmer — visible displacement
@@ -256,7 +255,7 @@ export function drawElementalWord(
     case "SMOKE": {
       if (mode === "bright") {
         // Bright: visible shadow depth + drift + smoke wisps
-        ctx.fillStyle = colorOverride ?? "#333";
+        ctx.fillStyle = "#333";
         if (hasText) ctx.fillText(word, 0, 0);
 
         // Deep shadow
@@ -292,7 +291,7 @@ export function drawElementalWord(
       } else {
         // Dark: expanding smoke, visible base
         ctx.globalAlpha *= 0.85;
-        ctx.fillStyle = colorOverride ?? "#aa99cc";
+        ctx.fillStyle = "#aa99cc";
         if (hasText) ctx.fillText(word, 0, 0);
         ctx.globalAlpha /= 0.85;
 
@@ -317,7 +316,7 @@ export function drawElementalWord(
     case "NEON": {
       if (mode === "bright") {
         // Bright: visible electric tint, flicker, spark particles
-        ctx.fillStyle = colorOverride ?? "#0a0a0a";
+        ctx.fillStyle = "#0a0a0a";
         if (hasText) ctx.fillText(word, 0, 0);
 
         // Strong inner shadow
@@ -359,7 +358,7 @@ export function drawElementalWord(
         }
       } else {
         // Dark: neon glow, orbs, electric arcs
-        const neonColor = colorOverride ?? "#00ffff";
+        const neonColor = "#00ffff";
         const glowAlpha = isHeroWord ? 0.18 + beatIntensity * 0.22 : 0.08;
         const glowRadius = isHeroWord ? fontSize * 1.35 : fontSize * 0.9;
         const glow = ctx.createRadialGradient(wordWidth / 2, -fontSize * 0.45, 0, wordWidth / 2, -fontSize * 0.45, glowRadius);
@@ -404,7 +403,7 @@ export function drawElementalWord(
     case "FROST": {
       if (mode === "bright") {
         // Bright: visible frost sweep + crystalline edges + ice crystals
-        ctx.fillStyle = colorOverride ?? "#1a3040";
+        ctx.fillStyle = "#1a3040";
         if (hasText) ctx.fillText(word, 0, 0);
 
         // Desaturation sweep — visible white wash
@@ -452,7 +451,7 @@ export function drawElementalWord(
         }
       } else {
         // Dark: blue outer glow, crystals, cold breath mist
-        ctx.fillStyle = colorOverride ?? "#A8D8EA";
+        ctx.fillStyle = "#A8D8EA";
         if (hasText) ctx.fillText(word, 0, 0);
 
         // Frost shimmer overlay

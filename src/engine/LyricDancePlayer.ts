@@ -3797,7 +3797,6 @@ export class LyricDancePlayer {
             wordLocalTime,
             beatPulse,
             1,
-            this._currentSectionPalette.elementalTint,
             {
               bubbleXPositions,
               useBlur: this._qualityTier === 0,
@@ -5540,7 +5539,7 @@ export class LyricDancePlayer {
         chunk.skewX = anim.skewX;
         chunk.blur = 0; // clean — no per-word blur
 
-        chunk.color = word.color ?? '#ffffff';
+        chunk.color = word.color;
 
         // Glow (hero words only, capped)
         const glowCap = this._activeEffects.glowCap;
