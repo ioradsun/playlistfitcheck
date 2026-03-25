@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computePhraseState, resolveActiveGroup } from '@/engine/PhraseAnimator';
+import { computeChunkAnim, computePhraseState, computeWordState, resolveActiveGroup } from '@/engine/PhraseAnimator';
 import type { CompiledPhraseGroup } from '@/lib/sceneCompiler';
 
 function mkGroup(overrides: Partial<CompiledPhraseGroup>): CompiledPhraseGroup {
@@ -65,5 +65,24 @@ describe('PhraseAnimator timing', () => {
     const state = computePhraseState(group, 2.3, 2.5, null, 1080);
     expect(state.groupStart).toBe(2.0);
     expect(state.groupEnd).toBe(2.8);
+  });
+
+  it('dampens and clamps beat-driven movement for readability', () => {
+    const group = mkGroup({ chorusRepeat: 4 });
+    const state = computePhraseState(group, Infinity, 0.4, { pulse: 1, phase: 0 }, 1080);
+
+    // pulse at max still lands in constrained range.
+    expect(state.beatNudgeY).toBeLessThanOrEqual(6);
+    expect(state.beatScale).toBeLessThanOrEqual(1.045);
+  });
+
+  it('clamps total word vertical offset after beat + reveal contributions', () => {
+    const group = mkGroup({ staggerDelay: 0.12 });
+    const phraseState = computePhraseState(group, Infinity, 0.05, { pulse: 1, phase: 0 }, 1080);
+    const wordState = computeWordState(group.words[0], 0, group, phraseState, 0.05, false, 1080, 1920);
+    const chunk = computeChunkAnim(group.words[0], phraseState, wordState);
+
+    expect(chunk.offsetY).toBeLessThanOrEqual(12);
+    expect(chunk.offsetY).toBeGreaterThanOrEqual(-12);
   });
 });

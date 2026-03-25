@@ -123,9 +123,14 @@ export interface ChunkAnimState {
 const WORD_FADE_SEC = 0.15; // 150ms per-word fade in after stagger reveal
 const REVEAL_ANTICIPATION = 0.1; // 100ms before group.start
 const CENTER_WORD_SCALE = 1.0; // layout fills viewport — no additional scale needed
-const BEAT_NUDGE_BASE = 8; // EXTREME: visible bounce
+const BEAT_NUDGE_BASE = 3.5; // toned down from 8px to keep lyrics readable
 const BEAT_SCALE_BASE = 1.0; // base scale (1.0 = no beat effect)
-const BEAT_SCALE_MULT = 0.08; // EXTREME: visible pulse
+const BEAT_SCALE_MULT = 0.03; // reduced pulse expansion for cinematic subtlety
+const BEAT_RESPONSE_DAMPING_EXPONENT = 0.72; // smooths spikes: 0..1 pulse -> softer curve
+const BEAT_NUDGE_MAX = 6; // hard clamp so words never drift too far vertically
+const BEAT_SCALE_MAX = 1.045; // hard clamp to prevent aggressive beat popping
+const REVEAL_RISE_PX = 8; // reduced per-word rise during stagger reveal (was 15)
+const WORD_OFFSET_Y_MAX = 12; // safety clamp for total vertical offset in readable range
 
 // ── Self-contained timing per presentation mode ──
 // Each mode defines its own entry/exit duration and intensity.
@@ -244,15 +249,16 @@ export function computePhraseState(
   const biasEntryOffsetX = 0;
 
   // ── Beat response ──
-  const pulse = beatState?.pulse ?? 0;
+  const rawPulse = beatState?.pulse ?? 0;
+  const pulse = Math.pow(Math.max(0, Math.min(1, rawPulse)), BEAT_RESPONSE_DAMPING_EXPONENT);
   // Chorus beat escalation: each return of the chorus hits harder
   const CHORUS_BEAT_SCALE = [1.0, 1.3, 1.6, 2.0];
   const chorusRepeat = group.chorusRepeat ?? 0;
   const beatMultiplier = chorusRepeat > 0
     ? CHORUS_BEAT_SCALE[Math.min(chorusRepeat - 1, 3)]
     : 1.0;
-  const beatNudgeY = pulse * BEAT_NUDGE_BASE * beatMultiplier;
-  const beatScale = BEAT_SCALE_BASE + pulse * BEAT_SCALE_MULT * beatMultiplier;
+  const beatNudgeY = Math.min(BEAT_NUDGE_MAX, pulse * BEAT_NUDGE_BASE * beatMultiplier);
+  const beatScale = Math.min(BEAT_SCALE_MAX, BEAT_SCALE_BASE + pulse * BEAT_SCALE_MULT * beatMultiplier);
 
   // All words visible from phrase activation (no reveal gating)
   const revealAnchor = group.start - entryPad;
@@ -382,8 +388,8 @@ export function computeWordState(
   // Each word rises slightly when it's revealed (the stagger IS the motion)
   let revealRise = 0;
   if (!phrase.ghostPreview && phrase.staggerDelay >= 0.005) {
-    // Words rise 15px over their reveal fade
-    revealRise = isRevealed ? (1 - revealProgress) * 15 : 15;
+    // Reduced rise keeps stagger readable and less jumpy.
+    revealRise = isRevealed ? (1 - revealProgress) * REVEAL_RISE_PX : REVEAL_RISE_PX;
   }
 
   return {
@@ -462,6 +468,8 @@ export function computeChunkAnim(
 
   // Per-word reveal rise (stagger modes only)
   offsetY += wordAnim.revealRise;
+  // Clamp the final vertical travel so beat + reveal cannot destabilize readability.
+  offsetY = Math.max(-WORD_OFFSET_Y_MAX, Math.min(WORD_OFFSET_Y_MAX, offsetY));
 
   // ── ROTATION / SKEW ──
   let rotation = 0;
