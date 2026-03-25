@@ -1113,6 +1113,26 @@ export function useLyricPipeline({
                   return updated;
                 });
               }
+
+              // Persist merged data (with phrases + presentation modes) to shareable_lyric_dances
+              // Without this, the player loads scene-only data and never sees word-level choreography.
+              if (user) {
+                const _slugify = (await import("@/lib/slugify")).slugify;
+                const _artistSlug = _slugify(artistNameRef.current || "artist");
+                const _songSlug = _slugify(lyricData?.title || "untitled");
+                supabase
+                  .from("shareable_lyric_dances" as any)
+                  .update({ cinematic_direction: merged } as any)
+                  .eq("artist_slug", _artistSlug)
+                  .eq("song_slug", _songSlug)
+                  .eq("user_id", user.id)
+                  .then(() => {
+                    console.log('[Pipeline] Persisted word-level data to shareable_lyric_dances');
+                  })
+                  .catch((err: any) => {
+                    console.warn('[Pipeline] Failed to persist word data to dance row:', err);
+                  });
+              }
             }
           } catch (wordErr: any) {}
         })();
@@ -1180,7 +1200,7 @@ export function useLyricPipeline({
               );
               await supabase
                 .from("shareable_lyric_dances" as any)
-                .update({ cinematic_direction: enrichedScene } as any)
+                .update({ cinematic_direction: cinematicDirectionRef.current || enrichedScene } as any)
                 .eq("id", resolvedDanceId);
             } else {
               const mainLines = lyricData!.lines.filter(
@@ -1215,7 +1235,7 @@ export function useLyricPipeline({
                   song_name: lyricData!.title || "Untitled",
                   audio_url: urlData.publicUrl,
                   lyrics: mainLines,
-                  cinematic_direction: enrichedScene,
+                  cinematic_direction: cinematicDirectionRef.current || enrichedScene,
                   words: words ?? null,
                   beat_grid: beatGrid
                     ? {
