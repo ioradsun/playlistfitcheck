@@ -804,11 +804,20 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const wordDirectives = payload.cinematic_direction?.wordDirectives;
   const directives = new Map<string, WordDirectiveLike>();
   if (Array.isArray(wordDirectives)) for (const d of wordDirectives) directives.set(String(d?.word ?? '').trim().toLowerCase(), d as WordDirectiveLike);
-  // B-11: Validate word timing — skip words with start >= end or negative timestamps
   const rawWords = payload.words ?? [];
-  const words = rawWords.filter(w => {
-    if (w.start < 0 || w.end < 0 || w.start >= w.end) return false;
-    return true;
+  // Fix zero-duration tokens: give them a small duration instead of dropping them.
+  // Dropping shifts all word indices and breaks AI phrase wordRange alignment.
+  const words = rawWords.map((w, i) => {
+    if (w.start < 0 || w.end < 0) {
+      // Truly invalid — give it the previous word's end time as both start and end
+      const prev = i > 0 ? rawWords[i - 1] : null;
+      return { ...w, start: prev?.end ?? 0, end: (prev?.end ?? 0) + 0.05 };
+    }
+    if (w.start >= w.end) {
+      // Zero-duration: give it 50ms duration so it's not dropped
+      return { ...w, end: w.start + 0.05 };
+    }
+    return w;
   });
   const wordMeta: WordMetaEntry[] = words.map((w) => {
     const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
