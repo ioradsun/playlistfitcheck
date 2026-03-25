@@ -6,9 +6,7 @@ import type { FrameRenderState } from "@/engine/presetDerivation";
 import { fitTextToViewport, type MeasureContext } from "@/engine/textLayout";
 import {
   deriveAllSectionMods,
-  derivePhraseMotionBudget,
   deriveSongMotionIdentity,
-  type PhraseMotionBudget,
   type SectionMotionMod,
   type SongMotionIdentity,
 } from "@/engine/MotionIdentity";
@@ -54,8 +52,6 @@ export interface AnimState {
   scaleY: number;
   alpha: number;
   skewX: number;
-  glowMult: number;
-  blur: number;
   rotation: number;
 }
 
@@ -76,7 +72,6 @@ export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
 interface WordDirectiveLike { word?: string; emphasisLevel?: number; elementalClass?: string; isolation?: boolean; }
 interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; isHeroWord?: boolean; }
 export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; phraseHeroWord?: string; }
-type StoryboardEntryLike = { lineIndex?: number; heroWord?: string; shotType?: string; };
 
 
 const TYPOGRAPHY_PROFILES: Record<string, TypographyProfile> = {
@@ -105,7 +100,7 @@ function getVisualMode(_payload: ScenePayload): VisualMode {
 function findAnchorWord(words: WordMetaEntry[]): number {
   let maxScore = -1; let maxIdx = words.length - 1;
   for (let i = 0; i < words.length; i += 1) {
-    const emp = words[i].directive?.emphasisLevel ?? 1;
+    const emp = 1;
     const isImpact = false;
     const isRising = false;
     const isFiller = isFillerWord(words[i].word);
@@ -173,7 +168,7 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
           }
         }
 
-        // lineIndex derived from first word (for backward compat with storyboard, palette, etc.)
+        // lineIndex derived from first word (for backward compat with palette indexing)
         const lineIndex = phraseWords[0].lineIndex;
 
         const grp: PhraseGroup = {
@@ -437,14 +432,7 @@ function snapToBeat(timeSec: number, beats: number[]): number {
   return minDist <= 0.08 ? best : timeSec;
 }
 
-type PresentationMode =
-  | 'horiz_center' | 'horiz_left' | 'horiz_right'
-  | 'stack_center' | 'stack_left' | 'stack_right'
-  | 'ghost_center' | 'ghost_left' | 'ghost_right'
-  | 'vibrate_smoke' | 'vibrate_element'
-  | 'wash_lr' | 'wash_rl' | 'wash_center'
-  | 'impact_center' | 'impact_left' | 'impact_right'
-  | 'horiz_drift';
+type PresentationMode = 'horiz_center';
 
 /**
  * Layout rules: phrase structure → composition.
@@ -452,7 +440,6 @@ type PresentationMode =
  */
 function resolveLayout(wordCount: number): {
   composition: 'line';
-  ghostPreview: boolean;
   revealStyle: 'instant';
   maxLines: number | undefined;
 } {
@@ -460,7 +447,6 @@ function resolveLayout(wordCount: number): {
   // < 4 words: single horizontal line. 4+: natural horizontal wrapping.
   return {
     composition: 'line',
-    ghostPreview: false,
     revealStyle: 'instant',
     maxLines: wordCount < 4 ? 1 : undefined,
   };
@@ -478,7 +464,6 @@ function assignPresentationModes(
     g.composition = 'line';
     g.bias = 'center';
     g.revealStyle = 'instant';
-    g.ghostPreview = false;
     g.holdClass = 'medium_groove';
     g.entryCharacter = 'drift';
     g.exitCharacter = 'none';
@@ -489,7 +474,7 @@ function assignPresentationModes(
   }
 }
 
-export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; color: string; isHeroWord?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; semanticAlphaMax: number; isLetterChunk?: boolean; letterIndex?: number; letterTotal?: number; letterDelay?: number; }
+export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; color: string; isHeroWord?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; }
 export interface CompiledPhraseGroup {
   lineIndex: number;
   groupIndex: number;
@@ -508,26 +493,15 @@ export interface CompiledPhraseGroup {
   revealStyle: 'instant' | 'stagger_fast' | 'stagger_slow';
   holdClass: 'short_hit' | 'medium_groove' | 'long_emotional';
   energyTier: 'intimate' | 'groove' | 'lift' | 'impact' | 'surprise';
-  motionBudget?: PhraseMotionBudget;
   presentationMode?: string;
   entryCharacter?: string;
   exitCharacter?: string;
-  ghostPreview?: boolean;
   vibrateOnHold?: boolean;
   elementalWash?: boolean;
   /** verse | chorus | bridge | outro — from AI */
   sectionLabel?: string;
   /** Chorus repeat number (1 = first time, 2 = second, etc.) */
   chorusRepeat?: number;
-  /** Semantic word effect from AI (on hero word) */
-  heroEffect?: {
-    type: string;
-    direction?: string;
-    amount?: number;
-    color?: string;
-    animated?: boolean;
-    decomp?: string;
-  };
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
@@ -560,11 +534,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const rawChapters = (payload.cinematic_direction?.chapters ?? []) as Array<any>;
   const chapters = rawChapters.length > 0 ? rawChapters : enrichSections(payload.cinematic_direction?.sections as CinematicSection[] | undefined);
   const visualMode = getVisualMode(payload);
-  const physicsProfile = payload.cinematic_direction?.visualWorld?.physicsProfile;
-
-  const wordDirectives = payload.cinematic_direction?.wordDirectives;
-  const directives = new Map<string, WordDirectiveLike>();
-  if (Array.isArray(wordDirectives)) for (const d of wordDirectives) directives.set(String(d?.word ?? '').trim().toLowerCase(), d as WordDirectiveLike);
   const rawWords = payload.words ?? [];
   // Fix zero-duration tokens: give them a small duration instead of dropping them.
   // Dropping shifts all word indices and breaks AI phrase wordRange alignment.
@@ -588,7 +557,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const clean = normalized.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
       .replace(/^'+|'+$/g, '');  // strip leading/trailing apostrophes from clean key
     const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? Infinity)));
-    return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
+    return { ...w, clean, directive: null, lineIndex, wordIndex: 0 };
   });
   const lineWordCounters: Record<number, number> = {};
   for (const wm of wordMeta) { lineWordCounters[wm.lineIndex] = lineWordCounters[wm.lineIndex] ?? 0; wm.wordIndex = lineWordCounters[wm.lineIndex]++; }
@@ -599,15 +568,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const phraseGroups = buildPhraseGroups(wordMeta, aiPhrases);
   // Assign presentation modes at compile time (moved from edge function)
   assignPresentationModes(phraseGroups, wordMeta, aiPhrases);
-  const storyboardRaw = (payload.cinematic_direction?.storyboard ?? []) as StoryboardEntryLike[];
-  // Convert to map keyed by lineIndex — the raw array is sparse (15-25 entries for a 40-line song)
-  const storyboard = new Map<number, StoryboardEntryLike>();
-  for (const entry of storyboardRaw) {
-    if (typeof entry.lineIndex === 'number') {
-      storyboard.set(entry.lineIndex, entry);
-    }
-  }
-
   const globalPhraseDur = phraseAnimDurations(Math.max(1, phraseGroups[0]?.words.length ?? 1), Math.max(250, Math.round(durationSec * 250)));
   const animParams = {
     linger: globalPhraseDur.linger,
@@ -683,8 +643,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
     const hasHero = group.words.some(wm =>
       wm.isHeroWord === true ||
-      wm.directive?.isolation === true ||
-      storyboard.get(group.lineIndex)?.heroWord?.toLowerCase() === wm.clean
+      wm.directive?.isolation === true
     );
 
     // maxLines resolved by resolveLayout: <4 words = 1 line, 4+ = auto wrap
@@ -724,7 +683,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     index,
     startRatio: chapter.startRatio ?? 0,
     endRatio: chapter.endRatio ?? 1,
-    targetZoom: distanceToZoom[((payload.cinematic_direction?.storyboard?.[index] as any)?.shotType ?? 'Medium')] ?? 1.0,
+    targetZoom: distanceToZoom['Medium'] ?? 1.0,
     emotionalIntensity: chapter.emotionalIntensity ?? 0.5,
     typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform },
     atmosphere: chapter.atmosphere ?? (payload.cinematic_direction as any)?.atmosphere ?? 'cinematic',
@@ -734,14 +693,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const songMotion = deriveSongMotionIdentity(bpm, analysis, beats);
   const sectionMods = deriveAllSectionMods(analysis, compiledChapters, durationSec);
 
-  for (const group of phraseGroups) {
-    const phraseDurMs = Math.round((group.end - group.start) * 1000);
-    (group as any)._motionBudget = derivePhraseMotionBudget(group.words.length, phraseDurMs);
-  }
-
   const compiledGroups: CompiledPhraseGroup[] = phraseGroups.map((group) => {
     const key = `${group.lineIndex}-${group.groupIndex}`;
-    const lineStory = storyboard.get(group.lineIndex);
     const groupDur = phraseAnimDurations(group.words.length, Math.round((group.end - group.start) * 1000));
     const matchPhrase = (aiPhrases ?? []).find((ap: any) => {
       const [ps, pe] = ap.wordRange ?? [0, 0];
@@ -800,14 +753,12 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         fontFamily: baseTypography.fontFamily,
         isHeroWord: wm.isHeroWord === true
           || (wm.directive as any)?.isolation === true
-          || (lineStory?.heroWord && wm.clean === lineStory.heroWord.toLowerCase().replace(/[^a-z0-9]/g, ''))
           || (Math.max(0, wm.end - wm.start) >= 0.5),
         isAnchor: wi === group.anchorWordIdx,
         color: '#ffffff',
         isFiller: isFillerWord(wm.word),
         emphasisLevel: computeEmphasisFromDuration(wm.end - wm.start),
         wordDuration: Math.max(0, wm.end - wm.start),
-        semanticAlphaMax: 1,
       };
       return [base];
     });
@@ -829,17 +780,14 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       revealStyle,
       holdClass,
       energyTier,
-      motionBudget: (group as any)._motionBudget ?? undefined,
       // Presentation mode: read from group (set by assignPresentationModes directly)
       presentationMode: (group as any).presentationMode ?? undefined,
       entryCharacter: (group as any).entryCharacter ?? undefined,
       exitCharacter: (group as any).exitCharacter ?? undefined,
-      ghostPreview: (group as any).ghostPreview ?? false,
       vibrateOnHold: (group as any).vibrateOnHold ?? false,
       elementalWash: (group as any).elementalWash ?? false,
       // Section label + effect: still from matchPhrase (AI data)
       sectionLabel: matchPhrase?.section ?? 'verse',
-      heroEffect: matchPhrase?.effect ?? undefined,
     };
   }).sort((a, b) => a.start - b.start);
 
@@ -856,11 +804,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     }
   }
 
-  const heat = physicsProfile?.heat ?? 0.5;
-  const beatResponse = physicsProfile?.beatResponse ?? 'pulse';
-  const springInit = beatResponse === 'slam' ? 1.8 * heat : 0.8 * heat;
-  const glowMax = beatResponse === 'slam' ? 1.2 * heat : 0.6 * heat;
-  const beatEvents: BeatEvent[] = beats.map((time) => ({ time, springVelocity: springInit, glowMax }));
+  const beatEvents: BeatEvent[] = beats.map((time) => ({ time, springVelocity: 0.4, glowMax: 0.3 }));
 
 
 
