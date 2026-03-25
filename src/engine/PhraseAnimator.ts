@@ -72,12 +72,8 @@ export function computePhraseState(
     pushInScale = 1.0 + Math.sqrt(progress) * 0.02;
   }
 
-  // ── Beat nod: same signal as background zoom ──
-  // Text dips down on beat, returns between beats. Synced exactly with background pulse.
-  // beatNudgeY is computed here from beatState, applied to all words equally.
-  const rawPulse = beatState?.pulse ?? 0;
-  const nodPx = rawPulse * mp.bgPulseAmplitude * 50;
-  // 50px multiplier: at bgPulseAmplitude 0.06 × pulse 1.0 = 3px dip (matches 6% zoom feel)
+  // Beat nod is canvas-level in LyricDancePlayer via camShakeY, not per-word here.
+  void beatState; void mp;
 
   return {
     composition, bias, revealStyle, holdClass, energyTier, heroType,
@@ -87,7 +83,7 @@ export function computePhraseState(
     motionIntensity: 0, presentationMode: group.presentationMode ?? 'horiz_center',
     ghostPreview: false, vibrateOnHold: false, elementalWash: false,
     entry: noMotion, exit: noMotion, biasEntryOffsetX: 0,
-    beatNudgeY: nodPx,
+    beatNudgeY: 0,
     beatScale: 1.0,
     staggerDelay: 0, revealAnchor: group.start,
     pushInScale,
@@ -164,13 +160,10 @@ export function computeChunkAnim(
   // ── Scale: traveling wave (reading cursor) × push-in ──
   const scale = wordAnim.waveScale * phrase.pushInScale;
 
-  // Y offset: hero centering + beat nod (synced with background zoom)
-  const offsetY = wordAnim.heroOffsetY + phrase.beatNudgeY;
-
   return {
     alpha,
     scaleX: scale, scaleY: scale,
-    offsetX: wordAnim.heroOffsetX, offsetY,
+    offsetX: wordAnim.heroOffsetX, offsetY: wordAnim.heroOffsetY,
     rotation: 0, skewX: 0,
     visible: alpha > 0.01,
   };
