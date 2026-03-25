@@ -705,12 +705,15 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       storyboard.get(group.lineIndex)?.heroWord?.toLowerCase() === wm.clean
     );
 
-    // Map composition to maxLines — never wrap
-    let maxLines: number;
+    // Map composition to maxLines
+    const ghostPreview = (group as any).ghostPreview ?? false;
+    let maxLines: number | undefined;
     if (composition === 'stack') {
       maxLines = groupWords.length; // one word per line (vertical)
+    } else if (ghostPreview) {
+      maxLines = undefined; // preview: auto-wrap, all words visible, spotlight reads through
     } else {
-      maxLines = 1; // center_word AND line: single horizontal line, font shrinks to fit
+      maxLines = 1; // center_word and line without preview: single line, font shrinks to fit
     }
 
     const targetFill = 0.88;
