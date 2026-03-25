@@ -576,7 +576,7 @@ class BeatVisSim {
     this.flickerPhase += 0.15 + energy * 0.3;
 
     const [pr, pg, pb] = this.palette;
-    const drive = energy * 0.55 + pulse * 0.35 + hitStrength * 0.10;
+    const drive = energy * 0.55 + (pulse * energy) * 0.35 + hitStrength * 0.10;
 
     for (let x = 0; x < W; x++) {
       const nx = x / W;
@@ -779,7 +779,7 @@ class DynamiteWickBar {
     // Beat injects heat near playhead
     if (pulse > 0.3) {
       for (let i = Math.max(0, px - 20); i <= px; i++) {
-        heat[i] = Math.min(1, heat[i] + pulse * 0.15);
+        heat[i] = Math.min(1, heat[i] + (pulse * energy) * 0.15);
       }
     }
     // Decay
@@ -911,7 +911,7 @@ class DynamiteWickBar {
         }
         ctx.lineTo(px, baseY);
         ctx.closePath();
-        ctx.fillStyle = `rgba(${Math.min(255, this.accent[0] + 40)},${Math.min(255, this.accent[1] + 20)},20,${pulse * 0.12})`;
+        ctx.fillStyle = `rgba(${Math.min(255, this.accent[0] + 40)},${Math.min(255, this.accent[1] + 20)},20,${(pulse * energy) * 0.12})`;
         ctx.fill();
       }
     }
@@ -922,7 +922,7 @@ class DynamiteWickBar {
     {
       const peakH = getPeakH(px);
       const flameBase = baseY - peakH;
-      const flameH = 8 + energy * 18 + pulse * 8;
+      const flameH = 8 + energy * 18 + (pulse * energy) * 8;
       const flicker1 = Math.sin(this.flamePhase * 1.7) * 0.3;
       const flicker2 = Math.sin(this.flamePhase * 2.9 + 1.3) * 0.2;
       const flicker3 = Math.sin(this.flamePhase * 4.3 + 2.7) * 0.15;
@@ -982,7 +982,7 @@ class DynamiteWickBar {
       }
 
       const coreGlow = ctx.createRadialGradient(px, flameBase, 0, px, flameBase, 5 + energy * 3);
-      coreGlow.addColorStop(0, `rgba(255,255,230,${0.7 + pulse * 0.3})`);
+      coreGlow.addColorStop(0, `rgba(255,255,230,${0.7 + (pulse * energy) * 0.3})`);
       coreGlow.addColorStop(0.5, `rgba(${Math.min(255, ar + 40)},${Math.min(255, ag + 20)},100,0.3)`);
       coreGlow.addColorStop(1, `rgba(${Math.min(255, ar)},${Math.max(90, ag * 0.7)},20,0)`);
       ctx.fillStyle = coreGlow;
@@ -3433,7 +3433,7 @@ export class LyricDancePlayer {
       const isHeroChunk = (chunk.emphasisLevel ?? 0) >= 2 || chunk.isHeroWord;
       if (isHeroChunk && entry >= 0.5 && drawAlpha > 0.1) {
         const baseGlow = chunk.glow > 0 ? chunk.glow : 0.3;
-        const bloomGlow = baseGlow + beatPulseNow * 0.35;
+        const bloomGlow = baseGlow + (beatPulseNow * (this._lastBeatState?.energy ?? 0.5)) * 0.35;
         const wordDurMs = (chunk.wordDuration ?? 0) * 1000;
         const tier = getEffectTier(wordDurMs);
         const tierGlowCap = canShowHeroGlow(tier) ? getGlowCap(tier) : 0;
@@ -3633,7 +3633,7 @@ export class LyricDancePlayer {
               sweepX - textW * 0.3, 0, sweepX + textW * 0.3, 0,
             );
             frostGrad.addColorStop(0, 'rgba(150,210,255,0)');
-            frostGrad.addColorStop(0.5, `rgba(180,230,255,${0.35 + beatPulseEl * 0.15})`);
+            frostGrad.addColorStop(0.5, `rgba(180,230,255,${0.35 + (beatPulseEl * (this._lastBeatState?.energy ?? 0.5)) * 0.15})`);
             frostGrad.addColorStop(1, 'rgba(150,210,255,0)');
             this.ctx.globalAlpha = drawAlpha * 1.0;
             this.ctx.fillStyle = frostGrad;
@@ -3650,8 +3650,8 @@ export class LyricDancePlayer {
           case 'FIRE': {
             // ── Heat shimmer: warm gradient pulsing with beat ──
             const fireGrad = this.ctx.createLinearGradient(0, -safeFontSize, 0, 0);
-            fireGrad.addColorStop(0, `rgba(255,80,0,${0.25 + beatPulseEl * 0.2})`);
-            fireGrad.addColorStop(0.5, `rgba(255,160,30,${0.3 + beatPulseEl * 0.15})`);
+            fireGrad.addColorStop(0, `rgba(255,80,0,${0.25 + (beatPulseEl * (this._lastBeatState?.energy ?? 0.5)) * 0.2})`);
+            fireGrad.addColorStop(0.5, `rgba(255,160,30,${0.3 + (beatPulseEl * (this._lastBeatState?.energy ?? 0.5)) * 0.15})`);
             fireGrad.addColorStop(1, 'rgba(255,60,0,0.15)');
             this.ctx.globalAlpha = drawAlpha * 1.0;
             this.ctx.fillStyle = fireGrad;
@@ -3668,7 +3668,7 @@ export class LyricDancePlayer {
           case 'WATER':
           case 'RAIN': {
             // ── Wet sheen: blue gradient sweep ──
-            const waveAmp = 2 + beatPulseEl * 2;
+            const waveAmp = 2 + (beatPulseEl * (this._lastBeatState?.energy ?? 0.5)) * 2;
             const waveOff = Math.sin(elTime * 2.5) * waveAmp;
             this.ctx.globalAlpha = drawAlpha * 0.7;
             this.ctx.fillStyle = '#2266bb';
@@ -3701,7 +3701,7 @@ export class LyricDancePlayer {
 
           case 'ELECTRIC': {
             // ── Electric crackle: bright cyan flashes synced to beat ──
-            const flashIntensity = 0.5 + beatPulseEl * 0.5;
+            const flashIntensity = 0.5 + (beatPulseEl * (this._lastBeatState?.energy ?? 0.5)) * 0.5;
             this.ctx.globalAlpha = drawAlpha * flashIntensity;
             this.ctx.fillStyle = '#44ddff';
             this.ctx.fillText(text, 0, 0);
@@ -5654,7 +5654,7 @@ export class LyricDancePlayer {
         const glowCap = this._activeEffects.glowCap;
         const heroBeatResp = ws.effectiveHero ? getBeatResponse(word.emphasisLevel ?? 1, true) : null;
         const glowPulse = heroBeatResp?.wordGlow ?? beatState?.pulse ?? 0;
-        chunk.glow = ws.effectiveHero ? Math.min(glowPulse * 0.5, glowCap / 20) : 0;
+        chunk.glow = ws.effectiveHero ? Math.min((glowPulse * (this._lastBeatState?.energy ?? 0.5)) * 0.5, glowCap / 20) : 0;
 
         // Metadata for elemental/decomp
         chunk.emphasisLevel = word.emphasisLevel;
