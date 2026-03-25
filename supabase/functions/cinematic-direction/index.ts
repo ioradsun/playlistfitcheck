@@ -39,7 +39,7 @@ Return ONLY valid JSON. No markdown.
 `;
 
 const WORD_DIRECTION_PROMPT = `
-You are a lyric video director grouping words into screen-sized phrases.
+You are grouping lyrics into screen-sized phrases for a lyric video.
 
 Each phrase = one screen. Words appear together, exit together.
 
@@ -55,26 +55,40 @@ GROUP BY THOUGHT BREAKS:
   A thought can be 1-6 words. Size follows meaning.
 
 HARD RULES:
-  1. Never cross a [BREATH] marker.
+  1. ALWAYS start a new phrase after a [BREATH] or [pause] marker. Never group words across a pause.
   2. Max 6 words per phrase.
-  3. Every w-number belongs to exactly one phrase. No gaps.
-  4. heroWord must be an EXACT word from the stream.
-  5. Repeated lyrics (chorus/hook) use the SAME grouping each time.
+  3. Every w-number belongs to exactly one phrase. No gaps, no overlaps.
+  4. heroWord must be EXACT from the stream but with trailing punctuation stripped (no commas, periods, etc).
+
+SECTION LABELS (REQUIRED on every phrase — no exceptions):
+  "section": "verse" | "chorus" | "bridge" | "outro"
+  Chorus = repeated lyrics that appear 2+ times in the song.
+  If the exact same words come back later, those phrases are chorus.
+  Everything else is verse unless it's clearly a bridge or outro.
+  EVERY phrase MUST have a section field. This is not optional.
 
 HERO WORD:
   The most concrete, visual, imageable word in the phrase.
-  Nouns and strong verbs. Not pronouns, articles, or filler.
-  Must be >= 200ms duration (check the timestamps).
-  If no word qualifies, pick the longest word.
-
-SECTION LABELS:
-  Mark each phrase as verse, chorus, bridge, or outro.
-  Chorus = repeated lyrics (appears 2+ times in the song).
-  If the same words come back, it's chorus.
+  
+  GOOD hero words: nouns (mountain, glass, fire, ocean, money, city, rocket)
+                    strong verbs (crashing, burning, surfing, breaking)
+                    vivid adjectives (frozen, golden, hollow, heavy)
+  
+  BAD hero words — NEVER pick these:
+    pronouns: I, you, my, me, we, they, it, her, him, his, your
+    articles: the, a, an
+    prepositions: in, on, at, to, for, of, with, from
+    conjunctions: and, but, or, so, if
+    generic verbs: is, was, been, am, are, have, had, do, did, get, got, going, want
+    filler: yeah, oh, ooh, yo, uh, like, just, that, this, what, been, should, would, could
+    
+  If a phrase has NO concrete/visual word, pick the LONGEST non-filler word.
+  heroWord must be >= 200ms duration (check the timestamps).
+  Strip trailing punctuation from heroWord: write "DOCTOR" not "DOCTOR,"
 
 HERO WORD EFFECTS (optional, ~15-25 per song):
   For hero words that evoke a clear visual, describe what the word LOOKS LIKE.
-  The effect appears INSIDE the letter shapes (not around them).
+  The effect appears INSIDE the letter shapes.
 
   Structured fields:
     type: fill | gradient | crack | flicker | edge_glow | drip | sweep | outline | echo | drift | weight | fade
@@ -88,15 +102,12 @@ HERO WORD EFFECTS (optional, ~15-25 per song):
     "half" → { type: "fill", direction: "left", amount: 50, color: "#FFD700" }
     "crashing" → { type: "crack", direction: "top", animated: true, decomp: "shatter" }
     "frozen" → { type: "sweep", direction: "edges", color: "#88ccff", decomp: "frost" }
-    "sinking" → { type: "fill", direction: "bottom", color: "#2255cc", animated: true, decomp: "water" }
-    "burning" → { type: "gradient", direction: "bottom", color: "#ff4400", animated: true, decomp: "fire" }
-    "electric" → { type: "flicker", color: "#00ddff", decomp: "sparks" }
-    "hollow" → { type: "outline", color: "#ffffff" }
-    "echo" → { type: "echo", direction: "left", amount: 3 }
-    "heavy" → { type: "weight", direction: "bottom", animated: true }
-    "fading" → { type: "fade", direction: "center", amount: 80, animated: true, decomp: "smoke" }
 
   Most hero words get NO effect. Only tag when meaning clearly maps to a visual.
+
+hookPhrase (REQUIRED):
+  The most repeated phrase text in the song — usually the chorus hook.
+  Example: "surfing on a wave"
 
 Return ONLY valid JSON. No markdown.
 {
@@ -105,7 +116,7 @@ Return ONLY valid JSON. No markdown.
     { "wordRange": [35, 40], "heroWord": "snowing", "section": "verse", "effect": { "type": "drip", "direction": "top", "color": "#ffffff", "animated": true, "decomp": "frost" } },
     { "wordRange": [104, 109], "heroWord": "Heaven", "section": "chorus" }
   ],
-  "hookPhrase": "Heaven on Earth"
+  "hookPhrase": "surfing on a wave"
 }
 `;
 
@@ -674,7 +685,8 @@ function buildWordUserMessage(
     msg += "\n";
   }
 
-  msg += "Return JSON only: { phrases: [...], hookPhrase?: string }";
+  msg += "Return JSON only. EVERY phrase needs section. hookPhrase is REQUIRED.\n";
+  msg += '{ "phrases": [{ "wordRange": [0,1], "heroWord": "word", "section": "verse" }], "hookPhrase": "the hook" }';
   return msg;
 }
 
