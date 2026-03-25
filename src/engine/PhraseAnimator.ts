@@ -86,7 +86,7 @@ export interface WordAnimState {
 
   // Spotlight
   wordState: 'upcoming' | 'active' | 'spoken';
-  spotlightAlpha: number; // 1.0 active/spoken, 0.3 upcoming+revealed, 0 unrevealed
+  spotlightAlpha: number; // 1.0 active/spoken, 0.5 upcoming+revealed, 0 unrevealed
 
   // Hero
   isHeroWord: boolean;
@@ -472,7 +472,7 @@ export function computeChunkAnim(
   void word;
 
   // ── ALPHA: simple. Phrase is on screen = words are visible. ──
-  // Active word = full brightness. Spoken = slightly dimmed. Upcoming = dimmer.
+  // Active/spoken words = full brightness. Upcoming words = dimmed.
   // No entry fade, no exit fade. Hero directive decomp handled separately.
   let alpha: number;
   if (wordAnim.soloHeroHidden) {
