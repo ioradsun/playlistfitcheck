@@ -44,7 +44,6 @@ import {
   computeWordState,
   computeChunkAnim,
   detectSoloHero,
-  findActiveHeroWordIndex,
   type AnimBeatState,
 } from '@/engine/PhraseAnimator';
 
@@ -61,8 +60,6 @@ const DEBUG_ELEMENTAL_TRACE = false;
 // Layer 4: Legibility ceilings (hard caps → readability wins)
 
 interface SectionEffectsConfig {
-  glowCap: number;
-  cameraIntensity: number;
   particleDensity: number;
   particleSpeed: number;
   beatBarStyle: 'light' | 'smoke' | 'neon' | 'flame';
@@ -74,8 +71,6 @@ function computeEffectsFromEnergy(avgEnergy: number, beatDensity: number): Secti
   const e = Math.max(0, Math.min(1, avgEnergy));
   const d = Math.max(0, Math.min(10, beatDensity));
   return {
-    glowCap: 4 + Math.round(e * 12),
-    cameraIntensity: e * 0.8,
     particleDensity: Math.max(0.5, 0.4 + e * 0.8),
     particleSpeed: 0.3 + d * 0.15 + e * 0.4,
     beatBarStyle: e > 0.7 ? 'flame' : e > 0.4 ? 'neon' : 'smoke' as const,
@@ -95,8 +90,6 @@ interface EffectsTransition {
 function lerpEffectsConfig(a: SectionEffectsConfig, b: SectionEffectsConfig, t: number): SectionEffectsConfig {
   const m = (x: number, y: number) => x + (y - x) * t;
   return {
-    glowCap: Math.round(m(a.glowCap, b.glowCap)),
-    cameraIntensity: m(a.cameraIntensity, b.cameraIntensity),
     particleDensity: m(a.particleDensity, b.particleDensity),
     particleSpeed: m(a.particleSpeed, b.particleSpeed),
     beatBarStyle: t < 0.5 ? a.beatBarStyle : b.beatBarStyle,
@@ -107,7 +100,6 @@ function lerpEffectsConfig(a: SectionEffectsConfig, b: SectionEffectsConfig, t: 
 const LEGIBILITY = {
   maxTextBlur: 0.3,
   maxForegroundAlphaOverText: 0.12,
-  glowCapAtSpeed: (wordsPerSec: number): number => Math.max(4, 20 - wordsPerSec * 2.5),
   cameraCapForDensity: (wordCount: number): number => wordCount > 5 ? 0.4 : wordCount > 3 ? 0.7 : 1.0,
 };
 
@@ -1360,7 +1352,6 @@ export class LyricDancePlayer {
   private _heroSchedule: Array<{ startSec: number; endSec: number; emphasis: number; word: string }> = [];
   private _heroLookaheadMs = 400; // anticipate hero words 400ms before they appear
   private activeSectionTexture = 'dust';
-  private chunkActiveSinceMs: Map<string, number> = new Map();
   // Health monitor + adaptive quality
   private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
   private frameCount = 0;
@@ -2057,11 +2048,7 @@ export class LyricDancePlayer {
       // Tell camera which section we're in (for amplitude scaling)
       this.cameraRig.setSectionIndex(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0);
 
-      // Tell camera the current phrase's reading load (for motion suppression)
-      // Active group's motionBudget.damping — dense phrases lock the camera
-      const _activeGIdx = this._activeGroupIndices[0] ?? -1;
-      const activeGroup = _activeGIdx >= 0 ? this.compiledScene?.phraseGroups[_activeGIdx] : null;
-      this.cameraRig.setPhraseDamping((activeGroup as any)?.motionBudget?.damping ?? 0);
+      this.cameraRig.setPhraseDamping(0);
 
       this.cameraRig.update(deltaMs, beatState, focus);
     }
@@ -2691,9 +2678,7 @@ export class LyricDancePlayer {
         // Tell camera which section we're in (for amplitude scaling)
         this.cameraRig.setSectionIndex(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0);
 
-        const _activeGIdx2 = this._activeGroupIndices[0] ?? -1;
-        const activeGroup = _activeGIdx2 >= 0 ? this.compiledScene?.phraseGroups[_activeGIdx2] : null;
-        this.cameraRig.setPhraseDamping((activeGroup as any)?.motionBudget?.damping ?? 0);
+        this.cameraRig.setPhraseDamping(0);
 
         // CameraRig driven by IntensityRouter — background moves with the beat
         const camIntensity = this._motionProfile?.cameraBeatMult ?? 0;
@@ -3268,8 +3253,6 @@ export class LyricDancePlayer {
 
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
 
-    const safeCameraX = Number.isFinite(frame.cameraX) ? frame.cameraX : 0;
-    const safeCameraY = Number.isFinite(frame.cameraY) ? frame.cameraY : 0;
     // Camera zoom is now applied via CameraRig.getSubjectTransform() at the text rendering stage
     this.ctx.textAlign = 'left';
     this.setCanvasBaseline('middle');
@@ -3294,11 +3277,11 @@ export class LyricDancePlayer {
       for (let i = 0; i < frame.chunks.length; i += 1) sortBuf.push(frame.chunks[i]);
       for (let i = 1; i < sortBuf.length; i += 1) {
         const v = sortBuf[i];
-        const vKey = ((v.exitProgress ?? 0) > 0) ? 1 : 0;
+        const vKey = 0;
         const vSort = (v.fontWeight ?? 700) * 10000 + (v.fontSize ?? 36);
         let j = i - 1;
         while (j >= 0) {
-          const jKey = ((sortBuf[j].exitProgress ?? 0) > 0) ? 1 : 0;
+          const jKey = 0;
           const jSort = (sortBuf[j].fontWeight ?? 700) * 10000 + (sortBuf[j].fontSize ?? 36);
           if (jKey > vKey || (jKey === vKey && jSort > vSort)) {
             sortBuf[j + 1] = sortBuf[j];
@@ -3357,8 +3340,8 @@ export class LyricDancePlayer {
 
       const chunkBaseX = Number.isFinite(chunk.x) ? chunk.x : 0;
       const chunkBaseY = Number.isFinite(chunk.y) ? chunk.y - this._textVerticalBias : 0;
-      const rawDrawX = chunk.frozen ? chunkBaseX - safeCameraX : chunkBaseX;
-      const rawDrawY = chunk.frozen ? chunkBaseY - safeCameraY : chunkBaseY;
+      const rawDrawX = chunkBaseX;
+      const rawDrawY = chunkBaseY;
 
       const baseFontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
       const safeFontSize = Math.max(viewportMinFont, Math.round(baseFontSize) || 36);
@@ -3386,7 +3369,6 @@ export class LyricDancePlayer {
       const drawX = centerX - textWidth * sx * 0.5;
       const finalDrawY = centerY;
 
-      const isAnchor = chunk.isAnchor ?? false;
       // ═══ SINGLE COLOR MODEL: no colored halos behind words ═══
 
       const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
@@ -4570,8 +4552,8 @@ export class LyricDancePlayer {
       this._motionProfile = this._intensityRouter.update(beatState, frameDt);
     }
     const mp: MotionProfile = this._motionProfile ?? {
-      intensity: 0, textNodMult: 0.5, textWaveMult: 0.6, textHeroMult: 1.0,
-      bgPulseAmplitude: 0, cameraBeatMult: 0, cameraShakeMult: 0,
+      intensity: 0,
+      bgPulseAmplitude: 0, cameraBeatMult: 0,
       textSyncFraction: 0, particleDensityMult: 0.2, particleSpeedMult: 0.3,
     };
     this._textSyncFraction = mp.textSyncFraction;
@@ -4631,13 +4613,6 @@ export class LyricDancePlayer {
     }
     const chapter = scene.chapters[currentChapterIdx] ?? scene.chapters[0];
 
-    const arcFn = this._getArcFunction(scene.emotionalArc);
-    const intensity = Math.max(0, Math.min(1, arcFn(songProgress)));
-    const intensityScaleMult = 1.0;
-
-    let driftX = 0;
-    let driftY = 0;
-
     const groups = scene.phraseGroups;
 
     // ═══ ACTIVE GROUP: PhraseAnimator resolves cursor + never-blank ═══
@@ -4653,21 +4628,6 @@ export class LyricDancePlayer {
       activeGroups.push(activeGroupIdx);
     }
 
-    // ═══ BEAT-TO-TEXT: lazy subsystem response cache ═══
-    type SR = import('@/engine/BeatConductor').SubsystemResponse;
-    const _beatCache = new Map<number, SR>();
-    const _beatCacheHero = new Map<number, SR>();
-    const _hasBeatResponses = !!(beatState && this.conductor);
-    const secIdx = this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0;
-    const getBeatResponse = (emp: number, isHero: boolean): SR | null => {
-      if (!_hasBeatResponses) return null;
-      const cache = isHero ? _beatCacheHero : _beatCache;
-      const cached = cache.get(emp);
-      if (cached) return cached;
-      const resp = this.conductor!.getSubsystemResponse(beatState!, emp, isHero, secIdx);
-      cache.set(emp, resp);
-      return resp;
-    };
     let ci = 0;
     if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
     const chunks = this._evalChunks;
@@ -4726,22 +4686,15 @@ export class LyricDancePlayer {
       const groupHasActiveSoloHero = detectSoloHero(group, tSec);
 
       // ── Per-word animation states ──
-      const activeHeroWi = findActiveHeroWordIndex(group, tSec);
       const wordAnimStates = group.words.map((word, wi) =>
-        computeWordState(word, wi, group, phraseState, tSec, groupHasActiveSoloHero, this.width, this.height, mp, activeHeroWi),
+        computeWordState(word, wi, group, tSec, groupHasActiveSoloHero, this.width, this.height),
       );
-
-      // ── Hero neighbor push (keeps hero from overlapping neighbors on same line) ──
-      const neighborPushOffsets: number[] = new Array(group.words.length).fill(0);
-      // Neighbor push removed — at 1.04x scale the overlap is invisible.
-      // The push displacement was more jarring than the overlap it fixed.
-
 
       // ── Build chunks ──
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
         const ws = wordAnimStates[wi];
-        const anim = computeChunkAnim(word, phraseState, ws, beatPhase, mp.intensity);
+        const anim = computeChunkAnim(phraseState, ws);
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
@@ -4749,8 +4702,8 @@ export class LyricDancePlayer {
         chunk.id = word.id;
         chunk.text = word.text;
 
-        // Position: layout + animation offsets + neighbor push
-        chunk.x = word.layoutX + anim.offsetX + neighborPushOffsets[wi];
+        // Position: layout + animation offsets
+        chunk.x = word.layoutX + anim.offsetX;
         chunk.y = word.layoutY + anim.offsetY;
 
         chunk.alpha = anim.alpha;
@@ -4761,17 +4714,11 @@ export class LyricDancePlayer {
         chunk.fontSize = word.baseFontSize;
         chunk.fontWeight = word.fontWeight;
         chunk.fontFamily = word.fontFamily;
-        chunk.isAnchor = word.isAnchor;
         chunk.rotation = anim.rotation;
         chunk.skewX = anim.skewX;
-        chunk.blur = 0; // clean — no per-word blur
 
         chunk.color = word.color;
 
-        chunk.glow = 0;
-
-        chunk.isHeroWord = ws.effectiveHero;
-        chunk.frozen = false;
         ci++;
       }
     }
@@ -4790,8 +4737,8 @@ export class LyricDancePlayer {
     frame.timeMs = (tSec - scene.songStartSec) * 1000;
     frame.beatIndex = beatIndex;
     frame.sectionIndex = currentChapterIdx;
-    frame.cameraX = driftX;
-    frame.cameraY = driftY;
+    frame.cameraX = 0;
+    frame.cameraY = 0;
     frame.cameraZoom = effectiveZoom;
     frame.bgBlend = 0;
     (frame as any).beatPulse = beatPulse;
