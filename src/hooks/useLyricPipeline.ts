@@ -113,12 +113,23 @@ export function usePipelineScheduler({
   const [fitUnlocked, setFitUnlocked] = useState(() => {
     if (!initialLyric) return false;
     const rd = (initialLyric as any).render_data;
-    return !!(
+    const hasCoreData = !!(
       (initialLyric as any).beat_grid &&
       ((initialLyric as any).cinematic_direction ||
         rd?.cinematicDirection ||
         rd?.cinematic_direction)
     );
+    if (!hasCoreData) return false;
+    const cd =
+      (initialLyric as any).cinematic_direction ||
+      rd?.cinematicDirection ||
+      rd?.cinematic_direction;
+    const sections = cd?.sections;
+    if (Array.isArray(sections) && sections.length > 0) {
+      const images = (initialLyric as any).section_images;
+      return Array.isArray(images) && images.some(Boolean);
+    }
+    return true;
   });
 
   const [fitReadiness, setFitReadiness] = useState<FitReadiness>(() => {
@@ -130,7 +141,17 @@ export function usePipelineScheduler({
       rd?.cinematicDirection ||
       rd?.cinematic_direction
     );
-    return hasBeatGrid && hasCinematic ? "ready" : "not_started";
+    if (!hasBeatGrid || !hasCinematic) return "not_started";
+    const cd =
+      (initialLyric as any).cinematic_direction ||
+      rd?.cinematicDirection ||
+      rd?.cinematic_direction;
+    const sections = cd?.sections;
+    if (Array.isArray(sections) && sections.length > 0) {
+      const images = (initialLyric as any).section_images;
+      if (!Array.isArray(images) || !images.some(Boolean)) return "not_started";
+    }
+    return "ready";
   });
 
   const [fitProgress, setFitProgress] = useState(() => {
@@ -264,8 +285,11 @@ export function usePipelineScheduler({
       generationStatus.beatGrid,
       generationStatus.renderData,
       generationStatus.cinematicDirection,
+      generationStatus.sectionImages,
     ];
-    const allCoreDone = coreStatuses.every((v) => v === "done");
+    const allCoreDone = coreStatuses.every(
+      (v) => v === "done" || v === "error",
+    );
     const hasCoreRunning = coreStatuses.includes("running");
     const hasError = coreStatuses.includes("error");
 
@@ -437,6 +461,11 @@ export function usePipelineScheduler({
 
 export type UseLyricPipelineReturn = {
   retryImages: () => Promise<void>;
+  setSectionImageUrls: React.Dispatch<React.SetStateAction<(string | null)[]>>;
+  setSectionImageProgress: React.Dispatch<
+    React.SetStateAction<{ done: number; total: number } | null>
+  >;
+  setGenerationStatus: React.Dispatch<React.SetStateAction<GenerationStatus>>;
 };
 
 interface UseLyricPipelineParams {
@@ -778,9 +807,20 @@ export function useLyricPipeline({
 
     if (savedBg && loadedCinematicDirection) {
       pipelineTriggeredRef.current = true;
-      setFitReadiness("ready");
-      setFitProgress(100);
-      setFitUnlocked(true);
+      const sections = loadedCinematicDirection.sections;
+      const savedSectionImages = (initialLyric as any).section_images;
+      const hasSections = Array.isArray(sections) && sections.length > 0;
+      const hasImages =
+        Array.isArray(savedSectionImages) && savedSectionImages.some(Boolean);
+      if (!hasSections || hasImages) {
+        setFitReadiness("ready");
+        setFitProgress(100);
+        setFitUnlocked(true);
+      } else {
+        setFitReadiness("running");
+        setFitStageLabel("Generating artwork...");
+        setFitProgress(80);
+      }
 
       import("@/engine/presetDerivation").then(({ deriveFrameState }) => {
         import("@/engine/presetDerivation").then(({ getTypography }) => {
@@ -1473,8 +1513,16 @@ export function useLyricPipeline({
     () =>
       ({
         retryImages: async () => retryGeneration(),
+        setSectionImageUrls,
+        setSectionImageProgress,
+        setGenerationStatus,
       }) as unknown as UseLyricPipelineReturn,
-    [retryGeneration],
+    [
+      retryGeneration,
+      setSectionImageUrls,
+      setSectionImageProgress,
+      setGenerationStatus,
+    ],
   );
 
   return {

@@ -178,9 +178,25 @@ export function FitTab({
       .eq("id", publishedDanceId)
       .maybeSingle()
       .then(({ data: row }) => {
-        if (row) setPrefetchedDanceData(row as any as LyricDanceData);
+        if (row) {
+          setPrefetchedDanceData(row as any as LyricDanceData);
+          const dbImages = (row as any).section_images;
+          if (Array.isArray(dbImages) && dbImages.some(Boolean)) {
+            pipeline.setSectionImageUrls(dbImages);
+            pipeline.setSectionImageProgress({
+              done: dbImages.filter(Boolean).length,
+              total: dbImages.length,
+            });
+            if (dbImages.every(Boolean)) {
+              pipeline.setGenerationStatus((prev) => ({
+                ...prev,
+                sectionImages: "done",
+              }));
+            }
+          }
+        }
       });
-  }, [publishedDanceId]);
+  }, [publishedDanceId, pipeline]);
 
   // Initial prefetch
   useEffect(() => {
