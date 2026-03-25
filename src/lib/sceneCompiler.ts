@@ -820,7 +820,12 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     return w;
   });
   const wordMeta: WordMetaEntry[] = words.map((w) => {
-    const clean = w.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    // Normalize curly quotes/apostrophes before cleaning, then strip
+    const normalized = w.word
+      .replace(/[\u2018\u2019\u201A\u201B\u0060\u00B4]/g, "'")  // curly → straight apostrophe
+      .replace(/[\u201C\u201D\u201E\u201F]/g, '"');               // curly → straight quote
+    const clean = normalized.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
+      .replace(/^'+|'+$/g, '');  // strip leading/trailing apostrophes from clean key
     const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? Infinity)));
     return { ...w, clean, directive: directives.get(clean) ?? null, lineIndex, wordIndex: 0 };
   });
@@ -1036,7 +1041,9 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       const pos = positions[wi] ?? { x: REF_W / 2, y: REF_H / 2, width: 40 };
       const base: CompiledWord = {
         id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
-        text: baseTypography.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word,
+        text: baseTypography.textTransform === 'uppercase'
+          ? wm.word.replace(/[\u2018\u2019]/g, "'").toUpperCase()
+          : wm.word.replace(/[\u2018\u2019]/g, "'"),
         clean: wm.clean || wm.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(),
         wordIndex: wi,
         layoutX: pos.x,

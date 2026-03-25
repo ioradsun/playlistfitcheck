@@ -124,7 +124,7 @@ export interface ChunkAnimState {
 
 const WORD_FADE_SEC = 0.15; // 150ms per-word fade in after stagger reveal
 const REVEAL_ANTICIPATION = 0.1; // 100ms before group.start
-const CENTER_WORD_SCALE = 1.15; // layout already fills viewport — this is a subtle boost
+const CENTER_WORD_SCALE = 1.0; // layout fills viewport — no additional scale needed
 const BEAT_NUDGE_BASE = 8; // EXTREME: visible bounce
 const BEAT_SCALE_BASE = 1.0; // base scale (1.0 = no beat effect)
 const BEAT_SCALE_MULT = 0.08; // EXTREME: visible pulse
@@ -468,7 +468,7 @@ export function computeWordState(
   const emp = word.emphasisLevel ?? 0;
   let heroScaleMult = 1.0;
   if (effectiveHero && !isSoloHero) {
-    heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.08; // subtle: emp5 = 1.32x, emp3 = 1.16x
+    heroScaleMult = 1.0 + Math.max(0, emp - 1) * 0.05; // emp5 = 1.20x, emp3 = 1.10x
   }
 
   // Solo hero offset (center screen)
@@ -477,7 +477,7 @@ export function computeWordState(
   if (isSoloHero) {
     heroOffsetX = canvasWidth / 2 - word.layoutX;
     heroOffsetY = canvasHeight / 2 - word.layoutY;
-    heroScaleMult = Math.max(heroScaleMult, 1.3); // solo hero stands out but fits viewport
+    heroScaleMult = Math.max(heroScaleMult, 1.15); // solo hero: visible but safe
   }
 
   // ── Composition scale boost ──
@@ -584,10 +584,11 @@ export function computeChunkAnim(
   }
   alpha = Math.max(0, Math.min(1, alpha));
 
-  // ── SCALE: use MAX of centerWord vs hero (don't multiply both) ──
-  // The layout system already sizes words for the viewport.
-  // These are ADDITIONAL emphasis — they should not stack.
-  const emphasisScale = Math.max(wordAnim.centerWordScale, wordAnim.heroScaleMult);
+  // ── SCALE: center_word = no extra scale. Others = hero emphasis. ──
+  // fitTextToViewport already sizes center_word to fill 88% of viewport.
+  // Adding ANY scale on top causes overflow. Only non-center_word gets hero boost.
+  const isCenterWord = wordAnim.centerWordScale > 1.01;
+  const emphasisScale = isCenterWord ? 1.0 : wordAnim.heroScaleMult;
   let scaleX = emphasisScale;
   let scaleY = emphasisScale;
 
