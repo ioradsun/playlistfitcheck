@@ -30,8 +30,8 @@ const ENERGY_TAU = 2.0;
 const BRIGHTNESS_TAU = 3.0;
 const TREND_TAU = 4.0;
 
-const BG_THRESHOLD = 0.4;
-const CAMERA_THRESHOLD = 0.5;
+const BG_THRESHOLD = 0.2;
+const CAMERA_THRESHOLD = 0.3;
 const SYNC_THRESHOLD = 0.7;
 const SHAKE_THRESHOLD = 0.85;
 
@@ -74,12 +74,14 @@ export class IntensityRouter {
     // Hero: INVERSE — quieter = more hero emphasis (one word in silence feels dramatic)
     p.textHeroMult = 1.2 - intensity * 0.3;
 
-    // Background: gated at 0.4
-    p.bgBeatMult = intensity > BG_THRESHOLD ? (intensity - BG_THRESHOLD) / (1 - BG_THRESHOLD) : 0;
+    // Background: quadratic ramp above threshold
+    const bgRaw = intensity > BG_THRESHOLD ? (intensity - BG_THRESHOLD) / (1 - BG_THRESHOLD) : 0;
+    p.bgBeatMult = bgRaw * bgRaw;
     p.bgParallaxMult = 0.2 + intensity * 1.0;
 
-    // Camera: gated at 0.5
-    p.cameraBeatMult = intensity > CAMERA_THRESHOLD ? (intensity - CAMERA_THRESHOLD) / (1 - CAMERA_THRESHOLD) : 0;
+    // Camera: quadratic ramp above threshold
+    const camRaw = intensity > CAMERA_THRESHOLD ? (intensity - CAMERA_THRESHOLD) / (1 - CAMERA_THRESHOLD) : 0;
+    p.cameraBeatMult = camRaw * camRaw;
     p.cameraShakeMult = intensity > SHAKE_THRESHOLD ? (intensity - SHAKE_THRESHOLD) / (1 - SHAKE_THRESHOLD) : 0;
 
     // Text-camera sync: 0→15% bleed, gated at 0.7

@@ -55,7 +55,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 1.5 },
     motionIntent: 'push-in',
-    beatBrightnessGain: 0.02,
+    beatBrightnessGain: 0.06,
   },
 
   anthemic: {
@@ -66,7 +66,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.0, size: 0 },
     motionIntent: 'pull-out',
-    beatBrightnessGain: 0.04,
+    beatBrightnessGain: 0.12,
   },
 
   dreamy: {
@@ -77,7 +77,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 2.0 },
     motionIntent: 'drift-lateral',
-    beatBrightnessGain: 0.01,
+    beatBrightnessGain: 0.03,
   },
 
   aggressive: {
@@ -88,7 +88,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 1.0 },
     motionIntent: 'handheld',
-    beatBrightnessGain: 0.06,
+    beatBrightnessGain: 0.18,
   },
 
   melancholy: {
@@ -99,7 +99,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 1.5 },
     motionIntent: 'drift-down',
-    beatBrightnessGain: 0.01,
+    beatBrightnessGain: 0.03,
   },
 
   euphoric: {
@@ -110,7 +110,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.0, size: 0 },
     motionIntent: 'pull-out',
-    beatBrightnessGain: 0.05,
+    beatBrightnessGain: 0.15,
   },
 
   eerie: {
@@ -121,7 +121,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 0.8 },
     motionIntent: 'drift-lateral',
-    beatBrightnessGain: 0.02,
+    beatBrightnessGain: 0.06,
   },
 
   vulnerable: {
@@ -132,7 +132,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 1.5 },
     motionIntent: 'breathing',
-    beatBrightnessGain: 0.01,
+    beatBrightnessGain: 0.03,
   },
 
   triumphant: {
@@ -143,7 +143,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.0, size: 0 },
     motionIntent: 'stable',
-    beatBrightnessGain: 0.04,
+    beatBrightnessGain: 0.12,
   },
 
   nostalgic: {
@@ -154,7 +154,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 2.0 },
     motionIntent: 'drift-lateral',
-    beatBrightnessGain: 0.01,
+    beatBrightnessGain: 0.03,
   },
 
   defiant: {
@@ -165,7 +165,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.1, size: 1.0 },
     motionIntent: 'push-in',
-    beatBrightnessGain: 0.04,
+    beatBrightnessGain: 0.12,
   },
 
   hopeful: {
@@ -176,7 +176,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.05, size: 1.0 },
     motionIntent: 'drift-up',
-    beatBrightnessGain: 0.03,
+    beatBrightnessGain: 0.09,
   },
 
   raw: {
@@ -187,7 +187,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.15, size: 1.2 },
     motionIntent: 'handheld',
-    beatBrightnessGain: 0.03,
+    beatBrightnessGain: 0.09,
   },
 
   hypnotic: {
@@ -198,7 +198,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.05, size: 1.0 },
     motionIntent: 'slow-zoom',
-    beatBrightnessGain: 0.02,
+    beatBrightnessGain: 0.06,
   },
 };
 
@@ -239,9 +239,11 @@ export function buildGradeFilter(
   if (cached !== undefined) return cached;
 
   const brightness = Math.min(0.90, grade.brightness + intensityMod * 0.15 + bModQ * grade.beatBrightnessGain);
+  const beatSatBoost = bModQ * 0.08;
+  const saturation = Math.min(1.4, grade.saturation + beatSatBoost);
   const parts: string[] = [
     `brightness(${brightness.toFixed(2)})`,
-    `saturate(${grade.saturation.toFixed(2)})`,
+    `saturate(${saturation.toFixed(2)})`,
     `contrast(${grade.contrast.toFixed(2)})`,
   ];
 
