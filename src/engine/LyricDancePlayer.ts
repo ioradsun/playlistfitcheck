@@ -5549,6 +5549,8 @@ export class LyricDancePlayer {
       const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
 
       // ── Phrase animation state from PhraseAnimator ──
+      // Mood config is ONLY used as fallback for ai_moment phrases (no presentation mode).
+      // Presentation mode cards are self-contained — they define their own timing + intensity.
       const moodForAnim: AnimMoodConfig = {
         character: this._activeMoodConfig.character,
         intensity: this._activeMoodConfig.intensity,
