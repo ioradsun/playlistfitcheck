@@ -1235,8 +1235,6 @@ export class LyricDancePlayer {
   private _intensityRouter = new IntensityRouter();
   private _motionProfile: MotionProfile | null = null;
   private _textSyncFraction = 0;
-  private _bgSectionParallaxMult = 1;
-  private _bgSectionBeatMult = 0;
 
   // Viewport scale (replaces timelineScale for runtime use)
   private _viewportSx = 1;
@@ -1292,17 +1290,8 @@ export class LyricDancePlayer {
   private _bgSnapshotQTier = -1;     // quality tier when snapshot was last baked
   private _bgLastBakeMs = 0;         // timestamp of last snapshot bake
   private _bgRebakeIntervalMs = 500; // rebake background every 500ms
-  // ═══ Background parallax — smoothed camera following for depth perception ═══
-  // Spatial ratio: background moves 12% of camera (Disney multiplane far-plane).
-  // Temporal inertia: EMA filter makes background resist fast motion (perceived mass).
-  private _bgParallaxX = 0;
-  private _bgParallaxY = 0;
-  private _bgParallaxZoom = 1;
-  private _bgParallaxRot = 0;
-  private static readonly BG_PARALLAX_DEPTH = 0.20;
-  // Alpha is adaptive — slower in quiet sections, faster when beats are strong
-  private static readonly BG_PARALLAX_ALPHA_SLOW = 0.07;
-  private static readonly BG_PARALLAX_ALPHA_FAST = 0.30;
+  /** Beat-synced zoom pulse — the background breathes with the beat */
+  private _bgPulseZoom = 1.0;
   // ═══ Breathing vignette — Fincher/Cronenweth eye funnel ═══
   private _vignetteCanvas: HTMLCanvasElement | null = null;
   private _vignetteKey = '';        // tracks canvas size for invalidation
@@ -2524,10 +2513,7 @@ export class LyricDancePlayer {
   }
 
   private _resetBgParallax(): void {
-    this._bgParallaxX = 0;
-    this._bgParallaxY = 0;
-    this._bgParallaxZoom = 1;
-    this._bgParallaxRot = 0;
+    this._bgPulseZoom = 1.0;
   }
 
   private _handleVisibilityChangeImpl(): void {
@@ -3064,7 +3050,7 @@ export class LyricDancePlayer {
     ds.beatIntensity = beatState?.pulse ?? 0;
 
 
-    const particleBeatIntensity = (beatState?.pulse ?? 0) * (1 + (this._motionProfile?.bgBeatMult ?? 0));
+    const particleBeatIntensity = (beatState?.pulse ?? 0) * (1 + (this._motionProfile?.bgPulseAmplitude ?? 0));
     const beatIntensityClamped = Math.max(0, Math.min(1, particleBeatIntensity));
     if (this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
   }
@@ -3185,39 +3171,19 @@ export class LyricDancePlayer {
       this._bgLastBakeMs = nowMsBg;
     }
 
-    // Stamp frozen snapshot with parallax depth
-    // Background follows camera through EMA filter at 12% depth ratio.
-    // Fast beat impulses filtered out. Slow section drifts pass through.
-    // Disney multiplane principle: far objects have mass.
+    // ═══ BACKGROUND: beat-synced zoom pulse ═══
+    // One axis. One number. Perfect beat sync.
+    // Zooms from center — overscan guarantees no edge visibility.
     if (this._bgSnapshot) {
-      const subjectT = this.cameraRig.getSubjectTransform();
-      const depth = LyricDancePlayer.BG_PARALLAX_DEPTH * this._bgSectionParallaxMult;
-      const bgBeat = this._bgSectionBeatMult;
-      const alpha = LyricDancePlayer.BG_PARALLAX_ALPHA_SLOW
-        + bgBeat * (LyricDancePlayer.BG_PARALLAX_ALPHA_FAST - LyricDancePlayer.BG_PARALLAX_ALPHA_SLOW);
-
-      const bgBeatGate = Math.max(0.05, this._bgSectionBeatMult);
-      const targetX = subjectT.offsetX * depth * bgBeatGate;
-      const targetY = subjectT.offsetY * depth * bgBeatGate;
-      const targetZoom = 1 + (subjectT.zoom - 1) * depth;
-      const targetRot = subjectT.rotation * depth;
-
-      this._bgParallaxX += (targetX - this._bgParallaxX) * alpha;
-      this._bgParallaxY += (targetY - this._bgParallaxY) * alpha;
-      this._bgParallaxZoom += (targetZoom - this._bgParallaxZoom) * alpha;
-      this._bgParallaxRot += (targetRot - this._bgParallaxRot) * alpha;
-
       const dpr = this._effectiveDpr;
       const cx = (this.width / 2) * dpr;
       const cy = (this.height / 2) * dpr;
+      const zoom = this._bgPulseZoom;
 
       this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       this.ctx.save();
-      this.ctx.translate(cx + this._bgParallaxX * dpr, cy + this._bgParallaxY * dpr);
-      if (Math.abs(this._bgParallaxRot) > 0.0001) {
-        this.ctx.rotate(this._bgParallaxRot);
-      }
-      this.ctx.scale(this._bgParallaxZoom, this._bgParallaxZoom);
+      this.ctx.translate(cx, cy);
+      this.ctx.scale(zoom, zoom);
       this.ctx.translate(-cx, -cy);
       this.ctx.drawImage(this._bgSnapshot, 0, 0);
       this.ctx.restore();
@@ -4602,20 +4568,31 @@ export class LyricDancePlayer {
     }
     const mp: MotionProfile = this._motionProfile ?? {
       intensity: 0, textNodMult: 0.5, textWaveMult: 0.6, textHeroMult: 1.0,
-      bgBeatMult: 0, bgParallaxMult: 0.2, cameraBeatMult: 0, cameraShakeMult: 0,
+      bgPulseAmplitude: 0, cameraBeatMult: 0, cameraShakeMult: 0,
       textSyncFraction: 0, particleDensityMult: 0.2, particleSpeedMult: 0.3,
     };
     this._textSyncFraction = mp.textSyncFraction;
-    this._bgSectionParallaxMult = mp.bgParallaxMult;
-    this._bgSectionBeatMult = mp.bgBeatMult;
 
-    // Beat-driven background responses
+    // ═══ BACKGROUND BEAT PULSE: one zoom, synced to beat ═══
+    // phase: 0 = on beat, 1 = just before next beat
+    // Attack curve: sharp zoom on hit, smooth decay back to 1.0
     const rawPulse = beatState?.pulse ?? 0;
+    const beatPhaseNow = beatState?.phase ?? 0;
     const hitStr = beatState?.hitStrength ?? 0;
-    const beatFlash = Math.max(rawPulse, hitStr) * mp.bgBeatMult;
-    this._bgBeatBrightnessBoost += (beatFlash - this._bgBeatBrightnessBoost) * 0.4;
+    void beatPhaseNow;
 
-    const vignetteBeat = rawPulse * mp.bgBeatMult * 0.15;
+    // Pulse envelope: sharp attack on beat, smooth decay
+    // Using pulse (gaussian on beat) gives a natural bell shape
+    const pulseEnvelope = Math.max(rawPulse, hitStr * 0.8);
+    // Zoom = 1.0 + amplitude × envelope
+    this._bgPulseZoom = 1.0 + mp.bgPulseAmplitude * pulseEnvelope;
+
+    // Brightness flash — proportional to pulse × intensity
+    const beatFlash = pulseEnvelope * mp.intensity;
+    this._bgBeatBrightnessBoost += (beatFlash - this._bgBeatBrightnessBoost) * 0.5;
+
+    // Vignette opens on beat
+    const vignetteBeat = pulseEnvelope * mp.intensity * 0.20;
     this._vignetteBeatPulse += (vignetteBeat - this._vignetteBeatPulse) * 0.35;
 
     if (beatIndex !== this._lastBeatIndex && beatIndex >= 0) {

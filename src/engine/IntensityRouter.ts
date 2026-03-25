@@ -17,8 +17,8 @@ export interface MotionProfile {
   textNodMult: number;
   textWaveMult: number;
   textHeroMult: number;
-  bgBeatMult: number;
-  bgParallaxMult: number;
+  /** 0→0.06 — zoom pulse amplitude on beat. Scales with intensity. */
+  bgPulseAmplitude: number;
   cameraBeatMult: number;
   cameraShakeMult: number;
   textSyncFraction: number;
@@ -30,7 +30,6 @@ const ENERGY_TAU = 2.0;
 const BRIGHTNESS_TAU = 3.0;
 const TREND_TAU = 4.0;
 
-const BG_THRESHOLD = 0.2;
 const CAMERA_THRESHOLD = 0.3;
 const SYNC_THRESHOLD = 0.7;
 const SHAKE_THRESHOLD = 0.85;
@@ -43,7 +42,7 @@ export class IntensityRouter {
   private _profile: MotionProfile = {
     intensity: 0,
     textNodMult: 0.5, textWaveMult: 0.6, textHeroMult: 1.0,
-    bgBeatMult: 0, bgParallaxMult: 0.2,
+    bgPulseAmplitude: 0,
     cameraBeatMult: 0, cameraShakeMult: 0, textSyncFraction: 0,
     particleDensityMult: 0.2, particleSpeedMult: 0.3,
   };
@@ -74,10 +73,8 @@ export class IntensityRouter {
     // Hero: INVERSE — quieter = more hero emphasis (one word in silence feels dramatic)
     p.textHeroMult = 1.2 - intensity * 0.3;
 
-    // Background: quadratic ramp above threshold
-    const bgRaw = intensity > BG_THRESHOLD ? (intensity - BG_THRESHOLD) / (1 - BG_THRESHOLD) : 0;
-    p.bgBeatMult = bgRaw * bgRaw;
-    p.bgParallaxMult = 0.2 + intensity * 1.0;
+    // Background pulse: linear with intensity. 1% at idle, up to 6% at peak.
+    p.bgPulseAmplitude = 0.01 + intensity * 0.05;
 
     // Camera: quadratic ramp above threshold
     const camRaw = intensity > CAMERA_THRESHOLD ? (intensity - CAMERA_THRESHOLD) / (1 - CAMERA_THRESHOLD) : 0;
