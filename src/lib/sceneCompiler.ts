@@ -502,6 +502,8 @@ export interface CompiledPhraseGroup {
   sectionLabel?: string;
   /** Chorus repeat number (1 = first time, 2 = second, etc.) */
   chorusRepeat?: number;
+  /** AI-selected exit animation type */
+  exitEffect?: string;
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
@@ -706,8 +708,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
     const revealStyle = (group as any).revealStyle ?? matchPhrase?.revealStyle ?? 'instant';
     const holdClass = (group as any).holdClass ?? matchPhrase?.holdClass ?? 'medium_groove';
-    const energyTier = matchPhrase?.energyTier ?? 'groove';
-    const heroType = matchPhrase?.heroType ?? 'word';
+    const energyTier = 'groove';
+    const heroType = 'word';
 
     // Reveal → stagger delay
     const staggerVal = revealStyle === 'instant' ? 0
@@ -786,8 +788,9 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       exitCharacter: (group as any).exitCharacter ?? undefined,
       vibrateOnHold: (group as any).vibrateOnHold ?? false,
       elementalWash: (group as any).elementalWash ?? false,
-      // Section label + effect: still from matchPhrase (AI data)
-      sectionLabel: matchPhrase?.section ?? 'verse',
+      // Exit effect from AI + chorus flag
+      sectionLabel: matchPhrase?.isChorus ? 'chorus' : undefined,
+      exitEffect: matchPhrase?.exitEffect ?? undefined,
     };
   }).sort((a, b) => a.start - b.start);
 

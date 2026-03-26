@@ -4755,6 +4755,7 @@ export class LyricDancePlayer {
         this._exitEffect.onGroupChange(
           activeGroup as any, nextGroupStart, tSec,
           this.ctx, this.width, this.height,
+          (activeGroup as any).exitEffect ?? undefined,
         );
       }
     }

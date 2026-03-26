@@ -31,6 +31,8 @@ export interface CinematicDirection {
    *  Each phrase is one "reading beat" — a complete thought the viewer reads and absorbs. */
   phrases?: CinematicPhrase[];
   hookPhrase?: string;
+  /** Detected chorus lyric text (repeated lines) */
+  chorusText?: string;
 
   // ── Legacy fields (deprecated — use resolvers instead) ─────
   /** @deprecated Use emotionalArc + resolvers */
@@ -85,31 +87,24 @@ export interface CinematicPhrase {
   wordRange: [number, number];
   /** Most impactful word in this phrase — UPPERCASE. Optional. */
   heroWord?: string;
-  /** NEW: section label from AI */
-  section?: 'verse' | 'chorus' | 'bridge' | 'outro';
-  /** NEW: semantic word effect on hero word */
-  effect?: {
-    type: string;
-    direction?: string;
-    amount?: number;
-    color?: string;
-    animated?: boolean;
-    decomp?: string;
-  };
+  /** AI-selected exit animation for this phrase */
+  exitEffect?: 'fade' | 'drift_up' | 'shrink' | 'dissolve' | 'cascade' | 'scatter' | 'slam' | 'glitch' | 'burn';
+  /** True if this phrase contains lyrics that repeat elsewhere in the song (chorus) */
+  isChorus?: boolean;
+  /** @deprecated — replaced by isChorus */
+  section?: string;
+  /** @deprecated — replaced by exitEffect */
+  effect?: Record<string, any>;
   /** @deprecated — use wordRange with global indices instead */
   lineIndex?: number;
   /** KEPT: layout (assigned by client) */
   composition?: "stack" | "line" | "center_word";
   /** KEPT: layout (assigned by client) */
   bias?: "left" | "center" | "right";
-  /** DEPRECATED: no longer in AI output */
-  heroType?: "word" | "phrase";
   /** KEPT: layout (assigned by client) */
   revealStyle?: "instant" | "stagger_fast" | "stagger_slow";
   /** KEPT: layout (assigned by client) */
   holdClass?: "short_hit" | "medium_groove" | "long_emotional";
-  /** DEPRECATED: no longer in AI output */
-  energyTier?: "intimate" | "groove" | "lift" | "impact" | "surprise";
   /** KEPT: assigned by client-side shuffle deck */
   presentationMode?: string;
   /** KEPT: assigned by client-side shuffle deck */
