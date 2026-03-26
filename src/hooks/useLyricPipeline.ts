@@ -1420,6 +1420,7 @@ export function useLyricPipeline({
     fitProgress,
     setFitProgress,
     fitStageLabel,
+    setFitStageLabel,
     pipelineStages,
     setPipelineStages,
     fitUnlocked,
