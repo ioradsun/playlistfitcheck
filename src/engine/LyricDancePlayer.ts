@@ -4593,7 +4593,7 @@ export class LyricDancePlayer {
     else if (barPos === 2) { nodDirX = 0; nodDirY = 0.8; }
     else if (barPos === 3) { nodDirX = -0.7; nodDirY = 0.3; }
 
-    const nodMag = mp.bgPulseAmplitude * pulseEnvelope * beatDynamic * 50;
+    const nodMag = mp.bgPulseAmplitude * pulseEnvelope * beatDynamic * this.height * 0.6;
     this._textBeatNodX = nodMag * nodDirX;
     this._textBeatNodY = nodMag * nodDirY;
 
