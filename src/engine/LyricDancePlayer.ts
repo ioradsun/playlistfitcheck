@@ -4596,19 +4596,30 @@ export class LyricDancePlayer {
     // Final zoom
     this._bgPulseZoom = 1.0 + mp.bgPulseAmplitude * pulseEnvelope * beatDynamic;
 
-    // ═══ DIRECTIONAL PIVOT: zoom center drifts over time ═══
-    // Shifts the zoom origin so the pulse "breathes" toward different areas.
-    // Changes direction every 2 beats. Magnitude scales with intensity.
-    const conductorBeatIdx = beatState?.beatIndex ?? 0;
-    const pivotCycle = Math.floor(conductorBeatIdx / 2); // changes every 2 beats
-    const pivotAngle = (pivotCycle * 2.399) % (Math.PI * 2); // golden angle for variety
-    const pivotMag = this.width * (0.02 + mp.intensity * 0.03); // 2-5% of width
-    const targetPivotX = Math.cos(pivotAngle) * pivotMag;
-    const targetPivotY = Math.sin(pivotAngle) * pivotMag;
+    // ═══ DIRECTIONAL PIVOT: 5-second cycle through 4 nod directions ═══
+    // 0: left, 1: back-and-forth, 2: right, 3: center. Subtle drift.
+    const songTime = Math.max(0, tSec - scene.songStartSec);
+    const dirCycle = Math.floor(songTime / 5) % 4;
+    const pivotMag = this.width * 0.025; // 2.5% of width — subtle
 
-    // EMA smooth — glide between pivot positions, ~200ms
-    this._bgZoomPivotX += (targetPivotX - this._bgZoomPivotX) * 0.08;
-    this._bgZoomPivotY += (targetPivotY - this._bgZoomPivotY) * 0.08;
+    let targetPivotX = 0;
+    let targetPivotY = 0;
+    if (dirCycle === 0) {
+      // Nod left
+      targetPivotX = -pivotMag;
+    } else if (dirCycle === 1) {
+      // Back and forth — gentle oscillation within the 5s window
+      const oscillate = Math.sin(songTime * 1.2);
+      targetPivotX = oscillate * pivotMag * 0.7;
+    } else if (dirCycle === 2) {
+      // Nod right
+      targetPivotX = pivotMag;
+    }
+    // dirCycle === 3: center (targetPivotX stays 0)
+
+    // EMA smooth — slow glide between directions, ~300ms
+    this._bgZoomPivotX += (targetPivotX - this._bgZoomPivotX) * 0.06;
+    this._bgZoomPivotY += (targetPivotY - this._bgZoomPivotY) * 0.06;
 
     // Text stays still — background zoom drives the rhythm.
     this._textBeatNodX = 0;
