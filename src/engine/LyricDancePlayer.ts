@@ -1234,6 +1234,8 @@ export class LyricDancePlayer {
   private _bgRebakeIntervalMs = 500; // rebake background every 500ms
   /** Beat-synced zoom pulse — the background breathes with the beat */
   private _bgPulseZoom = 1.0;
+  private _bgZoomPivotX = 0; // offset from center, in pixels
+  private _bgZoomPivotY = 0;
   /** Beat nod: uniform Y shift for all text, synced with background pulse */
   private _textBeatNodX = 0;
   private _textBeatNodY = 0;
@@ -2462,6 +2464,8 @@ export class LyricDancePlayer {
 
   private _resetBgParallax(): void {
     this._bgPulseZoom = 1.0;
+    this._bgZoomPivotX = 0;
+    this._bgZoomPivotY = 0;
     this._textBeatNodX = 0;
     this._textBeatNodY = 0;
     this._finaleEffect.reset();
@@ -3148,21 +3152,19 @@ export class LyricDancePlayer {
       this._bgLastBakeMs = nowMsBg;
     }
 
-    // ═══ BACKGROUND: beat-synced zoom pulse + parallax sway ═══
-    // Zoom from center on beat. Parallax: background drifts in SAME direction
-    // as text nod at 40% magnitude — same camera, background is farther away.
+    // ═══ BACKGROUND: beat-synced zoom pulse + directional pivot ═══
     if (this._bgSnapshot) {
       const dpr = this._effectiveDpr;
       const cx = (this.width / 2) * dpr;
       const cy = (this.height / 2) * dpr;
       const zoom = this._bgPulseZoom;
-      // Parallax: same direction as text nod × 0.4 (far layer moves less)
-      const swayX = this._textBeatNodX * 0.4 * dpr;
-      const swayY = this._textBeatNodY * 0.4 * dpr;
+      // Directional pivot: zoom origin drifts, creating subtle camera movement
+      const pivotX = this._bgZoomPivotX * dpr;
+      const pivotY = this._bgZoomPivotY * dpr;
 
       this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       this.ctx.save();
-      this.ctx.translate(cx + swayX, cy + swayY);
+      this.ctx.translate(cx + pivotX, cy + pivotY);
       this.ctx.scale(zoom, zoom);
       this.ctx.translate(-cx, -cy);
       this.ctx.drawImage(this._bgSnapshot, 0, 0);
@@ -4572,37 +4574,45 @@ export class LyricDancePlayer {
     const beatEnergy = beatState?.energy ?? 0.3;
     void beatPhaseNow;
 
-    // ═══ DYNAMIC PULSE: each beat's zoom scales with its strength ═══
-    // pulseEnvelope = WHEN (Gaussian timing signal, 0→1→0 per beat)
-    // beatDynamic = HOW MUCH (this specific beat's strength)
-    // bgPulseAmplitude = CEILING (section-level max from IntensityRouter)
-    const pulseEnvelope = Math.max(rawPulse, hitStr * 0.8);
+    // ═══ DYNAMIC PULSE: 2x rate (eighth notes) with directional shift ═══
+    // On-beat pulse from conductor + synthetic sub-beat pulse at phase 0.5.
+    // Combined = two hits per beat = matches real head bob frequency.
+    const onBeatPulse = Math.max(rawPulse, hitStr * 0.8);
 
-    // Per-beat dynamic: combine beat strength + hit onset + instant energy.
-    // Downbeats hit harder. Strong onsets hit harder. Louder moments hit harder.
+    // Sub-beat pulse: gaussian centered at phase=0.5 (halfway between beats)
+    const subBeatDist = Math.abs((beatState?.phase ?? 0) - 0.5);
+    const subBeatPulse = Math.exp(-(subBeatDist * subBeatDist) / (0.04 * 0.04));
+
+    // Combined: on-beat at full strength, sub-beat at 60%
+    const pulseEnvelope = Math.max(onBeatPulse, subBeatPulse * 0.6);
+
+    // Per-beat dynamic: downbeats harder, strong onsets harder, louder = bigger.
     const beatDynamic = Math.min(1.0,
-      beatStrength * 0.4     // positional: downbeat=0.4, offbeat=0.16
-      + hitStr * 0.35        // onset: strong transient = big punch
-      + beatEnergy * 0.25,   // instant energy: louder = bigger
+      beatStrength * 0.4
+      + hitStr * 0.35
+      + beatEnergy * 0.25,
     );
 
-    // Final zoom = ceiling × timing × per-beat-strength
+    // Final zoom
     this._bgPulseZoom = 1.0 + mp.bgPulseAmplitude * pulseEnvelope * beatDynamic;
-    // ═══ TEXT SWAY: continuous lissajous driven by audio time ═══
-    // sin(t) + sin(2t) = figure-8. Frequency locked to BPM.
-    // Always moving, always smooth. No pulse modulation, no discrete switching.
-    // Magnitude scales with intensity (louder = bigger sway) and canvas height.
-    const bpm = scene.bpm || 120;
-    const barDuration = 4 * (60 / bpm); // seconds per bar
-    const barAngle = ((tSec - scene.songStartSec) / barDuration) * Math.PI * 2;
 
-    const swayMag = this.height * (0.005 + mp.intensity * 0.01);
-    const targetSwayX = Math.sin(barAngle) * swayMag;
-    const targetSwayY = Math.sin(barAngle * 2) * swayMag * 0.5;
+    // ═══ DIRECTIONAL PIVOT: zoom center drifts over time ═══
+    // Shifts the zoom origin so the pulse "breathes" toward different areas.
+    // Changes direction every 2 beats. Magnitude scales with intensity.
+    const conductorBeatIdx = beatState?.beatIndex ?? 0;
+    const pivotCycle = Math.floor(conductorBeatIdx / 2); // changes every 2 beats
+    const pivotAngle = (pivotCycle * 2.399) % (Math.PI * 2); // golden angle for variety
+    const pivotMag = this.width * (0.02 + mp.intensity * 0.03); // 2-5% of width
+    const targetPivotX = Math.cos(pivotAngle) * pivotMag;
+    const targetPivotY = Math.sin(pivotAngle) * pivotMag;
 
-    // EMA smooth — ~100ms at 60fps. Silky glide.
-    this._textBeatNodX += (targetSwayX - this._textBeatNodX) * 0.15;
-    this._textBeatNodY += (targetSwayY - this._textBeatNodY) * 0.15;
+    // EMA smooth — glide between pivot positions, ~200ms
+    this._bgZoomPivotX += (targetPivotX - this._bgZoomPivotX) * 0.08;
+    this._bgZoomPivotY += (targetPivotY - this._bgZoomPivotY) * 0.08;
+
+    // Text stays still — background zoom drives the rhythm.
+    this._textBeatNodX = 0;
+    this._textBeatNodY = 0;
 
     // Brightness flash and vignette also scale per-beat
     const beatFlash = pulseEnvelope * beatDynamic * mp.intensity;
