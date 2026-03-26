@@ -722,15 +722,16 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       : Math.max(0.3, animParams.linger); // medium_groove
 
     // Energy → entry/exit speed
-    const entryVal = energyTier === 'impact' ? 0.08
-      : energyTier === 'surprise' ? 0.05
-      : energyTier === 'intimate' ? 0.4
-      : energyTier === 'lift' ? groupDur.entryDuration * 0.8
+    const _et = energyTier as string;
+    const entryVal = _et === 'impact' ? 0.08
+      : _et === 'surprise' ? 0.05
+      : _et === 'intimate' ? 0.4
+      : _et === 'lift' ? groupDur.entryDuration * 0.8
       : groupDur.entryDuration; // groove
-    const exitVal = energyTier === 'impact' ? 0.15
-      : energyTier === 'surprise' ? 0.1
-      : energyTier === 'intimate' ? 0.5
-      : energyTier === 'lift' ? groupDur.exitDuration * 0.8
+    const exitVal = _et === 'impact' ? 0.15
+      : _et === 'surprise' ? 0.1
+      : _et === 'intimate' ? 0.5
+      : _et === 'lift' ? groupDur.exitDuration * 0.8
       : groupDur.exitDuration; // groove
     const groupLayout = groupLayouts.get(key);
     const positions = groupLayout?.positions ?? [];
