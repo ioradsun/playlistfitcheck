@@ -35,6 +35,7 @@ import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/
 import { IntensityRouter, type MotionProfile } from '@/engine/IntensityRouter';
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { FinaleEffect } from "@/engine/FinaleEffect";
+import { ExitEffect } from '@/engine/ExitEffect';
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
@@ -1237,6 +1238,8 @@ export class LyricDancePlayer {
   private _textBeatNodX = 0;
   private _textBeatNodY = 0;
   private _finaleEffect = new FinaleEffect();
+  private _exitEffect = new ExitEffect();
+  private _prevActiveGroupIdx = -1;
   // ═══ Breathing vignette — Fincher/Cronenweth eye funnel ═══
   private _vignetteCanvas: HTMLCanvasElement | null = null;
   private _vignetteKey = '';        // tracks canvas size for invalidation
@@ -1812,6 +1815,8 @@ export class LyricDancePlayer {
     this.cameraRig.reset();
     this._activeGroupCursor = 0;
     this._activeGroupCursorTime = -1;
+    this._exitEffect.reset();
+    this._prevActiveGroupIdx = -1;
     this._intensityRouter.reset();
     this._resetBgParallax();
   }
@@ -2139,6 +2144,8 @@ export class LyricDancePlayer {
     this.cameraRig.reset();
     this._activeGroupCursor = 0;
     this._activeGroupCursorTime = -1;
+    this._exitEffect.reset();
+    this._prevActiveGroupIdx = -1;
     this._intensityRouter.reset();
     this._resetBgParallax();
     this._bgSnapshotSection = -1;
@@ -2457,6 +2464,8 @@ export class LyricDancePlayer {
     this._textBeatNodX = 0;
     this._textBeatNodY = 0;
     this._finaleEffect.reset();
+    this._exitEffect.reset();
+    this._prevActiveGroupIdx = -1;
   }
 
   private _handleVisibilityChangeImpl(): void {
@@ -3390,6 +3399,11 @@ export class LyricDancePlayer {
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.setCanvasBaseline('alphabetic');
+
+    // ═══ EXIT EFFECT: cinematic phrase exit ═══
+    if (this._exitEffect.active) {
+      this._exitEffect.draw(this.ctx, tSec, this._effectiveDpr);
+    }
 
     // Comment comets — after text, before watermark
     this.drawComments(frameNowSec);
@@ -4631,6 +4645,18 @@ export class LyricDancePlayer {
     if (activeGroupIdx >= 0) {
       activeGroups.push(activeGroupIdx);
     }
+
+    // ── Exit effect: detect phrase change, start exit for previous phrase ──
+    if (activeGroupIdx >= 0 && activeGroupIdx !== this._prevActiveGroupIdx && this._prevActiveGroupIdx >= 0) {
+      const prevGroup = groups[this._prevActiveGroupIdx];
+      const nextGroupStart = groups[activeGroupIdx]?.start ?? Infinity;
+
+      this._exitEffect.onGroupChange(
+        prevGroup as any, nextGroupStart, tSec,
+        this.ctx, this.width, this.height,
+      );
+    }
+    this._prevActiveGroupIdx = activeGroupIdx;
 
     let ci = 0;
     if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
