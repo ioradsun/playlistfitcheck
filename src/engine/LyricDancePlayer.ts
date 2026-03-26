@@ -3034,13 +3034,22 @@ export class LyricDancePlayer {
     const songDuration = this.songEndSec - this.songStartSec;
 
     // ═══ DYNAMITE FINALE ═══
-    const shatterActive = tSec >= this.songEndSec && tSec < this.songEndSec + 2;
-    if (songDuration >= 10 && (this._finaleEffect.phase === "shatter" || shatterActive)) {
+    // After songEnd: either shatter animation or black. NEVER fall through to normal draw.
+    if (songDuration >= 10 && tSec >= this.songEndSec) {
       this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
-      this._finaleEffect.update(
-        tSec, this.songEndSec, songDuration,
-        this.ctx, this.canvas, this.width, this.height, this._effectiveDpr,
-      );
+      const inShatterWindow = tSec < this.songEndSec + 2;
+      if (inShatterWindow || this._finaleEffect.phase === "shatter") {
+        // Shatter animation
+        this._finaleEffect.update(
+          tSec, this.songEndSec, songDuration,
+          this.ctx, this.canvas, this.width, this.height, this._effectiveDpr,
+        );
+      } else {
+        // Past shatter — hold black until audio loops back to start
+        this.ctx.fillStyle = '#000';
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        this._finaleEffect.reset();
+      }
       return;
     }
 
