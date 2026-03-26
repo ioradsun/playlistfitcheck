@@ -34,6 +34,7 @@ import {
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
 import { IntensityRouter, type MotionProfile } from '@/engine/IntensityRouter';
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
+import { FinaleEffect } from "@/engine/FinaleEffect";
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
@@ -1235,6 +1236,7 @@ export class LyricDancePlayer {
   /** Beat nod: uniform Y shift for all text, synced with background pulse */
   private _textBeatNodX = 0;
   private _textBeatNodY = 0;
+  private _finaleEffect = new FinaleEffect();
   // ═══ Breathing vignette — Fincher/Cronenweth eye funnel ═══
   private _vignetteCanvas: HTMLCanvasElement | null = null;
   private _vignetteKey = '';        // tracks canvas size for invalidation
@@ -2454,6 +2456,7 @@ export class LyricDancePlayer {
     this._bgPulseZoom = 1.0;
     this._textBeatNodX = 0;
     this._textBeatNodY = 0;
+    this._finaleEffect.reset();
   }
 
   private _handleVisibilityChangeImpl(): void {
@@ -3018,6 +3021,17 @@ export class LyricDancePlayer {
 
     const frame = precomputedFrame;
     const songProgress = (tSec - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
+    const songDuration = this.songEndSec - this.songStartSec;
+
+    // ═══ DYNAMITE FINALE ═══
+    if (songDuration >= 10 && this._finaleEffect.phase === "shatter") {
+      this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
+      this._finaleEffect.update(
+        tSec, this.songEndSec, songDuration,
+        this.ctx, this.canvas, this.width, this.height, this._effectiveDpr,
+      );
+      return;
+    }
 
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
 
@@ -3284,8 +3298,9 @@ export class LyricDancePlayer {
     // camT was already read above for wall computation — reuse it
     const camZoom = 1.0;
     const syncFrac = this._textSyncFraction;
-    const camShakeX = camT.offsetX * syncFrac + this._textBeatNodX;
-    const camShakeY = camT.offsetY * syncFrac + this._textBeatNodY;
+    const finaleShake = this._finaleEffect.getShake(tSec, this.songEndSec);
+    const camShakeX = camT.offsetX * syncFrac + this._textBeatNodX + finaleShake.x;
+    const camShakeY = camT.offsetY * syncFrac + this._textBeatNodY + finaleShake.y;
     const camRotation = camT.rotation * syncFrac;
     const camCX = this.width / 2;
     const camCY = this.height / 2;
@@ -3394,6 +3409,29 @@ export class LyricDancePlayer {
     // Like a lens: the optics don't exist inside the scene, they shape how you see it.
     if (this._qualityTier < 3) {
       this.drawVignette();
+    }
+
+    if (songDuration >= 10) {
+      const finaleActive = this._finaleEffect.update(
+        tSec, this.songEndSec, songDuration,
+        this.ctx, this.canvas, this.width, this.height, this._effectiveDpr,
+      );
+      if (finaleActive) {
+        this.debugState.drawCalls = drawCalls;
+        return;
+      }
+
+      if (this._finaleEffect.phase === "reform") {
+        const reformP = this._finaleEffect.getReformProgress(tSec, this.songEndSec);
+        if (reformP >= 1) {
+          this._finaleEffect.reset();
+        } else {
+          this.ctx.globalAlpha = 1 - reformP;
+          this.ctx.fillStyle = "#000";
+          this.ctx.fillRect(0, 0, this.width, this.height);
+          this.ctx.globalAlpha = 1;
+        }
+      }
     }
 
     if (this.isExporting) this.drawWatermark();
