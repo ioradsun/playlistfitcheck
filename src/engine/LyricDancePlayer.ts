@@ -2879,7 +2879,7 @@ export class LyricDancePlayer {
 
   private getResolvedFont(): string {
     const resolved = resolveTypographyFromDirection(this.payload?.cinematic_direction);
-    return resolved.lyric.fontFamily;
+    return resolved.fontFamily;
   }
 
 

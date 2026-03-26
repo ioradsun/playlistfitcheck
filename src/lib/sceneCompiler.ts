@@ -11,7 +11,7 @@ import {
   type SongMotionIdentity,
 } from "@/engine/MotionIdentity";
 import { getEffectTier } from "@/engine/timeTiers";
-import { resolveTypographyFromDirection, type ResolvedTypography } from "@/lib/fontResolver";
+import { resolveTypographyFromDirection } from "@/lib/fontResolver";
 
 
 export type LineBeatMap = {
@@ -493,8 +493,8 @@ export interface CompiledPhraseGroup {
   exitEffect?: string;
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
-export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; heroFontFamily?: string; }; atmosphere: string; }
-export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; heroFontFamily: string; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
+export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
+export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
 
 const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
 
@@ -577,15 +577,14 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
   const beats = payload.beat_grid?.beats ?? [];
 
-  const resolvedTypo: ResolvedTypography = resolveTypographyFromDirection(payload.cinematic_direction);
+  const resolvedTypo = resolveTypographyFromDirection(payload.cinematic_direction);
   const baseTypography: TypographyProfile = {
-    fontFamily: resolvedTypo.lyric.fontFamily.replace(/"/g, '').split(',')[0].trim(),
-    fontWeight: resolvedTypo.lyric.fontWeight,
-    textTransform: resolvedTypo.lyric.textTransform,
-    letterSpacing: resolvedTypo.lyric.letterSpacing,
-    heroWeight: resolvedTypo.display.fontWeight,
+    fontFamily: resolvedTypo.fontFamily.replace(/"/g, '').split(',')[0].trim(),
+    fontWeight: resolvedTypo.fontWeight,
+    textTransform: resolvedTypo.textTransform,
+    letterSpacing: resolvedTypo.letterSpacing,
+    heroWeight: resolvedTypo.heroWeight,
   };
-  const heroFontFamily = resolvedTypo.display.fontFamily.replace(/"/g, '').split(',')[0].trim();
 
   // Create measurement context
   let measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -682,7 +681,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     endRatio: chapter.endRatio ?? 1,
     targetZoom: distanceToZoom['Medium'] ?? 1.0,
     emotionalIntensity: chapter.emotionalIntensity ?? 0.5,
-    typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform, heroFontFamily },
+    typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform },
     atmosphere: chapter.atmosphere ?? (payload.cinematic_direction as any)?.atmosphere ?? 'cinematic',
   }));
 
@@ -748,7 +747,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         layoutWidth: pos.width,
         wordStart: snapToBeat(wm.start, beats),
         fontWeight: (wm.isHeroWord || (Math.max(0, wm.end - wm.start) >= 0.5)) ? baseTypography.heroWeight : baseTypography.fontWeight,
-        fontFamily: (wm.isHeroWord || (Math.max(0, wm.end - wm.start) >= 0.5)) ? heroFontFamily : baseTypography.fontFamily,
+        fontFamily: baseTypography.fontFamily,
         isHeroWord: wm.isHeroWord === true
           || (wm.directive as any)?.isolation === true
           || (Math.max(0, wm.end - wm.start) >= 0.5),
@@ -806,7 +805,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     visualMode,
     baseFontFamily: baseTypography.fontFamily,
     baseFontWeight: baseTypography.fontWeight,
-    heroFontFamily,
     baseTextTransform: baseTypography.textTransform,
     palettes,
     animParams,
