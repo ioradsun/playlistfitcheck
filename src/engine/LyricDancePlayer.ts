@@ -4597,7 +4597,8 @@ export class LyricDancePlayer {
     //   Beat 2:            sway right + dip  (0.7, 0.3)
     //   Beat 3:            smaller down       (0, 0.8)
     //   Beat 4:            sway left + dip   (-0.7, 0.3)
-    const barPos = beatIndex >= 0 ? beatIndex % 4 : 0;
+    const conductorBeatIdx = beatState?.beatIndex ?? -1;
+    const barPos = conductorBeatIdx >= 0 ? conductorBeatIdx % 4 : 0;
     let nodDirX = 0;
     let nodDirY = 1.0;
     if (barPos === 1)      { nodDirX = 0.7; nodDirY = 0.3; }
