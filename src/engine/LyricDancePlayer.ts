@@ -4134,70 +4134,17 @@ export class LyricDancePlayer {
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const sections = (cd?.sections as any[]) ?? [];
     this._kenBurnsParams = this.chapterImages.map((_, i) => {
-      const seed = (i * 2654435761) >>> 0;
-      const s = (v: number) => ((seed * v) & 0xFFFF) / 0xFFFF;
-      const sectionMood = sections[i]?.visualMood as string | undefined;
-      const grade = getMoodGrade(sectionMood);
-      const intent = grade.motionIntent;
-
-      let zoomStart = 1.06;
-      let zoomEnd = 1.06;
-      let panStartX = 0;
-      let panStartY = 0;
-      let panEndX = 0;
-      let panEndY = 0;
-
-      switch (intent) {
-        case 'push-in':
-          zoomStart = 1.06; zoomEnd = 1.14;
-          panStartX = (s(17) - 0.5) * 0.03; panStartY = (s(31) - 0.5) * 0.02;
-          break;
-        case 'pull-out':
-          zoomStart = 1.14; zoomEnd = 1.06;
-          panEndX = (s(53) - 0.5) * 0.03; panEndY = (s(71) - 0.5) * 0.02;
-          break;
-        case 'drift-up':
-          zoomStart = 1.08; zoomEnd = 1.10;
-          panStartY = 0.03; panEndY = -0.03;
-          panStartX = (s(17) - 0.5) * 0.01; panEndX = (s(53) - 0.5) * 0.01;
-          break;
-        case 'drift-down':
-          zoomStart = 1.08; zoomEnd = 1.10;
-          panStartY = -0.03; panEndY = 0.03;
-          panStartX = (s(17) - 0.5) * 0.01; panEndX = (s(53) - 0.5) * 0.01;
-          break;
-        case 'drift-lateral': {
-          const leftToRight = i % 2 === 0;
-          zoomStart = 1.08; zoomEnd = 1.10;
-          panStartX = leftToRight ? -0.04 : 0.04;
-          panEndX = leftToRight ? 0.04 : -0.04;
-          panStartY = (s(31) - 0.5) * 0.015; panEndY = (s(71) - 0.5) * 0.015;
-          break;
-        }
-        case 'slow-zoom':
-          zoomStart = 1.06; zoomEnd = 1.15;
-          panStartX = (s(17) - 0.5) * 0.02; panStartY = (s(31) - 0.5) * 0.015;
-          panEndX = panStartX * 0.3; panEndY = panStartY * 0.3;
-          break;
-        case 'breathing':
-          zoomStart = 1.08; zoomEnd = 1.10;
-          panStartX = (s(17) - 0.5) * 0.015; panStartY = (s(31) - 0.5) * 0.015;
-          panEndX = -panStartX; panEndY = -panStartY;
-          break;
-        case 'handheld':
-          zoomStart = 1.07; zoomEnd = 1.09;
-          panStartX = (s(17) - 0.5) * 0.04; panStartY = (s(31) - 0.5) * 0.03;
-          panEndX = (s(53) - 0.5) * 0.04; panEndY = (s(71) - 0.5) * 0.03;
-          break;
-        case 'stable':
-        default:
-          zoomStart = 1.07; zoomEnd = 1.08;
-          panStartX = (s(17) - 0.5) * 0.01; panStartY = (s(31) - 0.5) * 0.01;
-          panEndX = (s(53) - 0.5) * 0.01; panEndY = (s(71) - 0.5) * 0.01;
-          break;
-      }
-
-      return { zoomStart, zoomEnd, panStartX, panStartY, panEndX, panEndY };
+      // Center-zoom only — no panning. Pulse enlarges, never shows edges.
+      // zoomStart > 1.0 ensures the image is always overscanned.
+      // zoomEnd slightly higher = gentle outward drift over the section.
+      return {
+        zoomStart: 1.08,
+        zoomEnd: 1.12,
+        panStartX: 0,
+        panStartY: 0,
+        panEndX: 0,
+        panEndY: 0,
+      };
     });
   }
 
@@ -4675,13 +4622,9 @@ export class LyricDancePlayer {
     // ═══ DIRECTIONAL PIVOT: slow sine pendulum ═══
     // One continuous swing — ~21 seconds per full cycle.
     // Barely perceptible drift. Like rocking a baby.
-    const songTime = Math.max(0, tSec - scene.songStartSec);
-    const targetPivotX = Math.sin(songTime * 0.3) * this.width * 0.006;
-    const targetPivotY = 0;
-
-    // EMA smooth — ultra-gentle glide
-    this._bgZoomPivotX += (targetPivotX - this._bgZoomPivotX) * 0.04;
-    this._bgZoomPivotY += (targetPivotY - this._bgZoomPivotY) * 0.04;
+    // Pulse from center only — no directional drift
+    this._bgZoomPivotX = 0;
+    this._bgZoomPivotY = 0;
 
     // Text stays still — background zoom drives the rhythm.
     this._textBeatNodX = 0;
