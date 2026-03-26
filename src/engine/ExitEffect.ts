@@ -74,11 +74,11 @@ export class ExitEffect {
     canvasW: number,
     canvasH: number,
   ): void {
-    void currentTime;
     if (!prevGroup) return;
 
     const gap = nextGroupStart - prevGroup.end;
-    if (gap < MIN_EXIT_DURATION) {
+    const remainingGap = nextGroupStart - currentTime;
+    if (gap < MIN_EXIT_DURATION || remainingGap < 0.1) {
       this._active = false;
       return;
     }
@@ -93,8 +93,8 @@ export class ExitEffect {
 
     this._effectType = effect;
     this._active = true;
-    this._startTime = prevGroup.end;
-    this._duration = Math.min(MAX_EXIT_DURATION, gap * 0.8);
+    this._startTime = currentTime;
+    this._duration = Math.min(MAX_EXIT_DURATION, Math.max(0.15, remainingGap * 0.85));
     this._canvasW = canvasW;
     this._canvasH = canvasH;
     this._particles = [];
