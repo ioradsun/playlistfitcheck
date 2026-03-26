@@ -3148,17 +3148,17 @@ export class LyricDancePlayer {
       this._bgLastBakeMs = nowMsBg;
     }
 
-    // ═══ BACKGROUND: beat-synced zoom pulse + counter-sway ═══
-    // Zoom from center on beat. Counter-sway: background drifts opposite
-    // to text nod at 30% magnitude — creates depth/parallax illusion.
+    // ═══ BACKGROUND: beat-synced zoom pulse + parallax sway ═══
+    // Zoom from center on beat. Parallax: background drifts in SAME direction
+    // as text nod at 40% magnitude — same camera, background is farther away.
     if (this._bgSnapshot) {
       const dpr = this._effectiveDpr;
       const cx = (this.width / 2) * dpr;
       const cy = (this.height / 2) * dpr;
       const zoom = this._bgPulseZoom;
-      // Counter-sway: inverted text nod × 0.3 (background is "farther away")
-      const swayX = -this._textBeatNodX * 0.3 * dpr;
-      const swayY = -this._textBeatNodY * 0.3 * dpr;
+      // Parallax: same direction as text nod × 0.4 (far layer moves less)
+      const swayX = this._textBeatNodX * 0.4 * dpr;
+      const swayY = this._textBeatNodY * 0.4 * dpr;
 
       this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       this.ctx.save();
