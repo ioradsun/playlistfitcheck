@@ -14,7 +14,7 @@ export function PageLayout({ children, title, subtitle, headerRight }: PageLayou
     <>
       <AppSidebar />
       <SidebarInset className="flex flex-col h-svh overflow-hidden">
-        <header className="sticky top-0 z-40 flex items-center gap-3 h-12 border-b border-border bg-background/80 backdrop-blur-md px-3" style={{ paddingTop: 'env(safe-area-inset-top, 0px)', minHeight: 'calc(3rem + env(safe-area-inset-top, 0px))' }}>
+        <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-border bg-background/80 backdrop-blur-md px-3" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 0px)', minHeight: 'calc(3rem + max(env(safe-area-inset-top, 0px), 0px))', paddingLeft: 'max(env(safe-area-inset-left, 0px), 12px)' }}>
           <SidebarTrigger className="md:hidden" />
           {subtitle && (
             <span className="font-mono text-[11px] tracking-widest text-primary">
