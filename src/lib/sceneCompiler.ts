@@ -498,11 +498,7 @@ export interface CompiledPhraseGroup {
   exitCharacter?: string;
   vibrateOnHold?: boolean;
   elementalWash?: boolean;
-  /** verse | chorus | bridge | outro — from AI */
-  sectionLabel?: string;
-  /** Chorus repeat number (1 = first time, 2 = second, etc.) */
-  chorusRepeat?: number;
-  /** AI-selected exit animation type */
+  /** AI-chosen exit effect — passed to ExitEffect renderer */
   exitEffect?: string;
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
@@ -789,24 +785,10 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       exitCharacter: (group as any).exitCharacter ?? undefined,
       vibrateOnHold: (group as any).vibrateOnHold ?? false,
       elementalWash: (group as any).elementalWash ?? false,
-      // Exit effect from AI + chorus flag
-      sectionLabel: matchPhrase?.isChorus ? 'chorus' : undefined,
+      // Exit effect from AI
       exitEffect: matchPhrase?.exitEffect ?? undefined,
     };
   }).sort((a, b) => a.start - b.start);
-
-  // Compute chorus repeat numbers
-  let chorusCount = 0;
-  let lastWasChorus = false;
-  for (const group of compiledGroups) {
-    if (group.sectionLabel === 'chorus') {
-      if (!lastWasChorus) chorusCount++;
-      group.chorusRepeat = chorusCount;
-      lastWasChorus = true;
-    } else {
-      lastWasChorus = false;
-    }
-  }
 
   const beatEvents: BeatEvent[] = beats.map((time) => ({ time, springVelocity: 0.4, glowMax: 0.3 }));
 

@@ -132,32 +132,10 @@ export function computeConfidence(section: AudioSection): number {
 
 function deriveHeuristicLabel(
   section: AudioSection,
-  roleCounters: Partial<Record<SectionRole, number>>,
-  chorusCount: number,
+  _roleCounters: Partial<Record<SectionRole, number>>,
+  _chorusCount: number,
 ): string {
-  const nextCount = (roleCounters[section.role] ?? 0) + 1;
-  roleCounters[section.role] = nextCount;
-
-  switch (section.role) {
-    case "intro":
-      return "Intro";
-    case "outro":
-      return "Outro";
-    case "bridge":
-      return "Bridge";
-    case "prechorus":
-      return "Pre-Chorus";
-    case "chorus":
-      return chorusCount > 1 ? `Chorus ${nextCount}` : "Chorus";
-    case "verse":
-      return `Verse ${nextCount}`;
-    case "drop":
-      return "Drop";
-    case "breakdown":
-      return "Breakdown";
-    default:
-      return `Section ${section.index + 1}`;
-  }
+  return `Section ${section.index + 1}`;
 }
 
 export function useLyricSections(

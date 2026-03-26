@@ -200,6 +200,61 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
     motionIntent: 'slow-zoom',
     beatBrightnessGain: 0.06,
   },
+
+  ethereal: {
+    brightness: 0.58,
+    saturation: 0.35,
+    contrast: 0.85,
+    temperature: -0.15,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.05, size: 1.0 },
+    motionIntent: 'drift-up',
+    beatBrightnessGain: 0.03,
+  },
+
+  haunted: {
+    brightness: 0.25,
+    saturation: 0.25,
+    contrast: 1.2,
+    temperature: -0.35,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.15, size: 1.8 },
+    motionIntent: 'handheld',
+    beatBrightnessGain: 0.03,
+  },
+
+  celestial: {
+    brightness: 0.62,
+    saturation: 0.50,
+    contrast: 0.9,
+    temperature: -0.1,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.0, size: 0 },
+    motionIntent: 'slow-zoom',
+    beatBrightnessGain: 0.06,
+  },
+
+  noir: {
+    brightness: 0.22,
+    saturation: 0.15,
+    contrast: 1.4,
+    temperature: -0.3,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.15, size: 1.2 },
+    motionIntent: 'stable',
+    beatBrightnessGain: 0.03,
+  },
+
+  rebellious: {
+    brightness: 0.42,
+    saturation: 0.85,
+    contrast: 1.3,
+    temperature: 0.1,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.1, size: 1.0 },
+    motionIntent: 'handheld',
+    beatBrightnessGain: 0.15,
+  },
 };
 
 /** Default grade when no visualMood is set */

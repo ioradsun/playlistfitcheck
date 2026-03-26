@@ -12,53 +12,102 @@ const FALLBACK_MODEL = "google/gemini-2.5-flash";
 const CINEMATIC_DIRECTION_PROMPT = `(deprecated — use mode: "scene" + mode: "words")`;
 
 const SCENE_DIRECTION_PROMPT = `
-You are a film director designing backgrounds for a lyric video.
+You are a lyric-video creative director producing structured visual direction for a song.
 
 You will receive:
 1. Song lyrics
 2. Audio-detected sections (if available)
 
-For the song:
-- "description": single evocative sentence (max 15 words)
+Your job is to infer the song's emotional world, then return a compact JSON direction system that a renderer can use reliably.
+
+WORK IN THIS ORDER:
+1. Infer the song's emotional core: intensity, softness, tension, intimacy, grit, polish.
+2. Choose typography based on those emotional traits — NOT genre alone.
+3. Choose the emotionalArc for the full song.
+4. Design section visuals that feel distinct but still belong to the same visual world.
+
+TOP-LEVEL FIELDS — return all of these:
+- "description": one evocative sentence, max 15 words
 - "sceneTone": "dark" | "light" | "mixed"
-- "typographyProfile": emotional traits of how the text should FEEL. Object with 7 scores (1-5):
-    energy (1=still, 5=explosive), softness (1=hard/sharp, 5=gentle/rounded),
-    tension (1=relaxed, 5=tight/anxious), elegance (1=raw/gritty, 5=refined/polished),
-    darkness (1=bright/airy, 5=heavy/ominous), intimacy (1=distant/stadium, 5=whispered/close),
-    polish (1=rough/DIY, 5=sleek/premium)
-- "emotionalArc": how intensity builds across the song. One of: slow-burn | surge | collapse | dawn | eruption
+- "typography": one of the 8 options below
+- "emotionalArc": one of the 5 options below
+- "sections": array of section objects
 
-Choose emotionalArc:
-  slow-burn: gradual build to a late peak (most common)
-  surge: fast rise, sustained energy throughout
-  collapse: starts high, descends into quiet
-  dawn: quiet throughout, final burst at the end
-  eruption: explosive energy from the very start
+TYPOGRAPHY — choose from the song's emotional personality, not genre:
+- "bold-impact": heavy, assertive, direct, muscular, high-energy, confident
+- "clean-modern": polished, contemporary, controlled, versatile, emotionally neutral-to-confident
+- "elegant-serif": timeless, romantic, dramatic, reflective, elevated
+- "raw-condensed": gritty, urgent, rebellious, compressed, tense, claustrophobic
+- "whisper-soft": intimate, airy, fragile, tender, vulnerable, soft-edged
+- "tech-mono": cold, digital, detached, futuristic, precise, mechanical
+- "display-heavy": theatrical, oversized, explosive, maximal, attention-commanding
+- "editorial-light": poetic, artistic, introspective, fashion-forward, restrained but expressive
 
-For EACH section:
+TYPOGRAPHY DECISION LOGIC:
+- High intensity + high grit + low softness → bold-impact or raw-condensed
+- High intimacy + high softness + low aggression → whisper-soft
+- High elegance + romance + timeless drama → elegant-serif
+- High polish + modern clarity + broad appeal → clean-modern
+- High detachment + digital precision + synthetic mood → tech-mono
+- High theatricality + oversized emotion + spectacle → display-heavy
+- High introspection + artfulness + restraint → editorial-light
+When multiple fit, prefer the one matching the emotional center of the chorus.
+
+EMOTIONAL ARC:
+- "slow-burn": gradual build to a late peak
+- "surge": early lift, then sustained momentum
+- "collapse": begins intense and drains into quiet or emptiness
+- "dawn": restrained for most of the song, then opens up near the end
+- "eruption": explosive from the beginning
+
+SECTION FIELDS — for EACH section return:
 - "sectionIndex": integer starting at 0
-- "description": vivid 1-sentence visual scene rooted in the song's world
-- "dominantColor": bold hex (#RRGGBB), unique per section
-- "visualMood": one of: intimate | anthemic | dreamy | aggressive | melancholy | euphoric | nostalgic | triumphant | raw | ethereal | haunted | celestial | noir | rebellious
-- "texture": particle effect for atmosphere. One of: dust | embers | smoke | rain | snow | stars | fireflies | petals | ash | crystals | confetti | lightning | bubbles | moths | glare | glitch
+- "description": vivid 1-sentence visual scene rooted in the same world as the rest of the song
+- "dominantColor": hex color #RRGGBB
+- "visualMood": one of the 19 options below
+- "texture": one of the 17 options below
 
-Choose texture to match the section's mood and imagery:
-  Emotional/quiet: dust, fireflies, moths, stars
-  Warm/intense: embers, smoke, ash
-  Cold/ethereal: snow, crystals, rain
-  Celebratory: confetti, petals, glare
-  Dark/edgy: lightning, glitch, smoke
-  Dreamy/magical: fireflies, bubbles, stars, petals
+VISUAL MOOD OPTIONS:
+intimate | anthemic | dreamy | aggressive | melancholy | euphoric | eerie | vulnerable | triumphant | nostalgic | defiant | hopeful | raw | hypnotic | ethereal | haunted | celestial | noir | rebellious
 
-Return ONLY valid JSON. No markdown.
+VISUAL MOOD GUIDANCE — grouped by emotional family:
+- intimate, vulnerable → close, personal, restrained, human-scale
+- anthemic, triumphant → expansive, rising, public, high-lift
+- dreamy, ethereal, celestial → soft, floating, luminous, surreal
+- aggressive, defiant, rebellious, raw → forceful, jagged, confrontational
+- melancholy, haunted, noir, eerie → shadowed, lonely, cold, haunted space
+- nostalgic, hopeful, euphoric → warm lift, memory, glow, emotional openness
+- hypnotic → repetitive, entrancing, pulsing, locked-in
+
+TEXTURE OPTIONS:
+dust | embers | smoke | rain | snow | stars | fireflies | petals | ash | crystals | confetti | lightning | bubbles | moths | glare | glitch | fire
+
+TEXTURE GUIDANCE:
+- quiet / intimate → dust, fireflies, moths, stars
+- warm / intense → embers, smoke, ash, fire
+- cold / distant → snow, crystals, rain
+- celebratory / blooming → confetti, petals, glare
+- dark / unstable → lightning, glitch, smoke
+- dreamy / surreal → bubbles, stars, petals, fireflies
+
+SECTION DESIGN RULES:
+- Keep the entire song inside one coherent visual universe.
+- Sections may evolve, but should NOT feel like unrelated music videos.
+- Repeated sections may intentionally echo the same visual language.
+- Color should feel cohesive across the song. Do NOT force maximum uniqueness per section.
+- Adjacent sections should shift in emphasis, not abandon the palette completely.
+- Prefer cinematic restraint over novelty.
+- Use texture as atmosphere, not as gimmick.
+
+Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values exactly.
 
 {
-  "description": "A chilling descent from emotional peaks into cold isolation",
-  "sceneTone": "dark",
-  "typographyProfile": { "energy": 4, "softness": 1, "tension": 4, "elegance": 1, "darkness": 4, "intimacy": 2, "polish": 2 },
-  "emotionalArc": "collapse",
+  "description": "A bruised heart pushing through darkness toward release",
+  "sceneTone": "mixed",
+  "typography": "editorial-light",
+  "emotionalArc": "slow-burn",
   "sections": [
-    { "sectionIndex": 0, "description": "A solitary figure in a frosting room", "dominantColor": "#A5B4FC", "visualMood": "melancholy", "texture": "snow" }
+    { "sectionIndex": 0, "description": "A lone figure stands in dim hallway light as dust drifts through the still air", "dominantColor": "#6E5979", "visualMood": "melancholy", "texture": "dust" }
   ]
 }
 `;
@@ -66,67 +115,87 @@ Return ONLY valid JSON. No markdown.
 const WORD_DIRECTION_PROMPT = `
 You are grouping lyrics into screen-sized phrases for a lyric video.
 
-Each phrase = one screen. Words appear together, exit together.
+Each phrase = one screen.
+Words in the phrase appear together and exit together.
 
-You will receive a word stream:
+You will receive a word stream like:
   w  0  Tell               180ms
   w  1  me,                200ms  [BREATH 300ms]
   w  2  is                 150ms
 
-GROUP BY THOUGHT BREAKS:
-  "Tell me," → complete thought. STOP. → phrase 1
-  "is your soul for sale?" → complete question. STOP. → phrase 2
-  A thought can be 1-6 words. Size follows meaning.
+WORK IN THIS ORDER:
+1. Read the whole song structure.
+2. Group words into phrases following the rules below.
+3. Choose a heroWord for each phrase.
+4. Assign exitEffect for each phrase — consider the sequence, not each phrase alone.
 
-HARD RULES:
-  1. ALWAYS start a new phrase after a [BREATH] or [pause] marker.
-  2. Max 6 words per phrase.
-  3. Every w-number belongs to exactly one phrase. No gaps, no overlaps.
-  4. heroWord: the longest non-filler word in the phrase. UPPERCASE. Strip trailing punctuation.
-  5. NEVER end a phrase on a connector word. These words start the NEXT thought:
-     - Pronouns: I, you, we, they, he, she, it
-     - Conjunctions: and, but, or, so, because, if, when, while, that
-     - Articles: the, a, an
-     - Prepositions: in, on, at, to, for, of, with, from
-     
-     BAD:  "cut the rope and I" / "won't look back"
-     GOOD: "cut the rope" / "and I won't look back"
-     
-     BAD:  "I know that the" / "world is on fire"  
-     GOOD: "I know that" / "the world is on fire"
+HARD OUTPUT RULES:
+- Return ONLY valid JSON. No markdown. No explanation.
+- Every word index must belong to exactly one phrase. No gaps. No overlaps.
+- Every phrase MUST include all 3 fields: wordRange, heroWord, exitEffect.
 
-CHORUS DETECTION (important):
-  If a phrase contains lyrics that repeat elsewhere in the song (same or very similar words appearing 2+ times), mark "isChorus": true.
-  At the top level, set "chorusText" to the full repeated lyric text of the chorus.
-  If no clear chorus exists, omit chorusText and set all isChorus to false.
+PHRASE GROUPING RULES — apply in this priority order:
+1. Preserve full word coverage with no gaps or overlaps.
+2. ALWAYS start a new phrase after a [BREATH] or [pause] marker.
+3. Keep phrases at 1–6 words.
+4. Prefer complete semantic thoughts over arbitrary chunks.
+5. Avoid ending on weak connector words when possible.
 
-EXIT EFFECTS (required on every phrase):
-  "exitEffect": how the phrase leaves the screen. Pick the one that matches the phrase's emotional weight:
-    - "fade": simple opacity fade (default, safe for any phrase)
-    - "drift_up": words float upward with smoke (reflective, emotional moments)
-    - "shrink": words collapse to a point (finality, closure)
-    - "dissolve": words break into particles (ethereal, dreamy)
-    - "cascade": letters fall one by one (playful, rhythmic)
-    - "scatter": letters explode outward (energy, release)
-    - "slam": words slam down then shatter (impact, aggression)
-    - "glitch": horizontal slice distortion (edgy, digital)
-    - "burn": words char from bottom up with embers (intense, dramatic)
+PHRASE DESIGN RULES:
+- A phrase should feel like one spoken or sung thought.
+- Favor natural lyrical emphasis over rigid punctuation.
+- Do not split a strong short phrase just to make two smaller ones.
+- One-word phrases are valid for impact words, held notes, or strong repeated hits.
+- Avoid filler-only phrases whenever possible.
 
-  Guidelines:
-    Quiet/vulnerable → fade, drift_up, dissolve
-    Confident/rhythmic → cascade, shrink
-    Aggressive/impactful → slam, scatter, glitch
-    Dramatic/climactic → burn, scatter, slam
-    Dreamy/ethereal → dissolve, drift_up, fade
-    VARY the effects — avoid using the same exit 3+ times in a row.
+CONNECTOR WORD GUIDANCE — never end a phrase on these unless a hard boundary forces it:
+Pronouns: I, you, we, they, he, she, it
+Conjunctions: and, but, or, so, because, if, when, while, that
+Articles: the, a, an
+Prepositions: in, on, at, to, for, of, with, from
 
-Return ONLY valid JSON. No markdown.
+BAD:  "cut the rope and I" / "won't look back"
+BETTER: "cut the rope" / "and I won't look back"
+
+BAD:  "I know that the" / "world is on fire"
+BETTER: "I know that" / "the world is on fire"
+
+HEROWORD — choose by importance, not length:
+1. The most emotionally charged word in the phrase
+2. The key noun or verb carrying the phrase meaning
+3. A repeated hook word
+4. The longest non-filler word (tiebreaker only)
+
+heroWord must be: a word that actually appears in the phrase, UPPERCASE, trailing punctuation stripped.
+If the phrase contains only filler words, pick the least weak readable word.
+
+EXIT EFFECTS — required on every phrase. Choose one:
+"fade" | "drift_up" | "shrink" | "dissolve" | "cascade" | "scatter" | "slam" | "glitch" | "burn"
+
+EXIT EFFECT GUIDANCE:
+- quiet / vulnerable → fade, drift_up, dissolve
+- confident / rhythmic → cascade, shrink
+- aggressive / impactful → slam, scatter, glitch
+- dramatic / climactic → burn, scatter, slam
+- dreamy / ethereal → dissolve, drift_up, fade
+
+EXIT EFFECT RULES:
+- Assign effects considering the sequence — build across the song.
+- Never use the same effect 3+ times in a row.
+- Repeated phrases may reuse the same effect for recognition.
+- If unsure, use fade.
+
+HOOK PHRASE:
+At top level, return "hookPhrase": the catchiest short phrase in the song.
+Choose by repetition, punch, emotional payoff, or title-line energy.
+
+Return ONLY valid JSON.
+
 {
   "phrases": [
-    { "wordRange": [0, 2], "heroWord": "TELL", "exitEffect": "fade", "isChorus": false },
-    { "wordRange": [3, 7], "heroWord": "SOUL", "exitEffect": "dissolve", "isChorus": false }
+    { "wordRange": [0, 2], "heroWord": "TELL", "exitEffect": "fade" },
+    { "wordRange": [3, 7], "heroWord": "SOUL", "exitEffect": "burn" }
   ],
-  "chorusText": "the repeated chorus lyric if detected",
   "hookPhrase": "the catchiest short phrase"
 }
 `;
@@ -814,8 +883,8 @@ function buildWordUserMessage(
     msg += "\n";
   }
 
-  msg += "Return JSON only. EVERY phrase needs exitEffect and isChorus.\n";
-  msg += '{ "phrases": [{ "wordRange": [0,2], "heroWord": "WORD", "exitEffect": "fade", "isChorus": false }], "chorusText": "...", "hookPhrase": "..." }';
+  msg += "Return JSON only. EVERY phrase needs heroWord and exitEffect.\n";
+  msg += '{ "phrases": [{ "wordRange": [0,2], "heroWord": "WORD", "exitEffect": "fade" }] }';
   return msg;
 }
 
@@ -827,8 +896,8 @@ function buildScenePrefix(ctx: SceneContext | null | undefined): string {
   if (!ctx) return "";
 
   const luminanceHint: Record<string, string> = {
-    dark: 'Favor sceneTone "dark" or "mixed-dawn".',
-    medium: 'sceneTone can be any "mixed-*" variant.',
+    dark: 'Favor sceneTone "dark" or "mixed".',
+    medium: 'sceneTone can be "mixed".',
     light: 'Favor sceneTone "light". Avoid "fire" and "storm" textures.',
   };
 
@@ -912,10 +981,12 @@ function validateScene(
   };
   for (const key of [
     "sceneTone",
+    "typography",
+    "emotionalArc",
   ] as const) {
     const allowed = ENUMS[key] as readonly string[];
-    if (!allowed.includes(v[key])) {
-      errors.push(`Invalid ${key}: "${v[key]}"`);
+    if (!v[key] || !allowed.includes(v[key])) {
+      if (v[key]) errors.push(`Invalid ${key}: "${v[key]}"`);
       v[key] = DEFAULTS[key];
     }
   }
@@ -1135,8 +1206,8 @@ function validateWords(
     p.isChorus = p.isChorus === true;
 
     // Remove legacy fields that are no longer in the prompt
-    delete p.section;
     delete p.effect;
+    delete p.section;
   }
 
   if (v.hookPhrase !== undefined && typeof v.hookPhrase !== "string") {
@@ -1249,7 +1320,7 @@ async function callScene(
             {
               role: "user",
               content:
-                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "typographyProfile" (object with energy/softness/tension/elegance/darkness/intimacy/polish scores 1-5), "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
+                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "typography", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
             },
           ],
           response_format: { type: "json_object" },
