@@ -9,6 +9,7 @@ import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
+import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
@@ -329,94 +330,95 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   useEffect(() => {
     if (!player || !playerReady) return;
-    player.setTextVerticalBias(isBattleMode ? 0 : 60);
-  }, [player, playerReady, isBattleMode]);
+    player.setTextVerticalBias(0);
+  }, [player, playerReady]);
 
   const effectiveShowCover = showCover;
   void artistName;
   void playerEvicted;
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full h-full overflow-hidden"
-      style={{ background: "#0a0a0a" }}
-      onClick={(e) => {
-        if (!effectiveShowCover && !isWaiting) toggleMute(e);
-      }}
-    >
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-      <canvas
-        ref={textCanvasRef}
-        className="absolute inset-0 w-full h-full pointer-events-none"
-      />
+    <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
+      <div
+        ref={containerRef}
+        className="relative flex-1 min-h-0 overflow-hidden"
+        onClick={(e) => {
+          if (!effectiveShowCover && !isWaiting) toggleMute(e);
+        }}
+      >
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+        <canvas
+          ref={textCanvasRef}
+          className="absolute inset-0 w-full h-full pointer-events-none"
+        />
 
-      {!isBattleMode && (
-        <AnimatePresence>
-          {(effectiveShowCover || isWaiting) && (
-            <motion.div
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="absolute inset-0"
-            >
-              <LyricDanceCover
-                songName={songTitle}
-                waiting={isWaiting}
-                coverImageUrl={fetchedData?.section_images?.[0] ?? coverImageUrl}
-                hideBackground={playerReady}
-                badge={null}
-                onListen={(e) => {
-                  userActivatedRef.current = true;
-                  handleListenNow(e);
-                }}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
-
-      {!isBattleMode && playerReady && !reactionPanelOpen && (
-        <div
-          className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <span />
-          <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
-            <button
-              onClick={toggleMute}
-              className="p-1 text-white/40 hover:text-white/70 transition-colors"
-              aria-label={muted ? "Unmute" : "Mute"}
-            >
-              {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-            </button>
-            <button
-              onClick={handleReplay}
-              className="p-1 text-white/40 hover:text-white/70 transition-colors"
-              aria-label="Replay"
-            >
-              <RotateCcw size={14} />
-            </button>
-            {showExpandButton && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.open(lyricDanceUrl, "_blank");
-                }}
-                className="p-1 text-white/40 hover:text-white/70 transition-colors"
-                aria-label="Expand"
+        {!isBattleMode && (
+          <AnimatePresence>
+            {(effectiveShowCover || isWaiting) && (
+              <motion.div
+                initial={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="absolute inset-0"
               >
-                <Maximize2 size={14} />
-              </button>
+                <LyricDanceCover
+                  songName={songTitle}
+                  waiting={isWaiting}
+                  coverImageUrl={fetchedData?.section_images?.[0] ?? coverImageUrl}
+                  hideBackground={playerReady}
+                  badge={null}
+                  onListen={(e) => {
+                    userActivatedRef.current = true;
+                    handleListenNow(e);
+                  }}
+                />
+              </motion.div>
             )}
+          </AnimatePresence>
+        )}
+
+        {!isBattleMode && playerReady && !reactionPanelOpen && (
+          <div
+            className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span />
+            <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
+              <button
+                onClick={toggleMute}
+                className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                aria-label={muted ? "Unmute" : "Mute"}
+              >
+                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+              </button>
+              <button
+                onClick={handleReplay}
+                className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                aria-label="Replay"
+              >
+                <RotateCcw size={14} />
+              </button>
+              {showExpandButton && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(lyricDanceUrl, "_blank");
+                  }}
+                  className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                  aria-label="Expand"
+                >
+                  <Maximize2 size={14} />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {!isBattleMode && !reactionPanelOpen && (
         <div
-          className="absolute bottom-0 left-0 right-0 z-[450]"
-          style={{ background: "rgba(10, 10, 10, 0.85)" }}
+          className="w-full flex-shrink-0"
+          style={{ background: "#0a0a0a" }}
           onClick={(e) => e.stopPropagation()}
         >
           {reelsMode && artistName && effectiveShowCover && (
@@ -450,7 +452,17 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               </span>
             </div>
           )}
-          {/* Progress bar removed — in-canvas wick bar provides progress indication */}
+
+          {!effectiveShowCover && !isWaiting && playerReady && data && (
+            <LyricDanceProgressBar
+              player={player}
+              data={data}
+              onSeekStart={() => {}}
+              onSeekEnd={() => {}}
+              palette={palette.length ? palette : ["#ffffff", "#ffffff", "#ffffff"]}
+            />
+          )}
+
           <CardBottomBar
             variant={reelsMode ? "fullscreen" : "embedded"}
             votedSide={votedSide}
