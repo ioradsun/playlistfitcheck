@@ -22,36 +22,43 @@ Your job is to infer the song's emotional world, then return a compact JSON dire
 
 WORK IN THIS ORDER:
 1. Infer the song's emotional core: intensity, softness, tension, intimacy, grit, polish.
-2. Choose typography based on those emotional traits — NOT genre alone.
+2. Infer a font emotional profile (force/intimacy/polish/theatricality/era).
 3. Choose the emotionalArc for the full song.
 4. Design section visuals that feel distinct but still belong to the same visual world.
 
 TOP-LEVEL FIELDS — return all of these:
 - "description": one evocative sentence, max 15 words
 - "sceneTone": "dark" | "light" | "mixed"
-- "typography": one of the 8 options below
+- "fontProfile": object with 5 emotional axes (see below)
 - "emotionalArc": one of the 5 options below
 - "sections": array of section objects
 
-TYPOGRAPHY — choose from the song's emotional personality, not genre:
-- "bold-impact": heavy, assertive, direct, muscular, high-energy, confident
-- "clean-modern": polished, contemporary, controlled, versatile, emotionally neutral-to-confident
-- "elegant-serif": timeless, romantic, dramatic, reflective, elevated
-- "raw-condensed": gritty, urgent, rebellious, compressed, tense, claustrophobic
-- "whisper-soft": intimate, airy, fragile, tender, vulnerable, soft-edged
-- "tech-mono": cold, digital, detached, futuristic, precise, mechanical
-- "display-heavy": theatrical, oversized, explosive, maximal, attention-commanding
-- "editorial-light": poetic, artistic, introspective, fashion-forward, restrained but expressive
+FONT PROFILE — describe the song's typographic personality through emotional axes, not font names or styling choices.
 
-TYPOGRAPHY DECISION LOGIC:
-- High intensity + high grit + low softness → bold-impact or raw-condensed
-- High intimacy + high softness + low aggression → whisper-soft
-- High elegance + romance + timeless drama → elegant-serif
-- High polish + modern clarity + broad appeal → clean-modern
-- High detachment + digital precision + synthetic mood → tech-mono
-- High theatricality + oversized emotion + spectacle → display-heavy
-- High introspection + artfulness + restraint → editorial-light
-When multiple fit, prefer the one matching the emotional center of the chorus.
+Return a "fontProfile" object with these 5 fields:
+- "force": "low" | "medium" | "high" — how forceful, loud, aggressive the song feels
+- "intimacy": "low" | "medium" | "high" — how close, personal, confessional it feels
+- "polish": "raw" | "clean" | "elegant" — the surface texture of the production
+- "theatricality": "low" | "medium" | "high" — how much spectacle, drama, performance
+- "era": "timeless" | "modern" | "futuristic" — where it sits in time
+
+FONT PROFILE DECISION LOGIC:
+First ask about the song:
+- Is it soft or forceful?
+- Is it personal or public?
+- Is it rough or polished?
+- Is it understated or theatrical?
+- Does it feel classic, current, or futuristic?
+
+Examples:
+- Trap banger, aggressive, modern production → force: high, intimacy: low, polish: raw, theatricality: high, era: modern
+- Acoustic ballad, confessional, stripped-back → force: low, intimacy: high, polish: raw, theatricality: low, era: timeless
+- Pop anthem, polished, arena-sized → force: high, intimacy: low, polish: clean, theatricality: high, era: modern
+- R&B slow jam, intimate, lush production → force: low, intimacy: high, polish: elegant, theatricality: low, era: modern
+- Synthwave, detached, futuristic → force: medium, intimacy: low, polish: clean, theatricality: medium, era: futuristic
+- Art pop, expressive, theatrical → force: medium, intimacy: medium, polish: elegant, theatricality: high, era: modern
+
+Do NOT pick font names. Do NOT pick font families. Just describe the emotional personality. The system maps it to fonts.
 
 EMOTIONAL ARC:
 - "slow-burn": gradual build to a late peak
@@ -104,7 +111,7 @@ Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values
 {
   "description": "A bruised heart pushing through darkness toward release",
   "sceneTone": "mixed",
-  "typography": "editorial-light",
+  "fontProfile": { "force": "low", "intimacy": "high", "polish": "elegant", "theatricality": "low", "era": "timeless" },
   "emotionalArc": "slow-burn",
   "sections": [
     { "sectionIndex": 0, "description": "A lone figure stands in dim hallway light as dust drifts through the still air", "dominantColor": "#6E5979", "visualMood": "melancholy", "texture": "dust" }
@@ -278,75 +285,6 @@ const ENUMS = {
   texture: ["dust", "embers", "smoke", "rain", "snow", "stars", "fireflies", "petals", "ash", "crystals", "confetti", "lightning", "bubbles", "moths", "glare", "glitch", "fire"],
   emotionalArc: ["slow-burn", "surge", "collapse", "dawn", "eruption"],
 } as const;
-
-/**
- * Font trait catalog — each font has scores on the same 7 dimensions
- * the AI outputs. The resolver picks the font with the smallest distance.
- */
-const FONT_CATALOG: Array<{
-  key: string;
-  traits: { energy: number; softness: number; tension: number; elegance: number; darkness: number; intimacy: number; polish: number };
-}> = [
-  {
-    key: 'bold-impact', // Oswald — aggressive hooks, anthemic, confrontational
-    traits: { energy: 5, softness: 1, tension: 4, elegance: 1, darkness: 3, intimacy: 1, polish: 3 },
-  },
-  {
-    key: 'clean-modern', // Montserrat — modern pop, neutral clarity, versatile
-    traits: { energy: 3, softness: 3, tension: 2, elegance: 3, darkness: 2, intimacy: 3, polish: 5 },
-  },
-  {
-    key: 'elegant-serif', // Playfair Display — longing, heartbreak, cinematic romance
-    traits: { energy: 2, softness: 3, tension: 2, elegance: 5, darkness: 2, intimacy: 4, polish: 5 },
-  },
-  {
-    key: 'raw-condensed', // Barlow Condensed — raw energy, street, urgency
-    traits: { energy: 4, softness: 1, tension: 4, elegance: 1, darkness: 4, intimacy: 1, polish: 2 },
-  },
-  {
-    key: 'whisper-soft', // Nunito — vulnerable, tender, lullaby, acoustic
-    traits: { energy: 1, softness: 5, tension: 1, elegance: 2, darkness: 1, intimacy: 5, polish: 4 },
-  },
-  {
-    key: 'tech-mono', // JetBrains Mono — electronic, detached, digital, cold
-    traits: { energy: 3, softness: 1, tension: 3, elegance: 2, darkness: 3, intimacy: 1, polish: 4 },
-  },
-  {
-    key: 'display-heavy', // Bebas Neue — stadium anthems, bold statements, impact
-    traits: { energy: 5, softness: 1, tension: 3, elegance: 1, darkness: 2, intimacy: 1, polish: 3 },
-  },
-  {
-    key: 'editorial-light', // Cormorant Garamond — literary, nostalgic, sacred, introspective
-    traits: { energy: 1, softness: 4, tension: 1, elegance: 5, darkness: 1, intimacy: 4, polish: 5 },
-  },
-];
-
-/**
- * Score each font against the AI's trait profile using sum-of-squared-differences.
- * Lower score = better match. Returns the best font key.
- */
-function resolveTypographyFromProfile(
-  profile: Record<string, number>,
-): string {
-  const traitKeys = ['energy', 'softness', 'tension', 'elegance', 'darkness', 'intimacy', 'polish'] as const;
-  let bestKey = 'clean-modern';
-  let bestScore = Infinity;
-
-  for (const font of FONT_CATALOG) {
-    let score = 0;
-    for (const trait of traitKeys) {
-      const aiVal = typeof profile[trait] === 'number' ? Math.max(1, Math.min(5, Math.round(profile[trait]))) : 3;
-      const fontVal = font.traits[trait];
-      score += (aiVal - fontVal) * (aiVal - fontVal);
-    }
-    if (score < bestScore) {
-      bestScore = score;
-      bestKey = font.key;
-    }
-  }
-
-  return bestKey;
-}
 
 const LYRIC_FILLER = new Set([
   "the",
@@ -976,12 +914,10 @@ function validateScene(
 
   const DEFAULTS: Record<string, string> = {
     sceneTone: "dark",
-    typography: "clean-modern",
     emotionalArc: "slow-burn",
   };
   for (const key of [
     "sceneTone",
-    "typography",
     "emotionalArc",
   ] as const) {
     const allowed = ENUMS[key] as readonly string[];
@@ -991,19 +927,24 @@ function validateScene(
     }
   }
 
-  // typography — resolve from AI trait profile, or validate direct key, or default
-  if (v.typographyProfile && typeof v.typographyProfile === 'object') {
-    // AI returned emotional traits → score against font catalog
-    v.typography = resolveTypographyFromProfile(v.typographyProfile);
-  } else if (!v.typography || !(ENUMS.typography as readonly string[]).includes(v.typography)) {
-    // No profile and no valid direct key → default
-    v.typography = DEFAULTS.typography;
+  if (v.fontProfile && typeof v.fontProfile === 'object') {
+    const fp = v.fontProfile;
+    const VALID: Record<string, string[]> = {
+      force: ['low', 'medium', 'high'],
+      intimacy: ['low', 'medium', 'high'],
+      polish: ['raw', 'clean', 'elegant'],
+      theatricality: ['low', 'medium', 'high'],
+      era: ['timeless', 'modern', 'futuristic'],
+    };
+    for (const [key, allowed] of Object.entries(VALID)) {
+      if (!allowed.includes(fp[key])) {
+        fp[key] = key === 'polish' ? 'clean' : key === 'era' ? 'modern' : 'medium';
+      }
+    }
   }
-  // else: AI returned a valid direct key (backward compat with admin prompt overrides)
-
-  // emotionalArc — validate or default
-  if (!v.emotionalArc || !(ENUMS.emotionalArc as readonly string[]).includes(v.emotionalArc)) {
-    v.emotionalArc = DEFAULTS.emotionalArc;
+  if (v.typography && typeof v.typography === 'string') {
+    const allowed = ENUMS.typography as readonly string[];
+    if (!allowed.includes(v.typography)) delete v.typography;
   }
 
   if (typeof v.description === "string")
@@ -1320,7 +1261,7 @@ async function callScene(
             {
               role: "user",
               content:
-                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "typography", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
+                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "fontProfile", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
             },
           ],
           response_format: { type: "json_object" },

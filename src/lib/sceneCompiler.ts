@@ -11,6 +11,7 @@ import {
   type SongMotionIdentity,
 } from "@/engine/MotionIdentity";
 import { getEffectTier } from "@/engine/timeTiers";
+import { resolveTypographyFromDirection, type ResolvedTypography } from "@/lib/fontResolver";
 
 
 export type LineBeatMap = {
@@ -74,16 +75,6 @@ interface WordMetaEntry { word: string; start: number; end: number; clean: strin
 export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; phraseHeroWord?: string; }
 
 
-const TYPOGRAPHY_PROFILES: Record<string, TypographyProfile> = {
-  'bold-impact': { fontFamily: 'Oswald', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, heroWeight: 900 },
-  'clean-modern': { fontFamily: 'Montserrat', fontWeight: 600, textTransform: 'none', letterSpacing: 0.2, heroWeight: 700 },
-  'elegant-serif': { fontFamily: 'Playfair Display', fontWeight: 500, textTransform: 'none', letterSpacing: 0.15, heroWeight: 700 },
-  'raw-condensed': { fontFamily: 'Barlow Condensed', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.35, heroWeight: 800 },
-  'whisper-soft': { fontFamily: 'Nunito', fontWeight: 400, textTransform: 'none', letterSpacing: 0.25, heroWeight: 500 },
-  'tech-mono': { fontFamily: 'JetBrains Mono', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.4, heroWeight: 700 },
-  'display-heavy': { fontFamily: 'Bebas Neue', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, heroWeight: 800 },
-  'editorial-light': { fontFamily: 'Cormorant Garamond', fontWeight: 400, textTransform: 'none', letterSpacing: 0.1, heroWeight: 600 },
-};
 
 const FILLER_WORDS = new Set(['a','an','the','to','of','and','or','but','in','on','at','for','with','from','by','up','down','is','am','are','was','were','be','been','being','it','its','that','this','these','those','i','you','he','she','we','they']);
 const CONNECTOR_WORDS = new Set(['i', 'you', 'we', 'they', 'he', 'she', 'it', 'and', 'but', 'or', 'so', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by', 'if', 'when', 'while', 'that']);
@@ -502,8 +493,8 @@ export interface CompiledPhraseGroup {
   exitEffect?: string;
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
-export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
-export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
+export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; heroFontFamily?: string; }; atmosphere: string; }
+export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; heroFontFamily: string; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
 
 const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
 
@@ -586,7 +577,15 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
   const beats = payload.beat_grid?.beats ?? [];
 
-  const baseTypography = TYPOGRAPHY_PROFILES[((payload.cinematic_direction as any)?.typography as string) ?? 'clean-modern'] ?? TYPOGRAPHY_PROFILES['clean-modern'];
+  const resolvedTypo: ResolvedTypography = resolveTypographyFromDirection(payload.cinematic_direction);
+  const baseTypography: TypographyProfile = {
+    fontFamily: resolvedTypo.lyric.fontFamily.replace(/"/g, '').split(',')[0].trim(),
+    fontWeight: resolvedTypo.lyric.fontWeight,
+    textTransform: resolvedTypo.lyric.textTransform,
+    letterSpacing: resolvedTypo.lyric.letterSpacing,
+    heroWeight: resolvedTypo.display.fontWeight,
+  };
+  const heroFontFamily = resolvedTypo.display.fontFamily.replace(/"/g, '').split(',')[0].trim();
 
   // Create measurement context
   let measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -683,7 +682,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     endRatio: chapter.endRatio ?? 1,
     targetZoom: distanceToZoom['Medium'] ?? 1.0,
     emotionalIntensity: chapter.emotionalIntensity ?? 0.5,
-    typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform },
+    typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform, heroFontFamily },
     atmosphere: chapter.atmosphere ?? (payload.cinematic_direction as any)?.atmosphere ?? 'cinematic',
   }));
 
@@ -748,8 +747,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         baseFontSize: groupFontSize,
         layoutWidth: pos.width,
         wordStart: snapToBeat(wm.start, beats),
-        fontWeight: baseTypography.fontWeight,
-        fontFamily: baseTypography.fontFamily,
+        fontWeight: (wm.isHeroWord || (Math.max(0, wm.end - wm.start) >= 0.5)) ? baseTypography.heroWeight : baseTypography.fontWeight,
+        fontFamily: (wm.isHeroWord || (Math.max(0, wm.end - wm.start) >= 0.5)) ? heroFontFamily : baseTypography.fontFamily,
         isHeroWord: wm.isHeroWord === true
           || (wm.directive as any)?.isolation === true
           || (Math.max(0, wm.end - wm.start) >= 0.5),
@@ -807,6 +806,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     visualMode,
     baseFontFamily: baseTypography.fontFamily,
     baseFontWeight: baseTypography.fontWeight,
+    heroFontFamily,
     baseTextTransform: baseTypography.textTransform,
     palettes,
     animParams,
