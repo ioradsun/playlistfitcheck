@@ -3435,18 +3435,6 @@ export class LyricDancePlayer {
         this.debugState.drawCalls = drawCalls;
         return;
       }
-
-      if (this._finaleEffect.phase === "reform") {
-        const reformP = this._finaleEffect.getReformProgress(tSec, this.songEndSec);
-        if (reformP >= 1) {
-          this._finaleEffect.reset();
-        } else {
-          this.ctx.globalAlpha = 1 - reformP;
-          this.ctx.fillStyle = "#000";
-          this.ctx.fillRect(0, 0, this.width, this.height);
-          this.ctx.globalAlpha = 1;
-        }
-      }
     }
 
     if (this.isExporting) this.drawWatermark();

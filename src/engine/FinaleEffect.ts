@@ -4,7 +4,6 @@
  * Phase 1: CRACKS (last 3.5s) — white fracture lines spread from center
  * Phase 2: SHATTER — canvas snapshot breaks into grid shards
  * Phase 3: SMOKE — embers + smoke fill the void
- * Phase 4: REFORM — scene fades back in, loop restarts
  */
 
 interface CrackSegment { x1: number; y1: number; x2: number; y2: number; }
@@ -26,11 +25,10 @@ interface SmokePuff {
 
 const CRACK_DURATION = 3.5;
 const SHATTER_DURATION = 2.0;
-const REFORM_DURATION = 1.2;
 const GRID_X = 12;
 const GRID_Y = 8;
 
-export type FinalePhase = "inactive" | "cracking" | "shatter" | "reform";
+export type FinalePhase = "inactive" | "cracking" | "shatter";
 
 export class FinaleEffect {
   private cracks: Crack[] = [];
@@ -58,7 +56,7 @@ export class FinaleEffect {
     const timeToEnd = songEndSec - tSec;
     const isRegionLoop = songDuration < 10;
 
-    if (timeToEnd > CRACK_DURATION || timeToEnd < -SHATTER_DURATION - REFORM_DURATION || isRegionLoop) {
+    if (timeToEnd > CRACK_DURATION || timeToEnd < -SHATTER_DURATION || isRegionLoop) {
       if (this._phase !== "inactive") this.reset();
       return false;
     }
@@ -125,18 +123,11 @@ export class FinaleEffect {
     }
 
     if (timeToEnd <= -SHATTER_DURATION) {
-      this._phase = "reform";
+      this.reset();
       return false;
     }
 
     return false;
-  }
-
-  /** Reform progress: 0 (just started reforming) → 1 (fully reformed). */
-  getReformProgress(tSec: number, songEndSec: number): number {
-    const blowElapsed = tSec - songEndSec;
-    if (blowElapsed < SHATTER_DURATION) return 0;
-    return Math.min(1, (blowElapsed - SHATTER_DURATION) / REFORM_DURATION);
   }
 
   /** Screen shake amount for current phase. Caller adds to camShakeX/Y. */
