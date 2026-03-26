@@ -1255,7 +1255,7 @@ export class LyricDancePlayer {
   private _frameSectionIdx = -1;
   private _framePalette: string[] | null = null;
   private _framePaletteTime = -1; // audio time when palette was last resolved
-  private _smokePhraseAge = -1;
+  private _smokePhraseAge = 999;
   private _currentSectionPalette: SectionPalette = deserializeSectionPalette([
     '#0a0a0f',
     '#C9A96E',
