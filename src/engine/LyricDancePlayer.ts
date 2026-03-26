@@ -4773,11 +4773,17 @@ export class LyricDancePlayer {
     }
     chunks.length = ci;
 
-    // ── Suppress main text during exit — exit effect owns rendering ──
-    if (this._exitEffect.active) {
-      for (let i = 0; i < chunks.length; i++) {
-        chunks[i].alpha = 0;
-        chunks[i].visible = false;
+    // ── Suppress main text when outside active phrase window ──
+    // resolveActiveGroup is "never-blank" — returns a group even in gaps.
+    // Suppress chunks when tSec is before the group starts or after it ends.
+    // This handles: pre-first-phrase, during exit animation, post-exit gap.
+    if (activeGroupIdx >= 0) {
+      const activeGroup = groups[activeGroupIdx];
+      if (tSec < activeGroup.start || tSec >= activeGroup.end) {
+        for (let i = 0; i < chunks.length; i++) {
+          chunks[i].alpha = 0;
+          chunks[i].visible = false;
+        }
       }
     }
 
