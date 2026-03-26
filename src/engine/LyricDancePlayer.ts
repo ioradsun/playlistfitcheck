@@ -4596,30 +4596,16 @@ export class LyricDancePlayer {
     // Final zoom
     this._bgPulseZoom = 1.0 + mp.bgPulseAmplitude * pulseEnvelope * beatDynamic;
 
-    // ═══ DIRECTIONAL PIVOT: 5-second cycle through 4 nod directions ═══
-    // 0: left, 1: back-and-forth, 2: right, 3: center. Subtle drift.
+    // ═══ DIRECTIONAL PIVOT: slow sine pendulum ═══
+    // One continuous swing — ~21 seconds per full cycle.
+    // Barely perceptible drift. Like rocking a baby.
     const songTime = Math.max(0, tSec - scene.songStartSec);
-    const dirCycle = Math.floor(songTime / 5) % 4;
-    const pivotMag = this.width * 0.025; // 2.5% of width — subtle
+    const targetPivotX = Math.sin(songTime * 0.3) * this.width * 0.006;
+    const targetPivotY = 0;
 
-    let targetPivotX = 0;
-    let targetPivotY = 0;
-    if (dirCycle === 0) {
-      // Nod left
-      targetPivotX = -pivotMag;
-    } else if (dirCycle === 1) {
-      // Back and forth — gentle oscillation within the 5s window
-      const oscillate = Math.sin(songTime * 1.2);
-      targetPivotX = oscillate * pivotMag * 0.7;
-    } else if (dirCycle === 2) {
-      // Nod right
-      targetPivotX = pivotMag;
-    }
-    // dirCycle === 3: center (targetPivotX stays 0)
-
-    // EMA smooth — slow glide between directions, ~300ms
-    this._bgZoomPivotX += (targetPivotX - this._bgZoomPivotX) * 0.06;
-    this._bgZoomPivotY += (targetPivotY - this._bgZoomPivotY) * 0.06;
+    // EMA smooth — ultra-gentle glide
+    this._bgZoomPivotX += (targetPivotX - this._bgZoomPivotX) * 0.04;
+    this._bgZoomPivotY += (targetPivotY - this._bgZoomPivotY) * 0.04;
 
     // Text stays still — background zoom drives the rhythm.
     this._textBeatNodX = 0;
