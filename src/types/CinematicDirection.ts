@@ -91,8 +91,6 @@ export interface CinematicPhrase {
   exitEffect?: 'fade' | 'drift_up' | 'shrink' | 'dissolve' | 'cascade' | 'scatter' | 'slam' | 'glitch' | 'burn';
   /** True if this phrase contains lyrics that repeat elsewhere in the song (chorus) */
   isChorus?: boolean;
-  /** @deprecated — replaced by isChorus */
-  section?: string;
   /** @deprecated — replaced by exitEffect */
   effect?: Record<string, any>;
   /** @deprecated — use wordRange with global indices instead */

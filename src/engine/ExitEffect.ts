@@ -94,6 +94,7 @@ export class ExitEffect {
     let effect: ExitEffectType = preferredEffect && ALL_EFFECTS.includes(preferredEffect)
       ? preferredEffect
       : this._pickRandom();
+    this._lastEffect = effect;
 
     // Complex effects need more time — fall back to fade
     if (SPLIT_EFFECTS.has(effect) && gap < COMPLEX_MIN_GAP) {
