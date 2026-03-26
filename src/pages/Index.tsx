@@ -42,6 +42,7 @@ import {
   SongFitTabImport,
   VibeFitTabImport,
 } from "@/lib/routePrefetch";
+import { importWithRetry } from "@/lib/importWithRetry";
 
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { ChevronRight } from "lucide-react";
@@ -58,7 +59,13 @@ const ProFitTab = lazy(() =>
   ProFitTabImport().then((module) => ({ default: module.ProFitTab })),
 );
 const SongFitTab = lazy(() =>
-  SongFitTabImport().then((module) => ({ default: module.SongFitTab })),
+  importWithRetry(
+    () => SongFitTabImport(),
+    () =>
+      import(
+        /* @vite-ignore */ `../components/songfit/SongFitTab.tsx?t=${Date.now()}`
+      ),
+  ).then((module) => ({ default: module.SongFitTab })),
 );
 const HookFitTab = lazy(() =>
   HookFitTabImport().then((module) => ({ default: module.HookFitTab })),
