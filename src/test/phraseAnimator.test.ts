@@ -5,13 +5,8 @@ import type { MotionProfile } from '@/engine/IntensityRouter';
 
 const defaultMp: MotionProfile = {
   intensity: 0.5,
-  textNodMult: 1.0,
-  textWaveMult: 1.0,
-  textHeroMult: 1.0,
-  bgBeatMult: 0,
-  bgParallaxMult: 0.7,
+  bgPulseAmplitude: 0.03,
   cameraBeatMult: 0,
-  cameraShakeMult: 0,
   textSyncFraction: 0,
   particleDensityMult: 1.0,
   particleSpeedMult: 1.0,
@@ -43,7 +38,6 @@ function mkGroup(overrides: Partial<CompiledPhraseGroup>): CompiledPhraseGroup {
         color: '#fff',
         isFiller: false,
         emphasisLevel: 1,
-        semanticAlphaMax: 1,
       },
     ],
     staggerDelay: 0.12,
@@ -77,25 +71,29 @@ describe('PhraseAnimator timing', () => {
 
   it('uses group.end as phrase end (not next group start)', () => {
     const group = mkGroup({ start: 2.0, end: 2.8, holdClass: 'long_emotional' });
-    const state = computePhraseState(group, 2.3, 2.5, null, 1080, defaultMp);
+    // computePhraseState(group, nextGroupStart, prevGroupEnd, tSec, beatState, canvasWidth, mp)
+    const state = computePhraseState(group, Infinity, 0, 2.3, null, 1080, defaultMp);
     expect(state.groupStart).toBe(2.0);
     expect(state.groupEnd).toBe(2.8);
   });
 
-  it('dampens and clamps beat-driven movement for readability', () => {
+  it('returns valid push-in scale for active phrase', () => {
     const group = mkGroup({ chorusRepeat: 4 });
-    const state = computePhraseState(group, Infinity, 0.4, { pulse: 1, phase: 0 }, 1080, defaultMp);
+    const state = computePhraseState(group, Infinity, 0, 0.4, { pulse: 1, phase: 0 }, 1080, defaultMp);
 
-    // pulse at max still lands in constrained range.
-    expect(state.beatNudgeY).toBeLessThanOrEqual(6);
-    expect(state.beatScale).toBeLessThanOrEqual(1.045);
+    // pushInScale should be close to 1.0 during active phrase
+    expect(state.pushInScale).toBeGreaterThanOrEqual(1.0);
+    expect(state.pushInScale).toBeLessThanOrEqual(1.05);
   });
 
-  it('clamps total word vertical offset after beat + reveal contributions', () => {
+  it('clamps total word vertical offset after contributions', () => {
     const group = mkGroup({ staggerDelay: 0.12 });
-    const phraseState = computePhraseState(group, Infinity, 0.05, { pulse: 1, phase: 0 }, 1080, defaultMp);
-    const wordState = computeWordState(group.words[0], 0, group, phraseState, 0.05, false, 1080, 1920, defaultMp, -1);
-    const chunk = computeChunkAnim(group.words[0], phraseState, wordState, 0, 1);
+    // computePhraseState(group, nextGroupStart, prevGroupEnd, tSec, beatState, canvasWidth, mp)
+    const phraseState = computePhraseState(group, Infinity, 0, 0.05, { pulse: 1, phase: 0 }, 1080, defaultMp);
+    // computeWordState(word, wordIndex, group, tSec, groupHasActiveSoloHero, canvasWidth, canvasHeight)
+    const wordState = computeWordState(group.words[0], 0, group, 0.05, false, 1080, 1920);
+    // computeChunkAnim(phrase, wordAnim)
+    const chunk = computeChunkAnim(phraseState, wordState);
 
     expect(chunk.offsetY).toBeLessThanOrEqual(12);
     expect(chunk.offsetY).toBeGreaterThanOrEqual(-12);
