@@ -1304,7 +1304,7 @@ export class LyricDancePlayer {
   private audioContext: AudioContext | null = null;
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
   private ambientParticleEngine: ParticleEngine | null = null;
-  private activeSectionIndex = -1;
+  private activeSectionIndex = -999;
   private _activeEffects: SectionEffectsConfig = DEFAULT_EFFECTS;
   private _effectsTransition: EffectsTransition | null = null;
 
@@ -1502,6 +1502,14 @@ export class LyricDancePlayer {
     const cw = this.container?.offsetWidth || this.canvas.offsetWidth || 960;
     const ch = this.container?.offsetHeight || this.canvas.offsetHeight || 540;
     this.resize(cw, ch);
+
+    // Warm-spawn particles now that bounds are valid.
+    // Constructor called setSystem('dust') before resize → no particles spawned (bounds 1×1).
+    if (this.ambientParticleEngine) {
+      this.ambientParticleEngine.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
+      this.ambientParticleEngine.setSystem(this.activeSectionTexture || 'dust');
+    }
+
     this.displayWidth = this.width;
     this.displayHeight = this.height;
     this.drawMinimalFirstFrame();
@@ -3995,8 +4003,23 @@ export class LyricDancePlayer {
         speed: 0.35,
       },
     };
-    this.activeSectionIndex = -1;
+    this.activeSectionIndex = -999;
     this.activeSectionTexture = texture;
+
+    // Apply particle config immediately — don't wait for section transition in update()
+    if (this.ambientParticleEngine) {
+      const mapped = (PARTICLE_SYSTEM_MAP as Record<string, string | undefined>)[texture?.toLowerCase?.() ?? ""]?.toLowerCase?.() ?? texture;
+      this.ambientParticleEngine.setSystem(mapped);
+      this.ambientParticleEngine.setConfig({
+        system: mapped,
+        density: this.resolvedState.particleConfig.density ?? 0.8,
+        speed: this.resolvedState.particleConfig.speed ?? 0.5,
+        opacity: 0.7,
+        beatReactive: mapped !== 'glare',
+      });
+      this.ambientParticleEngine.setDensityMultiplier(Math.max(0.5, this.resolvedState.particleConfig.density));
+      this.ambientParticleEngine.setSpeedMultiplier(Math.max(0.2, this.resolvedState.particleConfig.speed));
+    }
 
     // ═══ Build pre-computed hero schedule for camera lookahead ═══
     this._buildHeroSchedule();
