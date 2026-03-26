@@ -16,14 +16,30 @@ You are a film director designing backgrounds for a lyric video.
 
 You will receive:
 1. Song lyrics
-2. Audio-detected sections
+2. Audio-detected sections (if available)
 
 For the song:
 - "description": single evocative sentence (max 15 words)
 - "sceneTone": "dark" | "light" | "mixed"
+- "typography": font style that matches the song's personality. One of: bold-impact | clean-modern | elegant-serif | raw-condensed | whisper-soft | tech-mono | display-heavy | editorial-light
+- "emotionalArc": how intensity builds across the song. One of: slow-burn | surge | collapse | dawn | eruption
+
+Choose typography:
+  Hip-hop/trap/aggressive: bold-impact, raw-condensed, display-heavy
+  Pop/R&B/smooth: clean-modern, whisper-soft
+  Alternative/indie: editorial-light, elegant-serif
+  Electronic/experimental: tech-mono, raw-condensed
+  Emotional/ballad: elegant-serif, whisper-soft, editorial-light
+
+Choose emotionalArc:
+  slow-burn: gradual build to a late peak (most common)
+  surge: fast rise, sustained energy throughout
+  collapse: starts high, descends into quiet
+  dawn: quiet throughout, final burst at the end
+  eruption: explosive energy from the very start
 
 For EACH section:
-- "sectionIndex": integer
+- "sectionIndex": integer starting at 0
 - "description": vivid 1-sentence visual scene rooted in the song's world
 - "dominantColor": bold hex (#RRGGBB), unique per section
 - "visualMood": one of: intimate | anthemic | dreamy | aggressive | melancholy | euphoric | nostalgic | triumphant | raw | ethereal | haunted | celestial | noir | rebellious
@@ -42,8 +58,10 @@ Return ONLY valid JSON. No markdown.
 {
   "description": "A chilling descent from emotional peaks into cold isolation",
   "sceneTone": "dark",
+  "typography": "raw-condensed",
+  "emotionalArc": "collapse",
   "sections": [
-    { "sectionIndex": 1, "description": "A solitary figure in a frosting room", "dominantColor": "#A5B4FC", "visualMood": "melancholy", "texture": "snow" }
+    { "sectionIndex": 0, "description": "A solitary figure in a frosting room", "dominantColor": "#A5B4FC", "visualMood": "melancholy", "texture": "snow" }
   ]
 }
 `;
@@ -80,17 +98,39 @@ HARD RULES:
      BAD:  "I know that the" / "world is on fire"  
      GOOD: "I know that" / "the world is on fire"
 
-SECTION LABELS (REQUIRED on every phrase):
-  "section": "verse" | "chorus" | "bridge" | "outro"
-  Chorus = repeated lyrics that appear 2+ times in the song.
-  EVERY phrase MUST have a section field.
+CHORUS DETECTION (important):
+  If a phrase contains lyrics that repeat elsewhere in the song (same or very similar words appearing 2+ times), mark "isChorus": true.
+  At the top level, set "chorusText" to the full repeated lyric text of the chorus.
+  If no clear chorus exists, omit chorusText and set all isChorus to false.
+
+EXIT EFFECTS (required on every phrase):
+  "exitEffect": how the phrase leaves the screen. Pick the one that matches the phrase's emotional weight:
+    - "fade": simple opacity fade (default, safe for any phrase)
+    - "drift_up": words float upward with smoke (reflective, emotional moments)
+    - "shrink": words collapse to a point (finality, closure)
+    - "dissolve": words break into particles (ethereal, dreamy)
+    - "cascade": letters fall one by one (playful, rhythmic)
+    - "scatter": letters explode outward (energy, release)
+    - "slam": words slam down then shatter (impact, aggression)
+    - "glitch": horizontal slice distortion (edgy, digital)
+    - "burn": words char from bottom up with embers (intense, dramatic)
+
+  Guidelines:
+    Quiet/vulnerable → fade, drift_up, dissolve
+    Confident/rhythmic → cascade, shrink
+    Aggressive/impactful → slam, scatter, glitch
+    Dramatic/climactic → burn, scatter, slam
+    Dreamy/ethereal → dissolve, drift_up, fade
+    VARY the effects — avoid using the same exit 3+ times in a row.
 
 Return ONLY valid JSON. No markdown.
 {
   "phrases": [
-    { "wordRange": [0, 2], "heroWord": "TELL", "section": "verse" },
-    { "wordRange": [3, 7], "heroWord": "SOUL", "section": "verse" }
-  ]
+    { "wordRange": [0, 2], "heroWord": "TELL", "exitEffect": "fade", "isChorus": false },
+    { "wordRange": [3, 7], "heroWord": "SOUL", "exitEffect": "dissolve", "isChorus": false }
+  ],
+  "chorusText": "the repeated chorus lyric if detected",
+  "hookPhrase": "the catchiest short phrase"
 }
 `;
 
@@ -708,8 +748,8 @@ function buildWordUserMessage(
     msg += "\n";
   }
 
-  msg += "Return JSON only. EVERY phrase needs section.\n";
-  msg += '{ "phrases": [{ "wordRange": [0,2], "heroWord": "WORD", "section": "verse" }] }';
+  msg += "Return JSON only. EVERY phrase needs exitEffect and isChorus.\n";
+  msg += '{ "phrases": [{ "wordRange": [0,2], "heroWord": "WORD", "exitEffect": "fade", "isChorus": false }], "chorusText": "...", "hookPhrase": "..." }';
   return msg;
 }
 
@@ -801,6 +841,8 @@ function validateScene(
 
   const DEFAULTS: Record<string, string> = {
     sceneTone: "dark",
+    typography: "clean-modern",
+    emotionalArc: "slow-burn",
   };
   for (const key of [
     "sceneTone",
@@ -810,6 +852,16 @@ function validateScene(
       errors.push(`Invalid ${key}: "${v[key]}"`);
       v[key] = DEFAULTS[key];
     }
+  }
+
+  // typography — validate or default
+  if (!v.typography || !(ENUMS.typography as readonly string[]).includes(v.typography)) {
+    v.typography = DEFAULTS.typography;
+  }
+
+  // emotionalArc — validate or default
+  if (!v.emotionalArc || !(ENUMS.emotionalArc as readonly string[]).includes(v.emotionalArc)) {
+    v.emotionalArc = DEFAULTS.emotionalArc;
   }
 
   if (typeof v.description === "string")
@@ -903,7 +955,29 @@ function validateScene(
       delete s.atmosphere;
       delete s.typography;
       delete s.structuralLabel;
+      // Fix sectionIndex to 0-based
+      if (typeof s.sectionIndex === 'number' && s.sectionIndex > 0) {
+        // Check if AI returned 1-based indices (common: example shows sectionIndex: 0 but AI may start at 1)
+        const allIndices = v.sections.map((sec: any) => sec.sectionIndex).filter((n: any) => typeof n === 'number');
+        const minIdx = Math.min(...allIndices);
+        if (minIdx === 1) {
+          // 1-based — will renumber after loop
+        }
+      }
     }
+  }
+
+  // Renumber sectionIndex to 0-based if AI returned 1-based
+  if (v.sections.length > 0) {
+    const indices = v.sections.map((s: any) => s.sectionIndex).filter((n: any) => typeof n === 'number');
+    if (indices.length > 0 && Math.min(...indices) >= 1) {
+      for (const s of v.sections) {
+        if (typeof s.sectionIndex === 'number') s.sectionIndex -= 1;
+      }
+    }
+    // Ensure sequential 0-based indices regardless
+    v.sections.sort((a: any, b: any) => (a.sectionIndex ?? 0) - (b.sectionIndex ?? 0));
+    v.sections.forEach((s: any, i: number) => { s.sectionIndex = i; });
   }
 
   if (sectionCount > 0 && v.sections.length !== sectionCount) {
@@ -960,6 +1034,12 @@ function validateWords(
 
   void words;
   if (!Array.isArray(v.phrases)) v.phrases = [];
+
+  const VALID_EXIT_EFFECTS = new Set([
+    'fade', 'drift_up', 'shrink', 'dissolve',
+    'cascade', 'scatter', 'slam', 'glitch', 'burn',
+  ]);
+
   for (const p of v.phrases) {
     if (!Array.isArray(p.wordRange) || p.wordRange.length !== 2) {
       p.wordRange = [0, 0];
@@ -975,13 +1055,16 @@ function validateWords(
 
     if (p.heroWord && typeof p.heroWord !== "string") delete p.heroWord;
 
-    if (
-      p.section !== undefined &&
-      !["verse", "chorus", "bridge", "outro"].includes(p.section)
-    ) {
-      delete p.section;
+    // exitEffect — validate or default to 'fade'
+    if (!p.exitEffect || !VALID_EXIT_EFFECTS.has(p.exitEffect)) {
+      p.exitEffect = 'fade';
     }
 
+    // isChorus — ensure boolean
+    p.isChorus = p.isChorus === true;
+
+    // Remove legacy fields that are no longer in the prompt
+    delete p.section;
     delete p.effect;
   }
 
@@ -989,12 +1072,18 @@ function validateWords(
     delete v.hookPhrase;
   }
 
+  // chorusText — pass through if valid string
+  const chorusText = typeof v.chorusText === "string" && v.chorusText.trim()
+    ? v.chorusText.trim()
+    : undefined;
+
   return {
     ok: errors.length === 0,
     errors,
     value: {
       phrases: v.phrases,
       hookPhrase: v.hookPhrase,
+      chorusText,
     },
   };
 }
@@ -1089,7 +1178,7 @@ async function callScene(
             {
               role: "user",
               content:
-                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", and "sections" array. Each section needs: sectionIndex, description, dominantColor, visualMood, texture. No markdown.',
+                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "typography", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
             },
           ],
           response_format: { type: "json_object" },

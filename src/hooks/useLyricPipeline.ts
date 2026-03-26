@@ -1122,16 +1122,15 @@ export function useLyricPipeline({
             );
 
             if (wordResult?.cinematicDirection) {
-              const { storyboard, wordDirectives, phrases, hookPhrase } =
+              const { phrases, hookPhrase, chorusText } =
                 wordResult.cinematicDirection;
 
               const wordMeta = wordResult._meta || null;
               const merged = {
                 ...enrichedScene,
-                storyboard: storyboard || [],
-                wordDirectives: wordDirectives || [],
                 phrases: phrases || [],
                 hookPhrase: hookPhrase || undefined,
+                chorusText: chorusText || undefined,
                 _meta: { scene: enrichedScene._meta?.scene, words: wordMeta },
               };
 

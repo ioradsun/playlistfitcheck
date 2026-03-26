@@ -80,6 +80,7 @@ export class ExitEffect {
     ctx: CanvasRenderingContext2D,
     canvasW: number,
     canvasH: number,
+    preferredEffect?: ExitEffectType,
   ): void {
     if (!prevGroup) return;
 
@@ -90,7 +91,9 @@ export class ExitEffect {
       return;
     }
 
-    let effect = this._pickRandom();
+    let effect: ExitEffectType = preferredEffect && ALL_EFFECTS.includes(preferredEffect)
+      ? preferredEffect
+      : this._pickRandom();
 
     // Complex effects need more time — fall back to fade
     if (SPLIT_EFFECTS.has(effect) && gap < COMPLEX_MIN_GAP) {
