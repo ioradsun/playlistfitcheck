@@ -40,6 +40,7 @@ import { HeroSmokeEffect } from '@/engine/HeroSmokeEffect';
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
+import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
 import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalette";
 import {
   resolveActiveGroup,
@@ -2795,16 +2796,6 @@ export class LyricDancePlayer {
     'spring-green': ['#F0FFF0', '#228844', '#0A200F', '#34D058', '#3A7A4A'],
   };
 
-  private static readonly TYPOGRAPHY_FONTS: Record<string, string> = {
-    'bold-impact': '"Oswald", sans-serif',
-    'clean-modern': '"Montserrat", sans-serif',
-    'elegant-serif': '"Playfair Display", serif',
-    'raw-condensed': '"Barlow Condensed", sans-serif',
-    'whisper-soft': '"Nunito", sans-serif',
-    'tech-mono': '"JetBrains Mono", monospace',
-    'display-heavy': '"Bebas Neue", sans-serif',
-    'editorial-light': '"Cormorant Garamond", serif',
-  };
 
 
   private resolveSectionIndex(sections: Array<{ startSec?: number; endSec?: number; startRatio?: number; endRatio?: number }>, currentTimeSec: number, totalDurationSec?: number): number {
@@ -2887,30 +2878,19 @@ export class LyricDancePlayer {
   }
 
   private getResolvedFont(): string {
-    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const typoKey = cd?.typography as string | undefined;
-    if (typoKey && LyricDancePlayer.TYPOGRAPHY_FONTS[typoKey]) {
-      return LyricDancePlayer.TYPOGRAPHY_FONTS[typoKey];
-    }
-    return '"Montserrat", sans-serif';
+    const resolved = resolveTypographyFromDirection(this.payload?.cinematic_direction);
+    return resolved.lyric.fontFamily;
   }
 
 
   private async preloadFonts(): Promise<void> {
-    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const typoKey = cd?.typography as string;
-    const fontMap: Record<string, string> = {
-      'bold-impact': 'Oswald',
-      'clean-modern': 'Montserrat',
-      'elegant-serif': 'Playfair Display',
-      'raw-condensed': 'Barlow Condensed',
-      'whisper-soft': 'Nunito',
-      'tech-mono': 'JetBrains Mono',
-      'display-heavy': 'Bebas Neue',
-      'editorial-light': 'Cormorant Garamond',
-    };
-    const fontName = fontMap[typoKey] ?? 'Montserrat';
-    const loaded = await ensureFontReady(fontName);
+    const resolved = resolveTypographyFromDirection(this.payload?.cinematic_direction);
+    const fontNames = getFontNamesForPreload(resolved);
+    let loaded = true;
+    for (const fontName of fontNames) {
+      const ready = await ensureFontReady(fontName);
+      if (!ready) loaded = false;
+    }
     if (!this.destroyed) {
       if (loaded) {
         this._fontStabilized = true;
@@ -2921,7 +2901,8 @@ export class LyricDancePlayer {
         if (fontsApi) {
           fontsApi.ready.then(() => {
             if (this.destroyed) return;
-            if (isFontReady(fontName)) {
+            const anyReady = fontNames.some((name) => isFontReady(name));
+            if (anyReady) {
               this._fontStabilized = true;
               this._fontLayoutReflowPending = true;
             }

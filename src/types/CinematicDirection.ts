@@ -9,12 +9,21 @@
 
 // ── Primary new-schema fields ────────────────────────────────
 
+export interface FontProfile {
+  force: 'low' | 'medium' | 'high';
+  intimacy: 'low' | 'medium' | 'high';
+  polish: 'raw' | 'clean' | 'elegant';
+  theatricality: 'low' | 'medium' | 'high';
+  era: 'timeless' | 'modern' | 'futuristic';
+}
+
 export interface CinematicDirection {
   // New backend fields (v2 prompt)
   sceneTone?: string;
   atmosphere?: string;
   motion?: string;
   typography?: string;
+  fontProfile?: FontProfile;
   texture?: string;
   emotionalArc?: string;
   palette?: string;
@@ -60,6 +69,7 @@ export interface CinematicSection {
   motion?: string;
   texture?: string;
   typography?: string;
+  fontProfile?: FontProfile;
   atmosphere?: string;
   /** Time boundary in seconds (from audioSections) */
   startSec?: number;
@@ -196,6 +206,7 @@ export interface Chapter {
   motion?: string;
   texture?: string;
   typography?: string;
+  fontProfile?: FontProfile;
   atmosphere?: string;
   overrides?: Record<string, string | undefined>;
   sectionIndex?: number;
