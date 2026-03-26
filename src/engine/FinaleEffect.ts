@@ -27,8 +27,8 @@ interface SmokePuff {
 const CRACK_DURATION = 3.5;
 const SHATTER_DURATION = 2.0;
 const REFORM_DURATION = 1.2;
-const GRID_X = 6;
-const GRID_Y = 4;
+const GRID_X = 12;
+const GRID_Y = 8;
 
 export type FinalePhase = "inactive" | "cracking" | "shatter" | "reform";
 
@@ -167,7 +167,7 @@ export class FinaleEffect {
 
   private _growCracks(W: number, H: number): void {
     const intensity = this.crackIntensity;
-    if (Math.random() < intensity * 0.4) {
+    if (Math.random() < intensity * 1.2) {
       const originAngle = Math.random() * Math.PI * 2;
       const startDist = intensity * Math.max(W, H) * 0.3;
       const sx = W / 2 + Math.cos(originAngle) * startDist * (0.3 + Math.random() * 0.7);
@@ -177,7 +177,7 @@ export class FinaleEffect {
       let cx = sx;
       let cy = sy;
       const mainAngle = originAngle + (Math.random() - 0.5) * 1.5;
-      const segCount = 4 + Math.floor(Math.random() * 8);
+      const segCount = 6 + Math.floor(Math.random() * 12);
 
       for (let i = 0; i < segCount; i++) {
         const segLen = 8 + Math.random() * 25 + intensity * 15;
@@ -188,7 +188,7 @@ export class FinaleEffect {
         cx = nx;
         cy = ny;
 
-        if (Math.random() < 0.35 * intensity) {
+        if (Math.random() < 0.5 * intensity) {
           const bAngle = angle + (Math.random() > 0.5 ? 1 : -1) * (0.5 + Math.random() * 0.8);
           const bLen = 5 + Math.random() * 15;
           segments.push({ x1: cx, y1: cy, x2: cx + Math.cos(bAngle) * bLen, y2: cy + Math.sin(bAngle) * bLen });
