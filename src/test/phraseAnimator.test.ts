@@ -78,7 +78,7 @@ describe('PhraseAnimator timing', () => {
   });
 
   it('returns valid push-in scale for active phrase', () => {
-    const group = mkGroup({ chorusRepeat: 4 });
+    const group = mkGroup({});
     const state = computePhraseState(group, Infinity, 0, 0.4, { pulse: 1, phase: 0 }, 1080, defaultMp);
 
     // pushInScale should be close to 1.0 during active phrase
