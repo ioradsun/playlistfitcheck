@@ -21,15 +21,12 @@ You will receive:
 For the song:
 - "description": single evocative sentence (max 15 words)
 - "sceneTone": "dark" | "light" | "mixed"
-- "typography": font style that matches the song's personality. One of: bold-impact | clean-modern | elegant-serif | raw-condensed | whisper-soft | tech-mono | display-heavy | editorial-light
+- "typographyProfile": emotional traits of how the text should FEEL. Object with 7 scores (1-5):
+    energy (1=still, 5=explosive), softness (1=hard/sharp, 5=gentle/rounded),
+    tension (1=relaxed, 5=tight/anxious), elegance (1=raw/gritty, 5=refined/polished),
+    darkness (1=bright/airy, 5=heavy/ominous), intimacy (1=distant/stadium, 5=whispered/close),
+    polish (1=rough/DIY, 5=sleek/premium)
 - "emotionalArc": how intensity builds across the song. One of: slow-burn | surge | collapse | dawn | eruption
-
-Choose typography:
-  Hip-hop/trap/aggressive: bold-impact, raw-condensed, display-heavy
-  Pop/R&B/smooth: clean-modern, whisper-soft
-  Alternative/indie: editorial-light, elegant-serif
-  Electronic/experimental: tech-mono, raw-condensed
-  Emotional/ballad: elegant-serif, whisper-soft, editorial-light
 
 Choose emotionalArc:
   slow-burn: gradual build to a late peak (most common)
@@ -58,7 +55,7 @@ Return ONLY valid JSON. No markdown.
 {
   "description": "A chilling descent from emotional peaks into cold isolation",
   "sceneTone": "dark",
-  "typography": "raw-condensed",
+  "typographyProfile": { "energy": 4, "softness": 1, "tension": 4, "elegance": 1, "darkness": 4, "intimacy": 2, "polish": 2 },
   "emotionalArc": "collapse",
   "sections": [
     { "sectionIndex": 0, "description": "A solitary figure in a frosting room", "dominantColor": "#A5B4FC", "visualMood": "melancholy", "texture": "snow" }
@@ -212,6 +209,75 @@ const ENUMS = {
   texture: ["dust", "embers", "smoke", "rain", "snow", "stars", "fireflies", "petals", "ash", "crystals", "confetti", "lightning", "bubbles", "moths", "glare", "glitch", "fire"],
   emotionalArc: ["slow-burn", "surge", "collapse", "dawn", "eruption"],
 } as const;
+
+/**
+ * Font trait catalog — each font has scores on the same 7 dimensions
+ * the AI outputs. The resolver picks the font with the smallest distance.
+ */
+const FONT_CATALOG: Array<{
+  key: string;
+  traits: { energy: number; softness: number; tension: number; elegance: number; darkness: number; intimacy: number; polish: number };
+}> = [
+  {
+    key: 'bold-impact', // Oswald — aggressive hooks, anthemic, confrontational
+    traits: { energy: 5, softness: 1, tension: 4, elegance: 1, darkness: 3, intimacy: 1, polish: 3 },
+  },
+  {
+    key: 'clean-modern', // Montserrat — modern pop, neutral clarity, versatile
+    traits: { energy: 3, softness: 3, tension: 2, elegance: 3, darkness: 2, intimacy: 3, polish: 5 },
+  },
+  {
+    key: 'elegant-serif', // Playfair Display — longing, heartbreak, cinematic romance
+    traits: { energy: 2, softness: 3, tension: 2, elegance: 5, darkness: 2, intimacy: 4, polish: 5 },
+  },
+  {
+    key: 'raw-condensed', // Barlow Condensed — raw energy, street, urgency
+    traits: { energy: 4, softness: 1, tension: 4, elegance: 1, darkness: 4, intimacy: 1, polish: 2 },
+  },
+  {
+    key: 'whisper-soft', // Nunito — vulnerable, tender, lullaby, acoustic
+    traits: { energy: 1, softness: 5, tension: 1, elegance: 2, darkness: 1, intimacy: 5, polish: 4 },
+  },
+  {
+    key: 'tech-mono', // JetBrains Mono — electronic, detached, digital, cold
+    traits: { energy: 3, softness: 1, tension: 3, elegance: 2, darkness: 3, intimacy: 1, polish: 4 },
+  },
+  {
+    key: 'display-heavy', // Bebas Neue — stadium anthems, bold statements, impact
+    traits: { energy: 5, softness: 1, tension: 3, elegance: 1, darkness: 2, intimacy: 1, polish: 3 },
+  },
+  {
+    key: 'editorial-light', // Cormorant Garamond — literary, nostalgic, sacred, introspective
+    traits: { energy: 1, softness: 4, tension: 1, elegance: 5, darkness: 1, intimacy: 4, polish: 5 },
+  },
+];
+
+/**
+ * Score each font against the AI's trait profile using sum-of-squared-differences.
+ * Lower score = better match. Returns the best font key.
+ */
+function resolveTypographyFromProfile(
+  profile: Record<string, number>,
+): string {
+  const traitKeys = ['energy', 'softness', 'tension', 'elegance', 'darkness', 'intimacy', 'polish'] as const;
+  let bestKey = 'clean-modern';
+  let bestScore = Infinity;
+
+  for (const font of FONT_CATALOG) {
+    let score = 0;
+    for (const trait of traitKeys) {
+      const aiVal = typeof profile[trait] === 'number' ? Math.max(1, Math.min(5, Math.round(profile[trait]))) : 3;
+      const fontVal = font.traits[trait];
+      score += (aiVal - fontVal) * (aiVal - fontVal);
+    }
+    if (score < bestScore) {
+      bestScore = score;
+      bestKey = font.key;
+    }
+  }
+
+  return bestKey;
+}
 
 const LYRIC_FILLER = new Set([
   "the",
@@ -854,10 +920,15 @@ function validateScene(
     }
   }
 
-  // typography — validate or default
-  if (!v.typography || !(ENUMS.typography as readonly string[]).includes(v.typography)) {
+  // typography — resolve from AI trait profile, or validate direct key, or default
+  if (v.typographyProfile && typeof v.typographyProfile === 'object') {
+    // AI returned emotional traits → score against font catalog
+    v.typography = resolveTypographyFromProfile(v.typographyProfile);
+  } else if (!v.typography || !(ENUMS.typography as readonly string[]).includes(v.typography)) {
+    // No profile and no valid direct key → default
     v.typography = DEFAULTS.typography;
   }
+  // else: AI returned a valid direct key (backward compat with admin prompt overrides)
 
   // emotionalArc — validate or default
   if (!v.emotionalArc || !(ENUMS.emotionalArc as readonly string[]).includes(v.emotionalArc)) {
@@ -1178,7 +1249,7 @@ async function callScene(
             {
               role: "user",
               content:
-                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "typography", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
+                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "typographyProfile" (object with energy/softness/tension/elegance/darkness/intimacy/polish scores 1-5), "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
             },
           ],
           response_format: { type: "json_object" },
