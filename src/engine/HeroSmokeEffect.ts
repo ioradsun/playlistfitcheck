@@ -1,8 +1,9 @@
 /**
  * HeroSmokeEffect — Always-on palette-colored flame wisps rising from hero words.
  *
- * Each particle is a bezier flame shape (tapered base, bulging middle, pointed
- * wobbling tip) drawn in three layers: outer halo, core, bright inner core.
+ * TIMING: Flames rise SLOWLY and linger near the word. They hover, grow, then
+ * gently drift upward. This is the key difference from typical particles —
+ * they accumulate around the word rather than streaming away.
  *
  * Behaviors:
  * - Intensity RAMPS while phrase is active: 30% → 100% over ~2s (ease-out)
@@ -13,31 +14,26 @@
  * Disabled at quality tier 3. Reduced at tier 2.
  */
 
-const MAX_PARTICLES = 120;
+const MAX_PARTICLES = 150;
 
 const SPAWN_INTERVAL: Record<number, number> = {
-  1: 8, 2: 5, 3: 3, 4: 2, 5: 1,
+  1: 6, 2: 4, 3: 2, 4: 1, 5: 1,
 };
 
 const SPAWN_COUNT: Record<number, number> = {
-  1: 1, 2: 1, 3: 1, 4: 2, 5: 3,
+  1: 1, 2: 1, 3: 2, 4: 3, 5: 4,
 };
 
 const BASE_SIZE: Record<number, number> = {
-  1: 3, 2: 4, 3: 6, 4: 8, 5: 10,
+  1: 5, 2: 7, 3: 9, 4: 12, 5: 15,
 };
 
 const BASE_OPACITY: Record<number, number> = {
-  1: 0.08, 2: 0.12, 3: 0.18, 4: 0.24, 5: 0.30,
+  1: 0.10, 2: 0.15, 3: 0.22, 4: 0.28, 5: 0.35,
 };
 
-/** Ramp-up duration in seconds — time from phrase start to full intensity */
 const RAMP_DURATION = 2.0;
-
-/** Minimum intensity at phrase start (0–1) */
 const RAMP_FLOOR = 0.3;
-
-/** Life drain multiplier when draining (no active hero chunks) */
 const DRAIN_SPEED = 8;
 
 interface FlameParticle {
@@ -53,11 +49,8 @@ interface FlameParticle {
   r: number;
   g: number;
   b: number;
-  /** Wobble animation speed (radians/sec equivalent via frame counter) */
   wobbleSpeed: number;
-  /** Wobble phase offset so each flame sways independently */
   wobblePhase: number;
-  /** Height-to-width ratio — randomized so flames aren't uniform */
   stretch: number;
 }
 
@@ -106,25 +99,21 @@ function drawFlamePath(
 
   ctx.beginPath();
   ctx.moveTo(x, y);
-  // Right side: base → bulge
   ctx.bezierCurveTo(
     x + w * 0.6, y - h * 0.1,
     x + w * 1.1, bulgeY - h * 0.05,
     x + w * 0.45 + wobX * 0.5, bulgeY,
   );
-  // Right side: bulge → tip
   ctx.bezierCurveTo(
     x + w * 0.6 + wobX, y - h * 0.65,
     x + w * 0.15 + wobX, tipY + h * 0.08,
     x + wobX * 0.7, tipY,
   );
-  // Left side: tip → bulge
   ctx.bezierCurveTo(
     x - w * 0.15 + wobX, tipY + h * 0.08,
     x - w * 0.6 + wobX, y - h * 0.65,
     x - w * 0.45 + wobX * 0.5, bulgeY,
   );
-  // Left side: bulge → base
   ctx.bezierCurveTo(
     x - w * 1.1, bulgeY - h * 0.05,
     x - w * 0.6, y - h * 0.1,
@@ -138,14 +127,6 @@ export class HeroSmokeEffect {
   private _frameCount = 0;
   private _draining = false;
 
-  /**
-   * Update: spawn new particles for visible hero words, age existing ones.
-   *
-   * @param chunks       visible word chunks from the current frame
-   * @param palette      active palette colors [bg, accent, text, ...]
-   * @param qualityTier  0–3 (skip entirely at 3)
-   * @param phraseAgeSec seconds since current phrase started, or -1 if in gap
-   */
   update(
     chunks: ChunkLike[],
     palette: string[],
@@ -154,7 +135,6 @@ export class HeroSmokeEffect {
   ): void {
     this._frameCount++;
 
-    // Determine if any hero chunks are visible this frame
     let anyHeroVisible = false;
     for (const chunk of chunks) {
       if (chunk.visible && (chunk.alpha ?? 1) > 0.3 && chunk.isHeroWord) {
@@ -165,22 +145,24 @@ export class HeroSmokeEffect {
     this._draining = !anyHeroVisible;
 
     // ── Age existing particles ──
+    // TIMING: very slow rise, gentle drift, long life.
+    // Flames hover and accumulate near the word rather than streaming away.
     const drainMult = this._draining ? DRAIN_SPEED : 1;
     for (let i = this._particles.length - 1; i >= 0; i--) {
       const p = this._particles[i];
       p.x += p.vx;
       p.y += p.vy;
-      p.vy -= 0.004;                                              // gentle upward acceleration
-      p.vx *= 0.995;                                              // horizontal drag
-      p.vx += Math.sin(this._frameCount * 0.03 + p.wobblePhase) * 0.015; // meandering path
-      p.size += 0.08;                                             // expand slowly
+      p.vy -= 0.001;                                                    // almost no upward acceleration — drift, don't rush
+      p.vx *= 0.998;                                                    // very light horizontal drag
+      p.vx += Math.sin(this._frameCount * 0.02 + p.wobblePhase) * 0.01; // gentle meandering
+      p.size += 0.15;                                                    // grow to fill space near the word
       p.life -= drainMult / (p.maxLife * 60);
       if (p.life <= 0 || p.y < -30) {
         this._particles.splice(i, 1);
       }
     }
 
-    // ── Spawn new flame particles for hero words ──
+    // ── Spawn ──
     if (this._draining) return;
     if (this._particles.length >= MAX_PARTICLES) return;
 
@@ -198,8 +180,6 @@ export class HeroSmokeEffect {
       if (!chunk.isHeroWord) continue;
 
       const emphasis = Math.max(1, Math.min(5, chunk.emphasisLevel ?? 1));
-
-      // Ramp affects spawn interval: at low ramp, spawn less frequently
       const rawInterval = SPAWN_INTERVAL[emphasis] ?? 4;
       const interval = Math.max(1, Math.round(rawInterval * tierMult / ramp));
       if (this._frameCount % interval !== 0) continue;
@@ -213,67 +193,63 @@ export class HeroSmokeEffect {
 
       for (let i = 0; i < count; i++) {
         const baseSize = BASE_SIZE[emphasis] ?? 5;
-        const maxLife = 1.5 + Math.random() * 1.8;
+        const maxLife = 2.0 + Math.random() * 2.0;                      // 2–4 seconds — long hang time
         const useAccent = Math.random() < 0.7;
         const rgb = useAccent ? accentRgb : secondaryRgb;
 
         this._particles.push({
           x: cx + (Math.random() - 0.5) * textW,
-          y: cy + fontSize * 0.15,                    // spawn below word so flames lick upward
-          vx: (Math.random() - 0.5) * 0.2,
-          vy: -0.2 - Math.random() * 0.35,
-          size: baseSize * (0.4 + Math.random() * 0.6) * ramp,
-          maxSize: baseSize * 3,
+          y: cy + fontSize * 0.1,                                        // spawn just below word center
+          vx: (Math.random() - 0.5) * 0.15,                             // very slow horizontal drift
+          vy: -0.08 - Math.random() * 0.12,                              // SLOW rise — hover near the word
+          size: baseSize * (0.5 + Math.random() * 0.5) * ramp,
+          maxSize: baseSize * 3.0,
           life: 1.0,
           maxLife,
-          opacity: (BASE_OPACITY[emphasis] ?? 0.1) * (0.7 + Math.random() * 0.5) * ramp,
+          opacity: (BASE_OPACITY[emphasis] ?? 0.1) * (0.8 + Math.random() * 0.4) * ramp,
           r: rgb[0],
           g: rgb[1],
           b: rgb[2],
-          wobbleSpeed: 2 + Math.random() * 4,
+          wobbleSpeed: 1.5 + Math.random() * 3,                          // slower wobble — languid flicker
           wobblePhase: Math.random() * Math.PI * 2,
-          stretch: 1.6 + Math.random() * 0.8,        // height:width ratio
+          stretch: 1.6 + Math.random() * 0.8,
         });
       }
     }
   }
 
-  /**
-   * Draw all flame particles.
-   * Call with ctx in device-pixel coords (setTransform(dpr, 0, 0, dpr, 0, 0)).
-   */
   draw(ctx: CanvasRenderingContext2D): void {
     if (this._particles.length === 0) return;
 
-    const t = this._frameCount * 0.05;
+    const t = this._frameCount * 0.04;
 
     for (const p of this._particles) {
-      const fadeIn = Math.min(1, (1 - p.life) * 5);
-      const fadeOut = p.life * p.life;
+      const fadeIn = Math.min(1, (1 - p.life) * 4);
+      const fadeOut = Math.pow(p.life, 1.5);                             // softer fadeout — stays visible longer before fading
       const alpha = p.opacity * fadeIn * fadeOut;
       if (alpha < 0.003) continue;
 
       const sz = Math.min(p.size, p.maxSize);
       const flameW = sz;
       const flameH = sz * p.stretch;
-      const wobble = Math.sin(t * p.wobbleSpeed + p.wobblePhase) * (0.5 + (1 - p.life) * 0.8);
+      const wobble = Math.sin(t * p.wobbleSpeed + p.wobblePhase) * (0.4 + (1 - p.life) * 0.6);
       const col = `rgb(${p.r},${p.g},${p.b})`;
 
       // Layer 1: Outer soft halo flame
-      ctx.globalAlpha = alpha * 0.25;
+      ctx.globalAlpha = alpha * 0.35;
       ctx.fillStyle = col;
-      drawFlamePath(ctx, p.x, p.y + flameH * 0.1, flameW * 2.4, flameH * 2, wobble * 0.7);
+      drawFlamePath(ctx, p.x, p.y + flameH * 0.1, flameW * 2.4, flameH * 2.0, wobble * 0.6);
       ctx.fill();
 
       // Layer 2: Core flame
-      ctx.globalAlpha = alpha * 0.7;
+      ctx.globalAlpha = alpha * 0.85;
       drawFlamePath(ctx, p.x, p.y, flameW, flameH, wobble);
       ctx.fill();
 
       // Layer 3: Bright inner core (lighter tint)
-      ctx.globalAlpha = alpha * 0.5;
+      ctx.globalAlpha = alpha * 0.6;
       ctx.fillStyle = `rgb(${Math.min(255, p.r + 60)},${Math.min(255, p.g + 60)},${Math.min(255, p.b + 60)})`;
-      drawFlamePath(ctx, p.x, p.y + flameH * 0.25, flameW * 0.35, flameH * 0.5, wobble * 1.3);
+      drawFlamePath(ctx, p.x, p.y + flameH * 0.2, flameW * 0.4, flameH * 0.5, wobble * 1.3);
       ctx.fill();
     }
 
