@@ -64,7 +64,7 @@ const SongFitTab = lazy(() =>
     () =>
       import(
         /* @vite-ignore */ `../components/songfit/SongFitTab.tsx?t=${Date.now()}`
-      ),
+      ) as ReturnType<typeof SongFitTabImport>,
   ).then((module) => ({ default: module.SongFitTab })),
 );
 const HookFitTab = lazy(() =>
