@@ -4817,9 +4817,9 @@ export class LyricDancePlayer {
     // Stash phrase age for hero smoke (read in _draw)
     if (activeGroupIdx >= 0) {
       const ag = groups[activeGroupIdx];
-      this._smokePhraseAge = (tSec >= ag.start && tSec < ag.end) ? tSec - ag.start : -1;
+      this._smokePhraseAge = (tSec >= ag.start && tSec < ag.end) ? tSec - ag.start : 999;
     } else {
-      this._smokePhraseAge = -1;
+      this._smokePhraseAge = 999;
     }
 
     if (!this._evalFrame) {
