@@ -3024,7 +3024,8 @@ export class LyricDancePlayer {
     const songDuration = this.songEndSec - this.songStartSec;
 
     // ═══ DYNAMITE FINALE ═══
-    if (songDuration >= 10 && this._finaleEffect.phase === "shatter") {
+    const shatterActive = tSec >= this.songEndSec && tSec < this.songEndSec + 2;
+    if (songDuration >= 10 && (this._finaleEffect.phase === "shatter" || shatterActive)) {
       this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
       this._finaleEffect.update(
         tSec, this.songEndSec, songDuration,
