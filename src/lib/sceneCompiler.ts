@@ -708,7 +708,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
     const revealStyle = (group as any).revealStyle ?? matchPhrase?.revealStyle ?? 'instant';
     const holdClass = (group as any).holdClass ?? matchPhrase?.holdClass ?? 'medium_groove';
-    const energyTier: string = 'groove';
+    const energyTier: "groove" | "impact" | "intimate" | "lift" | "surprise" = 'groove';
     const heroType: "phrase" | "word" = 'word';
 
     // Reveal → stagger delay
