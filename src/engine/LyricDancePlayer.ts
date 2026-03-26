@@ -3114,18 +3114,21 @@ export class LyricDancePlayer {
       this._bgLastBakeMs = nowMsBg;
     }
 
-    // ═══ BACKGROUND: beat-synced zoom pulse ═══
-    // One axis. One number. Perfect beat sync.
-    // Zooms from center — overscan guarantees no edge visibility.
+    // ═══ BACKGROUND: beat-synced zoom pulse + counter-sway ═══
+    // Zoom from center on beat. Counter-sway: background drifts opposite
+    // to text nod at 30% magnitude — creates depth/parallax illusion.
     if (this._bgSnapshot) {
       const dpr = this._effectiveDpr;
       const cx = (this.width / 2) * dpr;
       const cy = (this.height / 2) * dpr;
       const zoom = this._bgPulseZoom;
+      // Counter-sway: inverted text nod × 0.3 (background is "farther away")
+      const swayX = -this._textBeatNodX * 0.3 * dpr;
+      const swayY = -this._textBeatNodY * 0.3 * dpr;
 
       this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       this.ctx.save();
-      this.ctx.translate(cx, cy);
+      this.ctx.translate(cx + swayX, cy + swayY);
       this.ctx.scale(zoom, zoom);
       this.ctx.translate(-cx, -cy);
       this.ctx.drawImage(this._bgSnapshot, 0, 0);
