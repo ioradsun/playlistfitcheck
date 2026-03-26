@@ -85,6 +85,9 @@ export function computeWordStateInto(
   canvasWidth: number, canvasHeight: number,
   target: WordAnimState,
 ): void {
+  void groupHasActiveSoloHero;
+  void canvasWidth;
+  void canvasHeight;
   const wordStart = word.wordStart ?? group.start;
   const nextWordStart = wordIndex + 1 < group.words.length
     ? (group.words[wordIndex + 1].wordStart ?? group.end) : group.end;
@@ -100,22 +103,13 @@ export function computeWordStateInto(
 
   const waveScale = 1.0;
 
-  const isHeroWord = word.isHeroWord === true;
-  const isOnlyWordInPhrase = group.words.length === 1;
-  const isSoloHero = isOnlyWordInPhrase && isHeroWord && (word.wordDuration ?? 0) >= 0.5;
-
   target.wordState = wordState;
   target.waveScale = waveScale;
-  target.isSoloHero = isSoloHero;
-  target.soloHeroHidden = !isSoloHero && groupHasActiveSoloHero;
-
-  if (isSoloHero) {
-    target.heroOffsetX = canvasWidth / 2 - word.layoutX;
-    target.heroOffsetY = canvasHeight / 2 - word.layoutY;
-  } else {
-    target.heroOffsetX = 0;
-    target.heroOffsetY = 0;
-  }
+  target.isSoloHero = false;
+  target.soloHeroHidden = false;
+  // Solo hero centering removed — layout positions are final.
+  target.heroOffsetX = 0;
+  target.heroOffsetY = 0;
 }
 
 // ─── 4. Final chunk animation ───────────────────────────────
@@ -135,8 +129,6 @@ export function computeChunkAnim(
 }
 
 // ─── 5. Helpers ─────────────────────────────────────────────
-export function detectSoloHero(group: CompiledPhraseGroup, tSec: number): boolean {
-  void tSec;
-  if (group.words.length !== 1) return false;
-  return group.words[0].isHeroWord === true && (group.words[0].wordDuration ?? 0) >= 0.5;
+export function detectSoloHero(_group: CompiledPhraseGroup, _tSec: number): boolean {
+  return false; // Solo hero disabled — no centering, no hiding
 }
