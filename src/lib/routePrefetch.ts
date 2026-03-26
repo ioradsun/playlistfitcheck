@@ -43,7 +43,15 @@ export const prefetchRouteChunk = (path: string) => {
   const basePath = path.replace(/\/[0-9a-f-]{36}$/, "");
   const importer = ROUTE_CHUNK_PREFETCH[basePath] ?? ROUTE_CHUNK_PREFETCH[path];
   if (!importer) return;
-  void importer();
+  void importer().catch((error) => {
+    if (
+      typeof window !== "undefined" &&
+      error instanceof Error &&
+      error.message.includes("Failed to fetch dynamically imported module")
+    ) {
+      window.location.reload();
+    }
+  });
 };
 
 export const prefetchRouteData = (path: string, options?: { userId?: string; itemType?: string; itemId?: string }) => {

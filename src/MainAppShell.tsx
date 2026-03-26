@@ -12,8 +12,14 @@ import { VoteGateProvider } from "@/hooks/useVoteGate";
 import { Navigate, Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
 import { AdminPageImport } from "@/lib/routePrefetch";
+import { importWithRetry } from "@/lib/importWithRetry";
 
-const Index = lazy(() => import("./pages/Index"));
+const Index = lazy(() =>
+  importWithRetry(
+    () => import("./pages/Index"),
+    () => import(/* @vite-ignore */ `./pages/Index.tsx?t=${Date.now()}`),
+  ),
+);
 const About = lazy(() => import("./pages/About"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Profile = lazy(() => import("./pages/Profile"));
