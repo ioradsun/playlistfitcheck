@@ -1255,6 +1255,7 @@ export class LyricDancePlayer {
   private _frameSectionIdx = -1;
   private _framePalette: string[] | null = null;
   private _framePaletteTime = -1; // audio time when palette was last resolved
+  private _smokePhraseAge = -1;
   private _currentSectionPalette: SectionPalette = deserializeSectionPalette([
     '#0a0a0f',
     '#C9A96E',
@@ -3403,10 +3404,10 @@ export class LyricDancePlayer {
     this._lastShadowBlur = 0;
     this._lastShadowColor = 'transparent';
 
-    // ═══ HERO SMOKE: palette-colored heat rising from hero words ═══
+    // ═══ HERO SMOKE: palette-colored flame wisps rising from hero words ═══
     if (qTier < 3) {
       const smokePalette = this._framePalette ?? this.data?.palette ?? ['#a855f7', '#ec4899', '#ffffff'];
-      this._heroSmoke.update(sortBuf, smokePalette, qTier);
+      this._heroSmoke.update(sortBuf, smokePalette, qTier, this._smokePhraseAge);
       this.ctx.save();
       this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
       this._heroSmoke.draw(this.ctx);
@@ -4811,6 +4812,14 @@ export class LyricDancePlayer {
           chunks[i].visible = false;
         }
       }
+    }
+
+    // Stash phrase age for hero smoke (read in _draw)
+    if (activeGroupIdx >= 0) {
+      const ag = groups[activeGroupIdx];
+      this._smokePhraseAge = (tSec >= ag.start && tSec < ag.end) ? tSec - ag.start : -1;
+    } else {
+      this._smokePhraseAge = -1;
     }
 
     if (!this._evalFrame) {
