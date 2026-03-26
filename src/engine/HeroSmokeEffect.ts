@@ -13,14 +13,14 @@
  * Disabled at quality tier 3. Reduced at tier 2.
  */
 
-const MAX_PARTICLES = 120;
+const MAX_PARTICLES = 80;
 
 const SPAWN_INTERVAL: Record<number, number> = {
-  1: 8, 2: 5, 3: 3, 4: 2, 5: 1,
+  1: 12, 2: 7, 3: 5, 4: 3, 5: 2,
 };
 
 const SPAWN_COUNT: Record<number, number> = {
-  1: 1, 2: 1, 3: 1, 4: 2, 5: 3,
+  1: 1, 2: 1, 3: 1, 4: 1, 5: 2,
 };
 
 const BASE_SIZE: Record<number, number> = {
@@ -28,7 +28,7 @@ const BASE_SIZE: Record<number, number> = {
 };
 
 const BASE_OPACITY: Record<number, number> = {
-  1: 0.06, 2: 0.08, 3: 0.12, 4: 0.16, 5: 0.20,
+  1: 0.04, 2: 0.05, 3: 0.08, 4: 0.11, 5: 0.14,
 };
 
 const RAMP_DURATION = 2.0;
