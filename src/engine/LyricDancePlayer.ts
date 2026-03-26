@@ -1239,7 +1239,8 @@ export class LyricDancePlayer {
   private _textBeatNodY = 0;
   private _finaleEffect = new FinaleEffect();
   private _exitEffect = new ExitEffect();
-  private _prevActiveGroupIdx = -1;
+  /** Index of the group we last triggered an exit for — prevents re-triggering */
+  private _exitTriggeredForGroup = -1;
   // ═══ Breathing vignette — Fincher/Cronenweth eye funnel ═══
   private _vignetteCanvas: HTMLCanvasElement | null = null;
   private _vignetteKey = '';        // tracks canvas size for invalidation
@@ -1816,7 +1817,7 @@ export class LyricDancePlayer {
     this._activeGroupCursor = 0;
     this._activeGroupCursorTime = -1;
     this._exitEffect.reset();
-    this._prevActiveGroupIdx = -1;
+    this._exitTriggeredForGroup = -1;
     this._intensityRouter.reset();
     this._resetBgParallax();
   }
@@ -2145,7 +2146,7 @@ export class LyricDancePlayer {
     this._activeGroupCursor = 0;
     this._activeGroupCursorTime = -1;
     this._exitEffect.reset();
-    this._prevActiveGroupIdx = -1;
+    this._exitTriggeredForGroup = -1;
     this._intensityRouter.reset();
     this._resetBgParallax();
     this._bgSnapshotSection = -1;
@@ -2465,7 +2466,7 @@ export class LyricDancePlayer {
     this._textBeatNodY = 0;
     this._finaleEffect.reset();
     this._exitEffect.reset();
-    this._prevActiveGroupIdx = -1;
+    this._exitTriggeredForGroup = -1;
   }
 
   private _handleVisibilityChangeImpl(): void {
@@ -4635,17 +4636,21 @@ export class LyricDancePlayer {
       activeGroups.push(activeGroupIdx);
     }
 
-    // ── Exit effect: detect phrase change, start exit for previous phrase ──
-    if (activeGroupIdx >= 0 && activeGroupIdx !== this._prevActiveGroupIdx && this._prevActiveGroupIdx >= 0) {
-      const prevGroup = groups[this._prevActiveGroupIdx];
-      const nextGroupStart = groups[activeGroupIdx]?.start ?? Infinity;
-
-      this._exitEffect.onGroupChange(
-        prevGroup as any, nextGroupStart, tSec,
-        this.ctx, this.width, this.height,
-      );
+    // ── Exit effect: detect gap (tSec past active group's end) ──
+    // resolveActiveGroup stays on group N during the gap (never-blank),
+    // so we detect "in the gap" by checking tSec >= group.end.
+    if (activeGroupIdx >= 0 && this._exitTriggeredForGroup !== activeGroupIdx) {
+      const activeGroup = groups[activeGroupIdx];
+      if (tSec >= activeGroup.end) {
+        this._exitTriggeredForGroup = activeGroupIdx;
+        const nextGroupStart = (activeGroupIdx + 1 < groups.length)
+          ? groups[activeGroupIdx + 1].start : Infinity;
+        this._exitEffect.onGroupChange(
+          activeGroup as any, nextGroupStart, tSec,
+          this.ctx, this.width, this.height,
+        );
+      }
     }
-    this._prevActiveGroupIdx = activeGroupIdx;
 
     let ci = 0;
     if (!this._evalChunks) this._evalChunks = [] as ScaledKeyframe['chunks'];
@@ -4758,6 +4763,14 @@ export class LyricDancePlayer {
       }
     }
     chunks.length = ci;
+
+    // ── Suppress main text during exit — exit effect owns rendering ──
+    if (this._exitEffect.active) {
+      for (let i = 0; i < chunks.length; i++) {
+        chunks[i].alpha = 0;
+        chunks[i].visible = false;
+      }
+    }
 
     if (!this._evalFrame) {
       this._evalFrame = {
