@@ -4551,6 +4551,7 @@ export class LyricDancePlayer {
 
     overlay.addEventListener('mousedown', onDown);
     overlay.addEventListener('touchstart', onDown, { passive: false });
+    overlay.addEventListener('click', (e) => { e.stopPropagation(); });
     window.addEventListener('mousemove', onMove);
     window.addEventListener('touchmove', onMove, { passive: false });
     window.addEventListener('mouseup', onUp);
