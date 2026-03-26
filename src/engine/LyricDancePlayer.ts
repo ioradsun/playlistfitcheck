@@ -4588,24 +4588,21 @@ export class LyricDancePlayer {
 
     // Final zoom = ceiling × timing × per-beat-strength
     this._bgPulseZoom = 1.0 + mp.bgPulseAmplitude * pulseEnvelope * beatDynamic;
-    // ═══ TEXT BEAT NOD: figure-8 pattern per bar position ═══
-    // Each beat in a 4-beat bar gets a different direction.
-    // Same magnitude, driven by same pulse signal. Musical, not random.
-    //   Beat 1 (downbeat): dip down          (0, 1.0)
-    //   Beat 2:            sway right + dip  (0.7, 0.3)
-    //   Beat 3:            smaller down       (0, 0.8)
-    //   Beat 4:            sway left + dip   (-0.7, 0.3)
-    const conductorBeatIdx = beatState?.beatIndex ?? -1;
-    const barPos = conductorBeatIdx >= 0 ? conductorBeatIdx % 4 : 0;
-    let nodDirX = 0;
-    let nodDirY = 1.0;
-    if (barPos === 1)      { nodDirX = 0.7; nodDirY = 0.3; }
-    else if (barPos === 2) { nodDirX = 0; nodDirY = 0.8; }
-    else if (barPos === 3) { nodDirX = -0.7; nodDirY = 0.3; }
+    // ═══ TEXT SWAY: continuous lissajous driven by audio time ═══
+    // sin(t) + sin(2t) = figure-8. Frequency locked to BPM.
+    // Always moving, always smooth. No pulse modulation, no discrete switching.
+    // Magnitude scales with intensity (louder = bigger sway) and canvas height.
+    const bpm = scene.bpm || 120;
+    const barDuration = 4 * (60 / bpm); // seconds per bar
+    const barAngle = ((tSec - scene.songStartSec) / barDuration) * Math.PI * 2;
 
-    const nodMag = mp.bgPulseAmplitude * pulseEnvelope * beatDynamic * this.height * 0.6;
-    this._textBeatNodX = nodMag * nodDirX;
-    this._textBeatNodY = nodMag * nodDirY;
+    const swayMag = this.height * (0.005 + mp.intensity * 0.01);
+    const targetSwayX = Math.sin(barAngle) * swayMag;
+    const targetSwayY = Math.sin(barAngle * 2) * swayMag * 0.5;
+
+    // EMA smooth — ~100ms at 60fps. Silky glide.
+    this._textBeatNodX += (targetSwayX - this._textBeatNodX) * 0.15;
+    this._textBeatNodY += (targetSwayY - this._textBeatNodY) * 0.15;
 
     // Brightness flash and vignette also scale per-beat
     const beatFlash = pulseEnvelope * beatDynamic * mp.intensity;
