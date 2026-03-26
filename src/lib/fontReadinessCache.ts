@@ -39,8 +39,17 @@ export function ensureFontReady(fontName: string): Promise<boolean> {
         new Promise<void>((resolve) => setTimeout(resolve, 2500)),
       ]);
 
-      return fontsApi.check(`600 48px "${fontName}"`) || fontsApi.check(`700 48px "${fontName}"`);
+      const loaded = fontsApi.check(`600 48px "${fontName}"`) || fontsApi.check(`700 48px "${fontName}"`);
+
+      // If font didn't load in time, remove from cache so future calls can retry.
+      // The Google Fonts stylesheet is still in the DOM — the font will eventually arrive.
+      if (!loaded) {
+        cache.delete(key);
+      }
+
+      return loaded;
     } catch {
+      cache.delete(key);
       return false;
     }
   })();

@@ -1427,20 +1427,56 @@ export class LyricDancePlayer {
     performance.mark("engine:firstPaint");
   }
 
+  /**
+   * Resolve the Google Font family name from cinematic_direction.typography.
+   * Reads from this.data (available at construction time, before payload is built).
+   * Falls back to Montserrat if no typography key or unknown key.
+   */
+  private getTargetFontFamily(): string {
+    const cd = this.data?.cinematic_direction as unknown as Record<string, unknown> | null;
+    const typoKey = cd?.typography as string | undefined;
+    const fontMap: Record<string, string> = {
+      'bold-impact': 'Oswald',
+      'clean-modern': 'Montserrat',
+      'elegant-serif': 'Playfair Display',
+      'raw-condensed': 'Barlow Condensed',
+      'whisper-soft': 'Nunito',
+      'tech-mono': 'JetBrains Mono',
+      'display-heavy': 'Bebas Neue',
+      'editorial-light': 'Cormorant Garamond',
+    };
+    return fontMap[typoKey ?? ''] ?? 'Montserrat';
+  }
+
   private kickFontStabilizationLoad(): void {
-    if (isFontReady('Montserrat')) {
+    const fontName = this.getTargetFontFamily();
+
+    if (isFontReady(fontName)) {
       this._fontStabilized = true;
       this._fontLayoutReflowPending = true;
       performance.mark("engine:fontReady");
       return;
     }
 
-    ensureFontReady('Montserrat').then((ready) => {
+    ensureFontReady(fontName).then((ready) => {
       if (this.destroyed) return;
       if (ready) {
         this._fontStabilized = true;
         this._fontLayoutReflowPending = true;
         performance.mark("engine:fontReady");
+      } else {
+        // Font didn't load in time — listen for late arrival
+        const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
+        if (fontsApi) {
+          fontsApi.ready.then(() => {
+            if (this.destroyed) return;
+            if (isFontReady(fontName)) {
+              this._fontStabilized = true;
+              this._fontLayoutReflowPending = true;
+              performance.mark("engine:fontReady");
+            }
+          });
+        }
       }
     });
   }
@@ -2867,8 +2903,23 @@ export class LyricDancePlayer {
     };
     const fontName = fontMap[typoKey] ?? 'Montserrat';
     const loaded = await ensureFontReady(fontName);
-    if (loaded && !this.destroyed) {
-      this._fontStabilized = true;
+    if (!this.destroyed) {
+      if (loaded) {
+        this._fontStabilized = true;
+        this._fontLayoutReflowPending = true;
+      } else {
+        // Font missed the 2500ms window — listen for late arrival and trigger recompile
+        const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
+        if (fontsApi) {
+          fontsApi.ready.then(() => {
+            if (this.destroyed) return;
+            if (isFontReady(fontName)) {
+              this._fontStabilized = true;
+              this._fontLayoutReflowPending = true;
+            }
+          });
+        }
+      }
     }
   }
 
