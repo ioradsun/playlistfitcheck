@@ -30,9 +30,9 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Terms = lazy(() => import("./pages/Terms"));
 const ArtistStage = lazy(() => import("./pages/ArtistStage"));
 const SeoPages = lazy(() => import("./pages/SeoPages"));
-const FitWidget = lazy(() => import("@/components/FitWidget").then(m => ({ default: m.FitWidget })));
-const SignalsPanel = lazy(() => import("@/components/signals/SignalsPanel").then(m => ({ default: m.SignalsPanel })));
-const PageLayout = lazy(() => import("@/components/PageLayout").then(m => ({ default: m.PageLayout })));
+const FitWidget = lazy(() => importWithRetry(() => import("@/components/FitWidget").then(m => ({ default: m.FitWidget }))));
+const SignalsPanel = lazy(() => importWithRetry(() => import("@/components/signals/SignalsPanel").then(m => ({ default: m.SignalsPanel }))));
+const PageLayout = lazy(() => importWithRetry(() => import("@/components/PageLayout").then(m => ({ default: m.PageLayout }))));
 const Admin = lazy(AdminPageImport);
 
 export default function MainAppShell() {
