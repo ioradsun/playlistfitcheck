@@ -178,6 +178,10 @@ export class CameraRig {
   setSection(_s: string): void {}
   setViewport(w: number, h: number): void { this.canvasW = w; this.canvasH = h; }
   loadSongData(): void {}
+  /** Viewport scale — all pixel offsets designed for 960px, scale proportionally */
+  private get _vpScale(): number {
+    return Math.min(this.canvasW, this.canvasH) / 960;
+  }
 
   update(deltaMs: number, beatState: BeatState | null, focus?: SubjectFocus | null): void {
     const cfg = this.cfg;
@@ -213,7 +217,7 @@ export class CameraRig {
 
     if (spike > 0.3 && energy > 0.6 && this._mode !== 'shake') {
       this._mode = 'shake';
-      this._shakeAmplitude = Math.min(1, spike) * cfg.shakeMax * ampScale;
+      this._shakeAmplitude = Math.min(1, spike) * cfg.shakeMax * this._vpScale * ampScale;
       this._shakePhase = 0;
       this._holdUntil = nowMs + 1500;
     }
@@ -286,11 +290,11 @@ export class CameraRig {
     const finalAmp = amp * releaseMult * (this._amplitudeScale ?? 1.0);
 
     if (bs.hitType === 'bass' || (bs.hitType === 'none' && isDownbeat)) {
-      this._posY = -cfg.punchY * finalAmp * (0.5 + gravity * 0.5);
+      this._posY = -cfg.punchY * this._vpScale * finalAmp * (0.5 + gravity * 0.5);
       this._velY = 0;
     } else if (bs.hitType === 'transient') {
       const dir = bs.beatIndex % 2 === 0 ? 1 : -1;
-      this._posX = cfg.snapX * finalAmp * dir * (0.5 + latBias * 0.5);
+      this._posX = cfg.snapX * this._vpScale * finalAmp * dir * (0.5 + latBias * 0.5);
       this._velX = 0;
       this._posR = cfg.tiltRad * finalAmp * dir * 0.5;
       this._velR = 0;
@@ -299,9 +303,9 @@ export class CameraRig {
       this._velR = 0;
     } else {
       const dir = bs.beatIndex % 2 === 0 ? 1 : -1;
-      this._posY = -cfg.punchY * finalAmp * 0.5;
+      this._posY = -cfg.punchY * this._vpScale * finalAmp * 0.5;
       this._velY = 0;
-      this._posX = cfg.snapX * finalAmp * 0.3 * dir;
+      this._posX = cfg.snapX * this._vpScale * finalAmp * 0.3 * dir;
       this._velX = 0;
     }
   }
@@ -328,8 +332,8 @@ export class CameraRig {
     this._cachedTransform = {
       zoom: 1.0, // zoom disabled — fitTextToViewport sizes text to fill canvas, zoom fights that
       proximity: Math.max(0, this._posZ),
-      offsetX: clamp(this._posX + shakeX, -cfg.maxOffsetPx, cfg.maxOffsetPx),
-      offsetY: clamp(this._posY + shakeY, -cfg.maxOffsetPx, cfg.maxOffsetPx),
+      offsetX: clamp(this._posX + shakeX, -cfg.maxOffsetPx * this._vpScale, cfg.maxOffsetPx * this._vpScale),
+      offsetY: clamp(this._posY + shakeY, -cfg.maxOffsetPx * this._vpScale, cfg.maxOffsetPx * this._vpScale),
       rotation: clamp(this._posR, -cfg.maxRotationRad, cfg.maxRotationRad),
       shakeX,
       shakeY,
