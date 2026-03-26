@@ -142,6 +142,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     topReaction,
     isWaiting,
     commentRefreshKey,
+    lightningBarEnabled,
   } = useLyricDanceCore({
     lyricDanceId,
     prefetchedData: prefetchedDataWithRegion,
@@ -453,7 +454,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             </div>
           )}
 
-          {!effectiveShowCover && !isWaiting && playerReady && data && (
+          {!effectiveShowCover && !isWaiting && playerReady && data && !lightningBarEnabled && (
             <LyricDanceProgressBar
               player={player}
               data={data}
