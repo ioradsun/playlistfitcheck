@@ -19,7 +19,6 @@ import {
   Download,
   Link,
   Users,
-  User,
   Check,
   Circle,
 } from "lucide-react";
@@ -1313,7 +1312,7 @@ export function FitTab({
               )}
             </div>
 
-            {/* Video player with profile overlay */}
+            {/* Video player */}
             <div className="relative rounded-xl overflow-hidden w-full aspect-video">
               {playerReady || imageWaitExpired ? (
                 <LyricDanceEmbed
@@ -1337,28 +1336,6 @@ export function FitTab({
                           : !fontReady
                             ? "loading font..."
                             : "preparing player..."}
-                  </span>
-                </div>
-              )}
-              {profile && (
-                <div className="absolute top-0 left-0 right-0 z-[460] flex items-center gap-2 px-3 py-2.5 pointer-events-none">
-                  <div className="relative shrink-0">
-                    <div className="h-7 w-7 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.08]">
-                      {profile.avatar_url ? (
-                        <img
-                          src={profile.avatar_url}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <User size={12} className="text-white/40" />
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate">
-                    {profile.display_name
-                      ? `In Studio · ${profile.display_name}`
-                      : "In Studio"}
                   </span>
                 </div>
               )}
