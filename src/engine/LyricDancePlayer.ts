@@ -36,6 +36,7 @@ import { IntensityRouter, type MotionProfile } from '@/engine/IntensityRouter';
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { FinaleEffect } from "@/engine/FinaleEffect";
 import { ExitEffect } from '@/engine/ExitEffect';
+import { HeroSmokeEffect } from '@/engine/HeroSmokeEffect';
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
@@ -1241,6 +1242,7 @@ export class LyricDancePlayer {
   private _textBeatNodY = 0;
   private _finaleEffect = new FinaleEffect();
   private _exitEffect = new ExitEffect();
+  private _heroSmoke = new HeroSmokeEffect();
   /** Index of the group we last triggered an exit for — prevents re-triggering */
   private _exitTriggeredForGroup = -1;
   // ═══ Breathing vignette — Fincher/Cronenweth eye funnel ═══
@@ -1819,6 +1821,7 @@ export class LyricDancePlayer {
     this._activeGroupCursor = 0;
     this._activeGroupCursorTime = -1;
     this._exitEffect.reset();
+    this._heroSmoke.reset();
     this._exitTriggeredForGroup = -1;
     this._intensityRouter.reset();
     this._resetBgParallax();
@@ -2148,6 +2151,7 @@ export class LyricDancePlayer {
     this._activeGroupCursor = 0;
     this._activeGroupCursorTime = -1;
     this._exitEffect.reset();
+    this._heroSmoke.reset();
     this._exitTriggeredForGroup = -1;
     this._intensityRouter.reset();
     this._resetBgParallax();
@@ -2470,6 +2474,7 @@ export class LyricDancePlayer {
     this._textBeatNodY = 0;
     this._finaleEffect.reset();
     this._exitEffect.reset();
+    this._heroSmoke.reset();
     this._exitTriggeredForGroup = -1;
   }
 
@@ -3397,6 +3402,20 @@ export class LyricDancePlayer {
     this.ctx.shadowColor = 'transparent';
     this._lastShadowBlur = 0;
     this._lastShadowColor = 'transparent';
+
+    // ═══ HERO SMOKE: palette-colored heat rising from hero words ═══
+    if (qTier < 3) {
+      const smokePalette = this._framePalette ?? this.data?.palette ?? ['#a855f7', '#ec4899', '#ffffff'];
+      this._heroSmoke.update(sortBuf, smokePalette, qTier);
+      this.ctx.save();
+      this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
+      this._heroSmoke.draw(this.ctx);
+      this.ctx.restore();
+      this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+      this.ctx.textAlign = 'left';
+      this.setCanvasBaseline('middle');
+    }
+
     for (let ci = 0; ci < sortBuf.length; ci += 1) {
       drawChunkText(sortBuf[ci]);
     }
@@ -4771,6 +4790,9 @@ export class LyricDancePlayer {
         chunk.skewX = 0;
 
         chunk.color = word.color;
+        chunk.isHeroWord = word.isHeroWord;
+        chunk.emphasisLevel = word.emphasisLevel;
+        chunk.wordDuration = word.wordDuration;
 
         ci++;
       }
