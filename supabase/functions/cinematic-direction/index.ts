@@ -1567,7 +1567,7 @@ serve(async (req) => {
     if (body.mode === "scene") {
       // Build user message for scene mode inline
       const sectionList = (body.audioSections || [])
-        .map((s: any, i: number) => `  Section ${i + 1}: "${s.label || `Section ${i + 1}`}" (${fmt(s.start)}–${fmt(s.end)})`)
+        .map((s: any, i: number) => `  Section ${i + 1}: "${s.label || `Section ${i + 1}`}" (${fmt(s.start)}–${fmt(s.end)}, energy: ${(s.avgEnergy ?? 0).toFixed(2)}, beats/sec: ${(s.beatDensity ?? 0).toFixed(1)})`)
         .join("\n");
       const sceneUserMessage = [
         `Song: "${title}" by ${artist}`,
