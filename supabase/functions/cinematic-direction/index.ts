@@ -121,90 +121,92 @@ Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values
 `;
 
 const WORD_DIRECTION_PROMPT = `
-You are grouping lyrics into screen-sized phrases for a lyric video.
-
-Each phrase = one screen.
-Words in the phrase appear together and exit together.
-
-You will receive a word stream like:
-  w  0  Tell               180ms
-  w  1  me,                200ms  [BREATH 300ms]
-  w  2  is                 150ms
+You are a lyric video phrase director. Your job is to break a word
+stream into screen-sized phrases — each phrase occupies the full
+screen and exits before the next arrives.
 
 WORK IN THIS ORDER:
-1. Read the whole song structure.
-2. Group words into phrases following the rules below.
-3. Choose a heroWord for each phrase.
-4. Assign exitEffect for each phrase — consider the sequence, not each phrase alone.
+1. Read the full word stream. Note the BPM.
+2. Identify the song's energy mode: RAP/FLOW vs MELODIC/SUNG.
+   A section is FLOW if words arrive faster than 1 word per beat.
+   A section is MELODIC if words are held or spaced.
+3. Group words into phrases section by section using the rules below.
+4. Choose a heroWord per phrase.
+5. Assign exitEffect per phrase considering the full sequence arc.
 
 HARD OUTPUT RULES:
 - Return ONLY valid JSON. No markdown. No explanation.
 - Every word index must belong to exactly one phrase. No gaps. No overlaps.
 - Every phrase MUST include all 3 fields: wordRange, heroWord, exitEffect.
 
-PHRASE GROUPING RULES — apply in this priority order:
-1. Preserve full word coverage with no gaps or overlaps.
-2. ALWAYS start a new phrase after a [BREATH] or [pause] marker.
-3. Keep phrases at 1–6 words.
-4. Prefer complete semantic thoughts over arbitrary chunks.
-5. Avoid ending on weak connector words when possible.
+PHRASE BOUNDARY RULES — apply in this exact priority order:
+1. [BREATH] markers are HARD boundaries. Always start a new phrase.
+   No exceptions. The singer stopped — the screen must too.
+2. [pause 150ms+] markers are SOFT boundaries. Start a new phrase
+   unless doing so would leave a single connector word alone.
+3. Natural semantic unit — a complete sub-thought or rhythmic cell.
+4. Never end a phrase on: I, you, we, they, he, she, it, and, but,
+   or, so, because, if, when, while, that, the, a, an, in, on, at,
+   to, for, of, with, from — unless a HARD boundary forces it.
 
-PHRASE DESIGN RULES:
-- A phrase should feel like one spoken or sung thought.
-- Favor natural lyrical emphasis over rigid punctuation.
-- Do not split a strong short phrase just to make two smaller ones.
-- One-word phrases are valid for impact words, held notes, or strong repeated hits.
-- Avoid filler-only phrases whenever possible.
+PHRASE LENGTH BY MODE:
+FLOW sections (rap, fast delivery):
+  - 1–3 words per phrase. Short = impact.
+  - Each bar or half-bar = one phrase.
+  - Repeated single words (J-O-B, H-O-E) = one phrase each.
+  - Never group more than one punch line together.
 
-CONNECTOR WORD GUIDANCE — never end a phrase on these unless a hard boundary forces it:
-Pronouns: I, you, we, they, he, she, it
-Conjunctions: and, but, or, so, because, if, when, while, that
-Articles: the, a, an
-Prepositions: in, on, at, to, for, of, with, from
+MELODIC sections (singing, held notes):
+  - 3–6 words per phrase.
+  - Follow the natural sung breath, not the lyric line on paper.
+  - A held word can be its own phrase.
 
-BAD:  "cut the rope and I" / "won't look back"
-BETTER: "cut the rope" / "and I won't look back"
+BPM ADJUSTMENT:
+  - Below 85 BPM: can hold 4–6 words in MELODIC, 2–3 in FLOW.
+  - 85–110 BPM: 3–5 words MELODIC, 1–3 FLOW.
+  - Above 110 BPM: 2–4 words MELODIC, 1–2 FLOW.
 
-BAD:  "I know that the" / "world is on fire"
-BETTER: "I know that" / "the world is on fire"
+HEROWORD RULES:
+- Must be a word that actually appears in the phrase.
+- Return it UPPERCASE, no trailing punctuation.
+- Pick by this priority:
+  1. The verb or noun carrying the phrase's punch
+  2. An emotionally charged or culturally loaded word
+  3. A repeated hook word
+  4. The longest non-filler word (tiebreaker)
+- In a 1-word phrase, that word is the heroWord.
+- Never pick: I, a, the, and, but, or, is, it, to, of, in, on
 
-HEROWORD — choose by importance, not length:
-1. The most emotionally charged word in the phrase
-2. The key noun or verb carrying the phrase meaning
-3. A repeated hook word
-4. The longest non-filler word (tiebreaker only)
+EXIT EFFECTS — assign one per phrase:
+"fade" | "drift_up" | "shrink" | "dissolve" |
+"cascade" | "scatter" | "slam" | "glitch" | "burn"
 
-heroWord must be: a word that actually appears in the phrase, UPPERCASE, trailing punctuation stripped.
-If the phrase contains only filler words, pick the least weak readable word.
+ASSIGNMENT GUIDE:
+  quiet / intimate / vulnerable  →  fade, drift_up, dissolve
+  rhythmic / confident / bounce  →  cascade, shrink
+  aggressive / hard / impact     →  slam, scatter, glitch
+  climactic / dramatic / peak    →  burn, scatter, slam
+  dreamy / floating / ethereal   →  dissolve, drift_up, fade
 
-EXIT EFFECTS — required on every phrase. Choose one:
-"fade" | "drift_up" | "shrink" | "dissolve" | "cascade" | "scatter" | "slam" | "glitch" | "burn"
-
-EXIT EFFECT GUIDANCE:
-- quiet / vulnerable → fade, drift_up, dissolve
-- confident / rhythmic → cascade, shrink
-- aggressive / impactful → slam, scatter, glitch
-- dramatic / climactic → burn, scatter, slam
-- dreamy / ethereal → dissolve, drift_up, fade
-
-EXIT EFFECT RULES:
-- Assign effects considering the sequence — build across the song.
-- Never use the same effect 3+ times in a row.
-- Repeated phrases may reuse the same effect for recognition.
-- If unsure, use fade.
+ARC RULES:
+  - Build across the song — escalate effects toward the hook.
+  - Never repeat the same effect 3+ times in a row.
+  - Hook phrases should hit harder than verse phrases.
+  - Outro should de-escalate: fade, drift_up, dissolve.
+  - Repeated lyric lines may reuse the same effect for recognition.
 
 HOOK PHRASE:
-At top level, return "hookPhrase": the catchiest short phrase in the song.
-Choose by repetition, punch, emotional payoff, or title-line energy.
+Return "hookPhrase" at the top level: the single most punchy,
+repeatable phrase in the song. Usually the title line or the
+phrase the listener will remember walking away.
 
-Return ONLY valid JSON.
-
+OUTPUT FORMAT — return ONLY this JSON:
 {
   "phrases": [
-    { "wordRange": [0, 2], "heroWord": "TELL", "exitEffect": "fade" },
-    { "wordRange": [3, 7], "heroWord": "SOUL", "exitEffect": "burn" }
+    { "wordRange": [0, 2], "heroWord": "SOUL", "exitEffect": "fade" },
+    { "wordRange": [3, 3], "heroWord": "TELL", "exitEffect": "slam" }
   ],
-  "hookPhrase": "the catchiest short phrase"
+  "hookPhrase": "catchiest short phrase"
 }
 `;
 
