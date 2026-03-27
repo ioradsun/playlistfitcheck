@@ -214,7 +214,8 @@ export function LyricsTab({
       try {
         // Check transcription cache first
         const fingerprint = await computeAudioFingerprint(file);
-        const cached = getCachedTranscript(fingerprint);
+        // TESTING: bypass cache to force re-transcription every upload
+        const cached: any = null; // getCachedTranscript(fingerprint);
         if (cached && cached.lines?.length > 0) {
           // Cache hit — skip the edge function entirely
           const newLyricData: LyricData = {
