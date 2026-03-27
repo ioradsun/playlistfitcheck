@@ -33,8 +33,8 @@ export interface UseLyricSectionsResult {
   isReady: boolean;
 }
 
-const GAP_THRESHOLD_SEC = 1.2;
-const MAX_WORDS_PER_LINE = 10;
+const GAP_THRESHOLD_SEC = 0.4;
+const MAX_WORDS_PER_LINE = 6;
 const END_TRAIL_SEC = 0.15;
 const LINE_END_BUFFER_SEC = 0.05;
 
