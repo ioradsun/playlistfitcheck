@@ -42,6 +42,8 @@ function LazySpotifyEmbedInner({
   const controllerRef = useRef<SpotifyEmbedController | null>(null);
   const hasActivatedRef = useRef(false);
   const prevCardStateRef = useRef<CardState>(cardState);
+  // Bumped to force the creation effect to re-run after a cold→warm transition
+  const [createGeneration, setCreateGeneration] = useState(0);
 
   // Track whether this controller is currently playing so we only call
   // onPlay (→ activate) once per play session, not on every update tick.
@@ -101,7 +103,6 @@ function LazySpotifyEmbedInner({
     loadSpotifyIframeApi()
       .then((IFrameAPI) => {
         if (destroyed || !containerRef.current) return;
-        // Clear any previous content (e.g. after cold→warm transition)
         containerRef.current.innerHTML = "";
 
         IFrameAPI.createController(
@@ -115,7 +116,6 @@ function LazySpotifyEmbedInner({
             controllerRef.current = controller;
             setIframeLoaded(true);
 
-            // ── Detect playback start → call activate() ──
             controller.addListener(
               "playback_update",
               (e: { data: { isPaused: boolean } }) => {
@@ -124,8 +124,6 @@ function LazySpotifyEmbedInner({
                 const wasPlaying = isPlayingRef.current;
                 isPlayingRef.current = nowPlaying;
 
-                // On play start (transition from paused→playing), claim
-                // active status so every other media source gets silenced.
                 if (nowPlaying && !wasPlaying) {
                   if (onPlay) onPlay();
                   hasActivatedRef.current = true;
@@ -136,8 +134,6 @@ function LazySpotifyEmbedInner({
         );
       })
       .catch((err) => {
-        // API failed to load — fall back to raw iframe.
-        // This happens if the script is blocked (ad-blocker, CSP, etc).
         console.warn("[LazySpotifyEmbed] IFrame API unavailable:", err);
         if (!destroyed && containerRef.current) {
           const iframe = document.createElement("iframe");
@@ -171,7 +167,10 @@ function LazySpotifyEmbedInner({
       isPlayingRef.current = false;
       hasActivatedRef.current = false;
     };
-  }, [isSpotify, spotifyUri, embedHeight, cardState]);
+    // cardState is NOT a dep — warm→active must NOT destroy/recreate.
+    // Cold→warm recreation is triggered by bumping createGeneration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSpotify, spotifyUri, embedHeight, createGeneration]);
 
   // ── Cold → warm: recreate controller. Cold: destroy it. ──
   useEffect(() => {
@@ -194,13 +193,10 @@ function LazySpotifyEmbedInner({
       hasActivatedRef.current = false;
       setIframeLoaded(false);
       setRevealReady(false);
+    } else if (prev === "cold" && cardState !== "cold") {
+      // Cold → warm/active: bump generation so the creation effect re-runs
+      setCreateGeneration((g) => g + 1);
     }
-    // cold→warm recreation: the main effect above will re-run on next render
-    // since the container ref is now visible again. Force it by clearing and
-    // re-triggering via a state toggle would be over-engineering. The
-    // audio-solo listener already covers silence. If the card re-enters the
-    // window, useFeedWindow sets it to warm → MeasuredFeedCard renders →
-    // containerRef populates → the main effect's cleanup+re-run handles it.
   }, [isSpotify, cardState]);
 
   // ── Audio solo: pause if this card is not the active one ──
