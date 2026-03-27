@@ -10,6 +10,7 @@ const corsHeaders = {
 interface SectionInput {
   sectionIndex: number;
   description: string;
+  artistDirection?: string;
   visualMood?: string;
   mood?: string;
   atmosphere?: string;
@@ -76,6 +77,10 @@ function buildImagePrompt(
   totalSections: number,
 ): string {
   const parts: string[] = ["Cinematic background scene"];
+
+  if (section.artistDirection) {
+    parts.push(`Artist direction: ${section.artistDirection}`);
+  }
 
   // Core description
   const description = section.description?.trim();
@@ -329,6 +334,10 @@ serve(async (req) => {
     }
 
     const cinematicDirection = danceRow?.cinematic_direction;
+    const artistDirection: string | undefined =
+      typeof cinematicDirection?._artistDirection === "string"
+        ? cinematicDirection._artistDirection.trim() || undefined
+        : undefined;
     const lines = Array.isArray(danceRow?.lyrics) ? danceRow.lyrics : [];
 
     const rawSections = Array.isArray(cinematicDirection?.sections)
@@ -366,6 +375,7 @@ serve(async (req) => {
         return {
           sectionIndex,
           description: fallbackDesc,
+          artistDirection,
           visualMood:
             typeof section?.visualMood === "string"
               ? section.visualMood

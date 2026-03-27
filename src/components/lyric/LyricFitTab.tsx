@@ -4,7 +4,6 @@ import * as React from "react";
 import { useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
-import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import {
   useLyricPipeline,
   type FitReadiness,
@@ -16,7 +15,6 @@ import type { LyricFitView } from "./LyricFitToggle";
 import { LyricFitToggle } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
-import type { SceneContextResult } from "@/lib/sceneContexts";
 
 export type { FitReadiness, PipelineStages, PipelineStageStatus, GenerationStatus };
 
@@ -46,40 +44,16 @@ export function LyricFitTab({
 
   const [activeTab, setActiveTab] = React.useState<LyricFitView>("lyrics");
   const [sceneDescription, setSceneDescription] = React.useState("");
-  const [resolvedScene, setResolvedScene] = React.useState<SceneContextResult | null>(
-    null,
-  );
-  const [resolvingScene, setResolvingScene] = React.useState(false);
 
   const p = useLyricPipeline({
     initialLyric,
     user,
     siteCopy,
-    resolvedScene,
+    sceneDescription,
     onProjectSaved,
     onNewProject,
     onSavedId,
   });
-
-  React.useEffect(() => {
-    if (!sceneDescription.trim() || sceneDescription.trim().length < 10) return;
-    const timer = setTimeout(async () => {
-      setResolvingScene(true);
-      try {
-        const { data } = await invokeWithTimeout(
-          "resolve-scene-context",
-          { description: sceneDescription.trim() },
-          15_000,
-        );
-        if (data && !data.error) setResolvedScene(data);
-      } catch (e) {
-        console.error("Scene resolve failed:", e);
-      } finally {
-        setResolvingScene(false);
-      }
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [sceneDescription]);
 
   const handleViewChange = useCallback((nextView: LyricFitView) => {
     if (
@@ -103,26 +77,13 @@ export function LyricFitTab({
         <input
           type="text"
           value={sceneDescription}
-          onChange={(e) => {
-            setSceneDescription(e.target.value);
-            setResolvedScene(null);
-          }}
+          onChange={(e) => setSceneDescription(e.target.value)}
           placeholder="Where are you when this song plays? ex: driving at night. on a rooftop. in a crowded club."
           className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder:text-muted-foreground/50 placeholder:italic focus:outline-none focus:ring-1 focus:ring-primary/50"
           maxLength={200}
           aria-label="Scene description"
         />
-        {resolvingScene && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-mono animate-pulse">
-            reading vibe...
-          </div>
-        )}
       </div>
-      {resolvedScene && !resolvingScene ? (
-        <p className="text-primary text-xs font-mono">
-          ✓ {resolvedScene.moodSummary}
-        </p>
-      ) : null}
     </div>
   ) : null;
 
