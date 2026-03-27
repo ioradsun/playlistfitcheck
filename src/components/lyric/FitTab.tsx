@@ -1298,6 +1298,7 @@ export function FitTab({
                     const debugInfo = {
                       _meta: meta || "no meta available",
                       cinematicDirection,
+                      words: wordsRef.current ?? "no words available",
                     };
                     navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
                     const model = meta?.scene?.model || meta?.words?.model || "unknown";
