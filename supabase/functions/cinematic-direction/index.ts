@@ -1761,7 +1761,7 @@ async function loadCustomPrompts(): Promise<{
   if (!sbUrl || !sbKey) return defaults;
 
   try {
-    const slugs = ["cinematic-direction", "cinematic-scene", "cinematic-words", "analysis-model"];
+    const slugs = ["cinematic-direction", "cinematic-scene", "analysis-model"];
     const res = await fetch(
       `${sbUrl}/rest/v1/ai_prompts?slug=in.(${slugs.join(",")})&select=slug,prompt`,
       {
@@ -1782,7 +1782,7 @@ async function loadCustomPrompts(): Promise<{
     return {
       fullPrompt: bySlug["cinematic-direction"] || CINEMATIC_DIRECTION_PROMPT,
       scenePrompt: bySlug["cinematic-scene"] || SCENE_DIRECTION_PROMPT,
-      wordPrompt: bySlug["cinematic-words"] || WORD_DIRECTION_PROMPT,
+      wordPrompt: WORD_DIRECTION_PROMPT,
       model: bySlug["analysis-model"]?.trim() || PRIMARY_MODEL,
     };
   } catch (e) {
