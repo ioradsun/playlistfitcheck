@@ -193,13 +193,10 @@ function LazySpotifyEmbedInner({
       hasActivatedRef.current = false;
       setIframeLoaded(false);
       setRevealReady(false);
+    } else if (prev === "cold" && cardState !== "cold") {
+      // Cold → warm/active: bump generation so the creation effect re-runs
+      setCreateGeneration((g) => g + 1);
     }
-    // cold→warm recreation: the main effect above will re-run on next render
-    // since the container ref is now visible again. Force it by clearing and
-    // re-triggering via a state toggle would be over-engineering. The
-    // audio-solo listener already covers silence. If the card re-enters the
-    // window, useFeedWindow sets it to warm → MeasuredFeedCard renders →
-    // containerRef populates → the main effect's cleanup+re-run handles it.
   }, [isSpotify, cardState]);
 
   // ── Audio solo: pause if this card is not the active one ──
