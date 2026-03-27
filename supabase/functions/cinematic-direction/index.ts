@@ -134,91 +134,77 @@ Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values
 const WORD_DIRECTION_PROMPT = `
 You are a billboard copy editor cutting lyrics for a lyric video.
 
-Each phrase = one full screen. The viewer sees it for 1–3 seconds
-at most. Your job is to group words the way a billboard art director
-would — short, punchy, visually complete. Every phrase should be
-able to stand alone on a highway billboard and hit instantly.
+Each phrase = one full screen. The viewer sees it for a moment.
+Short. Punchy. Every phrase stands alone like a billboard.
 
-Ask yourself for every group: "Would this look powerful on a
-billboard?" If not, recut it.
+The word stream has been pre-analyzed. Three signals are marked:
 
-WORK IN THIS ORDER:
-1. Read the full word stream. Note the BPM and song energy.
-2. Cut the lyrics into billboard-ready phrases using the rules below.
-3. Choose the headline word (heroWord) for each billboard.
-4. Assign an exit effect that matches the phrase's emotional punch.
+[HERO]   — this word was held for 350ms+ by the singer. The music
+           is telling you this word matters. Build phrases around
+           HERO words. A single [HERO] word can be its own screen.
 
-OUTPUT RULES — non-negotiable:
-- Return ONLY valid JSON. No markdown. No explanation.
-- Every word index must belong to exactly one phrase. No gaps. No overlaps.
-- Every phrase MUST have all 3 fields: wordRange, heroWord, exitEffect.
+[BREATH] — hard cut. Always start a new phrase after a breath.
+           The singer stopped. The screen stops. No exceptions.
 
-BILLBOARD CUTTING RULES:
+[pause]  — soft cut. Start a new phrase unless it would leave a
+           single weak connector word stranded alone.
 
-1. [BREATH] = hard cut. Always start a new billboard after a breath.
-   The artist paused. The screen pauses. No exceptions.
+GROUPING RULES:
 
-2. [pause] = soft cut. Start a new billboard unless the split would
-   leave a single weak word stranded alone.
+1. [BREATH] = hard phrase boundary. Always. No exceptions.
 
-3. Max 5 words per billboard. This is a hard ceiling.
-   A great billboard is usually 2–4 words. 5 is the absolute max.
+2. [HERO] words are your anchors:
+   - A [HERO] word can stand alone as a 1-word phrase.
+   - Group 1–2 short surrounding words with a [HERO] if they
+     belong to the same thought.
+   - Never split a [HERO] word away from its natural phrase.
 
-4. Fast rap sections (dense word delivery, 120+ BPM): cut to
-   1–3 words per billboard. Rapid fire = rapid screens.
-   Single punch words get their own screen: FUCK. SOUL. BITCH.
+3. Non-hero words: group by natural spoken thought.
+   Fast rap delivery = 1–3 words per phrase.
+   Sung / melodic delivery = 3–5 words per phrase.
+   Hard ceiling: 6 words maximum, no exceptions.
 
-5. Sung / melodic sections: 3–5 words. Follow the breath, not
-   the written line.
+4. Never end a phrase on a hanging connector unless [BREATH]
+   forces it: I, you, we, they, he, she, it, and, but, or, so,
+   because, if, when, while, that, the, a, an, in, on, at, to,
+   for, of, with, from
 
-6. Never end a billboard on a hanging word that needs the next
-   screen to complete it:
-   BAD:  "is your" / "soul for sale"
-   GOOD: "is your soul" / "for sale"
-
-   BAD:  "god no yall aint" / "touchin my soul"
-   GOOD: "god no" / "yall aint touchin" / "my soul"
-
-7. Strong short phrases are never split just to make two:
-   "heaven on earth" = one billboard, not three.
+TIMING CHECK — before finalizing every phrase:
+   Total duration = last word end minus first word start.
+   If a phrase totals less than 350ms it is too fast to read.
+   Merge it into its neighbor (prefer merging forward).
+   A [HERO] word is always >= 350ms so it always passes alone.
 
 THE HEADLINE WORD (heroWord):
-This is the word that carries the billboard. The one that would be
-in the largest font. Think: if you could only keep one word from
-this phrase on the sign, which one is it?
+   - If the phrase has a [HERO] word, that IS the heroWord.
+   - Multiple [HERO] words: pick the most emotionally charged.
+   - No [HERO] word: pick the verb or noun carrying the punch.
+   - Return UPPERCASE, strip all punctuation — no apostrophes,
+     commas, periods, or any other character. Letters only.
+   - Never pick: I, a, the, and, but, or, is, it, to, of, in,
+     on, that, you, we, me, he, she, they, my, your, with, from
 
-Rules:
-- Must be a word that actually appears in the phrase.
-- Return it UPPERCASE, no punctuation at all — strip everything.
-- Never pick: I, a, the, and, but, or, is, it, to, of, in, on,
-  that, you, we, me, he, she, they, my, your, his, her, with, from
-- For a 1-word billboard, that word IS the headline.
-
-EXIT EFFECTS — one per billboard, every billboard, no exceptions:
+EXIT EFFECTS — one per phrase, every phrase, no exceptions:
 "fade" | "drift_up" | "shrink" | "dissolve" |
 "cascade" | "scatter" | "slam" | "glitch" | "burn"
 
-Match the effect to the phrase's emotional weight:
-  whisper / still / aching      →  fade, dissolve, drift_up
-  rhythmic / steady / rolling   →  cascade, shrink
-  aggressive / confrontational  →  slam, glitch, scatter
-  climactic / peak / anthem     →  burn, slam, scatter
-  floating / surreal / dreamy   →  drift_up, dissolve, fade
+   whisper / still / aching       →  fade, dissolve, drift_up
+   rhythmic / confident           →  cascade, shrink
+   aggressive / confrontational   →  slam, glitch, scatter
+   climactic / peak / [HERO] hit  →  burn, slam, scatter
+   floating / dreamy              →  drift_up, dissolve, fade
 
-ARC — think like an editor cutting a trailer:
-  - Build intensity toward the hook. Let it breathe after.
-  - Never repeat the same effect 3+ times in a row.
-  - The hook phrase should hit with the heaviest effect in its section.
-  - Chorus repeats should use the same effect pattern each time —
-    the viewer should feel déjà vu when the hook comes back.
-  - Outro cools down: fade, drift_up, dissolve only.
+ARC:
+   Build intensity toward the hook. Never repeat the same effect
+   3 times in a row. Chorus repeats use the same effect pattern
+   each time — the viewer should feel it coming back.
+   Outro only: fade, drift_up, dissolve.
 
 HOOK PHRASE:
-Return "hookPhrase" at top level — the one phrase from this song
-that would look best on an actual billboard. Usually the title line
-or the line the listener can't stop saying.
+   Return "hookPhrase" at top level — the single phrase that would
+   look best on an actual billboard. Usually the title line.
 
-OUTPUT — return ONLY this JSON:
+OUTPUT — return ONLY this JSON, nothing else:
 {
   "phrases": [
     { "wordRange": [0, 1], "heroWord": "TELL", "exitEffect": "fade" },
@@ -805,9 +791,10 @@ function buildWordUserMessage(
     for (let wi = 0; wi < words.length; wi++) {
       const w = words[wi];
       const durMs = Math.round((w.end - w.start) * 1000);
+      const isHero = durMs >= 350;
       const pad = String(wi).padStart(3, " ");
       const wordPad = w.word.padEnd(18, " ");
-      let line = `  w${pad}  ${wordPad} ${durMs}ms`;
+      let line = `  w${pad}  ${wordPad} ${durMs}ms${isHero ? "  [HERO]" : ""}`;
 
       // Gap to next word
       if (wi < words.length - 1) {
@@ -1396,45 +1383,41 @@ async function callWords(
 
   const result = validateWords(parsed, words);
 
-  // Server-side enforcement pipeline (order matters)
+  // Server-side enforcement — bare minimum, non-destructive
   if (words && Array.isArray(result.value.phrases)) {
-    // 1. Hard cap: split any phrase over 6 words
-    result.value.phrases = enforcePhraseLimits(result.value.phrases, words, 6);
-    // 2. Fill gaps
-    result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
-    // 3. Validate + fill heroWords
-    fillMissingHeroWords(result.value.phrases, words);
-    // 4. Repair phrase boundaries
-    if (words && words.length > 0) {
-      result.value.phrases = repairPhraseBoundaries(result.value.phrases, words);
-    }
-    // 5. Strip punctuation from all heroWords
-    for (const phrase of result.value.phrases) {
+
+    // 1. Fill any word index gaps the AI left uncovered
+    //    (structural integrity only — no creative decisions)
+    result.value.phrases = fillPhraseGaps(
+      result.value.phrases,
+      words.length
+    );
+
+    // 2. Strip punctuation from heroWords
+    for (const phrase of result.value.phrases as Array<any>) {
       if (phrase.heroWord) {
-        phrase.heroWord = (phrase.heroWord as string)
-          .replace(/[^A-Z0-9\-]/gi, "")
+        phrase.heroWord = String(phrase.heroWord)
+          .replace(/[^A-Z0-9]/gi, "")
           .toUpperCase();
       }
     }
-    // 6. Fill missing exitEffects
+
+    // 3. Fill any exitEffects the AI missed
     const VALID_EFFECTS = new Set([
-      "fade",
-      "drift_up",
-      "shrink",
-      "dissolve",
-      "cascade",
-      "scatter",
-      "slam",
-      "glitch",
-      "burn",
+      "fade", "drift_up", "shrink", "dissolve", "cascade",
+      "scatter", "slam", "glitch", "burn",
     ]);
     const pArr = result.value.phrases as Array<any>;
     for (let pi = 0; pi < pArr.length; pi++) {
       if (!pArr[pi].exitEffect || !VALID_EFFECTS.has(pArr[pi].exitEffect)) {
         const prev = pi > 0 ? pArr[pi - 1].exitEffect : null;
-        pArr[pi].exitEffect = (prev && prev !== "drift_up") ? "drift_up" : "fade";
+        pArr[pi].exitEffect =
+          prev && prev !== "drift_up" ? "drift_up" : "fade";
       }
     }
+
+    // 4. Fill any missing heroWords (longest non-filler word in phrase)
+    fillMissingHeroWords(result.value.phrases, words);
   }
 
   if (
