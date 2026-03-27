@@ -93,6 +93,8 @@ function LazySpotifyEmbedInner({
     if (!containerRef.current) return;
     // Don't create a controller for cold cards (outside render window)
     if (cardState === "cold") return;
+    // Already have a live controller — nothing to do
+    if (controllerRef.current) return;
 
     let destroyed = false;
 
@@ -169,10 +171,7 @@ function LazySpotifyEmbedInner({
       isPlayingRef.current = false;
       hasActivatedRef.current = false;
     };
-    // Re-create when track changes. cardState is intentionally NOT in deps —
-    // cold→warm recreation is handled by the separate effect below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSpotify, spotifyUri, embedHeight]);
+  }, [isSpotify, spotifyUri, embedHeight, cardState]);
 
   // ── Cold → warm: recreate controller. Cold: destroy it. ──
   useEffect(() => {
