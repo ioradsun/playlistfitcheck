@@ -641,11 +641,11 @@ async function runGeminiTranscribe(
 }> {
   let transcribePrompt: string;
   if (referenceLyrics) {
-    const alignTemplate = await getPrompt("lyric-align", DEFAULT_ALIGN_PROMPT);
-    transcribePrompt = alignTemplate.replace("{referenceLyrics}", referenceLyrics);
-    
+    // Always use hardcoded align prompt — never DB-overridable
+    transcribePrompt = DEFAULT_ALIGN_PROMPT.replace("{referenceLyrics}", referenceLyrics);
   } else {
-    transcribePrompt = await getPrompt("lyric-transcribe", DEFAULT_TRANSCRIBE_PROMPT);
+    // Always use hardcoded transcribe prompt — bypass DB to prevent override
+    transcribePrompt = DEFAULT_TRANSCRIBE_PROMPT;
   }
   const content = await callGemini(transcribePrompt, audioBase64, mimeType, lovableKey, model, 8000, "transcribe");
 
