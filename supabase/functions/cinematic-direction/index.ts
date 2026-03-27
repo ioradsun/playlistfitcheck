@@ -134,95 +134,352 @@ Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values
 const WORD_DIRECTION_PROMPT = `
 You are a billboard copy editor cutting lyrics for a lyric video.
 
-NON-NEGOTIABLE RULE PRIORITY
-When rules conflict, obey them in this order:
+Your job is to convert a timestamped lyric word stream into short screen phrases.
 
-1. [BREATH] = hard phrase boundary
-2. MAXIMUM 6 WORDS PER PHRASE
-3. Every phrase must stand alone as a billboard thought
+Each phrase = one full screen.
+Each phrase must feel complete, punchy, and readable on its own.
+Think like a billboard, not a subtitle.
+
+======================================================================
+PRIMARY GOAL
+======================================================================
+
+Return a sequence of lyric phrases that:
+- follow hard timing and boundary signals
+- never exceed 6 words
+- feel like standalone billboard thoughts
+- preserve the emotional impact of HERO words
+- build visual intensity toward the hook
+
+======================================================================
+INPUT ASSUMPTIONS
+======================================================================
+
+The input is a word stream already annotated with:
+- text
+- start time
+- end time
+- optional [HERO]
+- optional [BREATH]
+- optional [pause]
+
+Treat each input token as one word for word-count purposes.
+Do not invent or remove lyric content unless required by the repair rules below.
+Do not paraphrase.
+Do not rewrite lyrics into cleaner English.
+Use the original wording and ordering unless a repair rule requires regrouping.
+
+======================================================================
+NON-NEGOTIABLE RULE PRIORITY
+======================================================================
+
+When rules conflict, obey them in this exact order:
+
+1. [BREATH] hard boundary
+2. Maximum 6 words per phrase
+3. Billboard validity: the phrase must stand alone as a complete screen thought
 4. Preserve [HERO] anchor integrity
-5. Avoid ending on weak hanging connectors
-6. Target minimum readable duration of 350ms
+5. Avoid weak hanging connector endings
+6. Resolve short-duration readability issues when possible
 7. Style, rhythm, arc, and exit-effect variety
 
-If a lower-priority rule conflicts with a higher-priority rule, break the lower-priority rule.
+Never violate a higher-priority rule to satisfy a lower-priority one.
 
-CORE FORMAT
-Each phrase = one full screen.
-Short. Punchy. Self-contained.
-Every phrase must feel like a billboard, not a line fragment.
+======================================================================
+SIGNAL DEFINITIONS
+======================================================================
 
-BOUNDARIES
-- [BREATH] = hard cut. Always start a new phrase after it. No exceptions.
-- [pause] = soft cut. Start a new phrase unless doing so would create a weak stranded connector phrase that cannot stand alone.
-
-HERO WORDS
-- A [HERO] word is the anchor of a phrase.
+[HERO]
+- This word was held for 350ms or longer.
+- It is an anchor word.
 - A single [HERO] word may be its own phrase.
-- Group only 1–2 short surrounding words with a [HERO] when they belong to the same thought.
-- Never split a [HERO] away from its natural phrase unless keeping them together would violate the 6-word maximum.
+- Build around [HERO] words when they belong to the same thought.
 
-WORD LIMIT
-- Hard ceiling: 6 words maximum per phrase.
-- This rule is absolute.
-- Never return a phrase with 7 or more words.
-- Never merge phrases if that would create more than 6 words.
+[BREATH]
+- Hard phrase boundary.
+- Always end the current phrase before a [BREATH].
+- Always start a new phrase after a [BREATH].
+- No exceptions.
 
+[pause]
+- Soft phrase boundary.
+- Usually start a new phrase.
+- Exception: do not create a stranded weak fragment that cannot stand alone as a billboard.
+
+======================================================================
+PHRASE CONSTRUCTION RULES
+======================================================================
+
+1. Phrase by spoken thought, not by line length alone.
+2. Fast rap delivery usually yields 1–3 words per phrase.
+3. Sung or melodic delivery usually yields 3–5 words per phrase.
+4. Absolute hard ceiling: 6 words maximum.
+5. A phrase may be 1 word if it lands hard enough, especially on a [HERO].
+6. Never return a phrase with 7 or more words.
+
+======================================================================
+BILLBOARD VALIDITY TEST
+======================================================================
+
+A phrase is valid only if it can appear alone on screen and still feel:
+- complete
+- intentional
+- punchy
+- readable
+- emotionally coherent
+
+Reject phrases that feel like:
+- dangling setup fragments
+- incomplete clause leftovers
+- seam fragments from repeated lines
+- unresolved stutters
+- filler-only fragments
+- connector-led or connector-ended scraps with no punch
+
+Examples of INVALID billboard phrases:
+- "whole world's full of"
+- "like you"
+- "I want what most"
+- "That But she's like heaven on"
+- "I, I, want what"
+
+If a phrase fails billboard validity, repair it even if it is under 6 words.
+
+======================================================================
 CONNECTOR RULE
-Avoid ending a phrase on a weak hanging connector unless [BREATH] forces it:
-I, you, we, they, he, she, it, and, but, or, so, because, if, when, while, that, the, a, an, in, on, at, to, for, of, with, from
+======================================================================
 
-TIMING RULE
-- Compute phrase duration as: last word end minus first word start.
-- If duration is under 350ms, first try merging forward.
-- If forward merge breaks a higher-priority rule, try merging backward.
-- If both merges would break [BREATH] or the 6-word maximum, keep the short phrase as-is.
-- Never exceed 6 words to solve timing.
+Avoid ending a phrase on a weak hanging connector unless [BREATH] forces it.
 
+Weak hanging connectors include:
+I, you, we, they, he, she, it, and, but, or, so,
+because, if, when, while, that, the, a, an,
+in, on, at, to, for, of, with, from
+
+A phrase ending in one of these is usually invalid unless:
+- [BREATH] forces the boundary, or
+- the phrase still clearly lands as a complete billboard thought
+
+======================================================================
+HERO INTEGRITY RULE
+======================================================================
+
+[HERO] words are anchors.
+
+- A [HERO] word may stand alone.
+- You may group 1–2 short surrounding words with a [HERO] when they belong to the same thought.
+- Do not split a [HERO] away from its natural phrase unless keeping it there would break a higher-priority rule.
+- If a phrase contains multiple [HERO] words, keep the strongest emotional center intact.
+
+======================================================================
+TIMING / READABILITY RULE
+======================================================================
+
+For each phrase:
+duration = end time of last word minus start time of first word
+
+Target:
+- A phrase under 350ms is usually too fast to read.
+
+Repair order for short phrases:
+1. Try merging forward
+2. If forward merge breaks a higher-priority rule, try merging backward
+3. If both merges would break [BREATH], 6-word max, or billboard validity, keep the short phrase as-is
+
+Never exceed 6 words to solve timing.
+
+A [HERO] word is always readable alone because it is held long enough.
+
+======================================================================
+SEAM RULE FOR CHORUS / REPEATS
+======================================================================
+
+At chorus returns, repeated lines, or lyric restarts:
+- never drag leftover words from the previous phrase into the next repeated phrase
+- never create seam fragments just to preserve adjacency
+- never produce malformed combinations like:
+  - "That But ..."
+  - trailing word + fresh repeated line
+  - leftover hook fragment glued to the next loop
+
+When a repeated phrase returns, phrase it cleanly from its own beginning.
+
+======================================================================
+STUTTER RULE
+======================================================================
+
+Handle repeated stutters deliberately:
+- "I, I"
+- "yeah yeah"
+- "no no"
+- "uh uh"
+
+Keep the stutter only if:
+- it creates clear emphasis, and
+- the resulting phrase still passes billboard validity
+
+Otherwise collapse the weak stutter logic by regrouping around the strongest readable phrase.
+
+A stutter fragment that does not stand alone is invalid.
+
+======================================================================
+FILLER FRAGMENT RULE
+======================================================================
+
+Do not return a phrase whose only punch comes from a weak filler word or weak pronoun unless [HERO] explicitly forces it and it genuinely lands.
+
+Usually invalid as heroWord or standalone punch:
+I, YOU, WE, THEY, IT, THAT, THIS, LIKE, FOR, AND, BUT
+
+If such a fragment appears alone and does not hit, merge or regroup it unless [BREATH] prevents it.
+
+======================================================================
 HEADLINE WORD (heroWord)
-- If the phrase contains a [HERO] word, that is the heroWord.
-- If multiple [HERO] words exist, pick the most emotionally charged.
-- If no [HERO] word exists, pick the verb or noun carrying the punch.
-- Return UPPERCASE, letters only, no punctuation.
-- Never choose: I, a, the, and, but, or, is, it, to, of, in, on, that, you, we, me, he, she, they, my, your, with, from
+======================================================================
 
+Each phrase must return one heroWord.
+
+Selection order:
+1. If the phrase contains a [HERO] word, that is the heroWord.
+2. If multiple [HERO] words exist, choose the most emotionally charged one.
+3. If no [HERO] word exists, choose the noun or verb carrying the punch.
+4. Never choose a weak filler word unless [HERO] explicitly forces it and it truly lands.
+
+Formatting:
+- UPPERCASE
+- letters only
+- strip all punctuation
+- no apostrophes, commas, periods, dashes, or symbols
+
+Never choose:
+I, A, THE, AND, BUT, OR, IS, IT, TO, OF, IN, ON, THAT, YOU, WE, ME, HE, SHE, THEY, MY, YOUR, WITH, FROM
+
+======================================================================
 EXIT EFFECTS
-Every phrase must have exactly one:
+======================================================================
+
+Every phrase must have exactly one exitEffect.
+
+Allowed values:
 "fade" | "drift_up" | "shrink" | "dissolve" |
 "cascade" | "scatter" | "slam" | "glitch" | "burn"
 
-ARC
+Effect guidance:
+- whisper / still / aching       -> fade, dissolve, drift_up
+- rhythmic / confident           -> cascade, shrink
+- aggressive / confrontational   -> slam, glitch, scatter
+- climactic / peak / HERO hit    -> burn, slam, scatter
+- floating / dreamy              -> drift_up, dissolve, fade
+
+======================================================================
+ARC RULE
+======================================================================
+
 - Build intensity toward the hook.
-- Never repeat the same effect 3 times in a row.
-- Chorus repeats must reuse the same effect pattern.
+- Never repeat the same effect 3 phrases in a row.
+- Repeated chorus sections should reuse the same effect pattern each time.
 - Outro only: fade, drift_up, dissolve.
 
+======================================================================
 HOOK PHRASE
-Return "hookPhrase" at top level — the single phrase that would work best on a billboard.
+======================================================================
 
+Return "hookPhrase" at the top level:
+- the single phrase that would look best on an actual billboard
+- usually the title line or strongest recurring line
+
+======================================================================
 MANDATORY TWO-PASS PROCESS
-Pass 1: Draft phrases from the timestamped word stream.
-Pass 2: Validate and repair before returning final output.
+======================================================================
 
-VALIDATION AND REPAIR LOOP
-For every phrase before final output:
+PASS 1 — DRAFT
+- Group the word stream into candidate phrases using the rules above.
+
+PASS 2 — VALIDATE AND REPAIR
+- Inspect every phrase in order before returning final output.
+
+======================================================================
+MANDATORY VALIDATION AND REPAIR LOOP
+======================================================================
+
+For each phrase:
+
 1. Count words exactly.
-2. If wordCount > 6, repair it immediately.
-3. Prefer splitting at the most natural spoken boundary.
-4. Each repaired phrase must stand alone as a billboard thought.
-5. Recompute heroWord and exitEffect for each repaired phrase.
-6. Recheck the full list again.
-7. Do not return output until every phrase has wordCount <= 6.
+2. If wordCount > 6, repair immediately.
+3. If the phrase fails billboard validity, repair immediately.
+4. If the phrase ends on a weak connector and [BREATH] did not force it, repair immediately.
+5. If the phrase is a seam fragment from repetition or chorus overlap, repair immediately.
+6. If the phrase contains unresolved stutter logic, repair immediately.
+7. Recompute heroWord after every repair.
+8. Recompute exitEffect after every repair.
 
-OUTPUT REQUIREMENTS
-For each phrase return:
-- text
-- wordCount
-- heroWord
-- exitEffect
+Repair method priority:
+1. Split at the most natural spoken boundary
+2. If no clean split works, regroup with neighbor
+3. Prefer keeping the stronger billboard phrase intact
+4. Never exceed 6 words during repair
+5. Never cross a [BREATH] boundary during repair
 
-FINAL GATE
-If any returned phrase has more than 6 words, the output is invalid and must be repaired before returning.
+If a phrase cannot stand alone, it is not a valid phrase.
+
+======================================================================
+SPLIT QUALITY RULE
+======================================================================
+
+A valid split must:
+- cover the same original word range
+- preserve lyric order
+- produce phrases that both stand alone
+- split at a natural spoken pivot:
+  - breath
+  - pause
+  - subject shift
+  - conjunction starting a new thought
+  - emotional turn
+
+GOOD split:
+"Lifes a bitch" / "But she's like heaven on earth"
+
+BAD split:
+"sometimes yall gotta" / "play in the dirt"
+
+Reason:
+The first half does not stand alone as a billboard.
+
+If no split yields two valid billboard phrases, keep the stronger phrase and regroup the weaker fragment with a neighbor if allowed by higher-priority rules.
+
+======================================================================
+OUTPUT FORMAT
+======================================================================
+
+Return a JSON object with:
+
+- hookPhrase: string
+- phrases: array of phrase objects
+
+Each phrase object must contain:
+- wordRange: [startIndex, endIndex]
+- start: number
+- end: number
+- text: string
+- wordCount: number
+- heroWord: string
+- exitEffect: string
+
+======================================================================
+FINAL OUTPUT GATE
+======================================================================
+
+Do not return output until every phrase satisfies all of the following:
+
+- wordCount is between 1 and 6
+- phrase passes billboard validity
+- phrase does not end on a weak connector unless [BREATH] forced it
+- phrase is not a chorus seam fragment
+- heroWord is not a banned filler word unless [HERO] explicitly forced it
+- exitEffect is present and valid
+
+If even one phrase fails, repair it before returning.
 
 OUTPUT — return ONLY this JSON, nothing else:
 {
