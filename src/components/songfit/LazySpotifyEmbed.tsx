@@ -91,6 +91,7 @@ function LazySpotifyEmbedInner({
   // Create the Spotify controller once for this track/card lifecycle.
   useEffect(() => {
     if (!isSpotify) return;
+    if (cardState === "cold") return;
     if (!containerRef.current) return;
     // Already have a live controller — nothing to do
     if (controllerRef.current) return;
@@ -175,7 +176,7 @@ function LazySpotifyEmbedInner({
       hasActivatedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSpotify, spotifyUri, embedHeight]);
+  }, [isSpotify, spotifyUri, embedHeight, cardState]);
 
   // ── Audio solo: pause if this card is not the active one ──
   useEffect(() => {
