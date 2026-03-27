@@ -9,6 +9,8 @@ import {
   type SpotifyEmbedController,
 } from "@/lib/spotifyIframeApi";
 
+let _activeController: SpotifyEmbedController | null = null;
+
 interface Props {
   trackId: string;
   trackTitle: string;
@@ -41,9 +43,7 @@ function LazySpotifyEmbedInner({
   const containerRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<SpotifyEmbedController | null>(null);
   const hasActivatedRef = useRef(false);
-  const prevCardStateRef = useRef<CardState>(cardState);
-  // Bumped to force the creation effect to re-run after a cold→warm transition
-  const [createGeneration, setCreateGeneration] = useState(0);
+  const scPrevCardStateRef = useRef<CardState>(cardState);
 
   // Track whether this controller is currently playing so we only call
   // onPlay (→ activate) once per play session, not on every update tick.
@@ -88,13 +88,10 @@ function LazySpotifyEmbedInner({
   // SPOTIFY IFRAME API PATH
   // ════════════════════════════════════════════════════════════════════
 
-  // Create (or recreate) the Spotify controller when the container is
-  // ready and the card is not cold.
+  // Create the Spotify controller once for this track/card lifecycle.
   useEffect(() => {
     if (!isSpotify) return;
     if (!containerRef.current) return;
-    // Don't create a controller for cold cards (outside render window)
-    if (cardState === "cold") return;
     // Already have a live controller — nothing to do
     if (controllerRef.current) return;
 
@@ -125,6 +122,13 @@ function LazySpotifyEmbedInner({
                 isPlayingRef.current = nowPlaying;
 
                 if (nowPlaying && !wasPlaying) {
+                  if (
+                    _activeController &&
+                    _activeController !== controllerRef.current
+                  ) {
+                    _activeController.pause();
+                  }
+                  _activeController = controllerRef.current;
                   if (onPlay) onPlay();
                   hasActivatedRef.current = true;
                 }
@@ -156,6 +160,9 @@ function LazySpotifyEmbedInner({
 
     return () => {
       destroyed = true;
+      if (_activeController === controllerRef.current) {
+        _activeController = null;
+      }
       if (controllerRef.current) {
         try {
           controllerRef.current.destroy();
@@ -167,55 +174,19 @@ function LazySpotifyEmbedInner({
       isPlayingRef.current = false;
       hasActivatedRef.current = false;
     };
-    // cardState is NOT a dep — warm→active must NOT destroy/recreate.
-    // Cold→warm recreation is triggered by bumping createGeneration.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSpotify, spotifyUri, embedHeight, createGeneration]);
-
-  // ── Cold → warm: recreate controller. Cold: destroy it. ──
-  useEffect(() => {
-    if (!isSpotify) return;
-    const prev = prevCardStateRef.current;
-    prevCardStateRef.current = cardState;
-
-    if (cardState === "cold" && prev !== "cold") {
-      // Card left the render window — kill the controller
-      if (controllerRef.current) {
-        try {
-          controllerRef.current.destroy();
-        } catch {
-          /* ignore */
-        }
-        controllerRef.current = null;
-      }
-      if (containerRef.current) containerRef.current.innerHTML = "";
-      isPlayingRef.current = false;
-      hasActivatedRef.current = false;
-      setIframeLoaded(false);
-      setRevealReady(false);
-    } else if (prev === "cold" && cardState !== "cold") {
-      // Cold → warm/active: bump generation so the creation effect re-runs
-      setCreateGeneration((g) => g + 1);
-    }
-  }, [isSpotify, cardState]);
+  }, [isSpotify, spotifyUri, embedHeight]);
 
   // ── Audio solo: pause if this card is not the active one ──
   useEffect(() => {
-    if (!postId) return;
+    if (!postId || isSpotify) return;
     const handler = (e: Event) => {
       const ce = e as CustomEvent<{ activeCardId?: string }>;
       if (ce.detail?.activeCardId !== postId) {
-        // Another card claimed active — pause this controller
-        if (controllerRef.current && isPlayingRef.current) {
-          controllerRef.current.pause();
-          isPlayingRef.current = false;
-        }
         // SoundCloud fallback
-        if (!isSpotify) {
-          setScSilenced(true);
-          setIframeLoaded(false);
-          setRevealReady(false);
-        }
+        setScSilenced(true);
+        setIframeLoaded(false);
+        setRevealReady(false);
       }
     };
     window.addEventListener("crowdfit:audio-solo", handler);
@@ -239,10 +210,10 @@ function LazySpotifyEmbedInner({
       setScSilenced(true);
       setIframeLoaded(false);
       setRevealReady(false);
-    } else if (prevCardStateRef.current === "cold" && cardState === "warm") {
+    } else if (scPrevCardStateRef.current === "cold" && cardState === "warm") {
       setScSilenced(false);
     }
-    prevCardStateRef.current = cardState;
+    scPrevCardStateRef.current = cardState;
   }, [isSpotify, cardState]);
 
   // ════════════════════════════════════════════════════════════════════
