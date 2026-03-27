@@ -1400,14 +1400,40 @@ async function callWords(
   if (words && Array.isArray(result.value.phrases)) {
     // 1. Hard cap: split any phrase over 6 words
     result.value.phrases = enforcePhraseLimits(result.value.phrases, words, 6);
-    // 2. Merge orphan single-word phrases (< 350ms)
-    result.value.phrases = mergeOrphanPhrases(result.value.phrases, words);
-    // 3. Fill gaps
+    // 2. Fill gaps
     result.value.phrases = fillPhraseGaps(result.value.phrases, words.length);
-    // 4. Validate + fill heroWords
+    // 3. Validate + fill heroWords
     fillMissingHeroWords(result.value.phrases, words);
+    // 4. Repair phrase boundaries
     if (words && words.length > 0) {
       result.value.phrases = repairPhraseBoundaries(result.value.phrases, words);
+    }
+    // 5. Strip punctuation from all heroWords
+    for (const phrase of result.value.phrases) {
+      if (phrase.heroWord) {
+        phrase.heroWord = (phrase.heroWord as string)
+          .replace(/[^A-Z0-9\-]/gi, "")
+          .toUpperCase();
+      }
+    }
+    // 6. Fill missing exitEffects
+    const VALID_EFFECTS = new Set([
+      "fade",
+      "drift_up",
+      "shrink",
+      "dissolve",
+      "cascade",
+      "scatter",
+      "slam",
+      "glitch",
+      "burn",
+    ]);
+    const pArr = result.value.phrases as Array<any>;
+    for (let pi = 0; pi < pArr.length; pi++) {
+      if (!pArr[pi].exitEffect || !VALID_EFFECTS.has(pArr[pi].exitEffect)) {
+        const prev = pi > 0 ? pArr[pi - 1].exitEffect : null;
+        pArr[pi].exitEffect = (prev && prev !== "drift_up") ? "drift_up" : "fade";
+      }
     }
   }
 
