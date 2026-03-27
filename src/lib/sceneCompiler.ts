@@ -201,63 +201,7 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
           groups.sort((a, b) => a.start - b.start);
         }
 
-        // ── Safety net: split phrases at internal timing pauses ──
-        // If the AI grouped across a pause (>= 200ms gap), split there.
-        const splitGroups: PhraseGroup[] = [];
-        for (const grp of groups) {
-          if (grp.words.length <= 1) {
-            splitGroups.push(grp);
-            continue;
-          }
-
-          // Find the largest internal gap
-          let splitAt = -1;
-          let maxGap = 0;
-          for (let wi = 0; wi < grp.words.length - 1; wi++) {
-            const gap = grp.words[wi + 1].start - grp.words[wi].end;
-            if (gap >= 0.20 && gap > maxGap) {  // 200ms threshold
-              maxGap = gap;
-              splitAt = wi;
-            }
-          }
-
-          if (splitAt >= 0) {
-            // Split into two groups at the gap
-            const left = grp.words.slice(0, splitAt + 1);
-            const right = grp.words.slice(splitAt + 1);
-
-            if (left.length > 0) {
-              splitGroups.push({
-                words: left,
-                start: left[0].start,
-                end: left[left.length - 1].end,
-                anchorWordIdx: findAnchorWord(left),
-                lineIndex: grp.lineIndex,
-                groupIndex: grp.groupIndex,
-                phraseHeroWord: grp.phraseHeroWord,
-              });
-            }
-            if (right.length > 0) {
-              splitGroups.push({
-                words: right,
-                start: right[0].start,
-                end: right[right.length - 1].end,
-                anchorWordIdx: findAnchorWord(right),
-                lineIndex: right[0].lineIndex,
-                groupIndex: grp.groupIndex + 0.5, // half-index to maintain sort
-                phraseHeroWord: '',
-              });
-            }
-          } else {
-            splitGroups.push(grp);
-          }
-        }
-
-        // Re-index groups
-        splitGroups.sort((a, b) => a.start - b.start);
-        splitGroups.forEach((g, i) => { g.groupIndex = i; });
-
-        return splitGroups;
+        return groups;
       }
     } else {
       const groups: PhraseGroup[] = [];
