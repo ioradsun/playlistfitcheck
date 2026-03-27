@@ -487,6 +487,7 @@ export function SongFitPostCard({
                     .join(", ")}
                   genre={((post.tags_json as any[]) || [])[0] || null}
                   cardState={cardState}
+                  onPlay={activate}
                 />
 
                 <PostCommentPanel

@@ -27,6 +27,12 @@ export function CardLifecycleProvider({ children }: { children: ReactNode }) {
     if (previousActiveCardId && previousActiveCardId !== store.activeCardId) {
       window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", { detail: { cardId: previousActiveCardId } }));
     }
+    // Broadcast to ALL media embeds: only this card should produce audio.
+    // Unlike media-deactivate (which targets the *previous* active card),
+    // this tells every embed to check if it's the active one.
+    if (store.activeCardId) {
+      window.dispatchEvent(new CustomEvent("crowdfit:audio-solo", { detail: { activeCardId: store.activeCardId } }));
+    }
     previousActiveRef.current = store.activeCardId;
   }, [store.activeCardId]);
 
