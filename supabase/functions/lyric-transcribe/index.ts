@@ -491,76 +491,90 @@ function findRepetitionAnchor(
 }
 
 // ── Scribe Editor Mode: diff/correct words against reference lyrics ──────────
+function editDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost,
+      );
+    }
+  }
+
+  return dp[m][n];
+}
+
+function normalizeWord(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function applyReferenceLyricsDiff(
   words: WhisperWord[],
   referenceLyrics: string
 ): WhisperWord[] {
-  // Tokenize reference lyrics into flat word list
   const refWords = referenceLyrics
-    .split(/\n/)
-    .flatMap(line => line.trim().split(/\s+/))
-    .filter(w => w.length > 0);
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length > 0);
 
-  if (refWords.length === 0) return words;
+  if (words.length === 0 || refWords.length === 0) return words;
 
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const wordNorms = words.map((w) => normalizeWord(w.word));
+  const refNorms = refWords.map((w) => normalizeWord(w));
 
-  // Simple LCS-based alignment: walk both sequences greedily
-  const result: WhisperWord[] = [];
-  let ri = 0; // reference index
+  const m = words.length;
+  const n = refWords.length;
+  const lcs: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
 
-  for (let wi = 0; wi < words.length; wi++) {
-    const scribeNorm = normalize(words[wi].word);
-
-    // Look ahead in reference to find a match
-    let matched = false;
-    for (let look = ri; look < Math.min(ri + 5, refWords.length); look++) {
-      if (normalize(refWords[look]) === scribeNorm) {
-        // Fill any skipped reference words by interpolating timestamps
-        for (let skip = ri; skip < look; skip++) {
-          const interpStart = result.length > 0 ? result[result.length - 1].end : words[wi].start;
-          const interpEnd = words[wi].start;
-          const frac = (skip - ri + 1) / (look - ri + 1);
-          result.push({
-            word: refWords[skip],
-            start: Math.round((interpStart + (interpEnd - interpStart) * (frac - 1 / (look - ri + 1))) * 1000) / 1000,
-            end: Math.round((interpStart + (interpEnd - interpStart) * frac) * 1000) / 1000,
-          });
-        }
-        // Use reference text with Scribe timestamp
-        result.push({ word: refWords[look], start: words[wi].start, end: words[wi].end });
-        ri = look + 1;
-        matched = true;
-        break;
-      }
-    }
-
-    if (!matched) {
-      // Replace Scribe word with next reference word if available
-      if (ri < refWords.length) {
-        result.push({ word: refWords[ri], start: words[wi].start, end: words[wi].end });
-        ri++;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (wordNorms[i - 1] === refNorms[j - 1]) {
+        lcs[i][j] = lcs[i - 1][j - 1] + 1;
       } else {
-        result.push(words[wi]); // Keep Scribe word as-is
+        lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1]);
       }
     }
   }
 
-  // Append remaining reference words with estimated timestamps
-  if (ri < refWords.length && result.length > 0) {
-    const lastEnd = result[result.length - 1].end;
-    const remaining = refWords.slice(ri);
-    const gap = 0.3;
-    for (let i = 0; i < remaining.length; i++) {
-      result.push({
-        word: remaining[i],
-        start: Math.round((lastEnd + i * gap) * 1000) / 1000,
-        end: Math.round((lastEnd + (i + 1) * gap) * 1000) / 1000,
-      });
+  const matchedPairs: Array<{ wordIndex: number; refIndex: number }> = [];
+  let i = m;
+  let j = n;
+  while (i > 0 && j > 0) {
+    if (wordNorms[i - 1] === refNorms[j - 1]) {
+      matchedPairs.push({ wordIndex: i - 1, refIndex: j - 1 });
+      i--;
+      j--;
+    } else if (lcs[i - 1][j] >= lcs[i][j - 1]) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+  matchedPairs.reverse();
+
+  const result = words.map((w) => ({ ...w }));
+
+  for (const { wordIndex, refIndex } of matchedPairs) {
+    const transcribedNorm = wordNorms[wordIndex];
+    const referenceNorm = refNorms[refIndex];
+    const maxLen = Math.max(transcribedNorm.length, referenceNorm.length);
+    if (maxLen === 0) continue;
+
+    const similarity = 1 - editDistance(transcribedNorm, referenceNorm) / maxLen;
+    if (similarity >= 0.6) {
+      result[wordIndex].word = refWords[refIndex];
     }
   }
 
-  
   return result;
 }
 
