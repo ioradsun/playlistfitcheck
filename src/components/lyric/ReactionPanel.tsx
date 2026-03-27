@@ -242,7 +242,7 @@ function ReactionPanel({
     return counts;
   }, [comments]);
 
-  const voteAccent = palette[1] ?? "rgba(255,255,255,0.7)";
+  const accent = palette[1] ?? "rgba(255,255,255,0.7)";
   const playheadLineIndex = activeLine?.lineIndex ?? null;
   const displayLineIndex = playheadLineIndex ?? allLines[0]?.lineIndex ?? null;
 
@@ -551,9 +551,12 @@ function ReactionPanel({
             return (
               <div key={line.lineIndex}>
                 {shouldShowSectionHeader && (
-                  <div className={linePosition === 0 ? "mb-1" : "mt-4 mb-1"}>
+                  <div className={linePosition === 0 ? "mb-1" : "mt-6 mb-1"}>
                     <div className="flex items-center gap-2 px-3">
-                      <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/18">
+                      <span
+                        className="font-mono uppercase tracking-[0.25em] text-white/18"
+                        style={{ fontSize: 10 }}
+                      >
                         {sectionLabel}
                       </span>
                       <div className="flex-1 h-px bg-white/[0.03]" />
@@ -565,23 +568,30 @@ function ReactionPanel({
                     rowRefs.current[line.lineIndex] = node;
                   }}
                   onClick={() => handleLineTap(line)}
-                  className="flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors"
+                  className="relative flex items-center gap-2 px-3 cursor-pointer transition-colors"
                   style={{
-                    minHeight: 40,
+                    minHeight: 48,
+                    paddingTop: 10,
+                    paddingBottom: 10,
                     background: isActive
                       ? "rgba(255,255,255,0.03)"
                       : "transparent",
-                    boxShadow: isActive
-                      ? `inset 2px 0 0 0 ${palette[1] ?? "#ffffff"}`
-                      : "none",
                   }}
                 >
+                  {isActive && (
+                    <div
+                      className="absolute left-0 top-2 bottom-2 w-[2.5px] rounded-full"
+                      style={{ background: accent }}
+                    />
+                  )}
                   <span
-                    className="flex-1 text-[13px] font-light leading-relaxed transition-colors duration-100"
+                    className="flex-1 leading-relaxed transition-colors duration-100"
                     style={{
+                      fontSize: 15,
+                      fontWeight: isActive ? 500 : 300,
                       color: isActive
-                        ? "rgba(255,255,255,0.85)"
-                        : "rgba(255,255,255,0.28)",
+                        ? "rgba(255,255,255,0.92)"
+                        : "rgba(255,255,255,0.42)",
                     }}
                   >
                     {line.text}
@@ -615,11 +625,22 @@ function ReactionPanel({
                       className={`relative transition-all ${lineCommentCount > 0 ? "opacity-90" : "opacity-45 hover:opacity-70"} ${isCommentPulsing ? "scale-110" : ""}`}
                       aria-label="Toggle comments"
                     >
-                      <MessageCircle size={11} className="text-white/30" />
-                      {lineCommentCount > 0 && (
-                        <span className="absolute -top-1.5 -right-1.5 text-[7px] font-mono text-white/50 min-w-[10px] text-center">
-                          {lineCommentCount}
+                      {lineCommentCount > 0 ? (
+                        <span
+                          className="font-mono flex items-center justify-center"
+                          style={{
+                            fontSize: 11,
+                            color: isCommentPulsing
+                              ? accent
+                              : "rgba(255,255,255,0.3)",
+                            minWidth: 36,
+                            minHeight: 36,
+                          }}
+                        >
+                          💬 {lineCommentCount}
                         </span>
+                      ) : (
+                        <MessageCircle size={11} className="text-white/30" />
                       )}
                     </button>
                   </div>
@@ -628,8 +649,11 @@ function ReactionPanel({
                 {isActive && (
                   <>
                     {/* Emoji bar — inline under active line */}
-                    <div className="flex items-center justify-center gap-4 px-4 py-3 border-b border-white/[0.04]">
-                      {EMOJIS.map(({ key, symbol }) => {
+                    <div
+                      className="flex items-center justify-around px-4 py-3 border-b border-white/[0.04]"
+                      style={{ height: 58 }}
+                    >
+                      {EMOJIS.map(({ key, symbol, label }) => {
                         const count =
                           reactionData[key]?.line[line.lineIndex] ?? 0;
                         const reacted = sessionReacted.has(
@@ -639,27 +663,26 @@ function ReactionPanel({
                           <button
                             key={key}
                             onClick={() => handleReact(key, line.lineIndex)}
-                            className="flex flex-col items-center gap-0.5 w-11"
-                            style={
-                              reacted
-                                ? {
-                                    background: `${palette[1] ?? "#fff"}18`,
-                                    borderRadius: "10px",
-                                  }
-                                : undefined
-                            }
+                            className="flex flex-col items-center justify-center transition-all active:scale-90"
+                            style={{
+                              minWidth: 44,
+                              minHeight: 44,
+                              borderRadius: 12,
+                              background: reacted ? `${accent}15` : "transparent",
+                              border: reacted
+                                ? `1px solid ${accent}35`
+                                : "1px solid transparent",
+                            }}
                           >
-                            <span className="text-[18px]">{symbol}</span>
+                            <span style={{ fontSize: 22 }}>{symbol}</span>
                             <span
-                              className="text-[8px] font-mono min-h-[10px]"
+                              className="font-mono min-h-[10px]"
                               style={{
-                                color: reacted
-                                  ? (palette[1] ?? "rgba(255,255,255,0.7)")
-                                  : "rgba(255,255,255,0.25)",
-                                visibility: count > 0 ? "visible" : "hidden",
+                                fontSize: 9,
+                                color: reacted ? accent : "rgba(255,255,255,0.25)",
                               }}
                             >
-                              {count}
+                              {count > 0 ? count : label}
                             </span>
                           </button>
                         );
@@ -669,17 +692,23 @@ function ReactionPanel({
                     {/* Comment input — inline under emoji bar */}
                     {!hideInput && (
                       <div
-                        className="mx-3 my-2"
+                        className="mx-3 my-2 flex items-center gap-2"
                         style={{
+                          height: 44,
                           background: "rgba(255,255,255,0.05)",
-                          border: "1px solid rgba(255,255,255,0.09)",
-                          borderRadius: "8px",
-                          padding: "8px 12px",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                          borderRadius: 12,
+                          paddingLeft: 14,
+                          paddingRight: 6,
                         }}
                       >
                         <input
-                          className="w-full bg-transparent text-[13px] font-mono text-white placeholder:text-white/35 outline-none"
-                          placeholder={replyingTo ? "reply..." : "This line"}
+                          className="w-full bg-transparent font-light text-white placeholder:text-white/35 outline-none"
+                          placeholder={
+                            replyingTo
+                              ? "Write a reply..."
+                              : "React to this line..."
+                          }
                           value={textInput}
                           onChange={(e) => setTextInput(e.target.value)}
                           onKeyDown={(e) => {
@@ -689,7 +718,22 @@ function ReactionPanel({
                             }
                           }}
                           onFocus={() => onPause?.()}
+                          style={{ fontSize: 14, caretColor: accent }}
                         />
+                        {textInput.trim().length > 0 && (
+                          <button
+                            onClick={handleTextSubmit}
+                            className="px-3 py-1.5 rounded-lg font-mono tracking-wide"
+                            style={{
+                              background: accent,
+                              color: "#000",
+                              fontWeight: 600,
+                              fontSize: 12,
+                            }}
+                          >
+                            POST
+                          </button>
+                        )}
                       </div>
                     )}
                   </>
@@ -842,21 +886,22 @@ function ReactionPanel({
         >
           <div
             className="w-full max-w-2xl mx-auto flex items-stretch"
-            style={{ height: displayMode === "fullscreen" ? 52 : 48 }}
+            style={{ height: displayMode === "fullscreen" ? 56 : 52 }}
           >
             <button
               onClick={onVoteYes}
               className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === "fullscreen" ? "py-3.5" : "py-3"}`}
             >
               <span
-                className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
+                className="font-mono tracking-[0.15em] uppercase transition-colors"
                 style={{
+                  fontSize: 12,
                   color:
                     votedSide === null
                       ? "rgba(255,255,255,1)"
                       : votedSide === "a"
-                        ? voteAccent
-                        : "rgba(255,255,255,0.22)",
+                        ? accent
+                        : "rgba(255,255,255,0.2)",
                 }}
               >
                 Run it back
@@ -878,14 +923,15 @@ function ReactionPanel({
               className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === "fullscreen" ? "py-3.5" : "py-3"}`}
             >
               <span
-                className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
+                className="font-mono tracking-[0.15em] uppercase transition-colors"
                 style={{
+                  fontSize: 12,
                   color:
                     votedSide === null
                       ? "rgba(255,255,255,1)"
                       : votedSide === "b"
-                        ? voteAccent
-                        : "rgba(255,255,255,0.22)",
+                        ? accent
+                        : "rgba(255,255,255,0.2)",
                 }}
               >
                 Not for me
