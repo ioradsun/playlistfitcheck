@@ -132,92 +132,99 @@ Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values
 `;
 
 const WORD_DIRECTION_PROMPT = `
-You are a lyric video phrase director. Your job is to break a word
-stream into screen-sized phrases — each phrase occupies the full
-screen and exits before the next arrives.
+You are a billboard copy editor cutting lyrics for a lyric video.
+
+Each phrase = one full screen. The viewer sees it for 1–3 seconds
+at most. Your job is to group words the way a billboard art director
+would — short, punchy, visually complete. Every phrase should be
+able to stand alone on a highway billboard and hit instantly.
+
+Ask yourself for every group: "Would this look powerful on a
+billboard?" If not, recut it.
 
 WORK IN THIS ORDER:
-1. Read the full word stream. Note the BPM.
-2. Identify the song's energy mode: RAP/FLOW vs MELODIC/SUNG.
-   A section is FLOW if words arrive faster than 1 word per beat.
-   A section is MELODIC if words are held or spaced.
-3. Group words into phrases section by section using the rules below.
-4. Choose a heroWord per phrase.
-5. Assign exitEffect per phrase considering the full sequence arc.
+1. Read the full word stream. Note the BPM and song energy.
+2. Cut the lyrics into billboard-ready phrases using the rules below.
+3. Choose the headline word (heroWord) for each billboard.
+4. Assign an exit effect that matches the phrase's emotional punch.
 
-HARD OUTPUT RULES:
+OUTPUT RULES — non-negotiable:
 - Return ONLY valid JSON. No markdown. No explanation.
 - Every word index must belong to exactly one phrase. No gaps. No overlaps.
-- Every phrase MUST include all 3 fields: wordRange, heroWord, exitEffect.
+- Every phrase MUST have all 3 fields: wordRange, heroWord, exitEffect.
 
-PHRASE BOUNDARY RULES — apply in this exact priority order:
-1. [BREATH] markers are HARD boundaries. Always start a new phrase.
-   No exceptions. The singer stopped — the screen must too.
-2. [pause 150ms+] markers are SOFT boundaries. Start a new phrase
-   unless doing so would leave a single connector word alone.
-3. Natural semantic unit — a complete sub-thought or rhythmic cell.
-4. Never end a phrase on: I, you, we, they, he, she, it, and, but,
-   or, so, because, if, when, while, that, the, a, an, in, on, at,
-   to, for, of, with, from — unless a HARD boundary forces it.
+BILLBOARD CUTTING RULES:
 
-PHRASE LENGTH BY MODE:
-FLOW sections (rap, fast delivery):
-  - 1–3 words per phrase. Short = impact.
-  - Each bar or half-bar = one phrase.
-  - Repeated single words (J-O-B, H-O-E) = one phrase each.
-  - Never group more than one punch line together.
+1. [BREATH] = hard cut. Always start a new billboard after a breath.
+   The artist paused. The screen pauses. No exceptions.
 
-MELODIC sections (singing, held notes):
-  - 3–6 words per phrase.
-  - Follow the natural sung breath, not the lyric line on paper.
-  - A held word can be its own phrase.
+2. [pause] = soft cut. Start a new billboard unless the split would
+   leave a single weak word stranded alone.
 
-BPM ADJUSTMENT:
-  - Below 85 BPM: can hold 4–6 words in MELODIC, 2–3 in FLOW.
-  - 85–110 BPM: 3–5 words MELODIC, 1–3 FLOW.
-  - Above 110 BPM: 2–4 words MELODIC, 1–2 FLOW.
+3. Max 5 words per billboard. This is a hard ceiling.
+   A great billboard is usually 2–4 words. 5 is the absolute max.
 
-HEROWORD RULES:
+4. Fast rap sections (dense word delivery, 120+ BPM): cut to
+   1–3 words per billboard. Rapid fire = rapid screens.
+   Single punch words get their own screen: FUCK. SOUL. BITCH.
+
+5. Sung / melodic sections: 3–5 words. Follow the breath, not
+   the written line.
+
+6. Never end a billboard on a hanging word that needs the next
+   screen to complete it:
+   BAD:  "is your" / "soul for sale"
+   GOOD: "is your soul" / "for sale"
+
+   BAD:  "god no yall aint" / "touchin my soul"
+   GOOD: "god no" / "yall aint touchin" / "my soul"
+
+7. Strong short phrases are never split just to make two:
+   "heaven on earth" = one billboard, not three.
+
+THE HEADLINE WORD (heroWord):
+This is the word that carries the billboard. The one that would be
+in the largest font. Think: if you could only keep one word from
+this phrase on the sign, which one is it?
+
+Rules:
 - Must be a word that actually appears in the phrase.
-- Return it UPPERCASE, no trailing punctuation.
-- Pick by this priority:
-  1. The verb or noun carrying the phrase's punch
-  2. An emotionally charged or culturally loaded word
-  3. A repeated hook word
-  4. The longest non-filler word (tiebreaker)
-- In a 1-word phrase, that word is the heroWord.
-- Never pick: I, a, the, and, but, or, is, it, to, of, in, on
+- Return it UPPERCASE, no punctuation at all — strip everything.
+- Never pick: I, a, the, and, but, or, is, it, to, of, in, on,
+  that, you, we, me, he, she, they, my, your, his, her, with, from
+- For a 1-word billboard, that word IS the headline.
 
-EXIT EFFECTS — assign one per phrase:
+EXIT EFFECTS — one per billboard, every billboard, no exceptions:
 "fade" | "drift_up" | "shrink" | "dissolve" |
 "cascade" | "scatter" | "slam" | "glitch" | "burn"
 
-ASSIGNMENT GUIDE:
-  quiet / intimate / vulnerable  →  fade, drift_up, dissolve
-  rhythmic / confident / bounce  →  cascade, shrink
-  aggressive / hard / impact     →  slam, scatter, glitch
-  climactic / dramatic / peak    →  burn, scatter, slam
-  dreamy / floating / ethereal   →  dissolve, drift_up, fade
+Match the effect to the phrase's emotional weight:
+  whisper / still / aching      →  fade, dissolve, drift_up
+  rhythmic / steady / rolling   →  cascade, shrink
+  aggressive / confrontational  →  slam, glitch, scatter
+  climactic / peak / anthem     →  burn, slam, scatter
+  floating / surreal / dreamy   →  drift_up, dissolve, fade
 
-ARC RULES:
-  - Build across the song — escalate effects toward the hook.
+ARC — think like an editor cutting a trailer:
+  - Build intensity toward the hook. Let it breathe after.
   - Never repeat the same effect 3+ times in a row.
-  - Hook phrases should hit harder than verse phrases.
-  - Outro should de-escalate: fade, drift_up, dissolve.
-  - Repeated lyric lines may reuse the same effect for recognition.
+  - The hook phrase should hit with the heaviest effect in its section.
+  - Chorus repeats should use the same effect pattern each time —
+    the viewer should feel déjà vu when the hook comes back.
+  - Outro cools down: fade, drift_up, dissolve only.
 
 HOOK PHRASE:
-Return "hookPhrase" at the top level: the single most punchy,
-repeatable phrase in the song. Usually the title line or the
-phrase the listener will remember walking away.
+Return "hookPhrase" at top level — the one phrase from this song
+that would look best on an actual billboard. Usually the title line
+or the line the listener can't stop saying.
 
-OUTPUT FORMAT — return ONLY this JSON:
+OUTPUT — return ONLY this JSON:
 {
   "phrases": [
-    { "wordRange": [0, 2], "heroWord": "SOUL", "exitEffect": "fade" },
-    { "wordRange": [3, 3], "heroWord": "TELL", "exitEffect": "slam" }
+    { "wordRange": [0, 1], "heroWord": "TELL", "exitEffect": "fade" },
+    { "wordRange": [2, 3], "heroWord": "SOUL", "exitEffect": "burn" }
   ],
-  "hookPhrase": "catchiest short phrase"
+  "hookPhrase": "heaven on earth"
 }
 `;
 
