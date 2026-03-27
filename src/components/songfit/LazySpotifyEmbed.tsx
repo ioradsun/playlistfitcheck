@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +15,7 @@ interface Props {
   genre?: string | null;
   cardState: CardState;
   reelsMode?: boolean;
+  onPlay?: () => void; // ← NEW: calls activate() in the lifecycle
 }
 
 function LazySpotifyEmbedInner({
@@ -24,15 +25,56 @@ function LazySpotifyEmbedInner({
   postId,
   albumArtUrl,
   artistName,
-  cardState: _cardState,
+  cardState, // ← CHANGED: was _cardState (unused). Now actively used.
   reelsMode = false,
+  onPlay, // ← NEW
 }: Props) {
   const { user } = useAuth();
   const [iframeLoaded, setIframeLoaded] = useState(false);
-  // Delay reveal 150ms after iframe onload — gives Spotify's internal JS time
-  // to apply dark theme. Without this, the iframe's white default background
-  // flashes through during the poster crossfade.
   const [revealReady, setRevealReady] = useState(false);
+
+  // ── NEW: Audio solo enforcement ──────────────────────────────────
+  // When true, the iframe src is blanked → audio dies instantly.
+  const [silenced, setSilenced] = useState(false);
+  // After the user taps the gate overlay, we remove it so the next
+  // tap reaches the actual Spotify iframe.
+  const [gateOpen, setGateOpen] = useState(false);
+  const prevCardStateRef = useRef<CardState>(cardState);
+
+  // Listen for the global "only one card should play" broadcast.
+  useEffect(() => {
+    if (!postId) return;
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ activeCardId?: string }>;
+      if (ce.detail?.activeCardId !== postId) {
+        setSilenced(true);
+        setGateOpen(false); // re-arm the tap gate
+        setIframeLoaded(false);
+        setRevealReady(false);
+      } else {
+        // This card is the new active card — un-silence it.
+        setSilenced(false);
+      }
+    };
+    window.addEventListener("crowdfit:audio-solo", handler);
+    return () => window.removeEventListener("crowdfit:audio-solo", handler);
+  }, [postId]);
+
+  // When the card goes cold (exits render window), kill the iframe.
+  // When it comes back to warm, un-silence so it can reload.
+  useEffect(() => {
+    if (cardState === "cold") {
+      setSilenced(true);
+      setGateOpen(false);
+      setIframeLoaded(false);
+      setRevealReady(false);
+    } else if (prevCardStateRef.current === "cold" && cardState === "warm") {
+      // Card re-entered the render window — allow iframe to load again.
+      setSilenced(false);
+    }
+    prevCardStateRef.current = cardState;
+  }, [cardState]);
+  // ── END audio solo enforcement ───────────────────────────────────
 
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
 
@@ -57,6 +99,18 @@ function LazySpotifyEmbedInner({
       logEngagementEvent(postId, user.id, "spotify_click");
     }
   };
+
+  // ── NEW: Tap gate handler ────────────────────────────────────────
+  // First tap on the embed area: claim active status (silences others),
+  // then open the gate so the next tap reaches Spotify's iframe.
+  const handleGateTap = () => {
+    if (onPlay) onPlay(); // → activate() → crowdfit:audio-solo fires
+    setGateOpen(true);
+  };
+  // ── END tap gate ─────────────────────────────────────────────────
+
+  // When silenced, render the poster only (no iframe = no audio).
+  const renderIframe = !silenced;
 
   return (
     <div
@@ -119,23 +173,36 @@ function LazySpotifyEmbedInner({
                   </div>
                 </div>
               )}
-              <iframe
-                src={embedSrc}
-                width="100%"
-                height={platform === "soundcloud" ? 166 : 232}
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                className="border-0 block w-full"
-                style={{ background: "#000" }}
-                title={`Play ${trackTitle}`}
-                scrolling={platform === "soundcloud" ? "no" : undefined}
-                onLoad={() => setIframeLoaded(true)}
-              />
+              {renderIframe && (
+                <iframe
+                  src={embedSrc}
+                  width="100%"
+                  height={platform === "soundcloud" ? 166 : 232}
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  className="border-0 block w-full"
+                  style={{ background: "#000" }}
+                  title={`Play ${trackTitle}`}
+                  scrolling={platform === "soundcloud" ? "no" : undefined}
+                  onLoad={() => setIframeLoaded(true)}
+                />
+              )}
+
+              {/* ── NEW: Tap gate overlay ── */}
+              {!gateOpen && (
+                <div
+                  className="absolute inset-0 z-[20] cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGateTap();
+                  }}
+                />
+              )}
             </div>
           </div>
         </>
       ) : (
         <>
-          {/* Full-bleed album art poster — sits behind iframe, fades when dark theme is ready */}
+          {/* Full-bleed album art poster */}
           <div
             className="absolute inset-0 w-full h-full z-[6] pointer-events-none transition-opacity duration-700"
             style={{ opacity: revealReady ? 0 : 1 }}
@@ -161,22 +228,35 @@ function LazySpotifyEmbedInner({
             )}
           </div>
 
-          {/* Iframe — dark bg prevents white flash, fades in after dark theme paints */}
-          <iframe
-            src={embedSrc}
-            width="100%"
-            height={platform === "soundcloud" ? 166 : 232}
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            className="absolute inset-0 border-0 block w-full transition-opacity duration-700"
-            style={{
-              background: "#000",
-              opacity: revealReady ? 1 : 0,
-              zIndex: revealReady ? 8 : 5,
-            }}
-            title={`Play ${trackTitle}`}
-            scrolling={platform === "soundcloud" ? "no" : undefined}
-            onLoad={() => setIframeLoaded(true)}
-          />
+          {/* Iframe — only rendered when not silenced */}
+          {renderIframe && (
+            <iframe
+              src={embedSrc}
+              width="100%"
+              height={platform === "soundcloud" ? 166 : 232}
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              className="absolute inset-0 border-0 block w-full transition-opacity duration-700"
+              style={{
+                background: "#000",
+                opacity: revealReady ? 1 : 0,
+                zIndex: revealReady ? 8 : 5,
+              }}
+              title={`Play ${trackTitle}`}
+              scrolling={platform === "soundcloud" ? "no" : undefined}
+              onLoad={() => setIframeLoaded(true)}
+            />
+          )}
+
+          {/* ── NEW: Tap gate overlay ── */}
+          {!gateOpen && (
+            <div
+              className="absolute inset-0 z-[20] cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleGateTap();
+              }}
+            />
+          )}
         </>
       )}
     </div>
