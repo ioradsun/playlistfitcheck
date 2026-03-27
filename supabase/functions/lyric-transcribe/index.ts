@@ -533,45 +533,166 @@ function applyReferenceLyricsDiff(
 
   const m = words.length;
   const n = refWords.length;
-  const lcs: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(Number.POSITIVE_INFINITY));
+  const from: string[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(""));
+  dp[0][0] = 0;
 
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (wordNorms[i - 1] === refNorms[j - 1]) {
-        lcs[i][j] = lcs[i - 1][j - 1] + 1;
-      } else {
-        lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1]);
+  for (let i = 0; i <= m; i++) {
+    for (let j = 0; j <= n; j++) {
+      const current = dp[i][j];
+      if (!Number.isFinite(current)) continue;
+
+      // a = keep transcription word
+      if (i + 1 <= m) {
+        const cost = current + 4;
+        if (cost < dp[i + 1][j]) {
+          dp[i + 1][j] = cost;
+          from[i + 1][j] = "a";
+        }
+      }
+
+      // b = skip reference word
+      if (j + 1 <= n) {
+        const cost = current + 2;
+        if (cost < dp[i][j + 1]) {
+          dp[i][j + 1] = cost;
+          from[i][j + 1] = "b";
+        }
+      }
+
+      // c = 1:1 mapping
+      if (i + 1 <= m && j + 1 <= n) {
+        const alignCost = editDistance(wordNorms[i], refNorms[j]);
+        const cost = current + alignCost;
+        if (cost < dp[i + 1][j + 1]) {
+          dp[i + 1][j + 1] = cost;
+          from[i + 1][j + 1] = "c";
+        }
+      }
+
+      // d = 1:2 mapping
+      if (i + 1 <= m && j + 2 <= n) {
+        const refJoin = refNorms[j] + refNorms[j + 1];
+        const alignCost = editDistance(wordNorms[i], refJoin);
+        const cost = current + alignCost;
+        if (cost < dp[i + 1][j + 2]) {
+          dp[i + 1][j + 2] = cost;
+          from[i + 1][j + 2] = "d";
+        }
+      }
+
+      // e = 2:1 mapping
+      if (i + 2 <= m && j + 1 <= n) {
+        const transcribedJoin = wordNorms[i] + wordNorms[i + 1];
+        const alignCost = editDistance(transcribedJoin, refNorms[j]);
+        const cost = current + alignCost;
+        if (cost < dp[i + 2][j + 1]) {
+          dp[i + 2][j + 1] = cost;
+          from[i + 2][j + 1] = "e";
+        }
       }
     }
   }
 
-  const matchedPairs: Array<{ wordIndex: number; refIndex: number }> = [];
+  const ops: Array<{ op: string; ti?: number; ri?: number }> = [];
   let i = m;
   let j = n;
-  while (i > 0 && j > 0) {
-    if (wordNorms[i - 1] === refNorms[j - 1]) {
-      matchedPairs.push({ wordIndex: i - 1, refIndex: j - 1 });
-      i--;
-      j--;
-    } else if (lcs[i - 1][j] >= lcs[i][j - 1]) {
-      i--;
+  while (i > 0 || j > 0) {
+    const step = from[i][j];
+    if (step === "a") {
+      ops.push({ op: "keep", ti: i - 1 });
+      i -= 1;
+    } else if (step === "b") {
+      ops.push({ op: "skip_r", ri: j - 1 });
+      j -= 1;
+    } else if (step === "c") {
+      ops.push({ op: "1:1", ti: i - 1, ri: j - 1 });
+      i -= 1;
+      j -= 1;
+    } else if (step === "d") {
+      ops.push({ op: "1:2", ti: i - 1, ri: j - 2 });
+      i -= 1;
+      j -= 2;
+    } else if (step === "e") {
+      ops.push({ op: "2:1", ti: i - 2, ri: j - 1 });
+      i -= 2;
+      j -= 1;
     } else {
-      j--;
+      // Fallback for safety if DP path is unexpectedly incomplete.
+      if (i > 0) {
+        ops.push({ op: "keep", ti: i - 1 });
+        i -= 1;
+      } else {
+        ops.push({ op: "skip_r", ri: j - 1 });
+        j -= 1;
+      }
     }
   }
-  matchedPairs.reverse();
+  ops.reverse();
 
-  const result = words.map((w) => ({ ...w }));
+  const result: WhisperWord[] = [];
 
-  for (const { wordIndex, refIndex } of matchedPairs) {
-    const transcribedNorm = wordNorms[wordIndex];
-    const referenceNorm = refNorms[refIndex];
-    const maxLen = Math.max(transcribedNorm.length, referenceNorm.length);
-    if (maxLen === 0) continue;
+  for (const op of ops) {
+    if (op.op === "keep") {
+      result.push({ ...words[op.ti!] });
+      continue;
+    }
 
-    const similarity = 1 - editDistance(transcribedNorm, referenceNorm) / maxLen;
-    if (similarity >= 0.6) {
-      result[wordIndex].word = refWords[refIndex];
+    if (op.op === "skip_r") {
+      continue;
+    }
+
+    if (op.op === "1:1") {
+      const ti = op.ti!;
+      const ri = op.ri!;
+      const transcribedNorm = wordNorms[ti];
+      const referenceNorm = refNorms[ri];
+      const maxLen = Math.max(transcribedNorm.length, referenceNorm.length);
+      const sim = maxLen === 0 ? 1 : 1 - editDistance(transcribedNorm, referenceNorm) / maxLen;
+      if (sim >= 0.6) {
+        result.push({ ...words[ti], word: refWords[ri] });
+      } else {
+        result.push({ ...words[ti] });
+      }
+      continue;
+    }
+
+    if (op.op === "1:2") {
+      const ti = op.ti!;
+      const ri = op.ri!;
+      const transcribedNorm = wordNorms[ti];
+      const referenceNorm = refNorms[ri] + refNorms[ri + 1];
+      const maxLen = Math.max(transcribedNorm.length, referenceNorm.length);
+      const sim = maxLen === 0 ? 1 : 1 - editDistance(transcribedNorm, referenceNorm) / maxLen;
+      const w = words[ti];
+
+      if (sim >= 0.5) {
+        const mid = Math.round(((w.start + w.end) / 2) * 1000) / 1000;
+        result.push({ word: refWords[ri], start: w.start, end: mid });
+        result.push({ word: refWords[ri + 1], start: mid, end: w.end });
+      } else {
+        result.push({ ...w });
+      }
+      continue;
+    }
+
+    if (op.op === "2:1") {
+      const ti = op.ti!;
+      const ri = op.ri!;
+      const transcribedNorm = wordNorms[ti] + wordNorms[ti + 1];
+      const referenceNorm = refNorms[ri];
+      const maxLen = Math.max(transcribedNorm.length, referenceNorm.length);
+      const sim = maxLen === 0 ? 1 : 1 - editDistance(transcribedNorm, referenceNorm) / maxLen;
+      if (sim >= 0.5) {
+        result.push({
+          word: refWords[ri],
+          start: words[ti].start,
+          end: words[ti + 1].end,
+        });
+      } else {
+        result.push({ ...words[ti] });
+        result.push({ ...words[ti + 1] });
+      }
     }
   }
 
@@ -604,50 +725,18 @@ OUTPUT TEMPLATE:
   { "start": 7.450, "end": 8.100, "text": "yeah yeah", "tag": "adlib" }
 ]`;
 
-const DEFAULT_ALIGN_PROMPT = `ROLE: Precision Lyric Alignment Engine (Global Clock Sync)
-
-TASK: You are given the complete lyrics below. Your ONLY job is to listen
-to the audio and assign precise start/end timestamps to each line.
-Do NOT alter, rewrite, or reorder the lyrics. Align them exactly as given.
-
-REFERENCE LYRICS:
-{referenceLyrics}
-
-RULES:
-- Timestamps anchored to Absolute File Start (0.000)
-- 3-decimal precision (e.g., 12.402)
-- No overlaps between consecutive main vocal lines
-- Tag lines as "main" or "adlib" based on what you hear
-- If a reference line isn't audible, still include it with your best
-  estimate based on surrounding context
-
-OUTPUT: Raw JSON array only, no markdown.
-[
-  { "start": 5.210, "end": 7.400, "text": "exact lyric line from reference", "tag": "main" },
-  { "start": 7.450, "end": 8.100, "text": "yeah yeah", "tag": "adlib" }
-]`;
-
 async function runGeminiTranscribe(
   audioBase64: string,
   mimeType: string,
   lovableKey: string,
-  model: string,
-  referenceLyrics?: string
+  model: string
 ): Promise<{
   words: WhisperWord[];
   segments: Array<{ start: number; end: number; text: string }>;
   rawText: string;
   duration: number;
 }> {
-  let transcribePrompt: string;
-  if (referenceLyrics) {
-    // Always use hardcoded align prompt — never DB-overridable
-    transcribePrompt = DEFAULT_ALIGN_PROMPT.replace("{referenceLyrics}", referenceLyrics);
-  } else {
-    // Always use hardcoded transcribe prompt — bypass DB to prevent override
-    transcribePrompt = DEFAULT_TRANSCRIBE_PROMPT;
-  }
-  const content = await callGemini(transcribePrompt, audioBase64, mimeType, lovableKey, model, 8000, "transcribe");
+  const content = await callGemini(DEFAULT_TRANSCRIBE_PROMPT, audioBase64, mimeType, lovableKey, model, 8000, "transcribe");
 
   // Parse — could be a raw array or wrapped in an object
   let lines: any[];
@@ -860,7 +949,6 @@ serve(async (req) => {
             mimeType,
             LOVABLE_API_KEY,
             geminiTranscribeModel,
-            editorMode ? referenceLyrics!.trim() : undefined,
           ),
       );
     } else {
@@ -884,8 +972,8 @@ serve(async (req) => {
 
     let { words, segments, rawText, duration } = transcribeResult.value;
 
-    // ── Editor Mode: apply reference lyrics diff for Scribe path ────────────
-    if (editorMode && !useGeminiTranscription) {
+    // ── Editor Mode: apply reference lyrics diff for all transcription engines ─
+    if (editorMode) {
       words = applyReferenceLyricsDiff(words, referenceLyrics!.trim());
       // Rebuild segments from corrected words
       const MAX_WORDS_PER_SEG = 6;
