@@ -54,6 +54,43 @@ async function withRetry<T>(
   throw new Error("Unreachable retry state");
 }
 
+function buildSegmentsFromWords(
+  words: Array<{ word: string; start: number; end: number }>
+): Array<{ start: number; end: number; text: string }> {
+  if (words.length === 0) return [];
+
+  const segments: Array<{ start: number; end: number; text: string }> = [];
+  let segStart = 0;
+
+  for (let i = 0; i < words.length; i++) {
+    const isLast = i === words.length - 1;
+    let shouldSplit = isLast;
+
+    if (!isLast) {
+      const gapMs = Math.round((words[i + 1].start - words[i].end) * 1000);
+      const wordCount = i - segStart + 1;
+      // Hard split on breath (300ms+ gap)
+      if (gapMs >= 300) shouldSplit = true;
+      // Soft split on pause (150ms+) when enough words have accumulated
+      else if (gapMs >= 150 && wordCount >= 3) shouldSplit = true;
+      // Safety ceiling — never let a segment exceed 6 words
+      else if (wordCount >= 6) shouldSplit = true;
+    }
+
+    if (shouldSplit) {
+      const chunk = words.slice(segStart, i + 1);
+      segments.push({
+        start: chunk[0].start,
+        end: chunk[chunk.length - 1].end,
+        text: chunk.map(w => w.word).join(" "),
+      });
+      segStart = i + 1;
+    }
+  }
+
+  return segments;
+}
+
 // ── ElevenLabs Scribe: word-level granularity with diarization ───────────────
 async function runScribe(
   audioBytes: Uint8Array,
@@ -102,18 +139,7 @@ async function runScribe(
     }))
     .filter((w: WhisperWord) => w.word.length > 0 && w.end > w.start);
 
-  // Build segments from words (group by ~6 words)
-  const segments: Array<{ start: number; end: number; text: string }> = [];
-  const MAX_WORDS_PER_SEG = 6;
-  for (let i = 0; i < words.length; i += MAX_WORDS_PER_SEG) {
-    const chunk = words.slice(i, i + MAX_WORDS_PER_SEG);
-    if (chunk.length === 0) continue;
-    segments.push({
-      start: chunk[0].start,
-      end: chunk[chunk.length - 1].end,
-      text: chunk.map(w => w.word).join(" "),
-    });
-  }
+  const segments = buildSegmentsFromWords(words);
 
   const lastWord = words.length > 0 ? words[words.length - 1] : null;
   const duration = lastWord ? lastWord.end + 0.5 : 0;
@@ -196,18 +222,7 @@ async function runAssemblyAI(
     end: Math.round((Number(w.end) / 1000) * 1000) / 1000,
   })).filter((w: WhisperWord) => w.word.length > 0 && w.end > w.start);
 
-  // Build segments (~6 words each)
-  const segments: Array<{ start: number; end: number; text: string }> = [];
-  const MAX_WORDS_PER_SEG = 6;
-  for (let i = 0; i < words.length; i += MAX_WORDS_PER_SEG) {
-    const chunk = words.slice(i, i + MAX_WORDS_PER_SEG);
-    if (chunk.length === 0) continue;
-    segments.push({
-      start: chunk[0].start,
-      end: chunk[chunk.length - 1].end,
-      text: chunk.map(w => w.word).join(" "),
-    });
-  }
+  const segments = buildSegmentsFromWords(words);
 
   const lastWord = words.length > 0 ? words[words.length - 1] : null;
   const duration = lastWord ? lastWord.end + 0.5 : 0;
@@ -976,17 +991,7 @@ serve(async (req) => {
     if (editorMode) {
       words = applyReferenceLyricsDiff(words, referenceLyrics!.trim());
       // Rebuild segments from corrected words
-      const MAX_WORDS_PER_SEG = 6;
-      segments = [];
-      for (let i = 0; i < words.length; i += MAX_WORDS_PER_SEG) {
-        const chunk = words.slice(i, i + MAX_WORDS_PER_SEG);
-        if (chunk.length === 0) continue;
-        segments.push({
-          start: chunk[0].start,
-          end: chunk[chunk.length - 1].end,
-          text: chunk.map(w => w.word).join(" "),
-        });
-      }
+      segments = buildSegmentsFromWords(words);
       rawText = words.map(w => w.word).join(" ");
     }
 
