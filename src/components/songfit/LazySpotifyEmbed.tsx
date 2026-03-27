@@ -42,6 +42,8 @@ function LazySpotifyEmbedInner({
   const controllerRef = useRef<SpotifyEmbedController | null>(null);
   const hasActivatedRef = useRef(false);
   const prevCardStateRef = useRef<CardState>(cardState);
+  // Bumped to force the creation effect to re-run after a cold→warm transition
+  const [createGeneration, setCreateGeneration] = useState(0);
 
   // Track whether this controller is currently playing so we only call
   // onPlay (→ activate) once per play session, not on every update tick.
