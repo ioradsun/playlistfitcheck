@@ -487,7 +487,7 @@ export function SongFitPostCard({
                     .join(", ")}
                   genre={((post.tags_json as any[]) || [])[0] || null}
                   cardState={cardState}
-                  onPlay={activate}
+                  onPlay={activate} // Required so Spotify iframe playback triggers audio-solo activation
                 />
 
                 <PostCommentPanel
