@@ -204,6 +204,32 @@ HOOK PHRASE:
    Return "hookPhrase" at top level — the single phrase that would
    look best on an actual billboard. Usually the title line.
 
+FINAL CHECK — do this before you return:
+   Scan every phrase you grouped. If any phrase has more than 6
+   words, split it. Ask yourself: where does one complete billboard
+   thought end and another begin?
+   The split must:
+   - Cover the same wordRange as the original combined
+   - Each half must be able to stand alone on a billboard
+   - Split at the most natural spoken boundary — a breath, a
+     pivot word, a change in subject, or a conjunction that
+     starts a new thought
+   - Each new phrase needs its own heroWord and exitEffect
+
+   GOOD split — "Lifes a bitch But she's like heaven on earth":
+     "Lifes a bitch" / "But she's like heaven on earth"
+     Both stand alone. The "But" starts a new thought.
+
+   BAD split — "sometimes yall gotta play in the dirt":
+     "sometimes yall gotta" / "play in the dirt"
+     First half does not stand alone on a billboard.
+     Better: "sometimes yall gotta" → merge with neighbor,
+     or keep "play in the dirt" as the standalone phrase.
+
+   A phrase that cannot stand alone is not a billboard.
+   If you cannot find a clean split, merge the oversized phrase
+   into its neighbor instead.
+
 OUTPUT — return ONLY this JSON, nothing else:
 {
   "phrases": [
