@@ -28,18 +28,18 @@ interface RequestBody {
 
 // Color palette seeds per section index — ensures visual variety even with similar descriptions
 const SECTION_COLOR_SEEDS = [
-  "moonlit deep ocean blues with bioluminescent teal accents",
-  "volcanic crimson glow against obsidian darkness",
-  "violet nebula light bleeding through smoke and haze",
-  "emerald forest canopy with shafts of golden dawn light",
-  "arctic aurora borealis reflecting off frozen chrome",
-  "neon magenta city rain on dark wet pavement",
-  "burnt desert sunset with indigo mountain silhouettes",
-  "deep jade temple interior with floating dust motes in amber light",
-  "blood moon rising over a silver mist valley",
-  "electric storm clouds lit from within by copper lightning",
-  "underwater cathedral with shifting turquoise caustics",
-  "abandoned carnival at dusk with rusted gold ferris wheel light",
+  "golden hour light washing over weathered concrete, amber and dust",
+  "volcanic crimson glow against deep shadow, fire at the edges",
+  "moonlit rooftop with city lights below, silver-blue and warm amber",
+  "cathedral rays cutting through smoke, gold light in dark air",
+  "neon violet and electric blue reflected on wet city pavement",
+  "desert dusk with burnt orange sky bleeding into deep indigo",
+  "emerald light filtering through industrial haze, green and grey",
+  "blood orange sun low on the horizon, silhouette and warmth",
+  "arctic white sky with lone dark figure, high exposure, minimal",
+  "deep jade and copper lantern light, intimate interior glow",
+  "storm break — dark clouds parting to reveal single shaft of white light",
+  "soft pink dawn over empty highway, quiet and wide open",
 ];
 
 // Visual mood → image generation style hints
@@ -70,6 +70,16 @@ const MOOD_IMAGE_STYLE: Record<string, string> = {
   raw: "ungraded neutral, harsh direct light, gritty documentary feel, high grain",
   hypnotic:
     "deep saturated colors, slow gradient, mysterious lighting, tilt-shift bokeh",
+  noir:
+    "high-contrast with single warm light source, deep shadows, wet surfaces reflecting light, cinematic night scene, visible detail in shadow regions",
+  rebellious:
+    "raw energy, bold primary colors against dark ground, high contrast, street-level grit, saturated accents cutting through shadow",
+  ethereal:
+    "soft luminous haze, diffused light, pale warm tones, weightless atmosphere, blown-out highlights, heavenly texture",
+  celestial:
+    "vast dark sky with brilliant light source, cosmic scale, radiant rays, deep contrast between dark void and intense brightness",
+  haunted:
+    "cold desaturated palette, lone light source, long shadows, abandoned space, still and uneasy atmosphere",
 };
 
 function buildImagePrompt(
@@ -126,7 +136,19 @@ function buildImagePrompt(
   parts.push(colorSeed);
 
   if (section.dominantColor) {
-    parts.push(`primary color accent: ${section.dominantColor}`);
+    const hex = section.dominantColor.replace("#", "");
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    if (luminance > 0.6) {
+      parts.push("bright, high-key lighting, lifted exposure");
+    } else if (luminance > 0.35) {
+      parts.push("balanced cinematic exposure, mid-tone lighting");
+    } else {
+      parts.push("low-key lighting, shadows present but not total darkness");
+    }
+    parts.push(`primary color: ${section.dominantColor}`);
   }
 
   // Section position awareness
@@ -138,7 +160,7 @@ function buildImagePrompt(
 
   // Base quality — no longer forcing "ultra dark" on every image
   parts.push(
-    "wide cinematic shot, no people, no text, no faces, photorealistic, film grain, 1920x1080 landscape aspect ratio, 16:9",
+    "wide cinematic shot, no people, no text, no faces, photorealistic, film grain, 1920x1080 landscape aspect ratio, 16:9, minimum exposure: background detail visible throughout, avoid pure black regions larger than 10% of frame",
   );
 
   const prompt = parts.join(", ");
@@ -260,6 +282,57 @@ async function uploadBase64ToStorage(
     .from("lyric-backgrounds")
     .getPublicUrl(path);
   return urlData?.publicUrl ?? null;
+}
+
+function enforceMinimumLuminance(
+  base64DataUri: string,
+  minLuminance: number = 0.12,
+): string {
+  const match = base64DataUri.match(
+    /^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/,
+  );
+  if (!match) return base64DataUri;
+
+  const mimeType = match[1];
+  const base64Data = match[2];
+
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  let totalLuminance = 0;
+  let sampleCount = 0;
+  const stride = 48;
+
+  for (let i = 0; i < bytes.length - 2; i += stride) {
+    const r = bytes[i];
+    const g = bytes[i + 1];
+    const b = bytes[i + 2];
+    if (r === 0 && g === 0 && b === 0) continue;
+    totalLuminance += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    sampleCount++;
+  }
+
+  if (sampleCount === 0) return base64DataUri;
+  const avgLuminance = totalLuminance / sampleCount;
+
+  if (avgLuminance >= minLuminance) return base64DataUri;
+
+  const multiplier = Math.min(minLuminance / avgLuminance, 2.5);
+
+  const corrected = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    corrected[i] = Math.min(255, Math.round(bytes[i] * multiplier));
+  }
+
+  let binary = "";
+  for (let i = 0; i < corrected.length; i++) {
+    binary += String.fromCharCode(corrected[i]);
+  }
+
+  return `data:image/${mimeType};base64,${btoa(binary)}`;
 }
 
 serve(async (req) => {
@@ -454,10 +527,11 @@ serve(async (req) => {
     const uploadResults = await Promise.all(
       imageResults.map(async (base64, i) => {
         if (!base64) return null;
-        const ext = base64.includes("image/png") ? "png" : "jpg";
+        const corrected = enforceMinimumLuminance(base64, 0.12);
+        const ext = corrected.includes("image/png") ? "png" : "jpg";
         const cacheBust = Date.now();
         const path = `${lyric_dance_id}/section-${sections[i].sectionIndex}-${cacheBust}.${ext}`;
-        return uploadBase64ToStorage(supabase, base64, path);
+        return uploadBase64ToStorage(supabase, corrected, path);
       }),
     );
 

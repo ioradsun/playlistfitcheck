@@ -107,6 +107,17 @@ SECTION DESIGN RULES:
 - Use texture as atmosphere, not as gimmick.
 - If no ARTIST DIRECTION is provided, derive the visual world entirely from the lyrics' emotional content, imagery, and themes. The lyrics are always the fallback brief — read them closely and let the words drive every visual choice: sceneTone, texture, atmosphere, and color.
 
+SCENE TONE GUIDANCE:
+- Use 'dark' ONLY when the song is predominantly shadowed throughout — no relief, no lift, no contrast.
+- Use 'mixed' when the song has both dark and light emotional spaces, even if it leans dark overall. A song about struggle AND transcendence is always 'mixed'.
+- Use 'light' for songs that are primarily warm, open, or euphoric.
+- When in doubt between 'dark' and 'mixed', choose 'mixed'.
+
+DOMINANT COLOR GUIDANCE:
+- dominantColor should reflect the section's EMOTIONAL peak, not just its setting. A triumphant section in a dark song should still have a lifted color — gold, amber, violet — not near-black.
+- Avoid #000000 to #222222 range except for sections that are deliberately void-like or isolated.
+- Sections with visualMood triumphant, euphoric, hopeful, celestial, anthemic must have dominantColor luminance above 40%.
+
 Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values exactly.
 
 {
