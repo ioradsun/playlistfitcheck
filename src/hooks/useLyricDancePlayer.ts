@@ -139,5 +139,13 @@ export function useLyricDancePlayer(
     playerRef.current.updateSceneContext(data.scene_context);
   }, [data?.scene_context]);
 
+  // ── Cinematic direction hot-patch (phrases, sections, heroWords) ──────
+  useEffect(() => {
+    if (!playerRef.current || !data?.cinematic_direction) return;
+    playerRef.current.updateCinematicDirection(
+      data.cinematic_direction as any
+    );
+  }, [data?.cinematic_direction]);
+
   return { player, playerReady, data, setData };
 }
