@@ -105,6 +105,7 @@ SECTION DESIGN RULES:
 - Adjacent sections should shift in emphasis, not abandon the palette completely.
 - Prefer cinematic restraint over novelty.
 - Use texture as atmosphere, not as gimmick.
+- If no ARTIST DIRECTION is provided, derive the visual world entirely from the lyrics' emotional content, imagery, and themes. The lyrics are always the fallback brief — read them closely and let the words drive every visual choice: sceneTone, texture, atmosphere, and color.
 
 Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values exactly.
 
@@ -224,14 +225,6 @@ interface AudioSectionInput {
   confidence?: number;
 }
 
-interface SceneContext {
-  scene: string;
-  label: string;
-  timeOfDay: string;
-  baseLuminance: "dark" | "medium" | "light";
-  colorTemperature: string;
-}
-
 interface RequestBody {
   title?: string;
   artist?: string;
@@ -240,8 +233,7 @@ interface RequestBody {
   lyrics?: string;
   lyricId?: string;
   id?: string;
-  listenerScene?: string;
-  scene_context?: SceneContext | null;
+  artist_direction?: string;
   audioSections?: AudioSectionInput[];
   /** Word-level timestamps from Whisper — used for held-word hero detection */
   words?: Array<{ word: string; start: number; end: number }>;
@@ -826,34 +818,6 @@ function buildWordUserMessage(
   return msg;
 }
 
-function resolveListenerScene(body: RequestBody): string {
-  return body.listenerScene?.trim() || body.scene_context?.scene?.trim() || "";
-}
-
-function buildScenePrefix(ctx: SceneContext | null | undefined): string {
-  if (!ctx) return "";
-
-  const luminanceHint: Record<string, string> = {
-    dark: 'Favor sceneTone "dark" or "mixed".',
-    medium: 'sceneTone can be "mixed".',
-    light: 'Favor sceneTone "light". Avoid "fire" and "storm" textures.',
-  };
-
-  const tempHint: Record<string, string> = {
-    warm: "Prefer warm textures: fire, aurora, dust, smoke.",
-    cool: "Prefer cool textures: rain, snow, storm, stars.",
-    neutral: "Texture is open.",
-  };
-
-  return `
-SCENE CONTEXT — ground ALL choices in this world.
-"${ctx.label}" — ${ctx.scene}
-Time: ${ctx.timeOfDay}
-${luminanceHint[ctx.baseLuminance] ?? ""}
-${tempHint[ctx.colorTemperature] ?? ""}
-`;
-}
-
 function unwrapNested(obj: Record<string, any>): Record<string, any> {
   // If the AI wrapped everything under a single key, unwrap it
   const keys = Object.keys(obj);
@@ -1173,7 +1137,6 @@ function validateWords(
 
 async function callScene(
   apiKey: string,
-  scenePrefix: string,
   userMessage: string,
   sectionCount: number,
   body: RequestBody,
@@ -1181,7 +1144,7 @@ async function callScene(
   modelOverride: string = PRIMARY_MODEL,
 ): Promise<Record<string, any>> {
   const messages = [
-    { role: "system", content: scenePrefix + sceneSystemPrompt },
+    { role: "system", content: sceneSystemPrompt },
     { role: "user", content: userMessage },
   ];
 
@@ -1254,9 +1217,9 @@ async function callScene(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-           model: modelOverride,
+          model: modelOverride,
           messages: [
-            { role: "system", content: scenePrefix + sceneSystemPrompt },
+            { role: "system", content: sceneSystemPrompt },
             { role: "user", content: userMessage },
             {
               role: "user",
@@ -1561,25 +1524,23 @@ serve(async (req) => {
       );
     }
 
-    const listenerScene = resolveListenerScene(body);
-    const scenePrefix = buildScenePrefix(body.scene_context);
-
     if (body.mode === "scene") {
       // Build user message for scene mode inline
       const sectionList = (body.audioSections || [])
         .map((s: any, i: number) => `  Section ${i + 1}: "${s.label || `Section ${i + 1}`}" (${fmt(s.start)}–${fmt(s.end)}, energy: ${(s.avgEnergy ?? 0).toFixed(2)}, beats/sec: ${(s.beatDensity ?? 0).toFixed(1)})`)
         .join("\n");
       const sceneUserMessage = [
+        body.artist_direction
+          ? `ARTIST DIRECTION (this is the visual world — treat it as law): "${body.artist_direction}"`
+          : "",
         `Song: "${title}" by ${artist}`,
         bpm ? `BPM: ${bpm}` : "",
-        listenerScene ? `Listener scene: ${listenerScene}` : "",
         `\nLyrics:\n${lines.map((l) => l.text).join("\n")}`,
         sectionList ? `\nAudio sections:\n${sectionList}` : "",
       ].filter(Boolean).join("\n");
 
       const sceneResult = await callScene(
         apiKey,
-        scenePrefix,
         sceneUserMessage,
         body.audioSections?.length ?? 0,
         body,

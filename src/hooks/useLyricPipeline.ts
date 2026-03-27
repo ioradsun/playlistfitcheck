@@ -12,7 +12,6 @@ import {
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import type { LyricData, LyricLine } from "@/components/lyric/LyricDisplay";
 import type { WaveformData } from "@/hooks/useAudioEngine";
-import type { SceneContextResult } from "@/lib/sceneContexts";
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
 export type PipelineStageStatus = "pending" | "running" | "done";
@@ -472,7 +471,7 @@ interface UseLyricPipelineParams {
   initialLyric?: any;
   user: { id: string } | null;
   siteCopy: any;
-  resolvedScene?: SceneContextResult | null;
+  sceneDescription?: string;
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onSavedId?: (id: string) => void;
@@ -501,7 +500,7 @@ export function useLyricPipeline({
   initialLyric,
   user,
   siteCopy,
-  resolvedScene,
+  sceneDescription,
   onNewProject,
 }: UseLyricPipelineParams) {
   const hottestHooksEnabled = siteCopy?.features?.hookfit_hottest_hooks !== false;
@@ -1028,7 +1027,6 @@ export function useLyricPipeline({
           .filter((l: any) => l.tag !== "adlib")
           .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
 
-        const sceneContext = resolvedScene ?? null;
         const sharedBody = {
           title: lyricData.title,
           artist: artistNameRef.current,
@@ -1051,7 +1049,7 @@ export function useLyricPipeline({
               }
             : undefined,
           lyricId: savedIdRef.current || undefined,
-          scene_context: sceneContext,
+          artist_direction: sceneDescription?.trim() || undefined,
         };
 
         const { data: sceneResult } = await invokeWithTimeout(
@@ -1073,6 +1071,7 @@ export function useLyricPipeline({
           ...(beatGrid
             ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
             : { ...sceneDirection }),
+          _artistDirection: sceneDescription?.trim() || undefined,
           _meta: { scene: sceneMeta },
         };
 
@@ -1384,7 +1383,7 @@ export function useLyricPipeline({
       user,
       audioFile,
       initialLyric,
-      resolvedScene,
+      sceneDescription,
     ],
   );
 
