@@ -3,7 +3,7 @@
  * ShareableLyricDance — Public page for a full-song lyric dance.
  * Route: /:artistSlug/:songSlug/lyric-dance
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,7 @@ import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { SeoHead } from "@/components/SeoHead";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
+import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
 
 interface ProfileInfo {
   display_name: string | null;
@@ -43,6 +44,7 @@ export default function ShareableLyricDance() {
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [badgeVisible, setBadgeVisible] = useState(false);
+  const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -170,6 +172,14 @@ export default function ShareableLyricDance() {
     }
   }, [fetchedData, data]);
 
+  useEffect(() => {
+    const id = (data as any)?.id;
+    if (!player || !id) return;
+    fetchFireData(id).then((fires) => {
+      player.setHistoricalFires(fires);
+    });
+  }, [player, (data as any)?.id]);
+
   const openReactionPanel = useCallback(() => {
     openPanel();
   }, [openPanel]);
@@ -226,6 +236,11 @@ export default function ShareableLyricDance() {
   const ogDescription = isMarketingView
     ? "Your song. One click. AI lyric video. Claim your free artist page on tools.fm"
     : "Interactive lyric video on tools.fm · Run it back or skip";
+  const hookPhrase = (renderData as any)?.hook_phrase ?? null;
+  const activeLineFireCount = useMemo(() => {
+    if (!activeLine) return 0;
+    return fireStrengthByLine[activeLine.lineIndex] ?? 0;
+  }, [activeLine, fireStrengthByLine]);
 
   return (
     <div
@@ -409,6 +424,33 @@ export default function ShareableLyricDance() {
               onOpenReactions={openReactionPanel}
               onClose={closePanel}
               panelOpen={reactionPanelOpen}
+              onFireTap={() => {
+                const id = (data as any)?.id;
+                if (!id || !activeLine) return;
+                player?.fireFire(0);
+                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
+                setFireStrengthByLine((prev) => ({
+                  ...prev,
+                  [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
+                }));
+              }}
+              onFireHoldStart={() => {
+                /* nothing — visual handled by FireButton */
+              }}
+              onFireHoldEnd={(holdMs) => {
+                const id = (data as any)?.id;
+                if (!id || !activeLine) return;
+                player?.fireFire(holdMs);
+                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
+                const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
+                setFireStrengthByLine((prev) => ({
+                  ...prev,
+                  [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
+                }));
+              }}
+              activeLineFireCount={activeLineFireCount}
+              hookPhrase={hookPhrase}
+              activeLineText={activeLine?.text ?? null}
             />
           </div>
         )}
@@ -439,6 +481,11 @@ export default function ShareableLyricDance() {
         }}
         onPause={handlePauseForInput}
         onResume={handleResumeAfterInput}
+        onLineVisible={(lineIndex) => {
+          const id = renderData?.id ?? (data as any)?.id;
+          if (!id) return;
+          emitExposure(id, lineIndex);
+        }}
         empowermentPromise={empowermentPromise}
         fmlyHookEnabled={fmlyHookEnabled}
       />
