@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+  type TouchEvent,
+} from "react";
 import { MessageCircle, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
@@ -76,7 +84,105 @@ interface ReactionPanelProps {
     hooks: string[];
   } | null;
   fmlyHookEnabled?: boolean;
+  onFireLine?: (lineIndex: number, holdMs: number) => void;
   onLineVisible?: (lineIndex: number) => void;
+}
+
+function FireLineButton({
+  lineIndex: _lineIndex,
+  fireCount,
+  onFire,
+  accent,
+}: {
+  lineIndex: number;
+  fireCount: number;
+  onFire: (holdMs: number) => void;
+  accent: string;
+}) {
+  const holdRef = useRef<number | null>(null);
+  const [holding, setHolding] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const start = (e: MouseEvent | TouchEvent) => {
+    e.stopPropagation();
+    holdRef.current = Date.now();
+    setHolding(true);
+    tickRef.current = setInterval(() => {
+      setProgress(
+        Math.min(1, (Date.now() - (holdRef.current ?? Date.now())) / 3000),
+      );
+    }, 40);
+  };
+
+  const end = (e: MouseEvent | TouchEvent) => {
+    e.stopPropagation();
+    if (!holdRef.current) return;
+    const ms = Date.now() - holdRef.current;
+    holdRef.current = null;
+    setHolding(false);
+    setProgress(0);
+    if (tickRef.current) clearInterval(tickRef.current);
+    onFire(ms);
+  };
+
+  const scale = 1 + (holding ? progress * 0.35 : 0);
+
+  useEffect(() => {
+    return () => {
+      if (tickRef.current) clearInterval(tickRef.current);
+    };
+  }, []);
+
+  return (
+    <div
+      onMouseDown={start}
+      onMouseUp={end}
+      onMouseLeave={end}
+      onTouchStart={(e) => {
+        e.preventDefault();
+        start(e);
+      }}
+      onTouchEnd={end}
+      style={{
+        width: 44,
+        height: 44,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        cursor: "pointer",
+        borderRadius: 10,
+        background: holding ? `${accent}15` : "transparent",
+        border: `1px solid ${holding ? `${accent}40` : "transparent"}`,
+        transition: "background 0.15s, border 0.15s",
+        touchAction: "none",
+      }}
+    >
+      <span
+        style={{
+          fontSize: 20,
+          transform: `scale(${scale})`,
+          transition: holding ? "none" : "transform 0.2s",
+        }}
+      >
+        🔥
+      </span>
+      {fireCount > 0 && (
+        <span
+          style={{
+            fontSize: 8,
+            fontFamily: "monospace",
+            color: "rgba(255,255,255,0.25)",
+            marginTop: 1,
+          }}
+        >
+          {fireCount}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function CommentReactPicker({
@@ -141,7 +247,7 @@ function ReactionPanel({
   player,
   onReactionFired,
   reactionData,
-  onReactionDataChange,
+  onReactionDataChange: _onReactionDataChange,
   onPause,
   onResume,
   votedSide,
@@ -153,14 +259,14 @@ function ReactionPanel({
   renderBottomBar,
   onCloseWithPosition,
   maxHeight,
-  empowermentPromise,
-  fmlyHookEnabled,
+  empowermentPromise: _empowermentPromise,
+  fmlyHookEnabled: _fmlyHookEnabled,
+  onFireLine,
   onLineVisible,
 }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(
     null,
@@ -176,17 +282,14 @@ function ReactionPanel({
     Set<string>
   >(new Set());
 
-  const [angleVoted, setAngleVoted] = useState<number | null>(null);
-  const [angleVoteCounts, setAngleVoteCounts] = useState<number[]>([]);
-  const [angleVotesLoaded, setAngleVotesLoaded] = useState(false);
-
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const exposureObserverRef = useRef<IntersectionObserver | null>(null);
+  const reportedExposures = useRef<Set<number>>(new Set());
   const userTookControlRef = useRef(false);
   const [pinnedLineIndex, setPinnedLineIndex] = useState<number | null>(null);
   const pinnedLineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActiveLineRef = useRef<number | null>(null);
-  const lastExposedLineRef = useRef<number | null>(null);
   // null = free play (initial open, replay). Set to line.endSec on user tap.
   const stopAtSecRef = useRef<number | null>(null);
 
@@ -273,11 +376,34 @@ function ReactionPanel({
     pinnedLineIndex ?? playheadLineIndex ?? heldLineIndex;
 
   useEffect(() => {
-    if (!isOpen || effectiveActiveIndex == null) return;
-    if (lastExposedLineRef.current === effectiveActiveIndex) return;
-    lastExposedLineRef.current = effectiveActiveIndex;
-    onLineVisible?.(effectiveActiveIndex);
-  }, [isOpen, effectiveActiveIndex, onLineVisible]);
+    if (!isOpen || !onLineVisible) return;
+    reportedExposures.current.clear();
+
+    exposureObserverRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const lineIndex = Number(
+            (entry.target as HTMLElement).dataset.lineIndex,
+          );
+          if (isNaN(lineIndex) || reportedExposures.current.has(lineIndex))
+            return;
+          setTimeout(() => {
+            if (reportedExposures.current.has(lineIndex)) return;
+            reportedExposures.current.add(lineIndex);
+            onLineVisible(lineIndex);
+          }, 800);
+        });
+      },
+      { threshold: 0.6 },
+    );
+
+    Object.entries(rowRefs.current).forEach(([, el]) => {
+      if (el) exposureObserverRef.current?.observe(el);
+    });
+
+    return () => exposureObserverRef.current?.disconnect();
+  }, [isOpen, onLineVisible]);
 
   const expandedLineComments = useMemo(() => {
     if (expandedLineIndex == null) return [];
@@ -419,52 +545,6 @@ function ReactionPanel({
   }, [danceId, isOpen, refreshKey]);
 
 
-  useEffect(() => {
-    if (!isOpen || !danceId || !empowermentPromise) return;
-    setAngleVotesLoaded(false);
-    setAngleVoteCounts([]);
-    const sessionId = getSessionId();
-
-    supabase
-      .from("lyric_dance_angle_votes" as any)
-      .select("hook_index")
-      .eq("dance_id", danceId)
-      .then(({ data }) => {
-        if (!data) return;
-        const counts = Array(6).fill(0);
-        (data as any[]).forEach((row) => {
-          counts[row.hook_index] = (counts[row.hook_index] ?? 0) + 1;
-        });
-        setAngleVoteCounts(counts);
-        setAngleVotesLoaded(true);
-      });
-
-    supabase
-      .from("lyric_dance_angle_votes" as any)
-      .select("hook_index")
-      .eq("dance_id", danceId)
-      .eq("session_id", sessionId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setAngleVoted((data as any).hook_index);
-      });
-  }, [isOpen, danceId, empowermentPromise]);
-
-  const handleAngleVote = async (hookIndex: number) => {
-    if (angleVoted !== null || !danceId) return;
-    const sessionId = getSessionId();
-    setAngleVoted(hookIndex);
-    setAngleVoteCounts((prev) => {
-      const next = [...prev];
-      next[hookIndex] = (next[hookIndex] ?? 0) + 1;
-      return next;
-    });
-    await supabase
-      .from("lyric_dance_angle_votes" as any)
-      .insert({ dance_id: danceId, hook_index: hookIndex, session_id: sessionId })
-      .select();
-  };
-
   const handleLineTap = (line: LyricSectionLine) => {
     if (!player) {
       onSeekTo(line.startSec, line.endSec);
@@ -487,36 +567,6 @@ function ReactionPanel({
       player.startRendering();
     }
     userTookControlRef.current = true;
-  };
-
-  const handleReact = async (emoji: EmojiKey, lineIndex?: number) => {
-    if (!danceId) return;
-    const sessionId = getSessionId();
-    const targetLineIndex = lineIndex ?? activeLine?.lineIndex ?? null;
-    const reactionKey = `${emoji}-${targetLineIndex ?? "song"}`;
-    if (sessionReacted.has(reactionKey)) return;
-
-    setSessionReacted((prev) => new Set([...prev, reactionKey]));
-    onReactionFired(emoji);
-
-    await supabase.from("lyric_dance_reactions" as any).insert({
-      dance_id: danceId,
-      line_index: targetLineIndex,
-      section_index: null,
-      emoji,
-      session_id: sessionId,
-    });
-
-    onReactionDataChange((prev) => {
-      const updated = { ...prev };
-      if (!updated[emoji]) updated[emoji] = { line: {}, total: 0 };
-      updated[emoji].total++;
-      if (targetLineIndex != null) {
-        updated[emoji].line[targetLineIndex] =
-          (updated[emoji].line[targetLineIndex] ?? 0) + 1;
-      }
-      return updated;
-    });
   };
 
   const handleCommentReact = async (commentId: string, emoji: EmojiKey) => {
@@ -669,6 +719,7 @@ function ReactionPanel({
                   ref={(node) => {
                     rowRefs.current[line.lineIndex] = node;
                   }}
+                  data-line-index={line.lineIndex}
                   onClick={() => handleLineTap(line)}
                   className="relative flex items-center gap-2 px-3 cursor-pointer transition-colors overflow-hidden"
                   style={{
@@ -703,6 +754,17 @@ function ReactionPanel({
                   </span>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {isActive && (
+                      <FireLineButton
+                        lineIndex={line.lineIndex}
+                        fireCount={Object.values(reactionData).reduce(
+                          (sum, data) => sum + (data.line[line.lineIndex] ?? 0),
+                          0,
+                        )}
+                        onFire={(holdMs) => onFireLine?.(line.lineIndex, holdMs)}
+                        accent={accent}
+                      />
+                    )}
                     {topReaction && (
                       <span
                         className="text-[8px] font-mono px-1 py-0.5 rounded"
@@ -753,48 +815,7 @@ function ReactionPanel({
 
                 {isActive && (
                   <>
-                    {/* Emoji bar — inline under active line */}
-                    <div
-                      className="flex items-center justify-around px-4 py-3 border-b border-white/[0.04]"
-                      style={{ height: 58 }}
-                    >
-                      {EMOJIS.map(({ key, symbol, label }) => {
-                        const count =
-                          reactionData[key]?.line[line.lineIndex] ?? 0;
-                        const reacted = sessionReacted.has(
-                          `${key}-${line.lineIndex}`,
-                        );
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => handleReact(key, line.lineIndex)}
-                            className="flex flex-col items-center justify-center transition-all active:scale-90"
-                            style={{
-                              minWidth: 44,
-                              minHeight: 44,
-                              borderRadius: 12,
-                              background: reacted ? `${accent}15` : "transparent",
-                              border: reacted
-                                ? `1px solid ${accent}35`
-                                : "1px solid transparent",
-                            }}
-                          >
-                            <span style={{ fontSize: 22 }}>{symbol}</span>
-                            <span
-                              className="font-mono min-h-[10px]"
-                              style={{
-                                fontSize: 9,
-                                color: reacted ? accent : "rgba(255,255,255,0.25)",
-                              }}
-                            >
-                              {count > 0 ? count : label}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Comment input — inline under emoji bar */}
+                    {/* Comment input — inline under active line */}
                     {!hideInput && (
                       <div
                         className="mx-3 my-2 flex items-center gap-2"
@@ -976,136 +997,6 @@ function ReactionPanel({
             );
           })}
 
-          {empowermentPromise && (
-            <div className="mx-3 mt-4 mb-6 space-y-3">
-              <div style={{ height: "0.5px", background: "rgba(255,255,255,0.06)" }} />
-
-              <div className="flex items-center gap-2 px-1 pt-1">
-                <span style={{ fontSize: 10, fontFamily: "monospace", color: "rgba(255,255,255,0.3)", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-                  ⚡ Which angle hits?
-                </span>
-                {angleVoted === null && (
-                  <span style={{ fontSize: 9, fontFamily: "monospace", color: "rgba(255,255,255,0.2)" }}>
-                    pick the caption for this song
-                  </span>
-                )}
-              </div>
-
-              {empowermentPromise.hooks.map((hook, i) => {
-                const votes = angleVoteCounts[i] ?? 0;
-                const totalVotes = angleVoteCounts.reduce((a, b) => a + b, 0);
-                const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
-                const isVoted = angleVoted === i;
-                const isWinner =
-                  angleVoted !== null &&
-                  totalVotes >= 2 &&
-                  votes === Math.max(...angleVoteCounts);
-                const showResults = angleVoted !== null;
-
-                return (
-                  <button
-                    key={i}
-                    onClick={() => handleAngleVote(i)}
-                    disabled={angleVoted !== null}
-                    className="w-full text-left relative rounded-xl overflow-hidden transition-all"
-                    style={{
-                      background: isVoted ? `${accent}12` : "rgba(255,255,255,0.03)",
-                      border: isVoted
-                        ? `1px solid ${accent}35`
-                        : "1px solid rgba(255,255,255,0.06)",
-                      padding: "10px 12px",
-                      cursor: angleVoted === null ? "pointer" : "default",
-                    }}
-                  >
-                    {showResults && (
-                      <div
-                        className="absolute inset-y-0 left-0 transition-all duration-700"
-                        style={{
-                          width: `${pct}%`,
-                          background: isVoted
-                            ? `${accent}10`
-                            : "rgba(255,255,255,0.02)",
-                        }}
-                      />
-                    )}
-                    <div className="relative flex items-center gap-2.5">
-                      <div
-                        style={{
-                          width: 14,
-                          height: 14,
-                          borderRadius: "50%",
-                          flexShrink: 0,
-                          border: isVoted
-                            ? `2px solid ${accent}`
-                            : "2px solid rgba(255,255,255,0.12)",
-                          background: isVoted ? accent : "transparent",
-                          transition: "all 0.2s",
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: 12,
-                          color: isVoted
-                            ? "rgba(255,255,255,0.9)"
-                            : "rgba(255,255,255,0.55)",
-                          lineHeight: 1.45,
-                          flex: 1,
-                        }}
-                      >
-                        {hook}
-                      </span>
-                      {showResults && (
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {isWinner && (
-                            <span
-                              style={{
-                                fontSize: 8,
-                                fontFamily: "monospace",
-                                padding: "2px 6px",
-                                borderRadius: 4,
-                                background: `${accent}18`,
-                                color: accent,
-                                border: `1px solid ${accent}30`,
-                                letterSpacing: "0.1em",
-                                textTransform: "uppercase",
-                              }}
-                            >
-                              FMLY pick
-                            </span>
-                          )}
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontFamily: "monospace",
-                              color: "rgba(255,255,255,0.3)",
-                              minWidth: 28,
-                              textAlign: "right",
-                            }}
-                          >
-                            {pct}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-
-              {angleVoted === null && (
-                <p
-                  style={{
-                    fontSize: 10,
-                    fontFamily: "monospace",
-                    color: "rgba(255,255,255,0.2)",
-                    textAlign: "center",
-                    paddingTop: 4,
-                  }}
-                >
-                  or swipe to skip
-                </p>
-              )}
-            </div>
-          )}
         </div>
       </div>
 

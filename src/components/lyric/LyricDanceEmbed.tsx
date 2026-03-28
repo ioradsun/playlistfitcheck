@@ -566,8 +566,14 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           onReactionFired={(emoji) => player?.fireComment(emoji)}
           onPause={handlePauseForInput}
           onResume={handleResumeAfterInput}
+          onFireLine={(lineIndex, holdMs) => {
+            const id = (data ?? (prefetchedData as any))?.id;
+            if (!id) return;
+            player?.fireFire(holdMs);
+            emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs);
+          }}
           onLineVisible={(lineIndex) => {
-            const id = data?.id ?? (prefetchedData as any)?.id;
+            const id = (data ?? (prefetchedData as any))?.id;
             if (!id) return;
             emitExposure(id, lineIndex);
           }}
