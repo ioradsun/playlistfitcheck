@@ -21,6 +21,7 @@ import {
   Users,
   Check,
   Circle,
+  Copy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -52,6 +53,7 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useVoteGate } from "@/hooks/useVoteGate";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
+import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { UseLyricPipelineReturn } from "@/hooks/useLyricPipeline";
 
 const PEAK_SAMPLES = 200;
@@ -1224,6 +1226,87 @@ export function FitTab({
 
   // ── Sections derived from renderData ─────────────────────────────────────
   const meaning = renderData?.meaning;
+  const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
+
+  const [empowermentPromise, setEmpowermentPromise] = useState<{
+    emotionalJob: string;
+    fromState: string;
+    toState: string;
+    promise: string;
+    hooks: string[];
+  } | null>(null);
+  const [empowermentLoading, setEmpowermentLoading] = useState(false);
+  const [empowermentError, setEmpowermentError] = useState(false);
+
+  // Live vote counts per hook index — fetched after promise is generated
+  const [hookVoteCounts, setHookVoteCounts] = useState<number[]>([]);
+
+  const fetchVoteCounts = useCallback(async (danceId: string) => {
+    const { data } = await supabase
+      .from("lyric_dance_angle_votes" as any)
+      .select("hook_index")
+      .eq("dance_id", danceId);
+    if (!data) return;
+    const counts = Array(6).fill(0);
+    (data as any[]).forEach((row) => {
+      counts[row.hook_index] = (counts[row.hook_index] ?? 0) + 1;
+    });
+    setHookVoteCounts(counts);
+  }, []);
+
+  useEffect(() => {
+    if (!fmlyHookEnabled) return;
+    if (!allReady || !publishedDanceId) return;
+    if (empowermentPromise || empowermentLoading) return;
+
+    const lines = lyricData?.lines;
+    if (!Array.isArray(lines) || lines.length === 0) return;
+
+    const lyricsText = lines
+      .filter((l: any) => l.tag !== "adlib")
+      .map((l: any) => l.text)
+      .join("\n");
+
+    setEmpowermentLoading(true);
+    setEmpowermentError(false);
+
+    invokeWithTimeout(
+      "empowerment-promise",
+      {
+        songTitle: lyricData.title || "Untitled",
+        lyricsText,
+        emotionalArc: cinematicDirection?.emotionalArc ?? null,
+        sceneTone: cinematicDirection?.sceneTone ?? null,
+        chorusText: cinematicDirection?.chorusText ?? null,
+        meaning: renderData?.meaning ?? null,
+      },
+      30_000,
+    )
+      .then(async ({ data, error }) => {
+        if (error || !data?.hooks?.length) {
+          setEmpowermentError(true);
+          return;
+        }
+        setEmpowermentPromise(data);
+        await supabase
+          .from("shareable_lyric_dances" as any)
+          .update({ empowerment_promise: data })
+          .eq("id", publishedDanceId);
+        fetchVoteCounts(publishedDanceId);
+      })
+      .catch(() => setEmpowermentError(true))
+      .finally(() => setEmpowermentLoading(false));
+  }, [
+    fmlyHookEnabled,
+    allReady,
+    publishedDanceId,
+    empowermentPromise,
+    empowermentLoading,
+    lyricData,
+    cinematicDirection,
+    renderData,
+    fetchVoteCounts,
+  ]);
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -1561,6 +1644,135 @@ export function FitTab({
               </p>
             </div>
           )}
+
+          {fmlyHookEnabled &&
+            allReady &&
+            (empowermentLoading || empowermentPromise || empowermentError) && (
+              <div className="glass-card rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
+                    <Zap size={10} />
+                    FMLY Hook
+                  </div>
+                  {empowermentPromise && (
+                    <button
+                      onClick={() => {
+                        setEmpowermentPromise(null);
+                        setEmpowermentError(false);
+                        setHookVoteCounts([]);
+                      }}
+                      className="text-[9px] font-mono text-muted-foreground/50 hover:text-primary transition-colors flex items-center gap-1"
+                    >
+                      <RefreshCw size={9} /> Regenerate
+                    </button>
+                  )}
+                </div>
+
+                {empowermentLoading && (
+                  <div className="flex items-center gap-2 py-2">
+                    <Loader2 size={12} className="animate-spin text-white/20" />
+                    <span className="text-[10px] font-mono text-white/25 tracking-wider">
+                      generating angles…
+                    </span>
+                  </div>
+                )}
+
+                {empowermentError && !empowermentLoading && (
+                  <p className="text-[11px] text-muted-foreground/50">
+                    Could not generate — try again later.
+                  </p>
+                )}
+
+                {empowermentPromise && (() => {
+                  const totalVotes = hookVoteCounts.reduce((a, b) => a + b, 0);
+                  const winnerIndex =
+                    hookVoteCounts.length > 0
+                      ? hookVoteCounts.indexOf(Math.max(...hookVoteCounts))
+                      : -1;
+
+                  return (
+                    <>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-mono px-2 py-1 rounded bg-white/[0.04] text-white/50">
+                          {empowermentPromise.fromState}
+                        </span>
+                        <span className="text-white/20">→</span>
+                        <span className="text-[10px] font-mono px-2 py-1 rounded bg-primary/10 text-primary border border-primary/20">
+                          {empowermentPromise.toState}
+                        </span>
+                      </div>
+
+                      <p className="text-sm font-semibold text-foreground leading-snug">
+                        {empowermentPromise.promise}
+                      </p>
+
+                      <div className="space-y-1 pt-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[9px] font-mono text-muted-foreground/50 uppercase tracking-wider">
+                            {totalVotes > 0
+                              ? `${totalVotes} FMLY vote${totalVotes !== 1 ? "s" : ""}`
+                              : "Share to get votes"}
+                          </span>
+                        </div>
+                        {empowermentPromise.hooks.map((hook, i) => {
+                          const votes = hookVoteCounts[i] ?? 0;
+                          const pct =
+                            totalVotes > 0
+                              ? Math.round((votes / totalVotes) * 100)
+                              : 0;
+                          const isWinner = totalVotes >= 3 && i === winnerIndex;
+                          return (
+                            <div key={i} className="relative rounded-lg overflow-hidden">
+                              {totalVotes > 0 && (
+                                <div
+                                  className="absolute inset-y-0 left-0 transition-all duration-500"
+                                  style={{
+                                    width: `${pct}%`,
+                                    background: isWinner
+                                      ? "rgba(74,222,128,0.08)"
+                                      : "rgba(255,255,255,0.03)",
+                                  }}
+                                />
+                              )}
+                              <div className="relative flex items-center gap-2.5 px-2.5 py-2">
+                                <span className="text-[9px] font-mono text-white/15 shrink-0 w-4">
+                                  {String(i + 1).padStart(2, "0")}
+                                </span>
+                                <span
+                                  className={`text-[11px] flex-1 leading-snug ${isWinner ? "text-white/90" : "text-white/55"}`}
+                                >
+                                  {hook}
+                                </span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {isWinner && (
+                                    <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/20 uppercase tracking-wider">
+                                      FMLY pick
+                                    </span>
+                                  )}
+                                  {totalVotes > 0 && (
+                                    <span className="text-[9px] font-mono text-white/25 w-8 text-right">
+                                      {pct}%
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(hook);
+                                    }}
+                                    className="p-1 text-white/15 hover:text-white/50 transition-colors"
+                                  >
+                                    <Copy size={10} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
           {renderData && (
             <div className="space-y-3">

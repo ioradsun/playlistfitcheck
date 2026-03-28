@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImper
 import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
@@ -95,6 +96,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 }, ref) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
+  const siteCopy = useSiteCopy();
+  const empowermentPromise = (prefetchedData as any)?.empowerment_promise ?? null;
+  const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
 
   // For battle embeds: patch region_start/region_end onto a derived data copy
   // so LyricDancePlayer knows to window playback to the hook region.
@@ -518,6 +522,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           onReactionFired={(emoji) => player?.fireComment(emoji)}
           onPause={handlePauseForInput}
           onResume={handleResumeAfterInput}
+          empowermentPromise={empowermentPromise}
+          fmlyHookEnabled={fmlyHookEnabled}
         />
       )}
     </div>

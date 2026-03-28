@@ -41,6 +41,7 @@ interface FeaturesState {
   hookfit_hottest_hooks: boolean;
   export_video: boolean;
   crowdfit_reels: boolean;
+  fmly_hook: boolean;
 }
 
 const DEFAULT_FEATURES: FeaturesState = {
@@ -56,6 +57,7 @@ const DEFAULT_FEATURES: FeaturesState = {
   hookfit_hottest_hooks: true,
   export_video: false,
   crowdfit_reels: false,
+  fmly_hook: false,
 };
 
 async function patchFeatures(patch: Partial<FeaturesState & Record<string, any>>) {
@@ -184,6 +186,7 @@ export function ToolsEditor() {
           hookfit_hottest_hooks: f.hookfit_hottest_hooks ?? true,
           export_video: f.export_video ?? false,
           crowdfit_reels: f.crowdfit_reels ?? false,
+          fmly_hook: f.fmly_hook ?? false,
         });
         setOrderedKeys(merged);
         setGuestQuota(f.growth_quotas?.guest ?? 5);
@@ -541,6 +544,41 @@ export function ToolsEditor() {
               }
             }}
             disabled={savingKey === "hookfit_hottest_hooks"}
+          />
+        </div>
+      </div>
+
+
+      {/* ── FMLY Hook ── */}
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Zap size={14} className="text-primary" />
+          <span className="text-sm font-mono font-medium">FMLY Hook</span>
+        </div>
+        <div className="px-4 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">FMLY Hook — audience angle voting</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              AI generates 6 social hooks · FMLY votes which one hits · artist gets validated caption
+            </p>
+          </div>
+          <Switch
+            checked={features.fmly_hook ?? false}
+            onCheckedChange={async (enabled) => {
+              const prev = features.fmly_hook;
+              setFeatures(f => ({ ...f, fmly_hook: enabled }));
+              setSavingKey("fmly_hook");
+              try {
+                await patchFeatures({ fmly_hook: enabled });
+                toast.success(enabled ? "FMLY Hook enabled" : "FMLY Hook disabled");
+              } catch {
+                setFeatures(f => ({ ...f, fmly_hook: prev }));
+                toast.error("Failed to update");
+              } finally {
+                setSavingKey(null);
+              }
+            }}
+            disabled={savingKey === "fmly_hook"}
           />
         </div>
       </div>
