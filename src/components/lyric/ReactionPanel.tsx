@@ -282,7 +282,8 @@ function ReactionPanel({
     setTextInput("");
     setReplyingTo(null);
     setExpandedLineIndex(null);
-    stopAtSecRef.current = null; // initial open = free play
+    stopAtSecRef.current = null; // cleared — tapping a line will set it
+    userTookControlRef.current = false; // re-enable auto-scroll for this session
   }, [isOpen]);
 
   // Stop audio when the tapped line ends; clear on replay-from-start

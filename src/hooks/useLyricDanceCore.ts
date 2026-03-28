@@ -190,7 +190,7 @@ export function useLyricDanceCore({
     if (!reactionPanelOpen || !player) return;
     if (showCover) setShowCover(false);
     player.setMuted(false);
-    player.play();
+    player.pause();
     setMuted(false);
   }, [reactionPanelOpen, player, showCover]);
 
