@@ -16,6 +16,7 @@ import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
+import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import ClaimBanner from "@/components/claim/ClaimBanner";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -45,6 +46,7 @@ export default function ShareableLyricDance() {
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
+  const [closingVisible, setClosingVisible] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -190,6 +192,16 @@ export default function ShareableLyricDance() {
   }, []);
 
   useEffect(() => {
+    if (!durationSec || !player) return;
+    if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
+      setClosingVisible(true);
+    }
+    if (currentTimeSec < durationSec * 0.5 && closingVisible) {
+      setClosingVisible(false);
+    }
+  }, [currentTimeSec, durationSec, closingVisible, player]);
+
+  useEffect(() => {
     const style = document.createElement("style");
     style.id = "hide-lovable-badge-ld";
     style.textContent = `[data-lovable-badge], .lovable-badge, iframe[src*="lovable"] { display: none !important; }`;
@@ -312,6 +324,17 @@ export default function ShareableLyricDance() {
             id="text-canvas"
             ref={textCanvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none"
+          />
+
+          <ClosingScreen
+            visible={closingVisible && !reactionPanelOpen}
+            empowermentPromise={empowermentPromise}
+            danceId={(data as any)?.id ?? ""}
+            onReplay={() => {
+              setClosingVisible(false);
+              player?.seek(0);
+              player?.play();
+            }}
           />
 
 
