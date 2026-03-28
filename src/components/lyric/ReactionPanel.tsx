@@ -410,7 +410,7 @@ function ReactionPanel({
 
 
   useEffect(() => {
-    if (!isOpen || !danceId || !empowermentPromise || !fmlyHookEnabled) return;
+    if (!isOpen || !danceId || !empowermentPromise) return;
     setAngleVotesLoaded(false);
     setAngleVoteCounts([]);
     setAngleVoted(null);
@@ -967,7 +967,7 @@ function ReactionPanel({
             );
           })}
 
-          {fmlyHookEnabled && empowermentPromise && (
+          {empowermentPromise && (
             <div className="mx-3 mt-4 mb-6 space-y-3">
               <div style={{ height: "0.5px", background: "rgba(255,255,255,0.06)" }} />
 
