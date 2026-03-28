@@ -94,8 +94,9 @@ Return JSON:
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1200,
+        max_tokens: 3000,
         temperature: 0.7,
+        reasoning: { effort: "none" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
