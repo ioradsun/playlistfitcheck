@@ -184,6 +184,8 @@ function ReactionPanel({
   const [pinnedLineIndex, setPinnedLineIndex] = useState<number | null>(null);
   const pinnedLineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActiveLineRef = useRef<number | null>(null);
+  // null = free play (initial open, replay). Set to line.endSec on user tap.
+  const stopAtSecRef = useRef<number | null>(null);
 
   const sectionMeta = useMemo(() => {
     const canonical = sections
@@ -280,7 +282,30 @@ function ReactionPanel({
     setTextInput("");
     setReplyingTo(null);
     setExpandedLineIndex(null);
+    stopAtSecRef.current = null; // initial open = free play
   }, [isOpen]);
+
+  // Stop audio when the tapped line ends; clear on replay-from-start
+  useEffect(() => {
+    if (!player) return;
+    const audio = player.audio;
+    const onTimeUpdate = () => {
+      if (stopAtSecRef.current != null && audio.currentTime >= stopAtSecRef.current) {
+        stopAtSecRef.current = null;
+        player.pause();
+      }
+    };
+    const onPlay = () => {
+      // Replay from start (seek(0) + play()) clears the per-line stop constraint
+      if (audio.currentTime <= 0.5) stopAtSecRef.current = null;
+    };
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("play", onPlay);
+    return () => {
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("play", onPlay);
+    };
+  }, [player]);
 
   // Auto-scroll: follows playhead until user takes control
   useEffect(() => {
@@ -320,12 +345,16 @@ function ReactionPanel({
     if (!container) return;
     const onScroll = () => {
       userTookControlRef.current = true;
+      if (stopAtSecRef.current != null && player && !player.audio.paused) {
+        stopAtSecRef.current = null;
+        player.pause();
+      }
     };
     container.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       container.removeEventListener("scroll", onScroll);
     };
-  }, []);
+  }, [player]);
 
   // Reset control flag when panel closes so next open starts with auto-scroll
   useEffect(() => {
@@ -441,6 +470,7 @@ function ReactionPanel({
       () => setPinnedLineIndex(null),
       300,
     );
+    stopAtSecRef.current = line.endSec;
     player.seek(line.startSec);
     if (player.audio.paused) {
       player.audio.play().catch(() => {});
@@ -630,7 +660,7 @@ function ReactionPanel({
                     rowRefs.current[line.lineIndex] = node;
                   }}
                   onClick={() => handleLineTap(line)}
-                  className="relative flex items-center gap-2 px-3 cursor-pointer transition-colors"
+                  className="relative flex items-center gap-2 px-3 cursor-pointer transition-colors overflow-hidden"
                   style={{
                     minHeight: 48,
                     paddingTop: 10,
@@ -654,6 +684,9 @@ function ReactionPanel({
                       color: isActive
                         ? "rgba(255,255,255,0.92)"
                         : "rgba(255,255,255,0.42)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      minWidth: 0,
                     }}
                   >
                     {line.text}
