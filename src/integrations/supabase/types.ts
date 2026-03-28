@@ -671,6 +671,41 @@ export type Database = {
           },
         ]
       }
+      lyric_dance_angle_votes: {
+        Row: {
+          created_at: string
+          dance_id: string
+          hook_index: number
+          id: string
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          dance_id: string
+          hook_index: number
+          id?: string
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          dance_id?: string
+          hook_index?: number
+          id?: string
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lyric_dance_angle_votes_dance_id_fkey"
+            columns: ["dance_id"]
+            isOneToOne: false
+            referencedRelation: "shareable_lyric_dances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lyric_dance_comment_reactions: {
         Row: {
           comment_id: string
@@ -1522,6 +1557,7 @@ export type Database = {
           beat_grid: Json
           cinematic_direction: Json | null
           created_at: string
+          empowerment_promise: Json | null
           fire_count: number
           id: string
           lyrics: Json
@@ -1550,6 +1586,7 @@ export type Database = {
           beat_grid: Json
           cinematic_direction?: Json | null
           created_at?: string
+          empowerment_promise?: Json | null
           fire_count?: number
           id?: string
           lyrics: Json
@@ -1578,6 +1615,7 @@ export type Database = {
           beat_grid?: Json
           cinematic_direction?: Json | null
           created_at?: string
+          empowerment_promise?: Json | null
           fire_count?: number
           id?: string
           lyrics?: Json
