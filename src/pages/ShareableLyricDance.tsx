@@ -20,6 +20,7 @@ import ClaimBanner from "@/components/claim/ClaimBanner";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { SeoHead } from "@/components/SeoHead";
+import { useSiteCopy } from "@/hooks/useSiteCopy";
 
 interface ProfileInfo {
   display_name: string | null;
@@ -205,6 +206,9 @@ export default function ShareableLyricDance() {
   }
 
   const renderData = fetchedData ?? data;
+  const siteCopy = useSiteCopy();
+  const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
+  const empowermentPromise = (renderData as any)?.empowerment_promise ?? null;
   const coverSongName = renderData?.song_name ?? "";
   const coverArtist = profile?.display_name ?? renderData?.artist_name ?? "";
   const coverAvatarUrl = profile?.avatar_url ?? null;
@@ -435,6 +439,8 @@ export default function ShareableLyricDance() {
         }}
         onPause={handlePauseForInput}
         onResume={handleResumeAfterInput}
+        empowermentPromise={empowermentPromise}
+        fmlyHookEnabled={fmlyHookEnabled}
       />
     </div>
   );
