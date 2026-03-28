@@ -1206,6 +1206,7 @@ export class LyricDancePlayer {
   private _wickSeekOverlay: HTMLDivElement | null = null;
   public wickBarEnabled = false;
   private chapterImages: HTMLImageElement[] = [];
+  private _sectionScrimOpacity: number[] = [];
   // Pre-blurred images removed — background renders sharp
   // Ken Burns per-chapter parameters — computed once on image load
   private _kenBurnsParams: Array<{
@@ -2419,6 +2420,7 @@ export class LyricDancePlayer {
     this._zeroCanvas(this._beatVisCanvas);
     this.chapterSims = [];
     this.chapterImages = [];
+    this._sectionScrimOpacity = [];
     this._zeroCanvas(this._lightingOverlayCanvas);
     this._lightingOverlayCanvas = null;
     this._zeroCanvas(this._vignetteCanvas);
@@ -3179,6 +3181,11 @@ export class LyricDancePlayer {
         }
       }
       this._drawChapterImageToCtx(snapCtx, imgIdx, nextImgIdx, crossfade);
+      // Contrast scrim — guarantees white text readability against bright images
+      const scrimOpacity = this._sectionScrimOpacity[imgIdx] ?? 0;
+      if (scrimOpacity > 0.01) {
+        this._drawContrastScrim(snapCtx, scrimOpacity);
+      }
       if (qTier < 2) {
         this._drawSimLayerToCtx(snapCtx, frame);
       }
@@ -4079,8 +4086,12 @@ export class LyricDancePlayer {
 
   private async loadSectionImages(): Promise<void> {
     const urls = this.data.section_images ?? [];
+    this._sectionScrimOpacity = [];
     if (this.options?.preloadedImages?.length) {
       this.chapterImages = this.options.preloadedImages;
+      this._sectionScrimOpacity = this.chapterImages.map((img) =>
+        this._requiredScrimOpacity(this._sampleRegionLuminance(img, 90))
+      );
       this._rebuildKenBurnsParams();
       return;
     }
@@ -4092,6 +4103,9 @@ export class LyricDancePlayer {
       try {
         const img = await preloadImage(url);
         this.chapterImages[i] = img;
+        this._sectionScrimOpacity[i] = this._requiredScrimOpacity(
+          this._sampleRegionLuminance(img, 90)
+        );
       } catch {
         // leave fallback empty image
       }
@@ -4899,6 +4913,58 @@ export class LyricDancePlayer {
       this.ctx.fillRect(0, 0, this.width, this.height);
       this.ctx.restore();
     }
+  }
+
+  private _sampleRegionLuminance(img: HTMLImageElement, percentile = 90): number {
+    const W = 64;
+    const H = 64;
+    const off = document.createElement('canvas');
+    off.width = W;
+    off.height = H;
+    const ctx = off.getContext('2d')!;
+    ctx.drawImage(img, 0, 0, W, H);
+    // Sample center 60% vertically — that's where lyrics live
+    const yStart = Math.floor(H * 0.20);
+    const yEnd = Math.floor(H * 0.80);
+    const { data } = ctx.getImageData(0, yStart, W, yEnd - yStart);
+    const lums: number[] = [];
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i] / 255;
+      const g = data[i + 1] / 255;
+      const b = data[i + 2] / 255;
+      const toLinear = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+      lums.push(0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b));
+    }
+    lums.sort((a, b) => a - b);
+    return lums[Math.floor(lums.length * (percentile / 100))] ?? 0;
+  }
+
+  private _requiredScrimOpacity(bgLuminance: number, targetContrast = 4.5): number {
+    // White (L=1.0) contrast ratio against background: (1.05) / (bgL + 0.05)
+    // Solve for max bg luminance that achieves target: maxL = 1.05/target - 0.05
+    const maxL = (1.05 / targetContrast) - 0.05; // ~0.183 for 4.5:1
+    if (bgLuminance <= maxL) return 0;
+    // Linear darkening: opacity needed to pull bgLuminance down to maxL
+    return Math.min(0.78, 1 - maxL / bgLuminance);
+  }
+
+  private _drawContrastScrim(ctx: CanvasRenderingContext2D, opacity: number): void {
+    if (opacity < 0.01) return;
+    // Cinematic lens-shaped gradient: dark at center, transparent at top and bottom edges
+    // This preserves the image's atmosphere while protecting the text zone
+    const w = this.width;
+    const h = this.height;
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    const a = opacity;
+    grad.addColorStop(0, `rgba(0,0,0,${(a * 0.3).toFixed(3)})`);
+    grad.addColorStop(0.25, `rgba(0,0,0,${(a * 0.7).toFixed(3)})`);
+    grad.addColorStop(0.5, `rgba(0,0,0,${a.toFixed(3)})`);
+    grad.addColorStop(0.75, `rgba(0,0,0,${(a * 0.7).toFixed(3)})`);
+    grad.addColorStop(1, `rgba(0,0,0,${(a * 0.3).toFixed(3)})`);
+    ctx.save();
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
   }
 
   private drawLightingOverlay(_frame: ScaledKeyframe, _tSec: number): void {
