@@ -55,6 +55,8 @@ import { useVoteGate } from "@/hooks/useVoteGate";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { UseLyricPipelineReturn } from "@/hooks/useLyricPipeline";
+import { ClipComposer } from "@/components/lyric/ClipComposer";
+import { fetchFireStrength } from "@/lib/fire";
 
 const PEAK_SAMPLES = 200;
 
@@ -160,6 +162,11 @@ export function FitTab({
     useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxScene, setLightboxScene] = useState<{ imageUrl: string; description: string; timestamp: string; visualMood?: string; index: number } | null>(null);
+  const [clipComposerVisible, setClipComposerVisible] = useState(false);
+  const [clipComposerStart, setClipComposerStart] = useState(0);
+  const [clipComposerCaption, setClipComposerCaption] = useState<string | null>(
+    null,
+  );
   const dancePlayerRef =
     useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(
       null,
@@ -213,6 +220,32 @@ export function FitTab({
   const [battlePublishedUrl, setBattlePublishedUrl] = useState<string | null>(
     null,
   );
+  const [activeTab, setActiveTab] = useState<"results" | "fit">(
+    initialDanceId ? "results" : "fit",
+  );
+  const [fireStrength, setFireStrength] = useState<
+    Array<{
+      line_index: number;
+      fire_strength: number;
+      fire_count: number;
+      avg_hold_ms: number;
+    }>
+  >([]);
+  const [closingDist, setClosingDist] = useState<
+    Array<{
+      hook_index: number;
+      pick_count: number;
+      pct: number;
+    }>
+  >([]);
+  const [freeResponses, setFreeResponses] = useState<
+    Array<{
+      free_text: string;
+      repeat_count: number;
+    }>
+  >([]);
+  const [totalFires, setTotalFires] = useState(0);
+  const [resultsLoaded, setResultsLoaded] = useState(false);
   // User overrides per slot — null means "use AI hook"
   const [customHooks, setCustomHooks] = useState<
     [SavedCustomHook | null, SavedCustomHook | null]
@@ -1339,6 +1372,62 @@ export function FitTab({
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  const tabs = [
+    ...(publishedDanceId ? [{ key: "results" as const, label: "Results" }] : []),
+    { key: "fit" as const, label: "Fit" },
+  ];
+
+  const allLines = useMemo(
+    () =>
+      (lyricData?.lines ?? []).map((line, lineIndex) => ({
+        lineIndex,
+        text: line.text,
+        startSec:
+          typeof (line as any).startSec === "number"
+            ? (line as any).startSec
+            : Number((line as any).start ?? 0),
+      })),
+    [lyricData?.lines],
+  );
+
+  useEffect(() => {
+    setActiveTab(publishedDanceId ? "results" : "fit");
+  }, [publishedDanceId]);
+
+  useEffect(() => {
+    setResultsLoaded(false);
+    setFireStrength([]);
+    setClosingDist([]);
+    setFreeResponses([]);
+    setTotalFires(0);
+  }, [publishedDanceId]);
+
+  useEffect(() => {
+    if (activeTab !== "results" || !publishedDanceId || resultsLoaded) return;
+    Promise.all([
+      fetchFireStrength(publishedDanceId),
+      supabase
+        .from("v_closing_distribution" as any)
+        .select("hook_index, pick_count, pct")
+        .eq("dance_id", publishedDanceId),
+      supabase
+        .from("v_free_form_responses" as any)
+        .select("free_text, repeat_count")
+        .eq("dance_id", publishedDanceId)
+        .limit(20),
+      supabase
+        .from("lyric_dance_fires" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("dance_id", publishedDanceId),
+    ]).then(([strength, dist, free, count]) => {
+      setFireStrength(strength);
+      setClosingDist((dist.data as any[]) ?? []);
+      setFreeResponses((free.data as any[]) ?? []);
+      setTotalFires(count.count ?? 0);
+      setResultsLoaded(true);
+    });
+  }, [activeTab, publishedDanceId, resultsLoaded]);
+
   const handleGenerateImages = useCallback(async () => {
     await pipeline.retryImages();
   }, [pipeline]);
@@ -1492,6 +1581,254 @@ export function FitTab({
           </div>
         ) : null}
 
+        <div className="flex items-center gap-1 p-1 rounded-lg border border-border/30 bg-background/40">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 py-2 text-[10px] font-mono uppercase tracking-wider rounded-md transition-colors ${
+                activeTab === tab.key
+                  ? "bg-primary/10 text-primary border border-primary/25"
+                  : "text-muted-foreground hover:text-foreground border border-transparent"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "results" && (
+          <div className="space-y-4 pb-8">
+            {totalFires > 0 && (
+              <div className="flex items-center gap-2 px-1">
+                <span style={{ fontSize: 22 }}>🔥</span>
+                <div>
+                  <p className="text-[22px] font-mono font-medium text-foreground">
+                    {totalFires}
+                  </p>
+                  <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
+                    fires since release
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {fireStrength.length > 0 && (
+              <div className="glass-card rounded-xl p-4 space-y-3">
+                <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
+                  fire strength by line
+                </p>
+                {fireStrength.slice(0, 8).map((row) => {
+                  const line = allLines.find((l) => l.lineIndex === row.line_index);
+                  const maxStrength = fireStrength[0]?.fire_strength ?? 1;
+                  const pct = Math.round((row.fire_strength / maxStrength) * 100);
+                  const avgHoldLabel =
+                    row.avg_hold_ms < 300
+                      ? "tap"
+                      : row.avg_hold_ms < 1000
+                        ? "short hold"
+                        : row.avg_hold_ms < 3000
+                          ? "deep hold"
+                          : "sustained";
+                  return (
+                    <div key={row.line_index} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-mono text-foreground/75 flex-1 truncate min-w-0">
+                          {line?.text ?? `line ${row.line_index}`}
+                        </span>
+                        <span className="text-[9px] font-mono text-muted-foreground/50 shrink-0">
+                          {row.fire_count} × {avgHoldLabel}
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted/30 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{
+                            width: `${pct}%`,
+                            background:
+                              "linear-gradient(90deg, rgba(168,85,247,0.6) 0%, rgba(168,85,247,0.9) 100%)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {closingDist.length > 0 && empowermentPromise && (
+              <div className="glass-card rounded-xl p-4 space-y-3">
+                <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
+                  what listeners felt
+                </p>
+                <div className="text-[10px] font-mono text-muted-foreground/40 mb-1">
+                  {empowermentPromise.fromState} → {empowermentPromise.toState}
+                </div>
+                {closingDist.map((row) => {
+                  const label =
+                    empowermentPromise.hooks[row.hook_index] ??
+                    `feeling ${row.hook_index}`;
+                  return (
+                    <div key={row.hook_index} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-mono text-foreground/75 flex-1 truncate min-w-0">
+                          {label}
+                        </span>
+                        <span className="text-[10px] font-mono text-primary/70 shrink-0 ml-2">
+                          {row.pct}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted/30 overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${row.pct}%`,
+                            background: "rgba(168,85,247,0.55)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {freeResponses.length > 0 && (
+              <div className="glass-card rounded-xl p-4 space-y-2">
+                <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider mb-3">
+                  in their own words
+                </p>
+                {freeResponses.map((r, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-2.5 py-1.5 border-b border-border/20 last:border-0"
+                  >
+                    <span className="text-[11px] text-foreground/70 flex-1 leading-snug font-light italic">
+                      "{r.free_text}"
+                    </span>
+                    {r.repeat_count > 1 && (
+                      <span className="text-[9px] font-mono text-primary/40 shrink-0 mt-0.5">
+                        ×{r.repeat_count}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {closingDist.slice(0, 3).map((row) => {
+              if (!empowermentPromise || row.pct < 10) return null;
+              const feeling = empowermentPromise.hooks[row.hook_index];
+              if (!feeling) return null;
+              const topFireLine = fireStrength[0];
+              const topLine = allLines.find(
+                (l) => l.lineIndex === topFireLine?.line_index,
+              );
+              const captions: Record<number, string> = {
+                0: "for everyone who needed to hear this",
+                1: "this is what letting go sounds like",
+                2: "you already know who you were",
+                3: "this one hurts because it's true",
+                4: "something shifted — pay attention",
+                5: "none of it was wasted",
+              };
+              const caption = captions[row.hook_index] ?? feeling;
+              return (
+                <div
+                  key={row.hook_index}
+                  className="glass-card rounded-xl p-4 space-y-3 border border-primary/10"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">
+                      {row.pct}% felt "{feeling.slice(0, 28)}"
+                    </p>
+                  </div>
+                  <p className="text-[13px] font-mono text-foreground/85 italic">
+                    "{caption}"
+                  </p>
+                  {topLine && (
+                    <p className="text-[9px] font-mono text-muted-foreground/50">
+                      best moment · {topLine.text.slice(0, 40)}
+                    </p>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        const player = dancePlayerRef.current?.getPlayer();
+                        if (player && topFireLine) {
+                          const t = topFireLine.line_index;
+                          const line = allLines.find((l) => l.lineIndex === t);
+                          if (line) {
+                            player.setRegion(
+                              Math.max(0, line.startSec - 1.5),
+                              line.startSec + 10,
+                            );
+                            player.setClipCaption(caption);
+                            player.play();
+                          }
+                        }
+                      }}
+                      className="flex-1 py-2 text-[9px] font-mono uppercase tracking-wider rounded-lg border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
+                    >
+                      preview clip
+                    </button>
+                    <button
+                      onClick={() => {
+                        setClipComposerVisible(true);
+                        setClipComposerCaption(caption);
+                        setClipComposerStart(
+                          Math.max(
+                            0,
+                            (allLines.find(
+                              (l) => l.lineIndex === topFireLine?.line_index,
+                            )?.startSec ?? 0) - 1.5,
+                          ),
+                        );
+                      }}
+                      className="flex-1 py-2 text-[9px] font-mono uppercase tracking-wider rounded-lg border border-primary/30 text-primary/70 hover:text-primary hover:bg-primary/5 transition-colors"
+                    >
+                      export clip
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {clipComposerVisible && (
+              <ClipComposer
+                visible={clipComposerVisible}
+                player={dancePlayerRef.current?.getPlayer() ?? null}
+                durationSec={durationSec}
+                initialStart={clipComposerStart}
+                initialCaption={clipComposerCaption}
+                clipDuration={10}
+                empowermentPromise={empowermentPromise}
+                accent="hsl(var(--primary))"
+                danceId={publishedDanceId ?? ""}
+                onClose={() => {
+                  setClipComposerVisible(false);
+                  const player = dancePlayerRef.current?.getPlayer();
+                  if (player) {
+                    player.setRegion(undefined, undefined);
+                    player.setClipCaption(null);
+                  }
+                }}
+              />
+            )}
+
+            {totalFires === 0 && !resultsLoaded && (
+              <div className="flex flex-col items-center gap-3 py-12">
+                <span style={{ fontSize: 32 }}>🔥</span>
+                <p className="text-[11px] font-mono text-muted-foreground text-center">
+                  share your song to start collecting signal
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "fit" && (
+          <>
         {/* ── FMLY Feud Setup ── */}
         {hottestHooksEnabled && (
           <>
@@ -2056,6 +2393,8 @@ export function FitTab({
             </button>
           )}
         </div>
+          </>
+        )}
       </div>
     </>
   );
