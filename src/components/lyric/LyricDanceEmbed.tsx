@@ -13,6 +13,7 @@ import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
+import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -165,6 +166,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [playerEvicted, setPlayerEvicted] = useState(false);
   const [forceDemoted, setForceDemoted] = useState(false);
   const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
+  const [closingVisible, setClosingVisible] = useState(false);
   const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userActivatedRef = useRef(false);
 
@@ -341,6 +343,16 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   }, [player, playerReady]);
 
   useEffect(() => {
+    if (!durationSec || !player) return;
+    if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
+      setClosingVisible(true);
+    }
+    if (currentTimeSec < durationSec * 0.5 && closingVisible) {
+      setClosingVisible(false);
+    }
+  }, [currentTimeSec, durationSec, closingVisible, player]);
+
+  useEffect(() => {
     const id = (data ?? prefetchedData as any)?.id;
     if (!player || !id) return;
     fetchFireData(id).then((fires) => {
@@ -372,6 +384,17 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         <canvas
           ref={textCanvasRef}
           className="absolute inset-0 w-full h-full pointer-events-none"
+        />
+
+        <ClosingScreen
+          visible={closingVisible && !reactionPanelOpen}
+          empowermentPromise={empowermentPromise}
+          danceId={((data ?? prefetchedData) as any)?.id ?? ""}
+          onReplay={() => {
+            setClosingVisible(false);
+            player?.seek(0);
+            player?.play();
+          }}
         />
 
         {!isBattleMode && (
