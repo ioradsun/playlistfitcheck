@@ -37,7 +37,7 @@ const DEFAULT_COPY: SiteCopy = {
     crypto_tipping: false,
     growth_flow: false,
     growth_quotas: { guest: 5, limited: 10 },
-    fmly_hook: false,
+    fmly_hook: true,
   },
   signals: {
     resolving_label: "STATUS: RESOLVING... ({n}/50 SIGNALS)",
