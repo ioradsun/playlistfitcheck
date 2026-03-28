@@ -3774,12 +3774,16 @@ export class LyricDancePlayer {
       // Cache the gradient — re-create only when comet has moved > 2px or alpha changed.
       // createLinearGradient allocates a GPU gradient object every call — avoid it.
       const alphaHex = Math.floor(alpha * 120).toString(16).padStart(2, '0');
+      // Expand 3-digit hex shorthand before appending alphaHex to prevent same crash.
+      const trailColor = /^#[0-9a-fA-F]{3}$/.test(comment.color)
+        ? `#${comment.color[1]}${comment.color[1]}${comment.color[2]}${comment.color[2]}${comment.color[3]}${comment.color[3]}`
+        : comment.color;
       let trail: CanvasGradient;
       const gc = comment._cachedTrailGrad;
       if (!gc || Math.abs(gc.x1 - trailX) > 2 || Math.abs(gc.x2 - x) > 2 || gc.alphaHex !== alphaHex) {
         const g = this.ctx.createLinearGradient(trailX, y, x, y);
         g.addColorStop(0, 'transparent');
-        g.addColorStop(1, `${comment.color}${alphaHex}`);
+        g.addColorStop(1, `${trailColor}${alphaHex}`);
         comment._cachedTrailGrad = { grad: g, x1: trailX, x2: x, alphaHex };
         trail = g;
       } else {
