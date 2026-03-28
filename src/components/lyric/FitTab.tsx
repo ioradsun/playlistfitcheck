@@ -1236,6 +1236,7 @@ export function FitTab({
   } | null>(null);
   const [empowermentLoading, setEmpowermentLoading] = useState(false);
   const [empowermentError, setEmpowermentError] = useState(false);
+  const [hasHydratedEmpowerment, setHasHydratedEmpowerment] = useState(false);
 
   // Live vote counts per hook index — fetched after promise is generated
   const [hookVoteCounts, setHookVoteCounts] = useState<number[]>([]);
@@ -1253,16 +1254,21 @@ export function FitTab({
     setHookVoteCounts(counts);
   }, []);
 
-  // Hydrate empowermentPromise from DB snapshot on load/reload
+  // Hydrate empowermentPromise from DB snapshot once on load.
+  // Prevents stale prefetched values from overriding regenerate attempts.
   useEffect(() => {
-    if (!prefetchedDanceData) return;
+    if (!prefetchedDanceData || hasHydratedEmpowerment) return;
+
     const stored = (prefetchedDanceData as any).empowerment_promise;
     if (stored?.hooks?.length && !empowermentPromise && !empowermentLoading) {
       setEmpowermentPromise(stored);
       if (publishedDanceId) fetchVoteCounts(publishedDanceId);
     }
+
+    setHasHydratedEmpowerment(true);
   }, [
     prefetchedDanceData,
+    hasHydratedEmpowerment,
     empowermentPromise,
     empowermentLoading,
     publishedDanceId,
@@ -1303,6 +1309,8 @@ export function FitTab({
           setEmpowermentError(true);
           return;
         }
+
+        setHasHydratedEmpowerment(true);
         setEmpowermentPromise(data);
         await supabase
           .from("shareable_lyric_dances" as any)
