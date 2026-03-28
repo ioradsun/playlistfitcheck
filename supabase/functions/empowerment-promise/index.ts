@@ -38,6 +38,20 @@ Return exactly 6 social media caption hooks. Rules:
 
 Return ONLY valid JSON, no markdown, no preamble.`;
 
+function extractJson(raw: string): unknown {
+  let cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const jsonStart = cleaned.search(/[\{\[]/);
+  const jsonEnd = cleaned.lastIndexOf(jsonStart !== -1 && cleaned[jsonStart] === "[" ? "]" : "}");
+  if (jsonStart === -1 || jsonEnd === -1) throw new Error("No JSON found in response");
+  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    cleaned = cleaned.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]").replace(/[\x00-\x1F\x7F]/g, "");
+    return JSON.parse(cleaned);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -49,6 +63,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     const userPrompt = `Song: "${songTitle || "Untitled"}"
 ${emotionalArc ? `Emotional arc: ${emotionalArc}` : ""}
@@ -69,16 +86,15 @@ Return JSON:
   "hooks": ["hook1", "hook2", "hook3", "hook4", "hook5", "hook6"]
 }`;
 
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${Deno.env.get("OPENROUTER_API_KEY")}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://tools.fm",
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 600,
+        max_tokens: 800,
         temperature: 0.7,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
@@ -87,9 +103,27 @@ Return JSON:
       }),
     });
 
+    if (!res.ok) {
+      const txt = await res.text();
+      console.error("[empowerment-promise] gateway error:", res.status, txt);
+      return new Response(JSON.stringify({ error: `AI gateway error (${res.status})` }), {
+        status: res.status === 429 ? 429 : 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const result = await res.json();
     const raw = result.choices?.[0]?.message?.content ?? "";
-    const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+
+    if (!raw) {
+      console.error("[empowerment-promise] empty AI response");
+      return new Response(JSON.stringify({ error: "Empty AI response" }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const parsed = extractJson(raw);
 
     return new Response(JSON.stringify(parsed), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
