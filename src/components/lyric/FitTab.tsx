@@ -204,7 +204,6 @@ export function FitTab({
     refetchDanceData();
   }, [refetchDanceData]);
 
-
   // ── CrowdFit publish state ─────────────────────────────────────────
   const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
   const [crowdfitToggling, setCrowdfitToggling] = useState(false);
@@ -1254,9 +1253,26 @@ export function FitTab({
     setHookVoteCounts(counts);
   }, []);
 
+  // Hydrate empowermentPromise from DB snapshot on load/reload
+  useEffect(() => {
+    if (!prefetchedDanceData) return;
+    const stored = (prefetchedDanceData as any).empowerment_promise;
+    if (stored?.hooks?.length && !empowermentPromise && !empowermentLoading) {
+      setEmpowermentPromise(stored);
+      if (publishedDanceId) fetchVoteCounts(publishedDanceId);
+    }
+  }, [
+    prefetchedDanceData,
+    empowermentPromise,
+    empowermentLoading,
+    publishedDanceId,
+    fetchVoteCounts,
+  ]);
+
   useEffect(() => {
     if (!fmlyHookEnabled) return;
-    if (!allReady || !publishedDanceId) return;
+    if (!publishedDanceId) return;
+    if (!allReady && !prefetchedDanceData) return; // need either pipeline done OR DB data available
     if (empowermentPromise || empowermentLoading) return;
 
     const lines = lyricData?.lines;
@@ -1300,6 +1316,7 @@ export function FitTab({
     fmlyHookEnabled,
     allReady,
     publishedDanceId,
+    prefetchedDanceData,
     empowermentPromise,
     empowermentLoading,
     lyricData,
@@ -1398,7 +1415,10 @@ export function FitTab({
                     const debugInfo = {
                       _meta: meta || "no meta available",
                       cinematicDirection,
-                      words: wordsRef.current ?? "no words available",
+                      words:
+                        wordsRef.current ??
+                        (prefetchedDanceData as any)?.words ??
+                        "no words available",
                     };
                     navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
                     const model = meta?.scene?.model || meta?.words?.model || "unknown";
