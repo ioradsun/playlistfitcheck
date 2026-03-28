@@ -413,7 +413,6 @@ function ReactionPanel({
     if (!isOpen || !danceId || !empowermentPromise) return;
     setAngleVotesLoaded(false);
     setAngleVoteCounts([]);
-    setAngleVoted(null);
     const sessionId = getSessionId();
 
     supabase
@@ -439,7 +438,7 @@ function ReactionPanel({
       .then(({ data }) => {
         if (data) setAngleVoted((data as any).hook_index);
       });
-  }, [isOpen, danceId, empowermentPromise, fmlyHookEnabled]);
+  }, [isOpen, danceId, empowermentPromise]);
 
   const handleAngleVote = async (hookIndex: number) => {
     if (angleVoted !== null || !danceId) return;
@@ -991,7 +990,7 @@ function ReactionPanel({
                   angleVoted !== null &&
                   totalVotes >= 2 &&
                   votes === Math.max(...angleVoteCounts);
-                const showResults = angleVoted !== null && angleVotesLoaded;
+                const showResults = angleVoted !== null;
 
                 return (
                   <button
