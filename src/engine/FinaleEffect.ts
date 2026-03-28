@@ -391,8 +391,13 @@ export class FinaleEffect {
 
       ctx.globalAlpha = s.opacity * s.life;
       const sG = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.size);
-      sG.addColorStop(0, s.color);
-      sG.addColorStop(0.6, `${s.color}80`);
+      // Expand 3-digit shorthand hex (#abc → #aabbcc) before appending alpha suffix.
+      // 3-digit + 2-char alpha = 5 hex digits → invalid color → addColorStop crash.
+      const fullColor = /^#[0-9a-fA-F]{3}$/.test(s.color)
+        ? `#${s.color[1]}${s.color[1]}${s.color[2]}${s.color[2]}${s.color[3]}${s.color[3]}`
+        : s.color;
+      sG.addColorStop(0, fullColor);
+      sG.addColorStop(0.6, `${fullColor}80`);
       sG.addColorStop(1, "transparent");
       ctx.fillStyle = sG;
       ctx.fillRect(s.x - s.size, s.y - s.size, s.size * 2, s.size * 2);
