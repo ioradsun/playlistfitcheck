@@ -29,6 +29,7 @@ import { getMoodGrade, buildGradeFilter, type MoodGrade } from "@/engine/moodGra
 import { getEffectTier, canShowElemental, canShowHeroGlow, getParticleDensity, getGlowCap } from "@/engine/timeTiers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
 import {
+  normalizeCinematicDirection,
   normalizeToken,
 } from "@/engine/cinematicResolver";
 import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
@@ -1602,7 +1603,7 @@ export class LyricDancePlayer {
   private async ensureTimelineReady(): Promise<void> {
 
     // Cache exists but was baked without cinematic direction — invalidate
-    if (this._bakedScene && !this._bakedHasCinematicDirection && this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction)) {
+    if (this._bakedScene && !this._bakedHasCinematicDirection && this.data.cinematic_direction) {
       this._bakePromise = null;
       this._bakedScene = null;
       this._bakedChunkCache = null;
@@ -1671,7 +1672,7 @@ export class LyricDancePlayer {
         }
         this._bakedScene = compiled;
         this._bakedChunkCache = new Map(this.chunks);
-        this._bakedHasCinematicDirection = !!this.data.cinematic_direction && !Array.isArray(this.data.cinematic_direction);
+        this._bakedHasCinematicDirection = !!this.data.cinematic_direction;
         this._bakedVersion = BAKER_VERSION;
         this._bakeLock = false;
       })();
@@ -2004,7 +2005,7 @@ export class LyricDancePlayer {
     // Section + palette
     {
       const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-      const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
+      const sections = (cd?.sections as any[]) ?? [];
       const dur = this.getSongDuration() || 1;
       this._frameSectionIdx = sections.length > 0
         ? this.resolveSectionIndex(sections, clamped, dur)
@@ -2032,7 +2033,7 @@ export class LyricDancePlayer {
 
       // Feed section mood + energy — drives Layer 1 (Section Arc) camera behavior
       const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-      const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
+      const sections = (cd?.sections as any[]) ?? [];
       const secIdx = this._frameSectionIdx;
       const currentSection = sections[secIdx];
       if (currentSection) {
@@ -2241,6 +2242,7 @@ export class LyricDancePlayer {
   }
 
   updateCinematicDirection(direction: CinematicDirection): void {
+    direction = (normalizeCinematicDirection(direction) ?? direction) as CinematicDirection;
     // Direct pass-through — new schema consumed directly by resolvers
     this.data = { ...this.data, cinematic_direction: direction };
     if (!this.payload) return;
@@ -2632,7 +2634,7 @@ export class LyricDancePlayer {
       // ═══ Per-frame caches: section index + palette ═══
       {
         const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-        const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
+        const sections = (cd?.sections as any[]) ?? [];
         const dur = this.audio?.duration || 1;
         // In region mode, lock section index to the section at region_start.
         // A 10-second hook that crosses a section boundary would otherwise
@@ -2671,7 +2673,7 @@ export class LyricDancePlayer {
         // ── Feed section + energy to camera ──
         {
           const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-          const sections = (cd?.sections as any[]) ?? (cd?.chapters as any[]) ?? [];
+          const sections = (cd?.sections as any[]) ?? [];
           const secIdx = this._frameSectionIdx;
           const currentSection = sections[secIdx];
 
@@ -2831,7 +2833,7 @@ export class LyricDancePlayer {
   private _resolveCurrentPalette(secIdx: number): string[] {
     const autoPalettes = this.data?.auto_palettes;
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const chapters = (cd?.chapters as any[]) ?? [];
+    const chapters = (cd?.sections as any[]) ?? [];
 
     if (Array.isArray(autoPalettes) && autoPalettes.length > 0) {
       if (secIdx >= 0 && autoPalettes[secIdx]) return autoPalettes[secIdx];
@@ -3170,7 +3172,7 @@ export class LyricDancePlayer {
         : Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
       const duration = this.audio?.duration || 1;
       const cdForCrossfade = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-      const sectionsForCrossfade = (cdForCrossfade?.sections as any[]) ?? (cdForCrossfade?.chapters as any[]) ?? [];
+      const sectionsForCrossfade = (cdForCrossfade?.sections as any[]) ?? [];
       const currentSectionForCrossfade = sectionsForCrossfade[imgIdx];
       let crossfade = 0;
       if (currentSectionForCrossfade && nextImgIdx !== imgIdx) {
@@ -3914,28 +3916,25 @@ export class LyricDancePlayer {
   }
 
   private toLegacyChapters(direction: CinematicDirection | null | undefined): any[] {
-    if (!direction) return [];
-    if (Array.isArray(direction.chapters) && direction.chapters.length > 0) {
-      return direction.chapters;
-    }
+    if (!direction?.sections?.length) return [];
     return enrichSections(direction.sections).map((section) => ({
       title: section.description ?? `Section ${section.sectionIndex}`,
       startSec: section.startSec,
       endSec: section.endSec,
       startRatio: section.startRatio,
       endRatio: section.endRatio,
-      emotionalArc: section.mood ?? '',
+      emotionalArc: section.mood ?? "",
       motion: section.motion,
       texture: section.texture,
       atmosphere: section.atmosphere,
-      backgroundDirective: section.description ?? '',
+      backgroundDirective: section.description ?? "",
       sectionIndex: section.sectionIndex,
       mood: section.mood,
       visualMood: section.visualMood,
       atmosphereState: section.atmosphereState,
       dominantColor: section.dominantColor,
       zoom: 1,
-      driftIntensity: direction.motion === 'fluid' ? 0.3 : 0.1,
+      driftIntensity: direction.motion === "fluid" ? 0.3 : 0.1,
     }));
   }
 
