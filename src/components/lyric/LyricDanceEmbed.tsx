@@ -13,6 +13,7 @@ import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
+import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
@@ -163,6 +164,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   );
   const [playerEvicted, setPlayerEvicted] = useState(false);
   const [forceDemoted, setForceDemoted] = useState(false);
+  const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
   const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userActivatedRef = useRef(false);
 
@@ -338,6 +340,21 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     player.setTextVerticalBias(0);
   }, [player, playerReady]);
 
+  useEffect(() => {
+    const id = (data ?? prefetchedData as any)?.id;
+    if (!player || !id) return;
+    fetchFireData(id).then((fires) => {
+      player.setHistoricalFires(fires);
+    });
+  }, [player, (data ?? prefetchedData as any)?.id]);
+
+  const activeLineFireCount = useMemo(() => {
+    if (!activeLine) return 0;
+    return fireStrengthByLine[activeLine.lineIndex] ?? 0;
+  }, [activeLine, fireStrengthByLine]);
+
+  const hookPhrase = ((data ?? prefetchedData) as any)?.hook_phrase ?? null;
+
   const effectiveShowCover = showCover;
   void artistName;
   void playerEvicted;
@@ -480,6 +497,33 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             onOpenReactions={handleOpenReactions}
             onClose={handleClosePanelAndSync}
             panelOpen={reactionPanelOpen}
+            onFireTap={() => {
+              const id = (data ?? prefetchedData as any)?.id;
+              if (!id || !activeLine) return;
+              player?.fireFire(0);
+              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
+              setFireStrengthByLine((prev) => ({
+                ...prev,
+                [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
+              }));
+            }}
+            onFireHoldStart={() => {
+              /* nothing — visual handled by FireButton */
+            }}
+            onFireHoldEnd={(holdMs) => {
+              const id = (data ?? prefetchedData as any)?.id;
+              if (!id || !activeLine) return;
+              player?.fireFire(holdMs);
+              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
+              const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
+              setFireStrengthByLine((prev) => ({
+                ...prev,
+                [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
+              }));
+            }}
+            activeLineFireCount={activeLineFireCount}
+            hookPhrase={hookPhrase}
+            activeLineText={activeLine?.text ?? null}
             topReaction={
               topReaction
                 ? { symbol: topReaction.symbol, count: topReaction.count }
@@ -522,6 +566,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           onReactionFired={(emoji) => player?.fireComment(emoji)}
           onPause={handlePauseForInput}
           onResume={handleResumeAfterInput}
+          onLineVisible={(lineIndex) => {
+            const id = data?.id ?? (prefetchedData as any)?.id;
+            if (!id) return;
+            emitExposure(id, lineIndex);
+          }}
           empowermentPromise={empowermentPromise}
           fmlyHookEnabled={fmlyHookEnabled}
         />

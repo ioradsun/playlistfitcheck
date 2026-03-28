@@ -76,6 +76,7 @@ interface ReactionPanelProps {
     hooks: string[];
   } | null;
   fmlyHookEnabled?: boolean;
+  onLineVisible?: (lineIndex: number) => void;
 }
 
 function CommentReactPicker({
@@ -154,6 +155,7 @@ function ReactionPanel({
   maxHeight,
   empowermentPromise,
   fmlyHookEnabled,
+  onLineVisible,
 }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState("");
@@ -184,6 +186,7 @@ function ReactionPanel({
   const [pinnedLineIndex, setPinnedLineIndex] = useState<number | null>(null);
   const pinnedLineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActiveLineRef = useRef<number | null>(null);
+  const lastExposedLineRef = useRef<number | null>(null);
   // null = free play (initial open, replay). Set to line.endSec on user tap.
   const stopAtSecRef = useRef<number | null>(null);
 
@@ -268,6 +271,13 @@ function ReactionPanel({
     player && !player.audio.paused ? lastActiveLineRef.current : null;
   const effectiveActiveIndex =
     pinnedLineIndex ?? playheadLineIndex ?? heldLineIndex;
+
+  useEffect(() => {
+    if (!isOpen || effectiveActiveIndex == null) return;
+    if (lastExposedLineRef.current === effectiveActiveIndex) return;
+    lastExposedLineRef.current = effectiveActiveIndex;
+    onLineVisible?.(effectiveActiveIndex);
+  }, [isOpen, effectiveActiveIndex, onLineVisible]);
 
   const expandedLineComments = useMemo(() => {
     if (expandedLineIndex == null) return [];

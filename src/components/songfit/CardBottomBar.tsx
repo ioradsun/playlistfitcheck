@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 interface CardBottomBarProps {
@@ -18,6 +18,123 @@ interface CardBottomBarProps {
   yesLabel?: string;
   noLabel?: string;
   renderVotedContent?: () => React.ReactNode;
+  activeLineText?: string | null;
+  activeLineFireCount?: number;
+  hookPhrase?: string | null;
+  onFireTap?: () => void;
+  onFireHoldStart?: () => void;
+  onFireHoldEnd?: (holdMs: number) => void;
+}
+
+function FireButton({
+  panelOpen,
+  onClose,
+  count,
+  onTap,
+  onHoldStart,
+  onHoldEnd,
+  py,
+}: {
+  panelOpen: boolean;
+  onClose: () => void;
+  count: number;
+  onTap?: () => void;
+  onHoldStart?: () => void;
+  onHoldEnd?: (holdMs: number) => void;
+  py: string;
+}) {
+  const holdStartRef = useRef<number | null>(null);
+  const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const [isHolding, setIsHolding] = useState(false);
+
+  const startHold = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    if (panelOpen) return;
+    holdStartRef.current = Date.now();
+    setIsHolding(true);
+    setHoldProgress(0);
+    onHoldStart?.();
+    holdTimerRef.current = setInterval(() => {
+      const ms = Date.now() - (holdStartRef.current ?? Date.now());
+      setHoldProgress(Math.min(1, ms / 3000));
+    }, 40);
+  }, [panelOpen, onHoldStart]);
+
+  const endHold = useCallback(() => {
+    if (!holdStartRef.current) return;
+    const ms = Date.now() - holdStartRef.current;
+    holdStartRef.current = null;
+    setIsHolding(false);
+    setHoldProgress(0);
+    if (holdTimerRef.current) clearInterval(holdTimerRef.current);
+    if (ms < 150) {
+      onTap?.();
+    } else {
+      onHoldEnd?.(ms);
+    }
+  }, [onTap, onHoldEnd]);
+
+  const tier = holdProgress < 0.1 ? 0
+    : holdProgress < 0.33 ? 1
+      : holdProgress < 0.66 ? 2 : 3;
+
+  const ringSize = 28 + tier * 6;
+  const ringColors = [
+    "rgba(255,213,128,0)",
+    "rgba(255,159,64,0.5)",
+    "rgba(255,94,32,0.65)",
+    "rgba(255,32,96,0.8)",
+  ];
+  const ringColor = isHolding ? ringColors[tier] : "transparent";
+  const emojiScale = 1 + (isHolding ? holdProgress * 0.4 : 0);
+  const emojiStr = tier >= 3 ? "🔥🔥🔥" : tier >= 2 ? "🔥🔥" : "🔥";
+
+  return (
+    <button
+      onMouseDown={startHold}
+      onMouseUp={endHold}
+      onMouseLeave={endHold}
+      onTouchStart={(e) => { e.preventDefault(); startHold(e); }}
+      onTouchEnd={endHold}
+      onClick={(e) => { e.stopPropagation(); if (panelOpen) onClose(); }}
+      className={`relative flex items-center justify-center gap-1 px-4 min-w-[60px] ${py} transition-colors group shrink-0`}
+      style={{ touchAction: "none" }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          width: ringSize,
+          height: ringSize,
+          borderRadius: "50%",
+          border: `1.5px solid ${ringColor}`,
+          transition: isHolding ? "none" : "all 0.3s",
+          pointerEvents: "none",
+        }}
+      />
+      {panelOpen ? (
+        <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
+      ) : (
+        <>
+          <span
+            style={{
+              fontSize: 16,
+              display: "block",
+              transform: `scale(${emojiScale})`,
+              transition: isHolding ? "none" : "transform 0.2s",
+            }}
+          >
+            {emojiStr}
+          </span>
+          {count > 0 && (
+            <span className="text-[9px] font-mono text-white/20">
+              {count}
+            </span>
+          )}
+        </>
+      )}
+    </button>
+  );
 }
 
 export function CardBottomBar({
@@ -34,27 +151,25 @@ export function CardBottomBar({
   topReaction,
   trackTitle,
   variant = "embedded",
-  yesLabel = "Run it back",
-  noLabel = "Not For Me",
+  yesLabel,
+  noLabel,
   renderVotedContent,
+  activeLineText,
+  activeLineFireCount,
+  hookPhrase,
+  onFireTap,
+  onFireHoldStart,
+  onFireHoldEnd,
 }: CardBottomBarProps) {
-  const [showNudge, setShowNudge] = useState(false);
-  const prevVotedSide = useRef<"a" | "b" | null>(null);
-
-  useEffect(() => {
-    if (votedSide !== null && prevVotedSide.current === null) {
-      setShowNudge(true);
-      const t = setTimeout(() => setShowNudge(false), 3000);
-      prevVotedSide.current = votedSide;
-      return () => clearTimeout(t);
-    }
-    if (votedSide === null) {
-      prevVotedSide.current = null;
-      setShowNudge(false);
-    } else {
-      prevVotedSide.current = votedSide;
-    }
-  }, [votedSide]);
+  void votedSide;
+  void score;
+  void onVoteYes;
+  void onVoteNo;
+  void topReaction;
+  void trackTitle;
+  void yesLabel;
+  void noLabel;
+  void renderVotedContent;
 
   const py = variant === "embedded" ? "py-3" : "py-3.5";
 
@@ -75,9 +190,7 @@ export function CardBottomBar({
       style={wrapperStyle}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* ── Left side ── */}
       {panelOpen ? (
-        /* Panel open: comment input */
         <input
           type="text"
           value={note}
@@ -92,131 +205,42 @@ export function CardBottomBar({
           placeholder="What hit"
           className={`flex-1 bg-transparent text-[11px] font-mono text-white/60 placeholder:text-white/25 outline-none px-3 ${py} tracking-wide min-w-0`}
         />
-      ) : votedSide === null ? (
-        /* Pre-vote: Run it back / Not for me */
-        <>
-          <button
-            onClick={onVoteYes}
-            className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
-          >
-            <span
-              className={`${variant === "fullscreen" ? "text-[12px]" : "text-[11px]"} font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors`}
-            >
-              {yesLabel ?? "Run it back"}
-            </span>
-            {(score?.replay_yes ?? 0) > 0 && (
-              <span className="text-[9px] font-mono text-white/15">
-                {score!.replay_yes}
-              </span>
-            )}
-          </button>
-          <div
-            style={{ width: "0.5px" }}
-            className="bg-white/[0.06] self-stretch my-2"
-          />
-          <button
-            onClick={onVoteNo}
-            className={`flex-1 flex items-center justify-center gap-2 ${py} hover:bg-white/[0.04] transition-colors group`}
-          >
-            <span
-              className={`${variant === "fullscreen" ? "text-[12px]" : "text-[11px]"} font-mono tracking-[0.15em] uppercase text-white group-hover:text-white transition-colors`}
-            >
-              {noLabel ?? "Not For Me"}
-            </span>
-            {score != null && score.total - score.replay_yes > 0 && (
-              <span className="text-[9px] font-mono text-white/15">
-                {score.total - score.replay_yes}
-              </span>
-            )}
-          </button>
-        </>
       ) : (
-        /* Post-vote: nudge then social proof */
         <div
-          className={`flex-1 flex items-center px-3 ${py} overflow-hidden min-w-0`}
+          className={`flex-1 flex items-center px-3 ${py} min-w-0 cursor-pointer`}
+          onClick={onOpenReactions}
         >
-          {renderVotedContent ? renderVotedContent() : (
-            <>
-              {showNudge ? (
-                <span className="text-[9px] font-mono tracking-[0.12em] text-white/50 flex items-center gap-1.5">
-                  which line hit?
-                  <span className="text-white/30">→</span>
-                </span>
-              ) : (
-                <span className="text-[9px] font-mono tracking-[0.08em] text-white/60 truncate">
-                  {(() => {
-                    const total = score?.total ?? 0;
-                    const replay_yes = score?.replay_yes ?? 0;
-                    const notForMeCount = total - replay_yes;
-                    const majorityRanItBack = replay_yes > total / 2;
-                    const isSplit = total > 0 && replay_yes === total / 2;
-                    const userAgrees =
-                      votedSide === "a" ? majorityRanItBack : !majorityRanItBack;
-                    const titleLabel = trackTitle || "IT";
-
-                    let verdict: string;
-                    let tally: string;
-                    if (total < 20) {
-                      verdict = "FMLY STILL VOTING";
-                      tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
-                    } else if (isSplit) {
-                      verdict = "FMLY IS SPLIT";
-                      tally = `${replay_yes} / ${total} RAN ${titleLabel} BACK`;
-                    } else {
-                      verdict = `FMLY ${userAgrees ? "AGREES" : "DISAGREES"}`;
-                      tally = majorityRanItBack
-                        ? `${replay_yes} / ${total} RAN ${titleLabel} BACK`
-                        : `${notForMeCount} / ${total} NOT FOR ME`;
-                    }
-                    return `${verdict} · ${tally}`;
-                  })()}
-                </span>
-              )}
-            </>
+          {activeLineText ? (
+            <span
+              className="text-[10px] font-mono truncate transition-all duration-300"
+              style={{
+                color: hookPhrase && activeLineText === hookPhrase
+                  ? "rgba(255,255,255,0.88)"
+                  : "rgba(255,255,255,0.32)",
+                letterSpacing: "0.03em",
+              }}
+            >
+              {activeLineText}
+            </span>
+          ) : (
+            <span className="text-[10px] font-mono text-white/15 tracking-[0.2em]">
+              · · ·
+            </span>
           )}
         </div>
       )}
 
-      {/* ── Divider — always present ── */}
-      <div
-        style={{ width: "0.5px" }}
-        className="bg-white/[0.06] self-stretch my-2"
-      />
+      <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
 
-      {/* ── Right side: 🔥 / ✕ — always in the same position ── */}
-      <button
-        onClick={() => {
-          if (panelOpen) {
-            onClose();
-          } else {
-            onOpenReactions();
-          }
-        }}
-        className={`relative flex items-center justify-center gap-1 px-4 min-w-[64px] ${py} hover:bg-white/[0.04] transition-colors group shrink-0 focus:outline-none`}
-      >
-        {panelOpen ? (
-          <X
-            size={14}
-            className="text-white/30 group-hover:text-white/60 transition-colors"
-          />
-        ) : (
-          <>
-            <span
-              className="text-[13px] leading-none transition-all duration-300"
-              style={{
-                opacity: 0.7,
-              }}
-            >
-              {topReaction?.symbol ?? "🔥"}
-            </span>
-            {topReaction && topReaction.count > 0 && (
-              <span className="text-[9px] font-mono text-white/15 group-hover:text-white/40 transition-colors">
-                {topReaction.count}
-              </span>
-            )}
-          </>
-        )}
-      </button>
+      <FireButton
+        panelOpen={panelOpen}
+        onClose={onClose}
+        count={activeLineFireCount ?? 0}
+        onTap={onFireTap}
+        onHoldStart={onFireHoldStart}
+        onHoldEnd={onFireHoldEnd}
+        py={py}
+      />
     </div>
   );
 }
