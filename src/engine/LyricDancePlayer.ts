@@ -1045,6 +1045,8 @@ interface CommentChunk {
   direction: 1 | -1;  // 1 = left-to-right, -1 = right-to-left
   trailLength: number;
   fontSize: number;
+  holdTier: 0 | 1 | 2 | 3;
+  isHistorical: boolean;
   // Cached gradient — re-used while comet position hasn't changed > 2px
   _cachedTrailGrad?: { grad: CanvasGradient; x1: number; x2: number; alphaHex: string };
 }
@@ -1288,6 +1290,11 @@ export class LyricDancePlayer {
 
   // Comment comets
   private activeComments: CommentChunk[] = [];
+  private _historicalFires: Array<{
+    time_sec: number;
+    hold_ms: number;
+    spawned: boolean;
+  }> = [];
   private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
   private commentColorIdx = 0;
   private emojiRisers: EmojiRiser[] = [];
@@ -1873,6 +1880,10 @@ export class LyricDancePlayer {
     this._exitTriggeredForGroup = -1;
     this._intensityRouter.reset();
     this._resetBgParallax();
+    // Reset historical fire spawn flags when seeking
+    this._historicalFires.forEach(f => {
+      f.spawned = f.time_sec < this.audio.currentTime;
+    });
   }
 
   seekTo(timeSec: number): void {
@@ -2001,6 +2012,7 @@ export class LyricDancePlayer {
       }
       this.processEmojiSpawnQueue();
     }
+    this._processHistoricalFires();
 
     // Section + palette
     {
@@ -2234,6 +2246,12 @@ export class LyricDancePlayer {
   /** Set per-line reaction data for the emoji stream. Called by parent surfaces. */
   setReactionData(data: Record<string, { line: Record<number, number>; total: number }>): void {
     this.emojiReactionData = data;
+  }
+
+  setHistoricalFires(fires: Array<{ time_sec: number; hold_ms: number }>): void {
+    this._historicalFires = fires
+      .map(f => ({ ...f, spawned: false }))
+      .sort((a, b) => a.time_sec - b.time_sec);
   }
 
   /** Enable/disable the emoji stream overlay. Disabled when reaction panel is open. */
@@ -2624,6 +2642,7 @@ export class LyricDancePlayer {
         }
         this.processEmojiSpawnQueue();
       }
+      this._processHistoricalFires();
 
       // ═══ V2: Get beat state ONCE from conductor ═══
       const beatState = this.conductor?.getState(smoothedTime) ?? null;
@@ -3595,6 +3614,18 @@ export class LyricDancePlayer {
     }
   }
 
+  private _processHistoricalFires(): void {
+    const nowSec = this.audio.currentTime;
+    for (const fire of this._historicalFires) {
+      if (fire.spawned) continue;
+      if (fire.time_sec > nowSec) break;
+      fire.spawned = true;
+      this._spawnFireComet(fire.hold_ms, true);
+    }
+    // Reset spawned flags on seek backward
+    // (handled by setHistoricalFires reset on seek)
+  }
+
   private drawEmojiRisers(): void {
     if (this.emojiRisers.length === 0) return;
     const nowSec = performance.now() / 1000;
@@ -3700,7 +3731,7 @@ export class LyricDancePlayer {
   // Comment comets
   // ────────────────────────────────────────────────────────────
 
-  public fireComment(text: string): void {
+  private _legacyFireComment(text: string): void {
     const color = this.commentColors[this.commentColorIdx % this.commentColors.length];
     this.commentColorIdx++;
 
@@ -3721,6 +3752,8 @@ export class LyricDancePlayer {
       startX, y, endX, direction,
       trailLength: 120,
       fontSize: Math.max(18, Math.min(26, Math.floor(280 / text.length))),
+      holdTier: 0,
+      isHistorical: false,
     };
 
     this.activeComments.push(comment);
@@ -3733,6 +3766,56 @@ export class LyricDancePlayer {
     this.activeComments = this.activeComments.filter(
       c => now - c.startTime < c.duration + 0.5
     );
+  }
+
+  public fireComment(text: string): void {
+    if (text === '🔥') {
+      this.fireFire(0);
+      return;
+    }
+    this._legacyFireComment(text);
+  }
+
+  public fireFire(holdMs: number = 0): void {
+    this._spawnFireComet(holdMs, false);
+  }
+
+  private _spawnFireComet(holdMs: number, isHistorical: boolean): void {
+    const holdTier: 0 | 1 | 2 | 3 = holdMs < 300 ? 0 : holdMs < 1000 ? 1 : holdMs < 3000 ? 2 : 3;
+    const fromLeft = Math.random() > 0.5;
+    const direction: 1 | -1 = fromLeft ? 1 : -1;
+    const sizeMap = [18, 26, 38, 52];
+    const durationMap = [2.0, 2.8, 4.2, 6.0];
+    const trailMap = [80, 140, 220, 320];
+    const margin = 300 + holdTier * 80;
+    const startX = fromLeft ? -margin : this.width + margin;
+    const endX = fromLeft ? this.width + margin : -margin;
+
+    const yMin = isHistorical ? 0.10 : 0.25;
+    const yMax = isHistorical ? 0.85 : 0.82;
+    const y = this.height * (yMin + Math.random() * (yMax - yMin));
+
+    const colors = ['#FFD580', '#FF9F40', '#FF5E20', '#FF2060'];
+    const color = colors[holdTier];
+
+    const comet: CommentChunk = {
+      id: `fire-${Date.now()}-${Math.random()}`,
+      text: '🔥',
+      color,
+      startTime: performance.now() / 1000,
+      duration: durationMap[holdTier],
+      startX, y, endX, direction,
+      trailLength: trailMap[holdTier],
+      fontSize: sizeMap[holdTier],
+      holdTier,
+      isHistorical,
+    };
+
+    this.activeComments.push(comet);
+    const maxComets = isHistorical ? 24 : 8;
+    if (this.activeComments.length > maxComets) {
+      this.activeComments = this.activeComments.slice(-maxComets);
+    }
   }
 
   private drawComments(nowSec: number): void {
@@ -3754,7 +3837,6 @@ export class LyricDancePlayer {
       }
 
       const x = comment.startX + (comment.endX - comment.startX) * ep;
-      const y = comment.y;
 
       // Alpha: fade in 10%, full middle, fade out last 25% — capped at 65%
       const alpha = (t < 0.10
@@ -3762,18 +3844,40 @@ export class LyricDancePlayer {
         : t > 0.75
           ? 1 - (t - 0.75) / 0.25
           : 1) * 0.65;
+      const holdTier = comment.holdTier ?? 0;
+      const tierAlphaBoost = [1.0, 1.15, 1.3, 1.5][holdTier];
+      let effectiveAlpha = Math.min(0.85, alpha * tierAlphaBoost);
+      if (comment.isHistorical) {
+        effectiveAlpha *= 0.55;
+      }
+      const yOffset = holdTier >= 2
+        ? Math.sin(nowSec * 3 + comment.startX) * (holdTier * 4)
+        : 0;
+      const drawY = comment.y + yOffset;
 
       this.ctx.save();
 
       // Glow — softer
       this.ctx.shadowColor = comment.color;
-      this.ctx.shadowBlur = 6;
+      this.ctx.shadowBlur = [4, 8, 14, 22][holdTier];
+
+      if (holdTier === 3) {
+        this.ctx.save();
+        this.ctx.shadowColor = comment.color;
+        this.ctx.shadowBlur = 40;
+        this.ctx.globalAlpha = effectiveAlpha * 0.25;
+        this.ctx.beginPath();
+        this.ctx.arc(x, drawY, comment.fontSize * 0.4, 0, Math.PI * 2);
+        this.ctx.fillStyle = comment.color;
+        this.ctx.fill();
+        this.ctx.restore();
+      }
 
       // Trail — thinner, more transparent
       const trailX = x - comment.direction * comment.trailLength;
       // Cache the gradient — re-create only when comet has moved > 2px or alpha changed.
       // createLinearGradient allocates a GPU gradient object every call — avoid it.
-      const alphaHex = Math.floor(alpha * 120).toString(16).padStart(2, '0');
+      const alphaHex = Math.floor(effectiveAlpha * 120).toString(16).padStart(2, '0');
       // Expand 3-digit hex shorthand before appending alphaHex to prevent same crash.
       const trailColor = /^#[0-9a-fA-F]{3}$/.test(comment.color)
         ? `#${comment.color[1]}${comment.color[1]}${comment.color[2]}${comment.color[2]}${comment.color[3]}${comment.color[3]}`
@@ -3781,7 +3885,7 @@ export class LyricDancePlayer {
       let trail: CanvasGradient;
       const gc = comment._cachedTrailGrad;
       if (!gc || Math.abs(gc.x1 - trailX) > 2 || Math.abs(gc.x2 - x) > 2 || gc.alphaHex !== alphaHex) {
-        const g = this.ctx.createLinearGradient(trailX, y, x, y);
+        const g = this.ctx.createLinearGradient(trailX, drawY, x, drawY);
         g.addColorStop(0, 'transparent');
         g.addColorStop(1, `${trailColor}${alphaHex}`);
         comment._cachedTrailGrad = { grad: g, x1: trailX, x2: x, alphaHex };
@@ -3793,16 +3897,16 @@ export class LyricDancePlayer {
       this.ctx.lineWidth = comment.fontSize * 0.15;
       this.ctx.lineCap = 'round';
       this.ctx.beginPath();
-      this.ctx.moveTo(trailX, y);
-      this.ctx.lineTo(x, y);
+      this.ctx.moveTo(trailX, drawY);
+      this.ctx.lineTo(x, drawY);
       this.ctx.stroke();
 
       // 3 spark particles — smaller
       for (let i = 0; i < 3; i++) {
         const seed = (i * 0.618033) % 1;
         const sparkX = x - comment.direction * seed * comment.trailLength * 0.8;
-        const sparkY = y + Math.sin(nowSec * 8 + i * 2.1) * 6;
-        const sparkAlpha = (1 - seed) * alpha * 0.7;
+        const sparkY = drawY + Math.sin(nowSec * 8 + i * 2.1) * 6;
+        const sparkAlpha = (1 - seed) * effectiveAlpha * 0.7;
         this.ctx.globalAlpha = sparkAlpha;
         this.ctx.fillStyle = comment.color;
         this.ctx.shadowBlur = 0;
@@ -3812,7 +3916,7 @@ export class LyricDancePlayer {
       }
 
       // Color bullet dot — smaller
-      this.ctx.globalAlpha = alpha;
+      this.ctx.globalAlpha = effectiveAlpha;
       this.ctx.shadowBlur = 6;
       this.ctx.shadowColor = comment.color;
       const commentFont = `400 ${comment.fontSize * 0.85}px "Space Mono", monospace`;
@@ -3820,16 +3924,16 @@ export class LyricDancePlayer {
       const dotX = x - comment.direction * (textWidth / 2 + 12);
       this.ctx.fillStyle = comment.color;
       this.ctx.beginPath();
-      this.ctx.arc(dotX, y, 2.5, 0, Math.PI * 2);
+      this.ctx.arc(dotX, drawY, 2.5, 0, Math.PI * 2);
       this.ctx.fill();
 
       // Text — lighter weight, smaller, muted white
-      this.ctx.globalAlpha = alpha;
+      this.ctx.globalAlpha = effectiveAlpha;
       this.ctx.font = `400 ${comment.fontSize * 0.85}px "Space Mono", monospace`;
       this.ctx.fillStyle = 'rgba(255,255,255,0.75)';
       this.ctx.textAlign = 'center';
       this.setCanvasBaseline('middle');
-      this.ctx.fillText(comment.text, x, y);
+      this.ctx.fillText(comment.text, x, drawY);
 
       this.ctx.shadowBlur = 0;
       this.ctx.restore();
