@@ -380,11 +380,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
         {!isBattleMode && playerReady && !reactionPanelOpen && (
           <div
-            className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2"
+            className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2 pointer-events-none"
             onClick={(e) => e.stopPropagation()}
           >
             <span />
-            <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
+            <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5 pointer-events-auto">
               <button
                 onClick={toggleMute}
                 className="p-1 text-white/40 hover:text-white/70 transition-colors"
