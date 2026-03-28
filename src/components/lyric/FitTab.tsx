@@ -1721,11 +1721,11 @@ export function FitTab({
                   return (
                     <>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-mono px-2 py-1 rounded bg-white/[0.04] text-white/50">
+                        <span className="text-[10px] font-mono px-2 py-1 rounded bg-muted/60 text-muted-foreground border border-border/60">
                           {empowermentPromise.fromState}
                         </span>
-                        <span className="text-white/20">→</span>
-                        <span className="text-[10px] font-mono px-2 py-1 rounded bg-primary/10 text-primary border border-primary/20">
+                        <span className="text-muted-foreground/50">→</span>
+                        <span className="text-[10px] font-mono px-2 py-1 rounded bg-primary/10 text-primary border border-primary/25">
                           {empowermentPromise.toState}
                         </span>
                       </div>
@@ -1736,7 +1736,7 @@ export function FitTab({
 
                       <div className="space-y-1 pt-1">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-[9px] font-mono text-muted-foreground/50 uppercase tracking-wider">
+                          <span className="text-[9px] font-mono text-muted-foreground/70 uppercase tracking-wider">
                             {totalVotes > 0
                               ? `${totalVotes} FMLY vote${totalVotes !== 1 ? "s" : ""}`
                               : "Share to get votes"}
@@ -1750,24 +1750,24 @@ export function FitTab({
                               : 0;
                           const isWinner = totalVotes >= 3 && i === winnerIndex;
                           return (
-                            <div key={i} className="relative rounded-lg overflow-hidden">
+                            <div key={i} className="relative rounded-lg overflow-hidden border border-border/60 bg-background/40">
                               {totalVotes > 0 && (
                                 <div
                                   className="absolute inset-y-0 left-0 transition-all duration-500"
                                   style={{
                                     width: `${pct}%`,
                                     background: isWinner
-                                      ? "rgba(74,222,128,0.08)"
-                                      : "rgba(255,255,255,0.03)",
+                                      ? "hsl(var(--primary) / 0.12)"
+                                      : "hsl(var(--muted) / 0.6)",
                                   }}
                                 />
                               )}
                               <div className="relative flex items-center gap-2.5 px-2.5 py-2">
-                                <span className="text-[9px] font-mono text-white/15 shrink-0 w-4">
+                                <span className="text-[9px] font-mono text-muted-foreground/70 shrink-0 w-4">
                                   {String(i + 1).padStart(2, "0")}
                                 </span>
                                 <span
-                                  className={`text-[11px] flex-1 leading-snug ${isWinner ? "text-white/90" : "text-white/55"}`}
+                                  className={`text-[11px] flex-1 leading-snug ${isWinner ? "text-foreground" : "text-foreground/85"}`}
                                 >
                                   {hook}
                                 </span>
@@ -1778,7 +1778,7 @@ export function FitTab({
                                     </span>
                                   )}
                                   {totalVotes > 0 && (
-                                    <span className="text-[9px] font-mono text-white/25 w-8 text-right">
+                                    <span className="text-[9px] font-mono text-muted-foreground w-8 text-right">
                                       {pct}%
                                     </span>
                                   )}
@@ -1786,7 +1786,7 @@ export function FitTab({
                                     onClick={() => {
                                       navigator.clipboard.writeText(hook);
                                     }}
-                                    className="p-1 text-white/15 hover:text-white/50 transition-colors"
+                                    className="p-1 text-muted-foreground hover:text-foreground transition-colors"
                                   >
                                     <Copy size={10} />
                                   </button>
