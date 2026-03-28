@@ -1156,6 +1156,23 @@ export function FitTab({
     )
       return false;
     if (!prefetchedDanceData.beat_grid) return false;
+
+    // Ground-truth checks: ensure the prefetched DB snapshot has completed data.
+    const cd = prefetchedDanceData.cinematic_direction as any;
+    if (
+      !cd ||
+      Array.isArray(cd) ||
+      !Array.isArray(cd.sections) ||
+      cd.sections.length === 0
+    )
+      return false;
+
+    if (Array.isArray(sections) && sections.length > 0) {
+      const snapImages = (prefetchedDanceData as any).section_images;
+      if (!Array.isArray(snapImages) || !snapImages.some(Boolean))
+        return false;
+    }
+
     if (!fontReady) return false;
 
     return true;
