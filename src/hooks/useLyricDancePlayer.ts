@@ -61,7 +61,7 @@ export function useLyricDancePlayer(
   // ── Init / destroy ────────────────────────────────────────────────────
   // words are optional — player falls back to line-level timing if absent.
   // Only cinematic_direction is required (drives the entire visual system).
-  const dataReady = !!(data && data.cinematic_direction);
+  const dataReady = !!(data?.cinematic_direction);
 
   useEffect(() => {
     if (initRef.current || !dataReady) return;
@@ -142,9 +142,7 @@ export function useLyricDancePlayer(
   // ── Cinematic direction hot-patch (phrases, sections, heroWords) ──────
   useEffect(() => {
     if (!playerRef.current || !data?.cinematic_direction) return;
-    playerRef.current.updateCinematicDirection(
-      data.cinematic_direction as any
-    );
+    playerRef.current.updateCinematicDirection(data.cinematic_direction as any);
   }, [data?.cinematic_direction]);
 
   return { player, playerReady, data, setData };

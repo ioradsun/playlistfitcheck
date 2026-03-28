@@ -309,12 +309,7 @@ export default function ShareableLyricDance() {
                   claimArtistName={renderData?.artist_name ?? ""}
                   claimSongName={renderData?.song_name ?? ""}
                   isMarketingCover={isMarketingView}
-                  waiting={
-                    loading ||
-                    !renderData ||
-                    !renderData.cinematic_direction ||
-                    Array.isArray(renderData.cinematic_direction)
-                  }
+                  waiting={loading || !renderData?.cinematic_direction}
                   coverImageUrl={
                     renderData?.section_images?.[0] ??
                     (renderData as any)?.album_art_url ??

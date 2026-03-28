@@ -9,6 +9,7 @@ import { getSessionId } from "@/lib/sessionId";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { LIGHTNING_BAR_FLAG_EVENT, readLightningBarFlag } from "@/lib/lyricDanceFlags";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
+import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 
 const EMOJI_SYMBOLS: Record<string, string> = {
   fire: "🔥",
@@ -98,7 +99,10 @@ export function useLyricDanceCore({
 
   useEffect(() => {
     if (prefetchedData) {
-      setFetchedData(prefetchedData);
+      setFetchedData({
+        ...prefetchedData,
+        cinematic_direction: normalizeCinematicDirection(prefetchedData.cinematic_direction),
+      });
       setLoading(false);
       return;
     }
@@ -112,7 +116,12 @@ export function useLyricDanceCore({
       .maybeSingle()
       .then(({ data: row }) => {
         if (cancelled) return;
-        if (row) setFetchedData(row as unknown as LyricDanceData);
+        if (row) {
+          setFetchedData({
+            ...(row as unknown as LyricDanceData),
+            cinematic_direction: normalizeCinematicDirection((row as any).cinematic_direction),
+          });
+        }
         setLoading(false);
       });
     return () => {

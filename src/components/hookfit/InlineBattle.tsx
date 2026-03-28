@@ -153,11 +153,7 @@ export const InlineBattle = forwardRef<InlineBattleHandle, Props>(
     // ═══════════════════════════════════════════════════════════
     // EFFECT 2: Init engine once (when data + canvas are ready)
     // ═══════════════════════════════════════════════════════════
-    const dataReady = !!(
-      danceData &&
-      danceData.cinematic_direction &&
-      !Array.isArray(danceData.cinematic_direction)
-    );
+    const dataReady = !!(danceData?.cinematic_direction);
 
     useEffect(() => {
       if (!dataReady || !hookA) return;

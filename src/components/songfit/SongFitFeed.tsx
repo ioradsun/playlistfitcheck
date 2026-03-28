@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { preloadImage } from "@/lib/imagePreloadCache";
+import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 import { useVoteGate } from "@/hooks/useVoteGate";
 import { PanelShell } from "@/components/shared/panel/PanelShell";
 
@@ -394,11 +395,15 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
             const map = new Map<string, LyricDanceData>();
             const cacheObj: Record<string, any> = {};
             for (const row of (lyricRows ?? []) as any[]) {
-              map.set(row.id, row as LyricDanceData);
-              cacheObj[row.id] = row;
+              const normalized = {
+                ...row,
+                cinematic_direction: normalizeCinematicDirection(row.cinematic_direction),
+              } as LyricDanceData;
+              map.set(row.id, normalized);
+              cacheObj[row.id] = normalized;
 
               // Preload first section image — eliminates white flash on cover
-              const firstImg = (row as any).section_images?.[0];
+              const firstImg = row.section_images?.[0];
               if (firstImg) preloadImage(firstImg);
             }
             setLyricDataMap(map);
