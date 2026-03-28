@@ -91,6 +91,45 @@ function buildSegmentsFromWords(
   return segments;
 }
 
+/**
+ * Clamp word end times so no word bleeds into the next word's onset.
+ * Scribe assigns silence gaps to the preceding word, producing durations
+ * like 17s for a single word on slow/held performances.
+ * Max legitimate word duration: 3.0s. Anything beyond that gets clamped
+ * to nextWord.start - 0.05, or start + 3.0 for the last word.
+ */
+function normalizeWordDurations(
+  words: WhisperWord[]
+): WhisperWord[] {
+  if (words.length === 0) return words;
+  const MAX_WORD_DURATION = 3.0;
+  const result = words.map(w => ({ ...w }));
+
+  for (let i = 0; i < result.length; i++) {
+    const w = result[i];
+    const next = result[i + 1];
+    const duration = w.end - w.start;
+
+    if (next) {
+      // If end overshoots next word's start, clamp it
+      if (w.end > next.start - 0.01) {
+        w.end = Math.max(w.start + 0.05, next.start - 0.05);
+      }
+      // If duration exceeds max, cap at next word start regardless
+      if (duration > MAX_WORD_DURATION) {
+        w.end = next.start - 0.05;
+      }
+    } else {
+      // Last word: cap at max duration
+      if (duration > MAX_WORD_DURATION) {
+        w.end = w.start + MAX_WORD_DURATION;
+      }
+    }
+  }
+
+  return result;
+}
+
 // ── ElevenLabs Scribe: word-level granularity with diarization ───────────────
 async function runScribe(
   audioBytes: Uint8Array,
@@ -986,6 +1025,8 @@ serve(async (req) => {
     }
 
     let { words, segments, rawText, duration } = transcribeResult.value;
+    // Normalize word durations — clamp Scribe's silence-bleed artifacts
+    words = normalizeWordDurations(words);
 
     // ── Editor Mode: apply reference lyrics diff for all transcription engines ─
     if (editorMode) {
@@ -1025,6 +1066,7 @@ serve(async (req) => {
             input: { model: transcriptionEngine, format: ext, mimeType, estimatedMB: Math.round(estimatedBytes / 1024 / 1024 * 10) / 10 },
             output: {
               wordCount: words.length,
+              normalizedWordCount: words.filter(w => w.end - w.start <= 3.0).length,
               segmentCount: segments.length,
               duration,
               rawText: rawText.slice(0, 1000),
