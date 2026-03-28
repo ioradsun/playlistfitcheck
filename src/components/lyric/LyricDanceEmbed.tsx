@@ -382,9 +382,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           </AnimatePresence>
         )}
 
-        {!isBattleMode && playerReady && !reactionPanelOpen && (
+        {!isBattleMode && playerReady && (
           <div
-            className="absolute top-0 left-0 right-0 z-[450] flex items-center justify-between p-2 pointer-events-none"
+            className="absolute top-0 left-0 right-0 z-[510] flex items-center justify-between p-2 pointer-events-none"
             onClick={(e) => e.stopPropagation()}
           >
             <span />

@@ -20,7 +20,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHei
     variant === 'fullscreen'
       ? 'fixed bottom-0 left-0 right-0 z-[70] h-[88vh]'
       : variant === 'reels'
-        ? 'absolute inset-0 z-[500]'
+        ? 'absolute inset-x-0 bottom-0 z-[500]'
         : 'absolute inset-x-0 bottom-0 z-[400]';
 
   return (
@@ -37,7 +37,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHei
             background: variant === 'embedded' ? 'rgba(10,10,10,0.97)' : '#0d0d0d',
             backdropFilter: variant === 'embedded' ? 'blur(12px)' : undefined,
             borderTop: variant !== 'embedded' ? '1px solid rgba(255,255,255,0.06)' : undefined,
-            top: variant === 'embedded' ? -topOffset : undefined,
+            top: variant === 'reels' ? 44 : variant === 'embedded' ? -topOffset : undefined,
             maxHeight: maxHeight ?? undefined,
             height: maxHeight ?? undefined,
           }}
