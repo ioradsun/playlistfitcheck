@@ -68,6 +68,14 @@ interface ReactionPanelProps {
   /** Called when panel closes with the last audio position so the caller can resume there. */
   onCloseWithPosition?: (timeSec: number | null) => void;
   maxHeight?: string;
+  empowermentPromise?: {
+    emotionalJob: string;
+    fromState: string;
+    toState: string;
+    promise: string;
+    hooks: string[];
+  } | null;
+  fmlyHookEnabled?: boolean;
 }
 
 function CommentReactPicker({
@@ -144,6 +152,8 @@ function ReactionPanel({
   renderBottomBar,
   onCloseWithPosition,
   maxHeight,
+  empowermentPromise,
+  fmlyHookEnabled,
 }: ReactionPanelProps) {
   const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState("");
@@ -163,6 +173,10 @@ function ReactionPanel({
   const [sessionCommentReacted, setSessionCommentReacted] = useState<
     Set<string>
   >(new Set());
+
+  const [angleVoted, setAngleVoted] = useState<number | null>(null);
+  const [angleVoteCounts, setAngleVoteCounts] = useState<number[]>([]);
+  const [angleVotesLoaded, setAngleVotesLoaded] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -363,6 +377,54 @@ function ReactionPanel({
         setCommentReactions(counts);
       });
   }, [danceId, isOpen, refreshKey]);
+
+
+  useEffect(() => {
+    if (!isOpen || !danceId || !empowermentPromise || !fmlyHookEnabled) return;
+    setAngleVotesLoaded(false);
+    setAngleVoteCounts([]);
+    setAngleVoted(null);
+    const sessionId = getSessionId();
+
+    supabase
+      .from("lyric_dance_angle_votes" as any)
+      .select("hook_index")
+      .eq("dance_id", danceId)
+      .then(({ data }) => {
+        if (!data) return;
+        const counts = Array(6).fill(0);
+        (data as any[]).forEach((row) => {
+          counts[row.hook_index] = (counts[row.hook_index] ?? 0) + 1;
+        });
+        setAngleVoteCounts(counts);
+        setAngleVotesLoaded(true);
+      });
+
+    supabase
+      .from("lyric_dance_angle_votes" as any)
+      .select("hook_index")
+      .eq("dance_id", danceId)
+      .eq("session_id", sessionId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setAngleVoted((data as any).hook_index);
+      });
+  }, [isOpen, danceId, empowermentPromise, fmlyHookEnabled]);
+
+  const handleAngleVote = async (hookIndex: number) => {
+    if (angleVoted !== null || !danceId) return;
+    const sessionId = getSessionId();
+    setAngleVoted(hookIndex);
+    setAngleVoteCounts((prev) => {
+      const next = [...prev];
+      next[hookIndex] = (next[hookIndex] ?? 0) + 1;
+      return next;
+    });
+    await supabase
+      .from("lyric_dance_angle_votes" as any)
+      .insert({ dance_id: danceId, hook_index: hookIndex, session_id: sessionId })
+      .select();
+  };
 
   const handleLineTap = (line: LyricSectionLine) => {
     if (!player) {
@@ -870,6 +932,137 @@ function ReactionPanel({
               </div>
             );
           })}
+
+          {fmlyHookEnabled && empowermentPromise && (
+            <div className="mx-3 mt-4 mb-6 space-y-3">
+              <div style={{ height: "0.5px", background: "rgba(255,255,255,0.06)" }} />
+
+              <div className="flex items-center gap-2 px-1 pt-1">
+                <span style={{ fontSize: 10, fontFamily: "monospace", color: "rgba(255,255,255,0.3)", letterSpacing: "0.15em", textTransform: "uppercase" }}>
+                  ⚡ Which angle hits?
+                </span>
+                {angleVoted === null && (
+                  <span style={{ fontSize: 9, fontFamily: "monospace", color: "rgba(255,255,255,0.2)" }}>
+                    pick the caption for this song
+                  </span>
+                )}
+              </div>
+
+              {empowermentPromise.hooks.map((hook, i) => {
+                const votes = angleVoteCounts[i] ?? 0;
+                const totalVotes = angleVoteCounts.reduce((a, b) => a + b, 0);
+                const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+                const isVoted = angleVoted === i;
+                const isWinner =
+                  angleVoted !== null &&
+                  totalVotes >= 2 &&
+                  votes === Math.max(...angleVoteCounts);
+                const showResults = angleVoted !== null && angleVotesLoaded;
+
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleAngleVote(i)}
+                    disabled={angleVoted !== null}
+                    className="w-full text-left relative rounded-xl overflow-hidden transition-all"
+                    style={{
+                      background: isVoted ? `${accent}12` : "rgba(255,255,255,0.03)",
+                      border: isVoted
+                        ? `1px solid ${accent}35`
+                        : "1px solid rgba(255,255,255,0.06)",
+                      padding: "10px 12px",
+                      cursor: angleVoted === null ? "pointer" : "default",
+                    }}
+                  >
+                    {showResults && (
+                      <div
+                        className="absolute inset-y-0 left-0 transition-all duration-700"
+                        style={{
+                          width: `${pct}%`,
+                          background: isVoted
+                            ? `${accent}10`
+                            : "rgba(255,255,255,0.02)",
+                        }}
+                      />
+                    )}
+                    <div className="relative flex items-center gap-2.5">
+                      <div
+                        style={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: "50%",
+                          flexShrink: 0,
+                          border: isVoted
+                            ? `2px solid ${accent}`
+                            : "2px solid rgba(255,255,255,0.12)",
+                          background: isVoted ? accent : "transparent",
+                          transition: "all 0.2s",
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: isVoted
+                            ? "rgba(255,255,255,0.9)"
+                            : "rgba(255,255,255,0.55)",
+                          lineHeight: 1.45,
+                          flex: 1,
+                        }}
+                      >
+                        {hook}
+                      </span>
+                      {showResults && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {isWinner && (
+                            <span
+                              style={{
+                                fontSize: 8,
+                                fontFamily: "monospace",
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                background: `${accent}18`,
+                                color: accent,
+                                border: `1px solid ${accent}30`,
+                                letterSpacing: "0.1em",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              FMLY pick
+                            </span>
+                          )}
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontFamily: "monospace",
+                              color: "rgba(255,255,255,0.3)",
+                              minWidth: 28,
+                              textAlign: "right",
+                            }}
+                          >
+                            {pct}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+
+              {angleVoted === null && (
+                <p
+                  style={{
+                    fontSize: 10,
+                    fontFamily: "monospace",
+                    color: "rgba(255,255,255,0.2)",
+                    textAlign: "center",
+                    paddingTop: 4,
+                  }}
+                >
+                  or swipe to skip
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
