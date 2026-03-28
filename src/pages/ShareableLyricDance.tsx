@@ -481,8 +481,14 @@ export default function ShareableLyricDance() {
         }}
         onPause={handlePauseForInput}
         onResume={handleResumeAfterInput}
+        onFireLine={(lineIndex, holdMs) => {
+          const id = (data ?? (prefetchedData as any))?.id;
+          if (!id) return;
+          player?.fireFire(holdMs);
+          emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs);
+        }}
         onLineVisible={(lineIndex) => {
-          const id = renderData?.id ?? (data as any)?.id;
+          const id = (data ?? (prefetchedData as any))?.id;
           if (!id) return;
           emitExposure(id, lineIndex);
         }}
