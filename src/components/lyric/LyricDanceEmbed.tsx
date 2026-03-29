@@ -96,6 +96,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   isVerified,
   onProfileClick,
 }, ref) {
+  const [note, setNote] = useState("");
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
   const siteCopy = useSiteCopy();
@@ -134,11 +135,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     audioSections,
     activeLine,
     palette,
-    votedSide,
-    score,
-    note,
-    setNote,
-    handleVote,
     toggleMute,
     handleReplay,
     handleListenNow,
@@ -158,6 +154,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   });
 
   useImperativeHandle(ref, () => ({ getPlayer: () => player ?? null }), [player]);
+
+  const handleBottomBarSubmit = useCallback(async () => {
+    await handleCommentFromBar(note);
+    setNote("");
+  }, [handleCommentFromBar, note]);
 
 
   const [visibility, setVisibility] = useState<VisibilityState>(
@@ -509,50 +510,46 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           )}
 
           <CardBottomBar
-            variant={reelsMode ? "fullscreen" : "embedded"}
-            votedSide={votedSide}
-            score={score}
-            note={note}
-            onNoteChange={setNote}
-            onVoteYes={() => handleVote(true)}
-            onVoteNo={() => handleVote(false)}
-            onSubmit={handleCommentFromBar}
-            onOpenReactions={handleOpenReactions}
-            onClose={handleClosePanelAndSync}
-            panelOpen={reactionPanelOpen}
-            onFireTap={() => {
-              const id = (data ?? prefetchedData as any)?.id;
-              if (!id || !activeLine) return;
-              player?.fireFire(0);
-              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
-              setFireStrengthByLine((prev) => ({
-                ...prev,
-                [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
-              }));
-            }}
-            onFireHoldStart={() => {
-              /* nothing — visual handled by FireButton */
-            }}
-            onFireHoldEnd={(holdMs) => {
-              const id = (data ?? prefetchedData as any)?.id;
-              if (!id || !activeLine) return;
-              player?.fireFire(holdMs);
-              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
-              const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
-              setFireStrengthByLine((prev) => ({
-                ...prev,
-                [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
-              }));
-            }}
-            activeLineFireCount={activeLineFireCount}
-            hookPhrase={hookPhrase}
-            activeLineText={activeLine?.text ?? null}
-            topReaction={
-              topReaction
+            {...({
+              variant: reelsMode ? "fullscreen" : "embedded",
+              note,
+              onNoteChange: setNote,
+              onSubmit: handleBottomBarSubmit,
+              onOpenReactions: handleOpenReactions,
+              onClose: handleClosePanelAndSync,
+              panelOpen: reactionPanelOpen,
+              onFireTap: () => {
+                const id = (data ?? prefetchedData as any)?.id;
+                if (!id || !activeLine) return;
+                player?.fireFire(0);
+                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
+                setFireStrengthByLine((prev) => ({
+                  ...prev,
+                  [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
+                }));
+              },
+              onFireHoldStart: () => {
+                /* nothing — visual handled by FireButton */
+              },
+              onFireHoldEnd: (holdMs: number) => {
+                const id = (data ?? (prefetchedData as any))?.id;
+                if (!id || !activeLine) return;
+                player?.fireFire(holdMs);
+                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
+                const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
+                setFireStrengthByLine((prev) => ({
+                  ...prev,
+                  [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
+                }));
+              },
+              activeLineFireCount,
+              hookPhrase,
+              activeLineText: activeLine?.text ?? null,
+              topReaction: topReaction
                 ? { symbol: topReaction.symbol, count: topReaction.count }
-                : null
-            }
-            trackTitle={songTitle}
+                : null,
+              trackTitle: songTitle,
+            } as any)}
           />
         </div>
       )}
@@ -571,10 +568,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             }
             setMuted(false);
           }}
-          votedSide={votedSide}
-          score={score}
-          onVoteYes={() => handleVote(true)}
-          onVoteNo={() => handleVote(false)}
           danceId={data?.id ?? ""}
           activeLine={muted ? null : activeLine}
           allLines={lyricSections.allLines}

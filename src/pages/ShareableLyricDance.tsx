@@ -47,6 +47,7 @@ export default function ShareableLyricDance() {
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
   const [closingVisible, setClosingVisible] = useState(false);
+  const [note, setNote] = useState("");
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -152,11 +153,6 @@ export default function ShareableLyricDance() {
     audioSections,
     activeLine,
     palette,
-    votedSide,
-    score,
-    note,
-    setNote,
-    handleVote,
     toggleMute,
     handleReplay,
     handleListenNow,
@@ -167,6 +163,11 @@ export default function ShareableLyricDance() {
     commentRefreshKey,
     lightningBarEnabled,
   } = core;
+
+  const handleBottomBarSubmit = useCallback(async () => {
+    await handleCommentFromBar(note);
+    setNote("");
+  }, [handleCommentFromBar, note]);
 
   useEffect(() => {
     if (fetchedData && fetchedData !== data) {
@@ -436,44 +437,42 @@ export default function ShareableLyricDance() {
         {!reactionPanelOpen && (
           <div className="w-full max-w-2xl mx-auto">
             <CardBottomBar
-              variant="fullscreen"
-              votedSide={votedSide}
-              score={score}
-              note={note}
-              onNoteChange={setNote}
-              onVoteYes={() => handleVote(true)}
-              onVoteNo={() => handleVote(false)}
-              onSubmit={handleCommentFromBar}
-              onOpenReactions={openReactionPanel}
-              onClose={closePanel}
-              panelOpen={reactionPanelOpen}
-              onFireTap={() => {
-                const id = (data as any)?.id;
-                if (!id || !activeLine) return;
-                player?.fireFire(0);
-                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
-                setFireStrengthByLine((prev) => ({
-                  ...prev,
-                  [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
-                }));
-              }}
-              onFireHoldStart={() => {
-                /* nothing — visual handled by FireButton */
-              }}
-              onFireHoldEnd={(holdMs) => {
-                const id = (data as any)?.id;
-                if (!id || !activeLine) return;
-                player?.fireFire(holdMs);
-                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
-                const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
-                setFireStrengthByLine((prev) => ({
-                  ...prev,
-                  [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
-                }));
-              }}
-              activeLineFireCount={activeLineFireCount}
-              hookPhrase={hookPhrase}
-              activeLineText={activeLine?.text ?? null}
+              {...({
+                variant: "fullscreen",
+                note,
+                onNoteChange: setNote,
+                onSubmit: handleBottomBarSubmit,
+                onOpenReactions: openReactionPanel,
+                onClose: closePanel,
+                panelOpen: reactionPanelOpen,
+                onFireTap: () => {
+                  const id = (data as any)?.id;
+                  if (!id || !activeLine) return;
+                  player?.fireFire(0);
+                  emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
+                  setFireStrengthByLine((prev) => ({
+                    ...prev,
+                    [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
+                  }));
+                },
+                onFireHoldStart: () => {
+                  /* nothing — visual handled by FireButton */
+                },
+                onFireHoldEnd: (holdMs: number) => {
+                  const id = (data as any)?.id;
+                  if (!id || !activeLine) return;
+                  player?.fireFire(holdMs);
+                  emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
+                  const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
+                  setFireStrengthByLine((prev) => ({
+                    ...prev,
+                    [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
+                  }));
+                },
+                activeLineFireCount,
+                hookPhrase,
+                activeLineText: activeLine?.text ?? null,
+              } as any)}
             />
           </div>
         )}
@@ -484,10 +483,6 @@ export default function ShareableLyricDance() {
         isOpen={reactionPanelOpen}
         refreshKey={commentRefreshKey}
         onClose={handlePanelClose}
-        votedSide={votedSide}
-        score={score}
-        onVoteYes={() => handleVote(true)}
-        onVoteNo={() => handleVote(false)}
         danceId={renderData?.id ?? ""}
         activeLine={activeLine}
         allLines={lyricSections.allLines}
