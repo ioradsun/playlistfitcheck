@@ -3852,7 +3852,7 @@ export class LyricDancePlayer {
         : t > 0.75
           ? 1 - (t - 0.75) / 0.25
           : 1) * 0.65;
-      const holdTier: 0 | 1 | 2 | 3 = 0;
+      const holdTier = 0 as 0 | 1 | 2 | 3;
       const tierAlphaBoost = [1.0, 1.15, 1.3, 1.5][holdTier];
       let effectiveAlpha = Math.min(0.85, alpha * tierAlphaBoost);
       if (comment.isHistorical) {
