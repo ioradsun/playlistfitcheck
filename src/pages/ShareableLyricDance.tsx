@@ -477,6 +477,8 @@ export default function ShareableLyricDance() {
         activeLine={activeLine}
         allLines={lyricSections.allLines}
         audioSections={audioSections}
+        phrases={(data as any)?.cinematic_direction?.phrases ?? null}
+        words={(data as any)?.words ?? null}
         currentTimeSec={currentTimeSec}
         palette={palette}
         onSeekTo={(sec) => player?.seek(sec)}

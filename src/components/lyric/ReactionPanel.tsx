@@ -47,6 +47,8 @@ interface ReactionPanelProps {
   } | null;
   allLines: LyricSectionLine[];
   audioSections: CanonicalAudioSection[];
+  phrases?: Array<{ wordRange: [number, number] }> | null;
+  words?: Array<{ start: number; end: number }> | null;
   currentTimeSec: number;
   palette: string[];
   onSeekTo: (sec: number, endSec?: number) => void;
