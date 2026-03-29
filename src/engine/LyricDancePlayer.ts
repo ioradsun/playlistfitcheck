@@ -1045,7 +1045,6 @@ interface CommentChunk {
   direction: 1 | -1;  // 1 = left-to-right, -1 = right-to-left
   trailLength: number;
   fontSize: number;
-  holdTier: 0 | 1 | 2 | 3;
   isHistorical: boolean;
   // Cached gradient — re-used while comet position hasn't changed > 2px
   _cachedTrailGrad?: { grad: CanvasGradient; x1: number; x2: number; alphaHex: string };
@@ -1061,6 +1060,7 @@ interface EmojiRiser {
   driftAmplitude: number;
   driftPhase: number;
   opacity: number;
+  tier?: 0 | 1 | 2 | 3;
 }
 
 
@@ -3620,7 +3620,7 @@ export class LyricDancePlayer {
       if (fire.spawned) continue;
       if (fire.time_sec > nowSec) break;
       fire.spawned = true;
-      this._spawnFireComet(fire.hold_ms, true);
+      this.fireFire(0);
     }
     // Reset spawned flags on seek backward
     // (handled by setHistoricalFires reset on seek)
@@ -3645,9 +3645,20 @@ export class LyricDancePlayer {
 
       this.ctx.globalAlpha = alpha;
       this.ctx.font = `${Math.round(riser.size)}px serif`;
+
+      if ((riser.tier ?? 0) >= 2) {
+        this.ctx.shadowColor = (riser.tier ?? 0) >= 3
+          ? 'rgba(255, 32, 96, 0.6)'
+          : 'rgba(255, 94, 32, 0.5)';
+        this.ctx.shadowBlur = (riser.tier ?? 0) >= 3 ? 16 : 8;
+      } else {
+        this.ctx.shadowBlur = 0;
+      }
+
       this.ctx.fillText(riser.emoji, x, y);
     }
 
+    this.ctx.shadowBlur = 0;
     this.ctx.restore();
   }
 
@@ -3752,7 +3763,6 @@ export class LyricDancePlayer {
       startX, y, endX, direction,
       trailLength: 120,
       fontSize: Math.max(18, Math.min(26, Math.floor(280 / text.length))),
-      holdTier: 0,
       isHistorical: false,
     };
 
@@ -3777,44 +3787,42 @@ export class LyricDancePlayer {
   }
 
   public fireFire(holdMs: number = 0): void {
-    this._spawnFireComet(holdMs, false);
-  }
+    const tier: 0 | 1 | 2 | 3 =
+      holdMs < 300  ? 0 :
+      holdMs < 1000 ? 1 :
+      holdMs < 3000 ? 2 : 3;
 
-  private _spawnFireComet(holdMs: number, isHistorical: boolean): void {
-    const holdTier: 0 | 1 | 2 | 3 = holdMs < 300 ? 0 : holdMs < 1000 ? 1 : holdMs < 3000 ? 2 : 3;
-    const fromLeft = Math.random() > 0.5;
-    const direction: 1 | -1 = fromLeft ? 1 : -1;
-    const sizeMap = [18, 26, 38, 52];
-    const durationMap = [2.0, 2.8, 4.2, 6.0];
-    const trailMap = [80, 140, 220, 320];
-    const margin = 300 + holdTier * 80;
-    const startX = fromLeft ? -margin : this.width + margin;
-    const endX = fromLeft ? this.width + margin : -margin;
+    // Size, lifetime, opacity, drift all scale with tier
+    const sizeMap = [18, 26, 36, 48];
+    const lifetimeMap = [2.5, 3.5, 5.0, 7.0];
+    const opacityMap = [0.65, 0.75, 0.85, 0.95];
+    const driftMap = [8, 12, 18, 24];
 
-    const yMin = isHistorical ? 0.10 : 0.25;
-    const yMax = isHistorical ? 0.85 : 0.82;
-    const y = this.height * (yMin + Math.random() * (yMax - yMin));
+    // Spawn 1 riser for tap, 2 for tier1, 3 for tier2, 5 for tier3
+    const countMap = [1, 2, 3, 5];
+    const count = countMap[tier];
 
-    const colors = ['#FFD580', '#FF9F40', '#FF5E20', '#FF2060'];
-    const color = colors[holdTier];
+    const nowSec = performance.now() / 1000;
 
-    const comet: CommentChunk = {
-      id: `fire-${Date.now()}-${Math.random()}`,
-      text: '🔥',
-      color,
-      startTime: performance.now() / 1000,
-      duration: durationMap[holdTier],
-      startX, y, endX, direction,
-      trailLength: trailMap[holdTier],
-      fontSize: sizeMap[holdTier],
-      holdTier,
-      isHistorical,
-    };
+    for (let i = 0; i < count; i++) {
+      // Spread spawn x slightly for multiple risers
+      const xSpread = count > 1 ? (i - (count - 1) / 2) * 14 : 0;
+      this.emojiRisers.push({
+        emoji: '🔥',
+        spawnTime: nowSec + i * 0.08,
+        lifetime: lifetimeMap[tier] + Math.random() * 0.5,
+        spawnX: this.width - 48 + xSpread,
+        spawnY: this.height - 70,
+        size: sizeMap[tier] + Math.random() * 4,
+        driftAmplitude: driftMap[tier] + Math.random() * 8,
+        driftPhase: Math.random() * Math.PI * 2,
+        opacity: opacityMap[tier],
+        tier,
+      });
+    }
 
-    this.activeComments.push(comet);
-    const maxComets = isHistorical ? 24 : 8;
-    if (this.activeComments.length > maxComets) {
-      this.activeComments = this.activeComments.slice(-maxComets);
+    if (this.emojiRisers.length > 60) {
+      this.emojiRisers = this.emojiRisers.slice(-60);
     }
   }
 
@@ -3844,7 +3852,7 @@ export class LyricDancePlayer {
         : t > 0.75
           ? 1 - (t - 0.75) / 0.25
           : 1) * 0.65;
-      const holdTier = comment.holdTier ?? 0;
+      const holdTier: 0 | 1 | 2 | 3 = 0;
       const tierAlphaBoost = [1.0, 1.15, 1.3, 1.5][holdTier];
       let effectiveAlpha = Math.min(0.85, alpha * tierAlphaBoost);
       if (comment.isHistorical) {

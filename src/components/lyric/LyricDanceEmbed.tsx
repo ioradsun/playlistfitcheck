@@ -96,7 +96,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   isVerified,
   onProfileClick,
 }, ref) {
-  const [note, setNote] = useState("");
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
   const siteCopy = useSiteCopy();
@@ -140,7 +139,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     handleListenNow,
     handlePauseForInput,
     handleResumeAfterInput,
-    handleCommentFromBar,
     topReaction,
     isWaiting,
     commentRefreshKey,
@@ -154,11 +152,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   });
 
   useImperativeHandle(ref, () => ({ getPlayer: () => player ?? null }), [player]);
-
-  const handleBottomBarSubmit = useCallback(async () => {
-    await handleCommentFromBar(note);
-    setNote("");
-  }, [handleCommentFromBar, note]);
 
 
   const [visibility, setVisibility] = useState<VisibilityState>(
@@ -512,9 +505,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           <CardBottomBar
             {...({
               variant: reelsMode ? "fullscreen" : "embedded",
-              note,
-              onNoteChange: setNote,
-              onSubmit: handleBottomBarSubmit,
               onOpenReactions: handleOpenReactions,
               onClose: handleClosePanelAndSync,
               panelOpen: reactionPanelOpen,
