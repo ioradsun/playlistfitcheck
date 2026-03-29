@@ -1763,7 +1763,7 @@ export function FitTab({
                               Math.max(0, line.startSec - 1.5),
                               line.startSec + 10,
                             );
-                            player.setClipCaption(caption);
+                            (player as any).setClipCaption?.(caption);
                             player.play();
                           }
                         }
@@ -1798,7 +1798,7 @@ export function FitTab({
               <ClipComposer
                 visible={clipComposerVisible}
                 player={dancePlayerRef.current?.getPlayer() ?? null}
-                durationSec={durationSec}
+                durationSec={dancePlayerRef.current?.getPlayer()?.audio?.duration ?? 0}
                 initialStart={clipComposerStart}
                 initialCaption={clipComposerCaption}
                 clipDuration={10}
@@ -1810,7 +1810,7 @@ export function FitTab({
                   const player = dancePlayerRef.current?.getPlayer();
                   if (player) {
                     player.setRegion(undefined, undefined);
-                    player.setClipCaption(null);
+                    (player as any).setClipCaption?.(null);
                   }
                 }}
               />
