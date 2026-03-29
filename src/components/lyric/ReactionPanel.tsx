@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type TouchEvent,
 } from "react";
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
 import type { LyricSectionLine } from "@/hooks/useLyricSections";
@@ -250,10 +250,10 @@ function ReactionPanel({
   onReactionDataChange: _onReactionDataChange,
   onPause,
   onResume,
-  votedSide,
-  score,
-  onVoteYes,
-  onVoteNo,
+  votedSide: _votedSide,
+  score: _score,
+  onVoteYes: _onVoteYes,
+  onVoteNo: _onVoteNo,
   hideInput = false,
   refreshKey = 0,
   renderBottomBar,
@@ -655,9 +655,6 @@ function ReactionPanel({
     onClose();
   };
 
-  const runItBackCount = score?.replay_yes ?? 0;
-  const notForMeCount = score != null ? score.total - score.replay_yes : 0;
-
   return (
     <PanelShell isOpen={isOpen} variant={displayMode} maxHeight={maxHeight}>
       <div
@@ -1000,94 +997,7 @@ function ReactionPanel({
         </div>
       </div>
 
-      {renderBottomBar ? (
-        renderBottomBar(handlePanelClose)
-      ) : (
-        <div
-          className="shrink-0 flex"
-          style={{
-            background: "#0a0a0a",
-            borderTop: "0.5px solid rgba(255,255,255,0.06)",
-            paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          }}
-        >
-          <div
-            className="w-full max-w-2xl mx-auto flex items-stretch"
-            style={{ height: displayMode === "fullscreen" ? 56 : 52 }}
-          >
-            <button
-              onClick={onVoteYes}
-              className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === "fullscreen" ? "py-3.5" : "py-3"}`}
-            >
-              <span
-                className="font-mono tracking-[0.15em] uppercase transition-colors"
-                style={{
-                  fontSize: 12,
-                  color:
-                    votedSide === null
-                      ? "rgba(255,255,255,1)"
-                      : votedSide === "a"
-                        ? accent
-                        : "rgba(255,255,255,0.2)",
-                }}
-              >
-                Run it back
-              </span>
-              {runItBackCount > 0 && (
-                <span className="text-[9px] font-mono text-white/25">
-                  {runItBackCount}
-                </span>
-              )}
-            </button>
-
-            <div
-              style={{ width: "0.5px" }}
-              className="bg-white/[0.06] self-stretch my-2"
-            />
-
-            <button
-              onClick={onVoteNo}
-              className={`flex-1 flex items-center justify-center gap-2 hover:bg-white/[0.04] transition-colors ${displayMode === "fullscreen" ? "py-3.5" : "py-3"}`}
-            >
-              <span
-                className="font-mono tracking-[0.15em] uppercase transition-colors"
-                style={{
-                  fontSize: 12,
-                  color:
-                    votedSide === null
-                      ? "rgba(255,255,255,1)"
-                      : votedSide === "b"
-                        ? accent
-                        : "rgba(255,255,255,0.2)",
-                }}
-              >
-                Not for me
-              </span>
-              {notForMeCount > 0 && (
-                <span className="text-[9px] font-mono text-white/25">
-                  {notForMeCount}
-                </span>
-              )}
-            </button>
-
-            <div
-              style={{ width: "0.5px" }}
-              className="bg-white/[0.06] self-stretch my-2"
-            />
-
-            <button
-              onClick={handlePanelClose}
-              aria-label="Close"
-              className={`group flex items-center justify-center min-w-[64px] px-4 ${displayMode === "fullscreen" ? "py-3.5" : "py-3"} hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0`}
-            >
-              <X
-                size={14}
-                className="text-white/30 group-hover:text-white/60 transition-colors"
-              />
-            </button>
-          </div>
-        </div>
-      )}
+      {renderBottomBar && renderBottomBar(handlePanelClose)}
     </PanelShell>
   );
 }

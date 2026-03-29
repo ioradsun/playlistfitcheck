@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { useReactionPanel } from "@/hooks/useReactionPanel";
-import { useCardVote } from "@/hooks/useCardVote";
 import { getSessionId } from "@/lib/sessionId";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { LIGHTNING_BAR_FLAG_EVENT, readLightningBarFlag } from "@/lib/lyricDanceFlags";
@@ -67,7 +66,7 @@ export function useLyricDanceCore({
   lyricDanceId,
   prefetchedData,
   eagerUpgrade,
-  postId,
+  postId: _postId,
   autoPlay = false,
   onPlay,
 }: UseLyricDanceCoreOptions) {
@@ -153,11 +152,6 @@ export function useLyricDanceCore({
     data?.beat_grid ?? null,
     data?.cinematic_direction ?? null,
     durationSec,
-  );
-
-  const { votedSide, score, note, setNote, handleVote, handleSubmit } = useCardVote(
-    postId ?? lyricDanceId,
-    { anonymous: true, enabled: !showCover },
   );
 
   const [panelOpen, setPanelOpen] = useState(false);
@@ -337,8 +331,8 @@ export function useLyricDanceCore({
     setMuted(false);
   }, [player, onPlay]);
 
-  const handleCommentFromBar = useCallback(async () => {
-    const text = note.trim();
+  const handleCommentFromBar = useCallback(async (noteText: string) => {
+    const text = noteText.trim();
     if (!text) return;
     const danceId = fetchedData?.id;
     if (!danceId) return;
@@ -353,9 +347,8 @@ export function useLyricDanceCore({
     } catch {
       // silent
     }
-    setNote("");
     setCommentRefreshKey((k) => k + 1);
-  }, [note, fetchedData?.id, setNote]);
+  }, [fetchedData?.id]);
 
   activeLineRef.current = activeLine;
 
@@ -429,12 +422,6 @@ export function useLyricDanceCore({
     audioSections,
     activeLine,
     palette,
-    votedSide,
-    score,
-    note,
-    setNote,
-    handleVote,
-    handleSubmit,
     toggleMute,
     handleReplay,
     handleListenNow,
