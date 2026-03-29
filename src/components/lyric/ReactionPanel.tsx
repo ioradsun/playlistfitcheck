@@ -663,85 +663,6 @@ function ReactionPanel({
         style={{ scrollbarWidth: "none" }}
       >
         <div className={displayMode === "embedded" ? "pt-2 pb-4" : "pt-[max(1rem,env(safe-area-inset-top,12px))] pb-4"}>
-          {/* Instagram-style comment input at top of panel */}
-          <div
-            style={{
-              padding: '10px 12px 8px',
-              borderBottom: '0.5px solid rgba(255,255,255,0.05)',
-              background: 'rgba(10,10,10,0.6)',
-              position: 'sticky',
-              top: 0,
-              zIndex: 2,
-            }}
-          >
-            {activeLine && (
-              <p
-                style={{
-                  fontSize: 9,
-                  fontFamily: 'monospace',
-                  color: 'rgba(255,255,255,0.2)',
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  marginBottom: 6,
-                }}
-              >
-                on: {activeLine.text.slice(0, 40)}{activeLine.text.length > 40 ? '…' : ''}
-              </p>
-            )}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                background: 'rgba(255,255,255,0.05)',
-                border: '0.5px solid rgba(255,255,255,0.09)',
-                borderRadius: 12,
-                padding: '8px 12px',
-              }}
-            >
-              <input
-                type="text"
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleTextSubmit();
-                  }
-                }}
-                onFocus={() => onPause?.()}
-                placeholder={replyingTo ? 'Write a reply...' : 'say something...'}
-                style={{
-                  flex: 1,
-                  background: 'transparent',
-                  border: 'none',
-                  outline: 'none',
-                  fontSize: 13,
-                  color: 'rgba(255,255,255,0.75)',
-                  fontFamily: 'inherit',
-                  caretColor: accent,
-                }}
-              />
-              {textInput.trim().length > 0 && (
-                <button
-                  onClick={handleTextSubmit}
-                  style={{
-                    fontSize: 9,
-                    fontFamily: 'monospace',
-                    color: accent,
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    letterSpacing: '0.1em',
-                    flexShrink: 0,
-                  }}
-                >
-                  post
-                </button>
-              )}
-            </div>
-          </div>
-
           {allLines.map((line, linePosition) => {
             const currentSection =
               sectionMeta.sectionForLine.get(line.lineIndex) ?? null;
@@ -1021,6 +942,78 @@ function ReactionPanel({
             );
           })}
 
+        </div>
+      </div>
+
+      {/* ── Bottom comment bar ── */}
+      <div
+        style={{
+          flexShrink: 0,
+          borderTop: '0.5px solid rgba(255,255,255,0.06)',
+          background: '#0a0a0a',
+          padding: '8px 12px',
+          paddingBottom: displayMode === 'fullscreen'
+            ? 'max(8px, env(safe-area-inset-bottom, 8px))'
+            : '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'rgba(255,255,255,0.05)',
+            border: '0.5px solid rgba(255,255,255,0.09)',
+            borderRadius: 20,
+            padding: '7px 14px',
+            minWidth: 0,
+          }}
+        >
+          <input
+            type="text"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleTextSubmit();
+              }
+            }}
+            onFocus={() => onPause?.()}
+            placeholder={replyingTo ? 'Write a reply...' : 'say something...'}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              fontSize: 13,
+              color: 'rgba(255,255,255,0.75)',
+              fontFamily: 'inherit',
+              caretColor: accent,
+              minWidth: 0,
+            }}
+          />
+          {textInput.trim().length > 0 && (
+            <button
+              onClick={handleTextSubmit}
+              style={{
+                fontSize: 9,
+                fontFamily: 'monospace',
+                color: accent,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                letterSpacing: '0.1em',
+                flexShrink: 0,
+              }}
+            >
+              post
+            </button>
+          )}
         </div>
       </div>
 
