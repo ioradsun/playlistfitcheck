@@ -564,6 +564,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           audioSections={audioSections}
           phrases={(data as any)?.cinematic_direction?.phrases ?? null}
           words={(data as any)?.words ?? null}
+          beatGrid={(data as any)?.beat_grid ?? null}
           currentTimeSec={currentTimeSec}
           palette={palette}
           onSeekTo={(sec) => player?.seek(sec)}
