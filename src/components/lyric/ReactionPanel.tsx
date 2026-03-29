@@ -1,11 +1,8 @@
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
-  type MouseEvent,
   type ReactNode,
-  type TouchEvent,
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
@@ -49,6 +46,7 @@ interface ReactionPanelProps {
   audioSections: CanonicalAudioSection[];
   phrases?: Array<{ wordRange: [number, number] }> | null;
   words?: Array<{ start: number; end: number }> | null;
+  beatGrid?: { bpm: number; beats: number[] } | null;
   currentTimeSec: number;
   palette: string[];
   onSeekTo: (sec: number, endSec?: number) => void;
@@ -87,103 +85,6 @@ interface ReactionPanelProps {
   fmlyHookEnabled?: boolean;
   onFireLine?: (lineIndex: number, holdMs: number) => void;
   onLineVisible?: (lineIndex: number) => void;
-}
-
-function FireLineButton({
-  lineIndex: _lineIndex,
-  fireCount,
-  onFire,
-  accent,
-}: {
-  lineIndex: number;
-  fireCount: number;
-  onFire: (holdMs: number) => void;
-  accent: string;
-}) {
-  const holdRef = useRef<number | null>(null);
-  const [holding, setHolding] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const start = (e: MouseEvent | TouchEvent) => {
-    e.stopPropagation();
-    holdRef.current = Date.now();
-    setHolding(true);
-    tickRef.current = setInterval(() => {
-      setProgress(
-        Math.min(1, (Date.now() - (holdRef.current ?? Date.now())) / 3000),
-      );
-    }, 40);
-  };
-
-  const end = (e: MouseEvent | TouchEvent) => {
-    e.stopPropagation();
-    if (!holdRef.current) return;
-    const ms = Date.now() - holdRef.current;
-    holdRef.current = null;
-    setHolding(false);
-    setProgress(0);
-    if (tickRef.current) clearInterval(tickRef.current);
-    onFire(ms);
-  };
-
-  const scale = 1 + (holding ? progress * 0.35 : 0);
-
-  useEffect(() => {
-    return () => {
-      if (tickRef.current) clearInterval(tickRef.current);
-    };
-  }, []);
-
-  return (
-    <div
-      onMouseDown={start}
-      onMouseUp={end}
-      onMouseLeave={end}
-      onTouchStart={(e) => {
-        e.preventDefault();
-        start(e);
-      }}
-      onTouchEnd={end}
-      style={{
-        width: 44,
-        height: 44,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        cursor: "pointer",
-        borderRadius: 10,
-        background: holding ? `${accent}15` : "transparent",
-        border: `1px solid ${holding ? `${accent}40` : "transparent"}`,
-        transition: "background 0.15s, border 0.15s",
-        touchAction: "none",
-      }}
-    >
-      <span
-        style={{
-          fontSize: 20,
-          transform: `scale(${scale})`,
-          transition: holding ? "none" : "transform 0.2s",
-        }}
-      >
-        🔥
-      </span>
-      {fireCount > 0 && (
-        <span
-          style={{
-            fontSize: 8,
-            fontFamily: "monospace",
-            color: "rgba(255,255,255,0.25)",
-            marginTop: 1,
-          }}
-        >
-          {fireCount}
-        </span>
-      )}
-    </div>
-  );
 }
 
 function CommentReactPicker({
@@ -234,6 +135,48 @@ function CommentReactPicker({
   );
 }
 
+function formatTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function snapToBeat(t: number, beats: number[], tol = 1.5): number {
+  if (!beats.length) return t;
+  let best = t;
+  let bestDist = Infinity;
+  for (const b of beats) {
+    const d = Math.abs(b - t);
+    if (d < bestDist && d < tol) {
+      bestDist = d;
+      best = b;
+    }
+  }
+  return best;
+}
+
+function snapToPhraseEnd(
+  t: number,
+  phraseEnds: number[],
+  beats: number[],
+  tol = 2.5,
+): number {
+  if (phraseEnds.length) {
+    let best = -1;
+    let bestDist = Infinity;
+    for (const pe of phraseEnds) {
+      if (pe < t - tol || pe > t + tol) continue;
+      const d = Math.abs(pe - t);
+      if (d < bestDist) {
+        bestDist = d;
+        best = pe;
+      }
+    }
+    if (best > 0) return best;
+  }
+  return snapToBeat(t, beats);
+}
+
 function ReactionPanel({
   displayMode,
   isOpen,
@@ -242,9 +185,11 @@ function ReactionPanel({
   activeLine,
   allLines,
   audioSections,
-  currentTimeSec: _currentTimeSec,
+  phrases,
+  words,
+  beatGrid,
+  currentTimeSec,
   palette,
-  onSeekTo,
   player,
   onReactionFired,
   reactionData,
@@ -262,10 +207,8 @@ function ReactionPanel({
   maxHeight,
   empowermentPromise: _empowermentPromise,
   fmlyHookEnabled: _fmlyHookEnabled,
-  onFireLine,
   onLineVisible,
 }: ReactionPanelProps) {
-  const sections = audioSections ?? [];
   const [textInput, setTextInput] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
@@ -285,72 +228,10 @@ function ReactionPanel({
   const exposureObserverRef = useRef<IntersectionObserver | null>(null);
   const reportedExposures = useRef<Set<number>>(new Set());
   const userTookControlRef = useRef(false);
-  const [pinnedLineIndex, setPinnedLineIndex] = useState<number | null>(null);
-  const pinnedLineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActiveLineRef = useRef<number | null>(null);
   // null = free play (initial open, replay). Set to line.endSec on user tap.
   const stopAtSecRef = useRef<number | null>(null);
 
-  const sectionMeta = useMemo(() => {
-    const canonical = sections
-      .filter(
-        (section) =>
-          Number.isFinite(section.startSec) &&
-          Number.isFinite(section.endSec) &&
-          section.endSec > section.startSec,
-      )
-      .slice()
-      .sort((a, b) => a.startSec - b.startSec);
-
-    const totalByRole = new Map<string, number>();
-    canonical.forEach((section) => {
-      const role = section.role?.trim().toLowerCase();
-      if (!role) return;
-      totalByRole.set(role, (totalByRole.get(role) ?? 0) + 1);
-    });
-
-    const seenByRole = new Map<string, number>();
-    const labelBySectionIndex = new Map<number, string | null>();
-    canonical.forEach((section) => {
-      const role = section.role?.trim().toLowerCase();
-      if (!role) {
-        labelBySectionIndex.set(section.sectionIndex, null);
-        return;
-      }
-      const seenCount = (seenByRole.get(role) ?? 0) + 1;
-      seenByRole.set(role, seenCount);
-      const totalCount = totalByRole.get(role) ?? 0;
-      const base = role.toUpperCase();
-      labelBySectionIndex.set(
-        section.sectionIndex,
-        totalCount > 1 ? `${base} ${seenCount}` : base,
-      );
-    });
-
-    const sectionForLine = new Map<number, CanonicalAudioSection | null>();
-    const labelByLineIndex = new Map<number, string | null>();
-
-    allLines.forEach((line) => {
-      const lineStart = line.startSec;
-      const matchedSection =
-        canonical.find((section, index) => {
-          const isLast = index === canonical.length - 1;
-          return isLast
-            ? lineStart >= section.startSec &&
-                lineStart <= section.endSec + 0.05
-            : lineStart >= section.startSec && lineStart < section.endSec;
-        }) ?? null;
-      sectionForLine.set(line.lineIndex, matchedSection);
-      labelByLineIndex.set(
-        line.lineIndex,
-        matchedSection
-          ? (labelBySectionIndex.get(matchedSection.sectionIndex) ?? null)
-          : null,
-      );
-    });
-
-    return { sectionForLine, labelByLineIndex };
-  }, [allLines, sections]);
 
   const accent = palette[1] ?? "rgba(255,255,255,0.7)";
   const playheadLineIndex = activeLine?.lineIndex ?? null;
@@ -360,8 +241,7 @@ function ReactionPanel({
   if (playheadLineIndex !== null) lastActiveLineRef.current = playheadLineIndex;
   const heldLineIndex =
     player && !player.audio.paused ? lastActiveLineRef.current : null;
-  const effectiveActiveIndex =
-    pinnedLineIndex ?? playheadLineIndex ?? heldLineIndex;
+  const effectiveActiveIndex = playheadLineIndex ?? heldLineIndex;
 
   useEffect(() => {
     if (!isOpen || !onLineVisible) return;
@@ -525,34 +405,6 @@ function ReactionPanel({
   }, [danceId, isOpen, refreshKey]);
 
 
-  const handleLineTap = (line: LyricSectionLine) => {
-    if (!player) {
-      onSeekTo(line.startSec, line.endSec);
-      return;
-    }
-    // Unmute if muted — tapping a line means the user wants to hear it
-    if (player.audio.muted) {
-      player.setMuted(false);
-    }
-    if (line.lineIndex === playheadLineIndex && !player.audio.paused) {
-      player.pause();
-      return;
-    }
-    setPinnedLineIndex(line.lineIndex);
-    if (pinnedLineTimerRef.current) clearTimeout(pinnedLineTimerRef.current);
-    pinnedLineTimerRef.current = setTimeout(
-      () => setPinnedLineIndex(null),
-      300,
-    );
-    stopAtSecRef.current = line.endSec;
-    player.seek(line.startSec);
-    if (player.audio.paused) {
-      player.audio.play().catch(() => {});
-      player.startRendering();
-    }
-    userTookControlRef.current = true;
-  };
-
   const handleCommentReact = async (commentId: string, emoji: EmojiKey) => {
     const key = `${commentId}-${emoji}`;
     if (sessionCommentReacted.has(key)) return;
@@ -629,88 +481,113 @@ function ReactionPanel({
     setTimeout(() => setHasSubmitted(false), 500);
   };
 
-  const PHRASE_GAP_THRESHOLD = 1.2;
 
-  const displayGroups: Array<{
+  const TARGET_CLIP_SEC = 8;
+  const MIN_CLIP_SEC = 5;
+  const MAX_CLIP_SEC = 13;
+  const beats = (beatGrid?.beats ?? []) as number[];
+
+  // Build phrase end timestamps from AI phrases + word timings
+  const phraseEnds: number[] = [];
+  if (phrases?.length && words?.length) {
+    for (const phrase of phrases) {
+      const endIdx = Math.min(phrase.wordRange[1], words.length - 1);
+      const endTime = (words as any)[endIdx]?.end;
+      if (typeof endTime === "number" && Number.isFinite(endTime)) {
+        phraseEnds.push(endTime);
+      }
+    }
+    phraseEnds.sort((a, b) => a - b);
+  }
+
+  // Raw windows from section boundaries, or full song if no sections
+  const rawWindows: Array<{
+    startSec: number;
+    endSec: number;
+    label: string | null;
+  }> = [];
+
+  const validSections = audioSections.filter(
+    (s) =>
+      Number.isFinite(s.startSec) &&
+      Number.isFinite(s.endSec) &&
+      s.endSec > s.startSec,
+  );
+
+  const buildWindows = (
+    startSec: number,
+    endSec: number,
+    label: string | null,
+  ) => {
+    const dur = endSec - startSec;
+    if (dur <= MAX_CLIP_SEC) {
+      rawWindows.push({
+        startSec,
+        endSec: snapToPhraseEnd(endSec, phraseEnds, beats),
+        label,
+      });
+    } else {
+      let cursor = startSec;
+      let safetyCount = 0;
+      while (cursor < endSec - MIN_CLIP_SEC && safetyCount < 50) {
+        safetyCount++;
+        const idealEnd = Math.min(cursor + TARGET_CLIP_SEC, endSec);
+        const snapped = snapToPhraseEnd(idealEnd, phraseEnds, beats);
+        const end = Math.min(snapped, endSec);
+        // If snap didn't move forward enough, force MIN_CLIP_SEC
+        const effectiveEnd =
+          end - cursor < MIN_CLIP_SEC ? cursor + MIN_CLIP_SEC : end;
+        rawWindows.push({ startSec: cursor, endSec: effectiveEnd, label });
+        cursor = effectiveEnd;
+      }
+    }
+  };
+
+  if (validSections.length > 0) {
+    for (const section of validSections) {
+      buildWindows(section.startSec, section.endSec, section.role ?? null);
+    }
+  } else if (durationSec > 0) {
+    buildWindows(0, durationSec, null);
+  }
+
+  interface ClipWindow {
+    startSec: number;
+    endSec: number;
+    label: string | null;
     lines: LyricSectionLine[];
     isActive: boolean;
     totalFire: number;
-    topReaction: { symbol: string; count: number } | null;
-    sectionLabel: string | null;
     shouldShowSectionHeader: boolean;
-  }> = [];
+  }
 
-  let currentGroupLines: LyricSectionLine[] = [];
-
-  const flushGroup = () => {
-    if (!currentGroupLines.length) return;
-    const firstLine = currentGroupLines[0];
-    const groupIsActive = currentGroupLines.some(
-      (line) => line.lineIndex === effectiveActiveIndex,
+  const clipWindows: ClipWindow[] = rawWindows.map((w, i) => {
+    const windowLines = allLines.filter(
+      (l) => l.startSec >= w.startSec - 0.15 && l.startSec < w.endSec + 0.15,
     );
-    const groupFire = currentGroupLines.reduce(
-      (sum, line) =>
+    const isActive = currentTimeSec >= w.startSec && currentTimeSec < w.endSec;
+    const totalFire = windowLines.reduce(
+      (sum, l) =>
         sum +
-        Object.values(reactionData).reduce(
-          (lineSum, data) => lineSum + (data.line[line.lineIndex] ?? 0),
-          0,
-        ),
+        Object.values(reactionData).reduce((s, d) => s + (d.line[l.lineIndex] ?? 0), 0),
       0,
     );
-    const firstPosition = allLines.indexOf(firstLine);
-    const currentSection = sectionMeta.sectionForLine.get(firstLine.lineIndex) ?? null;
-    const prevLine = allLines[firstPosition - 1];
-    const previousSection = prevLine
-      ? (sectionMeta.sectionForLine.get(prevLine.lineIndex) ?? null)
-      : null;
-    const sectionLabel = sectionMeta.labelByLineIndex.get(firstLine.lineIndex) ?? null;
-    const shouldShowSectionHeader =
-      !!currentSection &&
-      currentSection.sectionIndex !== previousSection?.sectionIndex &&
-      !!sectionLabel;
-
-    let topReaction: { symbol: string; count: number } | null = null;
-    if (groupFire > 0) {
-      let topKey = "";
-      let topCount = 0;
-      for (const [key, data] of Object.entries(reactionData)) {
-        const lineCount = currentGroupLines.reduce(
-          (sum, line) => sum + (data.line[line.lineIndex] ?? 0),
-          0,
-        );
-        if (lineCount > topCount) {
-          topCount = lineCount;
-          topKey = key;
-        }
-      }
-      const symbol = EMOJIS.find((emoji) => emoji.key === topKey)?.symbol ?? "🔥";
-      if (topCount > 0) topReaction = { symbol, count: groupFire };
-    }
-
-    displayGroups.push({
-      lines: [...currentGroupLines],
-      isActive: groupIsActive,
-      totalFire: groupFire,
-      topReaction,
-      sectionLabel,
+    const prevLabel = i > 0 ? rawWindows[i - 1].label : null;
+    const shouldShowSectionHeader = !!w.label && w.label !== prevLabel;
+    return {
+      ...w,
+      lines: windowLines,
+      isActive,
+      totalFire,
       shouldShowSectionHeader,
-    });
-    currentGroupLines = [];
-  };
-
-  allLines.forEach((line) => {
-    if (currentGroupLines.length === 0) {
-      currentGroupLines.push(line);
-      return;
-    }
-    const prevLine = currentGroupLines[currentGroupLines.length - 1];
-    const gap = line.startSec - prevLine.endSec;
-    if (gap > PHRASE_GAP_THRESHOLD) flushGroup();
-    currentGroupLines.push(line);
+    };
   });
-  flushGroup();
+
+  const previewingWindowRef = useRef<number | null>(null);
 
   const handlePanelClose = () => {
+    player?.setRegion(undefined, undefined);
+    previewingWindowRef.current = null;
     if (replyingTo) {
       setReplyingTo(null);
       return;
@@ -728,105 +605,135 @@ function ReactionPanel({
         style={{ scrollbarWidth: "none" }}
       >
         <div className={displayMode === "embedded" ? "pt-2 pb-4" : "pt-[max(1rem,env(safe-area-inset-top,12px))] pb-4"}>
-          {displayGroups.map((group, groupIdx) => {
-            const firstLine = group.lines[0];
-            const isActive = group.isActive;
-            const isCommentPulsing = group.lines.some(
+
+          {clipWindows.map((win, wi) => {
+            const isCommentPulsing = win.lines.some(
               (l) => submittedLineIndex === l.lineIndex,
             );
-
             return (
-              <div key={firstLine.lineIndex}>
-                {group.shouldShowSectionHeader && (
-                  <div className={groupIdx === 0 ? "mb-1" : "mt-6 mb-1"}>
+              <div key={wi}>
+                {win.shouldShowSectionHeader && (
+                  <div className={wi === 0 ? "mb-1" : "mt-6 mb-1"}>
                     <div className="flex items-center gap-2 px-3">
                       <span
                         className="font-mono uppercase tracking-[0.25em] text-white/18"
                         style={{ fontSize: 10 }}
                       >
-                        {group.sectionLabel}
+                        {win.label}
                       </span>
                       <div className="flex-1 h-px bg-white/[0.03]" />
                     </div>
                   </div>
                 )}
+
                 <div
                   ref={(node) => {
-                    group.lines.forEach((l) => {
+                    win.lines.forEach((l) => {
                       rowRefs.current[l.lineIndex] = node;
                     });
                   }}
-                  data-line-index={firstLine.lineIndex}
-                  onClick={() => handleLineTap(firstLine)}
-                  className="relative flex items-start gap-2 px-3 cursor-pointer transition-colors overflow-hidden"
+                  data-line-index={win.lines[0]?.lineIndex}
+                  className="relative px-3 cursor-pointer"
                   style={{
-                    minHeight: 44,
                     paddingTop: 10,
                     paddingBottom: 10,
-                    background: isActive
+                    background: win.isActive
                       ? "rgba(255,255,255,0.03)"
                       : "transparent",
                   }}
+                  onClick={() => {
+                    if (player?.audio.muted) player.setMuted(false);
+                    player?.setRegion(win.startSec, win.endSec);
+                    player?.seek(win.startSec);
+                    player?.play();
+                    previewingWindowRef.current = wi;
+                  }}
                 >
-                  {isActive && (
+                  {win.isActive && (
                     <div
                       className="absolute left-0 top-2 bottom-2 w-[2.5px] rounded-full"
                       style={{ background: accent }}
                     />
                   )}
-                  <div className="flex-1 min-w-0">
-                    {group.lines.map((l) => (
+
+                  <div className="flex items-center gap-2 mb-2">
+                    <span
+                      style={{
+                        fontSize: 9,
+                        fontFamily: "monospace",
+                        color: "rgba(255,255,255,0.22)",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      {formatTime(win.startSec)} – {formatTime(win.endSec)}
+                    </span>
+                    <div className="flex-1" />
+                    {win.totalFire > 0 && (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontFamily: "monospace",
+                          color: "rgba(255,255,255,0.35)",
+                        }}
+                      >
+                        🔥 {win.totalFire}
+                      </span>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (player?.audio.muted) player.setMuted(false);
+                        player?.setRegion(win.startSec, win.endSec);
+                        player?.seek(win.startSec);
+                        player?.play();
+                        previewingWindowRef.current = wi;
+                      }}
+                      style={{
+                        fontSize: 9,
+                        fontFamily: "monospace",
+                        color: accent,
+                        background: "none",
+                        border: `0.5px solid ${accent}50`,
+                        borderRadius: 6,
+                        padding: "2px 8px",
+                        cursor: "pointer",
+                        letterSpacing: "0.08em",
+                        flexShrink: 0,
+                      }}
+                    >
+                      preview
+                    </button>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                    {win.lines.map((l) => (
                       <div
                         key={l.lineIndex}
                         style={{
                           fontSize: 15,
-                          fontWeight: isActive ? 500 : 300,
+                          fontWeight: win.isActive ? 500 : 300,
                           color:
                             l.lineIndex === effectiveActiveIndex
                               ? "rgba(255,255,255,0.95)"
-                              : isActive
-                                ? "rgba(255,255,255,0.70)"
+                              : win.isActive
+                                ? "rgba(255,255,255,0.65)"
                                 : "rgba(255,255,255,0.42)",
-                          lineHeight: 1.55,
-                          transition: "color 0.1s",
+                          lineHeight: 1.5,
                           whiteSpace: "normal",
                           wordBreak: "break-word",
+                          transition: "color 0.1s",
                         }}
                       >
                         {l.text}
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0 mt-1">
-                    {isActive && (
-                      <FireLineButton
-                        lineIndex={firstLine.lineIndex}
-                        fireCount={group.totalFire}
-                        onFire={(holdMs) => onFireLine?.(firstLine.lineIndex, holdMs)}
-                        accent={accent}
-                      />
-                    )}
-                    {group.topReaction && (
-                      <span
-                        className="text-[8px] font-mono px-1 py-0.5 rounded"
-                        style={{
-                          color: "rgba(255,255,255,0.25)",
-                          background: "rgba(255,255,255,0.025)",
-                        }}
-                      >
-                        {group.topReaction.symbol}
-                        {group.totalFire > 1 ? ` ${group.totalFire}` : ""}
-                      </span>
-                    )}
-                  </div>
                 </div>
+
                 <div className="h-[1px] mx-3">
                   <div
                     className="h-full rounded-full"
-                    style={{
-                      background: accent,
-                      opacity: isCommentPulsing ? 0.6 : 0,
-                    }}
+                    style={{ background: accent, opacity: isCommentPulsing ? 0.6 : 0 }}
                   />
                 </div>
               </div>
