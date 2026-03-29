@@ -170,6 +170,9 @@ export function CardBottomBar({
   void yesLabel;
   void noLabel;
   void renderVotedContent;
+  void note;
+  void onNoteChange;
+  void onSubmit;
 
   const py = variant === "embedded" ? "py-3" : "py-3.5";
 
@@ -190,45 +193,28 @@ export function CardBottomBar({
       style={wrapperStyle}
       onClick={(e) => e.stopPropagation()}
     >
-      {panelOpen ? (
-        <input
-          type="text"
-          value={note}
-          onChange={(e) => onNoteChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              onSubmit();
-            }
-            if (e.key === "Escape") onClose();
-          }}
-          placeholder="What hit"
-          className={`flex-1 bg-transparent text-[11px] font-mono text-white/60 placeholder:text-white/25 outline-none px-3 ${py} tracking-wide min-w-0`}
-        />
-      ) : (
-        <div
-          className={`flex-1 flex items-center px-3 ${py} min-w-0 cursor-pointer`}
-          onClick={onOpenReactions}
-        >
-          {activeLineText ? (
-            <span
-              className="text-[10px] font-mono truncate transition-all duration-300"
-              style={{
-                color: hookPhrase && activeLineText === hookPhrase
-                  ? "rgba(255,255,255,0.88)"
-                  : "rgba(255,255,255,0.32)",
-                letterSpacing: "0.03em",
-              }}
-            >
-              {activeLineText}
-            </span>
-          ) : (
-            <span className="text-[10px] font-mono text-white/15 tracking-[0.2em]">
-              · · ·
-            </span>
-          )}
-        </div>
-      )}
+      <div
+        className={`flex-1 flex items-center px-3 ${py} min-w-0 cursor-pointer`}
+        onClick={panelOpen ? undefined : onOpenReactions}
+      >
+        {!panelOpen && activeLineText ? (
+          <span
+            className="text-[10px] font-mono truncate transition-all duration-300"
+            style={{
+              color: hookPhrase && activeLineText === hookPhrase
+                ? "rgba(255,255,255,0.88)"
+                : "rgba(255,255,255,0.32)",
+              letterSpacing: "0.03em",
+            }}
+          >
+            {activeLineText}
+          </span>
+        ) : !panelOpen ? (
+          <span className="text-[10px] font-mono text-white/15 tracking-[0.2em]">
+            · · ·
+          </span>
+        ) : null}
+      </div>
 
       <div style={{ width: "0.5px" }} className="bg-white/[0.06] self-stretch my-2" />
 

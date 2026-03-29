@@ -47,7 +47,6 @@ export default function ShareableLyricDance() {
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
   const [closingVisible, setClosingVisible] = useState(false);
-  const [note, setNote] = useState("");
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -158,16 +157,10 @@ export default function ShareableLyricDance() {
     handleListenNow,
     handlePauseForInput,
     handleResumeAfterInput,
-    handleCommentFromBar,
     isWaiting,
     commentRefreshKey,
     lightningBarEnabled,
   } = core;
-
-  const handleBottomBarSubmit = useCallback(async () => {
-    await handleCommentFromBar(note);
-    setNote("");
-  }, [handleCommentFromBar, note]);
 
   useEffect(() => {
     if (fetchedData && fetchedData !== data) {
@@ -439,9 +432,6 @@ export default function ShareableLyricDance() {
             <CardBottomBar
               {...({
                 variant: "fullscreen",
-                note,
-                onNoteChange: setNote,
-                onSubmit: handleBottomBarSubmit,
                 onOpenReactions: openReactionPanel,
                 onClose: closePanel,
                 panelOpen: reactionPanelOpen,
