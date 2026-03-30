@@ -48,10 +48,11 @@ export async function fetchFireData(danceId: string): Promise<Array<{
   line_index: number;
   time_sec: number;
   hold_ms: number;
+  created_at: string;
 }>> {
   const { data } = await supabase
     .from('lyric_dance_fires' as any)
-    .select('line_index, time_sec, hold_ms')
+    .select('line_index, time_sec, hold_ms, created_at')
     .eq('dance_id', danceId)
     .order('time_sec', { ascending: true });
   return (data as any[]) ?? [];

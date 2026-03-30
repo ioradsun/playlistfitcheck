@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
+import { logEngagementEvent } from "@/lib/engagementTracking";
 import { formatDistanceToNow } from "date-fns";
 import {
   EMOJIS,
@@ -111,6 +112,8 @@ export function PostCommentPanel({
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
   const [hasFired, setHasFired] = useState(false);
+  const [totalFireCount, setTotalFireCount] = useState(0);
+  const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
   const [commentReactions, setCommentReactions] = useState<
     Record<string, Record<string, number>>
   >({});
@@ -245,6 +248,22 @@ export function PostCommentPanel({
     loadComments();
     loadCommentReactions();
   }, [isOpen, postId, commentRefreshKey]);
+
+
+  useEffect(() => {
+    if (!postId) return;
+    supabase
+      .from("songfit_engagement_events" as any)
+      .select("created_at")
+      .eq("post_id", postId)
+      .eq("event_type", "fire")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        setTotalFireCount(data.length);
+        if (data.length > 0) setLastFiredAt((data[0] as any).created_at ?? null);
+      });
+  }, [postId]);
 
   const handleCommentReact = async (commentId: string, emoji: EmojiKey) => {
     const key = `${commentId}-${emoji}`;
@@ -507,10 +526,21 @@ export function PostCommentPanel({
             onClose={onClose}
             panelOpen={false}
             topReaction={topPostReaction}
-            trackTitle={trackTitle}
             hasFired={hasFired}
-            onFireTap={() => setHasFired(true)}
+            onFireTap={() => {
+              if (!hasFired) {
+                setHasFired(true);
+                setTotalFireCount((c) => c + 1);
+                setLastFiredAt(new Date().toISOString());
+                if (postId) {
+                  logEngagementEvent(postId, user?.id ?? sessionId, "fire");
+                }
+              }
+            }}
             accent={accent}
+            isLive={cardState === "active"}
+            totalFireCount={totalFireCount}
+            lastFiredAt={lastFiredAt}
           />
         </div>
       )}

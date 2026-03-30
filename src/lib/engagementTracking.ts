@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 export async function logEngagementEvent(
   postId: string,
   userId: string,
-  eventType: 'like' | 'comment' | 'save' | 'spotify_click' | 'share' | 'follow_from_post' | 'profile_visit'
+  eventType: 'like' | 'comment' | 'save' | 'spotify_click' | 'share' | 'follow_from_post' | 'profile_visit' | 'fire'
 ) {
   try {
     await supabase.from("songfit_engagement_events" as any).insert({

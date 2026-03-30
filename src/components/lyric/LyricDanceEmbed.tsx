@@ -167,6 +167,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [firedSections, setFiredSections] = useState<Set<number>>(new Set());
   const [closingVisible, setClosingVisible] = useState(false);
   const [closingAnswered, setClosingAnswered] = useState(false);
+  const [totalFireCount, setTotalFireCount] = useState(0);
+  const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
   const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const userActivatedRef = useRef(false);
@@ -366,6 +368,13 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (!player || !id) return;
     fetchFireData(id).then((fires) => {
       player.setHistoricalFires(fires);
+      setTotalFireCount(fires.length);
+      if (fires.length > 0) {
+        const latest = fires.reduce((a, b) =>
+          (a.created_at ?? "") > (b.created_at ?? "") ? a : b,
+        );
+        setLastFiredAt(latest.created_at ?? null);
+      }
     });
   }, [player, (data ?? prefetchedData as any)?.id]);
 
@@ -393,6 +402,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     );
     return idx >= 0 ? idx : 0;
   }, [currentTimeSec, audioSections]);
+
+  const barAccent = useMemo(() => {
+    const autoPalettes = (data ?? (prefetchedData as any))?.auto_palettes;
+    if (Array.isArray(autoPalettes) && autoPalettes[activeSectionIndex]) {
+      const p = autoPalettes[activeSectionIndex] as string[];
+      return p[1] ?? p[0] ?? null;
+    }
+    return palette[1] ?? palette[0] ?? "rgba(255,140,50,1)";
+  }, [data, prefetchedData, activeSectionIndex, palette]);
   const hasFired = firedSections.has(activeSectionIndex);
   const markFired = useCallback(() => {
     setFiredSections((prev) => new Set([...prev, activeSectionIndex]));
@@ -432,7 +450,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         )}
 
         <ClosingScreen
-          visible={closingVisible && !reactionPanelOpen}
+          visible={closingVisible && !reactionPanelOpen && !effectiveShowCover}
           empowermentPromise={empowermentPromise}
           danceId={((data ?? prefetchedData) as any)?.id ?? ""}
           onAnswer={() => setClosingAnswered(true)}
@@ -598,15 +616,14 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 }));
                 markFired();
               },
-              activeLineFireCount,
+              activeLineFireCount: effectiveShowCover ? 0 : activeLineFireCount,
               hookPhrase,
-              activeLineText: activeLine?.text ?? null,
-              topReaction: topReaction
-                ? { symbol: topReaction.symbol, count: topReaction.count }
-                : null,
-              trackTitle: songTitle,
-              accent: palette[1] ?? palette[0] ?? "rgba(255,140,50,1)",
+              activeLineText: effectiveShowCover ? null : (activeLine?.text ?? null),
+              accent: barAccent,
               hasFired,
+              isLive: !effectiveShowCover && cardState === "active",
+              totalFireCount,
+              lastFiredAt,
             } as any)}
           />
         </div>
