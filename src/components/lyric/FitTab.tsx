@@ -15,11 +15,6 @@ import {
   Eye,
   Zap,
   Image,
-  ExternalLink,
-  Download,
-  Link,
-  Users,
-  Check,
   Circle,
   Copy,
 } from "lucide-react";
@@ -30,7 +25,6 @@ import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
 import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
 import { HookWaveformPicker } from "./HookWaveformPicker";
@@ -252,12 +246,7 @@ export function FitTab({
   >([null, null]);
   const [feudSetupOpen, setFeudSetupOpen] = useState(false);
   const [feudTab, setFeudTab] = useState<0 | 1>(0);
-  const [hookClipProgress, setHookClipProgress] = useState(0);
-  const hookClipProgressRafRef = useRef<number | null>(null);
   const hookLoopRegionRef = useRef<{ start: number; end: number } | null>(null);
-  const [activeCustomHookIndex, setActiveCustomHookIndex] = useState<
-    number | null
-  >(null);
 
   const hookAudioRef = useRef<HTMLAudioElement>(null);
   const hookAudioUrl = useMemo(
@@ -290,52 +279,45 @@ export function FitTab({
     !publishedUrl ||
     (publishedLyricsHash !== null && currentLyricsHash !== publishedLyricsHash);
 
-  // Check for existing published dance on load
   useEffect(() => {
     if (!user || !lyricData) return;
     const songSlug = slugify(lyricData.title || "untitled");
     if (!songSlug) return;
 
-    // Look up by user_id + song_slug (artist_slug may differ between artist name and display_name)
-    supabase
+    const danceP = supabase
       .from("shareable_lyric_dances" as any)
       .select("id, artist_slug, song_slug, lyrics")
       .eq("user_id", user.id)
       .eq("song_slug", songSlug)
-      .maybeSingle()
-      .then(({ data }: any) => {
-        if (data) {
-          setPublishedUrl(`/${data.artist_slug}/${data.song_slug}/lyric-dance`);
-          setPublishedDanceId(data.id);
-          const pubLines = Array.isArray(data.lyrics) ? data.lyrics : [];
-          setPublishedLyricsHash(computeLyricsHash(pubLines));
-        }
-      });
-  }, [user, lyricData, computeLyricsHash]);
+      .maybeSingle();
 
-  // Check for existing battle when we know user + song
-  useEffect(() => {
-    if (!user || !lyricData) return;
-    const songSlug = slugify(lyricData.title || "untitled");
-    if (!songSlug) return;
-
-    supabase
+    const battleP = supabase
       .from("shareable_hooks" as any)
       .select("artist_slug, song_slug, hook_slug, battle_id")
       .eq("user_id", user.id)
       .eq("song_slug", songSlug)
       .eq("battle_position", 1)
-      .maybeSingle()
-      .then(({ data }: any) => {
-        if (data?.battle_id && data.hook_slug) {
-          setBattlePublishedUrl(
-            `/${data.artist_slug}/${data.song_slug}/${data.hook_slug}`,
-          );
-        }
-      });
-  }, [user, lyricData]);
+      .maybeSingle();
 
-  // Check for existing CrowdFit post when we know the dance ID
+    Promise.all([danceP, battleP]).then(([danceResult, battleResult]) => {
+      const dance = danceResult.data as any;
+      if (dance) {
+        setPublishedUrl(`/${dance.artist_slug}/${dance.song_slug}/lyric-dance`);
+        setPublishedDanceId(dance.id);
+        const pubLines = Array.isArray(dance.lyrics) ? dance.lyrics : [];
+        setPublishedLyricsHash(computeLyricsHash(pubLines));
+      }
+
+      const battle = battleResult.data as any;
+      if (battle?.battle_id && battle.hook_slug) {
+        setBattlePublishedUrl(
+          `/${battle.artist_slug}/${battle.song_slug}/${battle.hook_slug}`,
+        );
+      }
+    });
+  }, [user, lyricData, computeLyricsHash]);
+
+  // Look for existing CrowdFit post when we know the dance ID
   useEffect(() => {
     if (!publishedDanceId || !user) {
       setCrowdfitPostId(null);
@@ -370,7 +352,7 @@ export function FitTab({
         setCrowdfitPostId(null);
         toast.success("Removed from CrowdFit");
       } else {
-        // Check for existing removed post to reactivate
+        // Look for existing removed post to reactivate
         const { data: existing }: any = await supabase
           .from("songfit_posts" as any)
           .select("id")
@@ -525,7 +507,6 @@ export function FitTab({
     onHeaderProject({ title, onBack: onBack ?? (() => {}), onTitleChange });
     return () => onHeaderProject(null);
   }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onTitleChange]);
-  // CinematicDirectionCard extracted to top-level — see below FitTab
 
   // ── Live transcript sync ──────────────────────────────────────────────
   // FitTab stays mounted (hidden) while the user edits in LyricsTab.
@@ -638,12 +619,6 @@ export function FitTab({
     }, 30_000);
 
     try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", user.id)
-        .single();
-
       const displayName = profile?.display_name || "artist";
       const artistSlug = slugify(displayName);
       const songSlug = slugify(lyricData.title || "untitled");
@@ -654,7 +629,7 @@ export function FitTab({
         return;
       }
 
-      // Check for existing dance to reuse audio_url and palettes
+      // Look for existing dance to reuse audio_url and palettes
       const { data: existingDance }: any = await supabase
         .from("shareable_lyric_dances" as any)
         .select("audio_url, section_images, auto_palettes")
@@ -727,7 +702,7 @@ export function FitTab({
       // beat_grid          — from state with fallback (required, NOT NULL)
       // palette            — from direction with fallback (required, NOT NULL)
       // section_images     — null if regenerating, preserved if not
-      const { error: insertError } = await supabase
+      const { data: danceRow, error: insertError }: any = await supabase
         .from("shareable_lyric_dances" as any)
         .upsert(
           {
@@ -741,7 +716,7 @@ export function FitTab({
             cinematic_direction: cinematicDirection || null,
             words: words ?? null,
             auto_palettes: danceNeedsRegeneration
-              ? (publishAutoPalettes ?? null)
+              ? null
               : (publishAutoPalettes ?? null),
             beat_grid: beatGrid
               ? {
@@ -753,7 +728,7 @@ export function FitTab({
             palette: derivePaletteFromDirection({
               ...cinematicDirection,
               auto_palettes: danceNeedsRegeneration
-                ? (publishAutoPalettes ?? null)
+                ? null
                 : (publishAutoPalettes ?? null),
             }),
             section_images: danceNeedsRegeneration
@@ -761,16 +736,11 @@ export function FitTab({
               : (existingDance?.section_images ?? sectionImageUrls ?? null),
           },
           { onConflict: "artist_slug,song_slug" },
-        );
+        )
+        .select("id")
+        .single();
 
       if (insertError) throw insertError;
-
-      const { data: danceRow }: any = await supabase
-        .from("shareable_lyric_dances" as any)
-        .select("id")
-        .eq("artist_slug", artistSlug)
-        .eq("song_slug", songSlug)
-        .single();
 
       const url = `/${artistSlug}/${songSlug}/lyric-dance`;
       setPublishedUrl(url);
@@ -835,13 +805,15 @@ export function FitTab({
     lyricData,
     audioFile,
     publishing,
-    renderData,
     beatGrid,
     cinematicDirection,
     words,
     danceNeedsRegeneration,
     currentLyricsHash,
     spendCredits,
+    savedId,
+    sectionImageUrls,
+    profile,
   ]);
 
   // ── Battle publish handler ──────────────────────────────────────────
@@ -861,12 +833,6 @@ export function FitTab({
       }, 30_000);
 
       try {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("display_name")
-          .eq("id", user.id)
-          .single();
-
         const displayName = profile?.display_name || "artist";
         const artistSlug = slugify(displayName);
         const songSlug = slugify(lyricData.title || "untitled");
@@ -991,34 +957,33 @@ export function FitTab({
           };
         };
 
-        // Upsert hook 1
-        const { error: e1 } = await supabase
-          .from("shareable_hooks" as any)
-          .upsert(
-            buildHookPayload(
-              activeHook0,
-              hookSlug,
-              1,
-              renderData.hookLabel || null,
-            ),
-            { onConflict: "artist_slug,song_slug,hook_slug" },
-          );
-        if (e1) throw e1;
-
-        // Upsert hook 2
         const secondHookSlug = deriveHookSlug(activeHook1);
-        const { error: e2 } = await supabase
-          .from("shareable_hooks" as any)
-          .upsert(
-            buildHookPayload(
-              activeHook1,
-              secondHookSlug || `${hookSlug}-2`,
-              2,
-              renderData.secondHookLabel || null,
+        const [r1, r2] = await Promise.all([
+          supabase
+            .from("shareable_hooks" as any)
+            .upsert(
+              buildHookPayload(
+                activeHook0,
+                hookSlug,
+                1,
+                renderData.hookLabel || null,
+              ),
+              { onConflict: "artist_slug,song_slug,hook_slug" },
             ),
-            { onConflict: "artist_slug,song_slug,hook_slug" },
-          );
-        if (e2) throw e2;
+          supabase
+            .from("shareable_hooks" as any)
+            .upsert(
+              buildHookPayload(
+                activeHook1,
+                secondHookSlug || `${hookSlug}-2`,
+                2,
+                renderData.secondHookLabel || null,
+              ),
+              { onConflict: "artist_slug,song_slug,hook_slug" },
+            ),
+        ]);
+        if (r1.error) throw r1.error;
+        if (r2.error) throw r2.error;
 
         // Upsert hookfit_posts
         const { data: primaryHook } = await supabase
@@ -1113,6 +1078,7 @@ export function FitTab({
       lyricData,
       beatGrid,
       spendCredits,
+      profile,
     ],
   );
 
@@ -1367,12 +1333,6 @@ export function FitTab({
     fetchVoteCounts,
   ]);
 
-  const formatTime = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
   const tabs = [
     ...(publishedDanceId ? [{ key: "results" as const, label: "Results" }] : []),
     { key: "fit" as const, label: "Fit" },
@@ -1429,13 +1389,9 @@ export function FitTab({
     });
   }, [activeTab, publishedDanceId, resultsLoaded]);
 
-  const handleGenerateImages = useCallback(async () => {
-    await pipeline.retryImages();
-  }, [pipeline]);
-
   const handleRetryImages = useCallback(() => {
-    void handleGenerateImages();
-  }, [handleGenerateImages]);
+    void pipeline.retryImages();
+  }, [pipeline]);
 
   return (
     <>
@@ -2339,17 +2295,6 @@ export function FitTab({
                   </div>
                 )}
 
-              {cinematicDirection && (
-                <CinematicDirectionCard
-                  cinematicDirection={cinematicDirection}
-                  sectionImages={sectionImageUrls}
-                  imageProgress={sectionImageProgress}
-                  imageError={sectionImageError}
-                  imageGenerating={generationStatus.sectionImages === "running"}
-                  retryImagesAction={handleRetryImages}
-                />
-              )}
-
               {beatGrid && (
                 <div className="glass-card rounded-xl p-3 space-y-1">
                   <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
@@ -2401,33 +2346,3 @@ export function FitTab({
   );
 }
 
-// ── Cinematic Direction Card with Section Images ─────────────────────
-// Extracted to top-level to prevent remount on every FitTab render.
-function CinematicDirectionCard({
-  cinematicDirection,
-  sectionImages,
-  imageProgress,
-  imageError,
-  imageGenerating,
-  retryImagesAction,
-}: {
-  cinematicDirection: any;
-  sectionImages: (string | null)[];
-  imageProgress: { done: number; total: number } | null;
-  imageError: string | null;
-  imageGenerating: boolean;
-  retryImagesAction: () => void;
-}) {
-  const [imageTimestamps, setImageTimestamps] = useState<(string | null)[]>([]);
-
-  const sections: any[] =
-    cinematicDirection.sections && Array.isArray(cinematicDirection.sections)
-      ? cinematicDirection.sections
-      : [];
-
-  useEffect(() => {
-    setImageTimestamps(Array.from({ length: sectionImages.length }, () => null));
-  }, [sectionImages]);
-
-  return null;
-}
