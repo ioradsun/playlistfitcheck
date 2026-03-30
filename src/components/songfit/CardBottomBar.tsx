@@ -121,19 +121,18 @@ function FireButton({
       ) : (
         <>
           {hasFired && !isHolding ? (
+            // Outline only — user has already fired
             <svg
-              width="16"
-              height="16"
+              width="15"
+              height="15"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
+              stroke="rgba(255,255,255,0.55)"
+              strokeWidth="1.6"
               strokeLinecap="round"
               strokeLinejoin="round"
-              style={{ color: "rgba(255,180,80,0.6)" }}
             >
-              <path d="M12 2c0 0-4 4-4 8a4 4 0 0 0 8 0c0-2-1-3.5-1-3.5S14 8 14 6c0 0 2 2 2 5a6 6 0 0 1-12 0c0-5 4-9 4-9z" />
-              <path d="M12 14c0 0-2-1-2-3 0 0 1 1 2 1s2-1 2-1c0 2-2 3-2 3z" />
+              <path d="M12 2C12 2 8 6 8 10a4 4 0 0 0 8 0c0-2-1-3.5-1-3.5S14 8 14 6c0 0 2 2 2 5a6 6 0 0 1-12 0c0-5 4-9 4-9z" />
             </svg>
           ) : (
             <span
@@ -178,8 +177,8 @@ export function CardBottomBar({
   activeLineText,
   activeLineFireCount,
   hookPhrase,
-  accent,
   hasFired = false,
+  accent = "rgba(255,255,255,0.5)",
   onFireTap,
   onFireHoldStart,
   onFireHoldEnd,
@@ -216,49 +215,42 @@ export function CardBottomBar({
       onClick={(e) => e.stopPropagation()}
     >
       <style>{`
-        @keyframes eqBar0 { from { height: 4px } to { height: 10px } }
-        @keyframes eqBar1 { from { height: 8px } to { height: 3px } }
-        @keyframes eqBar2 { from { height: 4px } to { height: 8px } }
+        @keyframes cfBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.15; }
+        }
       `}</style>
       <div
         className={`flex-1 flex items-center px-3 ${py} min-w-0 cursor-pointer`}
         onClick={panelOpen ? undefined : onOpenReactions}
       >
-        {!panelOpen && activeLineText ? (
+        {!panelOpen && (activeLineText || trackTitle) ? (
           <div className="flex items-center gap-1.5 min-w-0">
-            <div className="flex items-end gap-[2px] shrink-0" style={{ height: 10 }}>
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: 2,
-                    borderRadius: 1,
-                    background: accent ?? "rgba(255,255,255,0.4)",
-                    animation: `eqBar${i} 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
-                    height: i === 1 ? 10 : 6,
-                  }}
-                />
-              ))}
-            </div>
+            {/* Blinking dot — signals the card is live and tappable */}
+            <div
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: "50%",
+                background: accent,
+                flexShrink: 0,
+                animation: "cfBlink 1.4s ease-in-out infinite",
+              }}
+            />
             <span
               className="text-[10px] font-mono truncate transition-all duration-300"
               style={{
-                color: hookPhrase && activeLineText === hookPhrase
+                color: activeLineText && hookPhrase && activeLineText === hookPhrase
                   ? "rgba(255,255,255,0.88)"
-                  : "rgba(255,255,255,0.32)",
+                  : activeLineText
+                    ? "rgba(255,255,255,0.32)"
+                    : "rgba(255,255,255,0.2)",
                 letterSpacing: "0.03em",
               }}
             >
-              {activeLineText}
+              {activeLineText ?? trackTitle}
             </span>
           </div>
-        ) : !panelOpen && trackTitle ? (
-          <span
-            className="text-[10px] font-mono truncate"
-            style={{ color: "rgba(255,255,255,0.2)", letterSpacing: "0.05em" }}
-          >
-            {trackTitle.toUpperCase()}
-          </span>
         ) : !panelOpen ? (
           <span className="text-[10px] font-mono text-white/15 tracking-[0.2em]">
             · · ·
