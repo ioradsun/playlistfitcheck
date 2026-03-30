@@ -122,12 +122,14 @@ function FireButton({
   const ringSize = 28 + tier * 6;
   const isActive = hasFired || isHolding;
 
-  // Safe accent-with-alpha values computed in JS — never passed as SVG attributes
-  const strokeColor = isActive ? accent : withAlpha(accent, 0.35);
-  const fillColor = isActive ? accent : "none";
+  // Fired/holding: always warm orange — unmistakable confirmation regardless of palette.
+  // Unfired outline: accent-tinted so the button still breathes with section color.
+  const FIRE_ORANGE = "#FF6B2B";
+  const strokeColor = isActive ? FIRE_ORANGE : withAlpha(accent, 0.35);
+  const fillColor = isActive ? FIRE_ORANGE : "none";
   const glowFilter =
     isHolding && tier >= 2
-      ? `drop-shadow(0 0 ${4 + tier * 3}px ${accent})`
+      ? `drop-shadow(0 0 ${4 + tier * 3}px ${FIRE_ORANGE})`
       : "none";
 
   return (
@@ -238,29 +240,28 @@ export function CardBottomBar({
   let leftContent: React.ReactNode;
 
   if (!panelOpen && activeLineText) {
-    // Playing state (In Studio) — active lyric line with optional section count
+    // Playing state (In Studio) — active lyric line + optional section count
+    // hookPhrase gets full white + bold to signal the song's core moment
     const isHook = !!(hookPhrase && activeLineText === hookPhrase);
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        {/* Animated dot — song is live */}
+        {/* Animated white dot — song is live */}
         <div
           style={{
             width: 5,
             height: 5,
             borderRadius: "50%",
-            background: accent,
+            background: "rgba(255,255,255,0.7)",
             flexShrink: 0,
             animation: "cfBlink 1.4s ease-in-out infinite",
-            transition: "background 0.6s ease",
           }}
         />
         <span
           className="text-[10px] font-mono truncate"
           style={{
-            color: isHook ? accent : "rgba(255,255,255,0.75)",
+            color: isHook ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.75)",
             fontWeight: isHook ? 600 : 400,
             letterSpacing: "0.03em",
-            transition: "color 0.6s ease",
           }}
         >
           {activeLineText}
@@ -268,10 +269,7 @@ export function CardBottomBar({
         {activeLineFireCount > 0 && (
           <span
             className="text-[9px] font-mono shrink-0"
-            style={{
-              color: withAlpha(accent, 0.55),
-              transition: "color 0.6s ease",
-            }}
+            style={{ color: "rgba(255,255,255,0.35)" }}
           >
             🔥{activeLineFireCount}
           </span>
@@ -279,77 +277,55 @@ export function CardBottomBar({
       </div>
     );
   } else if (!panelOpen && totalFireCount > 0) {
-    // Pre-play with existing FMLY marks — social proof
+    // Pre-play with FMLY marks — social proof
     const label = recency
       ? `${totalFireCount} marks · ${recency}`
       : `${totalFireCount} marks`;
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        {/* Static dim dot — tappable but not yet live */}
+        {/* Static dim white dot — tappable, not yet live */}
         <div
           style={{
             width: 5,
             height: 5,
             borderRadius: "50%",
-            background: accent,
+            background: "rgba(255,255,255,0.25)",
             flexShrink: 0,
-            opacity: 0.35,
-            transition: "background 0.6s ease",
           }}
         />
         <span
           className="text-[10px] font-mono truncate"
           style={{ letterSpacing: "0.05em" }}
         >
-          <span
-            style={{ color: accent, transition: "color 0.6s ease" }}
-          >
-            🔥{" "}
-          </span>
-          <span
-            style={{
-              color: withAlpha(accent, 0.8),
-              fontWeight: 600,
-              transition: "color 0.6s ease",
-            }}
-          >
+          {/* 🔥 renders in native emoji color — no override needed */}
+          <span style={{ marginRight: 2 }}>🔥</span>
+          <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 600 }}>
             FMLY
           </span>
-          <span
-            style={{
-              color: withAlpha(accent, 0.55),
-              transition: "color 0.6s ease",
-            }}
-          >
-            {" · "}
-            {label}
+          <span style={{ color: "rgba(255,255,255,0.4)" }}>
+            {" · "}{label}
           </span>
         </span>
       </div>
     );
   } else if (!panelOpen && isLive) {
-    // Now Streaming: card active, user is listening, no lyric context — prompt the mechanic
+    // Now Streaming active — no lyric context, prompt the fire mechanic
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        {/* Animated dot — song is playing */}
+        {/* Animated white dot — listening now */}
         <div
           style={{
             width: 5,
             height: 5,
             borderRadius: "50%",
-            background: accent,
+            background: "rgba(255,255,255,0.7)",
             flexShrink: 0,
             animation: "cfBlink 1.4s ease-in-out infinite",
-            transition: "background 0.6s ease",
           }}
         />
         <span
           className="text-[10px] font-mono truncate"
-          style={{
-            color: withAlpha(accent, 0.7),
-            letterSpacing: "0.05em",
-            transition: "color 0.6s ease",
-          }}
+          style={{ color: "rgba(255,255,255,0.6)", letterSpacing: "0.05em" }}
         >
           mark your moment
         </span>
@@ -364,19 +340,13 @@ export function CardBottomBar({
             width: 5,
             height: 5,
             borderRadius: "50%",
-            background: accent,
+            background: "rgba(255,255,255,0.15)",
             flexShrink: 0,
-            opacity: 0.22,
-            transition: "background 0.6s ease",
           }}
         />
         <span
           className="text-[10px] font-mono truncate"
-          style={{
-            color: withAlpha(accent, 0.5),
-            letterSpacing: "0.05em",
-            transition: "color 0.6s ease",
-          }}
+          style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}
         >
           be the first to mark a moment
         </span>
@@ -409,10 +379,9 @@ export function CardBottomBar({
       <div
         style={{
           width: "0.5px",
-          background: withAlpha(accent, 0.1),
+          background: "rgba(255,255,255,0.08)",
           alignSelf: "stretch",
           margin: "8px 0",
-          transition: "background 0.6s ease",
         }}
       />
 
