@@ -14,13 +14,13 @@
  * Vignette overlay was REMOVED — use brightness() filter for edge darkening.
  */
 
-export interface BlurGrade {
+interface BlurGrade {
   type: 'none' | 'gaussian' | 'bloom' | 'tilt-shift';
   radius: number;           // retained for compatibility; currently always 0
   rackFocus?: boolean;      // sharp when vocal active, blur between
 }
 
-export interface GrainGrade {
+interface GrainGrade {
   intensity: number;        // 0-1 (capped at 0.15 at render time)
   size: number;             // px
 }
@@ -46,7 +46,7 @@ export interface MoodGrade {
 
 }
 
-export const MOOD_GRADES: Record<string, MoodGrade> = {
+const MOOD_GRADES: Record<string, MoodGrade> = {
   intimate: {
     brightness: 0.35,
     saturation: 0.65,
@@ -258,7 +258,7 @@ export const MOOD_GRADES: Record<string, MoodGrade> = {
 };
 
 /** Default grade when no visualMood is set */
-export const DEFAULT_MOOD_GRADE = MOOD_GRADES.intimate;
+const DEFAULT_MOOD_GRADE = MOOD_GRADES.intimate;
 
 /**
  * Resolve the mood grade for a section.
@@ -320,37 +320,4 @@ export function buildGradeFilter(
   }
   _gradeFilterCache.set(key, result);
   return result;
-}
-
-/**
- * Determine text color mode from graded brightness.
- * Returns 'dark' if background will be bright enough for dark text,
- * 'light' otherwise.
- */
-export function getTextMode(grade: MoodGrade, intensityMod: number = 0): 'light' | 'dark' {
-  // NOTE: This is still used by elemental effects lighting mode.
-  // Text color now uses _textBandBrightness (actual pixel sampling) instead.
-  const effectiveBrightness = grade.brightness + intensityMod * 0.15;
-  return effectiveBrightness > 0.52 ? 'dark' : 'light';
-}
-
-/**
- * Lerp between two grades for smooth section transitions.
- * All numeric values interpolate; enums snap at t=0.5.
- */
-export function lerpGrade(a: MoodGrade, b: MoodGrade, t: number): MoodGrade {
-  const lerp = (x: number, y: number) => x + (y - x) * t;
-  return {
-    brightness: lerp(a.brightness, b.brightness),
-    saturation: lerp(a.saturation, b.saturation),
-    contrast: lerp(a.contrast, b.contrast),
-    temperature: lerp(a.temperature, b.temperature),
-    blur: { type: 'none', radius: 0 },
-    grain: {
-      intensity: lerp(a.grain.intensity, b.grain.intensity),
-      size: lerp(a.grain.size, b.grain.size),
-    },
-    motionIntent: t < 0.5 ? a.motionIntent : b.motionIntent,
-    beatBrightnessGain: lerp(a.beatBrightnessGain, b.beatBrightnessGain),
-  };
 }

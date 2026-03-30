@@ -121,7 +121,7 @@ function getMaxParticles(): number {
 const MAX_PARTICLES = Math.max(PARTICLE_LIMITS.highEnd, 200);
 const FOREGROUND_ALLOWED = new Set(["snow", "petals", "ash", "confetti", "crystals", "GLARE", "glare"]);
 
-export interface ParticleRuntimeConfig {
+interface ParticleRuntimeConfig {
   system: string;
   density: number;
   speed: number;
@@ -996,7 +996,7 @@ function withAlpha(color: string, alpha: number): string {
   return color;
 }
 
-export function drawEmber(
+function drawEmber(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -1023,7 +1023,7 @@ export function drawEmber(
   ctx.restore();
 }
 
-export function drawSmoke(
+function drawSmoke(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -1052,7 +1052,7 @@ export function drawSmoke(
   ctx.restore();
 }
 
-export function drawRainDrop(
+function drawRainDrop(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -1070,7 +1070,7 @@ export function drawRainDrop(
   ctx.restore();
 }
 
-export function drawSnowflake(
+function drawSnowflake(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -1114,7 +1114,7 @@ export function drawSnowflake(
   ctx.restore();
 }
 
-export function drawFirefly(
+function drawFirefly(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -1140,7 +1140,7 @@ export function drawFirefly(
   ctx.restore();
 }
 
-export function drawBubble(
+function drawBubble(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -1164,7 +1164,7 @@ export function drawBubble(
   ctx.restore();
 }
 
-export function drawCrystal(
+function drawCrystal(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -1197,7 +1197,7 @@ export function drawCrystal(
   ctx.restore();
 }
 
-export function drawAsh(
+function drawAsh(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -1223,7 +1223,7 @@ export function drawAsh(
   ctx.restore();
 }
 
-export function drawNeonOrb(
+function drawNeonOrb(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,

@@ -11,7 +11,7 @@ function clamp(x: number, min: number, max: number): number {
 
 // ─── Typography ──────────────────────────────────────────────────
 
-export interface TypographyConfig {
+interface TypographyConfig {
   fontFamily: string;
   fontWeight: number;
   letterSpacing: string;
@@ -37,7 +37,7 @@ export function getTypography(preset: string): TypographyConfig {
 
 // ─── Motion → Physics ────────────────────────────────────────────
 
-export interface PhysicsConfig {
+interface PhysicsConfig {
   gravity: "slow-float" | "normal" | "slammed" | "inverted";
   tension: number;
   damping: number;
@@ -54,14 +54,14 @@ const PHYSICS: Record<string, PhysicsConfig> = {
   glitch: { gravity: "normal", tension: 0.8, damping: 0.2, beatResponse: "seismic", entryVelocity: 1.0, exitVelocity: 0.9 },
 };
 
-export function getPhysics(preset: string): PhysicsConfig {
+function getPhysics(preset: string): PhysicsConfig {
   return PHYSICS[preset] ?? PHYSICS.fluid;
 }
 
 
 // ─── Texture → Particles ─────────────────────────────────────────
 
-export interface ParticleConfig {
+interface ParticleConfig {
   system: string;
   density: number;
   speed: number;
@@ -83,14 +83,14 @@ const PARTICLES: Record<string, ParticleConfig> = {
   petals: { system: "petals", density: 0.35, speed: 0.25, opacity: 0.4, beatReactive: false, direction: "down" },
 };
 
-export function getParticles(preset: string): ParticleConfig {
+function getParticles(preset: string): ParticleConfig {
   return PARTICLES[preset] ?? PARTICLES.dust;
 }
 
 
 // ─── Atmosphere → Overlay ────────────────────────────────────────
 
-export interface OverlayConfig {
+interface OverlayConfig {
   imageOpacity: number;
   vignetteStrength: number;
   blurRadius: number;
@@ -109,7 +109,7 @@ const OVERLAY: Record<string, OverlayConfig> = {
   clean: { imageOpacity: 0.35, vignetteStrength: 0.1, blurRadius: 0, grainOpacity: 0.0, tintStrength: 0.0 },
 };
 
-export function getOverlay(preset: string): OverlayConfig {
+function getOverlay(preset: string): OverlayConfig {
   return OVERLAY[preset] ?? OVERLAY.cinematic;
 }
 
@@ -124,7 +124,7 @@ const EMPHASIS_SCALE: Record<number, number> = {
   5: 2.2,
 };
 
-export function getFontScale(emphasisLevel: number): number {
+function getFontScale(emphasisLevel: number): number {
   return EMPHASIS_SCALE[clamp(Math.round(emphasisLevel), 1, 5)] ?? 1.0;
 }
 
@@ -137,14 +137,14 @@ const FILLER_WORDS = new Set([
   "i", "me",
 ]);
 
-export function getDefaultEmphasis(word: string): number {
+function getDefaultEmphasis(word: string): number {
   return FILLER_WORDS.has(word.toLowerCase()) ? 1 : 2;
 }
 
 
 // ─── Scene Tone → Per-Section Tone ───────────────────────────────
 
-export type ToneValue = "dark" | "light";
+type ToneValue = "dark" | "light";
 
 export function getSectionTones(sceneTone: string, count: number): ToneValue[] {
   switch (sceneTone) {
@@ -177,7 +177,7 @@ export function getSectionTones(sceneTone: string, count: number): ToneValue[] {
 
 // ─── Emotional Arc → Intensity Curve ─────────────────────────────
 
-export function getIntensityCurve(arc: string): (progress: number) => number {
+function getIntensityCurve(arc: string): (progress: number) => number {
   switch (arc) {
     case "slow-burn":
       return (p) => 0.2 + p * 0.8;
@@ -199,14 +199,14 @@ export function getIntensityCurve(arc: string): (progress: number) => number {
 
 // ─── Section Audio → Dynamic Modifiers ───────────────────────────
 
-export interface SectionModifiers {
+interface SectionModifiers {
   particleDensityScale: number;
   beatResponseScale: number;
   textScale: number;
   transitionType: "hard-cut" | "cross-dissolve" | "flash-cut";
 }
 
-export function getSectionModifiers(
+function getSectionModifiers(
   section: { avgEnergy: number; energyDelta: number; role: string },
 ): SectionModifiers {
   const e = clamp01(section.avgEnergy);
@@ -251,7 +251,7 @@ export function buildWordDirectiveMap(directives: any[]): WordDirectiveMap {
   return map;
 }
 
-export function lookupWord(map: WordDirectiveMap, word: string) {
+function lookupWord(map: WordDirectiveMap, word: string) {
   const key = word.toLowerCase().replace(/[^a-z0-9]/g, "");
   return map.get(key) ?? null;
 }

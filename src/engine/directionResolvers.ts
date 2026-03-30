@@ -34,16 +34,7 @@ export function enrichSections(sections: CinematicSection[] | undefined, totalDu
   });
 }
 
-export function findSectionByProgress(sections: CinematicSection[] | undefined, progress: number): CinematicSection | null {
-  const enriched = enrichSections(sections);
-  return enriched.find((s) => progress >= (s.startRatio ?? 0) && progress < (s.endRatio ?? 1)) ?? enriched[enriched.length - 1] ?? null;
-}
 
-export function findSectionIndexByProgress(sections: CinematicSection[] | undefined, progress: number): number {
-  const enriched = enrichSections(sections);
-  const idx = enriched.findIndex((s) => progress >= (s.startRatio ?? 0) && progress < (s.endRatio ?? 1));
-  return idx >= 0 ? idx : Math.max(0, enriched.length - 1);
-}
 
 export function buildWordDirectiveMap(directives: WordDirective[] | undefined): Map<string, WordDirective> {
   const map = new Map<string, WordDirective>();
@@ -55,11 +46,6 @@ export function buildWordDirectiveMap(directives: WordDirective[] | undefined): 
   return map;
 }
 
-export function findWordDirective(directives: WordDirective[] | undefined, word: string): WordDirective | null {
-  if (!directives) return null;
-  const key = word.toLowerCase().replace(/[^a-z]/g, "");
-  return directives.find((wd) => (wd.word ?? "").toLowerCase().replace(/[^a-z0-9]/g, "") === key) ?? null;
-}
 
 export function deriveTensionCurve(emotionalArc: string | undefined): TensionStage[] {
   const curves: Record<string, TensionStage[]> = {
@@ -73,10 +59,6 @@ export function deriveTensionCurve(emotionalArc: string | undefined): TensionSta
   return curves[emotionalArc ?? "slow-burn"] ?? curves["slow-burn"];
 }
 
-export function getTensionStageForProgress(emotionalArc: string | undefined, progress: number): TensionStage | null {
-  const curve = deriveTensionCurve(emotionalArc);
-  return curve.find((s) => progress >= s.startRatio && progress <= s.endRatio) ?? curve[0] ?? null;
-}
 
 export function deriveClimaxRatio(emotionalArc: string | undefined): number {
   const arc = emotionalArc ?? "slow-burn";
