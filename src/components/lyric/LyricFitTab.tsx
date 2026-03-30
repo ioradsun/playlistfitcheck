@@ -57,7 +57,7 @@ export function LyricFitTab({
 
   const handleViewChange = useCallback((nextView: LyricFitView) => {
     if (
-      nextView === "fit" &&
+      (nextView === "fit" || nextView === "data") &&
       !p.fitUnlocked &&
       p.fitReadiness !== "ready" &&
       p.fitReadiness !== "not_started"
@@ -99,6 +99,7 @@ export function LyricFitTab({
           fitProgress={p.fitProgress}
           fitStageLabel={p.fitStageLabel}
           pipelineStages={p.pipelineStages}
+          hasData={!!p.pipelineDanceId}
         />
       )}
 
@@ -147,7 +148,7 @@ export function LyricFitTab({
       {p.lyricData && p.audioFile && (
         <div
           style={{
-            display: activeTab === "fit" ? "flex" : "none",
+            display: activeTab === "fit" || activeTab === "data" ? "flex" : "none",
             flexDirection: "column",
             flex: 1,
             minHeight: 0,
@@ -164,7 +165,7 @@ export function LyricFitTab({
             cinematicDirection={p.cinematicDirection}
             generationStatus={p.generationStatus}
             words={p.words}
-            onHeaderProject={activeTab === "fit" ? onHeaderProject : undefined}
+            onHeaderProject={activeTab === "fit" || activeTab === "data" ? onHeaderProject : undefined}
             onBack={handleBackToLyrics}
             pipelineStages={p.pipelineStages}
             parentWaveform={p.waveformData}
@@ -174,6 +175,7 @@ export function LyricFitTab({
             sectionImageProgress={p.sectionImageProgress}
             sectionImageError={p.sectionImageError}
             onTitleChange={p.handleTitleChange}
+            subView={activeTab === "data" ? "data" : "fit"}
           />
         </div>
       )}
