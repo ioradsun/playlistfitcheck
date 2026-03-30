@@ -1,6 +1,7 @@
-import { useState, memo } from "react";
+import { useState, useEffect, memo } from "react";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { cn } from "@/lib/utils";
+import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import {
   MessageCircle,
   User,
@@ -117,6 +118,18 @@ export function SongFitPostCard({
     !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
   const isSpotifyEmbed =
     !hasLyricDancePost && !isBattlePost && !!post.spotify_track_id;
+  const [spotifyPalette, setSpotifyPalette] = useState<string[] | undefined>(undefined);
+
+  useEffect(() => {
+    if (!isSpotifyEmbed || !post.album_art_url) return;
+    let cancelled = false;
+    computeAutoPalettesFromUrls([post.album_art_url])
+      .then((palettes) => {
+        if (!cancelled && palettes[0]) setSpotifyPalette(palettes[0]);
+      })
+      .catch(() => {/* CORS fail on i.scdn.co is expected — fallback stays */});
+    return () => { cancelled = true; };
+  }, [isSpotifyEmbed, post.album_art_url]);
   const CAPTION_MAX = 300;
 
   const { activate, deactivate } = useCardState(post.id);
@@ -500,6 +513,7 @@ export function SongFitPostCard({
                   reelsMode={reelsMode}
                   variant={reelsMode ? "reels" : "embedded"}
                   caption={!reelsMode && !editing ? localCaption : undefined}
+                  palette={spotifyPalette}
                 />
               </div>
             </>
