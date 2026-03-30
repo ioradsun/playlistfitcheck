@@ -102,6 +102,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const empowermentPromise = (prefetchedData as any)?.empowerment_promise ?? null;
   const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
 
+  const [playerEvicted, setPlayerEvicted] = useState(false);
+
   // For battle embeds: patch region_start/region_end onto a derived data copy
   // so LyricDancePlayer knows to window playback to the hook region.
   // Never mutates the shared prefetchedData object.
@@ -160,7 +162,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [visibility, setVisibility] = useState<VisibilityState>(
     isFeedEmbed ? "far" : "visible",
   );
-  const [playerEvicted, setPlayerEvicted] = useState(false);
   const [forceDemoted, setForceDemoted] = useState(false);
   const [, setFireStrengthByLine] = useState<Record<number, number>>({});
   const [closingVisible, setClosingVisible] = useState(false);
