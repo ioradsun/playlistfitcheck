@@ -27,6 +27,7 @@ export interface UseLyricDancePlayerReturn {
   /** Local copy of data — reflects hot-patched auto_palettes etc. */
   data: LyricDanceData | null;
   setData: React.Dispatch<React.SetStateAction<LyricDanceData | null>>;
+  playerRef: React.MutableRefObject<LyricDancePlayer | null>;
 }
 
 export function useLyricDancePlayer(
@@ -145,5 +146,5 @@ export function useLyricDancePlayer(
     playerRef.current.updateCinematicDirection(data.cinematic_direction as any);
   }, [data?.cinematic_direction]);
 
-  return { player, playerReady, data, setData };
+  return { player, playerReady, data, setData, playerRef };
 }

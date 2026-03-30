@@ -117,6 +117,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     player,
     playerReady,
     data,
+    playerRef,
     fetchedData,
     muted,
     setMuted,
@@ -235,20 +236,26 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) return;
     if (visibility === "far") {
-      if (!player && !playerReady) return;
       if (farTimerRef.current) return;
       farTimerRef.current = setTimeout(() => {
         farTimerRef.current = null;
+        // DESTROY the player — free GPU, audio, RAF, memory
+        // useLyricDancePlayer will recreate it when card becomes visible
+        playerRef.current?.destroy();
         setPlayerEvicted(true);
-      }, 3000);
+      }, 4000);
       return;
     }
+    // Coming back into view — clear eviction
     if (farTimerRef.current) {
       clearTimeout(farTimerRef.current);
       farTimerRef.current = null;
     }
-    setPlayerEvicted((prev) => (prev ? false : prev));
-  }, [visibility, isFeedEmbed, isBattleMode, player, playerReady]);
+    if (playerEvicted) {
+      setPlayerEvicted(false);
+      // Player will recreate via useLyricDancePlayer when data+canvas ready
+    }
+  }, [visibility, isFeedEmbed, isBattleMode, playerEvicted, playerRef]);
 
   useEffect(() => {
     if (!isFeedEmbed || !lyricDanceId) return;

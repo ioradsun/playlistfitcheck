@@ -4,7 +4,6 @@ import {
   useEffect,
   useCallback,
   useRef,
-  useContext,
 } from "react";
 import { Loader2, Plus, User, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,7 +17,7 @@ import { SongFitInlineComposer } from "./SongFitInlineComposer";
 import { BillboardToggle } from "./BillboardToggle";
 import {
   CardLifecycleProvider,
-  CardLifecycleContext,
+  useCardLifecycleStore,
   useCardState,
 } from "./useCardLifecycle";
 import { useFeedWindow } from "./useFeedWindow";
@@ -158,7 +157,7 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   isFirst?: boolean;
   lyricDataMap: Map<string, LyricDanceData>;
 }) {
-  const lifecycle = useContext(CardLifecycleContext);
+  const store = useCardLifecycleStore();
   const prevMapRef = useRef(new Map<string, boolean>());
   const {
     windowedPosts,
@@ -177,16 +176,15 @@ const _WindowedFeedList = memo(function WindowedFeedList({
   }, [impressions]);
 
   useEffect(() => {
-    if (!lifecycle) return;
     const prev = prevMapRef.current;
     windowedPosts.forEach(({ post, shouldRender }) => {
       const prevRendered = prev.get(post.id) ?? false;
       if (prevRendered !== shouldRender) {
-        lifecycle.setCardState(post.id, shouldRender ? "warm" : "cold");
+        store?.setState(post.id, shouldRender ? "warm" : "cold");
       }
       prev.set(post.id, shouldRender);
     });
-  }, [lifecycle, windowedPosts]);
+  }, [store, windowedPosts]);
 
   useEffect(() => {
     if (feedView === "billboard") return;
@@ -296,7 +294,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const isLoadingMoreRef = useRef(isLoadingMore);
   const hasMoreRef = useRef(hasMore);
   const newestCreatedAtRef = useRef<string | null>(null);
-  const feedMountedRef = useRef(false);
+  const hasFadedIn = useRef(false);
   const { canCreate, credits, required } = useVoteGate();
 
   postsRef.current = posts;
@@ -345,7 +343,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
 
     // If we already have posts (e.g. from cache), don't flash the skeleton
     // during revalidation. Only show loading state on truly empty first loads.
-    if (postsRef.current.length === 0 && posts.length === 0) {
+    if (postsRef.current.length === 0) {
       setLoading(true);
     }
 
@@ -404,54 +402,46 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         .filter((p) => p.lyric_dance_id)
         .map((p) => p.lyric_dance_id as string);
       if (lyricIds.length > 0) {
-        // Phase 1: lightweight cover data — renders card covers immediately
+        // Phase 1: cover columns only — fast, small payload
         supabase
           .from("shareable_lyric_dances" as any)
           .select(LYRIC_COVER_COLUMNS)
           .in("id", lyricIds)
           .then(({ data: coverRows }) => {
             const map = new Map<string, LyricDanceData>();
-            const cacheObj: Record<string, any> = {};
-            const rows = (coverRows ?? []) as any[];
-
-            // First pass: set data WITHOUT normalization so covers render immediately
-            for (const row of rows) {
-              const entry = { ...row } as LyricDanceData;
-              map.set(row.id, entry);
-              cacheObj[row.id] = entry;
-              const firstImg = row.section_images?.[0];
-              if (firstImg) preloadImage(firstImg);
+            for (const row of (coverRows ?? []) as any[]) {
+              map.set(row.id, { ...row } as LyricDanceData);
+              const img = row.section_images?.[0];
+              if (img) preloadImage(img);
             }
             setLyricDataMap(new Map(map));
-            cacheWrite("lyric_data", cacheObj);
 
-            // Phase 2: heavy columns — only for first 5 (visible cards)
-            const visibleIds = lyricIds.slice(0, 5);
-            if (visibleIds.length === 0) return;
+            // Phase 2: heavy columns, first 4 visible cards only, deferred
+            const visibleIds = lyricIds.slice(0, 4);
             setTimeout(() => {
               supabase
                 .from("shareable_lyric_dances" as any)
                 .select(LYRIC_HEAVY_COLUMNS)
                 .in("id", visibleIds)
                 .then(({ data: heavyRows }) => {
+                  const updated = new Map(map);
+                  const cacheObj: Record<string, any> = {};
                   for (const row of (heavyRows ?? []) as any[]) {
-                    const existing = map.get(row.id);
-                    if (existing) {
-                      const merged = {
-                        ...existing,
-                        ...row,
-                        cinematic_direction: normalizeCinematicDirection(
-                          row.cinematic_direction,
-                        ),
-                      };
-                      map.set(row.id, merged);
-                      cacheObj[row.id] = merged;
-                    }
+                    const base = updated.get(row.id) ?? {};
+                    const merged = {
+                      ...base,
+                      ...row,
+                      cinematic_direction: normalizeCinematicDirection(
+                        row.cinematic_direction,
+                      ),
+                    } as LyricDanceData;
+                    updated.set(row.id, merged);
+                    cacheObj[row.id] = merged;
                   }
-                  setLyricDataMap(new Map(map));
+                  setLyricDataMap(new Map(updated));
                   cacheWrite("lyric_data", cacheObj);
                 });
-            }, 500); // delay heavy fetch — covers are already showing
+            }, 300);
           });
       } else {
         setLyricDataMap(new Map());
@@ -599,7 +589,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     }
 
     setLoading(false);
-  }, [billboardMode, feedView, posts.length]);
+  }, [billboardMode, feedView]);
 
   const handleLoadNewDrops = useCallback(() => {
     setPendingNewCount(0);
@@ -774,7 +764,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
 
   return (
     <div className={reelsMode ? "w-full" : "w-full max-w-[470px] mx-auto"}>
-      <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
+      <style>{"@keyframes fadeIn{from{opacity:0}to{opacity:1}}"}</style>
       {reelsMode ? (
         <>
           <div className="fixed top-14 left-0 right-0 z-30 flex justify-center pointer-events-none">
@@ -890,13 +880,10 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       ) : (
         <div
           style={{
-            opacity: 1,
-            animation: feedMountedRef.current
-              ? "none"
-              : "fadeIn 0.3s ease forwards",
+            animation: hasFadedIn.current ? "none" : "fadeIn 0.3s ease forwards",
           }}
           ref={() => {
-            feedMountedRef.current = true;
+            hasFadedIn.current = true;
           }}
         >
           <CardLifecycleProvider>
