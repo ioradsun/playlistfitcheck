@@ -50,7 +50,7 @@ import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { UseLyricPipelineReturn } from "@/hooks/useLyricPipeline";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
-import { fetchFireStrength } from "@/lib/fire";
+import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { extractPeaks } from "@/lib/audioUtils";
 
 interface Props {
@@ -221,7 +221,9 @@ export function FitTab({
   >([]);
   const [totalFires, setTotalFires] = useState(0);
   const [resultsLoaded, setResultsLoaded] = useState(false);
-  const [reactionTotals, setReactionTotals] = useState<Record<string, number>>({});
+  const [rawFires, setRawFires] = useState<
+    Array<{ line_index: number; time_sec: number; hold_ms: number }>
+  >([]);
   const [uniqueListeners, setUniqueListeners] = useState(0);
   // User overrides per slot — null means "use AI hook"
   const [customHooks, setCustomHooks] = useState<
@@ -1337,7 +1339,7 @@ export function FitTab({
     setClosingDist([]);
     setFreeResponses([]);
     setTotalFires(0);
-    setReactionTotals({});
+    setRawFires([]);
     setUniqueListeners(0);
   }, [publishedDanceId]);
 
@@ -1345,6 +1347,7 @@ export function FitTab({
     if (subView !== "data" || !publishedDanceId || resultsLoaded) return;
     Promise.all([
       fetchFireStrength(publishedDanceId),
+      fetchFireData(publishedDanceId),
       supabase
         .from("v_closing_distribution" as any)
         .select("hook_index, pick_count, pct")
@@ -1359,24 +1362,15 @@ export function FitTab({
         .select("id", { count: "exact", head: true })
         .eq("dance_id", publishedDanceId),
       supabase
-        .from("lyric_dance_reactions" as any)
-        .select("emoji, line_index")
-        .eq("dance_id", publishedDanceId),
-      supabase
         .from("lyric_dance_exposures" as any)
         .select("session_id")
         .eq("dance_id", publishedDanceId),
-    ]).then(([strength, dist, free, count, reactions, exposures]) => {
+    ]).then(([strength, fires, dist, free, count, exposures]) => {
       setFireStrength(strength);
+      setRawFires(fires);
       setClosingDist((dist.data as any[]) ?? []);
       setFreeResponses((free.data as any[]) ?? []);
       setTotalFires(count.count ?? 0);
-
-      const emojiAgg: Record<string, number> = {};
-      for (const row of (reactions.data ?? []) as any[]) {
-        emojiAgg[row.emoji] = (emojiAgg[row.emoji] ?? 0) + 1;
-      }
-      setReactionTotals(emojiAgg);
 
       const uniqueSessions = new Set(
         ((exposures.data ?? []) as any[]).map((r: any) => r.session_id),
@@ -1541,9 +1535,9 @@ export function FitTab({
         {subView === "data" && (
           <div className="space-y-5 pb-8">
 
-            {/* ── Headline insight ── */}
+            {/* ── Headline ── */}
             {totalFires > 0 && (
-              <div className="space-y-2 px-1">
+              <div className="space-y-1.5 px-1">
                 <div className="flex items-baseline gap-3">
                   <span style={{ fontSize: 28 }}>🔥</span>
                   <span className="text-[28px] font-mono font-medium text-foreground">{totalFires}</span>
@@ -1555,217 +1549,255 @@ export function FitTab({
                     </>
                   )}
                 </div>
-                {/* Plain-language summary */}
-                {uniqueListeners > 0 && (
-                  <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
-                    {uniqueListeners === 1
-                      ? "Your first listener left signal. Share wider to see patterns emerge."
-                      : totalFires / uniqueListeners >= 3
-                        ? `Listeners are averaging ${(totalFires / uniqueListeners).toFixed(1)} fires each — that's high engagement. People are reacting to multiple moments.`
-                        : totalFires / uniqueListeners >= 1.5
-                          ? `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — your song has more than one moment that hits.`
-                          : `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — most people found at least one moment. More data will reveal which lines connect deepest.`
+                {uniqueListeners > 1 && (
+                  <p className="text-[12px] text-muted-foreground/60 leading-relaxed">
+                    {totalFires / uniqueListeners >= 3
+                      ? `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — people are reacting to multiple moments.`
+                      : totalFires / uniqueListeners >= 1.5
+                        ? `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — your song has more than one moment that hits.`
+                        : `${(totalFires / uniqueListeners).toFixed(1)} fires per listener. More shares will reveal which lines connect deepest.`
                     }
                   </p>
                 )}
               </div>
             )}
 
-            {/* ── Your strongest moment ── */}
-            {fireStrength.length > 0 && (() => {
-              const top = fireStrength[0];
-              const topLine = allLines.find((l) => l.lineIndex === top.line_index);
-              const holdType = top.avg_hold_ms < 300 ? "tapped" : top.avg_hold_ms < 1000 ? "held briefly" : top.avg_hold_ms < 3000 ? "held deep" : "held sustained";
-              return (
-                <div className="glass-card rounded-xl p-4 space-y-2 border border-primary/15">
-                  <p className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">your strongest moment</p>
-                  <p className="text-[14px] text-foreground/90 font-medium leading-snug">
-                    "{topLine?.text ?? `line ${top.line_index}`}"
-                  </p>
-                  <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
-                    {top.fire_count} {top.fire_count === 1 ? "person" : "people"} {holdType} on this line.
-                    {top.avg_hold_ms >= 1000
-                      ? " Long holds mean emotional weight — this line resonates beyond the surface."
-                      : top.fire_count >= 5
-                        ? " Multiple quick fires means broad appeal — this is a crowd moment."
-                        : " Early signal. Keep sharing to see if this holds."
-                    }
-                  </p>
-                </div>
+            {/* ── Fire Heatmap Waveform ── */}
+            {rawFires.length > 0 && (waveform || parentWaveform) && allLines.length > 0 && (() => {
+              const wf = waveform || parentWaveform!;
+              const dur = wf.duration || 1;
+              const bucketCount = wf.peaks.length;
+              const buckets = new Float32Array(bucketCount);
+              for (const fire of rawFires) {
+                const idx = Math.min(bucketCount - 1, Math.max(0, Math.floor((fire.time_sec / dur) * bucketCount)));
+                const weight = fire.hold_ms < 300 ? 1 : fire.hold_ms < 1000 ? 2 : fire.hold_ms < 3000 ? 4 : 8;
+                buckets[idx] += weight;
+              }
+              let maxBucket = 0;
+              for (let i = 0; i < bucketCount; i++) if (buckets[i] > maxBucket) maxBucket = buckets[i];
+              if (maxBucket > 0) for (let i = 0; i < bucketCount; i++) buckets[i] /= maxBucket;
+
+              let peakIdx = 0;
+              for (let i = 0; i < bucketCount; i++) if (buckets[i] > buckets[peakIdx]) peakIdx = i;
+              const peakTimeSec = (peakIdx / bucketCount) * dur;
+              const peakLine = allLines.reduce((best, line) =>
+                Math.abs(line.startSec - peakTimeSec) < Math.abs(best.startSec - peakTimeSec) ? line : best,
+                allLines[0],
               );
-            })()}
 
-            {/* ── Fire strength by line ── */}
-            {fireStrength.length > 1 && (
-              <div className="glass-card rounded-xl p-4 space-y-3">
-                <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
-                  fire strength by line
-                </p>
-                {fireStrength.slice(0, 8).map((row) => {
-                  const line = allLines.find((l) => l.lineIndex === row.line_index);
-                  const maxStrength = fireStrength[0]?.fire_strength ?? 1;
-                  const pct = Math.round((row.fire_strength / maxStrength) * 100);
-                  const avgHoldLabel =
-                    row.avg_hold_ms < 300
-                      ? "tap"
-                      : row.avg_hold_ms < 1000
-                        ? "short hold"
-                        : row.avg_hold_ms < 3000
-                          ? "deep hold"
-                          : "sustained";
-                  return (
-                    <div key={row.line_index} className="space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-mono text-foreground/75 flex-1 truncate min-w-0">
-                          {line?.text ?? `line ${row.line_index}`}
-                        </span>
-                        <span className="text-[9px] font-mono text-muted-foreground/50 shrink-0">
-                          {row.fire_count} × {avgHoldLabel}
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted/30 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{
-                            width: `${pct}%`,
-                            background:
-                              "linear-gradient(90deg, rgba(168,85,247,0.6) 0%, rgba(168,85,247,0.9) 100%)",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-                {/* Insight */}
-                {fireStrength.length >= 3 && (() => {
-                  const secondPct = Math.round((fireStrength[1].fire_strength / fireStrength[0].fire_strength) * 100);
-                  const thirdPct = Math.round((fireStrength[2].fire_strength / fireStrength[0].fire_strength) * 100);
-                  if (secondPct >= 80) {
-                    return (
-                      <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
-                        Your top lines are close in strength — your song has consistent energy across multiple moments. That's rare.
-                      </p>
-                    );
-                  } else if (thirdPct < 40) {
-                    return (
-                      <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
-                        One line dominates. Consider building more tension leading into it — or writing a second hook with similar emotional weight.
-                      </p>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-            )}
-
-            {/* ── Emotional reactions ── */}
-            {Object.keys(reactionTotals).length > 0 && (() => {
-              const EMOJI_MAP: Record<string, string> = {
-                fire: "🔥", dead: "💀", mind_blown: "🤯",
-                emotional: "😭", respect: "🙏", accurate: "🎯",
-              };
-              const EMOJI_LABEL: Record<string, string> = {
-                fire: "fire", dead: "devastating", mind_blown: "mind-blown",
-                emotional: "emotional", respect: "respect", accurate: "accurate",
-              };
-              const sorted = Object.entries(reactionTotals)
-                .map(([emoji, count]) => ({ emoji, count }))
-                .sort((a, b) => b.count - a.count);
-              const total = sorted.reduce((s, r) => s + r.count, 0);
-              const topEmoji = sorted[0];
               return (
-                <div className="glass-card rounded-xl p-4 space-y-3">
+                <div className="glass-card rounded-xl p-4 space-y-2">
                   <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
-                    how listeners reacted
+                    fire heatmap
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {sorted.map(({ emoji, count }) => {
-                      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-                      return (
-                        <div key={emoji} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/20 border border-border/20">
-                          <span className="text-[16px]">{EMOJI_MAP[emoji] ?? emoji}</span>
-                          <span className="text-[11px] font-mono text-foreground/70">{count}</span>
-                          <span className="text-[9px] font-mono text-muted-foreground/40">{pct}%</span>
-                        </div>
-                      );
-                    })}
+                  <div className="relative" style={{ height: 64 }}>
+                    <canvas
+                      ref={(el) => {
+                        if (!el) return;
+                        const dpr = window.devicePixelRatio || 1;
+                        el.width = el.clientWidth * dpr;
+                        el.height = el.clientHeight * dpr;
+                        const ctx = el.getContext("2d");
+                        if (!ctx) return;
+                        ctx.scale(dpr, dpr);
+                        const cw = el.clientWidth;
+                        const ch = el.clientHeight;
+                        ctx.clearRect(0, 0, cw, ch);
+
+                        const barW = Math.max(cw / wf.peaks.length, 1);
+                        const gap = 1;
+
+                        wf.peaks.forEach((peak, i) => {
+                          const barH = Math.max(peak * ch * 0.85, 2);
+                          const x = i * barW;
+                          const heat = buckets[i];
+                          if (heat > 0.01) {
+                            const r = 255;
+                            const g = Math.round(140 - heat * 100);
+                            const b = Math.round(30);
+                            const a = 0.3 + heat * 0.65;
+                            ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+                          } else {
+                            ctx.fillStyle = "rgba(150,150,150,0.25)";
+                          }
+                          ctx.fillRect(x, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
+                        });
+
+                        ctx.beginPath();
+                        ctx.strokeStyle = "rgba(255,120,30,0.6)";
+                        ctx.lineWidth = 1.5;
+                        for (let i = 0; i < bucketCount; i++) {
+                          const x = (i / bucketCount) * cw;
+                          const y = ch - buckets[i] * ch * 0.7 - 2;
+                          if (i === 0) ctx.moveTo(x, y);
+                          else ctx.lineTo(x, y);
+                        }
+                        ctx.stroke();
+                      }}
+                      className="absolute inset-0 w-full h-full"
+                    />
                   </div>
-                  {topEmoji && total >= 3 && (
+                  {peakLine && (
                     <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
-                      {topEmoji.emoji === "emotional"
-                        ? "Your song is hitting people in the feels. Emotional reactions are the strongest signal for replay value."
-                        : topEmoji.emoji === "fire"
-                          ? "Fire is the dominant reaction — your energy is landing. This is a performance track."
-                          : topEmoji.emoji === "dead"
-                            ? "\"Dead\" means you destroyed them. Your punchlines or flow switches are working."
-                            : topEmoji.emoji === "mind_blown"
-                              ? "Mind-blown reactions mean you're saying something people haven't heard before. Lean into the originality."
-                              : topEmoji.emoji === "respect"
-                                ? "Respect is the craft reaction — listeners appreciate the writing. Your pen game is connecting."
-                                : topEmoji.emoji === "accurate"
-                                  ? "\"Accurate\" means you're putting words to something people already feel. That's the most shareable kind of music."
-                                  : `${EMOJI_LABEL[topEmoji.emoji] ?? topEmoji.emoji} is your dominant reaction.`
-                      }
+                      Hottest moment at {Math.floor(peakTimeSec / 60)}:{String(Math.floor(peakTimeSec % 60)).padStart(2, "0")} — "{peakLine.text.slice(0, 50)}{peakLine.text.length > 50 ? "…" : ""}"
                     </p>
                   )}
                 </div>
               );
             })()}
 
-            {/* ── What listeners felt (closing screen) ── */}
+            {/* ── Section-by-section lyric breakdown ── */}
+            {fireStrength.length > 0 && (() => {
+              const sections = ((cinematicDirection as any)?.sections as any[]) ?? [];
+              const linesBySection: Map<number, typeof allLines> = new Map();
+
+              for (const line of allLines) {
+                let secIdx = 0;
+                for (let s = 0; s < sections.length; s++) {
+                  const sec = sections[s];
+                  const start = sec.startSec ?? sec.start ?? 0;
+                  const end = sec.endSec ?? sec.end ?? Infinity;
+                  if (line.startSec >= start && line.startSec < end) {
+                    secIdx = s;
+                    break;
+                  }
+                }
+                if (!linesBySection.has(secIdx)) linesBySection.set(secIdx, []);
+                linesBySection.get(secIdx)!.push(line);
+              }
+
+              const fireMap = new Map<number, { fire_count: number; fire_strength: number; avg_hold_ms: number }>();
+              for (const row of fireStrength) fireMap.set(row.line_index, row);
+
+              const maxStrength = fireStrength[0]?.fire_strength ?? 1;
+
+              return (
+                <div className="space-y-3">
+                  <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider px-1">
+                    fire by section
+                  </p>
+                  {Array.from(linesBySection.entries()).map(([secIdx, sectionLines]) => {
+                    const sec = sections[secIdx] ?? {};
+                    const sectionFires = sectionLines.reduce((sum, l) => sum + (fireMap.get(l.lineIndex)?.fire_count ?? 0), 0);
+                    if (sectionLines.length === 0) return null;
+
+                    const label = sec.description ? sec.description.slice(0, 40) : `Section ${secIdx + 1}`;
+
+                    return (
+                      <div key={secIdx} className="glass-card rounded-xl p-3 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider">
+                            {label}
+                          </span>
+                          {sectionFires > 0 && (
+                            <span className="text-[10px] font-mono text-orange-400/70">
+                              🔥 {sectionFires}
+                            </span>
+                          )}
+                        </div>
+                        {sectionLines.filter((l) => l.text.trim()).map((line) => {
+                          const fire = fireMap.get(line.lineIndex);
+                          const pct = fire ? Math.round((fire.fire_strength / maxStrength) * 100) : 0;
+                          const holdLabel = fire
+                            ? fire.avg_hold_ms < 300
+                              ? "tap"
+                              : fire.avg_hold_ms < 1000
+                                ? "hold"
+                                : "deep"
+                            : null;
+
+                          return (
+                            <div key={line.lineIndex} className="relative py-1">
+                              {pct > 0 && (
+                                <div
+                                  className="absolute inset-y-0 left-0 rounded"
+                                  style={{
+                                    width: `${pct}%`,
+                                    background: "linear-gradient(90deg, rgba(255,120,30,0.08) 0%, rgba(255,120,30,0.15) 100%)",
+                                  }}
+                                />
+                              )}
+                              <div className="relative flex items-center justify-between gap-2 px-1.5">
+                                <span
+                                  className={`text-[11px] leading-snug flex-1 min-w-0 ${
+                                    fire ? "text-foreground/80" : "text-muted-foreground/40"
+                                  }`}
+                                >
+                                  {line.text}
+                                </span>
+                                {fire && (
+                                  <span className="text-[9px] font-mono text-orange-400/50 shrink-0">
+                                    {fire.fire_count}× {holdLabel}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+
+                  {linesBySection.size >= 2 && (() => {
+                    const sectionFireCounts = Array.from(linesBySection.entries())
+                      .map(([secIdx, lines]) => ({
+                        secIdx,
+                        fires: lines.reduce((s, l) => s + (fireMap.get(l.lineIndex)?.fire_count ?? 0), 0),
+                        label: (sections[secIdx] as any)?.description?.slice(0, 30) ?? `Section ${secIdx + 1}`,
+                      }))
+                      .filter((s) => s.fires > 0)
+                      .sort((a, b) => b.fires - a.fires);
+
+                    if (sectionFireCounts.length >= 2) {
+                      const top = sectionFireCounts[0];
+                      const second = sectionFireCounts[1];
+                      if (top.fires > second.fires * 2) {
+                        return (
+                          <p className="text-[11px] text-muted-foreground/50 px-1 leading-relaxed">
+                            "{top.label}" is carrying your song — it has {Math.round((top.fires / sectionFireCounts.reduce((s, c) => s + c.fires, 0)) * 100)}% of all fires. That's your clip section.
+                          </p>
+                        );
+                      }
+                      return (
+                        <p className="text-[11px] text-muted-foreground/50 px-1 leading-relaxed">
+                          Fires spread across multiple sections — your song holds attention from start to finish.
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              );
+            })()}
+
+            {/* ── What your song did (closing screen) ── */}
             {closingDist.length > 0 && empowermentPromise && (
               <div className="glass-card rounded-xl p-4 space-y-3">
                 <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
                   what your song did for them
                 </p>
-                <p className="text-[11px] text-muted-foreground/50 mb-1">
-                  After listening, we asked: "How does this song make you feel?"
+                <p className="text-[11px] text-muted-foreground/40 mb-1">
+                  After listening: "How does this make you feel?"
                 </p>
                 {closingDist.map((row) => {
-                  const label =
-                    empowermentPromise.hooks[row.hook_index] ??
-                    `feeling ${row.hook_index}`;
+                  const label = empowermentPromise.hooks[row.hook_index] ?? `feeling ${row.hook_index}`;
                   return (
                     <div key={row.hook_index} className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-mono text-foreground/75 flex-1 truncate min-w-0">
-                          {label}
-                        </span>
-                        <span className="text-[10px] font-mono text-primary/70 shrink-0 ml-2">
-                          {row.pct}%
-                        </span>
+                        <span className="text-[11px] font-mono text-foreground/75 flex-1 truncate min-w-0">{label}</span>
+                        <span className="text-[10px] font-mono text-primary/70 shrink-0 ml-2">{row.pct}%</span>
                       </div>
                       <div className="h-1.5 rounded-full bg-muted/30 overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${row.pct}%`,
-                            background: "rgba(168,85,247,0.55)",
-                          }}
-                        />
+                        <div className="h-full rounded-full" style={{ width: `${row.pct}%`, background: "rgba(255,120,30,0.5)" }} />
                       </div>
                     </div>
                   );
                 })}
-                {/* Insight */}
-                {closingDist.length >= 2 && (() => {
-                  const top = closingDist[0];
-                  const topLabel = empowermentPromise.hooks[top?.hook_index] ?? "";
-                  if (top && top.pct >= 50) {
-                    return (
-                      <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
-                        Over half your listeners landed on "{topLabel.slice(0, 40)}." That's your song's emotional center — use it in captions, hooks, and promo.
-                      </p>
-                    );
-                  } else if (closingDist[0]?.pct - closingDist[1]?.pct < 10) {
-                    return (
-                      <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
-                        Reactions are split evenly — your song speaks to different people in different ways. That's a sign of depth.
-                      </p>
-                    );
-                  }
-                  return null;
-                })()}
+                {closingDist.length >= 2 && closingDist[0]?.pct >= 50 && (
+                  <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+                    Over half landed on "{empowermentPromise.hooks[closingDist[0].hook_index]?.slice(0, 40)}." That's your song's emotional center — use it in captions and promo.
+                  </p>
+                )}
               </div>
             )}
 
@@ -1776,17 +1808,10 @@ export function FitTab({
                   in their own words
                 </p>
                 {freeResponses.map((r, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-2.5 py-1.5 border-b border-border/20 last:border-0"
-                  >
-                    <span className="text-[11px] text-foreground/70 flex-1 leading-snug font-light italic">
-                      "{r.free_text}"
-                    </span>
+                  <div key={i} className="flex items-start gap-2.5 py-1.5 border-b border-border/20 last:border-0">
+                    <span className="text-[11px] text-foreground/70 flex-1 leading-snug font-light italic">"{r.free_text}"</span>
                     {r.repeat_count > 1 && (
-                      <span className="text-[9px] font-mono text-primary/40 shrink-0 mt-0.5">
-                        ×{r.repeat_count}
-                      </span>
+                      <span className="text-[9px] font-mono text-primary/40 shrink-0 mt-0.5">×{r.repeat_count}</span>
                     )}
                   </div>
                 ))}
@@ -1798,15 +1823,13 @@ export function FitTab({
               </div>
             )}
 
-            {/* ── Clip suggestions (kept from original) ── */}
+            {/* ── Clip suggestions (kept) ── */}
             {closingDist.slice(0, 3).map((row) => {
               if (!empowermentPromise || row.pct < 10) return null;
               const feeling = empowermentPromise.hooks[row.hook_index];
               if (!feeling) return null;
               const topFireLine = fireStrength[0];
-              const topLine = allLines.find(
-                (l) => l.lineIndex === topFireLine?.line_index,
-              );
+              const topLine = allLines.find((l) => l.lineIndex === topFireLine?.line_index);
               const captions: Record<number, string> = {
                 0: "for everyone who needed to hear this",
                 1: "this is what letting go sounds like",
@@ -1817,35 +1840,18 @@ export function FitTab({
               };
               const caption = captions[row.hook_index] ?? feeling;
               return (
-                <div
-                  key={row.hook_index}
-                  className="glass-card rounded-xl p-4 space-y-3 border border-primary/10"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">
-                      {row.pct}% felt "{feeling.slice(0, 28)}"
-                    </p>
-                  </div>
-                  <p className="text-[13px] font-mono text-foreground/85 italic">
-                    "{caption}"
-                  </p>
-                  {topLine && (
-                    <p className="text-[9px] font-mono text-muted-foreground/50">
-                      best moment · {topLine.text.slice(0, 40)}
-                    </p>
-                  )}
+                <div key={row.hook_index} className="glass-card rounded-xl p-4 space-y-3 border border-primary/10">
+                  <p className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">{row.pct}% felt "{feeling.slice(0, 28)}"</p>
+                  <p className="text-[13px] font-mono text-foreground/85 italic">"{caption}"</p>
+                  {topLine && <p className="text-[9px] font-mono text-muted-foreground/50">best moment · {topLine.text.slice(0, 40)}</p>}
                   <div className="flex gap-2 pt-1">
                     <button
                       onClick={() => {
                         const player = dancePlayerRef.current?.getPlayer();
                         if (player && topFireLine) {
-                          const t = topFireLine.line_index;
-                          const line = allLines.find((l) => l.lineIndex === t);
+                          const line = allLines.find((l) => l.lineIndex === topFireLine.line_index);
                           if (line) {
-                            player.setRegion(
-                              Math.max(0, line.startSec - 1.5),
-                              line.startSec + 10,
-                            );
+                            player.setRegion(Math.max(0, line.startSec - 1.5), line.startSec + 10);
                             (player as any).setClipCaption?.(caption);
                             player.play();
                           }
@@ -1859,14 +1865,7 @@ export function FitTab({
                       onClick={() => {
                         setClipComposerVisible(true);
                         setClipComposerCaption(caption);
-                        setClipComposerStart(
-                          Math.max(
-                            0,
-                            (allLines.find(
-                              (l) => l.lineIndex === topFireLine?.line_index,
-                            )?.startSec ?? 0) - 1.5,
-                          ),
-                        );
+                        setClipComposerStart(Math.max(0, (allLines.find((l) => l.lineIndex === topFireLine?.line_index)?.startSec ?? 0) - 1.5));
                       }}
                       className="flex-1 py-2 text-[9px] font-mono uppercase tracking-wider rounded-lg border border-primary/30 text-primary/70 hover:text-primary hover:bg-primary/5 transition-colors"
                     >
@@ -1904,13 +1903,12 @@ export function FitTab({
               <div className="flex flex-col items-center gap-3 py-12">
                 <span style={{ fontSize: 32 }}>🔥</span>
                 <p className="text-[12px] text-muted-foreground text-center leading-relaxed max-w-[260px]">
-                  Share your song to start collecting signal. Every fire, reaction, and response shows up here.
+                  Share your song to start collecting signal. Every fire shows up here — mapped to the exact lyric and moment in the song.
                 </p>
               </div>
             )}
-
             {totalFires === 0 && !resultsLoaded && (
-              <div className="flex flex-col items-center gap-3 py-12">
+              <div className="flex justify-center py-12">
                 <Loader2 size={18} className="animate-spin text-muted-foreground/30" />
               </div>
             )}
