@@ -530,7 +530,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 markFired();
               },
               activeLineFireCount: effectiveShowCover ? 0 : activeLineFireCount,
-              hookPhrase,
+              hookPhrase: null,
               activeLineText: effectiveShowCover ? null : (activeLine?.text ?? null),
               accent: barAccent,
               hasFired,

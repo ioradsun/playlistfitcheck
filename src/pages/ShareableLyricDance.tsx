@@ -161,7 +161,6 @@ export default function ShareableLyricDance() {
     prefetchedData: data,
     postId: data?.post_id ?? data?.id ?? "",
     autoPlay: true,
-    eagerUpgrade: true,
   });
 
   const {
