@@ -406,6 +406,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="absolute inset-0"
+                style={{ zIndex: 30 }}
               >
                 <LyricDanceCover
                   songName={songTitle}
