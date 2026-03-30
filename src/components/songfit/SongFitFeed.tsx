@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import type { SongFitPost, FeedView, BillboardMode } from "./types";
-import { SongFitPostCard, SongFitPostCardMemo } from "./SongFitPostCard";
+import { SongFitPostCardMemo } from "./SongFitPostCard";
 import { SongFitComments } from "./SongFitComments";
 import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
