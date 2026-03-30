@@ -767,6 +767,7 @@ export function FitTab({
               status: "live",
               submitted_at: new Date().toISOString(),
               expires_at: expiresAt.toISOString(),
+              palette: derivePaletteFromDirection(cinematicDirection) as any,
             });
           }
 
@@ -1029,6 +1030,7 @@ export function FitTab({
                 status: "live",
                 submitted_at: new Date().toISOString(),
                 expires_at: expiresAt.toISOString(),
+                palette: derivePaletteFromDirection(cinematicDirection) as any,
               });
             }
             window.dispatchEvent(new Event("songfit:dance-published"));

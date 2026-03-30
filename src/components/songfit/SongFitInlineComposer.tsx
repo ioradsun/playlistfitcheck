@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { checkDuplicateSubmission, checkEligibleForReentry, reenterSubmission } from "@/lib/engagementTracking";
 import { useNavigate } from "react-router-dom";
 import { useVoteGate } from "@/hooks/useVoteGate";
+import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 
 interface TrackResult {
   id: string;
@@ -236,6 +237,18 @@ export function SongFitInlineComposer({ onPostCreated, onNavigateLyricDance }: P
       // New submission
       const now = new Date();
       const expiresAt = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000);
+
+      // Compute palette from album art (non-blocking — insert even if it fails)
+      let palette: string[] | null = null;
+      if (selectedTrack.albumArt) {
+        try {
+          const palettes = await computeAutoPalettesFromUrls([selectedTrack.albumArt]);
+          if (palettes[0]?.length) palette = palettes[0];
+        } catch {
+          // palette computation failed — insert without it
+        }
+      }
+
       const { error } = await supabase.from("songfit_posts").insert({
         user_id: user.id,
         spotify_track_url: selectedTrack.spotifyUrl,
@@ -251,6 +264,7 @@ export function SongFitInlineComposer({ onPostCreated, onNavigateLyricDance }: P
         status: "live",
         submitted_at: now.toISOString(),
         expires_at: expiresAt.toISOString(),
+        palette: palette as any,
       });
       if (error) throw error;
       setQuery("");
