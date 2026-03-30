@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
-import { getPreloadedImage, preloadImage } from "@/lib/imagePreloadCache";
+import React from "react";
 
 interface LyricDanceCoverTypography {
   fontFamily: string;
@@ -21,15 +20,10 @@ interface LyricDanceCoverProps {
   badge?: string | null;
   onExpand?: () => void;
   coverImageUrl?: string | null;
-  /** All section images — cycled with CSS crossfade. Falls back to coverImageUrl. */
   sectionImages?: string[];
-  /** When true, fades out the background (canvas is ready, lyrics show through) */
   hideBackground?: boolean;
-  /** First two lyric lines shown as animated preview text */
   previewLines?: string[];
-  /** Hook phrase — highlighted in the preview */
   hookPhrase?: string | null;
-  /** Resolved typography from the song's cinematic_direction — matches player font exactly */
   typography?: LyricDanceCoverTypography;
 }
 
@@ -48,40 +42,25 @@ export function LyricDanceCover({
   hookPhrase,
   typography,
 }: LyricDanceCoverProps) {
-  const images: string[] = (sectionImages && sectionImages.length > 0)
+  // Images to cycle: section images first, fall back to coverImageUrl, then nothing
+  const images: string[] = sectionImages?.length
     ? sectionImages
-    : (coverImageUrl ? [coverImageUrl] : []);
-
-  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (images.length === 0) return;
-    let cancelled = false;
-    images.forEach((url) => {
-      const cached = getPreloadedImage(url);
-      if (cached && cached.complete && cached.naturalWidth > 0) {
-        setLoadedImages((prev) => new Set([...prev, url]));
-        return;
-      }
-      preloadImage(url).then(() => {
-        if (!cancelled) setLoadedImages((prev) => new Set([...prev, url]));
-      });
-    });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images.join(",")]);
+    : coverImageUrl
+    ? [coverImageUrl]
+    : [];
 
   const showPreview = !hideBackground && !waiting && previewLines && previewLines.length > 0;
-
   const cycleTime = 4;
   const totalDuration = cycleTime * Math.max(images.length, 1);
 
-  // Typography fallback — matches player default
   const fontFamily = typography?.fontFamily ?? '"Montserrat", sans-serif';
   const fontWeight = typography?.fontWeight ?? 600;
   const textTransform = typography?.textTransform ?? "none";
-  // letterSpacing from resolver is in em units
   const letterSpacing = typography ? `${typography.letterSpacing}em` : "0.03em";
+
+  // Base image: first available. CSS background-image loads gracefully —
+  // shows nothing while fetching, appears instantly when cached. No JS opacity gate.
+  const baseImage = images[0] ?? null;
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
@@ -104,12 +83,12 @@ export function LyricDanceCover({
         }
       `}</style>
 
-      {/* Base layer — album art always visible, never waits for preload */}
-      {coverImageUrl && !hideBackground && (
+      {/* Base layer — always-visible first image via CSS, no JS load gate */}
+      {baseImage && !hideBackground && (
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: `url(${coverImageUrl})`,
+            backgroundImage: `url(${baseImage})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
             filter: "blur(10px) saturate(0.5)",
@@ -118,8 +97,8 @@ export function LyricDanceCover({
         />
       )}
 
-      {/* Section image layers — each crossfades in turn */}
-      {images.map((url, i) => (
+      {/* Cycling section images — fade in over the base layer once loaded */}
+      {images.length > 1 && !hideBackground && images.map((url, i) => (
         <div
           key={url}
           className="absolute inset-0"
@@ -128,12 +107,9 @@ export function LyricDanceCover({
             backgroundSize: "cover",
             backgroundPosition: "center",
             filter: "blur(10px) saturate(0.6)",
-            opacity: hideBackground ? 0 : loadedImages.has(url) ? 1 : 0,
-            animation: hideBackground || !loadedImages.has(url)
-              ? "none"
-              : `imgCycle ${totalDuration}s ease-in-out infinite`,
+            animation: `imgCycle ${totalDuration}s ease-in-out infinite`,
             animationDelay: `${i * cycleTime}s`,
-            transition: "opacity 0.5s ease",
+            opacity: 0,
           }}
         />
       ))}
@@ -175,7 +151,7 @@ export function LyricDanceCover({
         </div>
       )}
 
-      {/* Lyric preview — uses the actual player font */}
+      {/* Lyric preview */}
       {showPreview && (
         <div
           className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[5]"
@@ -183,8 +159,6 @@ export function LyricDanceCover({
         >
           {previewLines!.map((line, i) => {
             const isHook = !!(hookPhrase && line === hookPhrase);
-            const lineDuration = 4;
-            const lineDelay = i * (lineDuration * 0.6);
             return (
               <div
                 key={i}
@@ -198,8 +172,8 @@ export function LyricDanceCover({
                   padding: "0 1.5rem",
                   marginBottom: "0.75rem",
                   color: isHook ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.6)",
-                  animation: `lyricCycle ${lineDuration * 2}s ease-in-out infinite`,
-                  animationDelay: `${lineDelay}s`,
+                  animation: `lyricCycle ${8}s ease-in-out infinite`,
+                  animationDelay: `${i * 4.8}s`,
                   opacity: 0,
                   maxWidth: "88%",
                   lineHeight: 1.4,
