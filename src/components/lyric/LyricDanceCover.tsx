@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getPreloadedImage, preloadImage } from "@/lib/imagePreloadCache";
 
+interface LyricDanceCoverTypography {
+  fontFamily: string;
+  fontWeight: number;
+  textTransform: "none" | "uppercase";
+  letterSpacing: number;
+}
+
 interface LyricDanceCoverProps {
   songName: string;
   claimArtistName?: string;
@@ -22,6 +29,8 @@ interface LyricDanceCoverProps {
   previewLines?: string[];
   /** Hook phrase — highlighted in the preview */
   hookPhrase?: string | null;
+  /** Resolved typography from the song's cinematic_direction — matches player font exactly */
+  typography?: LyricDanceCoverTypography;
 }
 
 export function LyricDanceCover({
@@ -37,13 +46,12 @@ export function LyricDanceCover({
   hideBackground = false,
   previewLines,
   hookPhrase,
+  typography,
 }: LyricDanceCoverProps) {
-  // Determine which images to cycle. Use section images if available, fall back to album art.
   const images: string[] = (sectionImages && sectionImages.length > 0)
     ? sectionImages
     : (coverImageUrl ? [coverImageUrl] : []);
 
-  // Preload all section images so crossfade doesn't flash on first cycle
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -60,13 +68,20 @@ export function LyricDanceCover({
       });
     });
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [images.join(",")]);
 
   const showPreview = !hideBackground && !waiting && previewLines && previewLines.length > 0;
 
-  // Each image is visible for (cycleTime) seconds, crossfade (fadeTime) seconds
-  const cycleTime = 4; // seconds per image
-  const totalDuration = cycleTime * images.length;
+  const cycleTime = 4;
+  const totalDuration = cycleTime * Math.max(images.length, 1);
+
+  // Typography fallback — matches player default
+  const fontFamily = typography?.fontFamily ?? '"Montserrat", sans-serif';
+  const fontWeight = typography?.fontWeight ?? 600;
+  const textTransform = typography?.textTransform ?? "none";
+  // letterSpacing from resolver is in em units
+  const letterSpacing = typography ? `${typography.letterSpacing}em` : "0.03em";
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
@@ -89,7 +104,7 @@ export function LyricDanceCover({
         }
       `}</style>
 
-      {/* Section image layers — each crossfades in turn via animation-delay */}
+      {/* Section image layers — each crossfades in turn */}
       {images.map((url, i) => (
         <div
           key={url}
@@ -104,14 +119,12 @@ export function LyricDanceCover({
               ? "none"
               : `imgCycle ${totalDuration}s ease-in-out infinite`,
             animationDelay: `${i * cycleTime}s`,
-            // First image starts visible immediately; others start at 0 opacity
-            // via keyframe definition — no need for separate initial state
             transition: "opacity 0.5s ease",
           }}
         />
       ))}
 
-      {/* Dark gradient overlay — pulses slightly */}
+      {/* Dark gradient overlay */}
       <div
         className="absolute inset-0 transition-opacity duration-700"
         style={{
@@ -124,7 +137,7 @@ export function LyricDanceCover({
         }}
       />
 
-      {/* Badge + expand, pinned top */}
+      {/* Badge + expand */}
       {(badge || onExpand) && (
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-3 z-10">
           {badge ? (
@@ -148,34 +161,35 @@ export function LyricDanceCover({
         </div>
       )}
 
-      {/* CSS lyric preview lines — fade cycle */}
+      {/* Lyric preview — uses the actual player font */}
       {showPreview && (
         <div
           className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[5]"
           style={{ paddingBottom: "4rem" }}
         >
           {previewLines!.map((line, i) => {
-            const isHook = hookPhrase && line === hookPhrase;
+            const isHook = !!(hookPhrase && line === hookPhrase);
             const lineDuration = 4;
             const lineDelay = i * (lineDuration * 0.6);
             return (
               <div
                 key={i}
                 style={{
-                  fontFamily: "monospace",
-                  fontSize: "clamp(11px, 2.8vw, 15px)",
-                  letterSpacing: "0.04em",
+                  fontFamily,
+                  fontSize: "clamp(13px, 3.5vw, 18px)",
+                  fontWeight: isHook ? Math.max(fontWeight, 700) : fontWeight,
+                  textTransform,
+                  letterSpacing,
                   textAlign: "center",
                   padding: "0 1.5rem",
-                  marginBottom: "0.6rem",
-                  color: isHook ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.55)",
-                  fontWeight: isHook ? 600 : 400,
+                  marginBottom: "0.75rem",
+                  color: isHook ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.6)",
                   animation: `lyricCycle ${lineDuration * 2}s ease-in-out infinite`,
                   animationDelay: `${lineDelay}s`,
                   opacity: 0,
-                  maxWidth: "85%",
-                  lineHeight: 1.5,
-                  textShadow: "0 1px 10px rgba(0,0,0,0.9)",
+                  maxWidth: "88%",
+                  lineHeight: 1.4,
+                  textShadow: "0 1px 12px rgba(0,0,0,0.9), 0 0 30px rgba(0,0,0,0.6)",
                 }}
               >
                 {line}
