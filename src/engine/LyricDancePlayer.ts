@@ -1386,7 +1386,6 @@ export class LyricDancePlayer {
   private _fontLayoutReflowPending = false;
   private _handleVisibilityChange: () => void;
   private _pendingUpgradeTimeout: number | null = null;
-  private _pendingIdleHandle: number | null = null;
   private _pendingCanPlayHandler: (() => void) | null = null;
   /** Audio is waiting for scene compilation to finish before playing */
   private _audioDeferredUntilReady = false;
@@ -1589,29 +1588,14 @@ export class LyricDancePlayer {
       || this.fullModeEnabled
       || this._bakePromise
       || this._pendingUpgradeTimeout != null
-      || this._pendingIdleHandle != null
     ) {
       return;
     }
 
-    const idleApi = window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-    };
-
-    const run = () => {
-      this._pendingIdleHandle = null;
-      if (this.destroyed || this.fullModeEnabled) return;
-      void this.prepareFullMode();
-    };
-
     this._pendingUpgradeTimeout = window.setTimeout(() => {
       this._pendingUpgradeTimeout = null;
       if (this.destroyed || this.fullModeEnabled) return;
-      if (idleApi.requestIdleCallback) {
-        this._pendingIdleHandle = idleApi.requestIdleCallback(run, { timeout: 300 });
-      } else {
-        run();
-      }
+      void this.prepareFullMode();
     }, 100);
   }
 
@@ -2389,11 +2373,6 @@ export class LyricDancePlayer {
       window.clearTimeout(this._pendingUpgradeTimeout);
       this._pendingUpgradeTimeout = null;
     }
-    const idleApi = window as Window & { cancelIdleCallback?: (id: number) => void };
-    if (this._pendingIdleHandle != null && idleApi.cancelIdleCallback) {
-      idleApi.cancelIdleCallback(this._pendingIdleHandle);
-    }
-    this._pendingIdleHandle = null;
     if (this._pendingCanPlayHandler) {
       this.audio.removeEventListener("canplay", this._pendingCanPlayHandler);
       this._pendingCanPlayHandler = null;
