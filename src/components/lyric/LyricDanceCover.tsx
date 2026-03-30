@@ -67,7 +67,18 @@ export function LyricDanceCover({
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
-      {/* Layer 1 — album art, blurred */}
+      <style>{`
+        @keyframes coverBreathe {
+          0%, 100% { transform: scale(1.08); }
+          50% { transform: scale(1.14); }
+        }
+        @keyframes coverPulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.82; }
+        }
+      `}</style>
+
+      {/* Layer 1 — album art, blurred + slow breathing zoom */}
       {coverImageUrl && (
         <div
           className="absolute inset-0 transition-opacity duration-500"
@@ -76,13 +87,13 @@ export function LyricDanceCover({
             backgroundSize: "cover",
             backgroundPosition: "center",
             filter: "blur(8px) saturate(0.5)",
-            transform: "scale(1.08)",
+            animation: hideBackground ? "none" : "coverBreathe 8s ease-in-out infinite",
             opacity: hideBackground ? 0 : imageLoaded ? 1 : 0,
           }}
         />
       )}
 
-      {/* Layer 2 — dark gradient over the image */}
+      {/* Layer 2 — dark gradient, pulsing slightly out of phase with the zoom */}
       <div
         className="absolute inset-0 transition-opacity duration-700"
         style={{
@@ -90,6 +101,8 @@ export function LyricDanceCover({
             ? "rgba(0,0,0,0.75)"
             : "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)",
           opacity: hideBackground ? (isMarketingCover ? 0.6 : 0.7) : 1,
+          animation: hideBackground ? "none" : "coverPulse 5s ease-in-out infinite",
+          animationDelay: "2.5s",
         }}
       />
 

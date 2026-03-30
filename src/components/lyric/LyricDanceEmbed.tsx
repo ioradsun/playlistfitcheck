@@ -258,8 +258,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player.play();
       player.setMuted(false);
       setMuted(false);
-    } else if (shouldMuted || coverUp) {
+    } else if (shouldMuted) {
+      // Cover is down, user hasn't engaged — play muted so scene renders
       player.play();
+      player.setMuted(true);
+      setMuted(true);
+    } else if (coverUp) {
+      // Cover is up — canvas is fully hidden. No RAF, no wasted CPU.
+      // RAF starts when user taps "Listen Now" via handleListenNow.
+      player.pause();
       player.setMuted(true);
       setMuted(true);
     }
