@@ -52,6 +52,8 @@ export function releaseCanvasSlot(postId: string): void {
   tCtx?.clearRect(0, 0, slot.text.width, slot.text.height);
   slot.inUse = false;
   slot.heldBy = null;
+  // Wake any cards that were waiting for a free slot
+  window.dispatchEvent(new CustomEvent("crowdfit:pool-slot-freed"));
 }
 
 /** Check if a card currently holds a slot. */
