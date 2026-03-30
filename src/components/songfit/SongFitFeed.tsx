@@ -17,7 +17,6 @@ import {
   CardLifecycleProvider,
   useCardLifecycleStore,
 } from "./useCardLifecycle";
-import { RealtimeFeedHubProvider } from "./RealtimeFeedHub";
 import { logImpression } from "@/lib/engagementTracking";
 import { cn } from "@/lib/utils";
 import { useVoteGate } from "@/hooks/useVoteGate";
@@ -357,19 +356,17 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         >
           <style>{"@keyframes fadeIn{from{opacity:0}to{opacity:1}}"}</style>
           <CardLifecycleProvider>
-            <RealtimeFeedHubProvider>
-              <FeedList
-                posts={feed.posts}
-                feedView={feed.feedView}
-                signalMap={feed.signalMap}
-                loadingMore={feed.loadingMore}
-                hasMore={feed.hasMore}
-                loadMore={feed.loadMore}
-                onRefresh={feed.refresh}
-                lyricDataMap={feed.lyricDataMap}
-                reelsMode={reelsMode}
-              />
-            </RealtimeFeedHubProvider>
+            <FeedList
+              posts={feed.posts}
+              feedView={feed.feedView}
+              signalMap={feed.signalMap}
+              loadingMore={feed.loadingMore}
+              hasMore={feed.hasMore}
+              loadMore={feed.loadMore}
+              onRefresh={feed.refresh}
+              lyricDataMap={feed.lyricDataMap}
+              reelsMode={reelsMode}
+            />
           </CardLifecycleProvider>
         </div>
       )}

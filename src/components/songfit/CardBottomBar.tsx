@@ -52,19 +52,6 @@ interface CardBottomBarProps {
   isLive?: boolean;
   totalFireCount?: number;
   lastFiredAt?: string | null;
-  // Legacy props accepted but unused — kept so existing call sites don't error
-  votedSide?: "a" | "b" | null;
-  score?: { total: number; replay_yes: number } | null;
-  note?: string;
-  onNoteChange?: (note: string) => void;
-  onVoteYes?: () => void;
-  onVoteNo?: () => void;
-  onSubmit?: () => void;
-  topReaction?: { symbol: string; count: number } | null;
-  trackTitle?: string;
-  yesLabel?: string;
-  noLabel?: string;
-  renderVotedContent?: () => React.ReactNode;
 }
 
 function FireButton({
