@@ -290,16 +290,15 @@ function LazySpotifyEmbedInner({
       ) : (
         <>
           <div
-            className="absolute inset-0 w-full h-full z-[6] pointer-events-none transition-opacity duration-700"
-            style={{ opacity: revealReady ? 0 : 1 }}
+            className="absolute inset-0 w-full h-full z-[5] pointer-events-none"
           >
             {posterElement}
           </div>
           {isSpotify ? (
             <div
               ref={containerRef}
-              className="absolute inset-0 w-full transition-opacity duration-700"
-              style={{ background: "#000", opacity: revealReady ? 1 : 0, zIndex: revealReady ? 8 : 5 }}
+              className="absolute inset-0 w-full"
+              style={{ zIndex: 6 }}
             />
           ) : (
             !scSilenced && (
@@ -308,8 +307,8 @@ function LazySpotifyEmbedInner({
                 width="100%"
                 height={embedHeight}
                 allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                className="absolute inset-0 border-0 block w-full transition-opacity duration-700"
-                style={{ background: "#000", opacity: revealReady ? 1 : 0, zIndex: revealReady ? 8 : 5 }}
+                className="absolute inset-0 border-0 block w-full"
+                style={{ zIndex: 6 }}
                 title={`Play ${trackTitle}`}
                 scrolling="no"
                 onLoad={() => setIframeLoaded(true)}
