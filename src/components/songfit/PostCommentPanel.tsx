@@ -8,7 +8,6 @@ import {
   EMOJIS,
   type EmojiKey,
 } from "@/components/shared/panel/panelConstants";
-import { CommentInput } from "@/components/shared/panel/CommentInput";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { useCardVote } from "@/hooks/useCardVote";
 import { useTopPostReaction } from "@/hooks/useTopPostReaction";
@@ -111,7 +110,6 @@ export function PostCommentPanel({
 
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
   const [commentReactions, setCommentReactions] = useState<
     Record<string, Record<string, number>>
   >({});
@@ -122,7 +120,6 @@ export function PostCommentPanel({
   // ── Panel comment input state ──
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   const handleCommentFromBar = useCallback(async () => {
     const content = note.trim();
@@ -142,31 +139,17 @@ export function PostCommentPanel({
     const content = text.trim();
     if (!content || !user || submitting) return;
     setSubmitting(true);
-    const parentId = replyingTo?.id ?? null;
     const optimistic: Comment = {
       id: `optimistic-${Date.now()}`,
       content,
       created_at: new Date().toISOString(),
       user_id: user.id,
-      parent_comment_id: parentId,
+      parent_comment_id: null,
       profiles: { display_name: user.email ?? null, avatar_url: null },
       replies: [],
     };
-    if (replyingTo) {
-      setComments((prev) =>
-        prev.map((c) =>
-          c.id === replyingTo.id
-            ? { ...c, replies: [...(c.replies ?? []), optimistic] }
-            : c,
-        ),
-      );
-    } else {
-      setComments((prev) => [...prev, optimistic]);
-    }
+    setComments((prev) => [...prev, optimistic]);
     setText("");
-    setReplyingTo(null);
-    setHasSubmitted(true);
-    setTimeout(() => setHasSubmitted(false), 500);
     try {
       await supabase
         .from("songfit_comments")
@@ -174,14 +157,14 @@ export function PostCommentPanel({
           post_id: postId,
           user_id: user.id,
           content,
-          parent_comment_id: parentId,
+          parent_comment_id: null,
         });
     } catch {
       // silent
     } finally {
       setSubmitting(false);
     }
-  }, [text, user, submitting, replyingTo, postId]);
+  }, [text, user, submitting, postId]);
 
   useEffect(() => {
     if (!isOpen || !postId) return;
@@ -260,7 +243,6 @@ export function PostCommentPanel({
 
     loadComments();
     loadCommentReactions();
-    setReplyingTo(null);
   }, [isOpen, postId, commentRefreshKey]);
 
   const handleCommentReact = async (commentId: string, emoji: EmojiKey) => {
@@ -356,14 +338,6 @@ export function PostCommentPanel({
             }
             sessionReacted={sessionCommentReacted}
           />
-          {!isReply && (
-            <button
-              onClick={() => setReplyingTo(comment)}
-              className="text-[10px] font-mono text-white/30 hover:text-white/55 transition-colors ml-auto focus:outline-none"
-            >
-              reply
-            </button>
-          )}
         </div>
 
         {!isReply && comment.replies && comment.replies.length > 0 && (
@@ -394,46 +368,6 @@ export function PostCommentPanel({
               borderTop: "0.5px solid rgba(255,255,255,0.06)",
             }}
           >
-            {/* Comment input */}
-            <CommentInput
-              value={text}
-              onChange={setText}
-              onSubmit={handleSubmit}
-              onClose={onClose}
-              hasSubmitted={hasSubmitted}
-              size="compact"
-            />
-
-            {replyingTo && (
-              <div
-                className="flex items-center gap-2 px-4 py-1.5 shrink-0 border-b border-white/[0.04]"
-                style={{ background: "rgba(255,255,255,0.02)" }}
-              >
-                <span className="text-[10px] font-mono text-white/35 truncate flex-1">
-                  replying to{" "}
-                  <span className="text-white/50">
-                    {replyingTo.profiles?.display_name ?? "anon"}
-                  </span>
-                </span>
-                <button
-                  onClick={() => setReplyingTo(null)}
-                  className="text-white/20 hover:text-white/50 transition-colors shrink-0 focus:outline-none"
-                >
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 10 10"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  >
-                    <line x1="2" y1="2" x2="8" y2="8" />
-                    <line x1="8" y1="2" x2="2" y2="8" />
-                  </svg>
-                </button>
-              </div>
-            )}
-
             <div
               className="flex-1 overflow-y-auto min-h-0"
               style={{ scrollbarWidth: "none" }}
@@ -449,30 +383,84 @@ export function PostCommentPanel({
               )}
             </div>
 
+            {/* ── Bottom comment bar — matches ReactionPanel ── */}
             <div
               style={{
                 flexShrink: 0,
-                height: 48,
-                background: "#0a0a0a",
                 borderTop: "0.5px solid rgba(255,255,255,0.06)",
+                background: "#0a0a0a",
+                padding: "8px 12px",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "flex-end",
-                paddingRight: 12,
+                gap: 8,
               }}
             >
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  background: "rgba(255,255,255,0.05)",
+                  border: "0.5px solid rgba(255,255,255,0.09)",
+                  borderRadius: 20,
+                  padding: "7px 14px",
+                  minWidth: 0,
+                }}
+              >
+                <input
+                  type="text"
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSubmit();
+                    }
+                  }}
+                  placeholder="why did this hit?"
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    fontSize: 13,
+                    color: "rgba(255,255,255,0.75)",
+                    fontFamily: "inherit",
+                    minWidth: 0,
+                  }}
+                />
+                {text.trim().length > 0 && (
+                  <button
+                    onClick={handleSubmit}
+                    style={{
+                      fontSize: 9,
+                      fontFamily: "monospace",
+                      color: "rgba(255,255,255,0.5)",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      letterSpacing: "0.1em",
+                      flexShrink: 0,
+                    }}
+                  >
+                    post
+                  </button>
+                )}
+              </div>
               <button
                 onClick={onClose}
                 style={{
+                  flexShrink: 0,
+                  width: 36,
+                  height: 36,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   background: "none",
                   border: "none",
                   cursor: "pointer",
                   color: "rgba(255,255,255,0.3)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 36,
-                  height: 36,
                   borderRadius: 8,
                 }}
               >
