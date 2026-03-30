@@ -47,6 +47,42 @@ export default defineConfig(({ mode }) => ({
               expiration: { maxAgeSeconds: 60 * 60 * 24 * 90 }, // 90 days
             },
           },
+          // Section images from Supabase storage — immutable, cache aggressively
+          {
+            urlPattern: /supabase\.co\/storage\/v1\/object\/public\/.*\.(?:jpg|jpeg|png|webp)$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "section-images",
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+              },
+            },
+          },
+          // Audio clips from Supabase storage
+          {
+            urlPattern: /supabase\.co\/storage\/v1\/object\/public\/audio-clips\//,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "audio-clips",
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+              },
+            },
+          },
+          // Google Fonts CSS and woff2 — browser usually caches these but SW ensures it
+          {
+            urlPattern: /fonts\.(?:googleapis|gstatic)\.com\//,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts",
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+            },
+          },
         ],
       },
       manifest: false, // We manage manifest.json ourselves in /public

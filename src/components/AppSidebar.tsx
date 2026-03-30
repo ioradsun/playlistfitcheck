@@ -119,6 +119,18 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
       return;
     }
 
+    const cacheKey = `tfm:sidebar:${user.id}`;
+    // Show cached list instantly
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { items, ts } = JSON.parse(cached);
+        if (items && Date.now() - ts < 24 * 60 * 60 * 1000) {
+          setRecentItems(items);
+        }
+      }
+    } catch {}
+
     const [
       { data: reports },
       { data: searches },
@@ -259,6 +271,10 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
     }
 
     setRecentItems(items);
+    // Cache for next visit
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({ items, ts: Date.now() }));
+    } catch {}
   }, [user]);
 
   const fetchTrashed = useCallback(async () => {
