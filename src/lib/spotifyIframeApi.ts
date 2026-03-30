@@ -39,7 +39,15 @@ export function loadSpotifyIframeApi(): Promise<SpotifyIFrameAPI> {
       return;
     }
 
+    // Timeout: if onSpotifyIframeApiReady never fires (ad blockers, privacy
+    // browsers, third-party cookie blocking), reject so callers can fall back.
+    const timeout = setTimeout(() => {
+      apiPromise = null; // allow retry
+      reject(new Error("Spotify IFrame API timed out (10s)"));
+    }, 10_000);
+
     (window as any).onSpotifyIframeApiReady = (IFrameAPI: SpotifyIFrameAPI) => {
+      clearTimeout(timeout);
       (window as any).__spotifyIframeApi = IFrameAPI;
       resolve(IFrameAPI);
     };
@@ -48,6 +56,7 @@ export function loadSpotifyIframeApi(): Promise<SpotifyIFrameAPI> {
     script.src = "https://open.spotify.com/embed/iframe-api/v1";
     script.async = true;
     script.onerror = () => {
+      clearTimeout(timeout);
       apiPromise = null; // allow retry
       reject(new Error("Failed to load Spotify IFrame API"));
     };

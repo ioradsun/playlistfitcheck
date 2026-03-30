@@ -85,24 +85,68 @@ function LazySpotifyEmbedInner({
   // causes the "never wakes up" bug under fast scroll. Load once, keep alive.
   useEffect(() => {
     if (!isSpotify) return;
-    // Only load when card first becomes non-cold
     if (cardState === "cold") return;
-    // Already loaded — nothing to do
     if (hasLoadedRef.current) return;
     if (!containerRef.current) return;
 
+    // Guard against re-entry — but do NOT permanently block retries.
+    // Set to true only on success paths. The catch block resets it.
+    let cancelled = false;
     hasLoadedRef.current = true;
+
+    // Timeout for createController callback — if the cross-origin bridge
+    // fails (Safari ITP, Firefox ETP, privacy extensions), the callback
+    // never fires. Fall back to a raw iframe after 8 seconds.
+    let controllerTimedOut = false;
+    let controllerTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const fallbackToRawIframe = () => {
+      if (cancelled || !containerRef.current) return;
+      // Destroy any partial Spotify iframe that was injected
+      containerRef.current.innerHTML = "";
+      const iframe = document.createElement("iframe");
+      iframe.src = embedSrc;
+      iframe.width = "100%";
+      iframe.height = String(embedHeight);
+      iframe.allow =
+        "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture";
+      iframe.style.border = "0";
+      iframe.style.display = "block";
+      iframe.style.background = "#000";
+      iframe.title = `Play ${trackTitle}`;
+      iframe.onload = () => {
+        if (!cancelled) setIframeLoaded(true);
+      };
+      containerRef.current.appendChild(iframe);
+      // hasLoadedRef stays true — raw iframe is our final state
+    };
 
     loadSpotifyIframeApi()
       .then((IFrameAPI) => {
-        if (!containerRef.current) return;
+        if (cancelled || !containerRef.current) return;
         containerRef.current.innerHTML = "";
+
+        // Start controller timeout BEFORE calling createController
+        controllerTimeout = setTimeout(() => {
+          controllerTimedOut = true;
+          controllerTimeout = null;
+          console.warn(
+            "[LazySpotifyEmbed] createController callback timed out (8s) — falling back to raw iframe",
+          );
+          fallbackToRawIframe();
+        }, 8_000);
 
         IFrameAPI.createController(
           containerRef.current,
           { uri: spotifyUri, width: "100%", height: embedHeight },
           (controller) => {
-            if (!containerRef.current) return;
+            // Controller callback fired — clear the timeout
+            if (controllerTimeout) {
+              clearTimeout(controllerTimeout);
+              controllerTimeout = null;
+            }
+            if (cancelled || controllerTimedOut || !containerRef.current) return;
+
             controllerRef.current = controller;
             setIframeLoaded(true);
 
@@ -126,26 +170,20 @@ function LazySpotifyEmbedInner({
         );
       })
       .catch((err) => {
+        if (cancelled) return;
         console.warn("[LazySpotifyEmbed] IFrame API unavailable:", err);
-        hasLoadedRef.current = false; // allow retry on next warm
-        if (containerRef.current) {
-          const iframe = document.createElement("iframe");
-          iframe.src = embedSrc;
-          iframe.width = "100%";
-          iframe.height = String(embedHeight);
-          iframe.allow = "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture";
-          iframe.style.border = "0";
-          iframe.style.display = "block";
-          iframe.style.background = "#000";
-          iframe.title = `Play ${trackTitle}`;
-          iframe.onload = () => setIframeLoaded(true);
-          containerRef.current.innerHTML = "";
-          containerRef.current.appendChild(iframe);
-          hasLoadedRef.current = true;
-        }
+        hasLoadedRef.current = false; // allow retry on next warm cycle
+        fallbackToRawIframe();
+        hasLoadedRef.current = true; // raw iframe is loaded — don't retry
       });
-    // No cleanup that destroys the controller — intentional.
-    // The controller lives for the lifetime of the component.
+
+    return () => {
+      cancelled = true;
+      if (controllerTimeout) {
+        clearTimeout(controllerTimeout);
+        controllerTimeout = null;
+      }
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardState, isSpotify]);
 
