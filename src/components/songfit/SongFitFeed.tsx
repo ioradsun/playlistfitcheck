@@ -26,7 +26,6 @@ import { logImpression } from "@/lib/engagementTracking";
 import { RealtimeFeedHubProvider } from "./RealtimeFeedHub";
 import { consumeFeedPrefetch, getCachedFeed, getCachedLyricData, cacheWrite } from "@/lib/prefetch";
 import { cn } from "@/lib/utils";
-import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
@@ -36,6 +35,13 @@ import { PanelShell } from "@/components/shared/panel/PanelShell";
 const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
 const FEED_MAX_POSTS = 200;
+const LYRIC_COVER_COLUMNS =
+  "id,artist_name,song_name,audio_url,section_images," +
+  "palette,auto_palettes,album_art_url,beat_grid,empowerment_promise";
+
+const LYRIC_HEAVY_COLUMNS =
+  "id,lyrics,words,cinematic_direction,motion_profile_spec:physics_spec," +
+  "scene_context,scene_manifest,system_type,seed,artist_dna";
 const sharedResizeObserver = (() => {
   let observer: ResizeObserver | null = null;
   const handlers = new WeakMap<Element, (height: number) => void>();
@@ -290,23 +296,13 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const isLoadingMoreRef = useRef(isLoadingMore);
   const hasMoreRef = useRef(hasMore);
   const newestCreatedAtRef = useRef<string | null>(null);
+  const feedMountedRef = useRef(false);
   const { canCreate, credits, required } = useVoteGate();
 
   postsRef.current = posts;
   isLoadingMoreRef.current = isLoadingMore;
   hasMoreRef.current = hasMore;
   newestCreatedAtRef.current = newestCreatedAt;
-
-  const normalizePosts = useCallback(
-    (input: SongFitPost[]) =>
-      input.map((p) => ({
-        ...p,
-        user_has_liked: false,
-        user_has_saved: false,
-        saves_count: 0,
-      })),
-    [],
-  );
 
   const handleCenterChange = useCallback((idx: number) => {
     centerIndexRef.current = idx;
@@ -331,9 +327,25 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   }, []);
 
   const fetchPosts = useCallback(async () => {
+    // If switching feed views and we have posts, filter immediately
+    // from existing data to avoid skeleton flash on tab switch
+    if (postsRef.current.length > 0 && feedView !== "billboard") {
+      const filtered = postsRef.current.filter((p) => {
+        if (feedView === "now_streaming") return !!p.spotify_track_id;
+        if (feedView === "in_studio") return !!p.lyric_dance_url && !!p.lyric_dance_id;
+        if (feedView === "in_battle") return !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id;
+        return true;
+      });
+      if (filtered.length > 0) {
+        setPosts(filtered);
+        // Don't show loading — we have something to show
+        // Revalidation continues below in the background
+      }
+    }
+
     // If we already have posts (e.g. from cache), don't flash the skeleton
     // during revalidation. Only show loading state on truly empty first loads.
-    if (postsRef.current.length === 0) {
+    if (postsRef.current.length === 0 && posts.length === 0) {
       setLoading(true);
     }
 
@@ -365,7 +377,12 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
             !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id,
         );
 
-      const normalized = normalizePosts(enriched);
+      const normalized = enriched.map((p: SongFitPost) => ({
+        ...p,
+        user_has_liked: false,
+        user_has_saved: false,
+        saves_count: 0,
+      }));
       
       postsRef.current = normalized;
       setPosts(normalized);
@@ -387,27 +404,54 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         .filter((p) => p.lyric_dance_id)
         .map((p) => p.lyric_dance_id as string);
       if (lyricIds.length > 0) {
+        // Phase 1: lightweight cover data — renders card covers immediately
         supabase
           .from("shareable_lyric_dances" as any)
-          .select(LYRIC_DANCE_COLUMNS)
+          .select(LYRIC_COVER_COLUMNS)
           .in("id", lyricIds)
-          .then(({ data: lyricRows }) => {
+          .then(({ data: coverRows }) => {
             const map = new Map<string, LyricDanceData>();
             const cacheObj: Record<string, any> = {};
-            for (const row of (lyricRows ?? []) as any[]) {
-              const normalized = {
-                ...row,
-                cinematic_direction: normalizeCinematicDirection(row.cinematic_direction),
-              } as LyricDanceData;
-              map.set(row.id, normalized);
-              cacheObj[row.id] = normalized;
+            const rows = (coverRows ?? []) as any[];
 
-              // Preload first section image — eliminates white flash on cover
+            // First pass: set data WITHOUT normalization so covers render immediately
+            for (const row of rows) {
+              const entry = { ...row } as LyricDanceData;
+              map.set(row.id, entry);
+              cacheObj[row.id] = entry;
               const firstImg = row.section_images?.[0];
               if (firstImg) preloadImage(firstImg);
             }
-            setLyricDataMap(map);
+            setLyricDataMap(new Map(map));
             cacheWrite("lyric_data", cacheObj);
+
+            // Phase 2: heavy columns — only for first 5 (visible cards)
+            const visibleIds = lyricIds.slice(0, 5);
+            if (visibleIds.length === 0) return;
+            setTimeout(() => {
+              supabase
+                .from("shareable_lyric_dances" as any)
+                .select(LYRIC_HEAVY_COLUMNS)
+                .in("id", visibleIds)
+                .then(({ data: heavyRows }) => {
+                  for (const row of (heavyRows ?? []) as any[]) {
+                    const existing = map.get(row.id);
+                    if (existing) {
+                      const merged = {
+                        ...existing,
+                        ...row,
+                        cinematic_direction: normalizeCinematicDirection(
+                          row.cinematic_direction,
+                        ),
+                      };
+                      map.set(row.id, merged);
+                      cacheObj[row.id] = merged;
+                    }
+                  }
+                  setLyricDataMap(new Map(map));
+                  cacheWrite("lyric_data", cacheObj);
+                });
+            }, 500); // delay heavy fetch — covers are already showing
           });
       } else {
         setLyricDataMap(new Map());
@@ -555,7 +599,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     }
 
     setLoading(false);
-  }, [billboardMode, feedView, normalizePosts]);
+  }, [billboardMode, feedView, posts.length]);
 
   const handleLoadNewDrops = useCallback(() => {
     setPendingNewCount(0);
@@ -606,7 +650,15 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
 
       if (nextPosts.length > 0) {
         setPosts((prev) => {
-          const merged = [...prev, ...normalizePosts(nextPosts)];
+          const merged = [
+            ...prev,
+            ...nextPosts.map((p: SongFitPost) => ({
+              ...p,
+              user_has_liked: false,
+              user_has_saved: false,
+              saves_count: 0,
+            })),
+          ];
           const capped = capPosts(merged);
           postsRef.current = capped;
           setNewestCreatedAt(capped[0]?.created_at ?? null);
@@ -621,7 +673,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       isLoadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
-  }, [capPosts, feedView, normalizePosts, oldestCreatedAt]);
+  }, [capPosts, feedView, oldestCreatedAt]);
 
   const loadPrevious = useCallback(async () => {
     if (
@@ -643,7 +695,14 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         .gt("created_at", newestCreatedAt)
         .order("created_at", { ascending: false })
         .limit(FEED_PAGE_SIZE);
-      const previous = normalizePosts((data || []) as unknown as SongFitPost[]);
+      const previous = ((data || []) as unknown as SongFitPost[]).map(
+        (p: SongFitPost) => ({
+          ...p,
+          user_has_liked: false,
+          user_has_saved: false,
+          saves_count: 0,
+        }),
+      );
       if (previous.length > 0) {
         setPosts((prev) => {
           const merged = [...previous, ...prev];
@@ -662,7 +721,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       isLoadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
-  }, [capPosts, feedView, newestCreatedAt, normalizePosts]);
+  }, [capPosts, feedView, newestCreatedAt]);
 
   useEffect(() => {
     void fetchPosts();
@@ -715,6 +774,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
 
   return (
     <div className={reelsMode ? "w-full" : "w-full max-w-[470px] mx-auto"}>
+      <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
       {reelsMode ? (
         <>
           <div className="fixed top-14 left-0 right-0 z-30 flex justify-center pointer-events-none">
@@ -828,7 +888,17 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           </p>
         </div>
       ) : (
-        <div className="animate-in fade-in duration-300">
+        <div
+          style={{
+            opacity: 1,
+            animation: feedMountedRef.current
+              ? "none"
+              : "fadeIn 0.3s ease forwards",
+          }}
+          ref={() => {
+            feedMountedRef.current = true;
+          }}
+        >
           <CardLifecycleProvider>
             <RealtimeFeedHubProvider>
               <_WindowedFeedList
