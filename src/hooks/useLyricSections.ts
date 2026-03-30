@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import {
   detectSections,
   type AudioSection,
+  type SectionRole,
   type TimestampedLine,
 } from "@/engine/sectionDetector";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
