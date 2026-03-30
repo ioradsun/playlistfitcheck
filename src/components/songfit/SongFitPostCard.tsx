@@ -10,7 +10,7 @@
  * PostCommentPanel is the sole comment UX (inline in Spotify cards).
  * LyricDance and Battle embeds own their own reaction/battle panels.
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { cn } from "@/lib/utils";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
@@ -130,13 +130,13 @@ export function SongFitPostCard({
   // Spotify palette
   const [spotifyPalette, setSpotifyPalette] = useState<string[] | undefined>();
   useEffect(() => {
-    // DB palette available — no computation needed
+    if (!isSpotify || !post.album_art_url) return;
+    // Check DB palette first (set by persist-palette migration)
     if (post.palette && Array.isArray(post.palette) && post.palette.length > 0) {
       setSpotifyPalette(post.palette as string[]);
       return;
     }
     // Fallback for old posts without stored palette
-    if (!isSpotify || !post.album_art_url) return;
     // Check module cache first
     const cached = _paletteCache.get(post.album_art_url);
     if (cached) {
@@ -156,7 +156,7 @@ export function SongFitPostCard({
     return () => {
       cancelled = true;
     };
-  }, [post.palette, isSpotify, post.album_art_url]);
+  }, [isSpotify, post.album_art_url, post.palette]);
 
   // Card type label
   const typeLabel = useMemo(() => {
@@ -245,6 +245,9 @@ export function SongFitPostCard({
     catch { toast.error("Failed to copy link"); }
   };
 
+  const handleOpenPanel = useCallback(() => setPanelOpen(true), []);
+  const handleClosePanel = useCallback(() => setPanelOpen(false), []);
+
   // ── Render ──
   return (
     <div
@@ -311,7 +314,7 @@ export function SongFitPostCard({
         </div>
 
         {/* ── Media ── */}
-        <div className={cn("relative", reelsMode ? "absolute inset-0" : "transition-all duration-500")}>
+        <div className={cn("relative", reelsMode ? "absolute inset-0" : "")}>
           {hasLyricDance ? (
             <div className="relative" style={reelsMode ? { height: "100%" } : { height: 320 }}>
               <LyricDanceEmbed
@@ -319,6 +322,7 @@ export function SongFitPostCard({
                 lyricDanceUrl={post.lyric_dance_url!}
                 songTitle={post.track_title}
                 artistName={displayName}
+                cardState={cardState}
                 onPlay={activate}
                 postId={post.id}
                 coverImageUrl={post.album_art_url}
@@ -326,7 +330,7 @@ export function SongFitPostCard({
                 reelsMode={reelsMode}
                 externalPanelOpen={panelOpen}
                 onExternalPanelOpenChange={setPanelOpen}
-                onOpenReactions={() => setPanelOpen(true)}
+                onOpenReactions={handleOpenPanel}
                 prefetchedData={lyricDanceData ?? null}
                 avatarUrl={post.profiles?.avatar_url}
                 isVerified={(post.profiles as any)?.is_verified}
@@ -340,6 +344,7 @@ export function SongFitPostCard({
                 battleUrl={post.lyric_dance_url!}
                 songTitle={post.track_title}
                 showSplitCover={true}
+                cardState={cardState}
                 onPlay={activate}
                 onDeactivate={deactivate}
                 initialVotedSide={(post as any).voted_side ?? null}
@@ -369,8 +374,9 @@ export function SongFitPostCard({
               <PostCommentPanel
                 postId={post.id}
                 isOpen={panelOpen}
-                onOpen={() => setPanelOpen(true)}
-                onClose={() => setPanelOpen(false)}
+                onOpen={handleOpenPanel}
+                onClose={handleClosePanel}
+                cardState={cardState}
                 trackTitle={post.track_title}
                 reelsMode={reelsMode}
                 variant={reelsMode ? "reels" : "embedded"}
