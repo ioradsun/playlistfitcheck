@@ -37,6 +37,7 @@ function FireButton({
   onHoldEnd,
   py,
   hasFired,
+  accent,
 }: {
   panelOpen: boolean;
   onClose: () => void;
@@ -46,6 +47,7 @@ function FireButton({
   onHoldEnd?: (holdMs: number) => void;
   py: string;
   hasFired?: boolean;
+  accent?: string;
 }) {
   const holdStartRef = useRef<number | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -91,8 +93,6 @@ function FireButton({
     "rgba(255,32,96,0.8)",
   ];
   const ringColor = isHolding ? ringColors[tier] : "transparent";
-  const emojiScale = 1 + (isHolding ? holdProgress * 0.4 : 0);
-  const emojiStr = tier >= 3 ? "🔥🔥🔥" : tier >= 2 ? "🔥🔥" : "🔥";
 
   return (
     <button
@@ -119,39 +119,35 @@ function FireButton({
       {panelOpen ? (
         <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
       ) : (
-        <>
-          {hasFired && !isHolding ? (
-            // Outline only — user has already fired
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="rgba(255,255,255,0.55)"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2C12 2 8 6 8 10a4 4 0 0 0 8 0c0-2-1-3.5-1-3.5S14 8 14 6c0 0 2 2 2 5a6 6 0 0 1-12 0c0-5 4-9 4-9z" />
-            </svg>
-          ) : (
-            <span
-              style={{
-                fontSize: 16,
-                display: "block",
-                transform: `scale(${emojiScale})`,
-                transition: isHolding ? "none" : "transform 0.2s",
-              }}
-            >
-              {emojiStr}
-            </span>
-          )}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill={hasFired || isHolding ? accent : "none"}
+            stroke={hasFired || isHolding ? accent : "rgba(255,255,255,0.35)"}
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              transform: `scale(${isHolding ? 1 + holdProgress * 0.5 : 1})`,
+              transition: isHolding ? "none" : "transform 0.2s, fill 0.15s, stroke 0.15s",
+              filter: isHolding && tier >= 2
+                ? `drop-shadow(0 0 ${4 + tier * 3}px ${accent})`
+                : "none",
+            }}
+          >
+            <path d="M12 2c0 0-5.5 5-5.5 10.5a5.5 5.5 0 0 0 11 0C17.5 9 15 6.5 15 6.5c0 0 .5 3-1.5 4.5C13.5 8 12 2 12 2z" />
+          </svg>
           {count > 0 && (
-            <span className="text-[9px] font-mono text-white/20">
+            <span
+              className="text-[9px] font-mono"
+              style={{ color: hasFired ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)" }}
+            >
               {count}
             </span>
           )}
-        </>
+        </div>
       )}
     </button>
   );
@@ -178,7 +174,7 @@ export function CardBottomBar({
   activeLineFireCount,
   hookPhrase,
   hasFired = false,
-  accent = "rgba(255,255,255,0.5)",
+  accent = "rgba(255,140,50,1)",
   onFireTap,
   onFireHoldStart,
   onFireHoldEnd,
@@ -269,6 +265,7 @@ export function CardBottomBar({
         onHoldEnd={onFireHoldEnd}
         py={py}
         hasFired={hasFired}
+        accent={accent}
       />
     </div>
   );
