@@ -35,7 +35,7 @@ const FEED_PAGE_SIZE = 20;
 const FEED_CARD_MIN_HEIGHT = 530;
 const FEED_MAX_POSTS = 200;
 const LYRIC_COVER_COLUMNS =
-  "id,artist_name,song_name,audio_url,section_images," +
+  "id,artist_name,song_name,audio_url,section_images,lyrics," +
   "palette,auto_palettes,album_art_url,beat_grid,empowerment_promise";
 
 const LYRIC_HEAVY_COLUMNS =
@@ -382,77 +382,83 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         saves_count: 0,
       }));
       
-      postsRef.current = normalized;
-      setPosts(normalized);
-      setNewestCreatedAt(normalized[0]?.created_at ?? null);
-      setOldestCreatedAt(normalized[normalized.length - 1]?.created_at ?? null);
-      setHasTrimmedNewer(false);
-      hasMoreRef.current = enriched.length === FEED_PAGE_SIZE;
-      setHasMore(enriched.length === FEED_PAGE_SIZE);
-
-      // Show the feed immediately — cards render covers while lyric data loads.
-      // The batch fetch runs in the background; useLyricDanceCore has a per-card
-      // fallback fetch if prefetchedData is null, so nothing breaks on any surface.
-      
-      setLoading(false);
-      setPendingNewCount(0);
-
-      // Preload album art for Spotify posts — prevents blank flash in poster
+      // Preload album art for Spotify posts
       enriched
         .filter((p) => !p.lyric_dance_id && p.album_art_url)
         .forEach((p) => preloadImage(p.album_art_url!));
 
-      // Batch-fetch lyric dance data (non-blocking background fill)
+      // Fetch lyric cover data (section_images + lyrics) BEFORE rendering cards.
+      // This ensures covers are never black on first visit — cards render with data.
       const lyricIds = enriched
         .filter((p) => p.lyric_dance_id)
         .map((p) => p.lyric_dance_id as string);
       if (lyricIds.length > 0) {
-        // Phase 1: cover columns only — fast, small payload
-        supabase
+        // Await Phase 1 so section_images and lyrics are ready when cards mount
+        const { data: coverRows } = await supabase
           .from("shareable_lyric_dances" as any)
           .select(LYRIC_COVER_COLUMNS)
-          .in("id", lyricIds)
-          .then(({ data: coverRows }) => {
-            const map = new Map<string, LyricDanceData>();
-            for (const row of (coverRows ?? []) as any[]) {
-              map.set(row.id, { ...row } as LyricDanceData);
-              const img = row.section_images?.[0];
-              if (img) preloadImage(img);
-            }
-            setLyricDataMap(new Map(map));
+          .in("id", lyricIds);
 
-            // Phase 2: heavy columns, first 4 visible cards only, deferred
-            const visibleIds = lyricIds.slice(0, 4);
-            setTimeout(() => {
-              supabase
-                .from("shareable_lyric_dances" as any)
-                .select(LYRIC_HEAVY_COLUMNS)
-                .in("id", visibleIds)
-                .then(({ data: heavyRows }) => {
-                  const updated = new Map(map);
-                  const cacheObj: Record<string, any> = {};
-                  for (const row of (heavyRows ?? []) as any[]) {
-                    const base = updated.get(row.id) ?? {};
-                    const merged = {
-                      ...base,
-                      ...row,
-                      cinematic_direction: normalizeCinematicDirection(
-                        row.cinematic_direction,
-                      ),
-                    } as LyricDanceData;
-                    updated.set(row.id, merged);
-                    cacheObj[row.id] = merged;
-                  }
-                  setLyricDataMap(new Map(updated));
-                  cacheWrite("lyric_data", cacheObj);
-                });
-            }, 300);
-          });
+        const map = new Map<string, LyricDanceData>();
+        for (const row of (coverRows ?? []) as any[]) {
+          map.set(row.id, { ...row } as LyricDanceData);
+          const img = row.section_images?.[0];
+          if (img) preloadImage(img);
+        }
+        setLyricDataMap(new Map(map));
+
+        // Now render cards — lyric data is available
+        postsRef.current = normalized;
+        setPosts(normalized);
+        setNewestCreatedAt(normalized[0]?.created_at ?? null);
+        setOldestCreatedAt(normalized[normalized.length - 1]?.created_at ?? null);
+        setHasTrimmedNewer(false);
+        hasMoreRef.current = enriched.length === FEED_PAGE_SIZE;
+        setHasMore(enriched.length === FEED_PAGE_SIZE);
+        setLoading(false);
+        setPendingNewCount(0);
+
+        // Phase 2: heavy columns (cinematic_direction, words etc), deferred
+        const visibleIds = lyricIds.slice(0, 4);
+        setTimeout(() => {
+          supabase
+            .from("shareable_lyric_dances" as any)
+            .select(LYRIC_HEAVY_COLUMNS)
+            .in("id", visibleIds)
+            .then(({ data: heavyRows }) => {
+              const updated = new Map(map);
+              const cacheObj: Record<string, any> = {};
+              for (const row of (heavyRows ?? []) as any[]) {
+                const base = updated.get(row.id) ?? {};
+                const merged = {
+                  ...base,
+                  ...row,
+                  cinematic_direction: normalizeCinematicDirection(
+                    row.cinematic_direction,
+                  ),
+                } as LyricDanceData;
+                updated.set(row.id, merged);
+                cacheObj[row.id] = merged;
+              }
+              setLyricDataMap(new Map(updated));
+              cacheWrite("lyric_data", cacheObj);
+            });
+        }, 300);
       } else {
+        // No lyric dance posts — render immediately
         setLyricDataMap(new Map());
+        postsRef.current = normalized;
+        setPosts(normalized);
+        setNewestCreatedAt(normalized[0]?.created_at ?? null);
+        setOldestCreatedAt(normalized[normalized.length - 1]?.created_at ?? null);
+        setHasTrimmedNewer(false);
+        hasMoreRef.current = enriched.length === FEED_PAGE_SIZE;
+        setHasMore(enriched.length === FEED_PAGE_SIZE);
+        setLoading(false);
+        setPendingNewCount(0);
       }
 
-      // Non-billboard path done — loading already set to false above.
+      // Non-billboard path done — loading already set to false in branch above.
       return;
     } else {
       let cutoff: string | null = null;
