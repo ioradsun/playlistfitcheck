@@ -63,6 +63,11 @@ import {
 
 const CAPTION_MAX = 300;
 
+// Module-level palette cache — keyed by album_art_url.
+// Survives component unmount/remount. Shared across all cards with same URL.
+// Only used as fallback for old posts that don't have palette in DB yet.
+const _paletteCache = new Map<string, string[]>();
+
 interface Props {
   post: SongFitPost;
   rank?: number;
@@ -125,13 +130,33 @@ export function SongFitPostCard({
   // Spotify palette
   const [spotifyPalette, setSpotifyPalette] = useState<string[] | undefined>();
   useEffect(() => {
-    if (!isSpotify || !post.album_art_url || cardState === "cold") return;
+    // DB palette available — no computation needed
+    if (post.palette && Array.isArray(post.palette) && post.palette.length > 0) {
+      setSpotifyPalette(post.palette as string[]);
+      return;
+    }
+    // Fallback for old posts without stored palette
+    if (!isSpotify || !post.album_art_url) return;
+    // Check module cache first
+    const cached = _paletteCache.get(post.album_art_url);
+    if (cached) {
+      setSpotifyPalette(cached);
+      return;
+    }
     let cancelled = false;
     computeAutoPalettesFromUrls([post.album_art_url])
-      .then((palettes) => { if (!cancelled && palettes[0]) setSpotifyPalette(palettes[0]); })
+      .then((palettes) => {
+        if (cancelled) return;
+        if (palettes[0]?.length) {
+          _paletteCache.set(post.album_art_url!, palettes[0]);
+          setSpotifyPalette(palettes[0]);
+        }
+      })
       .catch(() => {});
-    return () => { cancelled = true; };
-  }, [isSpotify, post.album_art_url, cardState]);
+    return () => {
+      cancelled = true;
+    };
+  }, [post.palette, isSpotify, post.album_art_url]);
 
   // Card type label
   const typeLabel = useMemo(() => {

@@ -23,6 +23,7 @@ export interface SongFitPost {
   cycle_number: number;
   engagement_score: number;
   peak_rank: number | null;
+  palette?: string[] | null;
   impressions: number;
   legacy_boost: number;
   // joined
