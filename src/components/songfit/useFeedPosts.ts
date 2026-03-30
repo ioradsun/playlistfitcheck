@@ -6,7 +6,7 @@
  *  - Cursor-based infinite scroll (loadMore)
  *  - Feed view filtering (all / now_streaming / in_studio / in_battle)
  *  - Billboard scoring (client-side, from reviews/comments/follows/saves)
- *  - Lyric dance cover data (2-phase: cover columns → deferred heavy columns)
+ *  - Lyric dance data hydration (full columns with cached reuse)
  *  - Realtime new-post counter
  *  - Like/save state hydration for logged-in users
  */
@@ -21,10 +21,6 @@ import { preloadImage } from "@/lib/imagePreloadCache";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 
 const PAGE_SIZE = 20;
-
-const LYRIC_COVER_COLUMNS =
-  "id,artist_name,song_name,audio_url,section_images,lyrics," +
-  "palette,auto_palettes,album_art_url,beat_grid,empowerment_promise";
 
 const POST_SELECT =
   "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)";
@@ -115,11 +111,7 @@ async function scoreBillboard(
 }
 
 // ── Lyric data fetching ─────────────────────────────────────────────────────
-// No more Phase 1 → Phase 2 split. Instead:
-//   - FULL columns for first 2 IDs (player needs cinematic_direction)
-//   - COVER columns for the rest (just for React covers)
-//   - Both queries in Promise.all — single network round trip
-//   - IDs already in the map with cinematic_direction are skipped entirely
+// Fetch full lyric columns for all cards so player-ready fields are present.
 
 const LYRIC_FULL_COLUMNS =
   "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
@@ -134,36 +126,32 @@ async function fetchLyricData(
 
   const map = new Map(existingMap);
 
-  // Split IDs: first 2 get full columns (player-ready), rest get cover only
-  const fullIds = ids.slice(0, 2).filter((id) => !(map.get(id) as any)?.cinematic_direction);
-  const coverIds = ids.slice(2).filter((id) => !map.has(id));
+  // Fetch full columns for all IDs that don't already have cinematic_direction
+  const needed = ids.filter((id) => !(map.get(id) as any)?.cinematic_direction);
 
-  // Fire both queries in parallel — single network round trip
-  const [fullResult, coverResult] = await Promise.all([
-    fullIds.length > 0
-      ? supabase.from("shareable_lyric_dances" as any).select(LYRIC_FULL_COLUMNS).in("id", fullIds)
-      : { data: [] },
-    coverIds.length > 0
-      ? supabase.from("shareable_lyric_dances" as any).select(LYRIC_COVER_COLUMNS).in("id", coverIds)
-      : { data: [] },
-  ]);
+  if (needed.length > 0) {
+    const { data: rows } = await supabase
+      .from("shareable_lyric_dances" as any)
+      .select(LYRIC_FULL_COLUMNS)
+      .in("id", needed);
 
-  // Merge full rows (with cinematic_direction — player can init immediately)
-  const cacheObj: Record<string, any> = {};
-  for (const row of ((fullResult.data ?? []) as any[])) {
-    const merged = {
-      ...row,
-      cinematic_direction: row.cinematic_direction
-        ? normalizeCinematicDirection(row.cinematic_direction)
-        : row.cinematic_direction,
-    } as LyricDanceData;
-    map.set(row.id, merged);
-    cacheObj[row.id] = merged;
-  }
+    const cacheObj: Record<string, any> = {};
+    for (const row of ((rows ?? []) as any[])) {
+      const merged = {
+        ...row,
+        cinematic_direction: row.cinematic_direction
+          ? normalizeCinematicDirection(row.cinematic_direction)
+          : row.cinematic_direction,
+      } as LyricDanceData;
+      map.set(row.id, merged);
+      cacheObj[row.id] = merged;
+    }
 
-  // Merge cover rows (no cinematic_direction — cover display only)
-  for (const row of ((coverResult.data ?? []) as any[])) {
-    map.set(row.id, { ...row } as LyricDanceData);
+    // Cache full rows for next visit
+    if (Object.keys(cacheObj).length > 0) {
+      const existing = getCachedLyricData() ?? {};
+      cacheWrite("lyric_data", { ...existing, ...cacheObj });
+    }
   }
 
   // Preload first section image for all rows
@@ -172,14 +160,9 @@ async function fetchLyricData(
     if (img) preloadImage(img);
   }
 
-  // Cache full rows for next visit (return visit prefetch reads this)
-  if (Object.keys(cacheObj).length > 0) {
-    const existing = getCachedLyricData() ?? {};
-    cacheWrite("lyric_data", { ...existing, ...cacheObj });
-  }
-
   return map;
 }
+
 
 // ── Hook ────────────────────────────────────────────────────────────────────
 export interface FeedState {
