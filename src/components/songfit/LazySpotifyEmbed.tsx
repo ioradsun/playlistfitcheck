@@ -89,10 +89,9 @@ function LazySpotifyEmbedInner({
     if (hasLoadedRef.current) return;
     if (!containerRef.current) return;
 
-    // Guard against re-entry — but do NOT permanently block retries.
-    // Set to true only on success paths. The catch block resets it.
     let cancelled = false;
-    hasLoadedRef.current = true;
+    let loadStarted = false;
+    hasLoadedRef.current = true; // prevent concurrent runs
 
     // Timeout for createController callback — if the cross-origin bridge
     // fails (Safari ITP, Firefox ETP, privacy extensions), the callback
@@ -102,7 +101,6 @@ function LazySpotifyEmbedInner({
 
     const fallbackToRawIframe = () => {
       if (cancelled || !containerRef.current) return;
-      // Destroy any partial Spotify iframe that was injected
       containerRef.current.innerHTML = "";
       const iframe = document.createElement("iframe");
       iframe.src = embedSrc;
@@ -118,15 +116,14 @@ function LazySpotifyEmbedInner({
         if (!cancelled) setIframeLoaded(true);
       };
       containerRef.current.appendChild(iframe);
-      // hasLoadedRef stays true — raw iframe is our final state
     };
 
+    loadStarted = true;
     loadSpotifyIframeApi()
       .then((IFrameAPI) => {
         if (cancelled || !containerRef.current) return;
         containerRef.current.innerHTML = "";
 
-        // Start controller timeout BEFORE calling createController
         controllerTimeout = setTimeout(() => {
           controllerTimedOut = true;
           controllerTimeout = null;
@@ -140,7 +137,6 @@ function LazySpotifyEmbedInner({
           containerRef.current,
           { uri: spotifyUri, width: "100%", height: embedHeight },
           (controller) => {
-            // Controller callback fired — clear the timeout
             if (controllerTimeout) {
               clearTimeout(controllerTimeout);
               controllerTimeout = null;
@@ -172,9 +168,7 @@ function LazySpotifyEmbedInner({
       .catch((err) => {
         if (cancelled) return;
         console.warn("[LazySpotifyEmbed] IFrame API unavailable:", err);
-        hasLoadedRef.current = false; // allow retry on next warm cycle
         fallbackToRawIframe();
-        hasLoadedRef.current = true; // raw iframe is loaded — don't retry
       });
 
     return () => {
@@ -182,6 +176,10 @@ function LazySpotifyEmbedInner({
       if (controllerTimeout) {
         clearTimeout(controllerTimeout);
         controllerTimeout = null;
+      }
+      // If the load was in-flight (not yet resolved), allow retry on next mount
+      if (loadStarted && !controllerRef.current) {
+        hasLoadedRef.current = false;
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
