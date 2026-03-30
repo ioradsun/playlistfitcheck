@@ -110,6 +110,7 @@ export function PostCommentPanel({
 
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [hasFired, setHasFired] = useState(false);
   const [commentReactions, setCommentReactions] = useState<
     Record<string, Record<string, number>>
   >({});
@@ -272,6 +273,7 @@ export function PostCommentPanel({
     respect: "🙏",
     accurate: "🎯",
   };
+  const accent = palette?.[1] ?? palette?.[0] ?? "rgba(255,140,50,1)";
 
   const renderComment = (comment: Comment, isReply = false) => {
     const name = comment.profiles?.display_name ?? "anon";
@@ -506,6 +508,9 @@ export function PostCommentPanel({
             panelOpen={false}
             topReaction={topPostReaction}
             trackTitle={trackTitle}
+            hasFired={hasFired}
+            onFireTap={() => setHasFired(true)}
+            accent={accent}
           />
         </div>
       )}

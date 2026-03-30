@@ -164,10 +164,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   );
   const [forceDemoted, setForceDemoted] = useState(false);
   const [, setFireStrengthByLine] = useState<Record<number, number>>({});
-  const [hasFired, setHasFired] = useState(false);
+  const [firedSections, setFiredSections] = useState<Set<number>>(new Set());
   const [closingVisible, setClosingVisible] = useState(false);
   const [closingAnswered, setClosingAnswered] = useState(false);
   const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const userActivatedRef = useRef(false);
 
   const isControlled = externalPanelOpen !== undefined;
@@ -385,11 +386,30 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       );
     }, 0);
   }, [activeLine, reactionData, lyricSections.allLines, player, data]);
+  const activeSectionIndex = useMemo(() => {
+    if (!audioSections.length) return 0;
+    const idx = audioSections.findIndex(
+      (s) => currentTimeSec >= s.startSec && currentTimeSec < s.endSec,
+    );
+    return idx >= 0 ? idx : 0;
+  }, [currentTimeSec, audioSections]);
+  const hasFired = firedSections.has(activeSectionIndex);
+  const markFired = useCallback(() => {
+    setFiredSections((prev) => new Set([...prev, activeSectionIndex]));
+  }, [activeSectionIndex]);
 
   const hookPhrase = ((data ?? prefetchedData) as any)?.hook_phrase ?? null;
 
   const effectiveShowCover = showCover;
   void artistName;
+
+  useEffect(() => {
+    return () => {
+      if (holdFireIntervalRef.current) {
+        clearInterval(holdFireIntervalRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
@@ -542,30 +562,41 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               onClose: handleClosePanelAndSync,
               panelOpen: reactionPanelOpen,
               onFireTap: () => {
+                if (holdFireIntervalRef.current) {
+                  clearInterval(holdFireIntervalRef.current);
+                  holdFireIntervalRef.current = null;
+                }
                 const id = (data ?? prefetchedData as any)?.id;
                 if (!id || !activeLine) return;
                 player?.fireFire(0);
                 emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
-                setHasFired(true);
                 setFireStrengthByLine((prev) => ({
                   ...prev,
                   [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
                 }));
+                markFired();
               },
               onFireHoldStart: () => {
-                /* nothing — visual handled by FireButton */
+                if (holdFireIntervalRef.current) return;
+                holdFireIntervalRef.current = setInterval(() => {
+                  player?.fireFire(0);
+                }, 300);
               },
               onFireHoldEnd: (holdMs: number) => {
+                if (holdFireIntervalRef.current) {
+                  clearInterval(holdFireIntervalRef.current);
+                  holdFireIntervalRef.current = null;
+                }
                 const id = (data ?? (prefetchedData as any))?.id;
                 if (!id || !activeLine) return;
                 player?.fireFire(holdMs);
                 emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
-                setHasFired(true);
                 const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
                 setFireStrengthByLine((prev) => ({
                   ...prev,
                   [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
                 }));
+                markFired();
               },
               activeLineFireCount,
               hookPhrase,
@@ -574,7 +605,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 ? { symbol: topReaction.symbol, count: topReaction.count }
                 : null,
               trackTitle: songTitle,
-              accent: palette[1] ?? palette[0] ?? "rgba(255,255,255,0.5)",
+              accent: palette[1] ?? palette[0] ?? "rgba(255,140,50,1)",
               hasFired,
             } as any)}
           />
@@ -617,7 +648,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             if (!id) return;
             player?.fireFire(holdMs);
             emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs);
-            setHasFired(true);
+            markFired();
           }}
           onLineVisible={(lineIndex) => {
             const id = (data ?? (prefetchedData as any))?.id;
