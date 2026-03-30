@@ -407,7 +407,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     const autoPalettes = (data ?? (prefetchedData as any))?.auto_palettes;
     if (Array.isArray(autoPalettes) && autoPalettes[activeSectionIndex]) {
       const p = autoPalettes[activeSectionIndex] as string[];
-      return p[1] ?? p[0] ?? null;
+      // p[3] = textAccent: WCAG 4.5:1 contrast-checked against the section's dark background.
+      // p[1] = accent: only checked against section midtone — can be too dark for #0a0a0a bar.
+      return p[3] ?? p[1] ?? p[0] ?? "rgba(255,140,50,1)";
     }
     return palette[1] ?? palette[0] ?? "rgba(255,140,50,1)";
   }, [data, prefetchedData, activeSectionIndex, palette]);
