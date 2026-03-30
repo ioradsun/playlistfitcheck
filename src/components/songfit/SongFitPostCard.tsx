@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { cn } from "@/lib/utils";
 import {
@@ -825,3 +825,21 @@ export function SongFitPostCard({
     </div>
   );
 }
+
+// Re-export as memoized — cold cards never re-render
+export const SongFitPostCardMemo = memo(
+  SongFitPostCard,
+  (prev, next) => {
+    // Both cold → skip entirely
+    if (prev.cardState === "cold" && next.cardState === "cold") return true;
+    // State transition → must render
+    if (prev.cardState !== next.cardState) return false;
+    // Different post → must render
+    if (prev.post.id !== next.post.id) return false;
+    // Lyric data arrived or changed → must render
+    if (prev.lyricDanceData !== next.lyricDanceData) return false;
+    // Panel state changed → must render
+    // (panelOpen is internal state, no prop — this is fine)
+    return true;
+  }
+);
