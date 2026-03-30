@@ -59,13 +59,3 @@ export function releaseCanvasSlot(postId: string): void {
   // Wake any cards that were waiting for a free slot
   window.dispatchEvent(new CustomEvent("crowdfit:pool-slot-freed"));
 }
-
-/** Check if a card currently holds a slot. */
-export function hasCanvasSlot(postId: string): boolean {
-  return getSlots().some((s) => s.heldBy === postId);
-}
-
-/** How many slots are free. */
-export function freeSlotCount(): number {
-  return getSlots().filter((s) => !s.inUse).length;
-}

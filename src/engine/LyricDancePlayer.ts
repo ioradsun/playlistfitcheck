@@ -4,7 +4,6 @@
  *
  * Architecture:
  * - BeatConductor is the SINGLE rhythmic driver. No dual-system chaos.
- * - EffectBudgeter guarantees effects complete (no mid-animation cutoffs).
  * - ACTIVE CHUNK ONLY: one phrase group on screen at a time, dead center.
  * - Single color model: one text color, contrast against background.
  * - Hero words: solo center (≥500ms) or inline emphasis scaling.
@@ -32,7 +31,7 @@ import {
   normalizeCinematicDirection,
   normalizeToken,
 } from "@/engine/cinematicResolver";
-import { BeatConductor, type BeatState, type SubsystemResponse } from "@/engine/BeatConductor";
+import { BeatConductor, type BeatState } from "@/engine/BeatConductor";
 import { IntensityRouter, type MotionProfile } from '@/engine/IntensityRouter';
 import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { FinaleEffect } from "@/engine/FinaleEffect";
@@ -52,8 +51,6 @@ import {
   type WordAnimState,
 } from '@/engine/PhraseAnimator';
 
-const LYRIC_DANCE_PLAYER_BUILD_STAMP = '[LyricDancePlayer] build: V2-CONDUCTOR-2026-03-04-PERF';
-const DEBUG_ELEMENTAL_TRACE = false;
 
 // ═══════════════════════════════════════════════════════════════
 // CINEMATIC TREATMENT SYSTEM
@@ -549,9 +546,12 @@ function sceneCacheSet(key: string, entry: SceneCacheEntry): void {
   }
 }
 
-const SIM_W = 96;
-const SIM_H = 54;
 const SPLIT_EXIT_STYLES = new Set(['scatter-letters', 'peel-off', 'peel-reverse', 'cascade-down', 'cascade-up']);
+
+function hexToRgb(hex: string): [number, number, number] {
+  const c = hex.replace('#', '').padEnd(6, '0');
+  return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+}
 
 // ═══ BeatVisSim: In-place beat-reactive visualizer ═══
 // Bar HEIGHT bounces with beat energy. Bar APPEARANCE varies by mood:
@@ -583,16 +583,10 @@ class BeatVisSim {
       this.barSeeds[i] = (Math.sin(i * 127.1 + 311.7) * 43758.5453) % 1;
       if (this.barSeeds[i] < 0) this.barSeeds[i] += 1;
     }
-    this.palette = this.hexToRgb(accent);
+    this.palette = hexToRgb(accent);
   }
 
-  private hexToRgb(hex: string): [number, number, number] {
-    const c = hex.replace('#', '').padEnd(6, '0');
-    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
-  }
-
-  setAccent(hex: string): void { this.palette = this.hexToRgb(hex); }
-  setStyle(_s: BarVisStyle): void { /* styles removed — single clean look */ }
+  setAccent(hex: string): void { this.palette = hexToRgb(hex); }
 
   update(energy: number, pulse: number, hitStrength: number, _beatPhase: number, beatIndex: number): void {
     const W = VIS_W;
@@ -692,12 +686,7 @@ class DynamiteWickBar {
     this.setAccent(accentHex);
   }
 
-  private hexToRgb(hex: string): [number, number, number] {
-    const c = hex.replace('#', '').padEnd(6, '0');
-    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
-  }
-
-  setAccent(hex: string): void { this.accent = this.hexToRgb(hex); }
+  setAccent(hex: string): void { this.accent = hexToRgb(hex); }
 
   /** Call once after beat analysis. Resamples beatEnergies to DWB_W and smooths. */
   setWaveformPreview(beatEnergies: number[]): void {
@@ -1114,10 +1103,6 @@ interface EmojiRiser {
 // ──────────────────────────────────────────────────────────────
 
 export class LyricDancePlayer {
-  static RESOLUTIONS = {
-    "16:9": { width: 1920, height: 1080 },
-    "9:16": { width: 1080, height: 1920 },
-  };
 
   private static readonly EMOJI_MAP: Record<string, string> = {
     fire: "🔥",
@@ -1145,12 +1130,9 @@ export class LyricDancePlayer {
   }
   private width = 0; // logical px
   private height = 0; // logical px
-  private mediaRecorder: MediaRecorder | null = null;
   private isExporting = false;
   private displayWidth = 0;
   private displayHeight = 0;
-  private wasLoopingBeforeExport = true;
-  public onExportComplete: (() => void) | null = null;
 
   // Audio (React reads this)
   public audio: HTMLAudioElement;
@@ -1168,7 +1150,6 @@ export class LyricDancePlayer {
   
 
   // Public writeable surface (React pushes comments here)
-  public constellationNodes: any[] = [];
 
   // Data
   private data: LyricDanceData;
@@ -1191,7 +1172,6 @@ export class LyricDancePlayer {
   private conductor: BeatConductor | null = null;
   private cameraRig: CameraRig = new CameraRig();
   private _lastBeatState: BeatState | null = null;
-  private _lastSubsystemResponse: SubsystemResponse | null = null;
   private _activeGroupCursor = 0;
   private _activeGroupCursorTime = -1;
 
@@ -1247,7 +1227,6 @@ export class LyricDancePlayer {
   private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
   private _barVisStyles: BarVisStyle[] = []; // per-chapter bar style from AI mood
   private lastSimFrame = -1;
-  private _beatVisCanvas: HTMLCanvasElement | null = null; // separate from themed sims
   // ═══ Dynamite Wick Bar (feature flag: window.__LYRIC_DANCE_LIGHTNING_BAR) ═══
   private _globalWickBar: DynamiteWickBar | null = null;
   private _wickSeekOverlay: HTMLDivElement | null = null;
@@ -1853,35 +1832,6 @@ export class LyricDancePlayer {
     this.audio.play().catch(() => {});
   }
 
-  async load(payload: ScenePayload, onProgress: (pct: number) => void): Promise<Map<string, ChunkState>> {
-    try {
-      this.payload = payload;
-      this._songGrade = null; // force recomputation for new song
-      this.resolvePlayerState(payload);
-      this.songStartSec = payload.songStart;
-      this.songEndSec = payload.songEnd;
-
-      const cw = this.container?.offsetWidth || this.canvas.offsetWidth || 960;
-      const ch = this.container?.offsetHeight || this.canvas.offsetHeight || 540;
-      this.resize(cw, ch);
-      const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
-      this.compiledScene = compiled;
-      this._markCompiledViewport(this.width || 960, this.height || 540);
-      this._buildChunkCacheFromScene(compiled);
-      this._updateViewportScale();
-      this._textMetricsCache.clear();
-      const chunkSnapshot = new Map(this.chunks);
-      this.buildBgCache();
-      this.deriveVisualSystems();
-      this.buildChapterSims();
-      onProgress(100);
-      return chunkSnapshot;
-    } catch (err) {
-      
-      throw err;
-    }
-  }
-
   play(): void {
     if (this.destroyed) return;
     this.primeAudio();
@@ -1961,73 +1911,11 @@ export class LyricDancePlayer {
     this._exitEffect.reset();
     this._heroSmoke.reset();
     this._exitTriggeredForGroup = -1;
-    this._intensityRouter.reset();
     this._resetBgParallax();
     // Reset historical fire spawn flags when seeking
     this._historicalFires.forEach(f => {
       f.spawned = f.time_sec < this.audio.currentTime;
     });
-  }
-
-  seekTo(timeSec: number): void {
-    this.seek(timeSec);
-
-
-  }
-
-  async startExport(ratio: "16:9" | "9:16"): Promise<void> {
-    if (this.isExporting || !this.payload) return;
-
-    const { width, height } = LyricDancePlayer.RESOLUTIONS[ratio];
-    this.isExporting = true;
-    this.wasLoopingBeforeExport = this.audio.loop;
-    this.audio.loop = false;
-
-    this.setResolution(width, height);
-    this.seekTo(0);
-
-    const stream = this.canvas.captureStream(30);
-    const mimeType = MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "video/webm";
-
-    this.mediaRecorder = new MediaRecorder(stream, {
-      mimeType,
-      videoBitsPerSecond: 8_000_000,
-    });
-
-    const chunks: Blob[] = [];
-    this.mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
-    };
-
-    const onAudioEnded = () => {
-      this.stopExport();
-    };
-    this.audio.addEventListener("ended", onAudioEnded, { once: true });
-
-    this.mediaRecorder.onstop = () => {
-      this.audio.removeEventListener("ended", onAudioEnded);
-      const blob = new Blob(chunks, { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${this.data.artist_name ?? "artist"}-${this.data.song_name ?? "song"}-${ratio.replace(":", "x")}.${mimeType.includes("mp4") ? "mp4" : "webm"}`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      this.isExporting = false;
-      this.mediaRecorder = null;
-      this.audio.loop = this.wasLoopingBeforeExport;
-      this.setResolution(this.displayWidth, this.displayHeight);
-      this.onExportComplete?.();
-    };
-
-    this.mediaRecorder.start(100);
-    this.play();
-  }
-
-  stopExport(): void {
-    if (!this.mediaRecorder || this.mediaRecorder.state === "inactive") return;
-    this.mediaRecorder.stop();
   }
 
   // ═══ WebCodecs export API ═══
@@ -2296,7 +2184,6 @@ export class LyricDancePlayer {
     this._exitEffect.reset();
     this._heroSmoke.reset();
     this._exitTriggeredForGroup = -1;
-    this._intensityRouter.reset();
     this._resetBgParallax();
     this._bgSnapshotSection = -1;
   }
@@ -2444,7 +2331,6 @@ export class LyricDancePlayer {
   updateAutoPalettes(palettes: string[][]): void {
     if (!palettes?.length) return;
     
-    (this as any)._paletteDiagLogged = false; // reset so next getResolvedPalette logs the new state
     this.data = { ...this.data, auto_palettes: palettes };
     // Recompile scene with fresh palette data
     if (this.payload) {
@@ -2520,7 +2406,6 @@ export class LyricDancePlayer {
       this._zeroCanvas(sim.beatVis?.canvas);
     });
     this._zeroCanvas(this._globalBeatVis?.canvas ?? null);
-    this._zeroCanvas(this._beatVisCanvas);
     this.chapterSims = [];
     this.chapterImages = [];
     this._sectionScrimOpacity = [];
@@ -2536,7 +2421,6 @@ export class LyricDancePlayer {
     this._globalBeatVis = null;
     this._unmountWickSeekOverlay();
     this._globalWickBar = null;
-    this._beatVisCanvas = null;
     this.emojiRisers = [];
     this._emojiSpawnQueue = [];
     this._textMetricsCache.clear();
@@ -2992,11 +2876,8 @@ export class LyricDancePlayer {
   private async preloadFonts(): Promise<void> {
     const resolved = resolveTypographyFromDirection(this.payload?.cinematic_direction);
     const fontNames = getFontNamesForPreload(resolved);
-    let loaded = true;
-    for (const fontName of fontNames) {
-      const ready = await ensureFontReady(fontName);
-      if (!ready) loaded = false;
-    }
+    const results = await Promise.all(fontNames.map(name => ensureFontReady(name)));
+    const loaded = results.every(Boolean);
     if (!this.destroyed) {
       if (loaded) {
         this._fontStabilized = true;
@@ -3057,10 +2938,6 @@ export class LyricDancePlayer {
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
-    if (this.isExporting && clamped >= this.songEndSec) {
-      this.stopExport();
-    }
-
     this.fpsAccum.t += deltaMs;
     this.fpsAccum.frames += 1;
     if (this.fpsAccum.t >= 500) {
@@ -3091,10 +2968,6 @@ export class LyricDancePlayer {
         startMs: performance.now(),
         durationMs: 500,
       };
-
-      if (this._globalBeatVis) {
-        this._globalBeatVis.setStyle(baseEffects.beatBarStyle);
-      }
 
       const texture = section?.texture ?? this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, cd) ?? "dust";
       this.activeSectionTexture = texture;
@@ -3136,7 +3009,6 @@ export class LyricDancePlayer {
 
     // ═══ V2: Use conductor for particle intensity instead of tension curve ═══
     const conductorResponse = beatState ? this.conductor?.getSubsystemResponse(beatState, 2) ?? null : null;
-    this._lastSubsystemResponse = conductorResponse;
 
     const config = this._activeEffects;
 
@@ -4740,8 +4612,6 @@ export class LyricDancePlayer {
           bs?.isDownbeat ?? false,
         );
       } else if (this._globalBeatVis) {
-        const visStyle = this._barVisStyles[ci] ?? 'flame';
-        this._globalBeatVis.setStyle(visStyle);
         const bs = this._lastBeatState;
         this._globalBeatVis.update(
           bs?.energy ?? 0,       // RMS energy — goes to 0 during silence
