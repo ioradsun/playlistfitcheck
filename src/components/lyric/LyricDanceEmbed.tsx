@@ -203,16 +203,16 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   // ── Media deactivate listener ──────────────────────────────────────
   useEffect(() => {
-    if (!isFeedEmbed || !lyricDanceId) return;
+    if (!isFeedEmbed || !postId) return;
     const handler = (e: Event) => {
       const ce = e as CustomEvent<{ cardId?: string }>;
-      if (ce.detail?.cardId !== lyricDanceId) return;
+      if (ce.detail?.cardId !== postId) return;
       userActivatedRef.current = false;
       setForceDemoted(true);
     };
     window.addEventListener("crowdfit:media-deactivate", handler);
     return () => window.removeEventListener("crowdfit:media-deactivate", handler);
-  }, [isFeedEmbed, lyricDanceId]);
+  }, [isFeedEmbed, postId]);
 
   useEffect(() => {
     if (cardState === "active") setForceDemoted(false);
