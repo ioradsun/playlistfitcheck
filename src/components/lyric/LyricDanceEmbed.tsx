@@ -17,6 +17,7 @@ import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar"
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
+import { resolveTypographyFromDirection } from "@/lib/fontResolver";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -349,6 +350,19 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   }, [activeSectionIndex]);
 
   const hookPhrase = ((data ?? prefetchedData) as any)?.hook_phrase ?? null;
+
+  const coverTypography = useMemo(() => {
+    const cd = (data ?? prefetchedData as any)?.cinematic_direction;
+    if (!cd) return undefined;
+    const r = resolveTypographyFromDirection(cd);
+    return {
+      fontFamily: r.fontFamily,
+      fontWeight: r.fontWeight,
+      textTransform: r.textTransform,
+      letterSpacing: r.letterSpacing,
+    };
+  }, [data, prefetchedData]);
+
   const effectiveShowCover = showCover;
   void artistName;
 
@@ -408,6 +422,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                       : (prefetchedData as any)?.lyrics?.slice(0, 2).map((l: any) => l.text)
                   }
                   hookPhrase={hookPhrase}
+                  typography={coverTypography}
                   onListen={(e) => {
                     userActivatedRef.current = true;
                     handleListenNow(e);
