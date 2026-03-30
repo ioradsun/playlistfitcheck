@@ -53,7 +53,7 @@ function LazySpotifyEmbedInner({
   // Poster → player reveal
   useEffect(() => {
     if (!iframeLoaded) return;
-    const timer = setTimeout(() => setRevealReady(true), 300);
+    const timer = setTimeout(() => setRevealReady(true), 800);
     return () => clearTimeout(timer);
   }, [iframeLoaded]);
 
@@ -245,15 +245,19 @@ function LazySpotifyEmbedInner({
                 </div>
               )}
               {isSpotify ? (
-                <div ref={containerRef} style={{ width: "100%", height: embedHeight, background: "#000" }} />
+                <div
+                  ref={containerRef}
+                  className="transition-opacity duration-500"
+                  style={{ width: "100%", height: embedHeight, background: "#000", opacity: revealReady ? 1 : 0 }}
+                />
               ) : (
                 <iframe
                   src={embedSrc}
                   width="100%"
                   height={embedHeight}
                   allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                  className="border-0 block w-full"
-                  style={{ background: "#000" }}
+                  className="border-0 block w-full transition-opacity duration-500"
+                  style={{ background: "#000", opacity: revealReady ? 1 : 0 }}
                   title={`Play ${trackTitle}`}
                   scrolling="no"
                   onLoad={() => setIframeLoaded(true)}
@@ -271,15 +275,19 @@ function LazySpotifyEmbedInner({
             {posterElement}
           </div>
           {isSpotify ? (
-            <div ref={containerRef} className="absolute inset-0 w-full" style={{ zIndex: 6 }} />
+            <div
+              ref={containerRef}
+              className="absolute inset-0 w-full transition-opacity duration-500"
+              style={{ zIndex: 6, opacity: revealReady ? 1 : 0 }}
+            />
           ) : (
             <iframe
               src={embedSrc}
               width="100%"
               height={embedHeight}
               allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-              className="absolute inset-0 border-0 block w-full"
-              style={{ zIndex: 6 }}
+              className="absolute inset-0 border-0 block w-full transition-opacity duration-500"
+              style={{ zIndex: 6, opacity: revealReady ? 1 : 0 }}
               title={`Play ${trackTitle}`}
               scrolling="no"
               onLoad={() => setIframeLoaded(true)}
