@@ -85,13 +85,8 @@ export function useLyricDanceCore({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const mountedRef = useRef(true);
   const currentTimeSecRef = useRef(0);
   const activeLineRef = useRef<{ text: string; lineIndex: number; sectionLabel: string | null } | null>(null);
-
-  useEffect(() => () => {
-    mountedRef.current = false;
-  }, []);
 
   useEffect(() => {
     const syncFromGlobal = () => {
@@ -107,14 +102,12 @@ export function useLyricDanceCore({
 
   useEffect(() => {
     if (prefetchedData) {
-      setFetchedData({ ...prefetchedData });
-      if (prefetchedData.cinematic_direction) {
-        setTimeout(() => {
-          if (!mountedRef.current) return;
-          const normalized = normalizeCinematicDirection(prefetchedData.cinematic_direction);
-          setFetchedData((prev) => (prev ? { ...prev, cinematic_direction: normalized } : prev));
-        }, 0);
-      }
+      setFetchedData({
+        ...prefetchedData,
+        cinematic_direction: prefetchedData.cinematic_direction
+          ? normalizeCinematicDirection(prefetchedData.cinematic_direction)
+          : prefetchedData.cinematic_direction,
+      });
       setLoading(false);
       return;
     }
@@ -129,14 +122,13 @@ export function useLyricDanceCore({
       .then(({ data: row }) => {
         if (cancelled) return;
         if (row) {
-          setFetchedData(row as unknown as LyricDanceData);
-          if ((row as any).cinematic_direction) {
-            setTimeout(() => {
-              if (cancelled || !mountedRef.current) return;
-              const normalized = normalizeCinematicDirection((row as any).cinematic_direction);
-              setFetchedData((prev) => (prev ? { ...prev, cinematic_direction: normalized } : prev));
-            }, 0);
-          }
+          const r = row as any;
+          setFetchedData({
+            ...(row as unknown as LyricDanceData),
+            cinematic_direction: r.cinematic_direction
+              ? normalizeCinematicDirection(r.cinematic_direction)
+              : r.cinematic_direction,
+          });
         }
         setLoading(false);
       });
