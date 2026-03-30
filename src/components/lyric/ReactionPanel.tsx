@@ -177,6 +177,71 @@ function snapToPhraseEnd(
   return snapToBeat(t, beats);
 }
 
+function FireLineButton({
+  lineIndex,
+  fireCount,
+  onFire,
+  accent,
+}: {
+  lineIndex: number;
+  fireCount: number;
+  onFire: (holdMs: number) => void;
+  accent: string;
+}) {
+  const holdStartRef = useRef<number | null>(null);
+
+  const startHold = () => {
+    holdStartRef.current = performance.now();
+  };
+
+  const endHold = () => {
+    const start = holdStartRef.current;
+    holdStartRef.current = null;
+    const holdMs = start ? Math.max(0, performance.now() - start) : 0;
+    onFire(holdMs);
+  };
+
+  return (
+    <button
+      onMouseDown={(e) => {
+        e.stopPropagation();
+        startHold();
+      }}
+      onMouseUp={(e) => {
+        e.stopPropagation();
+        endHold();
+      }}
+      onMouseLeave={() => {
+        if (holdStartRef.current != null) endHold();
+      }}
+      onTouchStart={(e) => {
+        e.stopPropagation();
+        startHold();
+      }}
+      onTouchEnd={(e) => {
+        e.stopPropagation();
+        endHold();
+      }}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        fontSize: 9,
+        fontFamily: "monospace",
+        color: "rgba(255,255,255,0.5)",
+        border: `0.5px solid ${accent}40`,
+        borderRadius: 999,
+        background: "rgba(255,255,255,0.02)",
+        padding: "2px 8px",
+        cursor: "pointer",
+        lineHeight: 1.3,
+      }}
+      aria-label={`Fire line ${lineIndex}`}
+      type="button"
+    >
+      🔥 {fireCount}
+    </button>
+  );
+}
+
 function ReactionPanel({
   displayMode,
   isOpen,
@@ -209,12 +274,14 @@ function ReactionPanel({
   maxHeight,
   empowermentPromise: _empowermentPromise,
   fmlyHookEnabled: _fmlyHookEnabled,
+  onFireLine,
   onLineVisible,
 }: ReactionPanelProps) {
   const [textInput, setTextInput] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [replyingTo, setReplyingTo] = useState<CommentRow | null>(null);
+  const [activeWindowIdx, setActiveWindowIdx] = useState<number | null>(null);
   const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(
     null,
   );
@@ -280,6 +347,7 @@ function ReactionPanel({
     setHasSubmitted(false);
     setTextInput("");
     setReplyingTo(null);
+    setActiveWindowIdx(null);
     stopAtSecRef.current = null; // cleared — tapping a line will set it
     userTookControlRef.current = false; // re-enable auto-scroll for this session
   }, [isOpen]);
@@ -437,7 +505,11 @@ function ReactionPanel({
         dance_id: danceId,
         text,
         session_id: sessionId,
-        line_index: displayLineIndex,
+        line_index:
+          activeWindowIdx !== null
+            ? (clipWindows[activeWindowIdx]?.lines[0]?.lineIndex ??
+              displayLineIndex)
+            : displayLineIndex,
         parent_comment_id: replyingTo?.id ?? null,
       })
       .select(
@@ -470,7 +542,13 @@ function ReactionPanel({
       });
     }
 
-    if (displayLineIndex != null) {
+    if (activeWindowIdx !== null) {
+      const firstLineIdx = clipWindows[activeWindowIdx]?.lines[0]?.lineIndex;
+      if (firstLineIdx != null) {
+        setSubmittedLineIndex(firstLineIdx);
+        setTimeout(() => setSubmittedLineIndex(null), 600);
+      }
+    } else if (displayLineIndex != null) {
       setSubmittedLineIndex(displayLineIndex);
       setTimeout(() => setSubmittedLineIndex(null), 600);
     }
@@ -584,6 +662,12 @@ function ReactionPanel({
       shouldShowSectionHeader,
     };
   });
+  const commentsByWindow = clipWindows.map((win) => {
+    const lineIndices = new Set(win.lines.map((l) => l.lineIndex));
+    return comments.filter(
+      (c) => c.line_index != null && lineIndices.has(c.line_index),
+    );
+  });
 
   const previewingWindowRef = useRef<number | null>(null);
 
@@ -649,6 +733,7 @@ function ReactionPanel({
                     player?.seek(win.startSec);
                     player?.play();
                     previewingWindowRef.current = wi;
+                    setActiveWindowIdx(wi);
                   }}
                 >
                   {win.isActive && (
@@ -668,43 +753,29 @@ function ReactionPanel({
                       }}
                     >
                       {formatTime(win.startSec)} – {formatTime(win.endSec)}
+                      {" "}
+                      <span style={{ opacity: 0.5 }}>
+                        ({Math.round(win.endSec - win.startSec)}s)
+                      </span>
                     </span>
                     <div className="flex-1" />
-                    {win.totalFire > 0 && (
-                      <span
-                        style={{
-                          fontSize: 9,
-                          fontFamily: "monospace",
-                          color: "rgba(255,255,255,0.35)",
-                        }}
-                      >
-                        🔥 {win.totalFire}
-                      </span>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (player?.audio.muted) player.setMuted(false);
-                        player?.setRegion(win.startSec, win.endSec);
-                        player?.seek(win.startSec);
-                        player?.play();
-                        previewingWindowRef.current = wi;
-                      }}
-                      style={{
-                        fontSize: 9,
-                        fontFamily: "monospace",
-                        color: accent,
-                        background: "none",
-                        border: `0.5px solid ${accent}50`,
-                        borderRadius: 6,
-                        padding: "2px 8px",
-                        cursor: "pointer",
-                        letterSpacing: "0.08em",
-                        flexShrink: 0,
-                      }}
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 4 }}
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      preview
-                    </button>
+                      <FireLineButton
+                        lineIndex={win.lines[0]?.lineIndex ?? 0}
+                        fireCount={win.totalFire}
+                        onFire={(holdMs) => {
+                          const targetLine =
+                            win.lines.find(
+                              (l) => l.lineIndex === effectiveActiveIndex,
+                            ) ?? win.lines[0];
+                          if (targetLine) onFireLine?.(targetLine.lineIndex, holdMs);
+                        }}
+                        accent={accent}
+                      />
+                    </div>
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -712,14 +783,14 @@ function ReactionPanel({
                       <div
                         key={l.lineIndex}
                         style={{
-                          fontSize: 15,
+                          fontSize: win.isActive ? 15 : 14,
                           fontWeight: win.isActive ? 500 : 300,
                           color:
                             l.lineIndex === effectiveActiveIndex
                               ? "rgba(255,255,255,0.95)"
                               : win.isActive
-                                ? "rgba(255,255,255,0.65)"
-                                : "rgba(255,255,255,0.42)",
+                                ? "rgba(255,255,255,0.70)"
+                                : "rgba(255,255,255,0.55)",
                           lineHeight: 1.5,
                           whiteSpace: "normal",
                           wordBreak: "break-word",
@@ -730,6 +801,37 @@ function ReactionPanel({
                       </div>
                     ))}
                   </div>
+
+                  {activeWindowIdx === wi && (
+                    <div style={{ paddingLeft: 12, paddingRight: 12, paddingBottom: 8 }}>
+                      {commentsByWindow[wi].length === 0 ? (
+                        <p style={{
+                          fontSize: 11, fontFamily: "monospace",
+                          color: "rgba(255,255,255,0.2)", paddingTop: 4,
+                        }}>
+                          no takes yet — be first
+                        </p>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 6 }}>
+                          {commentsByWindow[wi].map((comment) => (
+                            <div key={comment.id} style={{ display: "flex", gap: 8 }}>
+                              <div style={{
+                                width: 5, height: 5, borderRadius: "50%",
+                                background: accent, opacity: 0.5,
+                                flexShrink: 0, marginTop: 7,
+                              }} />
+                              <p style={{
+                                fontSize: 13, color: "rgba(255,255,255,0.65)",
+                                lineHeight: 1.4, flex: 1,
+                              }}>
+                                {comment.text}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="h-[1px] mx-3">
@@ -783,7 +885,12 @@ function ReactionPanel({
               }
             }}
             onFocus={() => onPause?.()}
-            placeholder={replyingTo ? 'Write a reply...' : 'say something...'}
+            placeholder={
+              replyingTo ? 'Write a reply...'
+              : activeWindowIdx !== null
+                ? `say something about ${formatTime(clipWindows[activeWindowIdx]?.startSec ?? 0)}...`
+                : 'say something...'
+            }
             style={{
               flex: 1,
               background: 'transparent',

@@ -11,6 +11,7 @@ interface ClosingScreenProps {
   } | null;
   danceId: string;
   onReplay: () => void;
+  onAnswer?: () => void;
 }
 
 const FALLBACK_FEELINGS = [
@@ -21,7 +22,7 @@ const FALLBACK_FEELINGS = [
   "something I can't name yet",
 ];
 
-export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay }: ClosingScreenProps) {
+export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, onAnswer }: ClosingScreenProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const [freeText, setFreeText] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -113,6 +114,7 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay }
                   key={i}
                   onClick={() => {
                     setPicked(i);
+                    onAnswer?.();
                     handleSubmit(i, freeText);
                   }}
                   style={{
@@ -144,6 +146,7 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay }
                 onChange={(e) => setFreeText(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && freeText.trim()) {
+                    onAnswer?.();
                     handleSubmit(picked, freeText);
                   }
                 }}
@@ -163,7 +166,10 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay }
               />
               {freeText.trim().length > 0 && (
                 <button
-                  onClick={() => handleSubmit(picked, freeText)}
+                  onClick={() => {
+                    onAnswer?.();
+                    handleSubmit(picked, freeText);
+                  }}
                   style={{
                     marginTop: 6,
                     fontSize: 9,
