@@ -14,8 +14,14 @@ interface LyricDanceCoverProps {
   badge?: string | null;
   onExpand?: () => void;
   coverImageUrl?: string | null;
-  /** When true, fades out the background image (canvas is ready, lyrics show through) */
+  /** All section images — cycled with CSS crossfade. Falls back to coverImageUrl. */
+  sectionImages?: string[];
+  /** When true, fades out the background (canvas is ready, lyrics show through) */
   hideBackground?: boolean;
+  /** First two lyric lines shown as animated preview text */
+  previewLines?: string[];
+  /** Hook phrase — highlighted in the preview */
+  hookPhrase?: string | null;
 }
 
 export function LyricDanceCover({
@@ -27,86 +33,98 @@ export function LyricDanceCover({
   badge,
   onExpand,
   coverImageUrl,
+  sectionImages,
   hideBackground = false,
+  previewLines,
+  hookPhrase,
 }: LyricDanceCoverProps) {
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const loadedImageRef = useRef<string | null>(null);
+  // Determine which images to cycle. Use section images if available, fall back to album art.
+  const images: string[] = (sectionImages && sectionImages.length > 0)
+    ? sectionImages
+    : (coverImageUrl ? [coverImageUrl] : []);
+
+  // Preload all section images so crossfade doesn't flash on first cycle
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!coverImageUrl) {
-      setImageLoaded(false);
-      loadedImageRef.current = null;
-      return;
-    }
-
-    if (loadedImageRef.current === coverImageUrl) {
-      setImageLoaded(true);
-      return;
-    }
-
-    // Check global preload cache — may already be loaded from feed batch
-    const cached = getPreloadedImage(coverImageUrl);
-    if (cached && cached.complete && cached.naturalWidth > 0) {
-      loadedImageRef.current = coverImageUrl;
-      setImageLoaded(true);
-      return;
-    }
-
-    // Not cached yet — preload through shared cache (dedupes with engine)
-    setImageLoaded(false);
+    if (images.length === 0) return;
     let cancelled = false;
-    preloadImage(coverImageUrl).then(() => {
-      if (cancelled) return;
-      loadedImageRef.current = coverImageUrl;
-      setImageLoaded(true);
+    images.forEach((url) => {
+      const cached = getPreloadedImage(url);
+      if (cached && cached.complete && cached.naturalWidth > 0) {
+        setLoadedImages((prev) => new Set([...prev, url]));
+        return;
+      }
+      preloadImage(url).then(() => {
+        if (!cancelled) setLoadedImages((prev) => new Set([...prev, url]));
+      });
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [coverImageUrl]);
+    return () => { cancelled = true; };
+  }, [images.join(",")]);
+
+  const showPreview = !hideBackground && !waiting && previewLines && previewLines.length > 0;
+
+  // Each image is visible for (cycleTime) seconds, crossfade (fadeTime) seconds
+  const cycleTime = 4; // seconds per image
+  const totalDuration = cycleTime * images.length;
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
       <style>{`
-        @keyframes coverBreathe {
-          0%, 100% { transform: scale(1.08); }
-          50% { transform: scale(1.14); }
-        }
         @keyframes coverPulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.82; }
         }
+        @keyframes imgCycle {
+          0%   { opacity: 0; transform: scale(1.06); }
+          8%   { opacity: 1; transform: scale(1.08); }
+          80%  { opacity: 1; transform: scale(1.13); }
+          92%  { opacity: 0; transform: scale(1.15); }
+          100% { opacity: 0; transform: scale(1.15); }
+        }
+        @keyframes lyricCycle {
+          0%, 15%  { opacity: 0; transform: translateY(6px); }
+          25%, 75% { opacity: 1; transform: translateY(0); }
+          85%, 100%{ opacity: 0; transform: translateY(-6px); }
+        }
       `}</style>
 
-      {/* Layer 1 — album art, blurred + slow breathing zoom */}
-      {coverImageUrl && (
+      {/* Section image layers — each crossfades in turn via animation-delay */}
+      {images.map((url, i) => (
         <div
-          className="absolute inset-0 transition-opacity duration-500"
+          key={url}
+          className="absolute inset-0"
           style={{
-            backgroundImage: `url(${coverImageUrl})`,
+            backgroundImage: `url(${url})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
-            filter: "blur(8px) saturate(0.5)",
-            animation: hideBackground ? "none" : "coverBreathe 8s ease-in-out infinite",
-            opacity: hideBackground ? 0 : imageLoaded ? 1 : 0,
+            filter: "blur(10px) saturate(0.6)",
+            opacity: hideBackground ? 0 : loadedImages.has(url) ? 1 : 0,
+            animation: hideBackground || !loadedImages.has(url)
+              ? "none"
+              : `imgCycle ${totalDuration}s ease-in-out infinite`,
+            animationDelay: `${i * cycleTime}s`,
+            // First image starts visible immediately; others start at 0 opacity
+            // via keyframe definition — no need for separate initial state
+            transition: "opacity 0.5s ease",
           }}
         />
-      )}
+      ))}
 
-      {/* Layer 2 — dark gradient, pulsing slightly out of phase with the zoom */}
+      {/* Dark gradient overlay — pulses slightly */}
       <div
         className="absolute inset-0 transition-opacity duration-700"
         style={{
           background: isMarketingCover
             ? "rgba(0,0,0,0.75)"
-            : "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%)",
+            : "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.4) 40%, rgba(0,0,0,0.78) 100%)",
           opacity: hideBackground ? (isMarketingCover ? 0.6 : 0.7) : 1,
-          animation: hideBackground ? "none" : "coverPulse 5s ease-in-out infinite",
-          animationDelay: "2.5s",
+          animation: hideBackground ? "none" : "coverPulse 6s ease-in-out infinite",
+          animationDelay: "1.5s",
         }}
       />
 
-      {/* Layer 3 — badge + expand, pinned top */}
+      {/* Badge + expand, pinned top */}
       {(badge || onExpand) && (
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-3 z-10">
           {badge ? (
@@ -130,24 +148,58 @@ export function LyricDanceCover({
         </div>
       )}
 
-      {/* Layer 3 — song title + Listen Now */}
+      {/* CSS lyric preview lines — fade cycle */}
+      {showPreview && (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[5]"
+          style={{ paddingBottom: "4rem" }}
+        >
+          {previewLines!.map((line, i) => {
+            const isHook = hookPhrase && line === hookPhrase;
+            const lineDuration = 4;
+            const lineDelay = i * (lineDuration * 0.6);
+            return (
+              <div
+                key={i}
+                style={{
+                  fontFamily: "monospace",
+                  fontSize: "clamp(11px, 2.8vw, 15px)",
+                  letterSpacing: "0.04em",
+                  textAlign: "center",
+                  padding: "0 1.5rem",
+                  marginBottom: "0.6rem",
+                  color: isHook ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.55)",
+                  fontWeight: isHook ? 600 : 400,
+                  animation: `lyricCycle ${lineDuration * 2}s ease-in-out infinite`,
+                  animationDelay: `${lineDelay}s`,
+                  opacity: 0,
+                  maxWidth: "85%",
+                  lineHeight: 1.5,
+                  textShadow: "0 1px 10px rgba(0,0,0,0.9)",
+                }}
+              >
+                {line}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Song title + Listen Now */}
       <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ marginBottom: 24 }}>
         {isMarketingCover ? (
-          <>
-            {/* Play button — no explanatory text, the banner + badge handle context */}
-            <button
-              onClick={waiting ? undefined : onListen}
-              className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
-              style={{
-                color: waiting ? "transparent" : "rgba(255,255,255,1)",
-                borderColor: waiting ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.20)",
-                cursor: waiting ? "default" : "pointer",
-                background: waiting ? "rgba(255,255,255,0.02)" : undefined,
-              }}
-            >
-              {`${(claimSongName || songName || "Lyric").trim()} Dance`}
-            </button>
-          </>
+          <button
+            onClick={waiting ? undefined : onListen}
+            className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
+            style={{
+              color: waiting ? "transparent" : "rgba(255,255,255,1)",
+              borderColor: waiting ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.20)",
+              cursor: waiting ? "default" : "pointer",
+              background: waiting ? "rgba(255,255,255,0.02)" : undefined,
+            }}
+          >
+            {`${(claimSongName || songName || "Lyric").trim()} Dance`}
+          </button>
         ) : (
           <>
             {songName ? (
@@ -172,7 +224,6 @@ export function LyricDanceCover({
           </>
         )}
       </div>
-
     </div>
   );
 }
