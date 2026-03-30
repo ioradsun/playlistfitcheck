@@ -886,27 +886,47 @@ const Index = () => {
 
   // Reset all tool state when user logs out
   const prevUserRef = useRef(user);
+  const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (user || authLoading) {
+      if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+        logoutTimerRef.current = null;
+      }
+      prevUserRef.current = user;
+      return;
+    }
+
     if (prevUserRef.current && !user && !authLoading) {
-      setResult(null);
-      setVibeAnalysis(null);
-      setSongFitAnalysis(null);
-      setLoadedMixProject(null);
-      setLoadedLyric(null);
-      setProfitArtistUrl(null);
-      setProfitSavedReport(null);
-      setLoadedHitFitAnalysis(null);
-      setLoadedVibeFitResult(null);
-      setOptimisticSidebarItem(null);
-      setProfitLoadKey((k) => k + 1);
-      setVibeFitLoadKey((k) => k + 1);
-      setIsFetchingProject(false);
-      setProjectMissing(false);
-      setHeaderProject(null);
-      // Clear all cached audio on logout
-      sessionAudio.clearAll();
+      logoutTimerRef.current = setTimeout(() => {
+        logoutTimerRef.current = null;
+        setResult(null);
+        setVibeAnalysis(null);
+        setSongFitAnalysis(null);
+        setLoadedMixProject(null);
+        setLoadedLyric(null);
+        setProfitArtistUrl(null);
+        setProfitSavedReport(null);
+        setLoadedHitFitAnalysis(null);
+        setLoadedVibeFitResult(null);
+        setOptimisticSidebarItem(null);
+        setProfitLoadKey((k) => k + 1);
+        setVibeFitLoadKey((k) => k + 1);
+        setIsFetchingProject(false);
+        setProjectMissing(false);
+        setHeaderProject(null);
+        // Clear all cached audio on logout
+        sessionAudio.clearAll();
+      }, 2000);
     }
     prevUserRef.current = user;
+
+    return () => {
+      if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+        logoutTimerRef.current = null;
+      }
+    };
   }, [user, authLoading]);
 
   const handleNewLyric = useCallback(() => {

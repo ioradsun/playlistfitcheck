@@ -2525,6 +2525,14 @@ export class LyricDancePlayer {
   private _handleVisibilityChangeImpl(): void {
     if (document.hidden) return;
 
+    // Guard: canvas may have been lost during backgrounding.
+    if (!this.ctx || !this.bgCanvas) return;
+    const testCtx = this.bgCanvas.getContext("2d");
+    if (!testCtx) {
+      this.playing = false;
+      return;
+    }
+
     this.lastTimestamp = 0;
 
     this._qFrameCount = 0;
@@ -2572,6 +2580,12 @@ export class LyricDancePlayer {
     }
 
     try {
+      // Guard: canvas context may be lost after prolonged backgrounding.
+      if (!this.ctx || !this.bgCanvas?.getContext) {
+        this.playing = false;
+        return;
+      }
+
       const rawDelta = timestamp - (this.lastTimestamp || timestamp);
       const deltaMs = rawDelta > 200 ? 0 : Math.min(rawDelta, 50);
       this.lastTimestamp = timestamp;

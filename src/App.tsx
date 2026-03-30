@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { lazy, Suspense } from "react";
 import { ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // ── Route detection — skip heavy imports on embed routes ──
 const _segs = typeof window !== "undefined"
@@ -53,35 +54,37 @@ const LyricDanceFallback = () => (
 
 const App = () => {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="tfm-theme">
-        <TooltipProvider>
-          <BrowserRouter>
-            <Routes>
-              {/* ── Lyric Dance: lightweight path ── */}
-              <Route path="/:artistSlug/:songSlug/lyric-dance" element={
-                <Suspense fallback={<LyricDanceFallback />}><ShareableLyricDance /></Suspense>
-              } />
-              <Route path="/artist/:username/claim-page" element={<Suspense fallback={null}><ArtistClaimPage /></Suspense>} />
-              <Route path="/create" element={<Suspense fallback={null}><CreateArtistPage /></Suspense>} />
-              {/* ── Hook embed: lightweight path ── */}
-              <Route path="/:artistSlug/:songSlug/:hookSlug" element={
-                <Suspense fallback={<HookEmbedFallback />}><ShareableHook /></Suspense>
-              } />
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="tfm-theme">
+          <TooltipProvider>
+            <BrowserRouter>
+              <Routes>
+                {/* ── Lyric Dance: lightweight path ── */}
+                <Route path="/:artistSlug/:songSlug/lyric-dance" element={
+                  <Suspense fallback={<LyricDanceFallback />}><ShareableLyricDance /></Suspense>
+                } />
+                <Route path="/artist/:username/claim-page" element={<Suspense fallback={null}><ArtistClaimPage /></Suspense>} />
+                <Route path="/create" element={<Suspense fallback={null}><CreateArtistPage /></Suspense>} />
+                {/* ── Hook embed: lightweight path ── */}
+                <Route path="/:artistSlug/:songSlug/:hookSlug" element={
+                  <Suspense fallback={<HookEmbedFallback />}><ShareableHook /></Suspense>
+                } />
 
-              {/* ── Main app: full provider tree (lazy-loaded shell) ── */}
-              <Route path="/*" element={
-                MainAppShell ? (
-                  <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#090a10" }} />}>
-                    <MainAppShell />
-                  </Suspense>
-                ) : null
-              } />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+                {/* ── Main app: full provider tree (lazy-loaded shell) ── */}
+                <Route path="/*" element={
+                  MainAppShell ? (
+                    <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#090a10" }} />}>
+                      <MainAppShell />
+                    </Suspense>
+                  ) : null
+                } />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 
