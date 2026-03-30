@@ -63,6 +63,8 @@ export function useLyricDancePlayer(
   const initRef = useRef(false);
   const onReadyRef = useRef(onReady);
   const slotRef = useRef<ReturnType<typeof acquireCanvasSlot> | null>(null);
+  // Bumped when a pool slot frees and this card hasn't inited yet — triggers init retry.
+  const [retryTick, setRetryTick] = useState(0);
   onReadyRef.current = onReady;
 
   // Keep local data in sync when parent passes new initialData
@@ -80,6 +82,17 @@ export function useLyricDancePlayer(
   // words are optional — player falls back to line-level timing if absent.
   // Only cinematic_direction is required (drives the entire visual system).
   const dataReady = !!(data?.cinematic_direction);
+
+  useEffect(() => {
+    const handler = () => {
+      // Only wake this card if it's still waiting (not inited, not evicted, data ready)
+      if (!initRef.current && !evicted && dataReady) {
+        setRetryTick((t) => t + 1);
+      }
+    };
+    window.addEventListener("crowdfit:pool-slot-freed", handler);
+    return () => window.removeEventListener("crowdfit:pool-slot-freed", handler);
+  }, [evicted, dataReady]);
 
   useEffect(() => {
     if (initRef.current || !dataReady) return;
@@ -184,7 +197,7 @@ export function useLyricDancePlayer(
       setPlayerReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataReady, data?.id, usePool, postId, evicted]);
+  }, [dataReady, data?.id, usePool, postId, evicted, retryTick]);
 
   useEffect(() => {
     if (!evicted) return;
