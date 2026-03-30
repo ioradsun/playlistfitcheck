@@ -47,6 +47,7 @@ function LazySpotifyEmbedInner({
 
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [revealReady, setRevealReady] = useState(false);
+  const [posterLoaded, setPosterLoaded] = useState(false);
   const [scSilenced, setScSilenced] = useState(false);
 
   const embedSrc =
@@ -68,6 +69,7 @@ function LazySpotifyEmbedInner({
   useEffect(() => {
     setIframeLoaded(false);
     setRevealReady(false);
+    setPosterLoaded(false);
     hasLoadedRef.current = false;
     if (controllerRef.current) {
       try { controllerRef.current.destroy(); } catch { /* ignore */ }
@@ -200,7 +202,13 @@ function LazySpotifyEmbedInner({
   // ── Render ─────────────────────────────────────────────────────────
   const posterElement = albumArtUrl ? (
     <>
-      <img src={albumArtUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      <img
+        src={albumArtUrl}
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+        style={{ opacity: posterLoaded ? 1 : 0 }}
+        onLoad={() => setPosterLoaded(true)}
+      />
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
       <div className="absolute bottom-3 left-3 right-3 z-10 flex items-end gap-3">
         <div className="flex flex-col gap-0.5 min-w-0">
@@ -246,7 +254,13 @@ function LazySpotifyEmbedInner({
                   className="absolute inset-0 z-[2] pointer-events-none transition-opacity duration-500"
                   style={{ opacity: revealReady ? 0 : 1 }}
                 >
-                  <img src={albumArtUrl} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={albumArtUrl}
+                    alt=""
+                    className="w-full h-full object-cover transition-opacity duration-300"
+                    style={{ opacity: posterLoaded ? 1 : 0 }}
+                    onLoad={() => setPosterLoaded(true)}
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-black/20" />
                   <div className="absolute bottom-3 left-3 right-3 z-10">
                     <p className="text-sm font-bold text-white drop-shadow-md truncate">{trackTitle}</p>

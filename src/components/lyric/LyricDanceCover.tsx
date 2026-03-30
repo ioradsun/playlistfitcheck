@@ -104,6 +104,20 @@ export function LyricDanceCover({
         }
       `}</style>
 
+      {/* Base layer — album art always visible, never waits for preload */}
+      {coverImageUrl && !hideBackground && (
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url(${coverImageUrl})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            filter: "blur(10px) saturate(0.5)",
+            transform: "scale(1.08)",
+          }}
+        />
+      )}
+
       {/* Section image layers — each crossfades in turn */}
       {images.map((url, i) => (
         <div
