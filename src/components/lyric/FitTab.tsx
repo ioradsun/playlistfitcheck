@@ -221,6 +221,8 @@ export function FitTab({
   >([]);
   const [totalFires, setTotalFires] = useState(0);
   const [resultsLoaded, setResultsLoaded] = useState(false);
+  const [reactionTotals, setReactionTotals] = useState<Record<string, number>>({});
+  const [uniqueListeners, setUniqueListeners] = useState(0);
   // User overrides per slot — null means "use AI hook"
   const [customHooks, setCustomHooks] = useState<
     [SavedCustomHook | null, SavedCustomHook | null]
@@ -1335,6 +1337,8 @@ export function FitTab({
     setClosingDist([]);
     setFreeResponses([]);
     setTotalFires(0);
+    setReactionTotals({});
+    setUniqueListeners(0);
   }, [publishedDanceId]);
 
   useEffect(() => {
@@ -1354,11 +1358,31 @@ export function FitTab({
         .from("lyric_dance_fires" as any)
         .select("id", { count: "exact", head: true })
         .eq("dance_id", publishedDanceId),
-    ]).then(([strength, dist, free, count]) => {
+      supabase
+        .from("lyric_dance_reactions" as any)
+        .select("emoji, line_index")
+        .eq("dance_id", publishedDanceId),
+      supabase
+        .from("lyric_dance_exposures" as any)
+        .select("session_id")
+        .eq("dance_id", publishedDanceId),
+    ]).then(([strength, dist, free, count, reactions, exposures]) => {
       setFireStrength(strength);
       setClosingDist((dist.data as any[]) ?? []);
       setFreeResponses((free.data as any[]) ?? []);
       setTotalFires(count.count ?? 0);
+
+      const emojiAgg: Record<string, number> = {};
+      for (const row of (reactions.data ?? []) as any[]) {
+        emojiAgg[row.emoji] = (emojiAgg[row.emoji] ?? 0) + 1;
+      }
+      setReactionTotals(emojiAgg);
+
+      const uniqueSessions = new Set(
+        ((exposures.data ?? []) as any[]).map((r: any) => r.session_id),
+      );
+      setUniqueListeners(uniqueSessions.size);
+
       setResultsLoaded(true);
     });
   }, [subView, publishedDanceId, resultsLoaded]);
@@ -1515,22 +1539,64 @@ export function FitTab({
         </div>
 
         {subView === "data" && (
-          <div className="space-y-4 pb-8">
+          <div className="space-y-5 pb-8">
+
+            {/* ── Headline insight ── */}
             {totalFires > 0 && (
-              <div className="flex items-center gap-2 px-1">
-                <span style={{ fontSize: 22 }}>🔥</span>
-                <div>
-                  <p className="text-[22px] font-mono font-medium text-foreground">
-                    {totalFires}
-                  </p>
-                  <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
-                    fires since release
-                  </p>
+              <div className="space-y-2 px-1">
+                <div className="flex items-baseline gap-3">
+                  <span style={{ fontSize: 28 }}>🔥</span>
+                  <span className="text-[28px] font-mono font-medium text-foreground">{totalFires}</span>
+                  <span className="text-[11px] font-mono text-muted-foreground">fires</span>
+                  {uniqueListeners > 0 && (
+                    <>
+                      <span className="text-muted-foreground/30">·</span>
+                      <span className="text-[11px] font-mono text-muted-foreground">{uniqueListeners} listener{uniqueListeners !== 1 ? "s" : ""}</span>
+                    </>
+                  )}
                 </div>
+                {/* Plain-language summary */}
+                {uniqueListeners > 0 && (
+                  <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
+                    {uniqueListeners === 1
+                      ? "Your first listener left signal. Share wider to see patterns emerge."
+                      : totalFires / uniqueListeners >= 3
+                        ? `Listeners are averaging ${(totalFires / uniqueListeners).toFixed(1)} fires each — that's high engagement. People are reacting to multiple moments.`
+                        : totalFires / uniqueListeners >= 1.5
+                          ? `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — your song has more than one moment that hits.`
+                          : `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — most people found at least one moment. More data will reveal which lines connect deepest.`
+                    }
+                  </p>
+                )}
               </div>
             )}
 
-            {fireStrength.length > 0 && (
+            {/* ── Your strongest moment ── */}
+            {fireStrength.length > 0 && (() => {
+              const top = fireStrength[0];
+              const topLine = allLines.find((l) => l.lineIndex === top.line_index);
+              const holdType = top.avg_hold_ms < 300 ? "tapped" : top.avg_hold_ms < 1000 ? "held briefly" : top.avg_hold_ms < 3000 ? "held deep" : "held sustained";
+              return (
+                <div className="glass-card rounded-xl p-4 space-y-2 border border-primary/15">
+                  <p className="text-[9px] font-mono text-primary/60 uppercase tracking-wider">your strongest moment</p>
+                  <p className="text-[14px] text-foreground/90 font-medium leading-snug">
+                    "{topLine?.text ?? `line ${top.line_index}`}"
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+                    {top.fire_count} {top.fire_count === 1 ? "person" : "people"} {holdType} on this line.
+                    {top.avg_hold_ms >= 1000
+                      ? " Long holds mean emotional weight — this line resonates beyond the surface."
+                      : top.fire_count >= 5
+                        ? " Multiple quick fires means broad appeal — this is a crowd moment."
+                        : " Early signal. Keep sharing to see if this holds."
+                    }
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* ── Fire strength by line ── */}
+            {fireStrength.length > 1 && (
               <div className="glass-card rounded-xl p-4 space-y-3">
                 <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
                   fire strength by line
@@ -1570,17 +1636,91 @@ export function FitTab({
                     </div>
                   );
                 })}
+                {/* Insight */}
+                {fireStrength.length >= 3 && (() => {
+                  const secondPct = Math.round((fireStrength[1].fire_strength / fireStrength[0].fire_strength) * 100);
+                  const thirdPct = Math.round((fireStrength[2].fire_strength / fireStrength[0].fire_strength) * 100);
+                  if (secondPct >= 80) {
+                    return (
+                      <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
+                        Your top lines are close in strength — your song has consistent energy across multiple moments. That's rare.
+                      </p>
+                    );
+                  } else if (thirdPct < 40) {
+                    return (
+                      <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
+                        One line dominates. Consider building more tension leading into it — or writing a second hook with similar emotional weight.
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             )}
 
+            {/* ── Emotional reactions ── */}
+            {Object.keys(reactionTotals).length > 0 && (() => {
+              const EMOJI_MAP: Record<string, string> = {
+                fire: "🔥", dead: "💀", mind_blown: "🤯",
+                emotional: "😭", respect: "🙏", accurate: "🎯",
+              };
+              const EMOJI_LABEL: Record<string, string> = {
+                fire: "fire", dead: "devastating", mind_blown: "mind-blown",
+                emotional: "emotional", respect: "respect", accurate: "accurate",
+              };
+              const sorted = Object.entries(reactionTotals)
+                .map(([emoji, count]) => ({ emoji, count }))
+                .sort((a, b) => b.count - a.count);
+              const total = sorted.reduce((s, r) => s + r.count, 0);
+              const topEmoji = sorted[0];
+              return (
+                <div className="glass-card rounded-xl p-4 space-y-3">
+                  <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
+                    how listeners reacted
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {sorted.map(({ emoji, count }) => {
+                      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                      return (
+                        <div key={emoji} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/20 border border-border/20">
+                          <span className="text-[16px]">{EMOJI_MAP[emoji] ?? emoji}</span>
+                          <span className="text-[11px] font-mono text-foreground/70">{count}</span>
+                          <span className="text-[9px] font-mono text-muted-foreground/40">{pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {topEmoji && total >= 3 && (
+                    <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+                      {topEmoji.emoji === "emotional"
+                        ? "Your song is hitting people in the feels. Emotional reactions are the strongest signal for replay value."
+                        : topEmoji.emoji === "fire"
+                          ? "Fire is the dominant reaction — your energy is landing. This is a performance track."
+                          : topEmoji.emoji === "dead"
+                            ? "\"Dead\" means you destroyed them. Your punchlines or flow switches are working."
+                            : topEmoji.emoji === "mind_blown"
+                              ? "Mind-blown reactions mean you're saying something people haven't heard before. Lean into the originality."
+                              : topEmoji.emoji === "respect"
+                                ? "Respect is the craft reaction — listeners appreciate the writing. Your pen game is connecting."
+                                : topEmoji.emoji === "accurate"
+                                  ? "\"Accurate\" means you're putting words to something people already feel. That's the most shareable kind of music."
+                                  : `${EMOJI_LABEL[topEmoji.emoji] ?? topEmoji.emoji} is your dominant reaction.`
+                      }
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── What listeners felt (closing screen) ── */}
             {closingDist.length > 0 && empowermentPromise && (
               <div className="glass-card rounded-xl p-4 space-y-3">
                 <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
-                  what listeners felt
+                  what your song did for them
                 </p>
-                <div className="text-[10px] font-mono text-muted-foreground/40 mb-1">
-                  {empowermentPromise.fromState} → {empowermentPromise.toState}
-                </div>
+                <p className="text-[11px] text-muted-foreground/50 mb-1">
+                  After listening, we asked: "How does this song make you feel?"
+                </p>
                 {closingDist.map((row) => {
                   const label =
                     empowermentPromise.hooks[row.hook_index] ??
@@ -1607,9 +1747,29 @@ export function FitTab({
                     </div>
                   );
                 })}
+                {/* Insight */}
+                {closingDist.length >= 2 && (() => {
+                  const top = closingDist[0];
+                  const topLabel = empowermentPromise.hooks[top?.hook_index] ?? "";
+                  if (top && top.pct >= 50) {
+                    return (
+                      <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
+                        Over half your listeners landed on "{topLabel.slice(0, 40)}." That's your song's emotional center — use it in captions, hooks, and promo.
+                      </p>
+                    );
+                  } else if (closingDist[0]?.pct - closingDist[1]?.pct < 10) {
+                    return (
+                      <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
+                        Reactions are split evenly — your song speaks to different people in different ways. That's a sign of depth.
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             )}
 
+            {/* ── In their own words ── */}
             {freeResponses.length > 0 && (
               <div className="glass-card rounded-xl p-4 space-y-2">
                 <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider mb-3">
@@ -1630,9 +1790,15 @@ export function FitTab({
                     )}
                   </div>
                 ))}
+                {freeResponses.length >= 3 && (
+                  <p className="text-[11px] text-muted-foreground/50 pt-2 leading-relaxed">
+                    These are captions waiting to happen. When listeners describe your song in their own words, that's your marketing language.
+                  </p>
+                )}
               </div>
             )}
 
+            {/* ── Clip suggestions (kept from original) ── */}
             {closingDist.slice(0, 3).map((row) => {
               if (!empowermentPromise || row.pct < 10) return null;
               const feeling = empowermentPromise.hooks[row.hook_index];
@@ -1733,16 +1899,24 @@ export function FitTab({
               />
             )}
 
-            {totalFires === 0 && !resultsLoaded && (
+            {/* ── Empty state ── */}
+            {totalFires === 0 && resultsLoaded && (
               <div className="flex flex-col items-center gap-3 py-12">
                 <span style={{ fontSize: 32 }}>🔥</span>
-                <p className="text-[11px] font-mono text-muted-foreground text-center">
-                  share your song to start collecting signal
+                <p className="text-[12px] text-muted-foreground text-center leading-relaxed max-w-[260px]">
+                  Share your song to start collecting signal. Every fire, reaction, and response shows up here.
                 </p>
+              </div>
+            )}
+
+            {totalFires === 0 && !resultsLoaded && (
+              <div className="flex flex-col items-center gap-3 py-12">
+                <Loader2 size={18} className="animate-spin text-muted-foreground/30" />
               </div>
             )}
           </div>
         )}
+
 
         {subView === "fit" && (
           <>
