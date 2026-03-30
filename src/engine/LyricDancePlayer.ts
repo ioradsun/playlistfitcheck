@@ -505,6 +505,50 @@ function lerpColor(a: string, b: string, t: number): string {
 
 const BAKER_VERSION = 10;
 
+// ── Module-level compiled scene cache ───────────────────────────
+// Survives player destroy(). Cards that return to view after eviction
+// skip compileScene() entirely — near-zero reinit cost.
+//
+// Key: `${danceId}:${bakerVersion}:${width}x${height}`
+// Value: { scene: CompiledScene; chunks: Map<string, ChunkState> }
+// Capacity: LRU, max 25 entries (~5MB total for typical scenes)
+
+interface SceneCacheEntry {
+  scene: CompiledScene;
+  chunks: Map<string, ChunkState>;
+  hasCinematicDirection: boolean;
+}
+
+const SCENE_CACHE_MAX = 25;
+const _sceneCache = new Map<string, SceneCacheEntry>();
+
+function sceneCacheKey(
+  danceId: string,
+  width: number,
+  height: number,
+): string {
+  return `${danceId}:${BAKER_VERSION}:${Math.round(width)}x${Math.round(height)}`;
+}
+
+function sceneCacheGet(key: string): SceneCacheEntry | null {
+  const entry = _sceneCache.get(key);
+  if (!entry) return null;
+  // LRU: move to end on access
+  _sceneCache.delete(key);
+  _sceneCache.set(key, entry);
+  return entry;
+}
+
+function sceneCacheSet(key: string, entry: SceneCacheEntry): void {
+  if (_sceneCache.has(key)) _sceneCache.delete(key);
+  _sceneCache.set(key, entry);
+  // Evict oldest if over capacity
+  if (_sceneCache.size > SCENE_CACHE_MAX) {
+    const oldest = _sceneCache.keys().next().value;
+    if (oldest) _sceneCache.delete(oldest);
+  }
+}
+
 const SIM_W = 96;
 const SIM_H = 54;
 const SPLIT_EXIT_STYLES = new Set(['scatter-letters', 'peel-off', 'peel-reverse', 'cascade-down', 'cascade-up']);
@@ -1617,6 +1661,47 @@ export class LyricDancePlayer {
       this._bakeLock = false;
     }
 
+    // Check module-level cache first — hit = skip compileScene entirely
+    if (!this._bakedScene) {
+      const danceId = this.data.id ?? this.data.song_slug ?? "";
+      if (danceId) {
+        const cacheKey = sceneCacheKey(danceId, this.width || 960, this.height || 540);
+        const cached = sceneCacheGet(cacheKey);
+        if (
+          cached &&
+          // Don't use a non-cinematic cache entry when we now have direction
+          (!this.data.cinematic_direction || cached.hasCinematicDirection)
+        ) {
+          // Restore from module cache — no compileScene() needed
+          this._bakedScene = cached.scene;
+          this._bakedChunkCache = new Map(cached.chunks);
+          this._bakedHasCinematicDirection = cached.hasCinematicDirection;
+          this._bakedVersion = BAKER_VERSION;
+          this.compiledScene = cached.scene;
+          this.chunks = new Map(cached.chunks);
+          // Still need payload + conductor for audio sync
+          const payload = this.buildScenePayload();
+          this.payload = payload;
+          this._songGrade = null;
+          this.resolvePlayerState(payload);
+          await this.preloadFonts(); // near-zero — fontReadinessCache hit
+          this.songStartSec = payload.songStart;
+          this.songEndSec = payload.songEnd;
+          const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
+          const beatGridData = this.data.beat_grid ??
+            { bpm: 120, beats: [], confidence: 0 };
+          this.conductor = new BeatConductor(beatGridData, songDuration);
+          if (cached.scene.songMotion) this.conductor.setSongIdentity(cached.scene.songMotion);
+          if (cached.scene.sectionMods) this.conductor.setSectionMods(cached.scene.sectionMods);
+          if (cached.scene.songMotion) this.cameraRig.setSongIdentity(cached.scene.songMotion);
+          if (cached.scene.sectionMods) this.cameraRig.setSectionMods(cached.scene.sectionMods);
+          this._updateViewportScale();
+          this._textMetricsCache.clear();
+          return; // skip the full bake
+        }
+      }
+    }
+
     if (!this._bakePromise) {
       this._bakeLock = true;
       const bakeGen = this._bakeGeneration; // snapshot — if updateTranscript() fires mid-bake it increments this
@@ -1682,6 +1767,17 @@ export class LyricDancePlayer {
         this._bakedHasCinematicDirection = !!this.data.cinematic_direction;
         this._bakedVersion = BAKER_VERSION;
         this._bakeLock = false;
+
+        // Write to module-level cache — survives player.destroy()
+        const danceId = this.data.id ?? this.data.song_slug ?? "";
+        if (danceId) {
+          const cacheKey = sceneCacheKey(danceId, this.width || 960, this.height || 540);
+          sceneCacheSet(cacheKey, {
+            scene: compiled,
+            chunks: new Map(this.chunks),
+            hasCinematicDirection: !!this.data.cinematic_direction,
+          });
+        }
       })();
     }
 
