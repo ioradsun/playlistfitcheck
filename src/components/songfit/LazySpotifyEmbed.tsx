@@ -85,7 +85,6 @@ function LazySpotifyEmbedInner({
   // causes the "never wakes up" bug under fast scroll. Load once, keep alive.
   useEffect(() => {
     if (!isSpotify) return;
-    if (cardState === "cold") return;
     if (hasLoadedRef.current) return;
     if (!containerRef.current) return;
 
@@ -183,7 +182,7 @@ function LazySpotifyEmbedInner({
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardState, isSpotify]);
+  }, [isSpotify]);
 
   // ── Spotify: audio solo — pause when another card goes active ──────
   useEffect(() => {
