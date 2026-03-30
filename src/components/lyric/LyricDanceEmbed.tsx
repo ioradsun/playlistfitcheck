@@ -396,9 +396,18 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 <LyricDanceCover
                   songName={songTitle}
                   waiting={isWaiting}
-                  coverImageUrl={fetchedData?.section_images?.[0] ?? coverImageUrl}
+                  coverImageUrl={coverImageUrl}
+                  sectionImages={
+                    (fetchedData?.section_images ?? (prefetchedData as any)?.section_images) as string[] | undefined
+                  }
                   hideBackground={playerReady}
                   badge={null}
+                  previewLines={
+                    lyricSections.allLines?.length
+                      ? lyricSections.allLines.slice(0, 2).map((l) => l.text)
+                      : (prefetchedData as any)?.lyrics?.slice(0, 2).map((l: any) => l.text)
+                  }
+                  hookPhrase={hookPhrase}
                   onListen={(e) => {
                     userActivatedRef.current = true;
                     handleListenNow(e);
