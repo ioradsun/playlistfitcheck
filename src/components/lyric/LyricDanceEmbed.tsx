@@ -46,6 +46,9 @@ interface LyricDanceEmbedProps {
   avatarUrl?: string | null;
   isVerified?: boolean;
   onProfileClick?: () => void;
+  /** When true, this card is at viewport center — create the player behind the cover
+   *  so the scene is pre-baked when the user taps Listen Now. */
+  preload?: boolean;
 }
 
 export interface LyricDanceEmbedHandle {
@@ -76,6 +79,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   avatarUrl,
   isVerified,
   onProfileClick,
+  preload = false,
 }, ref) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
@@ -83,29 +87,43 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const empowermentPromise = (prefetchedData as any)?.empowerment_promise ?? null;
   const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
 
-  // ── Single eviction state driven by cardState ──────────────────────
-  // A 300ms debounce prevents thrash when user fast-scrolls through cards.
+  // ── Eviction: controls whether a player exists ─────────────────────
+  // Only the preloaded card (center of viewport) or the active card gets
+  // a player. All other warm cards show the React cover at zero GPU cost.
+  // This keeps player count at 2-3 regardless of how many cards exist.
+  //
   // Non-feed embeds (shareable, FitTab) never evict.
-  const [evicted, setEvicted] = useState(false);
+  const [evicted, setEvicted] = useState(true);
   const evictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!isFeedEmbed || isBattleMode) return;
+    if (!isFeedEmbed || isBattleMode) {
+      // Non-feed: never evict
+      setEvicted(false);
+      return;
+    }
+
     if (cardState === "cold") {
+      // Offscreen → evict after 300ms debounce (prevents thrash on fast scroll)
       if (evictTimerRef.current) return; // already pending
       evictTimerRef.current = setTimeout(() => {
         evictTimerRef.current = null;
         setEvicted(true);
       }, 300);
-    } else {
-      // warm or active — cancel any pending eviction and revive if needed
-      if (evictTimerRef.current) {
-        clearTimeout(evictTimerRef.current);
-        evictTimerRef.current = null;
-      }
+    } else if (cardState === "active") {
+      // User tapped play → always create/keep the player
+      if (evictTimerRef.current) { clearTimeout(evictTimerRef.current); evictTimerRef.current = null; }
       if (evicted) setEvicted(false);
+    } else {
+      // warm — only the preloaded card (at viewport center) gets a player
+      if (evictTimerRef.current) { clearTimeout(evictTimerRef.current); evictTimerRef.current = null; }
+      if (preload) {
+        if (evicted) setEvicted(false);
+      } else {
+        if (!evicted) setEvicted(true);
+      }
     }
-  }, [cardState, isFeedEmbed, isBattleMode, evicted]);
+  }, [cardState, preload, isFeedEmbed, isBattleMode, evicted]);
 
   // Patch region onto prefetchedData for battle mode
   const prefetchedDataWithRegion = useMemo(() => {
