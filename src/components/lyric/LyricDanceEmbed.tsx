@@ -1,10 +1,14 @@
 /**
  * LyricDanceEmbed — Feed player (inline, reels, battle).
  * All shared player logic lives in useLyricDanceCore.
- * Lifecycle: cardState is the single source of truth.
- *   cold  → evict player after 300ms debounce (prevents thrash on fast scroll)
- *   warm  → player exists, muted, ready
- *   active → unmuted, playing
+ *
+ * Lifecycle (cardState + preload):
+ *   cold              → evict player after 300ms debounce
+ *   warm + no preload → evicted (React cover only, zero GPU cost)
+ *   warm + preload    → player behind cover, scene pre-bakes
+ *                       Reels: plays muted (RAF running, scene visually alive)
+ *                       Standard: paused (no RAF, scene compiles on CPU only)
+ *   active            → unmuted, playing
  */
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -283,13 +287,21 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player.setMuted(true);
       setMuted(true);
     } else if (coverUp) {
-      // Cover is up — canvas is fully hidden. No RAF, no wasted CPU.
-      // RAF starts when user taps "Listen Now" via handleListenNow.
-      player.pause();
-      player.setMuted(true);
-      setMuted(true);
+      if (reelsMode) {
+        // Reels: play muted behind cover so the lyric scene is visually alive.
+        // When user taps Listen Now, the animation is already rendering — seamless.
+        player.play();
+        player.setMuted(true);
+        setMuted(true);
+      } else {
+        // Standard feed: cover hides the canvas entirely. No RAF = no wasted CPU.
+        // Scene still pre-bakes via scheduleFullModeUpgrade() (CPU-only).
+        player.pause();
+        player.setMuted(true);
+        setMuted(true);
+      }
     }
-  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen]);
+  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen, reelsMode]);
 
   // ── Reels: auto-remove cover when active ──────────────────────────
   useEffect(() => {
