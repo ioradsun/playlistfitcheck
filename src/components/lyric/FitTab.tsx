@@ -1312,7 +1312,7 @@ export function FitTab({
     if (!fmlyHookEnabled) return;
     if (!publishedDanceId) return;
     if (!allReady && !prefetchedDanceData) return; // need either pipeline done OR DB data available
-    if (empowermentPromise || empowermentLoading) return;
+    if (empowermentPromise || empowermentLoading || empowermentError) return;
 
     const lines = lyricData?.lines;
     if (!Array.isArray(lines) || lines.length === 0) return;
@@ -1360,6 +1360,7 @@ export function FitTab({
     prefetchedDanceData,
     empowermentPromise,
     empowermentLoading,
+    empowermentError,
     lyricData,
     cinematicDirection,
     renderData,
