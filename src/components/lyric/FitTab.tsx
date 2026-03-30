@@ -74,6 +74,7 @@ interface Props {
   sectionImageProgress?: { done: number; total: number } | null;
   sectionImageError?: string | null;
   onTitleChange?: (newTitle: string) => void;
+  subView?: "fit" | "data";
 }
 
 export function FitTab({
@@ -97,6 +98,7 @@ export function FitTab({
   sectionImageProgress = null,
   sectionImageError = null,
   onTitleChange,
+  subView = "fit",
 }: Props) {
   const { user, profile } = useAuth();
   const { canCreate, credits, required, spendCredits } = useVoteGate();
@@ -195,9 +197,6 @@ export function FitTab({
   const [battlePublishing, setBattlePublishing] = useState(false);
   const [battlePublishedUrl, setBattlePublishedUrl] = useState<string | null>(
     null,
-  );
-  const [activeTab, setActiveTab] = useState<"results" | "fit">(
-    initialDanceId ? "results" : "fit",
   );
   const [fireStrength, setFireStrength] = useState<
     Array<{
@@ -1317,11 +1316,6 @@ export function FitTab({
     fetchVoteCounts,
   ]);
 
-  const tabs = [
-    ...(publishedDanceId ? [{ key: "results" as const, label: "Results" }] : []),
-    { key: "fit" as const, label: "Fit" },
-  ];
-
   const allLines = useMemo(
     () =>
       (lyricData?.lines ?? []).map((line, lineIndex) => ({
@@ -1336,10 +1330,6 @@ export function FitTab({
   );
 
   useEffect(() => {
-    setActiveTab(publishedDanceId ? "results" : "fit");
-  }, [publishedDanceId]);
-
-  useEffect(() => {
     setResultsLoaded(false);
     setFireStrength([]);
     setClosingDist([]);
@@ -1348,7 +1338,7 @@ export function FitTab({
   }, [publishedDanceId]);
 
   useEffect(() => {
-    if (activeTab !== "results" || !publishedDanceId || resultsLoaded) return;
+    if (subView !== "data" || !publishedDanceId || resultsLoaded) return;
     Promise.all([
       fetchFireStrength(publishedDanceId),
       supabase
@@ -1371,7 +1361,7 @@ export function FitTab({
       setTotalFires(count.count ?? 0);
       setResultsLoaded(true);
     });
-  }, [activeTab, publishedDanceId, resultsLoaded]);
+  }, [subView, publishedDanceId, resultsLoaded]);
 
   const handleRetryImages = useCallback(() => {
     void pipeline.retryImages();
@@ -1385,9 +1375,10 @@ export function FitTab({
         style={{ display: "none" }}
       />
       <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
-        {/* Dance preview or waveform fallback */}
-        {publishedUrl && publishedDanceId ? (
-          <div className="space-y-3">
+        {/* Dance preview — hidden on Data view */}
+        <div style={{ display: subView === "fit" ? undefined : "none" }}>
+          {publishedUrl && publishedDanceId ? (
+            <div className="space-y-3">
             {/* Action toolbar — above the player */}
             <div className="flex items-center justify-center gap-1">
               <a
@@ -1500,45 +1491,30 @@ export function FitTab({
               )}
             </div>
 
-            <FitExportModal
-              isOpen={showExportModal}
-              onClose={() => setShowExportModal(false)}
-              getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
-              songTitle={lyricData.title || "Untitled"}
-              artistName=""
-            />
-          </div>
-        ) : hasRealAudio ? (
-          <div className="glass-card rounded-xl p-3">
-            <LyricWaveform
-              waveform={waveform || parentWaveform || null}
-              isPlaying={isPlaying}
-              currentTime={currentTime}
-              onSeek={handleSeek}
-              onTogglePlay={handleTogglePlay}
-              beats={beatGrid?.beats ?? null}
-              beatGridLoading={false}
-            />
-          </div>
-        ) : null}
-
-        <div className="flex items-center gap-1 p-1 rounded-lg border border-border/30 bg-background/40">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 py-2 text-[10px] font-mono uppercase tracking-wider rounded-md transition-colors ${
-                activeTab === tab.key
-                  ? "bg-primary/10 text-primary border border-primary/25"
-                  : "text-muted-foreground hover:text-foreground border border-transparent"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+              <FitExportModal
+                isOpen={showExportModal}
+                onClose={() => setShowExportModal(false)}
+                getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
+                songTitle={lyricData.title || "Untitled"}
+                artistName=""
+              />
+            </div>
+          ) : hasRealAudio ? (
+            <div className="glass-card rounded-xl p-3">
+              <LyricWaveform
+                waveform={waveform || parentWaveform || null}
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+                onSeek={handleSeek}
+                onTogglePlay={handleTogglePlay}
+                beats={beatGrid?.beats ?? null}
+                beatGridLoading={false}
+              />
+            </div>
+          ) : null}
         </div>
 
-        {activeTab === "results" && (
+        {subView === "data" && (
           <div className="space-y-4 pb-8">
             {totalFires > 0 && (
               <div className="flex items-center gap-2 px-1">
@@ -1768,7 +1744,7 @@ export function FitTab({
           </div>
         )}
 
-        {activeTab === "fit" && (
+        {subView === "fit" && (
           <>
         {/* ── FMLY Feud Setup ── */}
         {hottestHooksEnabled && (
@@ -2302,7 +2278,7 @@ export function FitTab({
           )}
 
           {/* Dance button — only shown when no dance exists yet (buttons moved to top when dance exists) */}
-          {!publishedDanceId && (
+          {!publishedDanceId && subView === "fit" && (
             <button
               onClick={handleDance}
               disabled={danceDisabled}

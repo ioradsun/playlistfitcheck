@@ -4,7 +4,7 @@ import { Loader2, Lock, CheckCircle2, Circle, Bug } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import type { FitReadiness, PipelineStages, PipelineStageStatus } from "./LyricFitTab";
 
-export type LyricFitView = "lyrics" | "fit" | "debug";
+export type LyricFitView = "lyrics" | "fit" | "data" | "debug";
 
 interface Props {
   view: LyricFitView;
@@ -16,6 +16,7 @@ interface Props {
   fitStageLabel?: string;
   pipelineStages?: PipelineStages;
   showDebug?: boolean;
+  hasData?: boolean;
 }
 
 const STAGE_LABELS: Record<keyof PipelineStages, string> = {
@@ -54,7 +55,7 @@ const FitButton = forwardRef<HTMLButtonElement, { isLocked: boolean; isRunning: 
 );
 FitButton.displayName = "FitButton";
 
-export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = false, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages, showDebug }: Props) {
+export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = false, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages, showDebug, hasData = false }: Props) {
   const isLocked = fitDisabled || (!fitUnlocked && fitReadiness !== "ready");
   const isRunning = fitReadiness === "running";
   const isError = fitReadiness === "error";
@@ -113,6 +114,21 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
             </span>
           )}
         </div>
+        {hasData && (
+          <div className="flex-1 flex items-center justify-center">
+            <button
+              onClick={() => onViewChange("data")}
+              className={cn(
+                "py-2.5 text-sm transition-all duration-150",
+                view === "data"
+                  ? "font-medium text-foreground"
+                  : "font-normal text-muted-foreground"
+              )}
+            >
+              Data
+            </button>
+          </div>
+        )}
         {showDebug && (
           <div className="flex-1 flex items-center justify-center">
             <button
