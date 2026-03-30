@@ -63,8 +63,6 @@ export function useLyricDancePlayer(
   const initRef = useRef(false);
   const onReadyRef = useRef(onReady);
   const slotRef = useRef<ReturnType<typeof acquireCanvasSlot> | null>(null);
-  const pooledBgRef = useRef<HTMLCanvasElement | null>(null);
-  const pooledTextRef = useRef<HTMLCanvasElement | null>(null);
   onReadyRef.current = onReady;
 
   // Keep local data in sync when parent passes new initialData
@@ -100,8 +98,6 @@ export function useLyricDancePlayer(
       bgCanvas = slot.bg;
       textCanvas = slot.text;
       slotRef.current = slot;
-      pooledBgRef.current = bgCanvas;
-      pooledTextRef.current = textCanvas;
       if (containerRef.current) {
         if (!containerRef.current.contains(bgCanvas)) {
           containerRef.current.appendChild(bgCanvas);
@@ -119,8 +115,6 @@ export function useLyricDancePlayer(
       if (slot && postId) {
         releaseCanvasSlot(postId);
         slotRef.current = null;
-        pooledBgRef.current = null;
-        pooledTextRef.current = null;
       }
       return;
     }
@@ -182,8 +176,6 @@ export function useLyricDancePlayer(
         releaseCanvasSlot(postId);
       }
       slotRef.current = null;
-      pooledBgRef.current = null;
-      pooledTextRef.current = null;
       playerRef.current?.destroy();
       playerRef.current = null;
       initRef.current = false;
@@ -196,8 +188,8 @@ export function useLyricDancePlayer(
   useEffect(() => {
     if (!evicted) return;
     const container = containerRef.current;
-    const bgCanvas = pooledBgRef.current;
-    const textCanvas = pooledTextRef.current;
+    const bgCanvas = slotRef.current?.bg ?? null;
+    const textCanvas = slotRef.current?.text ?? null;
     if (container && bgCanvas && container.contains(bgCanvas)) {
       container.removeChild(bgCanvas);
     }
@@ -208,8 +200,6 @@ export function useLyricDancePlayer(
       releaseCanvasSlot(postId);
     }
     slotRef.current = null;
-    pooledBgRef.current = null;
-    pooledTextRef.current = null;
     playerRef.current?.destroy();
     playerRef.current = null;
     initRef.current = false;
