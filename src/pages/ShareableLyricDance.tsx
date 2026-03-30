@@ -47,6 +47,7 @@ export default function ShareableLyricDance() {
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
   const [closingVisible, setClosingVisible] = useState(false);
+  const [closingAnswered, setClosingAnswered] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -126,7 +127,7 @@ export default function ShareableLyricDance() {
     lyricDanceId: data?.id ?? "",
     prefetchedData: data,
     postId: data?.post_id ?? data?.id ?? "",
-    autoPlay: false,
+    autoPlay: true,
     eagerUpgrade: true,
   });
 
@@ -190,10 +191,11 @@ export default function ShareableLyricDance() {
     if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
       setClosingVisible(true);
     }
-    if (currentTimeSec < durationSec * 0.5 && closingVisible) {
+    if (currentTimeSec < durationSec * 0.5 && closingVisible && closingAnswered) {
       setClosingVisible(false);
+      setClosingAnswered(false);
     }
-  }, [currentTimeSec, durationSec, closingVisible, player]);
+  }, [currentTimeSec, durationSec, closingVisible, closingAnswered, player]);
 
   useEffect(() => {
     const style = document.createElement("style");
@@ -324,8 +326,10 @@ export default function ShareableLyricDance() {
             visible={closingVisible && !reactionPanelOpen}
             empowermentPromise={empowermentPromise}
             danceId={(data as any)?.id ?? ""}
+            onAnswer={() => setClosingAnswered(true)}
             onReplay={() => {
               setClosingVisible(false);
+              setClosingAnswered(false);
               player?.seek(0);
               player?.play();
             }}

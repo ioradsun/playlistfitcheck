@@ -159,8 +159,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   );
   const [playerEvicted, setPlayerEvicted] = useState(false);
   const [forceDemoted, setForceDemoted] = useState(false);
-  const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
+  const [, setFireStrengthByLine] = useState<Record<number, number>>({});
   const [closingVisible, setClosingVisible] = useState(false);
+  const [closingAnswered, setClosingAnswered] = useState(false);
   const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userActivatedRef = useRef(false);
 
@@ -341,10 +342,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
       setClosingVisible(true);
     }
-    if (currentTimeSec < durationSec * 0.5 && closingVisible) {
+    if (currentTimeSec < durationSec * 0.5 && closingVisible && closingAnswered) {
       setClosingVisible(false);
+      setClosingAnswered(false);
     }
-  }, [currentTimeSec, durationSec, closingVisible, player]);
+  }, [currentTimeSec, durationSec, closingVisible, closingAnswered, player]);
 
   useEffect(() => {
     const id = (data ?? prefetchedData as any)?.id;
@@ -356,8 +358,21 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   const activeLineFireCount = useMemo(() => {
     if (!activeLine) return 0;
-    return fireStrengthByLine[activeLine.lineIndex] ?? 0;
-  }, [activeLine, fireStrengthByLine]);
+    const activeStart = (data?.lyrics as any[])?.find(
+      (l: any) =>
+        l.start <= (player?.audio.currentTime ?? 0) &&
+        l.end >= (player?.audio.currentTime ?? 0),
+    )?.start ?? 0;
+    const windowEnd = activeStart + 10;
+    const linesInWindow = (lyricSections.allLines ?? []).filter(
+      (l) => l.startSec >= activeStart - 1 && l.startSec <= windowEnd,
+    );
+    return linesInWindow.reduce((sum, l) => {
+      return sum + Object.values(reactionData).reduce(
+        (s, d) => s + (d.line[l.lineIndex] ?? 0), 0,
+      );
+    }, 0);
+  }, [activeLine, reactionData, lyricSections.allLines, player, data]);
 
   const hookPhrase = ((data ?? prefetchedData) as any)?.hook_phrase ?? null;
 
@@ -384,8 +399,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           visible={closingVisible && !reactionPanelOpen}
           empowermentPromise={empowermentPromise}
           danceId={((data ?? prefetchedData) as any)?.id ?? ""}
+          onAnswer={() => setClosingAnswered(true)}
           onReplay={() => {
             setClosingVisible(false);
+            setClosingAnswered(false);
             player?.seek(0);
             player?.play();
           }}
