@@ -224,9 +224,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (cardState === "cold") {
       setShowCover(true);
       userActivatedRef.current = false;
-      if (lyricDanceId) {
+      if (postId) {
         window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", {
-          detail: { cardId: lyricDanceId },
+          detail: { cardId: postId },
         }));
       }
     }
