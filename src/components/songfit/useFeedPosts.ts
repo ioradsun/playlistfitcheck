@@ -237,6 +237,7 @@ export function useFeedPosts(): FeedState {
 
   // ── fetchPosts: initial load & refresh ────────────────────────────────
   const fetchPosts = useCallback(async () => {
+    console.log("[useFeedPosts] fetchPosts called, feedView:", feedView);
     if (feedView === "billboard") {
       setLoading(true);
       setSignalMap({});
