@@ -21,6 +21,8 @@ interface CardBottomBarProps {
   activeLineText?: string | null;
   activeLineFireCount?: number;
   hookPhrase?: string | null;
+  accent?: string;
+  hasFired?: boolean;
   onFireTap?: () => void;
   onFireHoldStart?: () => void;
   onFireHoldEnd?: (holdMs: number) => void;
@@ -34,6 +36,7 @@ function FireButton({
   onHoldStart,
   onHoldEnd,
   py,
+  hasFired,
 }: {
   panelOpen: boolean;
   onClose: () => void;
@@ -42,6 +45,7 @@ function FireButton({
   onHoldStart?: () => void;
   onHoldEnd?: (holdMs: number) => void;
   py: string;
+  hasFired?: boolean;
 }) {
   const holdStartRef = useRef<number | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -116,16 +120,33 @@ function FireButton({
         <X size={14} className="text-white/30 group-hover:text-white/60 transition-colors" />
       ) : (
         <>
-          <span
-            style={{
-              fontSize: 16,
-              display: "block",
-              transform: `scale(${emojiScale})`,
-              transition: isHolding ? "none" : "transform 0.2s",
-            }}
-          >
-            {emojiStr}
-          </span>
+          {hasFired && !isHolding ? (
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ color: "rgba(255,180,80,0.6)" }}
+            >
+              <path d="M12 2c0 0-4 4-4 8a4 4 0 0 0 8 0c0-2-1-3.5-1-3.5S14 8 14 6c0 0 2 2 2 5a6 6 0 0 1-12 0c0-5 4-9 4-9z" />
+              <path d="M12 14c0 0-2-1-2-3 0 0 1 1 2 1s2-1 2-1c0 2-2 3-2 3z" />
+            </svg>
+          ) : (
+            <span
+              style={{
+                fontSize: 16,
+                display: "block",
+                transform: `scale(${emojiScale})`,
+                transition: isHolding ? "none" : "transform 0.2s",
+              }}
+            >
+              {emojiStr}
+            </span>
+          )}
           {count > 0 && (
             <span className="text-[9px] font-mono text-white/20">
               {count}
@@ -157,6 +178,8 @@ export function CardBottomBar({
   activeLineText,
   activeLineFireCount,
   hookPhrase,
+  accent,
+  hasFired = false,
   onFireTap,
   onFireHoldStart,
   onFireHoldEnd,
@@ -166,7 +189,6 @@ export function CardBottomBar({
   void onVoteYes;
   void onVoteNo;
   void topReaction;
-  void trackTitle;
   void yesLabel;
   void noLabel;
   void renderVotedContent;
@@ -193,21 +215,49 @@ export function CardBottomBar({
       style={wrapperStyle}
       onClick={(e) => e.stopPropagation()}
     >
+      <style>{`
+        @keyframes eqBar0 { from { height: 4px } to { height: 10px } }
+        @keyframes eqBar1 { from { height: 8px } to { height: 3px } }
+        @keyframes eqBar2 { from { height: 4px } to { height: 8px } }
+      `}</style>
       <div
         className={`flex-1 flex items-center px-3 ${py} min-w-0 cursor-pointer`}
         onClick={panelOpen ? undefined : onOpenReactions}
       >
         {!panelOpen && activeLineText ? (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-end gap-[2px] shrink-0" style={{ height: 10 }}>
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: 2,
+                    borderRadius: 1,
+                    background: accent ?? "rgba(255,255,255,0.4)",
+                    animation: `eqBar${i} 0.8s ease-in-out ${i * 0.15}s infinite alternate`,
+                    height: i === 1 ? 10 : 6,
+                  }}
+                />
+              ))}
+            </div>
+            <span
+              className="text-[10px] font-mono truncate transition-all duration-300"
+              style={{
+                color: hookPhrase && activeLineText === hookPhrase
+                  ? "rgba(255,255,255,0.88)"
+                  : "rgba(255,255,255,0.32)",
+                letterSpacing: "0.03em",
+              }}
+            >
+              {activeLineText}
+            </span>
+          </div>
+        ) : !panelOpen && trackTitle ? (
           <span
-            className="text-[10px] font-mono truncate transition-all duration-300"
-            style={{
-              color: hookPhrase && activeLineText === hookPhrase
-                ? "rgba(255,255,255,0.88)"
-                : "rgba(255,255,255,0.32)",
-              letterSpacing: "0.03em",
-            }}
+            className="text-[10px] font-mono truncate"
+            style={{ color: "rgba(255,255,255,0.2)", letterSpacing: "0.05em" }}
           >
-            {activeLineText}
+            {trackTitle.toUpperCase()}
           </span>
         ) : !panelOpen ? (
           <span className="text-[10px] font-mono text-white/15 tracking-[0.2em]">
@@ -226,6 +276,7 @@ export function CardBottomBar({
         onHoldStart={onFireHoldStart}
         onHoldEnd={onFireHoldEnd}
         py={py}
+        hasFired={hasFired}
       />
     </div>
   );

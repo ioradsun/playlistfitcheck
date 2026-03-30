@@ -164,6 +164,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   );
   const [forceDemoted, setForceDemoted] = useState(false);
   const [, setFireStrengthByLine] = useState<Record<number, number>>({});
+  const [hasFired, setHasFired] = useState(false);
   const [closingVisible, setClosingVisible] = useState(false);
   const [closingAnswered, setClosingAnswered] = useState(false);
   const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -545,6 +546,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 if (!id || !activeLine) return;
                 player?.fireFire(0);
                 emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
+                setHasFired(true);
                 setFireStrengthByLine((prev) => ({
                   ...prev,
                   [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
@@ -558,6 +560,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 if (!id || !activeLine) return;
                 player?.fireFire(holdMs);
                 emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
+                setHasFired(true);
                 const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
                 setFireStrengthByLine((prev) => ({
                   ...prev,
@@ -571,6 +574,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 ? { symbol: topReaction.symbol, count: topReaction.count }
                 : null,
               trackTitle: songTitle,
+              accent: palette[0],
+              hasFired,
             } as any)}
           />
         </div>
@@ -612,6 +617,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             if (!id) return;
             player?.fireFire(holdMs);
             emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs);
+            setHasFired(true);
           }}
           onLineVisible={(lineIndex) => {
             const id = (data ?? (prefetchedData as any))?.id;
