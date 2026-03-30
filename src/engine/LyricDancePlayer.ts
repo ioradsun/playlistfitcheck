@@ -1487,19 +1487,9 @@ export class LyricDancePlayer {
    * Falls back to Montserrat if no typography key or unknown key.
    */
   private getTargetFontFamily(): string {
-    const cd = this.data?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const typoKey = cd?.typography as string | undefined;
-    const fontMap: Record<string, string> = {
-      'bold-impact': 'Oswald',
-      'clean-modern': 'Montserrat',
-      'elegant-serif': 'Playfair Display',
-      'raw-condensed': 'Barlow Condensed',
-      'whisper-soft': 'Nunito',
-      'tech-mono': 'JetBrains Mono',
-      'display-heavy': 'Bebas Neue',
-      'editorial-light': 'Cormorant Garamond',
-    };
-    return fontMap[typoKey ?? ''] ?? 'Montserrat';
+    const resolved = resolveTypographyFromDirection(this.data?.cinematic_direction);
+    const names = getFontNamesForPreload(resolved);
+    return names[0] ?? 'Montserrat';
   }
 
   private kickFontStabilizationLoad(): void {
@@ -1519,18 +1509,15 @@ export class LyricDancePlayer {
         this._fontLayoutReflowPending = true;
         performance.mark("engine:fontReady");
       } else {
-        // Font didn't load in time — listen for late arrival
-        const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
-        if (fontsApi) {
-          fontsApi.ready.then(() => {
-            if (this.destroyed) return;
-            if (isFontReady(fontName)) {
-              this._fontStabilized = true;
-              this._fontLayoutReflowPending = true;
-              performance.mark("engine:fontReady");
-            }
-          });
-        }
+        const _poll = setInterval(() => {
+          if (this.destroyed) { clearInterval(_poll); return; }
+          if (isFontReady(fontName)) {
+            clearInterval(_poll);
+            this._fontStabilized = true;
+            this._fontLayoutReflowPending = true;
+          }
+        }, 500);
+        setTimeout(() => clearInterval(_poll), 10_000);
       }
     });
   }
@@ -3015,17 +3002,16 @@ export class LyricDancePlayer {
         this._fontStabilized = true;
         this._fontLayoutReflowPending = true;
       } else {
-        // Font missed the 2500ms window — listen for late arrival and trigger recompile
-        const fontsApi = (document as Document & { fonts?: FontFaceSet }).fonts;
-        if (fontsApi) {
-          fontsApi.ready.then(() => {
-            if (this.destroyed) return;
-            const anyReady = fontNames.some((name) => isFontReady(name));
-            if (anyReady) {
+        for (const fontName of fontNames) {
+          const _poll = setInterval(() => {
+            if (this.destroyed) { clearInterval(_poll); return; }
+            if (isFontReady(fontName)) {
+              clearInterval(_poll);
               this._fontStabilized = true;
               this._fontLayoutReflowPending = true;
             }
-          });
+          }, 500);
+          setTimeout(() => clearInterval(_poll), 10_000);
         }
       }
     }
