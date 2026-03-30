@@ -107,6 +107,18 @@ Return JSON:
     if (!res.ok) {
       const txt = await res.text();
       console.error("[empowerment-promise] gateway error:", res.status, txt);
+      if (res.status === 402) {
+        return new Response(
+          JSON.stringify({
+            error: "Payment required: Lovable AI credits are exhausted",
+            code: "payment_required",
+          }),
+          {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
       return new Response(JSON.stringify({ error: `AI gateway error (${res.status})` }), {
         status: res.status === 429 ? 429 : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
