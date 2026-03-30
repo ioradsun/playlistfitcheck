@@ -178,7 +178,7 @@ function LazySpotifyEmbedInner({
         controllerTimeout = null;
       }
       // If the load was in-flight (not yet resolved), allow retry on next mount
-      if (loadStarted && !controllerRef.current && !iframeLoaded) {
+      if (loadStarted && !controllerRef.current) {
         hasLoadedRef.current = false;
       }
     };
