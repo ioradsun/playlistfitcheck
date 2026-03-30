@@ -189,14 +189,18 @@ function FireLineButton({
   accent: string;
 }) {
   const holdStartRef = useRef<number | null>(null);
+  const firedRef = useRef(false);
 
   const startHold = () => {
     holdStartRef.current = performance.now();
+    firedRef.current = false;
   };
 
   const endHold = () => {
+    if (firedRef.current) return;
     const start = holdStartRef.current;
     holdStartRef.current = null;
+    firedRef.current = true;
     const holdMs = start ? Math.max(0, performance.now() - start) : 0;
     onFire(holdMs);
   };
@@ -212,7 +216,8 @@ function FireLineButton({
         endHold();
       }}
       onMouseLeave={() => {
-        if (holdStartRef.current != null) endHold();
+        holdStartRef.current = null;
+        firedRef.current = false;
       }}
       onTouchStart={(e) => {
         e.stopPropagation();
@@ -282,6 +287,7 @@ function ReactionPanel({
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [replyingTo, setReplyingTo] = useState<CommentRow | null>(null);
   const [activeWindowIdx, setActiveWindowIdx] = useState<number | null>(null);
+  const [showCommentsForWindow, setShowCommentsForWindow] = useState<number | null>(null);
   const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(
     null,
   );
@@ -348,6 +354,7 @@ function ReactionPanel({
     setTextInput("");
     setReplyingTo(null);
     setActiveWindowIdx(null);
+    setShowCommentsForWindow(null);
     stopAtSecRef.current = null; // cleared — tapping a line will set it
     userTookControlRef.current = false; // re-enable auto-scroll for this session
   }, [isOpen]);
@@ -728,6 +735,15 @@ function ReactionPanel({
                       : "transparent",
                   }}
                   onClick={() => {
+                    if (previewingWindowRef.current === wi) {
+                      if (player?.audio.paused || player?.audio.muted) {
+                        player?.setMuted(false);
+                        player?.play();
+                      } else {
+                        player?.pause();
+                      }
+                      return;
+                    }
                     if (player?.audio.muted) player.setMuted(false);
                     player?.setRegion(win.startSec, win.endSec);
                     player?.seek(win.startSec);
@@ -802,34 +818,71 @@ function ReactionPanel({
                     ))}
                   </div>
 
-                  {activeWindowIdx === wi && (
-                    <div style={{ paddingLeft: 12, paddingRight: 12, paddingBottom: 8 }}>
-                      {commentsByWindow[wi].length === 0 ? (
-                        <p style={{
-                          fontSize: 11, fontFamily: "monospace",
-                          color: "rgba(255,255,255,0.2)", paddingTop: 4,
-                        }}>
-                          no takes yet — be first
-                        </p>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 6 }}>
-                          {commentsByWindow[wi].map((comment) => (
-                            <div key={comment.id} style={{ display: "flex", gap: 8 }}>
-                              <div style={{
-                                width: 5, height: 5, borderRadius: "50%",
-                                background: accent, opacity: 0.5,
-                                flexShrink: 0, marginTop: 7,
-                              }} />
-                              <p style={{
-                                fontSize: 13, color: "rgba(255,255,255,0.65)",
-                                lineHeight: 1.4, flex: 1,
-                              }}>
-                                {comment.text}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                  {commentsByWindow[wi].length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowCommentsForWindow((prev) => prev === wi ? null : wi);
+                      }}
+                      style={{
+                        marginTop: 6,
+                        fontSize: 9,
+                        fontFamily: "monospace",
+                        color: showCommentsForWindow === wi ? accent : "rgba(255,255,255,0.25)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        letterSpacing: "0.08em",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: 0,
+                      }}
+                    >
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 11 11"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                      >
+                        <path d="M1 1.5h9M1 5h6M1 8.5h4" />
+                      </svg>
+                      {commentsByWindow[wi].length}
+                    </button>
+                  )}
+
+                  {showCommentsForWindow === wi && (
+                    <div style={{ paddingTop: 8, paddingBottom: 4 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {commentsByWindow[wi].map((comment) => (
+                          <div key={comment.id} style={{ display: "flex", gap: 8 }}>
+                            <div
+                              style={{
+                                width: 4,
+                                height: 4,
+                                borderRadius: "50%",
+                                background: accent,
+                                opacity: 0.4,
+                                flexShrink: 0,
+                                marginTop: 8,
+                              }}
+                            />
+                            <p
+                              style={{
+                                fontSize: 13,
+                                color: "rgba(255,255,255,0.60)",
+                                lineHeight: 1.4,
+                                flex: 1,
+                              }}
+                            >
+                              {comment.text}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -861,6 +914,11 @@ function ReactionPanel({
           gap: 8,
         }}
       >
+        <style>{`
+          .reaction-comment-input::placeholder {
+            color: rgba(255,255,255,0.22);
+          }
+        `}</style>
         <div
           style={{
             flex: 1,
@@ -875,6 +933,7 @@ function ReactionPanel({
           }}
         >
           <input
+            className="reaction-comment-input"
             type="text"
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
@@ -885,12 +944,7 @@ function ReactionPanel({
               }
             }}
             onFocus={() => onPause?.()}
-            placeholder={
-              replyingTo ? 'Write a reply...'
-              : activeWindowIdx !== null
-                ? `say something about ${formatTime(clipWindows[activeWindowIdx]?.startSec ?? 0)}...`
-                : 'say something...'
-            }
+            placeholder={replyingTo ? "write a reply..." : "why did this hit?"}
             style={{
               flex: 1,
               background: 'transparent',
@@ -901,6 +955,7 @@ function ReactionPanel({
               fontFamily: 'inherit',
               caretColor: accent,
               minWidth: 0,
+              ["::placeholder" as any]: undefined,
             }}
           />
           {textInput.trim().length > 0 && (
