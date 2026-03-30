@@ -258,7 +258,15 @@ export function useFeedPosts(): FeedState {
       .filter((p) => !p.lyric_dance_id && p.album_art_url)
       .forEach((p) => preloadImage(p.album_art_url!));
 
-    // Fetch lyric data before rendering.
+    // ── Render cards IMMEDIATELY — don't wait for lyric data ──
+    setPosts(normalized);
+    cursorRef.current = normalized[normalized.length - 1]?.created_at ?? null;
+    newestRef.current = normalized[0]?.created_at ?? null;
+    setHasMore(allPosts.length === PAGE_SIZE);
+    setLoading(false);
+    setPendingNewCount(0);
+
+    // ── Fetch lyric data in background — cards show covers while waiting ──
     // On return visits, lyricDataPrefetch has FULL columns for the first 2 IDs
     // (fired at module eval in parallel with feed posts — zero waterfall).
     const lyricIds = filtered.filter((p) => p.lyric_dance_id).map((p) => p.lyric_dance_id as string);
@@ -279,16 +287,7 @@ export function useFeedPosts(): FeedState {
       }
       const newMap = await fetchLyricData(lyricIds, seededMap);
       setLyricDataMap(new Map(newMap));
-    } else {
-      setLyricDataMap(new Map());
     }
-
-    setPosts(normalized);
-    cursorRef.current = normalized[normalized.length - 1]?.created_at ?? null;
-    newestRef.current = normalized[0]?.created_at ?? null;
-    setHasMore(allPosts.length === PAGE_SIZE);
-    setLoading(false);
-    setPendingNewCount(0);
   }, [feedView, billboardMode]);
 
   // ── loadMore: cursor-based pagination ─────────────────────────────────
@@ -312,20 +311,22 @@ export function useFeedPosts(): FeedState {
       if (nextPosts.length > 0) {
         const normalized = nextPosts.map(hydrateDefaults);
 
-        // Fetch lyric data for new posts
-        const newLyricIds = normalized
-          .filter((p) => p.lyric_dance_id && !lyricDataMap.has(p.lyric_dance_id))
-          .map((p) => p.lyric_dance_id as string);
-        if (newLyricIds.length > 0) {
-          const newMap = await fetchLyricData(newLyricIds, lyricDataMap);
-          setLyricDataMap(new Map(newMap));
-        }
-
+        // Render new cards immediately
         setPosts((prev) => {
           const merged = [...prev, ...normalized];
           cursorRef.current = merged[merged.length - 1]?.created_at ?? null;
           return merged;
         });
+
+        // Fetch lyric data in background
+        const newLyricIds = normalized
+          .filter((p) => p.lyric_dance_id && !lyricDataMap.has(p.lyric_dance_id))
+          .map((p) => p.lyric_dance_id as string);
+        if (newLyricIds.length > 0) {
+          fetchLyricData(newLyricIds, lyricDataMap).then((newMap) => {
+            setLyricDataMap(new Map(newMap));
+          });
+        }
       }
       setHasMore((data ?? []).length === PAGE_SIZE);
     } finally {
