@@ -6,7 +6,9 @@
  * This keeps GPU memory and draw-call overhead constant at O(POOL_SIZE).
  */
 
-const POOL_SIZE = 3;
+// Must be >= WINDOW_RADIUS * 2 + 1 (currently 4*2+1=9) so every card in the
+// feed window can always acquire a slot without waiting for evictions.
+const POOL_SIZE = 9;
 
 interface CanvasSlot {
   id: number;
