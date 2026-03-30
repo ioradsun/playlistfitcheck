@@ -50,7 +50,13 @@ import { PageSkeleton } from "@/components/ui/PageSkeletons";
 
 const MixFitCheck = lazy(MixFitCheckImport);
 const LyricFitTab = lazy(() =>
-  LyricFitTabImport().then((module) => ({ default: module.LyricFitTab })),
+  importWithRetry(
+    () => LyricFitTabImport(),
+    () =>
+      import(
+        /* @vite-ignore */ `../components/lyric/LyricFitTab.tsx?t=${Date.now()}`
+      ) as ReturnType<typeof LyricFitTabImport>,
+  ).then((module) => ({ default: module.LyricFitTab })),
 );
 const HitFitTab = lazy(() =>
   HitFitTabImport().then((module) => ({ default: module.HitFitTab })),
