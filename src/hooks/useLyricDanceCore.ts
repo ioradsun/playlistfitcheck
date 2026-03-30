@@ -73,7 +73,7 @@ export function useLyricDanceCore({
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
   const [loading, setLoading] = useState(!prefetchedData);
   const [muted, setMuted] = useState(true);
-  const [showCover, setShowCover] = useState(!autoPlay);
+  const [showCover, setShowCover] = useState(true);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [lightningBarEnabled, setLightningBarEnabled] = useState(() => readLightningBarFlag());
@@ -140,6 +140,12 @@ export function useLyricDanceCore({
     if (!playerReady || !player) return;
     player.setMuted(true);
   }, [playerReady, player]);
+
+  useEffect(() => {
+    if (!autoPlay || !player || !playerReady) return;
+    player.setMuted(true);
+    player.play();
+  }, [autoPlay, player, playerReady]);
 
   const durationSec = useMemo(() => {
     const lines = data?.lyrics ?? [];
