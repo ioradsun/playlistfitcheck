@@ -1,94 +1,113 @@
 /* cache-bust: 2026-03-08-v1 */
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useRef, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 
 export type CardState = "cold" | "warm" | "active";
 
-type LifecycleStore = {
-  cardStates: Record<string, CardState>;
-  activeCardId: string | null;
-};
+type Listener = () => void;
 
-type CardLifecycleContextValue = {
-  getCardState: (postId: string) => CardState;
-  setCardState: (postId: string, state: CardState) => void;
-  activeCardId: string | null;
-};
+class CardLifecycleStore {
+  private states = new Map<string, CardState>();
+  private listeners = new Map<string, Set<Listener>>();
+  activeCardId: string | null = null;
+  private globalListeners = new Set<Listener>();
 
-export const CardLifecycleContext = createContext<CardLifecycleContextValue | null>(null);
+  getState(postId: string): CardState {
+    return this.states.get(postId) ?? "cold";
+  }
 
-export function CardLifecycleProvider({ children }: { children: ReactNode }) {
-  const [store, setStore] = useState<LifecycleStore>({ cardStates: {}, activeCardId: null });
+  setState(postId: string, state: CardState) {
+    const prev = this.states.get(postId) ?? "cold";
+    if (prev === state) return;
 
-  const previousActiveRef = useRef<string | null>(null);
+    let activeChanged = false;
 
-  useEffect(() => {
-    const previousActiveCardId = previousActiveRef.current;
-    if (previousActiveCardId && previousActiveCardId !== store.activeCardId) {
-      window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", { detail: { cardId: previousActiveCardId } }));
-    }
-    // Broadcast to ALL media embeds: only this card should produce audio.
-    // Unlike media-deactivate (which targets the previous active card only),
-    // this tells every embed to check whether it is the sole active source.
-    if (store.activeCardId) {
-      window.dispatchEvent(new CustomEvent("crowdfit:audio-solo", { detail: { activeCardId: store.activeCardId } }));
-    }
-    previousActiveRef.current = store.activeCardId;
-  }, [store.activeCardId]);
-
-  const getCardState = useCallback(
-    (postId: string): CardState => store.cardStates[postId] ?? "cold",
-    [store.cardStates],
-  );
-
-  const setCardState = useCallback((postId: string, state: CardState) => {
-    setStore((prev) => {
-      const nextStates = { ...prev.cardStates };
-      let nextActive = prev.activeCardId;
-
-      if (state === "active") {
-        if (prev.activeCardId && prev.activeCardId !== postId) {
-          nextStates[prev.activeCardId] = "warm";
-        }
-        nextStates[postId] = "active";
-        nextActive = postId;
-      } else if (state === "warm") {
-        nextStates[postId] = "warm";
-        if (prev.activeCardId === postId) {
-          nextActive = null;
-        }
-      } else {
-        // Explicit cold transition.
-        delete nextStates[postId];
-        if (prev.activeCardId === postId) {
-          nextActive = null;
-        }
+    if (state === "active") {
+      if (this.activeCardId && this.activeCardId !== postId) {
+        this.states.set(this.activeCardId, "warm");
+        this.notify(this.activeCardId);
+        window.dispatchEvent(
+          new CustomEvent("crowdfit:media-deactivate", {
+            detail: { cardId: this.activeCardId },
+          }),
+        );
       }
+      this.states.set(postId, "active");
+      this.activeCardId = postId;
+      activeChanged = true;
+      window.dispatchEvent(
+        new CustomEvent("crowdfit:audio-solo", {
+          detail: { activeCardId: postId },
+        }),
+      );
+    } else if (state === "warm") {
+      this.states.set(postId, "warm");
+      if (this.activeCardId === postId) {
+        this.activeCardId = null;
+        activeChanged = true;
+      }
+    } else {
+      this.states.delete(postId);
+      if (this.activeCardId === postId) {
+        this.activeCardId = null;
+        activeChanged = true;
+      }
+    }
 
-      return {
-        cardStates: nextStates,
-        activeCardId: nextActive,
-      };
-    });
-  }, []);
+    this.notify(postId);
+    if (activeChanged) this.notifyGlobal();
+  }
 
-  const value = useMemo(
-    () => ({ getCardState, setCardState, activeCardId: store.activeCardId }),
-    [getCardState, setCardState, store.activeCardId],
-  );
+  subscribe(postId: string, listener: Listener): () => void {
+    if (!this.listeners.has(postId)) this.listeners.set(postId, new Set());
+    this.listeners.get(postId)?.add(listener);
+    return () => this.listeners.get(postId)?.delete(listener);
+  }
 
-  return <CardLifecycleContext.Provider value={value}>{children}</CardLifecycleContext.Provider>;
+  subscribeGlobal(listener: Listener): () => void {
+    this.globalListeners.add(listener);
+    return () => this.globalListeners.delete(listener);
+  }
+
+  private notify(postId: string) {
+    this.listeners.get(postId)?.forEach((l) => l());
+  }
+
+  private notifyGlobal() {
+    this.globalListeners.forEach((l) => l());
+  }
 }
 
-const NOOP = () => {};
+export const CardLifecycleContext = createContext<CardLifecycleStore | null>(null);
 
-export function useCardState(postId: string): { state: CardState; activate: () => void; deactivate: () => void } {
-  const context = useContext(CardLifecycleContext);
+export function CardLifecycleProvider({ children }: { children: ReactNode }) {
+  const storeRef = useRef<CardLifecycleStore | null>(null);
+  if (!storeRef.current) storeRef.current = new CardLifecycleStore();
+  return (
+    <CardLifecycleContext.Provider value={storeRef.current}>
+      {children}
+    </CardLifecycleContext.Provider>
+  );
+}
 
-  const state = context ? context.getCardState(postId) : ("cold" as CardState);
+export function useCardState(postId: string) {
+  const store = useContext(CardLifecycleContext);
 
-  const activate = useCallback(() => context?.setCardState(postId, "active"), [context, postId]);
-  const deactivate = useCallback(() => context?.setCardState(postId, "warm"), [context, postId]);
+  const state = useSyncExternalStore(
+    useCallback(
+      (cb: Listener) => (store ? store.subscribe(postId, cb) : () => {}),
+      [store, postId],
+    ),
+    useCallback(() => store?.getState(postId) ?? "cold", [store, postId]),
+    () => "cold" as CardState,
+  );
+
+  const activate = useCallback(() => store?.setState(postId, "active"), [store, postId]);
+  const deactivate = useCallback(() => store?.setState(postId, "warm"), [store, postId]);
 
   return { state, activate, deactivate };
+}
+
+export function useCardLifecycleStore() {
+  return useContext(CardLifecycleContext);
 }

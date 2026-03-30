@@ -141,7 +141,7 @@ export function useLyricDanceCore({
     };
   }, [lyricDanceId, prefetchedData]);
 
-  const { player, playerReady, data } = useLyricDancePlayer(
+  const { player, playerReady, data, playerRef } = useLyricDancePlayer(
     fetchedData,
     canvasRef,
     textCanvasRef,
@@ -419,6 +419,7 @@ export function useLyricDanceCore({
     containerRef,
     player,
     playerReady,
+    playerRef,
     data,
     fetchedData,
     setFetchedData,
