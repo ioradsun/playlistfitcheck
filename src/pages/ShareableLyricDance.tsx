@@ -10,7 +10,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
-import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { consumeShareableDancePrefetch } from "@/lib/prefetch";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
@@ -23,6 +22,15 @@ import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { SeoHead } from "@/components/SeoHead";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
+
+const COVER_COLUMNS =
+  "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name," +
+  "audio_url,section_images,palette,auto_palettes,album_art_url," +
+  "empowerment_promise,beat_grid";
+
+const HEAVY_COLUMNS =
+  "id,lyrics,words,motion_profile_spec:physics_spec,cinematic_direction," +
+  "scene_context,scene_manifest,system_type,seed,artist_dna";
 
 interface ProfileInfo {
   display_name: string | null;
@@ -55,39 +63,64 @@ export default function ShareableLyricDance() {
     setLoading(true);
 
     const prefetched = consumeShareableDancePrefetch();
-    const dataPromise = prefetched
-      ? prefetched.data
-      : supabase
-          .from("shareable_lyric_dances" as any)
-          .select(LYRIC_DANCE_COLUMNS)
-          .eq("artist_slug", artistSlug)
-          .eq("song_slug", songSlug)
-          .maybeSingle();
-
-    dataPromise.then(async ({ data: row, error }: any) => {
-      if (error || !row) {
-        setNotFound(true);
+    if (prefetched) {
+      prefetched.data.then(({ data: row, error }: any) => {
+        if (error || !row) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
+        setNotFound(false);
+        setDataRaw(row as any as LyricDanceData);
         setLoading(false);
-        return;
-      }
+      });
+      return;
+    }
 
-      const d = row as any as LyricDanceData;
-      setNotFound(false);
-      setDataRaw(d);
-      setLoading(false);
+    supabase
+      .from("shareable_lyric_dances" as any)
+      .select(COVER_COLUMNS)
+      .eq("artist_slug", artistSlug)
+      .eq("song_slug", songSlug)
+      .maybeSingle()
+      .then(({ data: row, error }: any) => {
+        if (error || !row) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
 
-      supabase
-        .from("profiles")
-        .select("display_name, avatar_url, is_verified")
-        .eq("id", d.user_id)
-        .maybeSingle()
-        .then(
-          ({ data: pData }) => {
-            if (pData) setProfile(pData as ProfileInfo);
-          },
-          () => {},
-        );
-    });
+        setNotFound(false);
+        setDataRaw(row as any as LyricDanceData);
+        setLoading(false);
+
+        const userId = (row as any).user_id;
+        if (userId) {
+          supabase
+            .from("profiles")
+            .select("display_name, avatar_url, is_verified")
+            .eq("id", userId)
+            .maybeSingle()
+            .then(({ data: pData }) => {
+              if (pData) setProfile(pData as ProfileInfo);
+            });
+        }
+
+        supabase
+          .from("shareable_lyric_dances" as any)
+          .select(HEAVY_COLUMNS)
+          .eq("id", (row as any).id)
+          .maybeSingle()
+          .then(({ data: heavy }: any) => {
+            if (heavy) {
+              setDataRaw((prev) => (
+                prev
+                  ? { ...prev, ...(heavy as any) }
+                  : prev
+              ));
+            }
+          });
+      });
   }, [artistSlug, songSlug]);
 
   // Poll for section images if missing on initial load (claim pipeline generates async)
@@ -172,9 +205,12 @@ export default function ShareableLyricDance() {
   useEffect(() => {
     const id = (data as any)?.id;
     if (!player || !id) return;
-    fetchFireData(id).then((fires) => {
-      player.setHistoricalFires(fires);
-    });
+    const t = setTimeout(() => {
+      fetchFireData(id).then((fires) => {
+        player.setHistoricalFires(fires);
+      });
+    }, 3000);
+    return () => clearTimeout(t);
   }, [player, (data as any)?.id]);
 
   const openReactionPanel = useCallback(() => {
@@ -349,7 +385,7 @@ export default function ShareableLyricDance() {
                   claimArtistName={renderData?.artist_name ?? ""}
                   claimSongName={renderData?.song_name ?? ""}
                   isMarketingCover={isMarketingView}
-                  waiting={loading || !renderData?.cinematic_direction}
+                  waiting={false}
                   coverImageUrl={
                     renderData?.section_images?.[0] ??
                     (renderData as any)?.album_art_url ??
