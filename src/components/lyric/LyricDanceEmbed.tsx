@@ -96,31 +96,38 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   //
   // Non-feed embeds (shareable, FitTab) never evict.
   const [evicted, setEvicted] = useState(true);
-  const evictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) {
-      // Non-feed: never evict
       setEvicted(false);
       return;
     }
 
-    if (cardState === "cold") {
-      // Offscreen → evict after 300ms debounce (prevents thrash on fast scroll)
-      if (evictTimerRef.current) return; // already pending
-      evictTimerRef.current = setTimeout(() => {
-        evictTimerRef.current = null;
-        setEvicted(true);
-      }, 300);
-    } else if (cardState === "active") {
-      // User tapped play → always create/keep the player
-      if (evictTimerRef.current) { clearTimeout(evictTimerRef.current); evictTimerRef.current = null; }
+    if (cardState === "active") {
+      // User tapped play → create immediately, no debounce
+      if (warmTimerRef.current) { clearTimeout(warmTimerRef.current); warmTimerRef.current = null; }
       if (evicted) setEvicted(false);
+    } else if (cardState === "cold") {
+      // Offscreen → destroy immediately, free pool slot for the next card
+      if (warmTimerRef.current) { clearTimeout(warmTimerRef.current); warmTimerRef.current = null; }
+      if (!evicted) setEvicted(true);
     } else {
-      // warm (visible) — create player, pool caps concurrency
-      if (evictTimerRef.current) { clearTimeout(evictTimerRef.current); evictTimerRef.current = null; }
-      if (evicted) setEvicted(false);
+      // warm (visible) — debounce creation so fast-scroll cards never create players
+      if (warmTimerRef.current) return; // already pending
+      if (!evicted) return; // already have a player
+      warmTimerRef.current = setTimeout(() => {
+        warmTimerRef.current = null;
+        setEvicted(false);
+      }, 200);
     }
+
+    return () => {
+      if (warmTimerRef.current) {
+        clearTimeout(warmTimerRef.current);
+        warmTimerRef.current = null;
+      }
+    };
   }, [cardState, isFeedEmbed, isBattleMode, evicted]);
 
   // Patch region onto prefetchedData for battle mode
