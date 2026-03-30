@@ -121,7 +121,7 @@ export function SongFitPostCard({
   const [spotifyPalette, setSpotifyPalette] = useState<string[] | undefined>(undefined);
 
   useEffect(() => {
-    if (!isSpotifyEmbed || !post.album_art_url) return;
+    if (!isSpotifyEmbed || !post.album_art_url || cardState === "cold") return;
     let cancelled = false;
     computeAutoPalettesFromUrls([post.album_art_url])
       .then((palettes) => {
@@ -129,7 +129,7 @@ export function SongFitPostCard({
       })
       .catch(() => {/* CORS fail on i.scdn.co is expected — fallback stays */});
     return () => { cancelled = true; };
-  }, [isSpotifyEmbed, post.album_art_url]);
+  }, [isSpotifyEmbed, post.album_art_url, cardState]);
   const CAPTION_MAX = 300;
 
   const { activate, deactivate } = useCardState(post.id);

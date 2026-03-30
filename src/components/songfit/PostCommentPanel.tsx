@@ -251,7 +251,7 @@ export function PostCommentPanel({
 
 
   useEffect(() => {
-    if (!postId) return;
+    if (!postId || cardState === "cold") return;
     supabase
       .from("songfit_engagement_events" as any)
       .select("created_at")
@@ -263,7 +263,7 @@ export function PostCommentPanel({
         setTotalFireCount(data.length);
         if (data.length > 0) setLastFiredAt((data[0] as any).created_at ?? null);
       });
-  }, [postId]);
+  }, [postId, cardState]);
 
   const handleCommentReact = async (commentId: string, emoji: EmojiKey) => {
     const key = `${commentId}-${emoji}`;
