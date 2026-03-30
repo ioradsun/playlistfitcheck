@@ -89,10 +89,8 @@ function LazySpotifyEmbedInner({
     if (hasLoadedRef.current) return;
     if (!containerRef.current) return;
 
-    // Guard against re-entry — but do NOT permanently block retries.
-    // Set to true only on success paths. The catch block resets it.
     let cancelled = false;
-    hasLoadedRef.current = true;
+    let loadStarted = false;
 
     // Timeout for createController callback — if the cross-origin bridge
     // fails (Safari ITP, Firefox ETP, privacy extensions), the callback
