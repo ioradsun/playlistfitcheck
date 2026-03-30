@@ -397,6 +397,11 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       setLoading(false);
       setPendingNewCount(0);
 
+      // Preload album art for Spotify posts — prevents blank flash in poster
+      enriched
+        .filter((p) => !p.lyric_dance_id && p.album_art_url)
+        .forEach((p) => preloadImage(p.album_art_url!));
+
       // Batch-fetch lyric dance data (non-blocking background fill)
       const lyricIds = enriched
         .filter((p) => p.lyric_dance_id)
