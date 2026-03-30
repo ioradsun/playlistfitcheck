@@ -30,7 +30,6 @@ function LazySpotifyEmbedInner({
   trackUrl,
   postId,
   albumArtUrl,
-  artistName,
   cardState,
   reelsMode = false,
   onPlay,
@@ -39,21 +38,15 @@ function LazySpotifyEmbedInner({
   const platform = trackUrl ? detectPlatform(trackUrl) : "spotify";
   const isSpotify = platform === "spotify";
 
-  // ── Spotify IFrame API controller ──────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<SpotifyEmbedController | null>(null);
-  const hasActivatedRef = useRef(false);
+  // Once true, we never try to load again — Spotify iframes are cheap to keep alive
+  const hasLoadedRef = useRef(false);
+  const isPlayingRef = useRef(false);
   const scPrevCardStateRef = useRef<CardState>(cardState);
 
-  // Track whether this controller is currently playing so we only call
-  // onPlay (→ activate) once per play session, not on every update tick.
-  const isPlayingRef = useRef(false);
-
-  // ── Poster / reveal state (shared by both Spotify API + SoundCloud fallback) ──
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [revealReady, setRevealReady] = useState(false);
-
-  // ── SoundCloud fallback: src-blanking ──
   const [scSilenced, setScSilenced] = useState(false);
 
   const embedSrc =
@@ -64,74 +57,68 @@ function LazySpotifyEmbedInner({
   const spotifyUri = `spotify:track:${trackId}`;
   const embedHeight = platform === "soundcloud" ? 166 : 232;
 
-  // ── Reveal delay (same timing as before) ──
+  // Reveal delay
   useEffect(() => {
     if (!iframeLoaded) return;
     const timer = setTimeout(() => setRevealReady(true), 300);
     return () => clearTimeout(timer);
   }, [iframeLoaded]);
 
-  // ── Reset reveal on track change ──
+  // Reset on track change
   useEffect(() => {
     setIframeLoaded(false);
     setRevealReady(false);
+    hasLoadedRef.current = false;
+    if (controllerRef.current) {
+      try { controllerRef.current.destroy(); } catch { /* ignore */ }
+      controllerRef.current = null;
+    }
   }, [trackId, trackUrl]);
 
-  // ── Engagement tracking ──
+  // Engagement tracking
   const handleClick = useCallback(() => {
-    if (user && postId) {
-      logEngagementEvent(postId, user.id, "spotify_click");
-    }
+    if (user && postId) logEngagementEvent(postId, user.id, "spotify_click");
   }, [user, postId]);
 
-  // ════════════════════════════════════════════════════════════════════
-  // SPOTIFY IFRAME API PATH
-  // ════════════════════════════════════════════════════════════════════
-
-  // Create the Spotify controller once for this track/card lifecycle.
+  // ── Spotify: load once on first warm, never destroy ────────────────
+  // iframes are cheap. Destroying and recreating on every cold/warm cycle
+  // causes the "never wakes up" bug under fast scroll. Load once, keep alive.
   useEffect(() => {
     if (!isSpotify) return;
+    // Only load when card first becomes non-cold
     if (cardState === "cold") return;
+    // Already loaded — nothing to do
+    if (hasLoadedRef.current) return;
     if (!containerRef.current) return;
-    // Already have a live controller — nothing to do
-    if (controllerRef.current) return;
 
-    let destroyed = false;
+    hasLoadedRef.current = true;
 
     loadSpotifyIframeApi()
       .then((IFrameAPI) => {
-        if (destroyed || !containerRef.current) return;
+        if (!containerRef.current) return;
         containerRef.current.innerHTML = "";
 
         IFrameAPI.createController(
           containerRef.current,
           { uri: spotifyUri, width: "100%", height: embedHeight },
           (controller) => {
-            if (destroyed) {
-              controller.destroy();
-              return;
-            }
+            if (!containerRef.current) return;
             controllerRef.current = controller;
             setIframeLoaded(true);
 
             controller.addListener(
               "playback_update",
               (e: { data: { isPaused: boolean } }) => {
-                if (destroyed) return;
                 const nowPlaying = !e.data.isPaused;
                 const wasPlaying = isPlayingRef.current;
                 isPlayingRef.current = nowPlaying;
 
                 if (nowPlaying && !wasPlaying) {
-                  if (
-                    _activeController &&
-                    _activeController !== controllerRef.current
-                  ) {
+                  if (_activeController && _activeController !== controllerRef.current) {
                     _activeController.pause();
                   }
                   _activeController = controllerRef.current;
                   if (onPlay) onPlay();
-                  hasActivatedRef.current = true;
                 }
               },
             );
@@ -140,51 +127,48 @@ function LazySpotifyEmbedInner({
       })
       .catch((err) => {
         console.warn("[LazySpotifyEmbed] IFrame API unavailable:", err);
-        if (!destroyed && containerRef.current) {
+        hasLoadedRef.current = false; // allow retry on next warm
+        if (containerRef.current) {
           const iframe = document.createElement("iframe");
           iframe.src = embedSrc;
           iframe.width = "100%";
           iframe.height = String(embedHeight);
-          iframe.allow =
-            "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture";
+          iframe.allow = "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture";
           iframe.style.border = "0";
           iframe.style.display = "block";
           iframe.style.background = "#000";
           iframe.title = `Play ${trackTitle}`;
-          iframe.onload = () => {
-            if (!destroyed) setIframeLoaded(true);
-          };
+          iframe.onload = () => setIframeLoaded(true);
           containerRef.current.innerHTML = "";
           containerRef.current.appendChild(iframe);
+          hasLoadedRef.current = true;
         }
       });
+    // No cleanup that destroys the controller — intentional.
+    // The controller lives for the lifetime of the component.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardState, isSpotify]);
 
-    return () => {
-      destroyed = true;
-      if (_activeController === controllerRef.current) {
-        _activeController = null;
+  // ── Spotify: audio solo — pause when another card goes active ──────
+  useEffect(() => {
+    if (!isSpotify || !postId) return;
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ activeCardId?: string }>;
+      if (ce.detail?.activeCardId !== postId && controllerRef.current) {
+        try { controllerRef.current.pause(); } catch { /* ignore */ }
+        isPlayingRef.current = false;
       }
-      if (controllerRef.current) {
-        try {
-          controllerRef.current.destroy();
-        } catch {
-          /* ignore */
-        }
-        controllerRef.current = null;
-      }
-      isPlayingRef.current = false;
-      hasActivatedRef.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSpotify, spotifyUri, embedHeight, cardState]);
+    window.addEventListener("crowdfit:audio-solo", handler);
+    return () => window.removeEventListener("crowdfit:audio-solo", handler);
+  }, [isSpotify, postId]);
 
-  // ── Audio solo: pause if this card is not the active one ──
+  // ── SoundCloud: audio solo pause ───────────────────────────────────
   useEffect(() => {
     if (!postId || isSpotify) return;
     const handler = (e: Event) => {
       const ce = e as CustomEvent<{ activeCardId?: string }>;
       if (ce.detail?.activeCardId !== postId) {
-        // SoundCloud fallback
         setScSilenced(true);
         setIframeLoaded(false);
         setRevealReady(false);
@@ -194,17 +178,13 @@ function LazySpotifyEmbedInner({
     return () => window.removeEventListener("crowdfit:audio-solo", handler);
   }, [postId, isSpotify]);
 
-  // ════════════════════════════════════════════════════════════════════
-  // SOUNDCLOUD FALLBACK: restore iframe when card re-activates
-  // ════════════════════════════════════════════════════════════════════
+  // ── SoundCloud: restore on re-activate ────────────────────────────
   useEffect(() => {
     if (isSpotify || !scSilenced) return;
-    if (cardState === "active") {
-      setScSilenced(false);
-    }
+    if (cardState === "active") setScSilenced(false);
   }, [isSpotify, scSilenced, cardState]);
 
-  // Cold eviction for SoundCloud
+  // ── SoundCloud: cold eviction (raw iframe, cheap to recreate) ──────
   useEffect(() => {
     if (isSpotify) return;
     if (cardState === "cold") {
@@ -217,23 +197,14 @@ function LazySpotifyEmbedInner({
     scPrevCardStateRef.current = cardState;
   }, [isSpotify, cardState]);
 
-  // ════════════════════════════════════════════════════════════════════
-  // RENDER
-  // ════════════════════════════════════════════════════════════════════
-
+  // ── Render ─────────────────────────────────────────────────────────
   const posterElement = albumArtUrl ? (
     <>
-      <img
-        src={albumArtUrl}
-        alt=""
-        className="absolute inset-0 w-full h-full object-cover"
-      />
+      <img src={albumArtUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
       <div className="absolute bottom-3 left-3 right-3 z-10 flex items-end gap-3">
         <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-sm font-bold text-white drop-shadow-md line-clamp-1">
-            {trackTitle}
-          </span>
+          <span className="text-sm font-bold text-white drop-shadow-md line-clamp-1">{trackTitle}</span>
         </div>
       </div>
     </>
@@ -243,10 +214,7 @@ function LazySpotifyEmbedInner({
 
   return (
     <div
-      className={cn(
-        "w-full overflow-hidden relative",
-        reelsMode ? "h-full" : "",
-      )}
+      className={cn("w-full overflow-hidden relative", reelsMode ? "h-full" : "")}
       style={
         reelsMode
           ? { background: "#000" }
@@ -265,52 +233,29 @@ function LazySpotifyEmbedInner({
     >
       {reelsMode ? (
         <>
-          {/* Blurred album art fills entire viewport */}
           {albumArtUrl && (
             <div className="absolute inset-0 z-[1]">
-              <img
-                src={albumArtUrl}
-                alt=""
-                className="w-full h-full object-cover blur-2xl scale-110 opacity-60"
-              />
+              <img src={albumArtUrl} alt="" className="w-full h-full object-cover blur-2xl scale-110 opacity-60" />
               <div className="absolute inset-0 bg-black/40" />
             </div>
           )}
-
-          {/* Centered embed with constrained width */}
           <div className="relative z-[10] flex items-center justify-center h-full px-6">
-            <div
-              className="w-full max-w-[400px] relative"
-              style={{ borderRadius: 12, overflow: "hidden" }}
-            >
-              {/* Poster — fades when embed is ready */}
+            <div className="w-full max-w-[400px] relative" style={{ borderRadius: 12, overflow: "hidden" }}>
               {albumArtUrl && (
                 <div
                   className="absolute inset-0 z-[2] pointer-events-none transition-opacity duration-500"
                   style={{ opacity: revealReady ? 0 : 1 }}
                 >
-                  <img
-                    src={albumArtUrl}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={albumArtUrl} alt="" className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-black/20" />
                   <div className="absolute bottom-3 left-3 right-3 z-10">
-                    <p className="text-sm font-bold text-white drop-shadow-md truncate">
-                      {trackTitle}
-                    </p>
+                    <p className="text-sm font-bold text-white drop-shadow-md truncate">{trackTitle}</p>
                   </div>
                 </div>
               )}
-
               {isSpotify ? (
-                /* Spotify IFrame API: controller renders iframe into this div */
-                <div
-                  ref={containerRef}
-                  style={{ width: "100%", height: embedHeight, background: "#000" }}
-                />
+                <div ref={containerRef} style={{ width: "100%", height: embedHeight, background: "#000" }} />
               ) : (
-                /* SoundCloud fallback: raw iframe with src-blanking */
                 !scSilenced && (
                   <iframe
                     src={embedSrc}
@@ -330,27 +275,19 @@ function LazySpotifyEmbedInner({
         </>
       ) : (
         <>
-          {/* Poster — fades when embed is ready */}
           <div
             className="absolute inset-0 w-full h-full z-[6] pointer-events-none transition-opacity duration-700"
             style={{ opacity: revealReady ? 0 : 1 }}
           >
             {posterElement}
           </div>
-
           {isSpotify ? (
-            /* Spotify IFrame API container */
             <div
               ref={containerRef}
               className="absolute inset-0 w-full transition-opacity duration-700"
-              style={{
-                background: "#000",
-                opacity: revealReady ? 1 : 0,
-                zIndex: revealReady ? 8 : 5,
-              }}
+              style={{ background: "#000", opacity: revealReady ? 1 : 0, zIndex: revealReady ? 8 : 5 }}
             />
           ) : (
-            /* SoundCloud fallback */
             !scSilenced && (
               <iframe
                 src={embedSrc}
@@ -358,11 +295,7 @@ function LazySpotifyEmbedInner({
                 height={embedHeight}
                 allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                 className="absolute inset-0 border-0 block w-full transition-opacity duration-700"
-                style={{
-                  background: "#000",
-                  opacity: revealReady ? 1 : 0,
-                  zIndex: revealReady ? 8 : 5,
-                }}
+                style={{ background: "#000", opacity: revealReady ? 1 : 0, zIndex: revealReady ? 8 : 5 }}
                 title={`Play ${trackTitle}`}
                 scrolling="no"
                 onLoad={() => setIframeLoaded(true)}

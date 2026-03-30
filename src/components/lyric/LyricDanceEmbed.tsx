@@ -1,7 +1,10 @@
 /**
  * LyricDanceEmbed — Feed player (inline, reels, battle).
  * All shared player logic lives in useLyricDanceCore.
- * This file adds: feed visibility lifecycle, cardState, eviction, battle mode.
+ * Lifecycle: cardState is the single source of truth.
+ *   cold  → evict player after 300ms debounce (prevents thrash on fast scroll)
+ *   warm  → player exists, muted, ready
+ *   active → unmuted, playing
  */
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -17,29 +20,6 @@ import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
-
-type VisibilityState = "visible" | "near" | "far";
-type VisibilityListener = (v: VisibilityState) => void;
-const visibilityListeners = new Map<Element, VisibilityListener>();
-let sharedIO: IntersectionObserver | null = null;
-function getSharedIO() {
-  if (!sharedIO) {
-    sharedIO = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          const v: VisibilityState = !e.isIntersecting
-            ? "far"
-            : e.intersectionRatio > 0.2
-              ? "visible"
-              : "near";
-          visibilityListeners.get(e.target)?.(v);
-        }
-      },
-      { threshold: [0, 0.2, 0.6], rootMargin: "180px" },
-    );
-  }
-  return sharedIO;
-}
 
 interface LyricDanceEmbedProps {
   lyricDanceId: string;
@@ -102,11 +82,31 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const empowermentPromise = (prefetchedData as any)?.empowerment_promise ?? null;
   const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
 
-  const [playerEvicted, setPlayerEvicted] = useState(false);
+  // ── Single eviction state driven by cardState ──────────────────────
+  // A 300ms debounce prevents thrash when user fast-scrolls through cards.
+  // Non-feed embeds (shareable, FitTab) never evict.
+  const [evicted, setEvicted] = useState(false);
+  const evictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // For battle embeds: patch region_start/region_end onto a derived data copy
-  // so LyricDancePlayer knows to window playback to the hook region.
-  // Never mutates the shared prefetchedData object.
+  useEffect(() => {
+    if (!isFeedEmbed || isBattleMode) return;
+    if (cardState === "cold") {
+      if (evictTimerRef.current) return; // already pending
+      evictTimerRef.current = setTimeout(() => {
+        evictTimerRef.current = null;
+        setEvicted(true);
+      }, 300);
+    } else {
+      // warm or active — cancel any pending eviction and revive if needed
+      if (evictTimerRef.current) {
+        clearTimeout(evictTimerRef.current);
+        evictTimerRef.current = null;
+      }
+      if (evicted) setEvicted(false);
+    }
+  }, [cardState, isFeedEmbed, isBattleMode, evicted]);
+
+  // Patch region onto prefetchedData for battle mode
   const prefetchedDataWithRegion = useMemo(() => {
     if (!isBattleMode || !prefetchedData) return prefetchedData;
     return { ...prefetchedData, region_start: regionStart, region_end: regionEnd };
@@ -153,15 +153,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     autoPlay,
     onPlay,
     usePool: isFeedEmbed,
-    evicted: playerEvicted,
+    evicted,
   });
 
   useImperativeHandle(ref, () => ({ getPlayer: () => player ?? null }), [player]);
 
-
-  const [visibility, setVisibility] = useState<VisibilityState>(
-    isFeedEmbed ? "far" : "visible",
-  );
   const [forceDemoted, setForceDemoted] = useState(false);
   const [, setFireStrengthByLine] = useState<Record<number, number>>({});
   const [firedSections, setFiredSections] = useState<Set<number>>(new Set());
@@ -169,7 +165,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [closingAnswered, setClosingAnswered] = useState(false);
   const [totalFireCount, setTotalFireCount] = useState(0);
   const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
-  const farTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const userActivatedRef = useRef(false);
 
@@ -178,6 +173,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     handlePanelClose();
     if (isControlled) onExternalPanelOpenChange?.(false);
   }, [handlePanelClose, isControlled, onExternalPanelOpenChange]);
+
   const handleOpenReactions = useCallback(() => {
     if (hideReactButton) {
       onOpenReactions?.();
@@ -189,15 +185,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       userActivatedRef.current = true;
       onPlay?.();
     }
-  }, [
-    hideReactButton,
-    onOpenReactions,
-    isControlled,
-    onExternalPanelOpenChange,
-    openPanel,
-    showCover,
-    onPlay,
-  ]);
+  }, [hideReactButton, onOpenReactions, isControlled, onExternalPanelOpenChange, openPanel, showCover, onPlay]);
 
   useEffect(() => {
     if (!isControlled) return;
@@ -205,66 +193,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     else closePanel();
   }, [isControlled, externalPanelOpen, openPanel, closePanel]);
 
-  useEffect(() => {
-    if (!isFeedEmbed || reelsMode) return;
-    const el = containerRef.current;
-    if (!el) return;
-    visibilityListeners.set(el, setVisibility);
-    getSharedIO().observe(el);
-    return () => {
-      visibilityListeners.delete(el);
-      sharedIO?.unobserve(el);
-    };
-  }, [isFeedEmbed, reelsMode, containerRef]);
-
-  // In reels mode, derive visibility from cardState instead of IO.
-  // The windowing system is the source of truth; IO fires late on mount.
-  useEffect(() => {
-    if (!reelsMode || !isFeedEmbed) return;
-    if (cardState === "warm" || cardState === "active") {
-      setVisibility("visible");
-    } else {
-      setVisibility("far");
-    }
-  }, [reelsMode, isFeedEmbed, cardState]);
-
+  // ── Full-mode upgrade: when player is ready and card is warm/active ──
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
-    if (reelsMode && (cardState === "warm" || cardState === "active")) {
+    if (cardState === "warm" || cardState === "active") {
       player.scheduleFullModeUpgrade();
-      return;
     }
-    if (visibility === "near" || visibility === "visible")
-      player.scheduleFullModeUpgrade();
-  }, [player, playerReady, visibility, isFeedEmbed, reelsMode, cardState]);
+  }, [player, playerReady, isFeedEmbed, cardState]);
 
-  // Full-mode upgrade for non-feed embeds now handled by useLyricDanceCore
-
-  useEffect(() => {
-    if (!isFeedEmbed || isBattleMode) return;
-    if (visibility === "far") {
-      if (farTimerRef.current) return;
-      farTimerRef.current = setTimeout(() => {
-        farTimerRef.current = null;
-        // Signal to useLyricDancePlayer to destroy and release pool slot
-        // DESTROY the player — free GPU, audio, RAF, memory
-        // useLyricDancePlayer will recreate it when card becomes visible
-        playerRef.current?.destroy();
-        setPlayerEvicted(true);
-      }, 4000);
-      return;
-    }
-    // Coming back into view — clear eviction
-    if (farTimerRef.current) {
-      clearTimeout(farTimerRef.current);
-      farTimerRef.current = null;
-    }
-    if (playerEvicted) {
-      setPlayerEvicted(false);
-      // Player will recreate via useLyricDancePlayer when data+canvas ready
-    }
-  }, [visibility, isFeedEmbed, isBattleMode, playerEvicted, playerRef]);
-
+  // ── Media deactivate listener ──────────────────────────────────────
   useEffect(() => {
     if (!isFeedEmbed || !lyricDanceId) return;
     const handler = (e: Event) => {
@@ -274,29 +211,28 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       setForceDemoted(true);
     };
     window.addEventListener("crowdfit:media-deactivate", handler);
-    return () =>
-      window.removeEventListener("crowdfit:media-deactivate", handler);
+    return () => window.removeEventListener("crowdfit:media-deactivate", handler);
   }, [isFeedEmbed, lyricDanceId]);
 
   useEffect(() => {
     if (cardState === "active") setForceDemoted(false);
   }, [cardState]);
 
+  // ── Reset cover + deactivate when card goes cold ───────────────────
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) return;
-    if (visibility === "far") {
+    if (cardState === "cold") {
       setShowCover(true);
       userActivatedRef.current = false;
       if (lyricDanceId) {
-        window.dispatchEvent(
-          new CustomEvent("crowdfit:media-deactivate", {
-            detail: { cardId: lyricDanceId },
-          }),
-        );
+        window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", {
+          detail: { cardId: lyricDanceId },
+        }));
       }
     }
-  }, [visibility, isFeedEmbed, isBattleMode, lyricDanceId, setShowCover]);
+  }, [cardState, isFeedEmbed, isBattleMode, lyricDanceId, setShowCover]);
 
+  // ── Audio / mute driven purely by cardState ────────────────────────
   useEffect(() => {
     if (!player || !playerReady) return;
     if (isBattleMode) {
@@ -316,8 +252,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     const coverUp = showCover;
     const isUserEngaged = cardState === "active" || userActivatedRef.current;
     if (reactionPanelOpen) return;
-    const shouldUnmuted =
-      !coverUp && isUserEngaged && visibility === "visible" && !forceDemoted;
+    const shouldUnmuted = !coverUp && isUserEngaged && cardState !== "cold" && !forceDemoted;
     const shouldMuted = !coverUp && !isUserEngaged;
     if (shouldUnmuted) {
       player.play();
@@ -328,20 +263,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player.setMuted(true);
       setMuted(true);
     }
-  }, [
-    player,
-    playerReady,
-    cardState,
-    forceMuted,
-    visibility,
-    forceDemoted,
-    isFeedEmbed,
-    isBattleMode,
-    showCover,
-    setMuted,
-    reactionPanelOpen,
-  ]);
+  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen]);
 
+  // ── Reels: auto-remove cover when active ──────────────────────────
   useEffect(() => {
     if (!reelsMode || !isFeedEmbed || cardState !== "active" || !showCover) return;
     setShowCover(false);
@@ -352,17 +276,17 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     player.setTextVerticalBias(0);
   }, [player, playerReady]);
 
+  // ── Closing screen ─────────────────────────────────────────────────
   useEffect(() => {
     if (!durationSec || !player) return;
-    if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
-      setClosingVisible(true);
-    }
+    if (currentTimeSec > durationSec + 2.2 && !closingVisible) setClosingVisible(true);
     if (currentTimeSec < durationSec * 0.5 && closingVisible && closingAnswered) {
       setClosingVisible(false);
       setClosingAnswered(false);
     }
   }, [currentTimeSec, durationSec, closingVisible, closingAnswered, player]);
 
+  // ── Fire data ──────────────────────────────────────────────────────
   useEffect(() => {
     const id = (data ?? prefetchedData as any)?.id;
     if (!player || !id) return;
@@ -384,20 +308,17 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const activeLineFireCount = useMemo(() => {
     if (!activeLine) return 0;
     const activeStart = (data?.lyrics as any[])?.find(
-      (l: any) =>
-        l.start <= (player?.audio.currentTime ?? 0) &&
-        l.end >= (player?.audio.currentTime ?? 0),
+      (l: any) => l.start <= (player?.audio.currentTime ?? 0) && l.end >= (player?.audio.currentTime ?? 0),
     )?.start ?? 0;
     const windowEnd = activeStart + 10;
     const linesInWindow = (lyricSections.allLines ?? []).filter(
       (l) => l.startSec >= activeStart - 1 && l.startSec <= windowEnd,
     );
     return linesInWindow.reduce((sum, l) => {
-      return sum + Object.values(reactionData).reduce(
-        (s, d) => s + (d.line[l.lineIndex] ?? 0), 0,
-      );
+      return sum + Object.values(reactionData).reduce((s, d) => s + (d.line[l.lineIndex] ?? 0), 0);
     }, 0);
   }, [activeLine, reactionData, lyricSections.allLines, player, data]);
+
   const activeSectionIndex = useMemo(() => {
     if (!audioSections.length) return 0;
     const idx = audioSections.findIndex(
@@ -410,28 +331,22 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     const autoPalettes = (data ?? (prefetchedData as any))?.auto_palettes;
     if (Array.isArray(autoPalettes) && autoPalettes[activeSectionIndex]) {
       const p = autoPalettes[activeSectionIndex] as string[];
-      // p[3] = textAccent: WCAG 4.5:1 contrast-checked against the section's dark background.
-      // p[1] = accent: only checked against section midtone — can be too dark for #0a0a0a bar.
       return p[3] ?? p[1] ?? p[0] ?? "rgba(255,140,50,1)";
     }
     return palette[1] ?? palette[0] ?? "rgba(255,140,50,1)";
   }, [data, prefetchedData, activeSectionIndex, palette]);
+
   const hasFired = firedSections.has(activeSectionIndex);
   const markFired = useCallback(() => {
     setFiredSections((prev) => new Set([...prev, activeSectionIndex]));
   }, [activeSectionIndex]);
 
   const hookPhrase = ((data ?? prefetchedData) as any)?.hook_phrase ?? null;
-
   const effectiveShowCover = showCover;
   void artistName;
 
   useEffect(() => {
-    return () => {
-      if (holdFireIntervalRef.current) {
-        clearInterval(holdFireIntervalRef.current);
-      }
-    };
+    return () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); };
   }, []);
 
   return (
@@ -439,18 +354,13 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       <div
         ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
-        onClick={(e) => {
-          if (!effectiveShowCover && !isWaiting) toggleMute(e);
-        }}
+        onClick={(e) => { if (!effectiveShowCover && !isWaiting) toggleMute(e); }}
       >
         {/* Static canvases — only for non-pooled (shareable/FitTab) */}
         {!isFeedEmbed && (
           <>
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-            <canvas
-              ref={textCanvasRef}
-              className="absolute inset-0 w-full h-full pointer-events-none"
-            />
+            <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
           </>
         )}
 
@@ -499,26 +409,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           >
             <span />
             <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5 pointer-events-auto">
-              <button
-                onClick={toggleMute}
-                className="p-1 text-white/40 hover:text-white/70 transition-colors"
-                aria-label={muted ? "Unmute" : "Mute"}
-              >
+              <button onClick={toggleMute} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? "Unmute" : "Mute"}>
                 {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
               </button>
-              <button
-                onClick={handleReplay}
-                className="p-1 text-white/40 hover:text-white/70 transition-colors"
-                aria-label="Replay"
-              >
+              <button onClick={handleReplay} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
                 <RotateCcw size={14} />
               </button>
               {showExpandButton && (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.open(lyricDanceUrl, "_blank");
-                  }}
+                  onClick={(e) => { e.stopPropagation(); window.open(lyricDanceUrl, "_blank"); }}
                   className="p-1 text-white/40 hover:text-white/70 transition-colors"
                   aria-label="Expand"
                 >
@@ -531,35 +430,19 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       </div>
 
       {!isBattleMode && !reactionPanelOpen && (
-        <div
-          className="w-full flex-shrink-0"
-          style={{ background: "#0a0a0a" }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
           {reelsMode && artistName && effectiveShowCover && (
             <div className="flex items-center gap-2 px-3 pt-2 pb-1">
-              <div
-                className="relative shrink-0 cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onProfileClick?.();
-                }}
-              >
+              <div className="relative shrink-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onProfileClick?.(); }}>
                 <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
                   {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <User size={13} className="text-white/40" />
                   )}
                 </div>
                 {isVerified && (
-                  <span className="absolute -bottom-0.5 -right-0.5">
-                    <VerifiedBadge size={11} />
-                  </span>
+                  <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={11} /></span>
                 )}
               </div>
               <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate max-w-[60vw]">
@@ -593,17 +476,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 if (!id || !activeLine) return;
                 player?.fireFire(0);
                 emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
-                setFireStrengthByLine((prev) => ({
-                  ...prev,
-                  [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
-                }));
+                setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1 }));
                 markFired();
               },
               onFireHoldStart: () => {
                 if (holdFireIntervalRef.current) return;
-                holdFireIntervalRef.current = setInterval(() => {
-                  player?.fireFire(0);
-                }, 300);
+                holdFireIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
               },
               onFireHoldEnd: (holdMs: number) => {
                 if (holdFireIntervalRef.current) {
@@ -615,10 +493,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 player?.fireFire(holdMs);
                 emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
                 const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
-                setFireStrengthByLine((prev) => ({
-                  ...prev,
-                  [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
-                }));
+                setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
                 markFired();
               },
               activeLineFireCount: effectiveShowCover ? 0 : activeLineFireCount,
