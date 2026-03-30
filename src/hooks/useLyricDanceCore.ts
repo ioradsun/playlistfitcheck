@@ -60,6 +60,8 @@ interface UseLyricDanceCoreOptions {
   postId?: string;
   autoPlay?: boolean;
   onPlay?: () => void;
+  usePool?: boolean;
+  evicted?: boolean;
 }
 
 export function useLyricDanceCore({
@@ -69,6 +71,8 @@ export function useLyricDanceCore({
   postId: _postId,
   autoPlay = false,
   onPlay,
+  usePool = false,
+  evicted = false,
 }: UseLyricDanceCoreOptions) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
   const [loading, setLoading] = useState(!prefetchedData);
@@ -146,7 +150,7 @@ export function useLyricDanceCore({
     canvasRef,
     textCanvasRef,
     containerRef,
-    { bootMode: "minimal", eagerUpgrade },
+    { bootMode: "minimal", eagerUpgrade, usePool, postId: _postId ?? lyricDanceId, evicted },
   );
 
   useEffect(() => {
