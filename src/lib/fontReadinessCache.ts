@@ -45,6 +45,15 @@ export function ensureFontReady(fontName: string): Promise<boolean> {
       // The Google Fonts stylesheet is still in the DOM — the font will eventually arrive.
       if (!loaded) {
         cache.delete(key);
+        // Re-attach: back-fill cache if font arrives late
+        Promise.all(weightsToLoad).catch(() => {}).then(() => {
+          if (
+            fontsApi.check(`600 48px "${fontName}"`) ||
+            fontsApi.check(`700 48px "${fontName}"`)
+          ) {
+            cache.set(key, Promise.resolve(true));
+          }
+        });
       }
 
       return loaded;
