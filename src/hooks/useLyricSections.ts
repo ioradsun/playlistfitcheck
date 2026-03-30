@@ -3,7 +3,6 @@ import { useMemo } from "react";
 import {
   detectSections,
   type AudioSection,
-  type SectionRole,
   type TimestampedLine,
 } from "@/engine/sectionDetector";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
@@ -95,7 +94,7 @@ function deriveLines(words: WordTiming[]): LyricSectionLine[] {
   return lines;
 }
 
-export function computeConfidence(section: AudioSection): number {
+function computeConfidence(section: AudioSection): number {
   let c = 0;
   switch (section.role) {
     case "intro":
@@ -130,11 +129,7 @@ export function computeConfidence(section: AudioSection): number {
   return Math.min(1, Math.max(0, c));
 }
 
-function deriveHeuristicLabel(
-  section: AudioSection,
-  _roleCounters: Partial<Record<SectionRole, number>>,
-  _chorusCount: number,
-): string {
+function deriveHeuristicLabel(section: AudioSection): string {
   return `Section ${section.index + 1}`;
 }
 
@@ -196,12 +191,9 @@ export function useLyricSections(
       }
     }
 
-    const roleCounters: Partial<Record<SectionRole, number>> = {};
-    const chorusCount = detected.filter((section) => section.role === "chorus").length;
-
     const sections: LyricSection[] = detected.map((section) => {
       const aiLabel = aiLabelMap.get(section.index);
-      const heurLabel = deriveHeuristicLabel(section, roleCounters, chorusCount);
+      const heurLabel = deriveHeuristicLabel(section);
       const label = aiLabel ?? heurLabel;
       const labelSource = aiLabel ? "ai" : "heuristic";
 

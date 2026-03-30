@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState, useEffect } from "react";
+import { extractPeaks } from "@/lib/audioUtils";
 
 export interface WaveformData {
   peaks: number[];
@@ -15,24 +16,6 @@ export interface AudioMix {
 }
 
 const PEAK_SAMPLES = 200;
-
-function extractPeaks(buffer: AudioBuffer, samples: number): number[] {
-  const channel = buffer.getChannelData(0);
-  const blockSize = Math.floor(channel.length / samples);
-  const peaks: number[] = [];
-  for (let i = 0; i < samples; i++) {
-    let max = 0;
-    const start = i * blockSize;
-    for (let j = 0; j < blockSize; j++) {
-      const v = Math.abs(channel[start + j]);
-      if (v > max) max = v;
-    }
-    peaks.push(max);
-  }
-  // Normalize
-  const maxPeak = Math.max(...peaks, 0.01);
-  return peaks.map((p) => p / maxPeak);
-}
 
 export function useAudioEngine() {
   const ctxRef = useRef<AudioContext | null>(null);

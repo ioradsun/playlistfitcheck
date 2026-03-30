@@ -10,6 +10,7 @@ import {
   type BeatGridData,
 } from "@/hooks/useBeatGrid";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
+import { extractPeaks } from "@/lib/audioUtils";
 import type { LyricData, LyricLine } from "@/components/lyric/LyricDisplay";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
@@ -65,7 +66,6 @@ interface UsePipelineSchedulerReturn {
   fitProgress: number;
   setFitProgress: React.Dispatch<React.SetStateAction<number>>;
   fitStageLabel: string;
-  setFitStageLabel: React.Dispatch<React.SetStateAction<string>>;
   pipelineStages: PipelineStages;
   setPipelineStages: React.Dispatch<React.SetStateAction<PipelineStages>>;
   fitUnlocked: boolean;
@@ -443,7 +443,6 @@ export function usePipelineScheduler({
     fitProgress,
     setFitProgress,
     fitStageLabel,
-    setFitStageLabel,
     pipelineStages,
     setPipelineStages,
     fitUnlocked,
@@ -475,25 +474,6 @@ interface UseLyricPipelineParams {
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onSavedId?: (id: string) => void;
-}
-
-const WAVEFORM_PEAK_COUNT = 200;
-
-function extractPeaksFromBuffer(buf: AudioBuffer): WaveformData {
-  const channel = buf.getChannelData(0);
-  const blockSize = Math.floor(channel.length / WAVEFORM_PEAK_COUNT);
-  const peaks: number[] = [];
-  for (let i = 0; i < WAVEFORM_PEAK_COUNT; i++) {
-    let max = 0;
-    const start = i * blockSize;
-    for (let j = 0; j < blockSize; j++) {
-      const v = Math.abs(channel[start + j]);
-      if (v > max) max = v;
-    }
-    peaks.push(max);
-  }
-  const maxPeak = Math.max(...peaks, 0.01);
-  return { peaks: peaks.map((p) => p / maxPeak), duration: buf.duration };
 }
 
 export function useLyricPipeline({
@@ -606,7 +586,6 @@ export function useLyricPipeline({
   const [beatGridDone, setBeatGridDone] = useState(
     () => !!(initialLyric as any)?.beat_grid,
   );
-  const [audioBufferReady, setAudioBufferReady] = useState(false);
   const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
 
   const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
@@ -691,8 +670,7 @@ export function useLyricPipeline({
         ctx.decodeAudioData(ab).then((buf) => {
           if (!cancelled) {
             setAudioBuffer(buf);
-            setAudioBufferReady(true);
-            setWaveformData(extractPeaksFromBuffer(buf));
+            setWaveformData({ peaks: extractPeaks(buf), duration: buf.duration });
           }
           ctx.close();
         }),
@@ -704,36 +682,6 @@ export function useLyricPipeline({
       cancelled = true;
     };
   }, [audioFile, audioBuffer, allAnalysisLoaded]);
-
-  const decodeAudioOnDemand = useCallback(async () => {
-    if (audioBuffer || !audioFile || audioFile.size === 0) return;
-    try {
-      const ctx = new AudioContext();
-      const ab = await audioFile.arrayBuffer();
-      const buf = await ctx.decodeAudioData(ab);
-      setAudioBuffer(buf);
-      setAudioBufferReady(true);
-      setWaveformData(extractPeaksFromBuffer(buf));
-      ctx.close();
-    } catch {
-      console.warn("[Pipeline] On-demand AudioBuffer decode failed");
-    }
-  }, [audioFile, audioBuffer]);
-
-  const resolveProjectTitle = useCallback(
-    (title: string | null | undefined, filename: string) => {
-      const normalizedTitle = (title || "").trim();
-      if (
-        normalizedTitle &&
-        normalizedTitle.toLowerCase() !== "unknown" &&
-        normalizedTitle.toLowerCase() !== "untitled"
-      ) {
-        return normalizedTitle;
-      }
-      return filename.replace(/\.[^/.]+$/, "").trim() || "Untitled";
-    },
-    [],
-  );
 
   const handleTitleChange = useCallback((newTitle: string) => {
     setLyricData((prev) => prev ? { ...prev, title: newTitle } : prev);
@@ -821,13 +769,11 @@ export function useLyricPipeline({
         setFitProgress(80);
       }
 
-      import("@/engine/presetDerivation").then(({ deriveFrameState }) => {
-        import("@/engine/presetDerivation").then(({ getTypography }) => {
-          const typoPreset =
-            loadedCinematicDirection.typography || "clean-modern";
-          getTypography(typoPreset);
-          deriveFrameState(loadedCinematicDirection, 0, 0.5);
-        });
+      import("@/engine/presetDerivation").then(({ deriveFrameState, getTypography }) => {
+        const typoPreset =
+          loadedCinematicDirection.typography || "clean-modern";
+        getTypography(typoPreset);
+        deriveFrameState(loadedCinematicDirection, 0, 0.5);
       });
     }
 
@@ -996,16 +942,6 @@ export function useLyricPipeline({
   const startCinematicDirection = useCallback(
     async (sourceLines: LyricLine[], force = false) => {
       if (!lyricData || !sourceLines.length) return;
-      if (false && !force && cinematicDirectionRef.current) {
-        setGenerationStatus((prev) => {
-          const next = { ...prev };
-          if (next.cinematicDirection !== "done")
-            next.cinematicDirection = "done";
-          if (next.sectionImages === "idle") next.sectionImages = "done";
-          return next;
-        });
-        return;
-      }
       {
         if (
           !force &&
@@ -1418,7 +1354,6 @@ export function useLyricPipeline({
     fitProgress,
     setFitProgress,
     fitStageLabel,
-    setFitStageLabel,
     pipelineStages,
     setPipelineStages,
     fitUnlocked,
@@ -1437,19 +1372,6 @@ export function useLyricPipeline({
     async (targetAudioFile: File) => {
       if (!targetAudioFile || targetAudioFile.size === 0) return;
 
-      if (!audioBuffer) {
-        try {
-          const ctx = new AudioContext();
-          const ab = await targetAudioFile.arrayBuffer();
-          const buf = await ctx.decodeAudioData(ab);
-
-          setAudioBuffer(buf);
-          setAudioBufferReady(true);
-          setWaveformData(extractPeaksFromBuffer(buf));
-          ctx.close();
-        } catch {}
-      }
-
       if (beatGrid) {
         setBeatGridDone(true);
         setGenerationStatus((prev) =>
@@ -1466,7 +1388,7 @@ export function useLyricPipeline({
       setGenerationStatus((prev) => ({ ...prev, beatGrid: "running" }));
       setPipelineStages((prev) => ({ ...prev, rhythm: "running" }));
     },
-    [beatGrid, generationStatus.beatGrid, audioBuffer, setGenerationStatus, setPipelineStages],
+    [beatGrid, generationStatus.beatGrid, setGenerationStatus, setPipelineStages],
   );
 
   const handleAudioSubmitted = useCallback(
@@ -1488,7 +1410,6 @@ export function useLyricPipeline({
     setWaveformData(null);
     setTranscriptionDone(false);
     setBeatGridDone(false);
-    setAudioBufferReady(false);
     setGenerationStatus({
       beatGrid: "idle",
       renderData: "done",
@@ -1583,9 +1504,7 @@ export function useLyricPipeline({
     handleSectionImagesError,
     retryGeneration,
     resetProject,
-    decodeAudioOnDemand,
     pipelineCompat,
     savedIdRef,
-    resolveProjectTitle,
   };
 }

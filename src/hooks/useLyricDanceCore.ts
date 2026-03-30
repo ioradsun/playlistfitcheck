@@ -215,25 +215,7 @@ export function useLyricDanceCore({
 
   useEffect(() => {
     if (!data?.id) return;
-    supabase
-      .from("lyric_dance_reactions" as any)
-      .select("emoji, line_index")
-      .eq("dance_id", data.id)
-      .then(({ data: rows }) => {
-        if (!rows) return;
-        const agg: Record<string, { line: Record<number, number>; total: number }> = {};
-        for (const row of rows as any[]) {
-          const { emoji, line_index } = row;
-          if (!agg[emoji]) agg[emoji] = { line: {}, total: 0 };
-          agg[emoji].total++;
-          if (line_index != null) agg[emoji].line[line_index] = (agg[emoji].line[line_index] ?? 0) + 1;
-        }
-        setReactionData(agg);
-      });
-  }, [data?.id, setReactionData]);
-
-  useEffect(() => {
-    if (!data?.id) return;
+    // Subscribe first to avoid missing events during initial fetch
     const channel = supabase
       .channel(`reactions-core-${data.id}`)
       .on(
@@ -264,6 +246,24 @@ export function useLyricDanceCore({
         },
       )
       .subscribe();
+
+    // Then fetch existing reactions
+    supabase
+      .from("lyric_dance_reactions" as any)
+      .select("emoji, line_index")
+      .eq("dance_id", data.id)
+      .then(({ data: rows }) => {
+        if (!rows) return;
+        const agg: Record<string, { line: Record<number, number>; total: number }> = {};
+        for (const row of rows as any[]) {
+          const { emoji, line_index } = row;
+          if (!agg[emoji]) agg[emoji] = { line: {}, total: 0 };
+          agg[emoji].total++;
+          if (line_index != null) agg[emoji].line[line_index] = (agg[emoji].line[line_index] ?? 0) + 1;
+        }
+        setReactionData(agg);
+      });
+
     return () => {
       supabase.removeChannel(channel);
     };
