@@ -344,9 +344,11 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
 
       {/* ── Feed content ── */}
       {feed.loading ? (
-        <FeedSkeleton reelsMode={reelsMode} />
+        (() => { console.log("[SongFitFeed] rendering skeleton, loading=true"); return null; })()
+        || <FeedSkeleton reelsMode={reelsMode} />
       ) : feed.posts.length === 0 ? (
-        <div className="text-center py-16 space-y-3">
+        (() => { console.log("[SongFitFeed] rendering empty state, posts.length=0"); return null; })()
+        || <div className="text-center py-16 space-y-3">
           <p className="text-muted-foreground text-sm">No live submissions yet. Be the first!</p>
         </div>
       ) : (

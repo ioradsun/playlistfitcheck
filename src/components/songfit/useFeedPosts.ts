@@ -265,7 +265,9 @@ export function useFeedPosts(): FeedState {
           .order("created_at", { ascending: false });
 
     let allPosts = (raw ?? []) as unknown as SongFitPost[];
+    console.log("[useFeedPosts] raw posts:", allPosts.length, "feedView:", feedView);
     const filtered = allPosts.filter((p) => matchesView(p, feedView));
+    console.log("[useFeedPosts] filtered posts:", filtered.length);
     const normalized = filtered.map(hydrateDefaults);
 
     // Preload album art for Spotify posts
