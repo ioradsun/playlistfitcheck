@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import type { SongFitPost, FeedView, BillboardMode } from "./types";
-import { SongFitPostCard } from "./SongFitPostCard";
+import { SongFitPostCard, SongFitPostCardMemo } from "./SongFitPostCard";
 import { SongFitComments } from "./SongFitComments";
 import { SongFitLikesList } from "./SongFitLikesList";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
@@ -107,7 +107,7 @@ function MeasuredFeedCard({
       ref={ref}
       className={cn("shrink-0", reelsMode && "h-[100dvh] snap-start")}
     >
-      <SongFitPostCard
+      <SongFitPostCardMemo
         post={post}
         cardState={state}
         reelsMode={reelsMode}
