@@ -366,7 +366,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   useEffect(() => {
     const id = (data ?? prefetchedData as any)?.id;
     if (!player || !id) return;
+    let cancelled = false;
     fetchFireData(id).then((fires) => {
+      if (cancelled) return;
       player.setHistoricalFires(fires);
       setTotalFireCount(fires.length);
       if (fires.length > 0) {
@@ -376,6 +378,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         setLastFiredAt(latest.created_at ?? null);
       }
     });
+    return () => { cancelled = true; };
   }, [player, (data ?? prefetchedData as any)?.id]);
 
   const activeLineFireCount = useMemo(() => {
