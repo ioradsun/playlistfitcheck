@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 import { formatDistanceToNow } from "date-fns";
-import { EmojiBar } from "@/components/shared/panel/EmojiBar";
 import {
   EMOJIS,
   type EmojiKey,
@@ -113,10 +111,6 @@ export function PostCommentPanel({
 
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [reactionCounts, setReactionCounts] = useState<
-    Partial<Record<EmojiKey, number>>
-  >({});
-  const [sessionReacted, setSessionReacted] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
   const [commentReactions, setCommentReactions] = useState<
     Record<string, Record<string, number>>
@@ -236,20 +230,6 @@ export function PostCommentPanel({
       );
     };
 
-    const loadReactions = async () => {
-      const { data } = await supabase
-        .from("songfit_post_reactions" as any)
-        .select("emoji")
-        .eq("post_id", postId);
-      const counts: Partial<Record<EmojiKey, number>> = {};
-      for (const row of (data ?? []) as any[]) {
-        const key = row.emoji as EmojiKey;
-        counts[key] = (counts[key] ?? 0) + 1;
-      }
-      setReactionCounts(counts);
-      setSessionReacted(new Set());
-    };
-
     const loadCommentReactions = async () => {
       const commentIds =
         (
@@ -279,22 +259,9 @@ export function PostCommentPanel({
     };
 
     loadComments();
-    loadReactions();
     loadCommentReactions();
     setReplyingTo(null);
   }, [isOpen, postId, commentRefreshKey]);
-
-  const handleReact = async (key: EmojiKey) => {
-    if (sessionReacted.has(key)) return;
-    setSessionReacted((prev) => new Set([...prev, key]));
-    setReactionCounts((prev) => ({ ...prev, [key]: (prev[key] ?? 0) + 1 }));
-    await supabase.from("songfit_post_reactions" as any).insert({
-      post_id: postId,
-      emoji: key,
-      session_id: sessionId,
-      user_id: user?.id ?? null,
-    });
-  };
 
   const handleCommentReact = async (commentId: string, emoji: EmojiKey) => {
     const key = `${commentId}-${emoji}`;
@@ -323,19 +290,6 @@ export function PostCommentPanel({
     respect: "🙏",
     accurate: "🎯",
   };
-
-  const accent = palette?.[1] ?? "rgba(255,255,255,0.7)";
-  const replayCount = score?.replay_yes ?? 0;
-  const skipCount = score != null ? score.total - score.replay_yes : 0;
-
-  const activeStyle = (active: boolean) => ({
-    color:
-      votedSide === null
-        ? "rgba(255,255,255,1)"
-        : active
-          ? accent
-          : "rgba(255,255,255,0.25)",
-  });
 
   const renderComment = (comment: Comment, isReply = false) => {
     const name = comment.profiles?.display_name ?? "anon";
@@ -431,22 +385,16 @@ export function PostCommentPanel({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
-            className="absolute inset-0 flex flex-col pointer-events-auto overflow-hidden"
+            className="absolute inset-x-0 bottom-0 flex flex-col pointer-events-auto overflow-hidden"
             onClick={(e) => e.stopPropagation()}
             style={{
               background: "rgba(10,10,10,0.97)",
               backdropFilter: "blur(12px)",
+              maxHeight: "62%",
+              borderTop: "0.5px solid rgba(255,255,255,0.06)",
             }}
           >
-            <EmojiBar
-              variant="strip"
-              palette={palette}
-              counts={reactionCounts}
-              reacted={sessionReacted}
-              onReact={handleReact}
-            />
-
-            {/* Comment input — directly below emoji bar */}
+            {/* Comment input */}
             <CommentInput
               value={text}
               onChange={setText}
@@ -501,85 +449,45 @@ export function PostCommentPanel({
               )}
             </div>
 
-            {/* Vote strip — pixel-identical to CardBottomBar pre-vote */}
             <div
-              className="shrink-0 flex items-stretch"
               style={{
-                height: variant === "reels" ? 52 : 48,
+                flexShrink: 0,
+                height: 48,
                 background: "#0a0a0a",
                 borderTop: "0.5px solid rgba(255,255,255,0.06)",
-                paddingBottom:
-                  variant === "reels"
-                    ? "env(safe-area-inset-bottom, 0px)"
-                    : undefined,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                paddingRight: 12,
               }}
             >
               <button
-                onClick={() => handleVote(true)}
-                className={`flex-1 flex items-center justify-center gap-2 ${variant === "reels" ? "py-3.5" : "py-3"} hover:bg-white/[0.04] transition-colors focus:outline-none`}
-              >
-                <span
-                  className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
-                  style={{
-                    color:
-                      votedSide === null
-                        ? "rgba(255,255,255,1)"
-                        : votedSide === "a"
-                          ? "rgba(255,255,255,0.9)"
-                          : "rgba(255,255,255,0.22)",
-                  }}
-                >
-                  Run it back
-                </span>
-                {(score?.replay_yes ?? 0) > 0 && (
-                  <span className="text-[9px] font-mono text-white/25">
-                    {score!.replay_yes}
-                  </span>
-                )}
-              </button>
-
-              <div
-                style={{ width: "0.5px" }}
-                className="bg-white/[0.06] self-stretch my-2"
-              />
-
-              <button
-                onClick={() => handleVote(false)}
-                className={`flex-1 flex items-center justify-center gap-2 ${variant === "reels" ? "py-3.5" : "py-3"} hover:bg-white/[0.04] transition-colors focus:outline-none`}
-              >
-                <span
-                  className="text-[12px] font-mono tracking-[0.15em] uppercase transition-colors"
-                  style={{
-                    color:
-                      votedSide === null
-                        ? "rgba(255,255,255,1)"
-                        : votedSide === "b"
-                          ? "rgba(255,255,255,0.9)"
-                          : "rgba(255,255,255,0.22)",
-                  }}
-                >
-                  Not For Me
-                </span>
-                {score != null && score.total - score.replay_yes > 0 && (
-                  <span className="text-[9px] font-mono text-white/25">
-                    {score.total - score.replay_yes}
-                  </span>
-                )}
-              </button>
-
-              <div
-                style={{ width: "0.5px" }}
-                className="bg-white/[0.06] self-stretch my-2"
-              />
-
-              <button
                 onClick={onClose}
-                className={`flex items-center justify-center min-w-[64px] px-4 ${variant === "reels" ? "py-3.5" : "py-3"} hover:bg-white/[0.04] transition-colors focus:outline-none shrink-0`}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "rgba(255,255,255,0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                }}
               >
-                <X
-                  size={14}
-                  className="text-white/30 hover:text-white/60 transition-colors"
-                />
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                >
+                  <line x1="2" y1="2" x2="12" y2="12" />
+                  <line x1="12" y1="2" x2="2" y2="12" />
+                </svg>
               </button>
             </div>
           </motion.div>

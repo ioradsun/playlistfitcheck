@@ -574,7 +574,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 ? { symbol: topReaction.symbol, count: topReaction.count }
                 : null,
               trackTitle: songTitle,
-              accent: palette[0],
+              accent: palette[1] ?? palette[0] ?? "rgba(255,255,255,0.5)",
               hasFired,
             } as any)}
           />
