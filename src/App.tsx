@@ -72,7 +72,7 @@ const App = () => {
               {/* ── Main app: full provider tree (lazy-loaded shell) ── */}
               <Route path="/*" element={
                 MainAppShell ? (
-                  <Suspense fallback={null}>
+                  <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#090a10" }} />}>
                     <MainAppShell />
                   </Suspense>
                 ) : null

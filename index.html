@@ -6,10 +6,14 @@
     <link rel="icon" href="/favicon.png" type="image/png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#090a10" />
+    <!-- PWA: dark background before CSS custom properties load -->
+    <style>html,body{background:#090a10;color-scheme:dark}</style>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="tools.fm" />
     <link rel="apple-touch-icon" href="/favicon.png" />
+    <!-- Apple PWA splash screens — shown while JS loads on home screen launch -->
+    <meta name="apple-touch-startup-image" content="/pwa-icon-512.png" />
     <link rel="preconnect" href="https://xvgoogyagdbgphympzkg.supabase.co" crossorigin />
     <link rel="dns-prefetch" href="https://xvgoogyagdbgphympzkg.supabase.co" />
     <link rel="dns-prefetch" href="https://open.spotify.com" />
