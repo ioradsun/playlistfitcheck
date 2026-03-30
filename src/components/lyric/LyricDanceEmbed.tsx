@@ -91,9 +91,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
 
   // ── Eviction: controls whether a player exists ─────────────────────
-  // Only the preloaded card (center of viewport) or the active card gets
-  // a player. All other warm cards show the React cover at zero GPU cost.
-  // This keeps player count at 2-3 regardless of how many cards exist.
+  // Warm/active cards keep a player; cold cards evict after a short debounce.
+  // The canvas pool itself caps total concurrent players.
   //
   // Non-feed embeds (shareable, FitTab) never evict.
   const [evicted, setEvicted] = useState(true);
@@ -118,15 +117,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       if (evictTimerRef.current) { clearTimeout(evictTimerRef.current); evictTimerRef.current = null; }
       if (evicted) setEvicted(false);
     } else {
-      // warm — only the preloaded card (at viewport center) gets a player
+      // warm (visible) — create player, pool caps concurrency
       if (evictTimerRef.current) { clearTimeout(evictTimerRef.current); evictTimerRef.current = null; }
-      if (preload) {
-        if (evicted) setEvicted(false);
-      } else {
-        if (!evicted) setEvicted(true);
-      }
+      if (evicted) setEvicted(false);
     }
-  }, [cardState, preload, isFeedEmbed, isBattleMode, evicted]);
+  }, [cardState, isFeedEmbed, isBattleMode, evicted]);
 
   // Patch region onto prefetchedData for battle mode
   const prefetchedDataWithRegion = useMemo(() => {

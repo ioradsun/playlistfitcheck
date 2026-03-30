@@ -6,11 +6,10 @@
  * This keeps GPU memory and draw-call overhead constant at O(POOL_SIZE).
  */
 
-// 3 slots: 1 active player + 1 preloaded (center card behind cover) + 1 buffer.
-// Only the center card and the active card create players — all other visible
-// cards show the zero-cost React cover. This keeps GPU memory constant at O(3)
-// regardless of how many cards exist in the feed.
-const POOL_SIZE = 3;
+// 5 slots: covers a typical viewport of 3-4 visible cards + 1-2 buffer
+// for transitions during scroll. Cards that can't acquire a slot wait
+// for the crowdfit:pool-slot-freed event. GPU memory: ~8MB total.
+const POOL_SIZE = 5;
 
 interface CanvasSlot {
   id: number;
