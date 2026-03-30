@@ -6,9 +6,11 @@
  * This keeps GPU memory and draw-call overhead constant at O(POOL_SIZE).
  */
 
-// Must be >= WINDOW_RADIUS * 2 + 1 (currently 4*2+1=9) so every card in the
-// feed window can always acquire a slot without waiting for evictions.
-const POOL_SIZE = 9;
+// 3 slots: 1 active player + 1 preloaded (center card behind cover) + 1 buffer.
+// Only the center card and the active card create players — all other visible
+// cards show the zero-cost React cover. This keeps GPU memory constant at O(3)
+// regardless of how many cards exist in the feed.
+const POOL_SIZE = 3;
 
 interface CanvasSlot {
   id: number;
