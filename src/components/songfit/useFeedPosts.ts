@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { SongFitPost, FeedView, BillboardMode } from "./types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
-import { consumeFeedPrefetch, getCachedFeed, getCachedLyricData, cacheWrite } from "@/lib/prefetch";
+import { consumeFeedPrefetch, consumeLyricDataPrefetch, getCachedFeed, getCachedLyricData, cacheWrite } from "@/lib/prefetch";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 
@@ -25,10 +25,6 @@ const PAGE_SIZE = 20;
 const LYRIC_COVER_COLUMNS =
   "id,artist_name,song_name,audio_url,section_images,lyrics," +
   "palette,auto_palettes,album_art_url,beat_grid,empowerment_promise";
-
-const LYRIC_HEAVY_COLUMNS =
-  "id,lyrics,words,cinematic_direction,motion_profile_spec:physics_spec," +
-  "scene_context,scene_manifest,system_type,seed,artist_dna";
 
 const POST_SELECT =
   "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)";
@@ -119,45 +115,68 @@ async function scoreBillboard(
 }
 
 // ── Lyric data fetching ─────────────────────────────────────────────────────
+// No more Phase 1 → Phase 2 split. Instead:
+//   - FULL columns for first 2 IDs (player needs cinematic_direction)
+//   - COVER columns for the rest (just for React covers)
+//   - Both queries in Promise.all — single network round trip
+//   - IDs already in the map with cinematic_direction are skipped entirely
+
+const LYRIC_FULL_COLUMNS =
+  "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
+  "motion_profile_spec:physics_spec,cinematic_direction,section_images,scene_context,scene_manifest," +
+  "auto_palettes,beat_grid,palette,system_type,seed,artist_dna,album_art_url,empowerment_promise";
+
 async function fetchLyricData(
   ids: string[],
   existingMap: Map<string, LyricDanceData>,
 ): Promise<Map<string, LyricDanceData>> {
   if (ids.length === 0) return new Map();
 
-  const { data: coverRows } = await supabase
-    .from("shareable_lyric_dances" as any)
-    .select(LYRIC_COVER_COLUMNS)
-    .in("id", ids);
-
   const map = new Map(existingMap);
-  for (const row of (coverRows ?? []) as any[]) {
+
+  // Split IDs: first 2 get full columns (player-ready), rest get cover only
+  const fullIds = ids.slice(0, 2).filter((id) => !(map.get(id) as any)?.cinematic_direction);
+  const coverIds = ids.slice(2).filter((id) => !map.has(id));
+
+  // Fire both queries in parallel — single network round trip
+  const [fullResult, coverResult] = await Promise.all([
+    fullIds.length > 0
+      ? supabase.from("shareable_lyric_dances" as any).select(LYRIC_FULL_COLUMNS).in("id", fullIds)
+      : { data: [] },
+    coverIds.length > 0
+      ? supabase.from("shareable_lyric_dances" as any).select(LYRIC_COVER_COLUMNS).in("id", coverIds)
+      : { data: [] },
+  ]);
+
+  // Merge full rows (with cinematic_direction — player can init immediately)
+  const cacheObj: Record<string, any> = {};
+  for (const row of ((fullResult.data ?? []) as any[])) {
+    const merged = {
+      ...row,
+      cinematic_direction: row.cinematic_direction
+        ? normalizeCinematicDirection(row.cinematic_direction)
+        : row.cinematic_direction,
+    } as LyricDanceData;
+    map.set(row.id, merged);
+    cacheObj[row.id] = merged;
+  }
+
+  // Merge cover rows (no cinematic_direction — cover display only)
+  for (const row of ((coverResult.data ?? []) as any[])) {
     map.set(row.id, { ...row } as LyricDanceData);
-    const img = row.section_images?.[0];
+  }
+
+  // Preload first section image for all rows
+  for (const id of ids) {
+    const img = (map.get(id) as any)?.section_images?.[0];
     if (img) preloadImage(img);
   }
 
-  // Deferred heavy columns for first 4 visible
-  const visibleIds = ids.slice(0, 4);
-  setTimeout(async () => {
-    const { data: heavyRows } = await supabase
-      .from("shareable_lyric_dances" as any)
-      .select(LYRIC_HEAVY_COLUMNS)
-      .in("id", visibleIds);
-
-    const cacheObj: Record<string, any> = {};
-    for (const row of (heavyRows ?? []) as any[]) {
-      const base = map.get(row.id) ?? {};
-      const merged = {
-        ...base,
-        ...row,
-        cinematic_direction: normalizeCinematicDirection(row.cinematic_direction),
-      } as LyricDanceData;
-      map.set(row.id, merged);
-      cacheObj[row.id] = merged;
-    }
-    cacheWrite("lyric_data", cacheObj);
-  }, 300);
+  // Cache full rows for next visit (return visit prefetch reads this)
+  if (Object.keys(cacheObj).length > 0) {
+    const existing = getCachedLyricData() ?? {};
+    cacheWrite("lyric_data", { ...existing, ...cacheObj });
+  }
 
   return map;
 }
@@ -253,10 +272,26 @@ export function useFeedPosts(): FeedState {
       .filter((p) => !p.lyric_dance_id && p.album_art_url)
       .forEach((p) => preloadImage(p.album_art_url!));
 
-    // Fetch lyric cover data before rendering
+    // Fetch lyric data before rendering.
+    // On return visits, lyricDataPrefetch has FULL columns for the first 2 IDs
+    // (fired at module eval in parallel with feed posts — zero waterfall).
     const lyricIds = filtered.filter((p) => p.lyric_dance_id).map((p) => p.lyric_dance_id as string);
     if (lyricIds.length > 0) {
-      const newMap = await fetchLyricData(lyricIds, lyricDataMap);
+      // Seed map from parallel prefetch (has cinematic_direction — player-ready)
+      const lyricPrefetch = consumeLyricDataPrefetch();
+      let seededMap = new Map(lyricDataMap);
+      if (lyricPrefetch) {
+        const { data: prefetchedRows } = await lyricPrefetch;
+        for (const row of (prefetchedRows ?? []) as any[]) {
+          seededMap.set(row.id, {
+            ...row,
+            cinematic_direction: row.cinematic_direction
+              ? normalizeCinematicDirection(row.cinematic_direction)
+              : row.cinematic_direction,
+          } as LyricDanceData);
+        }
+      }
+      const newMap = await fetchLyricData(lyricIds, seededMap);
       setLyricDataMap(new Map(newMap));
     } else {
       setLyricDataMap(new Map());
