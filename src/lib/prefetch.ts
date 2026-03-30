@@ -134,6 +134,9 @@ export function consumeSiteCopyPrefetch() {
 // ── Chunk prefetch — only needed for main app routes ─────────────────────────
 if (!_isEmbedRoute) {
   import("./routePrefetch").then(({ SongFitTabImport }) => void SongFitTabImport());
+  // Eagerly warm the main app shell chunk so it's cached before React lazy-loads it.
+  // This eliminates the sequential waterfall: main.tsx → (wait) → MainAppShell → (wait) → Index
+  void import("../MainAppShell");
 }
 
 // Lyric engine chunk — always needed (both embed and main app use it)
