@@ -21,7 +21,6 @@ import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar"
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
-import { resolveTypographyFromDirection } from "@/lib/fontResolver";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -260,11 +259,13 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (!player || !playerReady) return;
     if (isBattleMode) {
       if (cardState === "active") {
+        player.setCoverMode(false);
         player.play();
         player.setMuted(forceMuted);
         player.scheduleFullModeUpgrade();
         setMuted(forceMuted);
       } else {
+        player.setCoverMode(false);
         player.stopRendering?.();
         player.setMuted(true);
         setMuted(true);
@@ -278,30 +279,25 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     const shouldUnmuted = !coverUp && isUserEngaged && cardState !== "cold" && !forceDemoted;
     const shouldMuted = !coverUp && !isUserEngaged;
     if (shouldUnmuted) {
+      player.setCoverMode(false);
       player.play();
       player.setMuted(false);
       setMuted(false);
     } else if (shouldMuted) {
       // Cover is down, user hasn't engaged — play muted so scene renders
+      player.setCoverMode(false);
       player.play();
       player.setMuted(true);
       setMuted(true);
     } else if (coverUp) {
-      if (reelsMode) {
-        // Reels: play muted behind cover so the lyric scene is visually alive.
-        // When user taps Listen Now, the animation is already rendering — seamless.
-        player.play();
-        player.setMuted(true);
-        setMuted(true);
-      } else {
-        // Standard feed: cover hides the canvas entirely. No RAF = no wasted CPU.
-        // Scene still pre-bakes via scheduleFullModeUpgrade() (CPU-only).
-        player.pause();
-        player.setMuted(true);
-        setMuted(true);
-      }
+      // Play muted behind cover — canvas is the preview.
+      // Engine throttles to half frame rate in cover mode.
+      player.setCoverMode(true);
+      player.play();
+      player.setMuted(true);
+      setMuted(true);
     }
-  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen, reelsMode]);
+  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen]);
 
   // ── Reels: auto-remove cover when active ──────────────────────────
   useEffect(() => {
@@ -379,20 +375,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     setFiredSections((prev) => new Set([...prev, activeSectionIndex]));
   }, [activeSectionIndex]);
 
-  const hookPhrase = ((data ?? prefetchedData) as any)?.hook_phrase ?? null;
-
-  const coverTypography = useMemo(() => {
-    const cd = (data ?? prefetchedData as any)?.cinematic_direction;
-    if (!cd) return undefined;
-    const r = resolveTypographyFromDirection(cd);
-    return {
-      fontFamily: r.fontFamily,
-      fontWeight: r.fontWeight,
-      textTransform: r.textTransform,
-      letterSpacing: r.letterSpacing,
-    };
-  }, [data, prefetchedData]);
-
   const effectiveShowCover = showCover;
   void artistName;
 
@@ -441,19 +423,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 <LyricDanceCover
                   songName={songTitle}
                   waiting={isWaiting}
-                  coverImageUrl={coverImageUrl}
-                  sectionImages={
-                    (fetchedData?.section_images ?? (prefetchedData as any)?.section_images) as string[] | undefined
-                  }
                   hideBackground={playerReady}
                   badge={null}
-                  previewLines={
-                    lyricSections.allLines?.length
-                      ? lyricSections.allLines.slice(0, 2).map((l) => l.text)
-                      : (prefetchedData as any)?.lyrics?.slice(0, 2).map((l: any) => l.text)
-                  }
-                  hookPhrase={hookPhrase}
-                  typography={coverTypography}
                   onListen={(e) => {
                     userActivatedRef.current = true;
                     handleListenNow(e);

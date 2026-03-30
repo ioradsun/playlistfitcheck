@@ -1348,6 +1348,9 @@ export class LyricDancePlayer {
   // Health monitor + adaptive quality
   private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
   private frameCount = 0;
+  /** When true, engine is playing behind a cover — throttle to half frame rate,
+   *  skip particles and camera movement, skip beat reactivity. */
+  private _coverMode = false;
   private currentTSec = 0;
 
   // ═══ Adaptive Quality Tier ═══
@@ -2208,6 +2211,11 @@ export class LyricDancePlayer {
     if (!muted) this.audio.play().catch(() => {});
   }
 
+  /** Toggle cover preview mode. When on: half frame rate, no particles, no camera. */
+  setCoverMode(enabled: boolean): void {
+    this._coverMode = enabled;
+  }
+
   /** Set vertical text bias in canvas pixels — shifts text up to account for bottom overlays (playbar, battle bar). */
   setTextVerticalBias(px: number): void {
     this._textVerticalBias = px;
@@ -2357,6 +2365,7 @@ export class LyricDancePlayer {
     if (this.destroyed) return;
     this.destroyed = true;
     this.playing = false;
+    this._coverMode = false;
     this.stopHealthMonitor();
     if (this.rafHandle) {
       cancelAnimationFrame(this.rafHandle);
@@ -2555,6 +2564,12 @@ export class LyricDancePlayer {
       this.rafHandle = 0;
       return;
     }
+    // ── Cover mode: skip every other frame for ~30fps ──
+    if (this._coverMode && this.frameCount % 2 !== 0) {
+      this.frameCount++;
+      this.rafHandle = requestAnimationFrame(this.tick);
+      return;
+    }
 
     try {
       const rawDelta = timestamp - (this.lastTimestamp || timestamp);
@@ -2648,7 +2663,7 @@ export class LyricDancePlayer {
       const frame = this.evaluateFrame(smoothedTime);
 
       // ═══ V2: Update CameraRig with LOOKAHEAD — anticipate hero words ═══
-      {
+      if (!this._coverMode) {
         const vocalActive = frame ? frame.chunks.some((c: any) => c.visible && c.alpha > 0.3) : false;
         const upcoming = this._getUpcomingHero(smoothedTime);
 
@@ -3030,7 +3045,7 @@ export class LyricDancePlayer {
 
     const particleBeatIntensity = (beatState?.pulse ?? 0) * (1 + (this._motionProfile?.bgPulseAmplitude ?? 0));
     const beatIntensityClamped = Math.max(0, Math.min(1, particleBeatIntensity));
-    if (this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
+    if (!this._coverMode && this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
   }
 
   private draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
@@ -3460,10 +3475,11 @@ export class LyricDancePlayer {
     }
 
     // Comment comets — after text, before watermark
-    this.drawComments(frameNowSec);
-
-    // Emoji stream — community reactions rising from bottom-right
-    this.drawEmojiRisers();
+    if (!this._coverMode) {
+      this.drawComments(frameNowSec);
+      // Emoji stream — community reactions rising from bottom-right
+      this.drawEmojiRisers();
+    }
 
     // ═══ Near-plane particles — Lubezki's envelope ═══
     // Foreground particles (depth >= 0.5) drawn AFTER text.
@@ -3476,7 +3492,7 @@ export class LyricDancePlayer {
     // ═══ Breathing vignette — Fincher's darkness ═══
     // Drawn LAST before UI (watermark/perf) — sits on top of everything.
     // Like a lens: the optics don't exist inside the scene, they shape how you see it.
-    if (this._qualityTier < 3) {
+    if (!this._coverMode && this._qualityTier < 3) {
       this.drawVignette();
     }
 
@@ -4363,7 +4379,7 @@ export class LyricDancePlayer {
 
     // ─── Film grain: consistent level from song grade ───
     // Skip grain at tier 1+ (overlay composite + putImageData is expensive)
-    if (this._qualityTier === 0) {
+    if (!this._coverMode && this._qualityTier === 0) {
       const grainIntensity = Math.min(0.15, activeGrade.grain.intensity);
       if (grainIntensity > 0.02) {
         this.renderFilmGrain(grainIntensity, activeGrade.grain.size);

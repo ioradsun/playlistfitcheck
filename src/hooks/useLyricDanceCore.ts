@@ -56,7 +56,6 @@ export function computeTopReaction(
 interface UseLyricDanceCoreOptions {
   lyricDanceId: string;
   prefetchedData?: LyricDanceData | null;
-  eagerUpgrade?: boolean;
   postId?: string;
   autoPlay?: boolean;
   onPlay?: () => void;
@@ -67,7 +66,6 @@ interface UseLyricDanceCoreOptions {
 export function useLyricDanceCore({
   lyricDanceId,
   prefetchedData,
-  eagerUpgrade,
   postId: _postId,
   autoPlay = false,
   onPlay,
@@ -142,7 +140,7 @@ export function useLyricDanceCore({
     canvasRef,
     textCanvasRef,
     containerRef,
-    { bootMode: "minimal", eagerUpgrade, usePool, postId: _postId ?? lyricDanceId, evicted },
+    { bootMode: "minimal", eagerUpgrade: true, usePool, postId: _postId ?? lyricDanceId, evicted },
   );
 
   useEffect(() => {

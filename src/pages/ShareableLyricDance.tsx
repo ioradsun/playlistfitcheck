@@ -386,11 +386,6 @@ export default function ShareableLyricDance() {
                   claimSongName={renderData?.song_name ?? ""}
                   isMarketingCover={isMarketingView}
                   waiting={false}
-                  coverImageUrl={
-                    renderData?.section_images?.[0] ??
-                    (renderData as any)?.album_art_url ??
-                    null
-                  }
                   hideBackground={playerReady}
                   badge={null}
                   onExpand={undefined}
