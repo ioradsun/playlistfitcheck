@@ -3,7 +3,6 @@ import { detectPlatform, toSoundCloudEmbedUrl } from "@/lib/platformUtils";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { logEngagementEvent } from "@/lib/engagementTracking";
-import type { CardState } from "./useCardLifecycle";
 import {
   loadSpotifyIframeApi,
   type SpotifyEmbedController,
@@ -19,7 +18,6 @@ interface Props {
   albumArtUrl?: string | null;
   artistName?: string;
   genre?: string | null;
-  cardState: CardState;
   reelsMode?: boolean;
   onPlay?: () => void;
 }
@@ -30,7 +28,6 @@ function LazySpotifyEmbedInner({
   trackUrl,
   postId,
   albumArtUrl,
-  cardState,
   reelsMode = false,
   onPlay,
 }: Props) {
@@ -40,14 +37,10 @@ function LazySpotifyEmbedInner({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<SpotifyEmbedController | null>(null);
-  // Once true, we never try to load again — Spotify iframes are cheap to keep alive
-  const hasLoadedRef = useRef(false);
   const isPlayingRef = useRef(false);
-  const scPrevCardStateRef = useRef<CardState>(cardState);
 
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [revealReady, setRevealReady] = useState(false);
-  const [scSilenced, setScSilenced] = useState(false);
 
   const embedSrc =
     !isSpotify && trackUrl
@@ -57,45 +50,18 @@ function LazySpotifyEmbedInner({
   const spotifyUri = `spotify:track:${trackId}`;
   const embedHeight = platform === "soundcloud" ? 166 : 232;
 
-  // Reveal delay
+  // Poster → player reveal
   useEffect(() => {
     if (!iframeLoaded) return;
     const timer = setTimeout(() => setRevealReady(true), 300);
     return () => clearTimeout(timer);
   }, [iframeLoaded]);
 
-  // Reset on track change
+  // ── Spotify: load on mount ────────────────────────────────────────────
   useEffect(() => {
-    setIframeLoaded(false);
-    setRevealReady(false);
-    hasLoadedRef.current = false;
-    if (controllerRef.current) {
-      try { controllerRef.current.destroy(); } catch { /* ignore */ }
-      controllerRef.current = null;
-    }
-  }, [trackId, trackUrl]);
-
-  // Engagement tracking
-  const handleClick = useCallback(() => {
-    if (user && postId) logEngagementEvent(postId, user.id, "spotify_click");
-  }, [user, postId]);
-
-  // ── Spotify: load once on first warm, never destroy ────────────────
-  // iframes are cheap. Destroying and recreating on every cold/warm cycle
-  // causes the "never wakes up" bug under fast scroll. Load once, keep alive.
-  useEffect(() => {
-    if (!isSpotify) return;
-    if (hasLoadedRef.current) return;
-    if (!containerRef.current) return;
+    if (!isSpotify || !containerRef.current) return;
 
     let cancelled = false;
-    let loadStarted = false;
-    hasLoadedRef.current = true; // prevent concurrent runs
-
-    // Timeout for createController callback — if the cross-origin bridge
-    // fails (Safari ITP, Firefox ETP, privacy extensions), the callback
-    // never fires. Fall back to a raw iframe after 8 seconds.
-    let controllerTimedOut = false;
     let controllerTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const fallbackToRawIframe = () => {
@@ -117,18 +83,14 @@ function LazySpotifyEmbedInner({
       containerRef.current.appendChild(iframe);
     };
 
-    loadStarted = true;
     loadSpotifyIframeApi()
       .then((IFrameAPI) => {
         if (cancelled || !containerRef.current) return;
         containerRef.current.innerHTML = "";
 
         controllerTimeout = setTimeout(() => {
-          controllerTimedOut = true;
           controllerTimeout = null;
-          console.warn(
-            "[LazySpotifyEmbed] createController callback timed out (8s) — falling back to raw iframe",
-          );
+          console.warn("[SpotifyEmbed] createController timed out — raw iframe fallback");
           fallbackToRawIframe();
         }, 8_000);
 
@@ -140,7 +102,7 @@ function LazySpotifyEmbedInner({
               clearTimeout(controllerTimeout);
               controllerTimeout = null;
             }
-            if (cancelled || controllerTimedOut || !containerRef.current) return;
+            if (cancelled || !containerRef.current) return;
 
             controllerRef.current = controller;
             setIframeLoaded(true);
@@ -153,11 +115,17 @@ function LazySpotifyEmbedInner({
                 isPlayingRef.current = nowPlaying;
 
                 if (nowPlaying && !wasPlaying) {
-                  if (_activeController && _activeController !== controllerRef.current) {
-                    _activeController.pause();
+                  // Pause previous Spotify controller
+                  if (_activeController && _activeController !== controller) {
+                    try {
+                      _activeController.pause();
+                    } catch {
+                      /* ignore */
+                    }
                   }
-                  _activeController = controllerRef.current;
-                  if (onPlay) onPlay();
+                  _activeController = controller;
+                  // Notify card system (fires crowdfit:audio-solo → pauses LyricDance players)
+                  onPlay?.();
                 }
               },
             );
@@ -166,75 +134,47 @@ function LazySpotifyEmbedInner({
       })
       .catch((err) => {
         if (cancelled) return;
-        console.warn("[LazySpotifyEmbed] IFrame API unavailable:", err);
+        console.warn("[SpotifyEmbed] API unavailable:", err);
         fallbackToRawIframe();
       });
 
     return () => {
       cancelled = true;
-      if (controllerTimeout) {
-        clearTimeout(controllerTimeout);
-        controllerTimeout = null;
-      }
-      // If the load was in-flight (not yet resolved), allow retry on next mount
-      if (loadStarted && !controllerRef.current) {
-        hasLoadedRef.current = false;
-      }
+      if (controllerTimeout) clearTimeout(controllerTimeout);
+      // Don't destroy controller — iframe persists until unmount
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSpotify]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackId, trackUrl]);
 
-  // ── Spotify: audio solo — pause when another card goes active ──────
+  // ── SoundCloud: simple iframe, loads on mount ─────────────────────────
+  // (Rendered inline in JSX — no effect needed. Unmount = gone.)
+
+  // ── Audio solo: pause when another card plays ─────────────────────────
   useEffect(() => {
-    if (!isSpotify || !postId) return;
+    if (!postId) return;
     const handler = (e: Event) => {
       const ce = e as CustomEvent<{ activeCardId?: string }>;
-      if (ce.detail?.activeCardId !== postId && controllerRef.current) {
-        try { controllerRef.current.pause(); } catch { /* ignore */ }
+      if (ce.detail?.activeCardId === postId) return;
+
+      if (isSpotify && controllerRef.current) {
+        try {
+          controllerRef.current.pause();
+        } catch {
+          /* ignore */
+        }
         isPlayingRef.current = false;
-      }
-    };
-    window.addEventListener("crowdfit:audio-solo", handler);
-    return () => window.removeEventListener("crowdfit:audio-solo", handler);
-  }, [isSpotify, postId]);
-
-  // ── SoundCloud: audio solo pause ───────────────────────────────────
-  useEffect(() => {
-    if (!postId || isSpotify) return;
-    const handler = (e: Event) => {
-      const ce = e as CustomEvent<{ activeCardId?: string }>;
-      if (ce.detail?.activeCardId !== postId) {
-        setScSilenced(true);
-        setIframeLoaded(false);
-        setRevealReady(false);
       }
     };
     window.addEventListener("crowdfit:audio-solo", handler);
     return () => window.removeEventListener("crowdfit:audio-solo", handler);
   }, [postId, isSpotify]);
 
-  // ── SoundCloud: restore on re-activate ────────────────────────────
-  useEffect(() => {
-    if (isSpotify || !scSilenced) return;
-    if (cardState === "active") setScSilenced(false);
-  }, [isSpotify, scSilenced, cardState]);
+  // Engagement tracking
+  const handleClick = useCallback(() => {
+    if (user && postId) logEngagementEvent(postId, user.id, "spotify_click");
+  }, [user, postId]);
 
-  // ── SoundCloud: cold eviction (raw iframe, cheap to recreate) ──────
-  useEffect(() => {
-    if (isSpotify) return;
-    if (cardState === "cold") {
-      setScSilenced(true);
-      setIframeLoaded(false);
-      setRevealReady(false);
-    } else if (scPrevCardStateRef.current === "cold" && cardState === "warm") {
-      setScSilenced(false);
-    }
-    scPrevCardStateRef.current = cardState;
-  }, [isSpotify, cardState]);
-
-  // ── Render ─────────────────────────────────────────────────────────
-  // CSS background-image: appears instantly when cached, loads gracefully when not.
-  // No onLoad state = no permanent opacity:0 when browser has image cached.
+  // ── Poster (shows while iframe loads) ─────────────────────────────────
   const posterElement = albumArtUrl ? (
     <>
       <div
@@ -307,19 +247,17 @@ function LazySpotifyEmbedInner({
               {isSpotify ? (
                 <div ref={containerRef} style={{ width: "100%", height: embedHeight, background: "#000" }} />
               ) : (
-                !scSilenced && (
-                  <iframe
-                    src={embedSrc}
-                    width="100%"
-                    height={embedHeight}
-                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                    className="border-0 block w-full"
-                    style={{ background: "#000" }}
-                    title={`Play ${trackTitle}`}
-                    scrolling="no"
-                    onLoad={() => setIframeLoaded(true)}
-                  />
-                )
+                <iframe
+                  src={embedSrc}
+                  width="100%"
+                  height={embedHeight}
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  className="border-0 block w-full"
+                  style={{ background: "#000" }}
+                  title={`Play ${trackTitle}`}
+                  scrolling="no"
+                  onLoad={() => setIframeLoaded(true)}
+                />
               )}
             </div>
           </div>
@@ -327,30 +265,25 @@ function LazySpotifyEmbedInner({
       ) : (
         <>
           <div
-            className="absolute inset-0 w-full h-full z-[5] pointer-events-none"
+            className="absolute inset-0 w-full h-full z-[5] pointer-events-none transition-opacity duration-500"
+            style={{ opacity: revealReady ? 0 : 1 }}
           >
             {posterElement}
           </div>
           {isSpotify ? (
-            <div
-              ref={containerRef}
-              className="absolute inset-0 w-full"
-              style={{ zIndex: 6 }}
-            />
+            <div ref={containerRef} className="absolute inset-0 w-full" style={{ zIndex: 6 }} />
           ) : (
-            !scSilenced && (
-              <iframe
-                src={embedSrc}
-                width="100%"
-                height={embedHeight}
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                className="absolute inset-0 border-0 block w-full"
-                style={{ zIndex: 6 }}
-                title={`Play ${trackTitle}`}
-                scrolling="no"
-                onLoad={() => setIframeLoaded(true)}
-              />
-            )
+            <iframe
+              src={embedSrc}
+              width="100%"
+              height={embedHeight}
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              className="absolute inset-0 border-0 block w-full"
+              style={{ zIndex: 6 }}
+              title={`Play ${trackTitle}`}
+              scrolling="no"
+              onLoad={() => setIframeLoaded(true)}
+            />
           )}
         </>
       )}

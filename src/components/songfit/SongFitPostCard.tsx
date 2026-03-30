@@ -294,7 +294,6 @@ export function SongFitPostCard({
                 lyricDanceUrl={post.lyric_dance_url!}
                 songTitle={post.track_title}
                 artistName={displayName}
-                cardState={cardState}
                 onPlay={activate}
                 postId={post.id}
                 coverImageUrl={post.album_art_url}
@@ -316,7 +315,6 @@ export function SongFitPostCard({
                 battleUrl={post.lyric_dance_url!}
                 songTitle={post.track_title}
                 showSplitCover={true}
-                cardState={cardState}
                 onPlay={activate}
                 onDeactivate={deactivate}
                 initialVotedSide={(post as any).voted_side ?? null}
@@ -341,7 +339,6 @@ export function SongFitPostCard({
                 albumArtUrl={post.album_art_url}
                 artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
                 genre={((post.tags_json as any[]) || [])[0] || null}
-                cardState={cardState}
                 onPlay={activate}
               />
               <PostCommentPanel
@@ -349,7 +346,6 @@ export function SongFitPostCard({
                 isOpen={panelOpen}
                 onOpen={() => setPanelOpen(true)}
                 onClose={() => setPanelOpen(false)}
-                cardState={cardState}
                 trackTitle={post.track_title}
                 reelsMode={reelsMode}
                 variant={reelsMode ? "reels" : "embedded"}
