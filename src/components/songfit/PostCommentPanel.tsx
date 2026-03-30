@@ -10,8 +10,6 @@ import {
   type EmojiKey,
 } from "@/components/shared/panel/panelConstants";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
-import { useCardVote } from "@/hooks/useCardVote";
-import { useTopPostReaction } from "@/hooks/useTopPostReaction";
 import type { CardState } from "./useCardLifecycle";
 
 interface Comment {
@@ -100,15 +98,6 @@ export function PostCommentPanel({
   const { user } = useAuth();
   const sessionId = getSessionId();
 
-  // ── Self-contained voting & reaction state ──
-  const topPostReaction = useTopPostReaction(
-    postId,
-    isOpen || (cardState ?? "cold") !== "cold",
-  );
-  const { votedSide, score, note, setNote, handleVote } = useCardVote(postId, {
-    enabled: (cardState ?? "cold") !== "cold",
-  });
-
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
   const [hasFired, setHasFired] = useState(false);
@@ -124,20 +113,6 @@ export function PostCommentPanel({
   // ── Panel comment input state ──
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  const handleCommentFromBar = useCallback(async () => {
-    const content = note.trim();
-    if (!content || !user) return;
-    try {
-      await supabase
-        .from("songfit_comments")
-        .insert({ post_id: postId, user_id: user.id, content });
-    } catch {
-      // silent
-    }
-    setNote("");
-    setCommentRefreshKey((k) => k + 1);
-  }, [note, user, postId, setNote]);
 
   const handleSubmit = useCallback(async () => {
     const content = text.trim();
@@ -515,17 +490,9 @@ export function PostCommentPanel({
           )}
           <CardBottomBar
             variant={variant === "reels" ? "fullscreen" : "embedded"}
-            votedSide={votedSide}
-            score={score}
-            note={note}
-            onNoteChange={setNote}
-            onVoteYes={() => handleVote(true)}
-            onVoteNo={() => handleVote(false)}
-            onSubmit={handleCommentFromBar}
             onOpenReactions={onOpen ?? (() => {})}
             onClose={onClose}
             panelOpen={false}
-            topReaction={topPostReaction}
             hasFired={hasFired}
             onFireTap={() => {
               if (!hasFired) {
