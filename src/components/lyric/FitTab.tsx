@@ -1532,7 +1532,7 @@ export function FitTab({
             </div>
 
             {/* Video player */}
-            <div className="relative rounded-xl overflow-hidden w-full aspect-video">
+            <div className="relative rounded-xl overflow-hidden w-full" style={{ height: 480 }}>
               {playerReady || imageWaitExpired ? (
                 <LyricDanceEmbed
                   ref={dancePlayerRef}
