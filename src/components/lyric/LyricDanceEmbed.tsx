@@ -150,6 +150,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     postId,
     autoPlay,
     onPlay,
+    usePool: isFeedEmbed,
+    evicted: playerEvicted,
   });
 
   useImperativeHandle(ref, () => ({ getPlayer: () => player ?? null }), [player]);
@@ -239,6 +241,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       if (farTimerRef.current) return;
       farTimerRef.current = setTimeout(() => {
         farTimerRef.current = null;
+        // Signal to useLyricDancePlayer to destroy and release pool slot
         // DESTROY the player — free GPU, audio, RAF, memory
         // useLyricDancePlayer will recreate it when card becomes visible
         playerRef.current?.destroy();
@@ -385,7 +388,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   const effectiveShowCover = showCover;
   void artistName;
-  void playerEvicted;
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
@@ -396,11 +398,16 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           if (!effectiveShowCover && !isWaiting) toggleMute(e);
         }}
       >
-        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-        <canvas
-          ref={textCanvasRef}
-          className="absolute inset-0 w-full h-full pointer-events-none"
-        />
+        {/* Static canvases — only for non-pooled (shareable/FitTab) */}
+        {!isFeedEmbed && (
+          <>
+            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+            <canvas
+              ref={textCanvasRef}
+              className="absolute inset-0 w-full h-full pointer-events-none"
+            />
+          </>
+        )}
 
         <ClosingScreen
           visible={closingVisible && !reactionPanelOpen}

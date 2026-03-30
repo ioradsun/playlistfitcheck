@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withInitLimit } from "@/engine/initQueue";
+import { acquireCanvasSlot, releaseCanvasSlot } from "@/engine/canvasPool";
 
 interface Options {
   bootMode?: "minimal" | "full";
@@ -19,6 +20,13 @@ interface Options {
   eagerUpgrade?: boolean;
   onReady?: (player: LyricDancePlayer) => void;
   preloadedImages?: HTMLImageElement[];
+  /** If true, use the global canvas pool instead of the DOM canvases.
+   *  The caller's canvasRef/textCanvasRef are ignored when pooled. */
+  usePool?: boolean;
+  /** The postId used to track pool slot ownership. */
+  postId?: string;
+  /** Whether the host card has been evicted from active feed windowing. */
+  evicted?: boolean;
 }
 
 export interface UseLyricDancePlayerReturn {
@@ -37,7 +45,15 @@ export function useLyricDancePlayer(
   containerRef: React.RefObject<HTMLDivElement>,
   options: Options = {},
 ): UseLyricDancePlayerReturn {
-  const { bootMode = "minimal", eagerUpgrade = false, onReady, preloadedImages } = options;
+  const {
+    bootMode = "minimal",
+    eagerUpgrade = false,
+    onReady,
+    preloadedImages,
+    usePool = false,
+    postId,
+    evicted = false,
+  } = options;
 
   const [data, setData] = useState<LyricDanceData | null>(initialData);
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
@@ -46,6 +62,9 @@ export function useLyricDancePlayer(
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const initRef = useRef(false);
   const onReadyRef = useRef(onReady);
+  const slotRef = useRef<ReturnType<typeof acquireCanvasSlot> | null>(null);
+  const pooledBgRef = useRef<HTMLCanvasElement | null>(null);
+  const pooledTextRef = useRef<HTMLCanvasElement | null>(null);
   onReadyRef.current = onReady;
 
   // Keep local data in sync when parent passes new initialData
@@ -66,7 +85,45 @@ export function useLyricDancePlayer(
 
   useEffect(() => {
     if (initRef.current || !dataReady) return;
-    if (!canvasRef.current || !textCanvasRef.current || !containerRef.current) return;
+
+    let slot: ReturnType<typeof acquireCanvasSlot> | null = null;
+    let bgCanvas: HTMLCanvasElement | null = null;
+    let textCanvas: HTMLCanvasElement | null = null;
+
+    if (usePool && postId) {
+      slot = acquireCanvasSlot(postId);
+      if (!slot) {
+        // Pool exhausted — defer init until a slot frees up
+        // (this card stays in cold state)
+        return;
+      }
+      bgCanvas = slot.bg;
+      textCanvas = slot.text;
+      slotRef.current = slot;
+      pooledBgRef.current = bgCanvas;
+      pooledTextRef.current = textCanvas;
+      if (containerRef.current) {
+        if (!containerRef.current.contains(bgCanvas)) {
+          containerRef.current.appendChild(bgCanvas);
+        }
+        if (!containerRef.current.contains(textCanvas)) {
+          containerRef.current.appendChild(textCanvas);
+        }
+      }
+    } else {
+      bgCanvas = canvasRef.current;
+      textCanvas = textCanvasRef.current;
+    }
+
+    if (!bgCanvas || !textCanvas || !containerRef.current) {
+      if (slot && postId) {
+        releaseCanvasSlot(postId);
+        slotRef.current = null;
+        pooledBgRef.current = null;
+        pooledTextRef.current = null;
+      }
+      return;
+    }
 
     initRef.current = true;
     let destroyed = false;
@@ -74,13 +131,10 @@ export function useLyricDancePlayer(
 
     withInitLimit(async () => {
       if (destroyed) return;
-      const p = new LyricDancePlayer(
-        data!,
-        canvasRef.current!,
-        textCanvasRef.current!,
-        containerRef.current as HTMLDivElement,
-        { bootMode, preloadedImages },
-      );
+      const p = new LyricDancePlayer(data!, bgCanvas!, textCanvas!, containerRef.current as HTMLDivElement, {
+        bootMode,
+        preloadedImages,
+      });
       playerRef.current = p;
       // DEBUG: expose player for console inspection
       (window as any).__ldp = p;
@@ -119,6 +173,17 @@ export function useLyricDancePlayer(
     return () => {
       destroyed = true;
       ro?.disconnect();
+      if (slot && postId) {
+        const container = containerRef.current;
+        if (container) {
+          if (container.contains(bgCanvas!)) container.removeChild(bgCanvas!);
+          if (container.contains(textCanvas!)) container.removeChild(textCanvas!);
+        }
+        releaseCanvasSlot(postId);
+      }
+      slotRef.current = null;
+      pooledBgRef.current = null;
+      pooledTextRef.current = null;
       playerRef.current?.destroy();
       playerRef.current = null;
       initRef.current = false;
@@ -126,7 +191,31 @@ export function useLyricDancePlayer(
       setPlayerReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataReady, data?.id]);
+  }, [dataReady, data?.id, usePool, postId]);
+
+  useEffect(() => {
+    if (!evicted) return;
+    const container = containerRef.current;
+    const bgCanvas = pooledBgRef.current;
+    const textCanvas = pooledTextRef.current;
+    if (container && bgCanvas && container.contains(bgCanvas)) {
+      container.removeChild(bgCanvas);
+    }
+    if (container && textCanvas && container.contains(textCanvas)) {
+      container.removeChild(textCanvas);
+    }
+    if (postId) {
+      releaseCanvasSlot(postId);
+    }
+    slotRef.current = null;
+    pooledBgRef.current = null;
+    pooledTextRef.current = null;
+    playerRef.current?.destroy();
+    playerRef.current = null;
+    initRef.current = false;
+    setPlayer(null);
+    setPlayerReady(false);
+  }, [evicted, postId, containerRef]);
 
   // ── Section images hot-patch ──────────────────────────────────────────
   useEffect(() => {
