@@ -765,8 +765,8 @@ export function useLyricPipeline({
         setFitUnlocked(true);
       } else {
         setFitReadiness("running");
-        setFitStageLabel("Generating artwork...");
         setFitProgress(80);
+        setGenerationStatus((prev) => ({ ...prev, sectionImages: "running" }));
       }
 
       import("@/engine/presetDerivation").then(({ deriveFrameState, getTypography }) => {
