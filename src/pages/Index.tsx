@@ -284,6 +284,40 @@ const Index = () => {
     setIsFetchingProject(true);
     setProjectMissing(false);
 
+    // Check localStorage cache first — instant load
+    try {
+      const cached = localStorage.getItem(`tfm:lyric:${projectId}`);
+      if (cached) {
+        const { data: cachedData, ts } = JSON.parse(cached);
+        if (cachedData && Date.now() - ts < 24 * 60 * 60 * 1000) {
+          projectLoadedRef.current = projectId;
+          flushSync(() => {
+            setLoadedLyric(cachedData);
+            setIsFetchingProject(false);
+            setProjectMissing(false);
+          });
+          // Revalidate in background — if DB is newer, update
+          void supabase
+            .from("saved_lyrics")
+            .select("*")
+            .eq("id", projectId)
+            .eq("user_id", user.id)
+            .maybeSingle()
+            .then(({ data }) => {
+              if (cancelled || !data) return;
+              // Update cache and state if data changed
+              try {
+                localStorage.setItem(`tfm:lyric:${projectId}`, JSON.stringify({ data, ts: Date.now() }));
+              } catch {}
+              setLoadedLyric(data);
+            });
+          return;
+        }
+      }
+    } catch {
+      // cache read failed — fall through to network
+    }
+
     (async () => {
       try {
         const { data, error } = await supabase
@@ -303,6 +337,12 @@ const Index = () => {
         }
 
         projectLoadedRef.current = projectId;
+        // Cache for instant load on return
+        try {
+          localStorage.setItem(`tfm:lyric:${projectId}`, JSON.stringify({ data, ts: Date.now() }));
+        } catch {
+          // localStorage full — silent
+        }
         // Commit atomically to avoid intermediate "ready + null" frames.
         flushSync(() => {
           setLoadedLyric(data);

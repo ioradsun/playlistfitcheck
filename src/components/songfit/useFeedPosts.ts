@@ -267,7 +267,7 @@ export function useFeedPosts(): FeedState {
     setPendingNewCount(0);
 
     // ── Fetch lyric data in background — cards show covers while waiting ──
-    // On return visits, lyricDataPrefetch has FULL columns for the first 2 IDs
+    // On return visits, lyricDataPrefetch has FULL columns for uncached lyric IDs
     // (fired at module eval in parallel with feed posts — zero waterfall).
     const lyricIds = filtered.filter((p) => p.lyric_dance_id).map((p) => p.lyric_dance_id as string);
     if (lyricIds.length > 0) {
@@ -276,13 +276,21 @@ export function useFeedPosts(): FeedState {
       let seededMap = new Map(lyricDataMap);
       if (lyricPrefetch) {
         const { data: prefetchedRows } = await lyricPrefetch;
+        const cacheObj: Record<string, any> = {};
         for (const row of (prefetchedRows ?? []) as any[]) {
-          seededMap.set(row.id, {
+          const merged = {
             ...row,
             cinematic_direction: row.cinematic_direction
               ? normalizeCinematicDirection(row.cinematic_direction)
               : row.cinematic_direction,
-          } as LyricDanceData);
+          } as LyricDanceData;
+          seededMap.set(row.id, merged);
+          cacheObj[row.id] = merged;
+        }
+        // Cache prefetched rows so they survive tab switches.
+        if (Object.keys(cacheObj).length > 0) {
+          const existing = getCachedLyricData() ?? {};
+          cacheWrite("lyric_data", { ...existing, ...cacheObj });
         }
       }
       const newMap = await fetchLyricData(lyricIds, seededMap);

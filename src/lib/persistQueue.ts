@@ -64,7 +64,15 @@ class PersistQueue {
           .update({ ...job.payload, updated_at: new Date().toISOString() } as any)
           .eq("id", job.id);
 
-        if (!error) break;
+        if (!error) {
+          // Invalidate localStorage cache for lyric rows so next load is fresh.
+          if (job.table === "saved_lyrics") {
+            try {
+              localStorage.removeItem(`tfm:lyric:${job.id}`);
+            } catch {}
+          }
+          break;
+        }
 
         console.error(
           `[Persist] update failed (${job.table}:${job.id}) attempt ${attempt}/${MAX_RETRIES}`,
