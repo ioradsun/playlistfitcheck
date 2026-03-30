@@ -83,6 +83,7 @@ export function useLyricDancePlayer(
 
   useEffect(() => {
     if (initRef.current || !dataReady) return;
+    if (evicted) return;
 
     let slot: ReturnType<typeof acquireCanvasSlot> | null = null;
     let bgCanvas: HTMLCanvasElement | null = null;
@@ -183,7 +184,7 @@ export function useLyricDancePlayer(
       setPlayerReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataReady, data?.id, usePool, postId]);
+  }, [dataReady, data?.id, usePool, postId, evicted]);
 
   useEffect(() => {
     if (!evicted) return;
