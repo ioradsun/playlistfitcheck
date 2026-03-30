@@ -51,25 +51,7 @@ import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { UseLyricPipelineReturn } from "@/hooks/useLyricPipeline";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { fetchFireStrength } from "@/lib/fire";
-
-const PEAK_SAMPLES = 200;
-
-function extractPeaks(buffer: AudioBuffer, samples: number): number[] {
-  const channel = buffer.getChannelData(0);
-  const blockSize = Math.floor(channel.length / samples);
-  const peaks: number[] = [];
-  for (let i = 0; i < samples; i++) {
-    let max = 0;
-    const start = i * blockSize;
-    for (let j = 0; j < blockSize; j++) {
-      const v = Math.abs(channel[start + j]);
-      if (v > max) max = v;
-    }
-    peaks.push(max);
-  }
-  const maxPeak = Math.max(...peaks, 0.01);
-  return peaks.map((p) => p / maxPeak);
-}
+import { extractPeaks } from "@/lib/audioUtils";
 
 interface Props {
   pipeline: UseLyricPipelineReturn;
@@ -445,7 +427,7 @@ export function FitTab({
         .then((ab) => {
           ctx.decodeAudioData(ab).then((buf) => {
             setWaveform({
-              peaks: extractPeaks(buf, PEAK_SAMPLES),
+              peaks: extractPeaks(buf, 200),
               duration: buf.duration,
             });
             ctx.close();
@@ -2345,4 +2327,3 @@ export function FitTab({
     </>
   );
 }
-
