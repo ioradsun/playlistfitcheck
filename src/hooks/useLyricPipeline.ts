@@ -1028,7 +1028,6 @@ export function useLyricPipeline({
               id: savedIdRef.current,
               payload: {
                 render_data: updatedRenderData,
-                cinematic_direction: enrichedScene,
               },
             });
           }
