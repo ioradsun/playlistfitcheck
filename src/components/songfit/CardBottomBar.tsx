@@ -140,7 +140,7 @@ function FireButton({
         if (panelOpen) onClose();
       }}
       className={`relative flex items-center justify-center px-4 ${minWidth} ${py} shrink-0`}
-      style={{ touchAction: "none" }}
+      style={{ touchAction: "manipulation" }}
     >
       {/* Hold ring */}
       <div
