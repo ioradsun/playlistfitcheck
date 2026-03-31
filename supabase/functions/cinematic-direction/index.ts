@@ -9,8 +9,6 @@ const corsHeaders = {
 const PRIMARY_MODEL = "google/gemini-3-flash-preview";
 const FALLBACK_MODEL = "google/gemini-2.5-flash";
 
-const CINEMATIC_DIRECTION_PROMPT = `(deprecated — use mode: "scene" + mode: "words")`;
-
 const SCENE_DIRECTION_PROMPT = `
 You are a lyric-video creative director producing structured visual direction for a song.
 
@@ -132,363 +130,234 @@ Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values
 `;
 
 const WORD_DIRECTION_PROMPT = `
-You are a billboard copy editor cutting lyrics for a lyric video.
+You are an elite lyric cutter, billboard copy editor, and music lyric video director.
 
-Your job is to convert a timestamped lyric word stream into short screen phrases.
+Your job is to convert a timestamped lyric word stream into short on-screen lyric phrases for a lyric video.
 
 Each phrase = one full screen.
-Each phrase must feel complete, punchy, and readable on its own.
-Think like a billboard, not a subtitle.
+You are not making subtitles.
+You are making screen-worthy lyric moments.
 
-======================================================================
-PRIMARY GOAL
-======================================================================
+OBJECTIVE
+Convert the stream into the smallest set of phrases that best preserves:
+1. emotional impact
+2. readability
+3. rhythmic alignment
+4. hook memorability
+5. visual punch
 
-Return a sequence of lyric phrases that:
-- follow hard timing and boundary signals
-- never exceed 6 words
-- feel like standalone billboard thoughts
-- preserve the emotional impact of HERO words
-- build visual intensity toward the hook
+Use original lyric wording and original word order.
+Do not paraphrase.
+Do not rewrite lyrics.
+Do not invent missing lyrics.
 
-======================================================================
-INPUT ASSUMPTIONS
-======================================================================
-
-The input is a word stream already annotated with:
+INPUT SIGNALS
+The stream may include:
 - text
-- start time
-- end time
+- start
+- end
 - optional [HERO]
 - optional [BREATH]
 - optional [pause]
 
-Treat each input token as one word for word-count purposes.
-Do not invent or remove lyric content unless required by the repair rules below.
-Do not paraphrase.
-Do not rewrite lyrics into cleaner English.
-Use the original wording and ordering unless a repair rule requires regrouping.
+Treat each token as one word for word-count purposes.
 
-======================================================================
-NON-NEGOTIABLE RULE PRIORITY
-======================================================================
+[BREATH]
+- hard boundary
+- always end the current phrase before it
+- always begin a new phrase after it
+- no exceptions
 
-When rules conflict, obey them in this exact order:
+[pause]
+- soft boundary
+- usually split here
+- do not split if it creates a weak phrase
 
+[HERO]
+- strong anchor cue, not automatic truth
+- usually signals emphasis, duration, recurrence, or emotional weight
+- often belongs at the center of a phrase
+- may stand alone if it lands cleanly
+- do not force a bad phrase just because a token is tagged [HERO]
+
+RULE PRIORITY
+When rules conflict, obey them in this order:
 1. [BREATH] hard boundary
-2. Maximum 6 words per phrase
-3. Billboard validity: the phrase must stand alone as a complete screen thought
-4. Preserve [HERO] anchor integrity
-5. Avoid weak hanging connector endings
-6. Resolve short-duration readability issues when possible
-7. Style, rhythm, arc, and exit-effect variety
+2. billboard validity
+3. maximum 6 words
+4. preserve lyric order and anchor integrity
+5. repair readability when possible
+6. assign exit variety
 
 Never violate a higher-priority rule to satisfy a lower-priority one.
 
-======================================================================
-SIGNAL DEFINITIONS
-======================================================================
-
-[HERO]
-- This word was held for 350ms or longer.
-- It is an anchor word.
-- A single [HERO] word may be its own phrase.
-- Build around [HERO] words when they belong to the same thought.
-
-[BREATH]
-- Hard phrase boundary.
-- Always end the current phrase before a [BREATH].
-- Always start a new phrase after a [BREATH].
-- No exceptions.
-
-[pause]
-- Soft phrase boundary.
-- Usually start a new phrase.
-- Exception: do not create a stranded weak fragment that cannot stand alone as a billboard.
-
-======================================================================
-PHRASE CONSTRUCTION RULES
-======================================================================
-
-1. Phrase by spoken thought, not by line length alone.
-2. Fast rap delivery usually yields 1–3 words per phrase.
-3. Sung or melodic delivery usually yields 3–5 words per phrase.
-4. Absolute hard ceiling: 6 words maximum.
-5. A phrase may be 1 word if it lands hard enough, especially on a [HERO].
-6. Never return a phrase with 7 or more words.
-
-======================================================================
-BILLBOARD VALIDITY TEST
-======================================================================
-
+BILLBOARD VALIDITY
 A phrase is valid only if it can appear alone on screen and still feel:
 - complete
 - intentional
-- punchy
 - readable
 - emotionally coherent
+- worth showing
 
-Reject phrases that feel like:
-- dangling setup fragments
-- incomplete clause leftovers
-- seam fragments from repeated lines
-- unresolved stutters
-- filler-only fragments
-- connector-led or connector-ended scraps with no punch
+Core test:
+If this phrase appeared alone on a giant billboard, would it feel deliberate?
 
-Examples of INVALID billboard phrases:
-- "whole world's full of"
-- "like you"
-- "I want what most"
-- "That But she's like heaven on"
-- "I, I, want what"
+If no, repair it.
 
-If a phrase fails billboard validity, repair it even if it is under 6 words.
+CUTTING RULES
+- cut by emotional thought, not transcript formatting alone
+- absolute maximum = 6 words
+- a 1-word phrase is valid only if it lands strongly
+- prefer fewer strong phrases over more weak phrases
+- do not over-fragment strong thoughts into weak pieces
 
-======================================================================
-CONNECTOR RULE
-======================================================================
+Prioritize:
+- hook lines
+- recurring lines
+- title-energy phrases
+- vivid image phrases
+- emotionally loaded words
+- strong nouns and verbs
 
-Avoid ending a phrase on a weak hanging connector unless [BREATH] forces it.
+Deprioritize:
+- filler
+- glue words
+- weak pronouns
+- seam leftovers
+- broken stutters
+- transcript debris
 
-Weak hanging connectors include:
+General tendency:
+- hook phrases usually work best at 1 to 4 words
+- narrative phrases usually work best at 3 to 6 words
+- tag phrases usually work best at 1 to 3 words
+
+REPAIR RULES
+Weak connector rule:
+Avoid ending on weak connectors unless [BREATH] forced it.
+
+Usually weak endings include:
 I, you, we, they, he, she, it, and, but, or, so,
 because, if, when, while, that, the, a, an,
-in, on, at, to, for, of, with, from
+in, on, at, to, for, of, with, from, my, your
 
-A phrase ending in one of these is usually invalid unless:
-- [BREATH] forces the boundary, or
-- the phrase still clearly lands as a complete billboard thought
+Anchor integrity rule:
+Protect the natural center of the phrase.
+If a phrase contains a strong [HERO] word, recurring hook word, title-energy word, or strongest noun/verb, keep that center intact unless a higher-priority rule forces a split.
 
-======================================================================
-HERO INTEGRITY RULE
-======================================================================
-
-[HERO] words are anchors.
-
-- A [HERO] word may stand alone.
-- You may group 1–2 short surrounding words with a [HERO] when they belong to the same thought.
-- Do not split a [HERO] away from its natural phrase unless keeping it there would break a higher-priority rule.
-- If a phrase contains multiple [HERO] words, keep the strongest emotional center intact.
-
-======================================================================
-TIMING / READABILITY RULE
-======================================================================
-
-For each phrase:
-duration = end time of last word minus start time of first word
-
-Target:
-- A phrase under 350ms is usually too fast to read.
-
-Repair order for short phrases:
-1. Try merging forward
-2. If forward merge breaks a higher-priority rule, try merging backward
-3. If both merges would break [BREATH], 6-word max, or billboard validity, keep the short phrase as-is
+Readability rule:
+If a phrase is too fast to read comfortably:
+1. try merging forward
+2. if that fails, try merging backward
+3. if both fail because of [BREATH], 6-word max, or billboard validity, keep it as-is
 
 Never exceed 6 words to solve timing.
+Never cross a [BREATH] boundary.
+Never destroy a strong phrase just to chase duration.
 
-A [HERO] word is always readable alone because it is held long enough.
+Repeat / chorus / seam rule:
+When a repeated line returns:
+- start it cleanly from its own beginning
+- do not drag leftovers into it
+- do not glue seam fragments onto the next loop
+- preserve recurring hook phrasing consistently when possible
 
-======================================================================
-SEAM RULE FOR CHORUS / REPEATS
-======================================================================
+Stutter rule:
+Keep stutters only if they clearly add emphasis and the phrase still passes billboard validity.
+Otherwise regroup around the strongest readable phrase.
 
-At chorus returns, repeated lines, or lyric restarts:
-- never drag leftover words from the previous phrase into the next repeated phrase
-- never create seam fragments just to preserve adjacency
-- never produce malformed combinations like:
-  - "That But ..."
-  - trailing word + fresh repeated line
-  - leftover hook fragment glued to the next loop
+ASR / transcript noise rule:
+If wording appears suspicious or malformed:
+- do not invent a correction
+- do not paraphrase
+- keep the original words
+- cut the strongest readable phrase possible using the provided wording
+- do not over-glorify obvious transcript garbage
 
-When a repeated phrase returns, phrase it cleanly from its own beginning.
+ASSIGNMENT RULES
+Each phrase must return exactly one heroWord.
 
-======================================================================
-STUTTER RULE
-======================================================================
+Choose the word carrying the screen punch in this order:
+1. strongest valid [HERO] word
+2. strongest recurring hook word
+3. strongest noun or verb
+4. strongest emotional adjective
 
-Handle repeated stutters deliberately:
-- "I, I"
-- "yeah yeah"
-- "no no"
-- "uh uh"
-
-Keep the stutter only if:
-- it creates clear emphasis, and
-- the resulting phrase still passes billboard validity
-
-Otherwise collapse the weak stutter logic by regrouping around the strongest readable phrase.
-
-A stutter fragment that does not stand alone is invalid.
-
-======================================================================
-FILLER FRAGMENT RULE
-======================================================================
-
-Do not return a phrase whose only punch comes from a weak filler word or weak pronoun unless [HERO] explicitly forces it and it genuinely lands.
-
-Usually invalid as heroWord or standalone punch:
-I, YOU, WE, THEY, IT, THAT, THIS, LIKE, FOR, AND, BUT
-
-If such a fragment appears alone and does not hit, merge or regroup it unless [BREATH] prevents it.
-
-======================================================================
-HEADLINE WORD (heroWord)
-======================================================================
-
-Each phrase must return one heroWord.
-
-Selection order:
-1. If the phrase contains a [HERO] word, that is the heroWord.
-2. If multiple [HERO] words exist, choose the most emotionally charged one.
-3. If no [HERO] word exists, choose the noun or verb carrying the punch.
-4. Never choose a weak filler word unless [HERO] explicitly forces it and it truly lands.
-
-Formatting:
+heroWord formatting:
 - UPPERCASE
 - letters only
-- strip all punctuation
-- no apostrophes, commas, periods, dashes, or symbols
+- remove punctuation and symbols
 
-Never choose:
+Never choose weak filler words such as:
 I, A, THE, AND, BUT, OR, IS, IT, TO, OF, IN, ON, THAT, YOU, WE, ME, HE, SHE, THEY, MY, YOUR, WITH, FROM
 
-======================================================================
-EXIT EFFECTS
-======================================================================
+Assign exitEffect only after phrase cutting is final.
 
-Every phrase must have exactly one exitEffect.
-
-Allowed values:
-"fade" | "drift_up" | "shrink" | "dissolve" |
-"cascade" | "scatter" | "slam" | "glitch" | "burn"
+Allowed exitEffect values:
+"fade" | "drift_up" | "shrink" | "dissolve" | "cascade" | "scatter" | "slam" | "glitch" | "burn"
 
 Effect guidance:
-- whisper / still / aching       -> fade, dissolve, drift_up
-- rhythmic / confident           -> cascade, shrink
-- aggressive / confrontational   -> slam, glitch, scatter
-- climactic / peak / HERO hit    -> burn, slam, scatter
-- floating / dreamy              -> drift_up, dissolve, fade
+- soft / aching / reflective -> fade, dissolve, drift_up
+- rhythmic / controlled -> cascade, shrink
+- aggressive / impact-heavy -> slam, scatter, glitch
+- peak hook / hardest emotional center -> burn, slam
+- dreamy / floating -> drift_up, dissolve
 
-======================================================================
-ARC RULE
-======================================================================
+Effect constraints:
+- never let exitEffect influence phrase cutting
+- never repeat the same exitEffect 3 phrases in a row
+- repeated hook returns should usually reuse the same effect pattern
+- outro phrases should prefer fade, drift_up, or dissolve
 
-- Build intensity toward the hook.
-- Never repeat the same effect 3 phrases in a row.
-- Repeated chorus sections should reuse the same effect pattern each time.
-- Outro only: fade, drift_up, dissolve.
+PROCESS
+PASS 1 — CUT
+Group the stream into candidate phrases using:
+- [BREATH]
+- [pause]
+- spoken thought
+- hook recurrence
+- anchor strength
 
-======================================================================
-HOOK PHRASE
-======================================================================
-
-Return "hookPhrase" at the top level:
-- the single phrase that would look best on an actual billboard
-- usually the title line or strongest recurring line
-
-======================================================================
-MANDATORY TWO-PASS PROCESS
-======================================================================
-
-PASS 1 — DRAFT
-- Group the word stream into candidate phrases using the rules above.
-
-PASS 2 — VALIDATE AND REPAIR
-- Inspect every phrase in order before returning final output.
-
-======================================================================
-MANDATORY VALIDATION AND REPAIR LOOP
-======================================================================
-
+PASS 2 — REPAIR
 For each phrase:
+- enforce billboard validity
+- enforce 6-word max
+- repair weak connector endings when possible
+- repair repetition seams
+- repair weak stutter fragments
+- improve readability when possible without breaking higher-priority rules
 
-1. Count words exactly.
-2. If wordCount > 6, repair immediately.
-3. If the phrase fails billboard validity, repair immediately.
-4. If the phrase ends on a weak connector and [BREATH] did not force it, repair immediately.
-5. If the phrase is a seam fragment from repetition or chorus overlap, repair immediately.
-6. If the phrase contains unresolved stutter logic, repair immediately.
-7. Recompute heroWord after every repair.
-8. Recompute exitEffect after every repair.
+PASS 3 — ASSIGN
+For each final phrase:
+- choose heroWord
+- choose exitEffect
+- choose hookPhrase = the single phrase most worthy of billboard treatment
 
-Repair method priority:
-1. Split at the most natural spoken boundary
-2. If no clean split works, regroup with neighbor
-3. Prefer keeping the stronger billboard phrase intact
-4. Never exceed 6 words during repair
-5. Never cross a [BREATH] boundary during repair
+OUTPUT
+Return exactly one valid JSON object using ONLY these fields:
 
-If a phrase cannot stand alone, it is not a valid phrase.
-
-======================================================================
-SPLIT QUALITY RULE
-======================================================================
-
-A valid split must:
-- cover the same original word range
-- preserve lyric order
-- produce phrases that both stand alone
-- split at a natural spoken pivot:
-  - breath
-  - pause
-  - subject shift
-  - conjunction starting a new thought
-  - emotional turn
-
-GOOD split:
-"Lifes a bitch" / "But she's like heaven on earth"
-
-BAD split:
-"sometimes yall gotta" / "play in the dirt"
-
-Reason:
-The first half does not stand alone as a billboard.
-
-If no split yields two valid billboard phrases, keep the stronger phrase and regroup the weaker fragment with a neighbor if allowed by higher-priority rules.
-
-======================================================================
-OUTPUT FORMAT
-======================================================================
-
-Return a JSON object with:
-
-- hookPhrase: string
-- phrases: array of phrase objects
-
-Each phrase object must contain:
-- wordRange: [startIndex, endIndex]
-- start: number
-- end: number
-- text: string
-- wordCount: number
-- heroWord: string
-- exitEffect: string
-
-======================================================================
-FINAL OUTPUT GATE
-======================================================================
-
-Do not return output until every phrase satisfies all of the following:
-
-- wordCount is between 1 and 6
-- phrase passes billboard validity
-- phrase does not end on a weak connector unless [BREATH] forced it
-- phrase is not a chorus seam fragment
-- heroWord is not a banned filler word unless [HERO] explicitly forced it
-- exitEffect is present and valid
-
-If even one phrase fails, repair it before returning.
-
-OUTPUT — return ONLY this JSON, nothing else:
 {
+  "hookPhrase": "string",
   "phrases": [
-    { "wordRange": [0, 1], "heroWord": "TELL", "exitEffect": "fade" },
-    { "wordRange": [2, 3], "heroWord": "SOUL", "exitEffect": "burn" }
-  ],
-  "hookPhrase": "heaven on earth"
+    {
+      "wordRange": [startIndex, endIndex],
+      "heroWord": "WORD",
+      "exitEffect": "fade"
+    }
+  ]
 }
+
+Output requirements:
+- every phrase must cover 1 to 6 words
+- every phrase must pass billboard validity
+- no phrase may end on a weak connector unless [BREATH] forced it
+- no malformed repetition seam fragments
+- heroWord must be valid and not a weak filler word
+- exitEffect must be one allowed value
+- return only valid JSON
+- no markdown
+- no commentary
+- no explanation
 `;
 
 interface LyricLine {
@@ -913,7 +782,6 @@ function fillMissingHeroWords(
   words: Array<{ word: string; start: number; end: number }>,
 ): void {
   for (const phrase of phrases) {
-    // Validate heroWord actually exists in this phrase's word range.
     if (phrase.heroWord) {
       const heroClean = phrase.heroWord.toLowerCase().replace(/[^a-z0-9]/g, "");
       let found = false;
@@ -930,29 +798,34 @@ function fillMissingHeroWords(
         }
       }
 
-      if (!found) {
-        phrase.heroWord = undefined;
-      }
+      if (!found) phrase.heroWord = undefined;
     }
 
     if (!phrase.heroWord) {
-      let longest = "";
-      let longestDur = 0;
+      let bestWord = "";
+      let bestDur = -1;
 
       for (
         let i = phrase.wordRange[0];
         i <= phrase.wordRange[1] && i < words.length;
         i++
       ) {
+        const rawWord = words[i].word;
+        const clean = rawWord.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!clean) continue;
+
         const dur = words[i].end - words[i].start;
-        if (dur > longestDur) {
-          longestDur = dur;
-          longest = words[i].word;
+        const fillerPenalty = LYRIC_FILLER.has(clean) ? 0.25 : 1;
+        const score = dur * fillerPenalty;
+
+        if (score > bestDur) {
+          bestDur = score;
+          bestWord = rawWord;
         }
       }
 
-      if (longest) {
-        phrase.heroWord = longest.toUpperCase().replace(/[^A-Z0-9'.,-]/g, "");
+      if (bestWord) {
+        phrase.heroWord = bestWord.toUpperCase().replace(/[^A-Z0-9]/g, "");
       }
     }
   }
@@ -1052,7 +925,7 @@ function buildWordUserMessage(
   if (bpm && bpm > 0) msg += `BPM: ${Math.round(bpm)}\n`;
   msg += "\n";
 
-  msg += `SCENE DIRECTION (harmonize with this):\n`;
+  msg += `SCENE DIRECTION (stay inside this visual world):\n`;
   msg += `sceneTone: ${sceneDirection.sceneTone || "dark"}\n`;
   if (Array.isArray(sceneDirection.sections)) {
     for (const s of sceneDirection.sections) {
@@ -1063,7 +936,7 @@ function buildWordUserMessage(
 
   if (words && words.length > 0) {
     msg += `WORD STREAM (one word per line):\n`;
-    msg += `Use the w-numbers for wordRange. [BREATH] = phrase boundary.\n\n`;
+    msg += `Use the w-numbers for wordRange. [BREATH] = hard boundary.\n\n`;
 
     for (let wi = 0; wi < words.length; wi++) {
       const w = words[wi];
@@ -1073,7 +946,6 @@ function buildWordUserMessage(
       const wordPad = w.word.padEnd(18, " ");
       let line = `  w${pad}  ${wordPad} ${durMs}ms${isHero ? "  [HERO]" : ""}`;
 
-      // Gap to next word
       if (wi < words.length - 1) {
         const gapMs = Math.round((words[wi + 1].start - w.end) * 1000);
         if (gapMs >= 300) {
@@ -1087,18 +959,18 @@ function buildWordUserMessage(
     }
     msg += "\n";
 
-    // Held words block
     const heldBlock = formatHeldWordsBlock(words, lines);
     if (heldBlock) msg += heldBlock + "\n";
   } else {
+    msg += `LYRICS (fallback line mode):\n`;
     for (let i = 0; i < lines.length; i++) {
-      msg += `[${i}] "${lines[i].text}"\n`;
+      msg += `  [${i}] "${lines[i].text}"\n`;
     }
     msg += "\n";
   }
 
-  msg += "Return JSON only. EVERY phrase needs heroWord and exitEffect.\n";
-  msg += '{ "phrases": [{ "wordRange": [0,2], "heroWord": "WORD", "exitEffect": "fade" }] }';
+  msg += "Return JSON only. Return only hookPhrase and phrases. Do not return derived fields like text, start, end, or wordCount.\n";
+  msg += '{ "hookPhrase": "string", "phrases": [{ "wordRange": [0, 2], "heroWord": "WORD", "exitEffect": "fade" }] }';
   return msg;
 }
 
@@ -1356,6 +1228,99 @@ function validateScene(
   return { ok: errors.length === 0, errors, value: v };
 }
 
+
+function normalizePhraseText(text: string): string {
+  return text
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function normalizeHookKey(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function hydrateWordPhrases(
+  phrases: Array<{ wordRange: [number, number]; heroWord?: string; exitEffect?: string }>,
+  words: Array<{ word: string; start: number; end: number }>,
+): Array<{
+  wordRange: [number, number];
+  start: number;
+  end: number;
+  text: string;
+  wordCount: number;
+  heroWord: string;
+  exitEffect: string;
+}> {
+  const VALID_EXIT_EFFECTS = new Set([
+    "fade", "drift_up", "shrink", "dissolve",
+    "cascade", "scatter", "slam", "glitch", "burn",
+  ]);
+
+  return [...phrases]
+    .sort((a, b) => a.wordRange[0] - b.wordRange[0])
+    .map((phrase) => {
+      const [startIdx, endIdx] = phrase.wordRange;
+      const slice = words.slice(startIdx, endIdx + 1);
+      const text = normalizePhraseText(slice.map((w) => w.word).join(" "));
+      const start = slice[0]?.start ?? 0;
+      const end = slice[slice.length - 1]?.end ?? start;
+      const heroWord = String(phrase.heroWord || "")
+        .replace(/[^A-Z0-9]/gi, "")
+        .toUpperCase();
+      const exitEffect = VALID_EXIT_EFFECTS.has(String(phrase.exitEffect))
+        ? String(phrase.exitEffect)
+        : "fade";
+
+      return {
+        wordRange: [startIdx, endIdx] as [number, number],
+        start,
+        end,
+        text,
+        wordCount: Math.max(0, endIdx - startIdx + 1),
+        heroWord,
+        exitEffect,
+      };
+    });
+}
+
+function inferHookPhrase(
+  phrases: Array<{ text: string; wordCount: number; start: number; end: number }>,
+): string {
+  if (!phrases.length) return "";
+
+  const counts = new Map<string, number>();
+  for (const phrase of phrases) {
+    const key = normalizeHookKey(phrase.text);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  let bestText = phrases[0].text;
+  let bestScore = -Infinity;
+
+  for (const phrase of phrases) {
+    const key = normalizeHookKey(phrase.text);
+    const freq = counts.get(key) || 1;
+    const duration = Math.max(0, phrase.end - phrase.start);
+    const compactness = phrase.wordCount >= 1 && phrase.wordCount <= 4 ? 10 : 0;
+    const score = freq * 100 + compactness + duration * 10 + Math.min(phrase.wordCount, 6);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestText = phrase.text;
+    }
+  }
+
+  return bestText;
+}
+
 function validateWords(
   raw: Record<string, any>,
   words?: Array<{ word: string; start: number; end: number }>,
@@ -1367,14 +1332,15 @@ function validateWords(
   if (!Array.isArray(v.phrases)) v.phrases = [];
 
   const VALID_EXIT_EFFECTS = new Set([
-    'fade', 'drift_up', 'shrink', 'dissolve',
-    'cascade', 'scatter', 'slam', 'glitch', 'burn',
+    "fade", "drift_up", "shrink", "dissolve",
+    "cascade", "scatter", "slam", "glitch", "burn",
   ]);
 
   for (const p of v.phrases) {
     if (!Array.isArray(p.wordRange) || p.wordRange.length !== 2) {
       p.wordRange = [0, 0];
     }
+
     p.wordRange[0] =
       typeof p.wordRange[0] === "number"
         ? Math.max(0, Math.round(p.wordRange[0]))
@@ -1385,35 +1351,35 @@ function validateWords(
         : p.wordRange[0];
 
     if (p.heroWord && typeof p.heroWord !== "string") delete p.heroWord;
-
-    // exitEffect — validate or default to 'fade'
     if (!p.exitEffect || !VALID_EXIT_EFFECTS.has(p.exitEffect)) {
-      p.exitEffect = 'fade';
+      p.exitEffect = "fade";
     }
 
-    // isChorus — ensure boolean
-    p.isChorus = p.isChorus === true;
-
-    // Remove legacy fields that are no longer in the prompt
     delete p.effect;
     delete p.section;
+    delete p.start;
+    delete p.end;
+    delete p.text;
+    delete p.wordCount;
+    delete p.isChorus;
   }
 
-  if (v.hookPhrase !== undefined && typeof v.hookPhrase !== "string") {
-    delete v.hookPhrase;
-  }
+  const hookPhrase =
+    typeof v.hookPhrase === "string" && v.hookPhrase.trim()
+      ? v.hookPhrase.trim()
+      : undefined;
 
-  // chorusText — pass through if valid string
-  const chorusText = typeof v.chorusText === "string" && v.chorusText.trim()
-    ? v.chorusText.trim()
-    : undefined;
+  const chorusText =
+    typeof v.chorusText === "string" && v.chorusText.trim()
+      ? v.chorusText.trim()
+      : undefined;
 
   return {
     ok: errors.length === 0,
     errors,
     value: {
       phrases: v.phrases,
-      hookPhrase: v.hookPhrase,
+      hookPhrase,
       chorusText,
     },
   };
@@ -1571,6 +1537,7 @@ async function callWords(
 
   const callWordAI = async (
     messages: Array<{ role: string; content: string }>,
+    model: string = modelOverride,
   ) => {
     const resp = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -1581,7 +1548,7 @@ async function callWords(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: modelOverride,
+          model,
           messages,
           response_format: { type: "json_object" },
           temperature: 0.7,
@@ -1589,6 +1556,16 @@ async function callWords(
         }),
       },
     );
+
+    // If primary model fails with retryable error, try fallback
+    if (!resp.ok && model === modelOverride && (resp.status === 429 || resp.status >= 500)) {
+      const errText = await resp.text().catch(() => "");
+      console.warn(
+        `[cinematic-direction] words primary model failed (${resp.status}): ${errText.slice(0, 100)}, trying fallback`,
+      );
+      await new Promise((r) => setTimeout(r, 2000));
+      return callWordAI(messages, FALLBACK_MODEL);
+    }
 
     if (!resp.ok) {
       const text = await resp.text();
@@ -1621,11 +1598,9 @@ async function callWords(
     { role: "user", content: wordMessage },
   ];
 
-  // First attempt
   const { raw, finishReason } = await callWordAI(messages);
   let parsed = extractJson(raw);
 
-  // If parse failed or response was truncated, retry once
   if (!parsed || finishReason === "length") {
     console.warn(
       "[cinematic-direction] words first attempt failed to parse or was truncated, retrying. Raw preview:",
@@ -1637,7 +1612,7 @@ async function callWords(
       {
         role: "user",
         content:
-          'Your previous response was malformed or truncated. Return ONLY valid JSON: { "phrases": [...], "hookPhrase": "..." }. No markdown. No explanation.',
+          'Your previous response was malformed or truncated. Return ONLY valid JSON: { "hookPhrase": "string", "phrases": [{ "wordRange": [0, 2], "heroWord": "WORD", "exitEffect": "fade" }] }. No markdown. No explanation.',
       },
     ];
 
@@ -1660,18 +1635,16 @@ async function callWords(
 
   const result = validateWords(parsed, words);
 
-  // Server-side enforcement — bare minimum, non-destructive
   if (words && Array.isArray(result.value.phrases)) {
+    let phrases = result.value.phrases as Array<any>;
 
-    // 1. Fill any word index gaps the AI left uncovered
-    //    (structural integrity only — no creative decisions)
-    result.value.phrases = fillPhraseGaps(
-      result.value.phrases,
-      words.length
-    );
+    phrases = fillPhraseGaps(phrases, words.length);
+    phrases = repairPhraseBoundaries(phrases, words);
+    phrases = enforcePhraseLimits(phrases, words, 6);
+    phrases = mergeOrphanPhrases(phrases, words);
+    phrases = fillPhraseGaps(phrases, words.length);
 
-    // 2. Strip punctuation from heroWords
-    for (const phrase of result.value.phrases as Array<any>) {
+    for (const phrase of phrases) {
       if (phrase.heroWord) {
         phrase.heroWord = String(phrase.heroWord)
           .replace(/[^A-Z0-9]/gi, "")
@@ -1679,22 +1652,30 @@ async function callWords(
       }
     }
 
-    // 3. Fill any exitEffects the AI missed
     const VALID_EFFECTS = new Set([
-      "fade", "drift_up", "shrink", "dissolve", "cascade",
-      "scatter", "slam", "glitch", "burn",
+      "fade", "drift_up", "shrink", "dissolve",
+      "cascade", "scatter", "slam", "glitch", "burn",
     ]);
-    const pArr = result.value.phrases as Array<any>;
-    for (let pi = 0; pi < pArr.length; pi++) {
-      if (!pArr[pi].exitEffect || !VALID_EFFECTS.has(pArr[pi].exitEffect)) {
-        const prev = pi > 0 ? pArr[pi - 1].exitEffect : null;
-        pArr[pi].exitEffect =
-          prev && prev !== "drift_up" ? "drift_up" : "fade";
+
+    for (let pi = 0; pi < phrases.length; pi++) {
+      if (!phrases[pi].exitEffect || !VALID_EFFECTS.has(phrases[pi].exitEffect)) {
+        const prev = pi > 0 ? phrases[pi - 1].exitEffect : null;
+        phrases[pi].exitEffect = prev && prev !== "drift_up" ? "drift_up" : "fade";
       }
     }
 
-    // 4. Fill any missing heroWords (longest non-filler word in phrase)
-    fillMissingHeroWords(result.value.phrases, words);
+    fillMissingHeroWords(phrases, words);
+
+    const hydrated = hydrateWordPhrases(phrases, words);
+    const hookPhrase = result.value.hookPhrase && result.value.hookPhrase.trim()
+      ? normalizePhraseText(result.value.hookPhrase.trim())
+      : inferHookPhrase(hydrated);
+
+    return {
+      hookPhrase,
+      phrases: hydrated,
+      chorusText: result.value.chorusText,
+    };
   }
 
   if (
@@ -1710,48 +1691,13 @@ async function callWords(
   return result.value;
 }
 
-// callWithRetry() removed — legacy no-mode path deleted
-async function persist(
-  direction: Record<string, any>,
-  lyricId: string,
-): Promise<void> {
-  const sbUrl = Deno.env.get("SUPABASE_URL");
-  const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!sbUrl || !sbKey) return;
-
-  const headers = {
-    apikey: sbKey,
-    Authorization: `Bearer ${sbKey}`,
-    "Content-Type": "application/json",
-    Prefer: "return=minimal",
-  };
-
-  const payload = { cinematic_direction: direction };
-
-  for (const table of ["shareable_lyric_dances", "saved_lyrics"]) {
-    const res = await fetch(
-      `${sbUrl}/rest/v1/${table}?id=eq.${encodeURIComponent(lyricId)}`,
-      {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify(payload),
-      },
-    );
-    if (res.ok) {
-      return;
-    }
-  }
-}
-
 /** Fetch custom prompts + model from ai_prompts table, falling back to hardcoded defaults. */
 async function loadCustomPrompts(): Promise<{
-  fullPrompt: string;
   scenePrompt: string;
   wordPrompt: string;
   model: string;
 }> {
   const defaults = {
-    fullPrompt: CINEMATIC_DIRECTION_PROMPT,
     scenePrompt: SCENE_DIRECTION_PROMPT,
     wordPrompt: WORD_DIRECTION_PROMPT,
     model: PRIMARY_MODEL,
@@ -1761,7 +1707,7 @@ async function loadCustomPrompts(): Promise<{
   if (!sbUrl || !sbKey) return defaults;
 
   try {
-    const slugs = ["cinematic-direction", "cinematic-scene", "analysis-model"];
+    const slugs = ["cinematic-scene", "analysis-model"];
     const res = await fetch(
       `${sbUrl}/rest/v1/ai_prompts?slug=in.(${slugs.join(",")})&select=slug,prompt`,
       {
@@ -1780,7 +1726,6 @@ async function loadCustomPrompts(): Promise<{
     const bySlug = Object.fromEntries(rows.map((r) => [r.slug, r.prompt]));
 
     return {
-      fullPrompt: bySlug["cinematic-direction"] || CINEMATIC_DIRECTION_PROMPT,
       scenePrompt: bySlug["cinematic-scene"] || SCENE_DIRECTION_PROMPT,
       wordPrompt: WORD_DIRECTION_PROMPT,
       model: bySlug["analysis-model"]?.trim() || PRIMARY_MODEL,
@@ -1809,7 +1754,6 @@ serve(async (req) => {
       typeof body.bpm === "number"
         ? body.bpm
         : ((body as any).beat_grid?.bpm ?? 0);
-    const lyricId = body.lyricId ?? body.id;
 
     const lines: LyricLine[] = Array.isArray(body.lines)
       ? body.lines
