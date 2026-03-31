@@ -855,7 +855,7 @@ async function runGeminiTranscribe(
 
   
 
-  return { words, segments, rawText, duration };
+  return { words, segments, rawText, duration, rawWordsFull: [] };
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
