@@ -1086,7 +1086,7 @@ serve(async (req) => {
             input: { model: transcriptionEngine, format: ext, mimeType, estimatedMB: Math.round(estimatedBytes / 1024 / 1024 * 10) / 10 },
             output: {
               wordCount: words.length,
-              normalizedWordCount: words.filter(w => w.end - w.start <= 3.0).length,
+              normalizedWordCount: words.filter((w: any) => w.end - w.start <= 3.0).length,
               segmentCount: segments.length,
               duration,
               rawText: rawText.slice(0, 1000),
