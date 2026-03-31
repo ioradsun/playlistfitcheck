@@ -344,7 +344,7 @@ export function useLyricDanceCore({
     setMuted(false);
   }, [player, onPlay]);
 
-  const handleCommentFromBar = useCallback(async (noteText: string) => {
+  const handleCommentFromBar = useCallback(async (noteText: string, momentIndex?: number | null) => {
     const text = noteText.trim();
     if (!text) return;
     const danceId = fetchedData?.id;
@@ -355,6 +355,7 @@ export function useLyricDanceCore({
         text,
         session_id: getSessionId(),
         line_index: activeLineRef.current?.lineIndex ?? null,
+        moment_index: momentIndex ?? null,
         parent_comment_id: null,
       });
     } catch {
@@ -445,5 +446,6 @@ export function useLyricDanceCore({
     topReaction,
     isWaiting,
     commentRefreshKey,
+    setCommentRefreshKey,
   };
 }
