@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { sessionAudio } from "@/lib/sessionAudioCache";
+import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { MixProjectData } from "@/hooks/useMixProjectStorage";
 import { useScrollRestore } from "@/hooks/useScrollRestore";
 import { useProjectScreen } from "@/hooks/useProjectScreen";
@@ -1229,6 +1230,7 @@ const Index = () => {
                 ? "h-full overflow-y-auto snap-y snap-mandatory overscroll-y-contain"
                 : "min-h-0 overflow-y-auto px-4 py-6",
             )}
+            onTouchStart={reelsMode ? () => unlockAudio() : undefined}
           >
             <Suspense fallback={<PageSkeleton tool="songfit" mode="new" />}>
               <SongFitTab reelsMode={reelsMode} />

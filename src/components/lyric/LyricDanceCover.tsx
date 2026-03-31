@@ -73,8 +73,7 @@ export function LyricDanceCover({
       {/* Song title + Listen Now */}
       <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ marginBottom: 24 }}>
         {isMarketingCover ? (
-          <button
-            onClick={(e) => e.stopPropagation()}
+          <div
             className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
             style={{
               color: waiting ? "transparent" : "rgba(255,255,255,1)",
@@ -83,7 +82,7 @@ export function LyricDanceCover({
             }}
           >
             {`${(claimSongName || songName || "Lyric").trim()} Dance`}
-          </button>
+          </div>
         ) : (
           <>
             {songName ? (
@@ -93,8 +92,7 @@ export function LyricDanceCover({
             ) : (
               <div className="h-4 mb-4" />
             )}
-            <button
-              onClick={(e) => e.stopPropagation()}
+            <div
               className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
               style={{
                 color: waiting ? "transparent" : "rgba(255,255,255,1)",
@@ -103,7 +101,7 @@ export function LyricDanceCover({
               }}
             >
               Listen Now
-            </button>
+            </div>
           </>
         )}
       </div>

@@ -250,7 +250,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (cardState === "active") setForceDemoted(false);
   }, [cardState]);
 
-  // ── Reset cover + deactivate when card goes cold ───────────────────
+  // ── Reset cover + deactivate when card leaves active ───────────────
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) return;
     if (cardState === "cold") {
@@ -261,8 +261,14 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           detail: { cardId: postId },
         }));
       }
+    } else if (reelsMode && cardState === "warm") {
+      // Reels: restore cover when swiped away (warm = adjacent card).
+      // Next time this card enters center, the auto-dismiss effect
+      // will clear the cover if audio is already unlocked.
+      setShowCover(true);
+      userActivatedRef.current = false;
     }
-  }, [cardState, isFeedEmbed, isBattleMode, lyricDanceId, setShowCover]);
+  }, [cardState, isFeedEmbed, isBattleMode, lyricDanceId, setShowCover, reelsMode]);
 
   // ── Audio / mute driven purely by cardState ────────────────────────
   useEffect(() => {
