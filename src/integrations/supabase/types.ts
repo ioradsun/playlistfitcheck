@@ -1956,7 +1956,6 @@ export type Database = {
           lyric_dance_id: string | null
           lyric_dance_url: string | null
           peak_rank: number | null
-          palette: Json | null
           preview_url: string | null
           release_date: string | null
           spotify_track_id: string | null
@@ -1986,7 +1985,6 @@ export type Database = {
           lyric_dance_id?: string | null
           lyric_dance_url?: string | null
           peak_rank?: number | null
-          palette?: Json | null
           preview_url?: string | null
           release_date?: string | null
           spotify_track_id?: string | null
@@ -2016,7 +2014,6 @@ export type Database = {
           lyric_dance_id?: string | null
           lyric_dance_url?: string | null
           peak_rank?: number | null
-          palette?: Json | null
           preview_url?: string | null
           release_date?: string | null
           spotify_track_id?: string | null
