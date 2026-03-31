@@ -366,7 +366,6 @@ export function usePipelineScheduler({
         id: savedIdRef.current,
         payload: {
           render_data: { cinematicDirection: null },
-          cinematic_direction: null,
           section_images: null,
         },
       });
