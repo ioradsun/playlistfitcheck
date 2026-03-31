@@ -19,9 +19,11 @@ import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
+import { ReelsGestureLayer } from "./ReelsGestureLayer";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
+import { isAudioUnlocked, onAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
@@ -96,6 +98,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   //
   // Non-feed embeds (shareable, FitTab) never evict.
   const [evicted, setEvicted] = useState(true);
+  const [reelsPaused, setReelsPaused] = useState(false);
   const warmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -113,13 +116,18 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       if (warmTimerRef.current) { clearTimeout(warmTimerRef.current); warmTimerRef.current = null; }
       if (!evicted) setEvicted(true);
     } else {
-      // warm (visible) — debounce creation so fast-scroll cards never create players
-      if (warmTimerRef.current) return; // already pending
-      if (!evicted) return; // already have a player
-      warmTimerRef.current = setTimeout(() => {
-        warmTimerRef.current = null;
-        setEvicted(false);
-      }, 200);
+      if (reelsMode) {
+        // Reels: create immediately — snap scroll = only 1-2 warm cards at once
+        if (evicted) setEvicted(false);
+      } else {
+        // Standard: debounce so fast-scroll cards don't create players
+        if (warmTimerRef.current) return;
+        if (!evicted) return;
+        warmTimerRef.current = setTimeout(() => {
+          warmTimerRef.current = null;
+          setEvicted(false);
+        }, 200);
+      }
     }
 
     return () => {
@@ -128,7 +136,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         warmTimerRef.current = null;
       }
     };
-  }, [cardState, isFeedEmbed, isBattleMode, evicted]);
+  }, [cardState, isFeedEmbed, isBattleMode, evicted, reelsMode]);
 
   // Patch region onto prefetchedData for battle mode
   const prefetchedDataWithRegion = useMemo(() => {
@@ -274,18 +282,24 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       }
       return;
     }
-    // ── Reels mode: binary active/inactive ──
+    // ── Reels mode ──
     if (reelsMode && isFeedEmbed) {
-      if (cardState === "active") {
+      if (cardState === "active" && !reelsPaused) {
         player.setCoverMode(false);
         player.play();
-        player.setMuted(false);
-        setMuted(false);
+        // Unmute only if user has provided a gesture (cover tap or previous card)
+        if (isAudioUnlocked()) {
+          player.setMuted(false);
+          setMuted(false);
+        } else {
+          // No gesture yet — play muted, cover is still showing for gesture
+          player.setMuted(true);
+          setMuted(true);
+        }
       } else {
-        // Not active in reels → mute and pause immediately
         player.setMuted(true);
         setMuted(true);
-        if (cardState === "cold") {
+        if (cardState === "cold" || reelsPaused) {
           player.pause();
         }
       }
@@ -316,13 +330,26 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player.setMuted(true);
       setMuted(true);
     }
-  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen, reelsMode]);
+  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen, reelsMode, reelsPaused]);
 
-  // ── Reels: ensure showCover is false so audio logic doesn't gate on it ──
+  // ── Reels: auto-dismiss cover when audio is already unlocked ──
+  // First card: cover stays (user must tap to unlock audio)
+  // Card 2+: audio already unlocked → dismiss cover immediately → auto-play
   useEffect(() => {
     if (!reelsMode || !isFeedEmbed) return;
-    if (showCover) setShowCover(false);
-  }, [reelsMode, isFeedEmbed, showCover, setShowCover]);
+    if (cardState === "active" && showCover && isAudioUnlocked()) {
+      setShowCover(false);
+    }
+  }, [reelsMode, isFeedEmbed, cardState, showCover, setShowCover]);
+
+  // Listen for global audio unlock (user tapped cover on another card)
+  // → dismiss this card's cover if it's active
+  useEffect(() => {
+    if (!reelsMode || !isFeedEmbed || cardState !== "active" || !showCover) return;
+    return onAudioUnlocked(() => {
+      setShowCover(false);
+    });
+  }, [reelsMode, isFeedEmbed, cardState, showCover, setShowCover]);
 
   useEffect(() => {
     if (!player || !playerReady) return;
@@ -401,12 +428,42 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     return () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); };
   }, []);
 
+  // ── Reels gesture callbacks (active AFTER cover dismisses) ──
+  const handleReelsSeekBack = useCallback(() => {
+    if (!player) return;
+    player.seek(Math.max(0, player.audio.currentTime - 5));
+  }, [player]);
+
+  const handleReelsSeekForward = useCallback(() => {
+    if (!player) return;
+    player.seek(Math.min(player.audio.duration || 999, player.audio.currentTime + 5));
+  }, [player]);
+
+  const handleReelsTogglePlayPause = useCallback(() => {
+    if (!player) return;
+    if (reelsPaused) {
+      setReelsPaused(false);
+      player.play();
+      player.setMuted(false);
+      setMuted(false);
+    } else {
+      setReelsPaused(true);
+      player.pause();
+    }
+  }, [player, reelsPaused, setMuted]);
+
+  // Reset pause when card deactivates
+  useEffect(() => {
+    if (!reelsMode || !isFeedEmbed) return;
+    if (cardState !== "active") setReelsPaused(false);
+  }, [reelsMode, isFeedEmbed, cardState]);
+
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
       <div
         ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
-        onClick={(e) => { if (!effectiveShowCover && !isWaiting) toggleMute(e); }}
+        onClick={reelsMode ? undefined : (e) => { if (!effectiveShowCover && !isWaiting) toggleMute(e); }}
       >
         {/* Static canvases — only for non-pooled (shareable/FitTab) */}
         {!isFeedEmbed && (
@@ -414,6 +471,26 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
             <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
           </>
+        )}
+
+        {/* Reels: gesture layer for seek/pause (only when cover is dismissed) */}
+        {reelsMode && isFeedEmbed && !effectiveShowCover && !isWaiting && (
+          <ReelsGestureLayer
+            onSeekBack={handleReelsSeekBack}
+            onSeekForward={handleReelsSeekForward}
+            onTogglePlayPause={handleReelsTogglePlayPause}
+          >
+            {reelsPaused && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="bg-black/40 backdrop-blur-sm rounded-full p-4">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="white" opacity="0.6">
+                    <rect x="6" y="4" width="4" height="16" rx="1" />
+                    <rect x="14" y="4" width="4" height="16" rx="1" />
+                  </svg>
+                </div>
+              </div>
+            )}
+          </ReelsGestureLayer>
         )}
 
         <ClosingScreen
@@ -432,8 +509,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
         {!isBattleMode && (
           <AnimatePresence>
-            {reelsMode ? (
-              /* Reels: no cover. Just a loading spinner until player is ready. */
+            {reelsMode && isAudioUnlocked() ? (
+              /* Reels + audio unlocked: show spinner while loading, no cover */
               !playerReady && isFeedEmbed && (
                 <motion.div
                   key="reels-loader"
@@ -465,6 +542,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                     badge={null}
                     onListen={(e) => {
                       userActivatedRef.current = true;
+                      unlockAudio(); // User gesture context → unlock browser audio policy
                       handleListenNow(e);
                     }}
                   />
@@ -474,7 +552,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           </AnimatePresence>
         )}
 
-        {!isBattleMode && playerReady && (
+        {!isBattleMode && playerReady && !reelsMode && (
           <div
             className="absolute top-0 left-0 right-0 z-[510] flex items-center justify-between p-2 pointer-events-none"
             onClick={(e) => e.stopPropagation()}
@@ -503,7 +581,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
       {!isBattleMode && !reactionPanelOpen && (
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
-          {reelsMode && artistName && effectiveShowCover && (
+          {reelsMode && artistName && (effectiveShowCover || !playerReady) && (
             <div className="flex items-center gap-2 px-3 pt-2 pb-1">
               <div className="relative shrink-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onProfileClick?.(); }}>
                 <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">

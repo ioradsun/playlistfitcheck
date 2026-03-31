@@ -9,7 +9,7 @@ interface LyricDanceCoverProps {
   avatarUrl?: string | null;
   initial?: string;
   waiting: boolean;
-  onListen?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onListen?: (e: React.MouseEvent) => void;
   badge?: string | null;
   onExpand?: () => void;
   hideBackground?: boolean;
@@ -26,7 +26,13 @@ export function LyricDanceCover({
   hideBackground = false,
 }: LyricDanceCoverProps) {
   return (
-    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
+    <div
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center"
+      style={{ cursor: waiting ? "default" : "pointer" }}
+      onClick={(e) => {
+        if (!waiting && onListen) onListen(e);
+      }}
+    >
       {/* Scrim — lets canvas preview show through */}
       <div
         className="absolute inset-0"
@@ -47,7 +53,10 @@ export function LyricDanceCover({
           ) : <span />}
           {onExpand && (
             <button
-              onClick={(e) => { e.stopPropagation(); onExpand(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onExpand();
+              }}
               className="p-1.5 rounded-full bg-black/40 text-white/30 hover:text-white/60 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -65,12 +74,11 @@ export function LyricDanceCover({
       <div className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ marginBottom: 24 }}>
         {isMarketingCover ? (
           <button
-            onClick={waiting ? undefined : onListen}
+            onClick={(e) => e.stopPropagation()}
             className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
             style={{
               color: waiting ? "transparent" : "rgba(255,255,255,1)",
               borderColor: waiting ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.20)",
-              cursor: waiting ? "default" : "pointer",
               background: waiting ? "rgba(255,255,255,0.02)" : undefined,
             }}
           >
@@ -86,12 +94,11 @@ export function LyricDanceCover({
               <div className="h-4 mb-4" />
             )}
             <button
-              onClick={waiting ? undefined : onListen}
+              onClick={(e) => e.stopPropagation()}
               className="px-8 py-3 text-[11px] font-bold uppercase tracking-[0.2em] border rounded-lg transition-all duration-700"
               style={{
                 color: waiting ? "transparent" : "rgba(255,255,255,1)",
                 borderColor: waiting ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.20)",
-                cursor: waiting ? "default" : "pointer",
                 background: waiting ? "rgba(255,255,255,0.02)" : undefined,
               }}
             >
