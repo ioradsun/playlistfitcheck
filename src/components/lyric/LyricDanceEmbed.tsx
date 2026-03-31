@@ -23,6 +23,9 @@ import { ReelsGestureLayer } from "./ReelsGestureLayer";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
+import { supabase } from "@/integrations/supabase/client";
+import { getSessionId } from "@/lib/sessionId";
+import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { isAudioUnlocked, onAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -178,6 +181,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     isWaiting,
     commentRefreshKey,
     lightningBarEnabled,
+    handleCommentFromBar,
+    setCommentRefreshKey,
   } = useLyricDanceCore({
     lyricDanceId,
     prefetchedData: prefetchedDataWithRegion,
@@ -437,6 +442,82 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     return idx >= 0 ? idx : 0;
   }, [currentTimeSec, audioSections]);
 
+  const moments = useMemo<Moment[]>(() => {
+    const phrases = (data as any)?.cinematic_direction?.phrases ?? [];
+    const phraseInputs = phrases.map((p: any) => {
+      const isMs = p.start > 500;
+      return {
+        start: isMs ? p.start / 1000 : p.start,
+        end: isMs ? p.end / 1000 : p.end,
+        text: p.text ?? "",
+      };
+    });
+    return buildMoments(phraseInputs, audioSections, lyricSections.allLines, durationSec);
+  }, [data, prefetchedData, audioSections, lyricSections.allLines, durationSec]);
+
+  const currentMoment = useMemo(() => {
+    const m = moments.find(
+      (moment) => currentTimeSec >= moment.startSec && currentTimeSec < moment.endSec,
+    );
+    if (!m) return null;
+    return { index: m.index, total: moments.length, label: m.label };
+  }, [moments, currentTimeSec]);
+
+  const handleVoiceNote = useCallback(async (audioBlob: Blob) => {
+    const danceId = (data ?? (prefetchedData as any))?.id;
+    if (!danceId) return;
+
+    const momentIdx = currentMoment?.index ?? null;
+    const filename = `voice-${danceId}-${Date.now()}.webm`;
+    const { error: uploadError } = await supabase.storage
+      .from("voice-notes")
+      .upload(filename, audioBlob, { contentType: "audio/webm" });
+
+    if (uploadError) {
+      console.error("[VoiceNote] Upload failed:", uploadError);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("voice-notes")
+      .getPublicUrl(filename);
+    const audioUrl = urlData?.publicUrl ?? null;
+
+    const { data: commentRow } = await supabase
+      .from("lyric_dance_comments" as any)
+      .insert({
+        dance_id: danceId,
+        text: "🎤 voice note",
+        audio_url: audioUrl,
+        session_id: getSessionId(),
+        line_index: activeLine?.lineIndex ?? null,
+        moment_index: momentIdx,
+        parent_comment_id: null,
+      })
+      .select("id")
+      .single();
+
+    setCommentRefreshKey((k) => k + 1);
+
+    if (audioUrl && commentRow?.id) {
+      try {
+        const { data: transcribeData } = await supabase.functions.invoke(
+          "voice-note-transcribe",
+          { body: { audio_url: audioUrl, comment_id: commentRow.id } },
+        );
+        if (transcribeData?.text) {
+          await supabase
+            .from("lyric_dance_comments" as any)
+            .update({ text: transcribeData.text })
+            .eq("id", commentRow.id);
+          setCommentRefreshKey((k) => k + 1);
+        }
+      } catch {
+        // keep placeholder text on failure
+      }
+    }
+  }, [data, prefetchedData, currentMoment, activeLine, setCommentRefreshKey]);
+
   const barAccent = useMemo(() => {
     const autoPalettes = (data ?? (prefetchedData as any))?.auto_palettes;
     if (Array.isArray(autoPalettes) && autoPalettes[activeSectionIndex]) {
@@ -649,6 +730,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               onOpenReactions: handleOpenReactions,
               onClose: handleClosePanelAndSync,
               panelOpen: reactionPanelOpen,
+              currentMoment,
               onFireTap: () => {
                 if (holdFireIntervalRef.current) {
                   clearInterval(holdFireIntervalRef.current);
@@ -678,6 +760,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
                 markFired();
               },
+              onComment: (text: string) => {
+                handleCommentFromBar(text, currentMoment?.index ?? null);
+              },
+              onVoiceNote: handleVoiceNote,
+              onPauseForInput: handlePauseForInput,
+              onResumeAfterInput: handleResumeAfterInput,
               activeLineFireCount: effectiveShowCover ? 0 : activeLineFireCount,
               hookPhrase: null,
               activeLineText: effectiveShowCover ? null : (activeLine?.text ?? null),

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 // Applies alpha to a hex (#rrggbb) or rgba(...) accent string.
@@ -41,6 +41,11 @@ interface CardBottomBarProps {
   onClose: () => void;
   panelOpen?: boolean;
   variant?: "embedded" | "fullscreen";
+  currentMoment?: {
+    index: number;
+    total: number;
+    label: string | null;
+  } | null;
   activeLineText?: string | null;
   activeLineFireCount?: number;
   hookPhrase?: string | null;
@@ -49,6 +54,10 @@ interface CardBottomBarProps {
   onFireTap?: () => void;
   onFireHoldStart?: () => void;
   onFireHoldEnd?: (holdMs: number) => void;
+  onComment?: (text: string) => void;
+  onVoiceNote?: (audioBlob: Blob) => void;
+  onPauseForInput?: () => void;
+  onResumeAfterInput?: () => void;
   isLive?: boolean;
   totalFireCount?: number;
   lastFiredAt?: string | null;
@@ -115,8 +124,6 @@ function FireButton({
   const ringSize = baseRingSize + tier * 6;
   const isActive = hasFired || isHolding;
 
-  // Fired/holding: always warm orange — unmistakable confirmation regardless of palette.
-  // Unfired outline: accent-tinted so the button still breathes with section color.
   const FIRE_ORANGE = "#FF6B2B";
   const strokeColor = isActive ? FIRE_ORANGE : withAlpha(accent, 0.35);
   const fillColor = isActive ? FIRE_ORANGE : "none";
@@ -142,7 +149,6 @@ function FireButton({
       className={`relative flex items-center justify-center px-4 ${minWidth} ${py} shrink-0`}
       style={{ touchAction: "manipulation" }}
     >
-      {/* Hold ring */}
       <div
         style={{
           position: "absolute",
@@ -169,7 +175,6 @@ function FireButton({
           height={iconSize}
           viewBox="0 0 24 24"
           style={{
-            // All color applied via style, never via SVG presentation attributes
             fill: fillColor,
             stroke: strokeColor,
             strokeWidth: 1.8,
@@ -189,11 +194,14 @@ function FireButton({
   );
 }
 
+type BarState = "lyrics" | "fired" | "typing" | "recording";
+
 export function CardBottomBar({
   onOpenReactions,
   onClose,
   panelOpen = false,
   variant = "embedded",
+  currentMoment = null,
   activeLineText,
   activeLineFireCount = 0,
   hookPhrase,
@@ -202,10 +210,23 @@ export function CardBottomBar({
   onFireTap,
   onFireHoldStart,
   onFireHoldEnd,
+  onComment,
+  onVoiceNote,
+  onPauseForInput,
+  onResumeAfterInput,
   isLive = false,
   totalFireCount = 0,
   lastFiredAt,
 }: CardBottomBarProps) {
+  const [barState, setBarState] = useState<BarState>("lyrics");
+  const [commentText, setCommentText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [recordingSec, setRecordingSec] = useState(0);
+  const prevMomentIndexRef = useRef<number | null>(null);
+
   const py = variant === "embedded" ? "py-3" : "py-4";
   const textSize = variant === "fullscreen" ? "text-[13px]" : "text-[10px]";
   const subTextSize = variant === "fullscreen" ? "text-[11px]" : "text-[9px]";
@@ -220,7 +241,6 @@ export function CardBottomBar({
 
   const wrapperStyle: React.CSSProperties = {
     background: "#0a0a0a",
-    // Top border shifts to accent when live — single pixel of color = "active now"
     borderTop: `1px solid ${isLive ? withAlpha(accent, 0.25) : "rgba(255,255,255,0.06)"}`,
     transition: "border-color 0.6s ease",
     ...(variant === "fullscreen"
@@ -228,22 +248,183 @@ export function CardBottomBar({
       : {}),
   };
 
-  const recency = formatRecency(lastFiredAt);
+  const stopRecording = useCallback((save: boolean) => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) {
+      setBarState("lyrics");
+      setRecordingSec(0);
+      onResumeAfterInput?.();
+      return;
+    }
+    mediaRecorderRef.current = null;
 
-  // ── Left side state machine ────────────────────────────────────────
-  // Priority 1: playing — show active lyric line + section fire count
-  // Priority 2: pre-play with marks — show social proof
-  // Priority 3: pre-play, isLive (Now Streaming active, no lyric) — "mark your moment"
-  // Priority 4: zero marks — invite
+    if (save) {
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        if (blob.size > 0) {
+          onVoiceNote?.(blob);
+        }
+        recorder.stream.getTracks().forEach((t) => t.stop());
+      };
+    } else {
+      recorder.onstop = () => {
+        recorder.stream.getTracks().forEach((t) => t.stop());
+      };
+    }
+    recorder.stop();
+    setBarState("lyrics");
+    setRecordingSec(0);
+    onResumeAfterInput?.();
+  }, [onResumeAfterInput, onVoiceNote]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setBarState("recording");
+      setRecordingSec(0);
+      onPauseForInput?.();
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSec((s) => {
+          if (s >= 9) {
+            stopRecording(true);
+            return 10;
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch {
+      // Mic permission denied: stay in fired/typing.
+    }
+  }, [onPauseForInput, stopRecording]);
+
+  useEffect(() => {
+    const momentIdx = currentMoment?.index ?? null;
+    if (prevMomentIndexRef.current !== null && momentIdx !== prevMomentIndexRef.current) {
+      if (barState === "recording") {
+        stopRecording(false);
+      } else if (barState === "typing") {
+        onResumeAfterInput?.();
+      }
+      setBarState("lyrics");
+      setCommentText("");
+      setRecordingSec(0);
+    }
+    prevMomentIndexRef.current = momentIdx;
+  }, [barState, currentMoment?.index, onResumeAfterInput, stopRecording]);
+
+  useEffect(() => {
+    if (barState === "fired" || barState === "typing") {
+      inputRef.current?.focus();
+    }
+  }, [barState]);
+
+  useEffect(() => () => {
+    if (mediaRecorderRef.current) {
+      stopRecording(false);
+    }
+  }, [stopRecording]);
+
+  const handleFireComplete = useCallback(() => {
+    setBarState("fired");
+    setCommentText("");
+  }, []);
+
+  const handleInputFocus = useCallback(() => {
+    setBarState("typing");
+    onPauseForInput?.();
+  }, [onPauseForInput]);
+
+  const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const text = commentText.trim();
+      if (text) {
+        onComment?.(text);
+      }
+      setCommentText("");
+      setBarState("lyrics");
+      onResumeAfterInput?.();
+    }
+  }, [commentText, onComment, onResumeAfterInput]);
+
+  const recency = formatRecency(lastFiredAt);
+  const momentLabel = currentMoment ? `Moment ${currentMoment.index + 1}` : null;
+
   let leftContent: React.ReactNode;
 
-  if (!panelOpen && activeLineText) {
-    // Playing state (In Studio) — active lyric line + optional section count
-    // hookPhrase gets full white + bold to signal the song's core moment
+  if (barState === "recording") {
+    leftContent = (
+      <div className="flex items-center gap-2 min-w-0">
+        {momentLabel && (
+          <span className={`${subTextSize} font-mono shrink-0`} style={{ color: accent ?? "rgba(255,140,50,0.8)" }}>
+            🔥 {momentLabel}
+          </span>
+        )}
+        <div className="flex items-center gap-1.5">
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ff4444", animation: "cfBlink 0.8s ease-in-out infinite" }} />
+          <span className={`${textSize} font-mono`} style={{ color: "rgba(255,255,255,0.6)" }}>
+            {recordingSec}s
+          </span>
+          <div className="flex items-center gap-px" style={{ height: 16 }}>
+            {[...Array(8)].map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  width: 2,
+                  height: 4 + Math.random() * 12,
+                  background: "rgba(255,255,255,0.3)",
+                  borderRadius: 1,
+                  transition: "height 0.1s",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  } else if (barState === "fired" || barState === "typing") {
+    leftContent = (
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        {momentLabel && (
+          <span className={`${subTextSize} font-mono shrink-0`} style={{ color: accent ?? "rgba(255,140,50,0.8)" }}>
+            🔥 {momentLabel}
+          </span>
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          onFocus={handleInputFocus}
+          onKeyDown={handleInputKeyDown}
+          placeholder="What hit?"
+          className="flex-1 min-w-0 bg-transparent outline-none font-mono"
+          style={{
+            fontSize: variant === "fullscreen" ? 12 : 11,
+            color: "rgba(255,255,255,0.8)",
+            caretColor: accent ?? "#ff8c32",
+            letterSpacing: "0.02em",
+          }}
+          autoComplete="off"
+        />
+      </div>
+    );
+  } else if (!panelOpen && activeLineText) {
     const isHook = !!(hookPhrase && activeLineText === hookPhrase);
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        {/* Animated white dot — song is live */}
         <div
           style={{
             height: dotSize,
@@ -254,6 +435,11 @@ export function CardBottomBar({
             animation: "cfBlink 1.4s ease-in-out infinite",
           }}
         />
+        {momentLabel && (
+          <span className={`${subTextSize} font-mono shrink-0`} style={{ color: "rgba(255,255,255,0.30)", letterSpacing: "0.05em" }}>
+            {momentLabel}
+          </span>
+        )}
         <span
           className={`${textSize} font-mono truncate`}
           style={{
@@ -265,52 +451,27 @@ export function CardBottomBar({
           {activeLineText}
         </span>
         {activeLineFireCount > 0 && (
-          <span
-            className={`${subTextSize} font-mono shrink-0`}
-            style={{ color: "rgba(255,255,255,0.35)" }}
-          >
+          <span className={`${subTextSize} font-mono shrink-0`} style={{ color: "rgba(255,255,255,0.35)" }}>
             🔥{activeLineFireCount}
           </span>
         )}
       </div>
     );
   } else if (!panelOpen && totalFireCount > 0) {
-    // Pre-play with FMLY marks — social proof
-    const label = recency
-      ? `${totalFireCount} marks · ${recency}`
-      : `${totalFireCount} marks`;
+    const label = recency ? `${totalFireCount} marks · ${recency}` : `${totalFireCount} marks`;
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        {/* Static dim white dot — tappable, not yet live */}
-        <div
-          style={{
-            width: dotSize,
-            height: dotSize,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.25)",
-            flexShrink: 0,
-          }}
-        />
-        <span
-          className={`${textSize} font-mono truncate`}
-          style={{ letterSpacing: "0.05em" }}
-        >
-          {/* 🔥 renders in native emoji color — no override needed */}
+        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.25)", flexShrink: 0 }} />
+        <span className={`${textSize} font-mono truncate`} style={{ letterSpacing: "0.05em" }}>
           <span style={{ marginRight: 2 }}>🔥</span>
-          <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 600 }}>
-            FMLY
-          </span>
-          <span style={{ color: "rgba(255,255,255,0.4)" }}>
-            {" · "}{label}
-          </span>
+          <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 600 }}>FMLY</span>
+          <span style={{ color: "rgba(255,255,255,0.4)" }}>{" · "}{label}</span>
         </span>
       </div>
     );
   } else if (!panelOpen && isLive) {
-    // Now Streaming active — no lyric context, prompt the fire mechanic
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        {/* Animated white dot — listening now */}
         <div
           style={{
             width: dotSize,
@@ -321,31 +482,16 @@ export function CardBottomBar({
             animation: "cfBlink 1.4s ease-in-out infinite",
           }}
         />
-        <span
-          className={`${textSize} font-mono truncate`}
-          style={{ color: "rgba(255,255,255,0.6)", letterSpacing: "0.05em" }}
-        >
+        <span className={`${textSize} font-mono truncate`} style={{ color: "rgba(255,255,255,0.6)", letterSpacing: "0.05em" }}>
           mark your moment
         </span>
       </div>
     );
   } else if (!panelOpen) {
-    // Zero marks, not live — invitation
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        <div
-          style={{
-            width: dotSize,
-            height: dotSize,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.15)",
-            flexShrink: 0,
-          }}
-        />
-        <span
-          className={`${textSize} font-mono truncate`}
-          style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}
-        >
+        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.15)", flexShrink: 0 }} />
+        <span className={`${textSize} font-mono truncate`} style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}>
           be the first to mark a moment
         </span>
       </div>
@@ -353,11 +499,7 @@ export function CardBottomBar({
   }
 
   return (
-    <div
-      className={wrapperClass}
-      style={wrapperStyle}
-      onClick={(e) => e.stopPropagation()}
-    >
+    <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
       <style>{`
         @keyframes cfBlink {
           0%, 100% { opacity: 1; }
@@ -365,37 +507,72 @@ export function CardBottomBar({
         }
       `}</style>
 
-      {/* Left — tap to open reaction panel */}
       <div
         className={`flex-1 flex items-center px-3 ${py} min-w-0 cursor-pointer`}
-        onClick={panelOpen ? undefined : onOpenReactions}
+        onClick={barState === "lyrics" && !panelOpen ? onOpenReactions : undefined}
       >
         {leftContent}
       </div>
 
-      {/* Divider */}
-      <div
-        style={{
-          width: "0.5px",
-          background: "rgba(255,255,255,0.08)",
-          alignSelf: "stretch",
-          margin: "8px 0",
-        }}
-      />
-
-      <FireButton
-        panelOpen={panelOpen}
-        onClose={onClose}
-        onTap={onFireTap}
-        onHoldStart={onFireHoldStart}
-        onHoldEnd={onFireHoldEnd}
-        py={py}
-        hasFired={hasFired}
-        accent={accent}
-        iconSize={fireIconSize}
-        minWidth={fireMinWidth}
-        baseRingSize={variant === "fullscreen" ? 34 : 28}
-      />
+      {barState === "lyrics" ? (
+        <>
+          <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />
+          <FireButton
+            panelOpen={panelOpen}
+            onClose={onClose}
+            onTap={() => { onFireTap?.(); handleFireComplete(); }}
+            onHoldStart={onFireHoldStart}
+            onHoldEnd={(ms) => { onFireHoldEnd?.(ms); handleFireComplete(); }}
+            py={py}
+            hasFired={hasFired}
+            accent={accent}
+            iconSize={fireIconSize}
+            minWidth={fireMinWidth}
+            baseRingSize={variant === "fullscreen" ? 34 : 28}
+          />
+        </>
+      ) : (
+        <>
+          <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />
+          <button
+            className={`flex items-center justify-center ${py} ${fireMinWidth}`}
+            style={{ touchAction: "manipulation" }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              if (barState === "fired" || barState === "typing") startRecording();
+            }}
+            onTouchEnd={() => {
+              if (barState === "recording") stopRecording(true);
+            }}
+            onMouseDown={() => {
+              if (barState === "fired" || barState === "typing") startRecording();
+            }}
+            onMouseUp={() => {
+              if (barState === "recording") stopRecording(true);
+            }}
+            onMouseLeave={() => {
+              if (barState === "recording") stopRecording(true);
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <svg
+              width={fireIconSize}
+              height={fireIconSize}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={barState === "recording" ? "#ff4444" : "rgba(255,255,255,0.45)"}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="9" y="1" width="6" height="12" rx="3" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+          </button>
+        </>
+      )}
     </div>
   );
 }
