@@ -1052,7 +1052,7 @@ serve(async (req) => {
     }
 
     // ── Build lyric lines from Scribe segments ──────────────────────────────
-    const lines: LyricLine[] = segments.map(seg => ({
+    const lines: LyricLine[] = segments.map((seg: any) => ({
       start: Math.round(seg.start * 1000) / 1000,
       end: Math.round(seg.end * 1000) / 1000,
       text: seg.text.trim(),
