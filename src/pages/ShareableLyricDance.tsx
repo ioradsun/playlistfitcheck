@@ -352,7 +352,16 @@ export default function ShareableLyricDance() {
       (mo) => currentTimeSec >= mo.startSec && currentTimeSec < mo.endSec,
     );
     if (!m) return null;
-    return { index: m.index, total: moments.length, label: m.label };
+    // Join all lines in this moment into one continuous string for the ticker
+    const fullText = m.lines.map((l) => l.text).join("  ·  ");
+    return {
+      index: m.index,
+      total: moments.length,
+      label: m.label,
+      text: fullText,
+      startSec: m.startSec,
+      endSec: m.endSec,
+    };
   }, [moments, currentTimeSec]);
 
   const handleVoiceNote = useCallback(async (audioBlob: Blob) => {
