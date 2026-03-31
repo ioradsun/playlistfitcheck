@@ -26,8 +26,8 @@ function getSlots(): CanvasSlot[] {
   _slots = Array.from({ length: POOL_SIZE }, (_, i) => {
     const bg = document.createElement("canvas");
     const text = document.createElement("canvas");
-    bg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
-    text.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
+    bg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;";
+    text.style.cssText = "position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;";
     return { id: i, bg, text, inUse: false, heldBy: null };
   });
   return _slots;
