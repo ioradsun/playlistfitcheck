@@ -7,6 +7,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
 import type { LyricSectionLine } from "@/hooks/useLyricSections";
+import { buildMoments, type Moment } from "@/lib/buildMoments";
 import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
 import { PanelShell } from "@/components/shared/panel/PanelShell";
 import {
@@ -139,42 +140,6 @@ function formatTime(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function snapToBeat(t: number, beats: number[], tol = 1.5): number {
-  if (!beats.length) return t;
-  let best = t;
-  let bestDist = Infinity;
-  for (const b of beats) {
-    const d = Math.abs(b - t);
-    if (d < bestDist && d < tol) {
-      bestDist = d;
-      best = b;
-    }
-  }
-  return best;
-}
-
-function snapToPhraseEnd(
-  t: number,
-  phraseEnds: number[],
-  beats: number[],
-  tol = 2.5,
-): number {
-  if (phraseEnds.length) {
-    let best = -1;
-    let bestDist = Infinity;
-    for (const pe of phraseEnds) {
-      if (pe < t - tol || pe > t + tol) continue;
-      const d = Math.abs(pe - t);
-      if (d < bestDist) {
-        bestDist = d;
-        best = pe;
-      }
-    }
-    if (best > 0) return best;
-  }
-  return snapToBeat(t, beats);
 }
 
 function FireLineButton({
@@ -569,106 +534,55 @@ function ReactionPanel({
   };
 
 
-  const TARGET_CLIP_SEC = 8;
-  const MIN_CLIP_SEC = 5;
-  const MAX_CLIP_SEC = 13;
-  const beats = (beatGrid?.beats ?? []) as number[];
+  // ── Build moments from AI phrases (never breaks mid-phrase) ──
+  const phraseInputs = (phrases ?? []).map((p: any) => {
+    // AI phrases use milliseconds for start/end, convert to seconds
+    const isMs = p.start > 500;
+    const startSec = isMs ? p.start / 1000 : p.start;
+    const endSec = isMs ? p.end / 1000 : p.end;
+    return { start: startSec, end: endSec, text: p.text ?? "" };
+  });
 
-  // Build phrase end timestamps from AI phrases + word timings
-  const phraseEnds: number[] = [];
-  if (phrases?.length && words?.length) {
-    for (const phrase of phrases) {
-      const endIdx = Math.min(phrase.wordRange[1], words.length - 1);
-      const endTime = (words as any)[endIdx]?.end;
-      if (typeof endTime === "number" && Number.isFinite(endTime)) {
-        phraseEnds.push(endTime);
-      }
-    }
-    phraseEnds.sort((a, b) => a - b);
-  }
-
-  // Raw windows from section boundaries, or full song if no sections
-  const rawWindows: Array<{
-    startSec: number;
-    endSec: number;
-    label: string | null;
-  }> = [];
-
-  const validSections = audioSections.filter(
-    (s) =>
-      Number.isFinite(s.startSec) &&
-      Number.isFinite(s.endSec) &&
-      s.endSec > s.startSec,
+  const moments: Moment[] = buildMoments(
+    phraseInputs,
+    audioSections,
+    allLines,
+    durationSec,
   );
-
-  const buildWindows = (
-    startSec: number,
-    endSec: number,
-    label: string | null,
-  ) => {
-    const dur = endSec - startSec;
-    if (dur <= MAX_CLIP_SEC) {
-      rawWindows.push({
-        startSec,
-        endSec: snapToPhraseEnd(endSec, phraseEnds, beats),
-        label,
-      });
-    } else {
-      let cursor = startSec;
-      let safetyCount = 0;
-      while (cursor < endSec - MIN_CLIP_SEC && safetyCount < 50) {
-        safetyCount++;
-        const idealEnd = Math.min(cursor + TARGET_CLIP_SEC, endSec);
-        const snapped = snapToPhraseEnd(idealEnd, phraseEnds, beats);
-        const end = Math.min(snapped, endSec);
-        // If snap didn't move forward enough, force MIN_CLIP_SEC
-        const effectiveEnd =
-          end - cursor < MIN_CLIP_SEC ? cursor + MIN_CLIP_SEC : end;
-        rawWindows.push({ startSec: cursor, endSec: effectiveEnd, label });
-        cursor = effectiveEnd;
-      }
-    }
-  };
-
-  if (validSections.length > 0) {
-    for (const section of validSections) {
-      buildWindows(section.startSec, section.endSec, section.role ?? null);
-    }
-  } else if (durationSec > 0) {
-    buildWindows(0, durationSec, null);
-  }
 
   interface ClipWindow {
     startSec: number;
     endSec: number;
     label: string | null;
-    lines: LyricSectionLine[];
+    lines: typeof allLines;
     isActive: boolean;
     totalFire: number;
     shouldShowSectionHeader: boolean;
+    momentIndex: number;
   }
 
-  const clipWindows: ClipWindow[] = rawWindows.map((w, i) => {
-    const windowLines = allLines.filter(
-      (l) => l.startSec >= w.startSec - 0.15 && l.startSec < w.endSec + 0.15,
-    );
-    const isActive = currentTimeSec >= w.startSec && currentTimeSec < w.endSec;
-    const totalFire = windowLines.reduce(
+  const clipWindows: ClipWindow[] = moments.map((m, i) => {
+    const isActive = currentTimeSec >= m.startSec && currentTimeSec < m.endSec;
+    const totalFire = m.lines.reduce(
       (sum, l) =>
         sum +
         Object.values(reactionData).reduce((s, d) => s + (d.line[l.lineIndex] ?? 0), 0),
       0,
     );
-    const prevLabel = i > 0 ? rawWindows[i - 1].label : null;
-    const shouldShowSectionHeader = !!w.label && w.label !== prevLabel;
+    const prevLabel = i > 0 ? moments[i - 1].label : null;
+    const shouldShowSectionHeader = !!m.label && m.label !== prevLabel;
     return {
-      ...w,
-      lines: windowLines,
+      startSec: m.startSec,
+      endSec: m.endSec,
+      label: m.label,
+      lines: m.lines,
       isActive,
       totalFire,
       shouldShowSectionHeader,
+      momentIndex: m.index,
     };
   });
+
   const commentsByWindow = clipWindows.map((win) => {
     const lineIndices = new Set(win.lines.map((l) => l.lineIndex));
     return comments.filter(
@@ -713,6 +627,12 @@ function ReactionPanel({
                         style={{ fontSize: 10 }}
                       >
                         {win.label}
+                      </span>
+                      <span
+                        className="font-mono text-white/10"
+                        style={{ fontSize: 9, letterSpacing: "0.05em" }}
+                      >
+                        Moment {win.momentIndex + 1}
                       </span>
                       <div className="flex-1 h-px bg-white/[0.03]" />
                     </div>
@@ -768,10 +688,11 @@ function ReactionPanel({
                         letterSpacing: "0.1em",
                       }}
                     >
+                      Moment {win.momentIndex + 1}/{moments.length}
+                      {" · "}
                       {formatTime(win.startSec)} – {formatTime(win.endSec)}
-                      {" "}
                       <span style={{ opacity: 0.5 }}>
-                        ({Math.round(win.endSec - win.startSec)}s)
+                        {" "}({Math.round(win.endSec - win.startSec)}s)
                       </span>
                     </span>
                     <div className="flex-1" />
