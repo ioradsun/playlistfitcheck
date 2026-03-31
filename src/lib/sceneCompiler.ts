@@ -495,15 +495,18 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const clean = normalized.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
       .replace(/^'+|'+$/g, '');  // strip leading/trailing apostrophes from clean key
     const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? Infinity)));
-    // ── 3-layer adlib detection ──────────────────────────────────────
-    // Layer 1: Gemini line-level tag
+    // ── 2-layer adlib detection ──────────────────────────────────────
+    // Layer 1: Gemini line-level tag (explicit, human-reviewable)
     const line = payload.lines[lineIndex];
     const isAdlibFromLine = (line as any)?.tag === "adlib";
 
-    // Layer 2: ElevenLabs Scribe speaker diarization
-    const isAdlibFromSpeaker = (w as any).speaker_id && (w as any).speaker_id !== "speaker_0";
+    // NOTE: speaker_id detection is DISABLED.
+    // Scribe's music diarization is section-based (intro/verse/outro),
+    // not lead-vs-background. It incorrectly flags entire song sections
+    // as adlib. speaker_id is preserved in the data for future use but
+    // not used for adlib classification.
 
-    // Layer 3: Ghost word heuristics (infer adlib from timing anomalies)
+    // Layer 2: Ghost word heuristics (infer adlib from timing anomalies)
     // Scribe "fills in" background vocals it can hear faintly — these have
     // telltale timing signatures: truly zero duration, or multiple words
     // clustered at the exact same timestamp under a sustained note.
@@ -537,7 +540,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
     const isInferredAdlib = isGhostCluster || isEchoUnderSustain;
 
-    const isAdlib = isAdlibFromLine || isAdlibFromSpeaker || isInferredAdlib;
+    const isAdlib = isAdlibFromLine || isInferredAdlib;
     return { ...w, clean, directive: null, lineIndex, wordIndex: 0, isAdlib: isAdlib || undefined };
   });
   const lineWordCounters: Record<number, number> = {};
