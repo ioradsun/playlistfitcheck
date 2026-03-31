@@ -1036,7 +1036,7 @@ serve(async (req) => {
       );
     }
 
-    let { words, segments, rawText, duration, rawWordSample } = transcribeResult.value as any;
+    let { words, segments, rawText, duration, rawWordsFull } = transcribeResult.value as any;
     // Normalize word durations — clamp Scribe's silence-bleed artifacts
     words = normalizeWordDurations(words);
 
