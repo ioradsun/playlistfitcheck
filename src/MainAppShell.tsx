@@ -24,6 +24,7 @@ const Index = lazy(() =>
 const About = lazy(() => import("./pages/About"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Profile = lazy(() => import("./pages/Profile"));
+const ArtistDashboard = lazy(() => import("./pages/ArtistDashboard"));
 const PublicProfile = lazy(() => import("./pages/PublicProfile"));
 const SongDetail = lazy(() => import("./pages/SongDetail"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
@@ -99,6 +100,7 @@ export default function MainAppShell() {
                   </Suspense>
                 } />
                 <Route path="/profile" element={<Suspense fallback={null}><PageLayout title="Profile"><Profile /></PageLayout></Suspense>} />
+                <Route path="/dashboard" element={<Suspense fallback={null}><ArtistDashboard /></Suspense>} />
                 <Route path="/reset-password" element={<Suspense fallback={null}><PageLayout title="Reset Password"><ResetPassword /></PageLayout></Suspense>} />
                 <Route path="/u/:userId" element={<Suspense fallback={null}><PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout></Suspense>} />
                 <Route path="/song/:postId" element={<Suspense fallback={null}><PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout></Suspense>} />

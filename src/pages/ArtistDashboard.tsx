@@ -1,0 +1,372 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { ArrowLeft, ExternalLink, Loader2, Music } from "lucide-react";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
+
+interface PostRow {
+  id: string;
+  track_title: string;
+  album_art_url: string | null;
+  created_at: string;
+  impressions: number;
+  likes_count: number;
+  comments_count: number;
+  tips_total: number;
+  engagement_score: number;
+  spotify_track_id: string | null;
+  spotify_track_url: string | null;
+  lyric_dance_id: string | null;
+  lyric_dance_url: string | null;
+  status: string;
+  palette: any;
+}
+
+interface SongSignal {
+  post: PostRow;
+  type: "in_studio" | "now_streaming" | "battle";
+  totalFires: number;
+  uniqueListeners: number;
+  firesPerListener: number;
+  topLine: { text: string; fireCount: number; avgHoldMs: number } | null;
+  spotifyClicks: number;
+  saves: number;
+  commentCount: number;
+}
+
+async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
+  const { data: posts } = await supabase
+    .from("songfit_posts")
+    .select(
+      "id, track_title, album_art_url, created_at, impressions, likes_count, comments_count, tips_total, engagement_score, spotify_track_id, spotify_track_url, lyric_dance_id, lyric_dance_url, status, palette",
+    )
+    .eq("user_id", userId)
+    .eq("status", "live")
+    .order("created_at", { ascending: false });
+
+  if (!posts || posts.length === 0) return [];
+
+  const inStudioPosts = posts.filter((p: any) => p.lyric_dance_id);
+  const nowStreamingPosts = posts.filter((p: any) => p.spotify_track_id && !p.lyric_dance_id);
+  const battlePosts = posts.filter((p: any) => p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id);
+
+  const danceIds = inStudioPosts.map((p: any) => p.lyric_dance_id).filter(Boolean);
+  let firesByDance: Record<string, { totalFires: number; uniqueListeners: number }> = {};
+  let topLineByDance: Record<string, { text: string; fireCount: number; avgHoldMs: number } | null> = {};
+
+  if (danceIds.length > 0) {
+    const { data: fireRows } = await supabase.from("lyric_dance_fires" as any).select("dance_id").in("dance_id", danceIds);
+
+    const fireCountMap: Record<string, number> = {};
+    for (const row of (fireRows ?? []) as any[]) {
+      fireCountMap[row.dance_id] = (fireCountMap[row.dance_id] ?? 0) + 1;
+    }
+
+    const { data: exposureRows } = await supabase
+      .from("lyric_dance_exposures" as any)
+      .select("dance_id, session_id")
+      .in("dance_id", danceIds);
+
+    const listenerMap: Record<string, Set<string>> = {};
+    for (const row of (exposureRows ?? []) as any[]) {
+      if (!listenerMap[row.dance_id]) listenerMap[row.dance_id] = new Set();
+      listenerMap[row.dance_id].add(row.session_id);
+    }
+
+    for (const danceId of danceIds) {
+      const fires = fireCountMap[danceId] ?? 0;
+      const listeners = listenerMap[danceId]?.size ?? 0;
+      firesByDance[danceId] = { totalFires: fires, uniqueListeners: listeners };
+    }
+
+    const { data: strengthRows } = await supabase
+      .from("v_fire_strength" as any)
+      .select("dance_id, line_index, fire_strength, fire_count, avg_hold_ms")
+      .in("dance_id", danceIds)
+      .order("fire_strength", { ascending: false });
+
+    const { data: danceRows } = await supabase.from("shareable_lyric_dances" as any).select("id, lyrics").in("id", danceIds);
+
+    const lyricsMap: Record<string, any[]> = {};
+    for (const row of (danceRows ?? []) as any[]) {
+      lyricsMap[row.id] = Array.isArray(row.lyrics) ? row.lyrics : [];
+    }
+
+    const topByDance: Record<string, any> = {};
+    for (const row of (strengthRows ?? []) as any[]) {
+      if (!topByDance[row.dance_id]) topByDance[row.dance_id] = row;
+    }
+
+    for (const danceId of danceIds) {
+      const top = topByDance[danceId];
+      if (top) {
+        const lines = lyricsMap[danceId] ?? [];
+        const lineText = lines[top.line_index]?.text ?? `Line ${top.line_index}`;
+        topLineByDance[danceId] = {
+          text: lineText,
+          fireCount: top.fire_count,
+          avgHoldMs: top.avg_hold_ms,
+        };
+      } else {
+        topLineByDance[danceId] = null;
+      }
+    }
+  }
+
+  const nowStreamingIds = nowStreamingPosts.map((p: any) => p.id);
+  const engagementByPost: Record<string, { spotifyClicks: number; saves: number }> = {};
+
+  if (nowStreamingIds.length > 0) {
+    const { data: events } = await supabase
+      .from("songfit_engagement_events" as any)
+      .select("post_id, event_type")
+      .in("post_id", nowStreamingIds);
+
+    const { data: saveRows } = await supabase.from("songfit_saves" as any).select("post_id").in("post_id", nowStreamingIds);
+
+    for (const postId of nowStreamingIds) {
+      const clicks = ((events ?? []) as any[]).filter((e: any) => e.post_id === postId && e.event_type === "spotify_click").length;
+      const saves = ((saveRows ?? []) as any[]).filter((s: any) => s.post_id === postId).length;
+      engagementByPost[postId] = { spotifyClicks: clicks, saves };
+    }
+  }
+
+  const signals: SongSignal[] = [];
+
+  for (const post of inStudioPosts as PostRow[]) {
+    const danceId = post.lyric_dance_id!;
+    const fires = firesByDance[danceId] ?? { totalFires: 0, uniqueListeners: 0 };
+    signals.push({
+      post,
+      type: "in_studio",
+      totalFires: fires.totalFires,
+      uniqueListeners: fires.uniqueListeners,
+      firesPerListener: fires.uniqueListeners > 0 ? fires.totalFires / fires.uniqueListeners : 0,
+      topLine: topLineByDance[danceId] ?? null,
+      spotifyClicks: 0,
+      saves: 0,
+      commentCount: post.comments_count,
+    });
+  }
+
+  for (const post of nowStreamingPosts as PostRow[]) {
+    const eng = engagementByPost[post.id] ?? { spotifyClicks: 0, saves: 0 };
+    signals.push({
+      post,
+      type: "now_streaming",
+      totalFires: 0,
+      uniqueListeners: 0,
+      firesPerListener: 0,
+      topLine: null,
+      spotifyClicks: eng.spotifyClicks,
+      saves: eng.saves,
+      commentCount: post.comments_count,
+    });
+  }
+
+  for (const post of battlePosts as PostRow[]) {
+    signals.push({
+      post,
+      type: "battle",
+      totalFires: 0,
+      uniqueListeners: 0,
+      firesPerListener: 0,
+      topLine: null,
+      spotifyClicks: 0,
+      saves: 0,
+      commentCount: post.comments_count,
+    });
+  }
+
+  signals.sort((a, b) => {
+    const scoreA = a.type === "in_studio" ? a.totalFires * 10 : a.spotifyClicks + a.saves * 3 + a.commentCount;
+    const scoreB = b.type === "in_studio" ? b.totalFires * 10 : b.spotifyClicks + b.saves * 3 + b.commentCount;
+    return scoreB - scoreA;
+  });
+
+  return signals;
+}
+
+function SongCard({ signal, onClick }: { signal: SongSignal; onClick: () => void }) {
+  const { post, type, totalFires, uniqueListeners, firesPerListener, topLine, spotifyClicks, saves, commentCount } = signal;
+
+  const typeLabel = type === "in_studio" ? "In Studio" : type === "now_streaming" ? "Now Streaming" : "FMLY Feud";
+  const typeColor = type === "in_studio" ? "text-orange-400" : type === "now_streaming" ? "text-green-400" : "text-purple-400";
+
+  const holdLabel = topLine
+    ? topLine.avgHoldMs < 300
+      ? "tap"
+      : topLine.avgHoldMs < 1000
+        ? "hold"
+        : topLine.avgHoldMs < 3000
+          ? "deep hold"
+          : "sustained"
+    : null;
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left glass-card rounded-xl overflow-hidden transition-all hover:ring-1 hover:ring-primary/20 active:scale-[0.99]"
+    >
+      <div className="flex gap-3 p-3">
+        {post.album_art_url ? (
+          <img src={post.album_art_url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+        ) : (
+          <div className="w-14 h-14 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+            <Music size={18} className="text-white/20" />
+          </div>
+        )}
+
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div>
+            <p className="text-[13px] font-medium text-foreground truncate">{post.track_title}</p>
+            <p className={`text-[9px] font-mono uppercase tracking-wider ${typeColor}`}>{typeLabel}</p>
+          </div>
+
+          {type === "in_studio" && (
+            <div className="flex items-center gap-3 flex-wrap">
+              {totalFires > 0 && <span className="text-[10px] font-mono text-orange-400/80">🔥 {totalFires}</span>}
+              {uniqueListeners > 0 && (
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {uniqueListeners} listener{uniqueListeners !== 1 ? "s" : ""}
+                </span>
+              )}
+              {firesPerListener >= 1.5 && (
+                <span className="text-[9px] font-mono text-muted-foreground/50">{firesPerListener.toFixed(1)}/listener</span>
+              )}
+            </div>
+          )}
+          {type === "now_streaming" && (
+            <div className="flex items-center gap-3 flex-wrap">
+              {spotifyClicks > 0 && <span className="text-[10px] font-mono text-muted-foreground">{spotifyClicks} clicks</span>}
+              {saves > 0 && <span className="text-[10px] font-mono text-muted-foreground">{saves} saves</span>}
+              {commentCount > 0 && <span className="text-[10px] font-mono text-muted-foreground">{commentCount} comments</span>}
+            </div>
+          )}
+
+          {topLine && (
+            <div className="space-y-0.5">
+              <p className="text-[10px] text-foreground/60 truncate italic">"{topLine.text}"</p>
+              <p className="text-[9px] font-mono text-muted-foreground/40">
+                {topLine.fireCount}× {holdLabel}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center shrink-0 text-muted-foreground/30">
+          <ExternalLink size={14} />
+        </div>
+      </div>
+
+      {type === "in_studio" && totalFires > 0 && (
+        <div className="h-1 bg-muted/20">
+          <div
+            className="h-full rounded-r"
+            style={{
+              width: `${Math.min(100, Math.round((firesPerListener / 5) * 100))}%`,
+              background: "linear-gradient(90deg, rgba(255,120,30,0.4) 0%, rgba(255,120,30,0.7) 100%)",
+            }}
+          />
+        </div>
+      )}
+    </button>
+  );
+}
+
+export default function ArtistDashboard() {
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
+  const [signals, setSignals] = useState<SongSignal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [followCount, setFollowCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    Promise.all([
+      fetchPortfolioData(user.id),
+      supabase.from("songfit_follows").select("id", { count: "exact", head: true }).eq("followed_user_id", user.id),
+    ]).then(([data, follows]) => {
+      setSignals(data);
+      setFollowCount(follows.count ?? 0);
+      setLoading(false);
+    });
+  }, [user]);
+
+  const totals = useMemo(() => {
+    const fires = signals.reduce((s, sig) => s + sig.totalFires, 0);
+    const listeners = signals.reduce((s, sig) => s + sig.uniqueListeners, 0);
+    return { fires, listeners, songs: signals.length };
+  }, [signals]);
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <p className="text-muted-foreground text-sm">Sign in to see your dashboard</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-muted/30 transition-colors">
+            <ArrowLeft size={18} className="text-muted-foreground" />
+          </button>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-foreground">{profile?.display_name || "Your Dashboard"}</h1>
+              {profile?.is_verified && <VerifiedBadge size={14} />}
+            </div>
+            {!loading && (
+              <p className="text-[11px] font-mono text-muted-foreground">
+                {totals.songs} song{totals.songs !== 1 ? "s" : ""}
+                {totals.fires > 0 && <> · {totals.fires} fires</>}
+                {totals.listeners > 0 && <> · {totals.listeners} listeners</>}
+                {followCount > 0 && <> · {followCount} followers</>}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {!loading && signals.length > 0 && totals.fires > 0 && (() => {
+          const topSong = signals.find((s) => s.type === "in_studio" && s.totalFires > 0);
+          if (!topSong) return null;
+          return (
+            <div className="glass-card rounded-xl p-4 border border-orange-500/10">
+              <p className="text-[12px] text-foreground/70 leading-relaxed">
+                {signals.filter((s) => s.totalFires > 0).length === 1
+                  ? `"${topSong.post.track_title}" has all your signal. Share it wider to see what lines connect.`
+                  : topSong.totalFires > totals.fires * 0.6
+                    ? `"${topSong.post.track_title}" is your standout — ${Math.round((topSong.totalFires / totals.fires) * 100)}% of your total fires. Double down on sharing it.`
+                    : `Your fires are spread across ${signals.filter((s) => s.totalFires > 0).length} songs — your audience connects with your range, not just one moment.`}
+              </p>
+            </div>
+          );
+        })()}
+
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 size={20} className="animate-spin text-muted-foreground/30" />
+          </div>
+        ) : signals.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-16">
+            <Music size={32} className="text-muted-foreground/20" />
+            <p className="text-[12px] text-muted-foreground text-center max-w-[240px]">
+              Post your first song to CrowdFit to start collecting signal.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {signals.map((signal) => (
+              <SongCard key={signal.post.id} signal={signal} onClick={() => navigate(`/song/${signal.post.id}`)} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

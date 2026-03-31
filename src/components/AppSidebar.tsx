@@ -33,6 +33,7 @@ import {
   RotateCcw,
   Trash,
   Bug,
+  BarChart2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -763,6 +764,14 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                   className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                 >
                   <span>Profile</span>
+                </button>
+                <button
+                  onMouseEnter={() => handleNavHover("/dashboard") }
+                  onClick={() => { navigate("/dashboard"); closeMobileIfNeeded(); }}
+                  className="flex items-center gap-2 w-full px-2 py-1 rounded-md text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                >
+                  <BarChart2 size={12} />
+                  <span>Dashboard</span>
                 </button>
                 {!(profile as any)?.is_verified && (
                   <button
