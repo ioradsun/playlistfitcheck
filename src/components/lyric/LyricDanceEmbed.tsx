@@ -483,7 +483,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       .getPublicUrl(filename);
     const audioUrl = urlData?.publicUrl ?? null;
 
-    const { data: commentRow } = await supabase
+    const { data: commentRow } = await (supabase
       .from("lyric_dance_comments" as any)
       .insert({
         dance_id: danceId,
@@ -495,21 +495,22 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         parent_comment_id: null,
       })
       .select("id")
-      .single();
+      .single() as any);
 
     setCommentRefreshKey((k) => k + 1);
 
-    if (audioUrl && commentRow?.id) {
+    const cRow = commentRow as any;
+    if (audioUrl && cRow?.id) {
       try {
         const { data: transcribeData } = await supabase.functions.invoke(
           "voice-note-transcribe",
-          { body: { audio_url: audioUrl, comment_id: commentRow.id } },
+          { body: { audio_url: audioUrl, comment_id: cRow.id } },
         );
         if (transcribeData?.text) {
           await supabase
             .from("lyric_dance_comments" as any)
             .update({ text: transcribeData.text })
-            .eq("id", commentRow.id);
+            .eq("id", cRow.id);
           setCommentRefreshKey((k) => k + 1);
         }
       } catch {
