@@ -3080,7 +3080,7 @@ export class LyricDancePlayer {
           this.ctx, this.canvas, this.width, this.height, this._effectiveDpr,
         );
       } else {
-        // Past shatter — hold black until audio loops back to start
+        // Past shatter — hold black. Audio is paused by closing screen.
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.width, this.height);
         this._finaleEffect.reset();

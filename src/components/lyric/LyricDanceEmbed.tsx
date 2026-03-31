@@ -365,12 +365,36 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   // ── Closing screen ─────────────────────────────────────────────────
   useEffect(() => {
     if (!durationSec || !player) return;
-    if (currentTimeSec > durationSec + 2.2 && !closingVisible) setClosingVisible(true);
-    if (currentTimeSec < durationSec * 0.5 && closingVisible && closingAnswered) {
+    // Don't trigger while cover is up — audio is playing behind scrim, not "ended"
+    if (showCover) return;
+    // Show closing screen ~2.2s after song ends (after shatter animation)
+    if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
+      setClosingVisible(true);
+      // Stop the audio — no looping back to start.
+      // The closing screen is the end state until user seeks or replays.
+      player.audio.loop = false;
+      player.pause();
+    }
+  }, [currentTimeSec, durationSec, closingVisible, player, showCover]);
+
+  // ── Dismiss closing screen on replay or seek ───────────────────────
+  const dismissClosingAndReplay = useCallback(() => {
+    setClosingVisible(false);
+    setClosingAnswered(false);
+    if (player) player.audio.loop = false;
+    handleReplay();
+  }, [handleReplay, player]);
+
+  const dismissClosingAndSeek = useCallback((timeSec: number) => {
+    if (closingVisible) {
       setClosingVisible(false);
       setClosingAnswered(false);
     }
-  }, [currentTimeSec, durationSec, closingVisible, closingAnswered, player]);
+    player?.seek(timeSec);
+    player?.play();
+    player?.setMuted(false);
+    setMuted(false);
+  }, [closingVisible, player, setMuted]);
 
   // ── Fire data ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -437,16 +461,23 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   // ── Reels gesture callbacks (active AFTER cover dismisses) ──
   const handleReelsSeekBack = useCallback(() => {
     if (!player) return;
-    player.seek(Math.max(0, player.audio.currentTime - 5));
-  }, [player]);
+    const t = Math.max(0, player.audio.currentTime - 5);
+    dismissClosingAndSeek(t);
+  }, [player, dismissClosingAndSeek]);
 
   const handleReelsSeekForward = useCallback(() => {
     if (!player) return;
-    player.seek(Math.min(player.audio.duration || 999, player.audio.currentTime + 5));
-  }, [player]);
+    const t = Math.min(player.audio.duration || 999, player.audio.currentTime + 5);
+    dismissClosingAndSeek(t);
+  }, [player, dismissClosingAndSeek]);
 
   const handleReelsTogglePlayPause = useCallback(() => {
     if (!player) return;
+    // If closing screen is up, center tap = replay
+    if (closingVisible) {
+      dismissClosingAndReplay();
+      return;
+    }
     if (reelsPaused) {
       setReelsPaused(false);
       player.play();
@@ -456,7 +487,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       setReelsPaused(true);
       player.pause();
     }
-  }, [player, reelsPaused, setMuted]);
+  }, [player, reelsPaused, setMuted, closingVisible, dismissClosingAndReplay]);
 
   // Reset pause when card deactivates
   useEffect(() => {
@@ -504,12 +535,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           empowermentPromise={empowermentPromise}
           danceId={((data ?? prefetchedData) as any)?.id ?? ""}
           onAnswer={() => setClosingAnswered(true)}
-          onReplay={() => {
-            setClosingVisible(false);
-            setClosingAnswered(false);
-            player?.seek(0);
-            player?.play();
-          }}
+          onReplay={dismissClosingAndReplay}
           source="feed"
         />
 
@@ -568,7 +594,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               <button onClick={toggleMute} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? "Unmute" : "Mute"}>
                 {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
               </button>
-              <button onClick={handleReplay} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
+              <button onClick={dismissClosingAndReplay} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
                 <RotateCcw size={14} />
               </button>
               {showExpandButton && (
