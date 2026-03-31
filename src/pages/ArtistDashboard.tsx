@@ -23,6 +23,152 @@ interface PostRow {
   palette: any;
 }
 
+
+interface ListenerIntelligence {
+  totalUniqueSessions: number;
+  sessionsMultipleSongs: number;
+  sessionsSuperFan: number;
+  songOverlap: Array<{ songA: string; songB: string; titleA: string; titleB: string; shared: number }>;
+  perSong: Record<
+    string,
+    {
+      exposureSessions: number;
+      fireSessions: number;
+      closingSessions: number;
+      commentSessions: number;
+      repeatListeners: number;
+      avgFiresPerSession: number;
+      deepListeners: number;
+    }
+  >;
+}
+
+async function fetchListenerIntelligence(
+  danceIds: string[],
+  danceTitles: Record<string, string>,
+): Promise<ListenerIntelligence> {
+  if (danceIds.length === 0) {
+    return {
+      totalUniqueSessions: 0,
+      sessionsMultipleSongs: 0,
+      sessionsSuperFan: 0,
+      songOverlap: [],
+      perSong: {},
+    };
+  }
+
+  const [firesRes, exposuresRes, closingRes, commentsRes] = await Promise.all([
+    supabase
+      .from("lyric_dance_fires" as any)
+      .select("dance_id, session_id, line_index, created_at")
+      .in("dance_id", danceIds),
+    supabase.from("lyric_dance_exposures" as any).select("dance_id, session_id").in("dance_id", danceIds),
+    supabase.from("lyric_dance_closing_picks" as any).select("dance_id, session_id").in("dance_id", danceIds),
+    supabase.from("lyric_dance_comments" as any).select("dance_id, session_id").in("dance_id", danceIds),
+  ]);
+
+  const fires = (firesRes.data ?? []) as any[];
+  const exposures = (exposuresRes.data ?? []) as any[];
+  const closings = (closingRes.data ?? []) as any[];
+  const comments = (commentsRes.data ?? []) as any[];
+
+  const allSessions = new Set<string>();
+  const sessionSongs = new Map<string, Set<string>>();
+
+  for (const row of [...fires, ...exposures]) {
+    if (!row.session_id) continue;
+    allSessions.add(row.session_id);
+    if (!sessionSongs.has(row.session_id)) sessionSongs.set(row.session_id, new Set());
+    sessionSongs.get(row.session_id)?.add(row.dance_id);
+  }
+
+  let sessionsMultipleSongs = 0;
+  let sessionsSuperFan = 0;
+  for (const songs of sessionSongs.values()) {
+    if (songs.size >= 2) sessionsMultipleSongs++;
+    if (songs.size >= 3) sessionsSuperFan++;
+  }
+
+  const songOverlap: ListenerIntelligence["songOverlap"] = [];
+  const danceIdArray = [...new Set(danceIds)];
+  for (let i = 0; i < danceIdArray.length; i++) {
+    for (let j = i + 1; j < danceIdArray.length; j++) {
+      const a = danceIdArray[i];
+      const b = danceIdArray[j];
+      let shared = 0;
+      for (const songs of sessionSongs.values()) {
+        if (songs.has(a) && songs.has(b)) shared++;
+      }
+      if (shared > 0) {
+        songOverlap.push({
+          songA: a,
+          songB: b,
+          titleA: danceTitles[a] ?? "Unknown",
+          titleB: danceTitles[b] ?? "Unknown",
+          shared,
+        });
+      }
+    }
+  }
+  songOverlap.sort((a, b) => b.shared - a.shared);
+
+  const perSong: ListenerIntelligence["perSong"] = {};
+
+  for (const danceId of danceIds) {
+    const songFires = fires.filter((f: any) => f.dance_id === danceId);
+    const songExposures = exposures.filter((e: any) => e.dance_id === danceId);
+    const songClosings = closings.filter((c: any) => c.dance_id === danceId);
+    const songComments = comments.filter((c: any) => c.dance_id === danceId);
+
+    const exposureSessions = new Set(songExposures.map((e: any) => e.session_id).filter(Boolean)).size;
+    const fireSessions = new Set(songFires.map((f: any) => f.session_id).filter(Boolean)).size;
+    const closingSessions = new Set(songClosings.map((c: any) => c.session_id).filter(Boolean)).size;
+    const commentSessions = new Set(songComments.map((c: any) => c.session_id).filter(Boolean)).size;
+
+    const sessionDays = new Map<string, Set<string>>();
+    for (const fire of songFires) {
+      if (!fire.session_id || !fire.created_at) continue;
+      if (!sessionDays.has(fire.session_id)) sessionDays.set(fire.session_id, new Set());
+      sessionDays.get(fire.session_id)?.add(String(fire.created_at).slice(0, 10));
+    }
+    let repeatListeners = 0;
+    for (const days of sessionDays.values()) {
+      if (days.size >= 2) repeatListeners++;
+    }
+
+    const sessionLines = new Map<string, Set<number>>();
+    for (const fire of songFires) {
+      if (!fire.session_id || fire.line_index == null) continue;
+      if (!sessionLines.has(fire.session_id)) sessionLines.set(fire.session_id, new Set());
+      sessionLines.get(fire.session_id)?.add(fire.line_index);
+    }
+    let deepListeners = 0;
+    for (const lines of sessionLines.values()) {
+      if (lines.size >= 3) deepListeners++;
+    }
+
+    const avgFiresPerSession = fireSessions > 0 ? songFires.length / fireSessions : 0;
+
+    perSong[danceId] = {
+      exposureSessions,
+      fireSessions,
+      closingSessions,
+      commentSessions,
+      repeatListeners,
+      avgFiresPerSession,
+      deepListeners,
+    };
+  }
+
+  return {
+    totalUniqueSessions: allSessions.size,
+    sessionsMultipleSongs,
+    sessionsSuperFan,
+    songOverlap,
+    perSong,
+  };
+}
+
 interface SongSignal {
   post: PostRow;
   type: "in_studio" | "now_streaming" | "battle";
@@ -318,6 +464,7 @@ export default function ArtistDashboard() {
   const [followCount, setFollowCount] = useState(0);
   const [followerTimeline, setFollowerTimeline] = useState<Array<{ day: string; count: number }>>([]);
   const [engagementTimeline, setEngagementTimeline] = useState<Array<{ day: string; fires: number; events: number }>>([]);
+  const [listenerIntel, setListenerIntel] = useState<ListenerIntelligence | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -339,6 +486,17 @@ export default function ArtistDashboard() {
         days.set(day, cumulative);
       }
       setFollowerTimeline(Array.from(days.entries()).map(([day, count]) => ({ day, count })));
+
+      const inStudioSignals = data.filter((s) => s.type === "in_studio" && s.post.lyric_dance_id);
+      const ids = inStudioSignals.map((s) => s.post.lyric_dance_id!);
+      const titleMap: Record<string, string> = {};
+      for (const s of inStudioSignals) titleMap[s.post.lyric_dance_id!] = s.post.track_title;
+
+      if (ids.length > 0) {
+        fetchListenerIntelligence(ids, titleMap).then(setListenerIntel);
+      } else {
+        setListenerIntel(null);
+      }
 
       setLoading(false);
     });
@@ -510,6 +668,87 @@ export default function ArtistDashboard() {
                   <span>{followerTimeline[0]?.day.slice(5)}</span>
                   <span>{followerTimeline[followerTimeline.length - 1]?.day.slice(5)}</span>
                 </div>
+              </div>
+            )}
+
+            {listenerIntel && listenerIntel.totalUniqueSessions > 0 && (
+              <div className="space-y-3">
+                <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider px-1">listener intelligence</p>
+
+                <div className="glass-card rounded-xl p-4 space-y-3">
+                  <div className="flex items-baseline justify-between">
+                    <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">your audience</p>
+                    <span className="text-[11px] font-mono text-foreground/70">{listenerIntel.totalUniqueSessions} total</span>
+                  </div>
+
+                  {(() => {
+                    const total = listenerIntel.totalUniqueSessions;
+                    const multi = listenerIntel.sessionsMultipleSongs;
+                    const superFan = listenerIntel.sessionsSuperFan;
+                    const oneSong = total - multi;
+
+                    const segments = [
+                      { label: "Discovered you", count: oneSong, color: "rgba(150,150,150,0.4)" },
+                      ...(multi - superFan > 0
+                        ? [{ label: "Exploring", count: multi - superFan, color: "rgba(168,85,247,0.5)" }]
+                        : []),
+                      ...(superFan > 0 ? [{ label: "Super fans", count: superFan, color: "rgba(255,120,30,0.7)" }] : []),
+                    ].filter((segment) => segment.count > 0);
+
+                    return (
+                      <>
+                        <div className="flex rounded-full overflow-hidden h-3">
+                          {segments.map((segment) => (
+                            <div
+                              key={segment.label}
+                              style={{ width: `${Math.max(4, (segment.count / total) * 100)}%`, background: segment.color }}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1">
+                          {segments.map((segment) => (
+                            <div key={segment.label} className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full" style={{ background: segment.color }} />
+                              <span className="text-[10px] text-foreground/60">{segment.label}</span>
+                              <span className="text-[9px] font-mono text-muted-foreground/40">{segment.count}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {total >= 5 && (
+                          <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+                            {superFan > 0
+                              ? `${superFan} super fan${superFan !== 1 ? "s" : ""} heard 3+ of your songs. These are the people who'll share your music for you.`
+                              : multi > 0
+                                ? `${multi} listener${multi !== 1 ? "s" : ""} explored a second song. More releases convert discoverers into fans.`
+                                : "Everyone's heard just one song so far. Post more to see who comes back."}
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {listenerIntel.songOverlap.length > 0 && (
+                  <div className="glass-card rounded-xl p-4 space-y-2.5">
+                    <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">listener overlap</p>
+                    {listenerIntel.songOverlap.slice(0, 3).map((pair, i) => (
+                      <div key={i} className="flex items-center gap-2 text-[10px]">
+                        <span className="text-foreground/60 truncate flex-1 min-w-0">{pair.titleA}</span>
+                        <span className="text-muted-foreground/30">↔</span>
+                        <span className="text-foreground/60 truncate flex-1 min-w-0">{pair.titleB}</span>
+                        <span className="text-[9px] font-mono text-purple-400/60 shrink-0">{pair.shared} shared</span>
+                      </div>
+                    ))}
+                    {(() => {
+                      const top = listenerIntel.songOverlap[0];
+                      return (
+                        <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
+                          {top.shared} people heard both "{top.titleA.slice(0, 20)}" and "{top.titleB.slice(0, 20)}." These listeners are your core audience.
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             )}
 

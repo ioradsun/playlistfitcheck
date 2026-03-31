@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Loader2, Share2 } from "lucide-react";
 import type { SongFitPost } from "@/components/songfit/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { MilestoneCard } from "@/components/dashboard/MilestoneCard";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -689,6 +690,15 @@ function BattleDrillDown({ post, navigate }: { post: SongFitPost; navigate: (pat
   const [hookB, setHookB] = useState<{ id: string; hook_phrase: string; hook_label: string | null; vote_count: number } | null>(null);
   const [totalVotes, setTotalVotes] = useState(0);
   const [comments, setComments] = useState<CommentRow[]>([]);
+  const [funnel, setFunnel] = useState<{
+    exposureSessions: number;
+    fireSessions: number;
+    closingSessions: number;
+    commentSessions: number;
+    repeatListeners: number;
+    deepListeners: number;
+    avgFiresPerSession: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -908,6 +918,15 @@ const SongDetail = () => {
 
   // Comments
   const [comments, setComments] = useState<CommentRow[]>([]);
+  const [funnel, setFunnel] = useState<{
+    exposureSessions: number;
+    fireSessions: number;
+    closingSessions: number;
+    commentSessions: number;
+    repeatListeners: number;
+    deepListeners: number;
+    avgFiresPerSession: number;
+  } | null>(null);
 
   // Empowerment promise (from dance data)
   const empowermentPromise = (danceData as any)?.empowerment_promise ?? null;
@@ -1049,6 +1068,48 @@ const SongDetail = () => {
         srcCounts[src] = (srcCounts[src] ?? 0) + 1;
       }
       setSourceBreakdown(srcCounts);
+    });
+
+    Promise.all([
+      supabase.from("lyric_dance_exposures" as any).select("session_id").eq("dance_id", danceId),
+      supabase.from("lyric_dance_fires" as any).select("session_id, line_index, created_at").eq("dance_id", danceId),
+      supabase.from("lyric_dance_closing_picks" as any).select("session_id").eq("dance_id", danceId),
+      supabase.from("lyric_dance_comments" as any).select("session_id").eq("dance_id", danceId),
+    ]).then(([expRes, fireRes, closeRes, commentRes]) => {
+      const expSessions = new Set(((expRes.data ?? []) as any[]).map((r: any) => r.session_id).filter(Boolean));
+      const fireSessions = new Set(((fireRes.data ?? []) as any[]).map((r: any) => r.session_id).filter(Boolean));
+      const closeSessions = new Set(((closeRes.data ?? []) as any[]).map((r: any) => r.session_id).filter(Boolean));
+      const commentSessions = new Set(((commentRes.data ?? []) as any[]).map((r: any) => r.session_id).filter(Boolean));
+
+      const sessionDays = new Map<string, Set<string>>();
+      for (const row of ((fireRes.data ?? []) as any[])) {
+        if (!row.session_id || !row.created_at) continue;
+        if (!sessionDays.has(row.session_id)) sessionDays.set(row.session_id, new Set());
+        sessionDays.get(row.session_id)?.add(String(row.created_at).slice(0, 10));
+      }
+      let repeatListeners = 0;
+      for (const days of sessionDays.values()) if (days.size >= 2) repeatListeners++;
+
+      const sessionLines = new Map<string, Set<number>>();
+      for (const row of ((fireRes.data ?? []) as any[])) {
+        if (!row.session_id || row.line_index == null) continue;
+        if (!sessionLines.has(row.session_id)) sessionLines.set(row.session_id, new Set());
+        sessionLines.get(row.session_id)?.add(row.line_index);
+      }
+      let deepListeners = 0;
+      for (const fireLines of sessionLines.values()) if (fireLines.size >= 3) deepListeners++;
+
+      const avgFires = fireSessions.size > 0 ? (fireRes.data ?? []).length / fireSessions.size : 0;
+
+      setFunnel({
+        exposureSessions: expSessions.size,
+        fireSessions: fireSessions.size,
+        closingSessions: closeSessions.size,
+        commentSessions: commentSessions.size,
+        repeatListeners,
+        deepListeners,
+        avgFiresPerSession: avgFires,
+      });
     });
   }, [danceId]);
 
@@ -1206,6 +1267,145 @@ const SongDetail = () => {
             </div>
           );
         })()}
+
+        {funnel && funnel.exposureSessions > 0 && (
+          <div className="glass-card rounded-xl p-4 space-y-3">
+            <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">listener journey</p>
+
+            {(() => {
+              const stages = [
+                { label: "Heard it", count: funnel.exposureSessions, color: "rgba(150,150,150,0.5)" },
+                { label: "Fired", count: funnel.fireSessions, color: "rgba(255,120,30,0.6)" },
+                { label: "Felt something", count: funnel.closingSessions, color: "rgba(168,85,247,0.6)" },
+                { label: "Commented", count: funnel.commentSessions, color: "rgba(34,197,94,0.6)" },
+              ].filter((stage) => stage.count > 0);
+
+              const maxCount = stages[0]?.count ?? 1;
+
+              return (
+                <div className="space-y-2">
+                  {stages.map((stage, i) => {
+                    const pct = Math.max(8, Math.round((stage.count / maxCount) * 100));
+                    const dropoff =
+                      i > 0 && stages[i - 1].count > 0
+                        ? Math.round(((stages[i - 1].count - stage.count) / stages[i - 1].count) * 100)
+                        : null;
+                    return (
+                      <div key={stage.label} className="space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-foreground/60">{stage.label}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono text-foreground/70">{stage.count}</span>
+                            {dropoff != null && dropoff > 0 && (
+                              <span className="text-[8px] font-mono text-muted-foreground/30">-{dropoff}%</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted/20 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{ width: `${pct}%`, background: stage.color }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            <div className="flex gap-3 pt-1">
+              {funnel.repeatListeners > 0 && (
+                <div className="flex-1 text-center py-2 rounded-lg bg-muted/10 border border-border/10">
+                  <p className="text-[14px] font-mono text-foreground/80">{funnel.repeatListeners}</p>
+                  <p className="text-[8px] font-mono text-muted-foreground/40 uppercase">came back</p>
+                </div>
+              )}
+              {funnel.deepListeners > 0 && (
+                <div className="flex-1 text-center py-2 rounded-lg bg-muted/10 border border-border/10">
+                  <p className="text-[14px] font-mono text-foreground/80">{funnel.deepListeners}</p>
+                  <p className="text-[8px] font-mono text-muted-foreground/40 uppercase">deep listeners</p>
+                </div>
+              )}
+              {funnel.avgFiresPerSession >= 1.5 && (
+                <div className="flex-1 text-center py-2 rounded-lg bg-muted/10 border border-border/10">
+                  <p className="text-[14px] font-mono text-foreground/80">{funnel.avgFiresPerSession.toFixed(1)}</p>
+                  <p className="text-[8px] font-mono text-muted-foreground/40 uppercase">fires / listener</p>
+                </div>
+              )}
+            </div>
+
+            {(() => {
+              const fireRate = funnel.exposureSessions > 0 ? funnel.fireSessions / funnel.exposureSessions : 0;
+              const closingRate = funnel.fireSessions > 0 ? funnel.closingSessions / funnel.fireSessions : 0;
+
+              if (fireRate >= 0.5) {
+                return (
+                  <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+                    Half the people who heard your song fired on it — that's exceptional. This song connects on first listen.
+                  </p>
+                );
+              }
+              if (fireRate >= 0.2 && closingRate < 0.3) {
+                return (
+                  <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+                    People are firing but not finishing — they might be dropping off mid-song. Check which sections lose attention.
+                  </p>
+                );
+              }
+              if (funnel.repeatListeners > 0) {
+                return (
+                  <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+                    {funnel.repeatListeners} listener{funnel.repeatListeners !== 1 ? "s" : ""} came back on a different day. That's the strongest signal — your song lives in their head.
+                  </p>
+                );
+              }
+              if (funnel.deepListeners > 0) {
+                return (
+                  <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+                    {funnel.deepListeners} listener{funnel.deepListeners !== 1 ? "s" : ""} fired on 3+ different lines — they're not just liking one moment, they're absorbing the whole song.
+                  </p>
+                );
+              }
+              return null;
+            })()}
+          </div>
+        )}
+
+        {totalFires > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+            <div className="shrink-0" style={{ width: 160 }}>
+              <MilestoneCard
+                number={String(totalFires)}
+                label="fires"
+                sublabel={uniqueListeners > 0 ? `from ${uniqueListeners} listeners` : undefined}
+                songTitle={post.track_title}
+              />
+            </div>
+            {funnel && funnel.repeatListeners > 0 && (
+              <div className="shrink-0" style={{ width: 160 }}>
+                <MilestoneCard
+                  number={String(funnel.repeatListeners)}
+                  label="came back"
+                  sublabel="returned on a different day"
+                  songTitle={post.track_title}
+                  accentColor="rgba(168,85,247,0.8)"
+                />
+              </div>
+            )}
+            {funnel && funnel.deepListeners > 0 && (
+              <div className="shrink-0" style={{ width: 160 }}>
+                <MilestoneCard
+                  number={String(funnel.deepListeners)}
+                  label="deep listeners"
+                  sublabel="fired on 3+ lines"
+                  songTitle={post.track_title}
+                  accentColor="rgba(34,197,94,0.8)"
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Fire heatmap */}
         {rawFires.length > 0 && (
