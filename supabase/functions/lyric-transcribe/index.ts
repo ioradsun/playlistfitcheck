@@ -187,8 +187,8 @@ async function runScribe(
     }))
     .filter((w: WhisperWord) => w.word.length > 0 && w.end > w.start);
 
-  // Capture raw word sample before any stripping (first 5 words with all original fields)
-  const rawWordSample = (data.words || []).slice(0, 5);
+  // Capture full raw words before any stripping (all original fields from provider)
+  const rawWordsFull = (data.words || []);
 
   const segments = buildSegmentsFromWords(words);
 
@@ -197,7 +197,7 @@ async function runScribe(
   const rawText = data.text || words.map(w => w.word).join(" ");
 
 
-  return { words, segments, rawText, duration, rawWordSample };
+  return { words, segments, rawText, duration, rawWordsFull };
 }
 
 // ── AssemblyAI: word-level transcription with polling ─────────────────────────
@@ -1036,7 +1036,7 @@ serve(async (req) => {
       );
     }
 
-    let { words, segments, rawText, duration, rawWordSample } = transcribeResult.value as any;
+    let { words, segments, rawText, duration, rawWordsFull } = transcribeResult.value as any;
     // Normalize word durations — clamp Scribe's silence-bleed artifacts
     words = normalizeWordDurations(words);
 
@@ -1087,7 +1087,7 @@ serve(async (req) => {
               segmentCount: segments.length,
               duration,
               rawText: rawText.slice(0, 1000),
-              rawWordSample: rawWordSample || words.slice(0, 5),
+              rawWords: rawWordsFull || [],
             },
           },
         },
