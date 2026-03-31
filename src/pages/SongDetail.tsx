@@ -9,7 +9,7 @@ import { LyricDanceEmbed, type LyricDanceEmbedHandle } from "@/components/lyric/
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LazySpotifyEmbed } from "@/components/songfit/LazySpotifyEmbed";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Share2 } from "lucide-react";
+import { ArrowLeft, Loader2, Music, Share2 } from "lucide-react";
 import type { SongFitPost } from "@/components/songfit/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
