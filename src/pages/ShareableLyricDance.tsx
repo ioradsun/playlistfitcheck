@@ -351,11 +351,13 @@ export default function ShareableLyricDance() {
             id="bg-canvas"
             ref={canvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ zIndex: 1 }}
           />
           <canvas
             id="text-canvas"
             ref={textCanvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ zIndex: 2 }}
           />
 
           <ClosingScreen
@@ -383,6 +385,7 @@ export default function ShareableLyricDance() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 className="absolute inset-0"
+                style={{ zIndex: 30 }}
               >
                 <LyricDanceCover
                   songName={coverSongName}

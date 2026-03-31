@@ -505,8 +505,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         {/* Static canvases — only for non-pooled (shareable/FitTab) */}
         {!isFeedEmbed && (
           <>
-            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-            <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }} />
+            <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }} />
           </>
         )}
 
