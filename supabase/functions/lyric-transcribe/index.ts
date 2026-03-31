@@ -1048,7 +1048,7 @@ serve(async (req) => {
       words = applyReferenceLyricsDiff(words, referenceLyrics!.trim());
       // Rebuild segments from corrected words
       segments = buildSegmentsFromWords(words);
-      rawText = words.map(w => w.word).join(" ");
+      rawText = words.map((w: any) => w.word).join(" ");
     }
 
     // ── Build lyric lines from Scribe segments ──────────────────────────────
