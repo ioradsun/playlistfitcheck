@@ -281,7 +281,7 @@ async function runAssemblyAI(
   const duration = lastWord ? lastWord.end + 0.5 : 0;
   const rawText = result.text || words.map(w => w.word).join(" ");
 
-  return { words, segments, rawText, duration };
+  return { words, segments, rawText, duration, rawWordsFull: [] };
 }
 
 // ── Gemini Prompt: Song DNA (Hook + Insights + Metadata + Meaning) ────────────
