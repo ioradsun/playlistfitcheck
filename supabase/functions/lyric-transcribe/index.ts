@@ -187,6 +187,9 @@ async function runScribe(
     }))
     .filter((w: WhisperWord) => w.word.length > 0 && w.end > w.start);
 
+  // Capture raw word sample before any stripping (first 5 words with all original fields)
+  const rawWordSample = (data.words || []).slice(0, 5);
+
   const segments = buildSegmentsFromWords(words);
 
   const lastWord = words.length > 0 ? words[words.length - 1] : null;
@@ -194,7 +197,7 @@ async function runScribe(
   const rawText = data.text || words.map(w => w.word).join(" ");
 
 
-  return { words, segments, rawText, duration };
+  return { words, segments, rawText, duration, rawWordSample };
 }
 
 // ── AssemblyAI: word-level transcription with polling ─────────────────────────
