@@ -465,6 +465,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     isHeroWord?: boolean;
     wordDuration?: number;
     isAdlib?: boolean;
+    _wordStart?: number;
     visible: boolean;
   }>;
 };
@@ -1217,6 +1218,7 @@ export class LyricDancePlayer {
   private _compiledWasPortrait = false;
   private _evalFrame: ScaledKeyframe | null = null;
   private _evalChunks: ScaledKeyframe['chunks'] | null = null;
+  private _lastEvalTime = 0;
 
   // Background cache
   private bgCaches: HTMLCanvasElement[] = [];
@@ -3404,8 +3406,25 @@ export class LyricDancePlayer {
       const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
       if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
       const isAdlib = (chunk as any).isAdlib === true;
-      this.ctx.globalAlpha = isAdlib ? drawAlpha * 0.35 : drawAlpha;
-      this.ctx.fillStyle = isAdlib ? 'rgba(255,255,255,0.5)' : (chunk.color ?? '#ffffff');
+      // Adlib fade envelope: fade in over 150ms, hold, fade out over 200ms.
+      // Makes ghost words breathe in/out instead of hard-popping.
+      let adlibAlpha = 0.35;
+      if (isAdlib && (chunk as any).wordDuration != null) {
+        const wStart = (chunk as any)._wordStart ?? 0;
+        const wEnd = wStart + ((chunk as any).wordDuration ?? 0.5);
+        const tNow = this._lastEvalTime ?? 0;
+        const fadeIn = 0.15;
+        const fadeOut = 0.2;
+        if (tNow < wStart) {
+          adlibAlpha = 0;
+        } else if (tNow < wStart + fadeIn) {
+          adlibAlpha = 0.35 * ((tNow - wStart) / fadeIn);
+        } else if (tNow > wEnd - fadeOut) {
+          adlibAlpha = 0.35 * Math.max(0, (wEnd - tNow) / fadeOut);
+        }
+      }
+      this.ctx.globalAlpha = isAdlib ? drawAlpha * adlibAlpha : drawAlpha;
+      this.ctx.fillStyle = isAdlib ? 'rgba(255,255,255,0.6)' : (chunk.color ?? '#ffffff');
 
       const dpr = this._effectiveDpr;
       const heroDrawX = Math.round(drawX * dpr) / dpr;
@@ -4643,6 +4662,7 @@ export class LyricDancePlayer {
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
     const scene = this.compiledScene;
     if (!scene) return null;
+    this._lastEvalTime = tSec;
 
     if (this._effectsTransition) {
       const t = this._effectsTransition;
@@ -4886,6 +4906,7 @@ export class LyricDancePlayer {
         chunk.color = word.color;
         chunk.isHeroWord = word.isHeroWord;
         chunk.isAdlib = word.isAdlib;
+        chunk._wordStart = word.wordStart;
         chunk.emphasisLevel = word.emphasisLevel;
         chunk.wordDuration = word.wordDuration;
 
