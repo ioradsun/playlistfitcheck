@@ -306,6 +306,7 @@ export function LyricDisplay({
   onLinesChange,
   onHeaderProject,
   onTitleChange,
+  debugData,
 }: Props) {
   const { user, roles } = useAuth();
   const siteCopy = useSiteCopy();
