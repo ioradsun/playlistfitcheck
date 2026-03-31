@@ -107,7 +107,7 @@ const ObservedCard = memo(function ObservedCard({
           store.setState(post.id, "cold");
         }
       },
-      { rootMargin: reelsMode ? "50px 0px" : "200px 0px" },
+      { rootMargin: reelsMode ? "10% 0px" : "200px 0px" },
     );
 
     observer.observe(el);
@@ -124,12 +124,12 @@ const ObservedCard = memo(function ObservedCard({
         if (entry.isIntersecting) onCenterEnter(post.id);
         else onCenterLeave(post.id);
       },
-      { rootMargin: "-35% 0px -35% 0px" },
+      { rootMargin: reelsMode ? "-45% 0px -45% 0px" : "-35% 0px -35% 0px" },
     );
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [post.id, onCenterEnter, onCenterLeave]);
+  }, [post.id, onCenterEnter, onCenterLeave, reelsMode]);
 
   return (
     <div ref={ref} className={cn("shrink-0", reelsMode && "h-[100dvh] snap-start")}>
@@ -173,12 +173,17 @@ function FeedList({
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [preloadId, setPreloadId] = useState<string | null>(null);
   const centerSetRef = useRef(new Set<string>());
+  const store = useCardLifecycleStore();
 
   // Track which cards are in the center zone. The most recent entrant wins.
   const onCenterEnter = useCallback((postId: string) => {
     centerSetRef.current.add(postId);
     setPreloadId(postId);
-  }, []);
+    // In reels mode, auto-activate the centered card (Instagram behavior)
+    if (reelsMode && store) {
+      store.setState(postId, "active");
+    }
+  }, [reelsMode, store]);
 
   const onCenterLeave = useCallback((postId: string) => {
     centerSetRef.current.delete(postId);
@@ -190,7 +195,11 @@ function FeedList({
       // Pick whichever is still in center
       return Array.from(remaining).pop()!;
     });
-  }, []);
+    // In reels mode, deactivate the leaving card immediately
+    if (reelsMode && store) {
+      store.setState(postId, "warm");
+    }
+  }, [reelsMode, store]);
 
   // Infinite scroll sentinel
   useEffect(() => {

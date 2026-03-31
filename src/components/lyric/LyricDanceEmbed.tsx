@@ -274,6 +274,23 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       }
       return;
     }
+    // ── Reels mode: binary active/inactive ──
+    if (reelsMode && isFeedEmbed) {
+      if (cardState === "active") {
+        player.setCoverMode(false);
+        player.play();
+        player.setMuted(false);
+        setMuted(false);
+      } else {
+        // Not active in reels → mute and pause immediately
+        player.setMuted(true);
+        setMuted(true);
+        if (cardState === "cold") {
+          player.pause();
+        }
+      }
+      return;
+    }
     if (!isFeedEmbed) return;
     const coverUp = showCover;
     const isUserEngaged = cardState === "active" || userActivatedRef.current;
@@ -299,7 +316,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player.setMuted(true);
       setMuted(true);
     }
-  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen]);
+  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen, reelsMode]);
 
   // ── Reels: auto-remove cover when active ──────────────────────────
   useEffect(() => {
