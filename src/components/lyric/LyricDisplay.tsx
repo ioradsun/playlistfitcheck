@@ -145,6 +145,7 @@ interface Props {
     } | null,
   ) => void;
   onTitleChange?: (newTitle: string) => void;
+  debugData?: any | null;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -305,6 +306,7 @@ export function LyricDisplay({
   onLinesChange,
   onHeaderProject,
   onTitleChange,
+  debugData,
 }: Props) {
   const { user, roles } = useAuth();
   const siteCopy = useSiteCopy();
@@ -1460,6 +1462,24 @@ export function LyricDisplay({
                   </div>
                  ))}
                </div>
+             </div>
+           )}
+
+           {/* Debug — copy transcription response (admin only) */}
+           {isAdmin && debugData && (
+             <div className="glass-card rounded-xl p-3">
+               <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">
+                 Debug
+               </p>
+               <button
+                 className="w-full text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors text-left"
+                 onClick={() => {
+                   navigator.clipboard.writeText(JSON.stringify(debugData, null, 2));
+                   toast.success("Transcription response copied to clipboard");
+                 }}
+               >
+                 📋 Copy transcription response
+               </button>
              </div>
            )}
 

@@ -452,6 +452,7 @@ export function LyricsTab({
           }}
           onHeaderProject={onHeaderProject}
           onTitleChange={onTitleChange}
+          debugData={debugData}
         />
       </div>
     );
