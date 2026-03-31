@@ -19,6 +19,7 @@ interface WhisperWord {
   word: string;
   start: number;
   end: number;
+  speaker_id?: string;
 }
 
 interface GeminiHook {
@@ -175,6 +176,7 @@ async function runScribe(
       word: String(w.text ?? w.word ?? "").trim(),
       start: Math.round((Number(w.start) || 0) * 1000) / 1000,
       end: Math.round((Number(w.end) || 0) * 1000) / 1000,
+      ...(w.speaker_id ? { speaker_id: String(w.speaker_id) } : {}),
     }))
     .filter((w: WhisperWord) => w.word.length > 0 && w.end > w.start);
 
@@ -1054,7 +1056,12 @@ serve(async (req) => {
         title,
         artist,
         lines,
-        words: words.map(w => ({ word: w.word, start: w.start, end: w.end })),
+        words: words.map(w => ({
+          word: w.word,
+          start: w.start,
+          end: w.end,
+          ...(w.speaker_id ? { speaker_id: w.speaker_id } : {}),
+        })),
         _debug: {
           version: "v14.0-transcription-only",
           mode: editorMode ? "editor" : "detective",

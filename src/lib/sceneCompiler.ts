@@ -3,7 +3,7 @@ import { enrichSections } from "@/engine/directionResolvers";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { FrameRenderState } from "@/engine/presetDerivation";
-import { fitTextToViewport, type MeasureContext } from "@/engine/textLayout";
+import { fitTextToViewport, type MeasureContext, type Slot } from "@/engine/textLayout";
 import {
   deriveAllSectionMods,
   deriveSongMotionIdentity,
@@ -26,7 +26,7 @@ export type LineBeatMap = {
 
 export type ScenePayload = {
   lines: LyricLine[];
-  words?: Array<{ word: string; start: number; end: number }>;
+  words?: Array<{ word: string; start: number; end: number; speaker_id?: string }>;
   bpm?: number | null;
   beat_grid: { bpm: number; beats: number[]; confidence: number };
   motion_profile_spec: PhysicsSpec;
@@ -71,7 +71,7 @@ interface TypographyProfile {
 
 export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
 interface WordDirectiveLike { word?: string; emphasisLevel?: number; elementalClass?: string; isolation?: boolean; }
-interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; isHeroWord?: boolean; }
+interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; isHeroWord?: boolean; isAdlib?: boolean; }
 export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; phraseHeroWord?: string; }
 
 
@@ -409,7 +409,7 @@ function assignPresentationModes(
   }
 }
 
-export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; color: string; isHeroWord?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; }
+export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; color: string; isHeroWord?: boolean; isAdlib?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; }
 export interface CompiledPhraseGroup {
   lineIndex: number;
   groupIndex: number;
@@ -435,6 +435,8 @@ export interface CompiledPhraseGroup {
   elementalWash?: boolean;
   /** AI-chosen exit effect — passed to ExitEffect renderer */
   exitEffect?: string;
+  /** True if this group contains adlib/background vocal words */
+  isAdlib?: boolean;
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
@@ -490,7 +492,12 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const clean = normalized.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
       .replace(/^'+|'+$/g, '');  // strip leading/trailing apostrophes from clean key
     const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? Infinity)));
-    return { ...w, clean, directive: null, lineIndex, wordIndex: 0 };
+    // Detect adlib from line tag OR speaker diarization (speaker_0 = lead, others = adlib)
+    const line = payload.lines[lineIndex];
+    const isAdlibFromLine = (line as any)?.tag === "adlib";
+    const isAdlibFromSpeaker = (w as any).speaker_id && (w as any).speaker_id !== "speaker_0";
+    const isAdlib = isAdlibFromLine || isAdlibFromSpeaker;
+    return { ...w, clean, directive: null, lineIndex, wordIndex: 0, isAdlib: isAdlib || undefined };
   });
   const lineWordCounters: Record<number, number> = {};
   for (const wm of wordMeta) { lineWordCounters[wm.lineIndex] = lineWordCounters[wm.lineIndex] ?? 0; wm.wordIndex = lineWordCounters[wm.lineIndex]++; }
@@ -499,9 +506,70 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
   const aiPhrases = (payload.cinematic_direction as any)?.phrases as CinematicPhrase[] | undefined;
   const phraseGroups = buildPhraseGroups(wordMeta, aiPhrases);
+  // ── Separate adlib phrases from main phrases ──
+  // Adlib words render in a peripheral zone, not center-stage.
+  // Split any phrase group that mixes main + adlib into two groups.
+  // Pure-adlib groups get a different layout (smaller, offset).
+  const mainGroups: typeof phraseGroups = [];
+  const adlibGroups: typeof phraseGroups = [];
+
+  for (const group of phraseGroups) {
+    const mainWords = group.words.filter(w => !w.isAdlib);
+    const adlibWords = group.words.filter(w => w.isAdlib);
+
+    if (adlibWords.length === 0) {
+      // Pure main — keep as-is
+      mainGroups.push(group);
+    } else if (mainWords.length === 0) {
+      // Pure adlib
+      adlibGroups.push(group);
+    } else {
+      // Mixed — split into two groups
+      if (mainWords.length > 0) {
+        mainGroups.push({
+          ...group,
+          words: mainWords,
+          end: mainWords[mainWords.length - 1].end,
+          anchorWordIdx: findAnchorWord(mainWords),
+        });
+      }
+      if (adlibWords.length > 0) {
+        adlibGroups.push({
+          ...group,
+          words: adlibWords,
+          start: adlibWords[0].start,
+          end: adlibWords[adlibWords.length - 1].end,
+          anchorWordIdx: 0,
+          groupIndex: group.groupIndex + 10000, // offset to avoid collision
+        });
+      }
+    }
+  }
+
+  // ── Cap main phrase groups: split any group > MAX_GROUP_SIZE ──
+  const cappedMainGroups: typeof phraseGroups = [];
+  for (const group of mainGroups) {
+    if (group.words.length <= MAX_GROUP_SIZE) {
+      cappedMainGroups.push(group);
+    } else {
+      // Split at MAX_GROUP_SIZE boundaries
+      for (let i = 0; i < group.words.length; i += MAX_GROUP_SIZE) {
+        const chunk = group.words.slice(i, i + MAX_GROUP_SIZE);
+        if (chunk.length === 0) continue;
+        cappedMainGroups.push({
+          ...group,
+          words: chunk,
+          start: chunk[0].start,
+          end: chunk[chunk.length - 1].end,
+          anchorWordIdx: findAnchorWord(chunk),
+          groupIndex: group.groupIndex + (i > 0 ? i : 0),
+        });
+      }
+    }
+  }
   // Assign presentation modes at compile time (moved from edge function)
-  assignPresentationModes(phraseGroups, wordMeta, aiPhrases);
-  const globalPhraseDur = phraseAnimDurations(Math.max(1, phraseGroups[0]?.words.length ?? 1), Math.max(250, Math.round(durationSec * 250)));
+  assignPresentationModes(cappedMainGroups, wordMeta, aiPhrases);
+  const globalPhraseDur = phraseAnimDurations(Math.max(1, cappedMainGroups[0]?.words.length ?? 1), Math.max(250, Math.round(durationSec * 250)));
   const animParams = {
     linger: globalPhraseDur.linger,
     stagger: typeof (payload.frame_state as any)?.stagger === 'number' ? (payload.frame_state as any).stagger : globalPhraseDur.stagger,
@@ -510,7 +578,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   };
 
   const slotEnds: number[] = [];
-  for (const group of phraseGroups) {
+  for (const group of cappedMainGroups) {
     const groupDur = phraseAnimDurations(group.words.length, Math.round((group.end - group.start) * 1000));
     const visStart = group.start - groupDur.entryDuration - groupDur.stagger * group.words.length;
     const visEnd = group.end + Math.max(animParams.linger, groupDur.linger) + groupDur.exitDuration;
@@ -565,7 +633,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   // Pre-compute layout for each group using fitTextToViewport
   const groupLayouts = new Map<string, { fontSize: number; positions: Array<{ x: number; y: number; width: number }> }>();
 
-  for (const group of phraseGroups) {
+  // Layout main groups at center (normal behavior)
+  for (const group of cappedMainGroups) {
     const key = `${group.lineIndex}-${group.groupIndex}`;
     const groupWords = group.words.map(wm =>
       baseTypography.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word
@@ -616,6 +685,45 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     });
   }
 
+  // Layout adlib groups — smaller font, positioned at bottom 20% of viewport
+  for (const group of adlibGroups) {
+    const key = `${group.lineIndex}-${group.groupIndex}`;
+    const groupWords = group.words.map(wm =>
+      baseTypography.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word
+    );
+    // Adlibs: 55% of normal fill ratio, placed in bottom zone
+    const adlibSlot: Slot = {
+      id: 99,
+      yTop: REF_H * 0.74,
+      yBottom: REF_H * 0.90,
+      yCenter: REF_H * 0.82,
+      height: REF_H * 0.16,
+    };
+    const adlibLayout = fitTextToViewport(
+      measureCtx as MeasureContext,
+      groupWords,
+      REF_W,
+      REF_H,
+      baseTypography.fontFamily,
+      baseTypography.fontWeight,
+      {
+        maxLines: 1,
+        textTransform: 'none',
+        hasHeroWord: false,
+        targetFillRatio: 0.55,
+        slot: adlibSlot,
+      },
+    );
+    groupLayouts.set(key, {
+      fontSize: Math.min(adlibLayout.fontSize, 28), // cap adlib font size
+      positions: adlibLayout.wordPositions.map(wp => ({
+        x: wp.x,
+        y: wp.y,
+        width: wp.width,
+      })),
+    });
+  }
+
   const chapterBeats = payload.beat_grid?.beats ?? [];
   const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
 
@@ -633,7 +741,11 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const songMotion = deriveSongMotionIdentity(bpm, analysis, beats);
   const sectionMods = deriveAllSectionMods(analysis, compiledChapters, durationSec);
 
-  const compiledGroups: CompiledPhraseGroup[] = phraseGroups.map((group) => {
+  const allGroups = [...cappedMainGroups, ...adlibGroups];
+  // Sort by start time so resolveActiveGroup works correctly
+  allGroups.sort((a, b) => a.start - b.start);
+
+  const compiledGroups: CompiledPhraseGroup[] = allGroups.map((group) => {
     const key = `${group.lineIndex}-${group.groupIndex}`;
     const groupDur = phraseAnimDurations(group.words.length, Math.round((group.end - group.start) * 1000));
     const matchPhrase = (aiPhrases ?? []).find((ap: any) => {
@@ -695,6 +807,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         isHeroWord: wm.isHeroWord === true
           || (wm.directive as any)?.isolation === true
           || (Math.max(0, wm.end - wm.start) >= 0.5),
+        isAdlib: wm.isAdlib === true,
         isAnchor: wi === group.anchorWordIdx,
         color: '#ffffff',
         isFiller: isFillerWord(wm.word),
@@ -729,6 +842,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       elementalWash: (group as any).elementalWash ?? false,
       // Exit effect from AI
       exitEffect: matchPhrase?.exitEffect ?? undefined,
+      isAdlib: group.words.some(w => w.isAdlib),
     };
   }).sort((a, b) => a.start - b.start);
 

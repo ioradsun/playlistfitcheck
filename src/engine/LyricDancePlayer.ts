@@ -119,7 +119,7 @@ export interface LyricDanceData {
   song_name: string;
   audio_url: string;
   lyrics: LyricLine[];
-  words?: Array<{ word: string; start: number; end: number }>;
+  words?: Array<{ word: string; start: number; end: number; speaker_id?: string }>;
   motion_profile_spec: PhysicsSpec;
   beat_grid: { bpm: number; beats: number[]; confidence: number };
   palette: string[];
@@ -464,6 +464,7 @@ type ScaledKeyframe = Omit<Keyframe, "chunks" | "cameraX" | "cameraY"> & {
     isSoloHero?: boolean;
     isHeroWord?: boolean;
     wordDuration?: number;
+    isAdlib?: boolean;
     visible: boolean;
   }>;
 };
@@ -2244,7 +2245,7 @@ export class LyricDancePlayer {
    * Hot-patch lyrics/words without a full load() — skips images, sims, bg cache.
    * Only recompiles the scene and rebuilds chunk/timing caches.
    */
-  updateTranscript(lines: LyricLine[], words?: Array<{ word: string; start: number; end: number }> | null): void {
+  updateTranscript(lines: LyricLine[], words?: Array<{ word: string; start: number; end: number; speaker_id?: string }> | null): void {
     this.data = { ...this.data, lyrics: lines };
     if (words !== undefined) this.data = { ...this.data, words: words ?? undefined };
 
@@ -3370,7 +3371,8 @@ export class LyricDancePlayer {
       const rawDrawY = Number.isFinite(chunk.y) ? chunk.y - this._textVerticalBias : 0;
 
       const baseFontSize = Number.isFinite(chunk.fontSize) ? (chunk.fontSize as number) : 36;
-      const safeFontSize = Math.max(viewportMinFont, Math.round(baseFontSize) || 36);
+      const rawFontSize = (chunk as any).isAdlib ? baseFontSize * 0.65 : baseFontSize;
+      const safeFontSize = Math.max(viewportMinFont, Math.round(rawFontSize) || 36);
       const fontWeight = chunk.fontWeight ?? 700;
       const family = chunk.fontFamily ?? resolvedFont;
       const text = chunk.text;
@@ -3401,8 +3403,9 @@ export class LyricDancePlayer {
 
       const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
       if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
-      this.ctx.globalAlpha = drawAlpha;
-      this.ctx.fillStyle = chunk.color ?? '#ffffff';
+      const isAdlib = (chunk as any).isAdlib === true;
+      this.ctx.globalAlpha = isAdlib ? drawAlpha * 0.35 : drawAlpha;
+      this.ctx.fillStyle = isAdlib ? 'rgba(255,255,255,0.5)' : (chunk.color ?? '#ffffff');
 
       const dpr = this._effectiveDpr;
       const heroDrawX = Math.round(drawX * dpr) / dpr;
@@ -4882,6 +4885,7 @@ export class LyricDancePlayer {
 
         chunk.color = word.color;
         chunk.isHeroWord = word.isHeroWord;
+        chunk.isAdlib = word.isAdlib;
         chunk.emphasisLevel = word.emphasisLevel;
         chunk.wordDuration = word.wordDuration;
 
@@ -4896,7 +4900,9 @@ export class LyricDancePlayer {
     // This handles: pre-first-phrase, during exit animation, post-exit gap.
     if (activeGroupIdx >= 0) {
       const activeGroup = groups[activeGroupIdx];
-      if (tSec < activeGroup.start || tSec >= activeGroup.end) {
+      // Don't suppress if the "active" group is an adlib — let main text show
+      const isActiveAdlib = (activeGroup as any).isAdlib === true;
+      if (!isActiveAdlib && (tSec < activeGroup.start || tSec >= activeGroup.end)) {
         for (let i = 0; i < chunks.length; i++) {
           chunks[i].alpha = 0;
           chunks[i].visible = false;
