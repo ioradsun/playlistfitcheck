@@ -1069,7 +1069,7 @@ serve(async (req) => {
         title,
         artist,
         lines,
-        words: words.map(w => ({
+        words: words.map((w: any) => ({
           word: w.word,
           start: w.start,
           end: w.end,
