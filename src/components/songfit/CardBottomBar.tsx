@@ -63,6 +63,9 @@ function FireButton({
   py,
   hasFired,
   accent,
+  iconSize = 18,
+  minWidth = "min-w-[52px]",
+  baseRingSize = 28,
 }: {
   panelOpen: boolean;
   onClose: () => void;
@@ -72,6 +75,9 @@ function FireButton({
   py: string;
   hasFired?: boolean;
   accent: string;
+  iconSize?: number;
+  minWidth?: string;
+  baseRingSize?: number;
 }) {
   const holdStartRef = useRef<number | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -106,7 +112,7 @@ function FireButton({
   }, [onTap, onHoldEnd]);
 
   const tier = holdProgress < 0.1 ? 0 : holdProgress < 0.33 ? 1 : holdProgress < 0.66 ? 2 : 3;
-  const ringSize = 28 + tier * 6;
+  const ringSize = baseRingSize + tier * 6;
   const isActive = hasFired || isHolding;
 
   // Fired/holding: always warm orange — unmistakable confirmation regardless of palette.
@@ -133,7 +139,7 @@ function FireButton({
         e.stopPropagation();
         if (panelOpen) onClose();
       }}
-      className={`relative flex items-center justify-center px-4 min-w-[52px] ${py} shrink-0`}
+      className={`relative flex items-center justify-center px-4 ${minWidth} ${py} shrink-0`}
       style={{ touchAction: "none" }}
     >
       {/* Hold ring */}
@@ -159,8 +165,8 @@ function FireButton({
         />
       ) : (
         <svg
-          width="18"
-          height="18"
+          width={iconSize}
+          height={iconSize}
           viewBox="0 0 24 24"
           style={{
             // All color applied via style, never via SVG presentation attributes
@@ -200,12 +206,17 @@ export function CardBottomBar({
   totalFireCount = 0,
   lastFiredAt,
 }: CardBottomBarProps) {
-  const py = variant === "embedded" ? "py-3" : "py-3.5";
+  const py = variant === "embedded" ? "py-3" : "py-4";
+  const textSize = variant === "fullscreen" ? "text-[13px]" : "text-[10px]";
+  const subTextSize = variant === "fullscreen" ? "text-[11px]" : "text-[9px]";
+  const dotSize = variant === "fullscreen" ? 6 : 5;
+  const fireIconSize = variant === "fullscreen" ? 22 : 18;
+  const fireMinWidth = variant === "fullscreen" ? "min-w-[60px]" : "min-w-[52px]";
 
   const wrapperClass =
     variant === "embedded"
       ? "flex items-stretch h-[48px]"
-      : "flex items-stretch mx-1 mt-1 rounded-md overflow-hidden h-[52px]";
+      : "flex items-stretch mx-1 mt-1 rounded-lg overflow-hidden h-[64px]";
 
   const wrapperStyle: React.CSSProperties = {
     background: "#0a0a0a",
@@ -235,8 +246,8 @@ export function CardBottomBar({
         {/* Animated white dot — song is live */}
         <div
           style={{
-            width: 5,
-            height: 5,
+            height: dotSize,
+            width: dotSize,
             borderRadius: "50%",
             background: "rgba(255,255,255,0.7)",
             flexShrink: 0,
@@ -244,7 +255,7 @@ export function CardBottomBar({
           }}
         />
         <span
-          className="text-[10px] font-mono truncate"
+          className={`${textSize} font-mono truncate`}
           style={{
             color: isHook ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.75)",
             fontWeight: isHook ? 600 : 400,
@@ -255,7 +266,7 @@ export function CardBottomBar({
         </span>
         {activeLineFireCount > 0 && (
           <span
-            className="text-[9px] font-mono shrink-0"
+            className={`${subTextSize} font-mono shrink-0`}
             style={{ color: "rgba(255,255,255,0.35)" }}
           >
             🔥{activeLineFireCount}
@@ -273,15 +284,15 @@ export function CardBottomBar({
         {/* Static dim white dot — tappable, not yet live */}
         <div
           style={{
-            width: 5,
-            height: 5,
+            width: dotSize,
+            height: dotSize,
             borderRadius: "50%",
             background: "rgba(255,255,255,0.25)",
             flexShrink: 0,
           }}
         />
         <span
-          className="text-[10px] font-mono truncate"
+          className={`${textSize} font-mono truncate`}
           style={{ letterSpacing: "0.05em" }}
         >
           {/* 🔥 renders in native emoji color — no override needed */}
@@ -302,8 +313,8 @@ export function CardBottomBar({
         {/* Animated white dot — listening now */}
         <div
           style={{
-            width: 5,
-            height: 5,
+            width: dotSize,
+            height: dotSize,
             borderRadius: "50%",
             background: "rgba(255,255,255,0.7)",
             flexShrink: 0,
@@ -311,7 +322,7 @@ export function CardBottomBar({
           }}
         />
         <span
-          className="text-[10px] font-mono truncate"
+          className={`${textSize} font-mono truncate`}
           style={{ color: "rgba(255,255,255,0.6)", letterSpacing: "0.05em" }}
         >
           mark your moment
@@ -324,15 +335,15 @@ export function CardBottomBar({
       <div className="flex items-center gap-1.5 min-w-0">
         <div
           style={{
-            width: 5,
-            height: 5,
+            width: dotSize,
+            height: dotSize,
             borderRadius: "50%",
             background: "rgba(255,255,255,0.15)",
             flexShrink: 0,
           }}
         />
         <span
-          className="text-[10px] font-mono truncate"
+          className={`${textSize} font-mono truncate`}
           style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}
         >
           be the first to mark a moment
@@ -381,6 +392,9 @@ export function CardBottomBar({
         py={py}
         hasFired={hasFired}
         accent={accent}
+        iconSize={fireIconSize}
+        minWidth={fireMinWidth}
+        baseRingSize={variant === "fullscreen" ? 34 : 28}
       />
     </div>
   );

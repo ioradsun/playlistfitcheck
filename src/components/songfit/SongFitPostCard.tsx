@@ -394,7 +394,7 @@ export function SongFitPostCard({
             <div className="pointer-events-auto bg-gradient-to-t from-[#0a0a0a]/90 via-[#0a0a0a]/50 to-transparent pt-20 px-4 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]">
               <div className="flex items-center gap-2 mb-2">
                 <div className="relative shrink-0 cursor-pointer" onClick={handleProfileClick}>
-                  <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
+                  <div className="h-11 w-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
                     {post.profiles?.avatar_url ? (
                       <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
@@ -405,20 +405,20 @@ export function SongFitPostCard({
                     <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={11} /></span>
                   )}
                 </div>
-                <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 rounded px-1.5 py-0.5 min-w-0 truncate max-w-[60vw]">
+                <span className="text-[12px] font-mono uppercase tracking-[0.12em] text-green-400 rounded px-1.5 py-0.5 min-w-0 truncate max-w-[60vw]">
                   {typeLabel}
                 </span>
               </div>
 
               {localCaption?.trim() && !editing && (
-                <p className="text-[12px] leading-snug text-white/50 mt-1">
+                <p className="text-[14px] leading-snug text-white/50 mt-1">
                   {localCaption.length <= 80 ? localCaption : (
                     <>
                       {captionExpanded ? localCaption : localCaption.slice(0, 80).trimEnd()}
                       {!captionExpanded && (
                         <>
                           <span className="text-white/20">… </span>
-                          <button onClick={() => setCaptionExpanded(true)} className="text-white/30 hover:text-white/50 text-[12px]">more</button>
+                          <button onClick={() => setCaptionExpanded(true)} className="text-white/30 hover:text-white/50 text-[14px]">more</button>
                         </>
                       )}
                     </>
