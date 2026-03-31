@@ -187,8 +187,8 @@ async function runScribe(
     }))
     .filter((w: WhisperWord) => w.word.length > 0 && w.end > w.start);
 
-  // Capture raw word sample before any stripping (first 5 words with all original fields)
-  const rawWordSample = (data.words || []).slice(0, 5);
+  // Capture full raw words before any stripping (all original fields from provider)
+  const rawWordsFull = (data.words || []);
 
   const segments = buildSegmentsFromWords(words);
 
