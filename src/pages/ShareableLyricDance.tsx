@@ -223,14 +223,15 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     if (!durationSec || !player) return;
+    if (showCover) return; // Don't trigger while cover is up
     if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
       setClosingVisible(true);
+      if (player) {
+        player.audio.loop = false;
+        player.pause();
+      }
     }
-    if (currentTimeSec < durationSec * 0.5 && closingVisible && closingAnswered) {
-      setClosingVisible(false);
-      setClosingAnswered(false);
-    }
-  }, [currentTimeSec, durationSec, closingVisible, closingAnswered, player]);
+  }, [currentTimeSec, durationSec, closingVisible, player, showCover]);
 
   useEffect(() => {
     const style = document.createElement("style");
@@ -365,8 +366,11 @@ export default function ShareableLyricDance() {
             onReplay={() => {
               setClosingVisible(false);
               setClosingAnswered(false);
-              player?.seek(0);
-              player?.play();
+              if (player) {
+                player.audio.loop = false;
+                player.seek(0);
+                player.play();
+              }
             }}
             source="shareable"
           />
