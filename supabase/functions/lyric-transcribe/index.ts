@@ -170,6 +170,9 @@ async function runScribe(
 
   const data = await res.json();
 
+  // DEBUG: log first 3 raw words to see what Scribe actually returns
+  console.log("[Scribe] Raw word sample:", JSON.stringify((data.words || []).slice(0, 3)));
+
   // Log raw word fields from first 3 words to check for speaker_id, type, etc.
   const rawSample = (data.words || []).slice(0, 3).map((w: any) => Object.keys(w));
   console.log("[Scribe] raw word keys sample:", JSON.stringify(rawSample));
