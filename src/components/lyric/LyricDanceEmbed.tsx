@@ -318,11 +318,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
   }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen, reelsMode]);
 
-  // ── Reels: auto-remove cover when active ──────────────────────────
+  // ── Reels: ensure showCover is false so audio logic doesn't gate on it ──
   useEffect(() => {
-    if (!reelsMode || !isFeedEmbed || cardState !== "active" || !showCover) return;
-    setShowCover(false);
-  }, [reelsMode, isFeedEmbed, cardState, showCover, setShowCover]);
+    if (!reelsMode || !isFeedEmbed) return;
+    if (showCover) setShowCover(false);
+  }, [reelsMode, isFeedEmbed, showCover, setShowCover]);
 
   useEffect(() => {
     if (!player || !playerReady) return;
@@ -432,25 +432,44 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
         {!isBattleMode && (
           <AnimatePresence>
-            {(effectiveShowCover || isWaiting) && (
-              <motion.div
-                initial={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.3, ease: "easeOut" }}
-                className="absolute inset-0"
-                style={{ zIndex: 30 }}
-              >
-                <LyricDanceCover
-                  songName={songTitle}
-                  waiting={isWaiting}
-                  hideBackground={playerReady}
-                  badge={null}
-                  onListen={(e) => {
-                    userActivatedRef.current = true;
-                    handleListenNow(e);
-                  }}
-                />
-              </motion.div>
+            {reelsMode ? (
+              /* Reels: no cover. Just a loading spinner until player is ready. */
+              !playerReady && isFeedEmbed && (
+                <motion.div
+                  key="reels-loader"
+                  initial={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{ zIndex: 30, background: "#0a0a0a" }}
+                >
+                  <div
+                    className="w-5 h-5 border-2 border-white/10 border-t-white/40 rounded-full animate-spin"
+                  />
+                </motion.div>
+              )
+            ) : (
+              (effectiveShowCover || isWaiting) && (
+                <motion.div
+                  key="standard-cover"
+                  initial={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="absolute inset-0"
+                  style={{ zIndex: 30 }}
+                >
+                  <LyricDanceCover
+                    songName={songTitle}
+                    waiting={isWaiting}
+                    hideBackground={playerReady}
+                    badge={null}
+                    onListen={(e) => {
+                      userActivatedRef.current = true;
+                      handleListenNow(e);
+                    }}
+                  />
+                </motion.div>
+              )
             )}
           </AnimatePresence>
         )}
