@@ -170,6 +170,10 @@ async function runScribe(
 
   const data = await res.json();
 
+  // Log raw word fields from first 3 words to check for speaker_id, type, etc.
+  const rawSample = (data.words || []).slice(0, 3).map((w: any) => Object.keys(w));
+  console.log("[Scribe] raw word keys sample:", JSON.stringify(rawSample));
+
   const words: WhisperWord[] = (data.words || [])
     .filter((w: any) => w.type === "word" || !w.type)
     .map((w: any) => ({

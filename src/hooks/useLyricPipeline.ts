@@ -1082,7 +1082,6 @@ export function useLyricPipeline({
                     id: savedIdRef.current!,
                     payload: {
                       render_data: updated,
-                      cinematic_direction: merged,
                     },
                   });
                   return updated;
