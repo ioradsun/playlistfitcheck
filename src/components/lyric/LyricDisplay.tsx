@@ -1465,6 +1465,24 @@ export function LyricDisplay({
              </div>
            )}
 
+           {/* Debug — copy transcription response (admin only) */}
+           {isAdmin && debugData && (
+             <div className="glass-card rounded-xl p-3">
+               <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">
+                 Debug
+               </p>
+               <button
+                 className="w-full text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors text-left"
+                 onClick={() => {
+                   navigator.clipboard.writeText(JSON.stringify(debugData, null, 2));
+                   toast.success("Transcription response copied to clipboard");
+                 }}
+               >
+                 📋 Copy transcription response
+               </button>
+             </div>
+           )}
+
            {/* Publish Hook Battle / Hook Page — below both hooks */}
            {hottestHooksEnabled && (renderData?.hook || renderData?.secondHook) && renderData?.motionProfileSpec && beatGrid && (
              <PublishHookButton
