@@ -45,6 +45,9 @@ interface CardBottomBarProps {
     index: number;
     total: number;
     label: string | null;
+    text?: string;
+    startSec?: number;
+    endSec?: number;
   } | null;
   activeLineText?: string | null;
   activeLineFireCount?: number;
@@ -232,6 +235,10 @@ export function CardBottomBar({
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [recordingSec, setRecordingSec] = useState(0);
   const prevMomentIndexRef = useRef<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const scrollRafRef = useRef<number>(0);
+  const momentTextRef = useRef<string>("");
 
   const py = variant === "embedded" ? "py-3" : "py-4";
   const textSize = variant === "fullscreen" ? "text-[13px]" : "text-[10px]";
@@ -329,6 +336,50 @@ export function CardBottomBar({
     }
     prevMomentIndexRef.current = momentIdx;
   }, [barState, currentMoment?.index, onResumeAfterInput, stopRecording]);
+
+  // ── Ticker scroll animation ──
+  // Scrolls the moment text from right to left at a steady pace.
+  // Resets to 0 when the moment changes (detected by text change).
+  useEffect(() => {
+    const text = currentMoment?.text ?? "";
+    if (text !== momentTextRef.current) {
+      // Moment changed — reset scroll
+      momentTextRef.current = text;
+      setScrollOffset(0);
+    }
+
+    if (barState !== "lyrics" || !text) {
+      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+      return;
+    }
+
+    let lastTime = performance.now();
+    const SPEED = 40; // pixels per second
+
+    const tick = (now: number) => {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      setScrollOffset((prev) => prev + SPEED * dt);
+      scrollRafRef.current = requestAnimationFrame(tick);
+    };
+
+    scrollRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+    };
+  }, [currentMoment?.text, barState]);
+
+  // Reset scroll position when first copy scrolls fully off-screen
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    const el = scrollRef.current;
+    // The element contains two copies of the text + an 80px spacer.
+    // When we've scrolled past the first copy, snap back to 0.
+    const singleWidth = (el.scrollWidth - 80) / 2;
+    if (singleWidth > 0 && scrollOffset > singleWidth + 80) {
+      setScrollOffset(0);
+    }
+  }, [scrollOffset]);
 
   useEffect(() => {
     if (barState === "fired" || barState === "typing") {
@@ -440,10 +491,12 @@ export function CardBottomBar({
         </span>
       </div>
     );
-  } else if (!panelOpen && activeLineText) {
+  } else if (!panelOpen && (currentMoment?.text || activeLineText)) {
     const isHook = !!(hookPhrase && activeLineText === hookPhrase);
+    const displayText = currentMoment?.text || activeLineText || "";
+
     leftContent = (
-      <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0" style={{ overflow: "hidden" }}>
         <div
           style={{
             height: dotSize,
@@ -459,16 +512,48 @@ export function CardBottomBar({
             {momentLabel}
           </span>
         )}
-        <span
-          className={`${textSize} font-mono truncate`}
+        <div
           style={{
-            color: isHook ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.75)",
-            fontWeight: isHook ? 600 : 400,
-            letterSpacing: "0.03em",
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            position: "relative",
+            maskImage: "linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)",
+            WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)",
           }}
         >
-          {activeLineText}
-        </span>
+          <div
+            ref={scrollRef}
+            style={{
+              display: "inline-block",
+              whiteSpace: "nowrap",
+              transform: `translateX(-${scrollOffset}px)`,
+              willChange: "transform",
+            }}
+          >
+            <span
+              className={`${textSize} font-mono`}
+              style={{
+                color: isHook ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.75)",
+                fontWeight: isHook ? 600 : 400,
+                letterSpacing: "0.03em",
+              }}
+            >
+              {displayText}
+            </span>
+            <span style={{ display: "inline-block", width: 80 }} />
+            <span
+              className={`${textSize} font-mono`}
+              style={{
+                color: isHook ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.75)",
+                fontWeight: isHook ? 600 : 400,
+                letterSpacing: "0.03em",
+              }}
+            >
+              {displayText}
+            </span>
+          </div>
+        </div>
         {activeLineFireCount > 0 && (
           <span className={`${subTextSize} font-mono shrink-0`} style={{ color: "rgba(255,255,255,0.35)" }}>
             🔥{activeLineFireCount}
