@@ -1881,18 +1881,22 @@ export function FitTab({
                 visible={clipComposerVisible}
                 player={dancePlayerRef.current?.getPlayer() ?? null}
                 durationSec={dancePlayerRef.current?.getPlayer()?.audio?.duration ?? 0}
+                fires={rawFires}
+                lines={allLines.map((l) => ({
+                  lineIndex: l.lineIndex,
+                  text: l.text,
+                  startSec: l.startSec,
+                  endSec: l.startSec + 5,
+                }))}
                 initialStart={clipComposerStart}
+                initialEnd={clipComposerStart + 12}
                 initialCaption={clipComposerCaption}
-                clipDuration={10}
-                empowermentPromise={empowermentPromise}
-                accent="hsl(var(--primary))"
-                danceId={publishedDanceId ?? ""}
+                songTitle={lyricData.title || "Untitled"}
                 onClose={() => {
                   setClipComposerVisible(false);
                   const player = dancePlayerRef.current?.getPlayer();
                   if (player) {
                     player.setRegion(undefined, undefined);
-                    (player as any).setClipCaption?.(null);
                   }
                 }}
               />

@@ -26,6 +26,9 @@ interface ExportOptions {
   height: number;
   fps: number;
   songDuration: number;
+  /** Absolute time offset in seconds. drawAtTime will be called with startOffset + frame_time.
+   *  Use this for clip export: set startOffset = clipStart, songDuration = clipEnd - clipStart. */
+  startOffset?: number;
   onProgress?: (percent: number) => void;
   signal?: AbortSignal;
   /** Max encoder queue depth before backpressure kicks in (default: 8) */
@@ -126,7 +129,7 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
       if (encodeError) throw encodeError;
 
       // ── Render ──
-      player.drawAtTime(i / fps);
+      player.drawAtTime((options.startOffset ?? 0) + i / fps);
 
       // ── Create VideoFrame (zero-copy when possible) ──
       const timestamp = i * usPerFrame;
