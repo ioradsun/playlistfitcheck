@@ -502,28 +502,37 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
     // Layer 3: Ghost word heuristics (infer adlib from timing anomalies)
     // Scribe "fills in" background vocals it can hear faintly — these have
-    // telltale timing signatures: zero/near-zero duration, or multiple words
+    // telltale timing signatures: truly zero duration, or multiple words
     // clustered at the exact same timestamp under a sustained note.
-    const wordDur = w.end - w.start;
+    //
+    // IMPORTANT: Normal short words ("it", "a", "the") can be 10-40ms.
+    // Only flag words with ZERO duration (start === end) or near-zero
+    // AND they must appear in clusters (2+ consecutive ghost words).
+    const wordDur = Math.round((w.end - w.start) * 1000); // milliseconds
     const prev = i > 0 ? words[i - 1] : null;
+    const next = i < words.length - 1 ? words[i + 1] : null;
 
-    // Ghost: word duration < 50ms (Scribe heard it but couldn't isolate it)
-    const isGhostDuration = wordDur < 0.05;
+    // Zero-duration: start === end (within 10ms rounding)
+    const isZeroDuration = wordDur <= 10;
 
-    // Cluster: this word starts at the same time (±50ms) as the previous word ended,
-    // AND both have very short durations — multiple words stacked at one timestamp
-    const isTimestampCluster = prev != null
-      && Math.abs(w.start - prev.start) < 0.05
-      && Math.abs(w.end - prev.end) < 0.05;
+    // Cluster check: is this zero-duration word next to another zero-duration word?
+    // Single short words are normal. 2+ consecutive zero-duration words = ghost cluster.
+    const prevDurMs = prev ? Math.round((prev.end - prev.start) * 1000) : 999;
+    const nextDurMs = next ? Math.round((next.end - next.start) * 1000) : 999;
+    const hasZeroNeighbor = (prevDurMs <= 10) || (nextDurMs <= 10);
 
-    // Echo under sustain: previous word was held >1s (sustained note),
-    // and this word starts right at or before that word's end
+    // Ghost: zero duration AND part of a cluster (neighbor also zero-duration)
+    const isGhostCluster = isZeroDuration && hasZeroNeighbor;
+
+    // Echo under sustain: previous word held >1.5s, this word starts at its end,
+    // AND this word is zero/near-zero duration
     const prevDur = prev ? prev.end - prev.start : 0;
-    const isEchoUnderSustain = prevDur > 1.0
-      && w.start <= prev.end + 0.1
-      && wordDur < 0.15;
+    const isEchoUnderSustain = isZeroDuration
+      && prevDur > 1.5
+      && prev != null
+      && Math.abs(w.start - prev.end) < 0.05;
 
-    const isInferredAdlib = isGhostDuration || isTimestampCluster || isEchoUnderSustain;
+    const isInferredAdlib = isGhostCluster || isEchoUnderSustain;
 
     const isAdlib = isAdlibFromLine || isAdlibFromSpeaker || isInferredAdlib;
     return { ...w, clean, directive: null, lineIndex, wordIndex: 0, isAdlib: isAdlib || undefined };
