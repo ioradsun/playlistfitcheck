@@ -7,6 +7,7 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 import { LyricDanceEmbed, type LyricDanceEmbedHandle } from "@/components/lyric/LyricDanceEmbed";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
+import { LazySpotifyEmbed } from "@/components/songfit/LazySpotifyEmbed";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Share2 } from "lucide-react";
 import type { SongFitPost } from "@/components/songfit/types";
@@ -384,6 +385,303 @@ function SectionLyrics({
   );
 }
 
+// ── Now Streaming Drill-Down ─────────────────────────────────────────────
+
+function NowStreamingDrillDown({ post, navigate }: { post: SongFitPost; navigate: (path: any) => void }) {
+  const [events, setEvents] = useState<Array<{ event_type: string; created_at: string; user_id: string }>>([]);
+  const [comments, setComments] = useState<Array<{ id: string; content: string; created_at: string; user_id: string; likes_count: number }>>([]);
+  const [commentProfiles, setCommentProfiles] = useState<Record<string, { display_name: string | null; avatar_url: string | null }>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      supabase
+        .from("songfit_engagement_events" as any)
+        .select("event_type, created_at, user_id")
+        .eq("post_id", post.id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("songfit_comments")
+        .select("id, content, created_at, user_id, likes_count")
+        .eq("post_id", post.id)
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ]).then(async ([eventsRes, commentsRes]) => {
+      const evts = (eventsRes.data ?? []) as any[];
+      const cmts = (commentsRes.data ?? []) as any[];
+      setEvents(evts);
+      setComments(cmts);
+
+      // Fetch profiles for commenters
+      const userIds = [...new Set(cmts.map((c: any) => c.user_id).filter(Boolean))];
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .in("id", userIds);
+        const map: Record<string, any> = {};
+        for (const p of (profiles ?? []) as any[]) map[p.id] = p;
+        setCommentProfiles(map);
+      }
+      setLoading(false);
+    });
+  }, [post.id]);
+
+  // Aggregate events by type
+  const eventCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const e of events) counts[e.event_type] = (counts[e.event_type] ?? 0) + 1;
+    return counts;
+  }, [events]);
+
+  // Unique users who engaged
+  const uniqueEngagers = useMemo(() => new Set(events.map((e) => e.user_id)).size, [events]);
+
+  // Events by day for timeline
+  const timeline = useMemo(() => {
+    const days = new Map<string, Record<string, number>>();
+    for (const e of events) {
+      const day = e.created_at.slice(0, 10);
+      if (!days.has(day)) days.set(day, {});
+      const d = days.get(day)!;
+      d[e.event_type] = (d[e.event_type] ?? 0) + 1;
+    }
+    return Array.from(days.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([day, counts]) => ({ day, total: Object.values(counts).reduce((s, c) => s + c, 0), counts }));
+  }, [events]);
+
+  const bestDay = timeline.length > 0 ? timeline.reduce((best, d) => d.total > best.total ? d : best) : null;
+
+  const EVENT_LABELS: Record<string, { emoji: string; label: string }> = {
+    spotify_click: { emoji: "🎧", label: "Spotify clicks" },
+    like: { emoji: "❤️", label: "Likes" },
+    save: { emoji: "🔖", label: "Saves" },
+    comment: { emoji: "💬", label: "Comments" },
+    share: { emoji: "🔗", label: "Shares" },
+    profile_visit: { emoji: "👤", label: "Profile visits" },
+    follow_from_post: { emoji: "➕", label: "Follows" },
+    fire: { emoji: "🔥", label: "Fires" },
+  };
+
+  const fmt = (t: string) => {
+    const d = new Date(t);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffH = Math.floor(diffMs / 3600000);
+    const diffD = Math.floor(diffMs / 86400000);
+    if (diffH < 1) return "just now";
+    if (diffH < 24) return `${diffH}h ago`;
+    if (diffD < 7) return `${diffD}d ago`;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  };
+
+  if (loading)
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 size={20} className="animate-spin text-muted-foreground/30" />
+      </div>
+    );
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-muted/30">
+            <ArrowLeft size={18} className="text-muted-foreground" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-lg font-semibold truncate">{post.track_title}</p>
+            <p className="text-[10px] font-mono text-green-400 uppercase tracking-wider">Now Streaming</p>
+          </div>
+        </div>
+
+        {/* Spotify embed */}
+        <div className="rounded-xl overflow-hidden" style={{ height: 232 }}>
+          <LazySpotifyEmbed
+            trackId={post.spotify_track_id!}
+            trackTitle={post.track_title}
+            trackUrl={post.spotify_track_url!}
+            postId={post.id}
+            albumArtUrl={post.album_art_url}
+          />
+        </div>
+
+        {/* Headline stats */}
+        <div className="space-y-1.5">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className="text-[24px] font-mono font-medium text-foreground">{events.length}</span>
+            <span className="text-[11px] font-mono text-muted-foreground">interactions</span>
+            {uniqueEngagers > 0 && (
+              <>
+                <span className="text-muted-foreground/30">·</span>
+                <span className="text-[11px] font-mono text-muted-foreground">{uniqueEngagers} people</span>
+              </>
+            )}
+          </div>
+          {uniqueEngagers > 1 && (
+            <p className="text-[12px] text-muted-foreground/60 leading-relaxed">
+              {eventCounts.spotify_click > uniqueEngagers
+                ? `People are clicking through to Spotify multiple times — that's replay intent.`
+                : eventCounts.save > 0
+                  ? `${eventCounts.save} ${eventCounts.save === 1 ? "person" : "people"} saved this — saves are the strongest signal for long-term playlist adds.`
+                  : `${uniqueEngagers} people engaged. Share wider to see if saves and clicks grow.`}
+            </p>
+          )}
+        </div>
+
+        {/* Engagement breakdown */}
+        {Object.keys(eventCounts).length > 0 && (
+          <div className="glass-card rounded-xl p-4 space-y-2.5">
+            <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">engagement breakdown</p>
+            {Object.entries(eventCounts)
+              .sort((a, b) => b[1] - a[1])
+              .map(([type, count]) => {
+                const meta = EVENT_LABELS[type] ?? { emoji: "·", label: type };
+                const pct = events.length > 0 ? Math.round((count / events.length) * 100) : 0;
+                return (
+                  <div key={type} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-foreground/75 flex items-center gap-1.5">
+                        <span>{meta.emoji}</span> {meta.label}
+                      </span>
+                      <span className="text-[10px] font-mono text-muted-foreground/60">
+                        {count} · {pct}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted/30 overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "rgba(34,197,94,0.5)" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            {/* Insight */}
+            {eventCounts.spotify_click > 0 &&
+              eventCounts.save > 0 &&
+              (() => {
+                const clickToSaveRate = Math.round((eventCounts.save / eventCounts.spotify_click) * 100);
+                return (
+                  <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
+                    {clickToSaveRate >= 30
+                      ? `${clickToSaveRate}% click-to-save rate — people who listen are keeping it. That's strong conversion.`
+                      : clickToSaveRate >= 10
+                        ? `${clickToSaveRate}% of clickers saved. Growing this number is how songs go from heard to remembered.`
+                        : `People are clicking but not saving yet. The first 30 seconds might not be hooking them — consider a stronger intro.`}
+                  </p>
+                );
+              })()}
+          </div>
+        )}
+
+        {/* Activity timeline */}
+        {timeline.length > 1 && (
+          <div className="glass-card rounded-xl p-4 space-y-3">
+            <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">activity timeline</p>
+            <div className="flex items-end gap-1" style={{ height: 48 }}>
+              {timeline.map(({ day, total }) => {
+                const maxTotal = bestDay?.total ?? 1;
+                const pct = Math.max(8, Math.round((total / maxTotal) * 100));
+                return (
+                  <div key={day} className="flex-1 flex flex-col items-center">
+                    <div
+                      className="w-full rounded-t"
+                      style={{
+                        height: `${pct}%`,
+                        minHeight: 4,
+                        background: total === maxTotal ? "rgba(34,197,94,0.7)" : "rgba(34,197,94,0.3)",
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-between text-[8px] font-mono text-muted-foreground/30">
+              <span>{timeline[0]?.day.slice(5)}</span>
+              <span>{timeline[timeline.length - 1]?.day.slice(5)}</span>
+            </div>
+            {bestDay && (
+              <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+                {bestDay.day.slice(5)} was your biggest day — {bestDay.total} interactions.
+                {timeline.length >= 3 && timeline[timeline.length - 1].total > timeline[timeline.length - 2].total
+                  ? " Your momentum is building."
+                  : ""}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Comments */}
+        {comments.length > 0 && (
+          <div className="glass-card rounded-xl p-4 space-y-3">
+            <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">comments · {comments.length}</p>
+            {comments.slice(0, 10).map((c) => {
+              const profile = commentProfiles[c.user_id];
+              return (
+                <div key={c.id} className="space-y-1 py-1.5 border-b border-border/15 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono text-foreground/50">{profile?.display_name ?? "listener"}</span>
+                    <span className="text-[8px] font-mono text-muted-foreground/30">{fmt(c.created_at)}</span>
+                    {c.likes_count > 0 && (
+                      <span className="text-[8px] font-mono text-muted-foreground/30 ml-auto">❤️ {c.likes_count}</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-foreground/70 leading-snug">{c.content}</p>
+                </div>
+              );
+            })}
+            {comments.length > 10 && <p className="text-[9px] text-muted-foreground/30 text-center">+{comments.length - 10} more</p>}
+            {/* Insight */}
+            {comments.length >= 3 && (
+              <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
+                {comments.length} comments means people want to talk about your music. Respond to keep the conversation going —
+                engagement breeds engagement.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Card stats */}
+        <div className="glass-card rounded-xl p-4 space-y-2">
+          <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">card stats</p>
+          <div className="flex justify-between text-[11px]">
+            <span className="text-muted-foreground">Impressions</span>
+            <span className="font-mono text-foreground/70">{post.impressions.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-[11px]">
+            <span className="text-muted-foreground">Engagement score</span>
+            <span className="font-mono text-foreground/70">{Math.round(post.engagement_score)}</span>
+          </div>
+          {post.peak_rank && (
+            <div className="flex justify-between text-[11px]">
+              <span className="text-muted-foreground">Peak rank</span>
+              <span className="font-mono text-foreground/70">#{post.peak_rank}</span>
+            </div>
+          )}
+          {post.impressions > 0 && events.length > 0 && (
+            <p className="text-[11px] text-muted-foreground/50 pt-1 leading-relaxed">
+              {Math.round((events.length / post.impressions) * 100)}% of people who saw your card engaged with it.
+              {(events.length / post.impressions) >= 0.1
+                ? " That's strong — your card is doing its job."
+                : " Stronger album art or a punchier caption could lift this."}
+            </p>
+          )}
+        </div>
+
+        {/* Empty state */}
+        {events.length === 0 && comments.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-12">
+            <Music size={32} className="text-muted-foreground/20" />
+            <p className="text-[12px] text-muted-foreground text-center leading-relaxed max-w-[260px]">
+              No engagement yet. Your card needs more impressions — share it to get signal.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 const SongDetail = () => {
@@ -567,36 +865,10 @@ const SongDetail = () => {
       </div>
     );
 
-  // ── Non In Studio: keep simple view ────────────────────────────────────
+  // ── Now Streaming / Battle drill-down ──────────────────────────────────
 
   if (!isInStudio) {
-    return (
-      <div className="px-4 py-6 max-w-lg mx-auto space-y-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-muted/30">
-            <ArrowLeft size={18} className="text-muted-foreground" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-lg font-semibold truncate">{post.track_title}</p>
-            <p className="text-[10px] font-mono text-green-400 uppercase tracking-wider">Now Streaming</p>
-          </div>
-        </div>
-        <div className="glass-card rounded-xl p-4 space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Impressions</span>
-            <span className="font-mono">{post.impressions}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Likes</span>
-            <span className="font-mono">{post.likes_count}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Comments</span>
-            <span className="font-mono">{post.comments_count}</span>
-          </div>
-        </div>
-      </div>
-    );
+    return <NowStreamingDrillDown post={post} navigate={navigate} />;
   }
 
   // ── In Studio drill-down ───────────────────────────────────────────────
