@@ -6,9 +6,9 @@ import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 import { LyricDanceEmbed, type LyricDanceEmbedHandle } from "@/components/lyric/LyricDanceEmbed";
-import { FitExportModal } from "@/components/lyric/FitExportModal";
+import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Download, Share2, Play } from "lucide-react";
+import { ArrowLeft, Loader2, Share2 } from "lucide-react";
 import type { SongFitPost } from "@/components/songfit/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
@@ -420,7 +420,7 @@ const SongDetail = () => {
   } | null>(null);
 
   // Export
-  const [showExport, setShowExport] = useState(false);
+  const [clipEditorOpen, setClipEditorOpen] = useState(false);
   const playerRef = useRef<LyricDanceEmbedHandle>(null);
 
   // Derived
@@ -550,23 +550,6 @@ const SongDetail = () => {
 
   // ── Handlers ───────────────────────────────────────────────────────────
 
-  const handlePreviewClip = useCallback(() => {
-    if (!clipRegion) return;
-    const player = playerRef.current?.getPlayer();
-    if (!player) return;
-    player.setRegion(clipRegion.start, clipRegion.end);
-    player.seek(clipRegion.start);
-    player.play();
-    player.setMuted(false);
-  }, [clipRegion]);
-
-  const handleExportClip = useCallback(() => {
-    if (!clipRegion) return;
-    const player = playerRef.current?.getPlayer();
-    if (!player) return;
-    player.setRegion(clipRegion.start, clipRegion.end);
-    setShowExport(true);
-  }, [clipRegion]);
 
   // ── Loading / not found ────────────────────────────────────────────────
 
@@ -731,16 +714,10 @@ const SongDetail = () => {
             )}
             <div className="flex gap-2 pt-1">
               <button
-                onClick={handlePreviewClip}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[9px] font-mono uppercase tracking-wider rounded-lg border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
-              >
-                <Play size={10} /> Preview
-              </button>
-              <button
-                onClick={handleExportClip}
+                onClick={() => setClipEditorOpen(true)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[9px] font-mono uppercase tracking-wider rounded-lg border border-orange-500/30 text-orange-400/70 hover:text-orange-400 hover:bg-orange-500/5 transition-colors"
               >
-                <Download size={10} /> Export
+                ✂️ Open Clip Editor
               </button>
               <button
                 onClick={() => {
@@ -755,6 +732,25 @@ const SongDetail = () => {
               </button>
             </div>
           </div>
+        )}
+
+        {clipEditorOpen && clipRegion && (
+          <ClipComposer
+            visible={clipEditorOpen}
+            player={playerRef.current?.getPlayer() ?? null}
+            durationSec={audioDuration}
+            fires={rawFires}
+            lines={lines}
+            initialStart={clipRegion.start}
+            initialEnd={clipRegion.end}
+            initialCaption={clipCaption}
+            songTitle={post.track_title}
+            onClose={() => {
+              setClipEditorOpen(false);
+              const p = playerRef.current?.getPlayer();
+              if (p) p.setRegion(undefined, undefined);
+            }}
+          />
         )}
 
         {/* Player (collapsed, expandable) */}
@@ -773,17 +769,6 @@ const SongDetail = () => {
           </div>
         )}
 
-        <FitExportModal
-          isOpen={showExport}
-          onClose={() => {
-            setShowExport(false);
-            const player = playerRef.current?.getPlayer();
-            if (player) player.setRegion(undefined, undefined);
-          }}
-          getPlayer={() => playerRef.current?.getPlayer() ?? null}
-          songTitle={post.track_title}
-          artistName=""
-        />
 
         {/* Section lyrics with fire + comments */}
         {fireStrength.length > 0 && lines.length > 0 && (
