@@ -185,7 +185,7 @@ async function runScribe(
       end: Math.round((Number(w.end) || 0) * 1000) / 1000,
       ...(w.speaker_id ? { speaker_id: String(w.speaker_id) } : {}),
     }))
-    .filter((w: WhisperWord) => w.word.length > 0 && w.end > w.start);
+    .filter((w: WhisperWord) => w.word.length > 0 && w.end >= w.start);
 
   // Capture full raw words before any stripping (all original fields from provider)
   const rawWordsFull = (data.words || []);

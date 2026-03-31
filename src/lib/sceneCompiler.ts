@@ -484,7 +484,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     }
     return w;
   });
-  const wordMeta: WordMetaEntry[] = words.map((w) => {
+  const wordMeta: WordMetaEntry[] = words.map((w, i) => {
     // Normalize curly quotes/apostrophes before cleaning, then strip
     const normalized = w.word
       .replace(/[\u2018\u2019\u201A\u201B\u0060\u00B4]/g, "'")  // curly → straight apostrophe
@@ -492,11 +492,40 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const clean = normalized.replace(/[^a-zA-Z0-9']/g, '').toLowerCase()
       .replace(/^'+|'+$/g, '');  // strip leading/trailing apostrophes from clean key
     const lineIndex = Math.max(0, payload.lines.findIndex((l) => w.start >= (l.start ?? 0) && w.start < (l.end ?? Infinity)));
-    // Detect adlib from line tag OR speaker diarization (speaker_0 = lead, others = adlib)
+    // ── 3-layer adlib detection ──────────────────────────────────────
+    // Layer 1: Gemini line-level tag
     const line = payload.lines[lineIndex];
     const isAdlibFromLine = (line as any)?.tag === "adlib";
+
+    // Layer 2: ElevenLabs Scribe speaker diarization
     const isAdlibFromSpeaker = (w as any).speaker_id && (w as any).speaker_id !== "speaker_0";
-    const isAdlib = isAdlibFromLine || isAdlibFromSpeaker;
+
+    // Layer 3: Ghost word heuristics (infer adlib from timing anomalies)
+    // Scribe "fills in" background vocals it can hear faintly — these have
+    // telltale timing signatures: zero/near-zero duration, or multiple words
+    // clustered at the exact same timestamp under a sustained note.
+    const wordDur = w.end - w.start;
+    const prev = i > 0 ? words[i - 1] : null;
+
+    // Ghost: word duration < 50ms (Scribe heard it but couldn't isolate it)
+    const isGhostDuration = wordDur < 0.05;
+
+    // Cluster: this word starts at the same time (±50ms) as the previous word ended,
+    // AND both have very short durations — multiple words stacked at one timestamp
+    const isTimestampCluster = prev != null
+      && Math.abs(w.start - prev.start) < 0.05
+      && Math.abs(w.end - prev.end) < 0.05;
+
+    // Echo under sustain: previous word was held >1s (sustained note),
+    // and this word starts right at or before that word's end
+    const prevDur = prev ? prev.end - prev.start : 0;
+    const isEchoUnderSustain = prevDur > 1.0
+      && w.start <= prev.end + 0.1
+      && wordDur < 0.15;
+
+    const isInferredAdlib = isGhostDuration || isTimestampCluster || isEchoUnderSustain;
+
+    const isAdlib = isAdlibFromLine || isAdlibFromSpeaker || isInferredAdlib;
     return { ...w, clean, directive: null, lineIndex, wordIndex: 0, isAdlib: isAdlib || undefined };
   });
   const lineWordCounters: Record<number, number> = {};
