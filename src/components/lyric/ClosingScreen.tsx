@@ -12,6 +12,7 @@ interface ClosingScreenProps {
   danceId: string;
   onReplay: () => void;
   onAnswer?: () => void;
+  source?: "feed" | "shareable" | "embed";
 }
 
 const FALLBACK_FEELINGS = [
@@ -22,7 +23,7 @@ const FALLBACK_FEELINGS = [
   "something I can't name yet",
 ];
 
-export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, onAnswer }: ClosingScreenProps) {
+export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, onAnswer, source }: ClosingScreenProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const [freeText, setFreeText] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -37,7 +38,7 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
   const handleSubmit = async (hookIndex: number | null, text: string) => {
     if (submitted) return;
     setSubmitted(true);
-    await emitClosingPick(danceId, hookIndex, text || null);
+    await emitClosingPick(danceId, hookIndex, text || null, source);
     if (hookIndex !== null && hookIndex < options.length - 1) {
       setConfirmText(options[hookIndex]);
     }
