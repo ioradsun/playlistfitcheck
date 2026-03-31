@@ -715,7 +715,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             </div>
           )}
 
-          {!effectiveShowCover && !isWaiting && playerReady && data && !lightningBarEnabled && (
+          {!effectiveShowCover && !isWaiting && playerReady && data && !lightningBarEnabled && !closingVisible && (
             <LyricDanceProgressBar
               player={player}
               data={data}
@@ -775,6 +775,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               isLive: !effectiveShowCover && cardState === "active",
               totalFireCount,
               lastFiredAt,
+              songEnded: closingVisible,
+              firedMomentCount: firedSections.size,
             } as any)}
           />
         </div>

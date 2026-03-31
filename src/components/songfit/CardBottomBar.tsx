@@ -61,6 +61,10 @@ interface CardBottomBarProps {
   isLive?: boolean;
   totalFireCount?: number;
   lastFiredAt?: string | null;
+  /** True when the song has ended and closing screen is visible */
+  songEnded?: boolean;
+  /** Number of moments the user fired on (for end-state summary) */
+  firedMomentCount?: number;
 }
 
 function FireButton({
@@ -217,6 +221,8 @@ export function CardBottomBar({
   isLive = false,
   totalFireCount = 0,
   lastFiredAt,
+  songEnded = false,
+  firedMomentCount = 0,
 }: CardBottomBarProps) {
   const [barState, setBarState] = useState<BarState>("lyrics");
   const [commentText, setCommentText] = useState("");
@@ -421,6 +427,19 @@ export function CardBottomBar({
         />
       </div>
     );
+  } else if (songEnded && !panelOpen) {
+    leftContent = (
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span
+          className={`${textSize} font-mono truncate`}
+          style={{ color: "rgba(255,255,255,0.5)", letterSpacing: "0.05em" }}
+        >
+          {firedMomentCount > 0
+            ? `✓ ${firedMomentCount} moment${firedMomentCount !== 1 ? "s" : ""} marked`
+            : "song complete"}
+        </span>
+      </div>
+    );
   } else if (!panelOpen && activeLineText) {
     const isHook = !!(hookPhrase && activeLineText === hookPhrase);
     leftContent = (
@@ -515,22 +534,48 @@ export function CardBottomBar({
       </div>
 
       {barState === "lyrics" ? (
-        <>
-          <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />
-          <FireButton
-            panelOpen={panelOpen}
-            onClose={onClose}
-            onTap={() => { onFireTap?.(); handleFireComplete(); }}
-            onHoldStart={onFireHoldStart}
-            onHoldEnd={(ms) => { onFireHoldEnd?.(ms); handleFireComplete(); }}
-            py={py}
-            hasFired={hasFired}
-            accent={accent}
-            iconSize={fireIconSize}
-            minWidth={fireMinWidth}
-            baseRingSize={variant === "fullscreen" ? 34 : 28}
-          />
-        </>
+        songEnded ? (
+          <>
+            <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />
+            <button
+              className={`flex items-center justify-center ${py} ${fireMinWidth}`}
+              style={{ touchAction: "manipulation" }}
+              onClick={(e) => { e.stopPropagation(); onOpenReactions(); }}
+              aria-label="Replay"
+            >
+              <svg
+                width={fireIconSize}
+                height={fireIconSize}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="rgba(255,255,255,0.35)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />
+            <FireButton
+              panelOpen={panelOpen}
+              onClose={onClose}
+              onTap={() => { onFireTap?.(); handleFireComplete(); }}
+              onHoldStart={onFireHoldStart}
+              onHoldEnd={(ms) => { onFireHoldEnd?.(ms); handleFireComplete(); }}
+              py={py}
+              hasFired={hasFired}
+              accent={accent}
+              iconSize={fireIconSize}
+              minWidth={fireMinWidth}
+              baseRingSize={variant === "fullscreen" ? 34 : 28}
+            />
+          </>
+        )
       ) : (
         <>
           <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />

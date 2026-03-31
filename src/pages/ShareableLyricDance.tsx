@@ -457,7 +457,7 @@ export default function ShareableLyricDance() {
           ...(isMobile ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
         }}
       >
-        {!showCover && !isWaiting && renderData && !lightningBarEnabled && (
+        {!showCover && !isWaiting && renderData && !lightningBarEnabled && !closingVisible && (
           <LyricDanceProgressBar
             player={player}
             data={renderData}
@@ -504,6 +504,8 @@ export default function ShareableLyricDance() {
                 activeLineFireCount,
                 hookPhrase,
                 activeLineText: activeLine?.text ?? null,
+                songEnded: closingVisible,
+                firedMomentCount: 0,
               } as any)}
             />
           </div>
