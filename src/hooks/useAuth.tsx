@@ -13,6 +13,7 @@ interface ProfileData {
   wallet_address: string | null;
   invite_code: string | null;
   is_unlimited: boolean;
+  is_verified: boolean;
 }
 
 interface AuthContextType {

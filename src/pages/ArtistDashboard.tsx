@@ -150,11 +150,11 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
         .eq("hook_slug", hookSlug)
         .maybeSingle();
 
-      if (hookRow?.battle_id) {
+      if ((hookRow as any)?.battle_id) {
         const { count } = await supabase
           .from("lyric_dance_angle_votes" as any)
           .select("id", { count: "exact", head: true })
-          .eq("dance_id", hookRow.battle_id);
+          .eq("dance_id", (hookRow as any).battle_id);
         votesByPost[post.id] = count ?? 0;
       }
     }
