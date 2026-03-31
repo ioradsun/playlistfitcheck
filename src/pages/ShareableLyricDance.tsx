@@ -3,7 +3,7 @@
  * ShareableLyricDance — Public page for a full-song lyric dance.
  * Route: /:artistSlug/:songSlug/lyric-dance
  */
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +21,9 @@ import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { SeoHead } from "@/components/SeoHead";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
+import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
+import { getSessionId } from "@/lib/sessionId";
 
 const COVER_COLUMNS =
   "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name," +
@@ -56,6 +58,10 @@ export default function ShareableLyricDance() {
   const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
   const [closingVisible, setClosingVisible] = useState(false);
   const [closingAnswered, setClosingAnswered] = useState(false);
+  const [firedSections, setFiredSections] = useState<Set<number>>(new Set());
+  const [totalFireCount, setTotalFireCount] = useState(0);
+  const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
+  const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -192,6 +198,8 @@ export default function ShareableLyricDance() {
     handleResumeAfterInput,
     isWaiting,
     commentRefreshKey,
+    handleCommentFromBar,
+    setCommentRefreshKey,
     lightningBarEnabled,
   } = core;
 
@@ -200,17 +208,26 @@ export default function ShareableLyricDance() {
       setDataRaw(fetchedData);
     }
   }, [fetchedData, data]);
+  const renderData = fetchedData ?? data;
 
+  // ── Fetch historical fire data ─────────────────────────────────────
   useEffect(() => {
-    const id = (data as any)?.id;
+    const id = renderData?.id;
     if (!player || !id) return;
-    const t = setTimeout(() => {
-      fetchFireData(id).then((fires) => {
-        player.setHistoricalFires(fires);
-      });
-    }, 3000);
-    return () => clearTimeout(t);
-  }, [player, (data as any)?.id]);
+    let cancelled = false;
+    fetchFireData(id).then((fires) => {
+      if (cancelled) return;
+      player.setHistoricalFires(fires);
+      setTotalFireCount(fires.length);
+      if (fires.length > 0) {
+        const latest = fires.reduce((a, b) =>
+          (a.created_at ?? "") > (b.created_at ?? "") ? a : b,
+        );
+        setLastFiredAt(latest.created_at ?? null);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [player, renderData?.id]);
 
   const openReactionPanel = useCallback(() => {
     openPanel();
@@ -259,7 +276,6 @@ export default function ShareableLyricDance() {
     );
   }
 
-  const renderData = fetchedData ?? data;
   const siteCopy = useSiteCopy();
   const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
   const empowermentPromise = (renderData as any)?.empowerment_promise ?? null;
@@ -283,8 +299,109 @@ export default function ShareableLyricDance() {
   const hookPhrase = (renderData as any)?.hook_phrase ?? null;
   const activeLineFireCount = useMemo(() => {
     if (!activeLine) return 0;
-    return fireStrengthByLine[activeLine.lineIndex] ?? 0;
-  }, [activeLine, fireStrengthByLine]);
+    const currentTime = player?.audio?.currentTime ?? 0;
+    const activeStart = (renderData?.lyrics as any[])?.find(
+      (l: any) => l.start <= currentTime && l.end >= currentTime,
+    )?.start ?? 0;
+    const windowEnd = activeStart + 10;
+    const linesInWindow = (lyricSections.allLines ?? []).filter(
+      (l) => l.startSec >= activeStart - 1 && l.startSec <= windowEnd,
+    );
+    return linesInWindow.reduce((sum, l) => {
+      return sum + Object.values(reactionData).reduce((s, d) => s + (d.line[l.lineIndex] ?? 0), 0);
+    }, 0);
+  }, [activeLine, reactionData, lyricSections.allLines, player, renderData]);
+
+  const activeSectionIndex = useMemo(() => {
+    if (!audioSections.length) return 0;
+    const idx = audioSections.findIndex(
+      (s) => currentTimeSec >= s.startSec && currentTimeSec < s.endSec,
+    );
+    return idx >= 0 ? idx : 0;
+  }, [currentTimeSec, audioSections]);
+
+  const hasFired = firedSections.has(activeSectionIndex);
+  const markFired = useCallback(() => {
+    setFiredSections((prev) => new Set([...prev, activeSectionIndex]));
+  }, [activeSectionIndex]);
+
+  const barAccent = useMemo(() => {
+    const autoPalettes = (renderData as any)?.auto_palettes;
+    if (Array.isArray(autoPalettes) && autoPalettes[activeSectionIndex]) {
+      const p = autoPalettes[activeSectionIndex] as string[];
+      return p[3] ?? p[1] ?? p[0] ?? "rgba(255,140,50,1)";
+    }
+    return palette[1] ?? palette[0] ?? "rgba(255,140,50,1)";
+  }, [renderData, activeSectionIndex, palette]);
+
+  const moments = useMemo<Moment[]>(() => {
+    const phrases = (renderData as any)?.cinematic_direction?.phrases ?? [];
+    const phraseInputs = phrases.map((p: any) => {
+      const isMs = p.start > 500;
+      return {
+        start: isMs ? p.start / 1000 : p.start,
+        end: isMs ? p.end / 1000 : p.end,
+        text: p.text ?? "",
+      };
+    });
+    return buildMoments(phraseInputs, audioSections, lyricSections.allLines, durationSec);
+  }, [renderData, audioSections, lyricSections.allLines, durationSec]);
+
+  const currentMoment = useMemo(() => {
+    const m = moments.find(
+      (mo) => currentTimeSec >= mo.startSec && currentTimeSec < mo.endSec,
+    );
+    if (!m) return null;
+    return { index: m.index, total: moments.length, label: m.label };
+  }, [moments, currentTimeSec]);
+
+  const handleVoiceNote = useCallback(async (audioBlob: Blob) => {
+    const danceId = renderData?.id;
+    if (!danceId) return;
+
+    const momentIdx = currentMoment?.index ?? null;
+    const filename = `voice-${danceId}-${Date.now()}.webm`;
+    const { error: uploadError } = await supabase.storage
+      .from("voice-notes")
+      .upload(filename, audioBlob, { contentType: "audio/webm" });
+
+    if (uploadError) {
+      // eslint-disable-next-line no-console
+      console.error("[VoiceNote] Upload failed:", uploadError);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("voice-notes")
+      .getPublicUrl(filename);
+    const audioUrl = urlData?.publicUrl ?? null;
+
+    await (supabase
+      .from("lyric_dance_comments" as any)
+      .insert({
+        dance_id: danceId,
+        text: "🎤 voice note",
+        audio_url: audioUrl,
+        session_id: getSessionId(),
+        line_index: activeLine?.lineIndex ?? null,
+        moment_index: momentIdx,
+        parent_comment_id: null,
+      }) as any);
+
+    setCommentRefreshKey((k: number) => k + 1);
+
+    if (audioUrl) {
+      supabase.functions.invoke("voice-note-transcribe", {
+        body: { audio_url: audioUrl },
+      }).catch(() => {});
+    }
+  }, [renderData, currentMoment, activeLine, setCommentRefreshKey]);
+
+  useEffect(() => {
+    return () => {
+      if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current);
+    };
+  }, []);
 
   return (
     <div
@@ -477,8 +594,13 @@ export default function ShareableLyricDance() {
                 onOpenReactions: openReactionPanel,
                 onClose: closePanel,
                 panelOpen: reactionPanelOpen,
+                currentMoment,
                 onFireTap: () => {
-                  const id = (data as any)?.id;
+                  if (holdFireIntervalRef.current) {
+                    clearInterval(holdFireIntervalRef.current);
+                    holdFireIntervalRef.current = null;
+                  }
+                  const id = renderData?.id;
                   if (!id || !activeLine) return;
                   player?.fireFire(0);
                   emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "shareable");
@@ -486,12 +608,20 @@ export default function ShareableLyricDance() {
                     ...prev,
                     [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
                   }));
+                  setTotalFireCount((c) => c + 1);
+                  setLastFiredAt(new Date().toISOString());
+                  markFired();
                 },
                 onFireHoldStart: () => {
-                  /* nothing — visual handled by FireButton */
+                  if (holdFireIntervalRef.current) return;
+                  holdFireIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
                 },
                 onFireHoldEnd: (holdMs: number) => {
-                  const id = (data as any)?.id;
+                  if (holdFireIntervalRef.current) {
+                    clearInterval(holdFireIntervalRef.current);
+                    holdFireIntervalRef.current = null;
+                  }
+                  const id = renderData?.id;
                   if (!id || !activeLine) return;
                   player?.fireFire(holdMs);
                   emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "shareable");
@@ -500,12 +630,26 @@ export default function ShareableLyricDance() {
                     ...prev,
                     [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
                   }));
+                  setTotalFireCount((c) => c + 1);
+                  setLastFiredAt(new Date().toISOString());
+                  markFired();
                 },
+                onComment: (text: string) => {
+                  handleCommentFromBar(text, currentMoment?.index ?? null);
+                },
+                onVoiceNote: handleVoiceNote,
+                onPauseForInput: handlePauseForInput,
+                onResumeAfterInput: handleResumeAfterInput,
                 activeLineFireCount,
                 hookPhrase,
                 activeLineText: activeLine?.text ?? null,
+                accent: barAccent,
+                hasFired,
+                isLive: !showCover && playerReady,
+                totalFireCount,
+                lastFiredAt,
                 songEnded: closingVisible,
-                firedMomentCount: 0,
+                firedMomentCount: firedSections.size,
               } as any)}
             />
           </div>
