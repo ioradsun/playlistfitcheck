@@ -803,6 +803,7 @@ async function runGeminiTranscribe(
   segments: Array<{ start: number; end: number; text: string }>;
   rawText: string;
   duration: number;
+  rawWordsFull: any[];
 }> {
   const content = await callGemini(DEFAULT_TRANSCRIBE_PROMPT, audioBase64, mimeType, lovableKey, model, 8000, "transcribe");
 
