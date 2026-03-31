@@ -212,6 +212,7 @@ async function runAssemblyAI(
   segments: Array<{ start: number; end: number; text: string }>;
   rawText: string;
   duration: number;
+  rawWordsFull: any[];
 }> {
   // Step 1: Upload audio
   const uploadRes = await fetch("https://api.assemblyai.com/v2/upload", {
