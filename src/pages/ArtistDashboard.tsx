@@ -20,7 +20,6 @@ interface PostRow {
   lyric_dance_id: string | null;
   lyric_dance_url: string | null;
   status: string;
-  palette: any;
 }
 
 interface SongSignal {
