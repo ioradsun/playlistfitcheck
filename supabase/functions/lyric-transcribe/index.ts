@@ -1084,6 +1084,7 @@ serve(async (req) => {
               segmentCount: segments.length,
               duration,
               rawText: rawText.slice(0, 1000),
+              rawWordSample: words.slice(0, 5),
             },
           },
         },
