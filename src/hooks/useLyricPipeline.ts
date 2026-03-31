@@ -366,7 +366,6 @@ export function usePipelineScheduler({
         id: savedIdRef.current,
         payload: {
           render_data: { cinematicDirection: null },
-          cinematic_direction: null,
           section_images: null,
         },
       });
@@ -1029,7 +1028,6 @@ export function useLyricPipeline({
               id: savedIdRef.current,
               payload: {
                 render_data: updatedRenderData,
-                cinematic_direction: enrichedScene,
               },
             });
           }
@@ -1084,7 +1082,6 @@ export function useLyricPipeline({
                     id: savedIdRef.current!,
                     payload: {
                       render_data: updated,
-                      cinematic_direction: merged,
                     },
                   });
                   return updated;
