@@ -470,7 +470,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const chapters = rawChapters.length > 0 ? rawChapters : enrichSections(payload.cinematic_direction?.sections as CinematicSection[] | undefined);
   const visualMode = getVisualMode(payload);
   const rawWords = payload.words ?? [];
-  // Fix zero-duration tokens: give them a small duration instead of dropping them.
+  // Fix zero-duration tokens: give them a visible duration instead of dropping them.
   // Dropping shifts all word indices and breaks AI phrase wordRange alignment.
   const words = rawWords.map((w, i) => {
     if (w.start < 0 || w.end < 0) {
@@ -479,8 +479,11 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       return { ...w, start: prev?.end ?? 0, end: (prev?.end ?? 0) + 0.05 };
     }
     if (w.start >= w.end) {
-      // Zero-duration: give it 50ms duration so it's not dropped
-      return { ...w, end: w.start + 0.05 };
+      // Zero-duration ghost word: give it enough duration to be visible.
+      // 500ms lets the word appear, linger, and fade — feels intentional,
+      // not like a rendering glitch. The isAdlib flag (set later) routes
+      // these to the peripheral lane at reduced alpha.
+      return { ...w, end: w.start + 0.5 };
     }
     return w;
   });
