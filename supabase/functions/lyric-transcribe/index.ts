@@ -197,7 +197,7 @@ async function runScribe(
   const rawText = data.text || words.map(w => w.word).join(" ");
 
 
-  return { words, segments, rawText, duration, rawWordSample };
+  return { words, segments, rawText, duration, rawWordsFull };
 }
 
 // ── AssemblyAI: word-level transcription with polling ─────────────────────────
