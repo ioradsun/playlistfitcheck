@@ -145,6 +145,7 @@ interface Props {
     } | null,
   ) => void;
   onTitleChange?: (newTitle: string) => void;
+  debugData?: any | null;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
