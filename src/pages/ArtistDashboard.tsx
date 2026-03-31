@@ -132,6 +132,34 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
     }
   }
 
+  const battleUrls = battlePosts.map((p: any) => p.lyric_dance_url).filter(Boolean);
+  let votesByPost: Record<string, number> = {};
+
+  if (battleUrls.length > 0) {
+    for (const post of battlePosts as PostRow[]) {
+      if (!post.lyric_dance_url) continue;
+      const segments = post.lyric_dance_url.replace(/^\//, "").split("/").filter(Boolean);
+      if (segments.length < 3) continue;
+      const [artistSlug, songSlug, hookSlug] = segments;
+
+      const { data: hookRow } = await supabase
+        .from("shareable_hooks" as any)
+        .select("battle_id")
+        .eq("artist_slug", artistSlug)
+        .eq("song_slug", songSlug)
+        .eq("hook_slug", hookSlug)
+        .maybeSingle();
+
+      if (hookRow?.battle_id) {
+        const { count } = await supabase
+          .from("lyric_dance_angle_votes" as any)
+          .select("id", { count: "exact", head: true })
+          .eq("dance_id", hookRow.battle_id);
+        votesByPost[post.id] = count ?? 0;
+      }
+    }
+  }
+
   const signals: SongSignal[] = [];
 
   for (const post of inStudioPosts as PostRow[]) {
@@ -166,10 +194,11 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
   }
 
   for (const post of battlePosts as PostRow[]) {
+    const votes = votesByPost[post.id] ?? 0;
     signals.push({
       post,
       type: "battle",
-      totalFires: 0,
+      totalFires: votes,
       uniqueListeners: 0,
       firesPerListener: 0,
       topLine: null,
@@ -180,8 +209,8 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
   }
 
   signals.sort((a, b) => {
-    const scoreA = a.type === "in_studio" ? a.totalFires * 10 : a.spotifyClicks + a.saves * 3 + a.commentCount;
-    const scoreB = b.type === "in_studio" ? b.totalFires * 10 : b.spotifyClicks + b.saves * 3 + b.commentCount;
+    const scoreA = a.type === "in_studio" || a.type === "battle" ? a.totalFires * 10 : a.spotifyClicks + a.saves * 3 + a.commentCount;
+    const scoreB = b.type === "in_studio" || b.type === "battle" ? b.totalFires * 10 : b.spotifyClicks + b.saves * 3 + b.commentCount;
     return scoreB - scoreA;
   });
 
@@ -241,6 +270,12 @@ function SongCard({ signal, onClick }: { signal: SongSignal; onClick: () => void
             <div className="flex items-center gap-3 flex-wrap">
               {spotifyClicks > 0 && <span className="text-[10px] font-mono text-muted-foreground">{spotifyClicks} clicks</span>}
               {saves > 0 && <span className="text-[10px] font-mono text-muted-foreground">{saves} saves</span>}
+              {commentCount > 0 && <span className="text-[10px] font-mono text-muted-foreground">{commentCount} comments</span>}
+            </div>
+          )}
+          {type === "battle" && totalFires > 0 && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-[10px] font-mono text-purple-400/80">⚔️ {totalFires} votes</span>
               {commentCount > 0 && <span className="text-[10px] font-mono text-muted-foreground">{commentCount} comments</span>}
             </div>
           )}

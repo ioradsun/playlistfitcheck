@@ -6,6 +6,7 @@ export async function emitFire(
   lineIndex: number,
   timeSec: number,
   holdMs: number,
+  source?: "feed" | "shareable" | "embed",
 ): Promise<void> {
   supabase.from('lyric_dance_fires' as any).insert({
     dance_id: danceId,
@@ -13,18 +14,21 @@ export async function emitFire(
     line_index: lineIndex,
     time_sec: timeSec,
     hold_ms: holdMs,
+    ...(source ? { source } : {}),
   }).then();
 }
 
 export async function emitExposure(
   danceId: string,
   lineIndex: number,
+  source?: "feed" | "shareable" | "embed",
 ): Promise<void> {
   supabase.from('lyric_dance_exposures' as any)
     .upsert({
       dance_id: danceId,
       session_id: getSessionId(),
       line_index: lineIndex,
+      ...(source ? { source } : {}),
     }, { onConflict: 'dance_id,session_id,line_index', ignoreDuplicates: true })
     .then();
 }
@@ -33,6 +37,7 @@ export async function emitClosingPick(
   danceId: string,
   hookIndex: number | null,
   freeText: string | null,
+  source?: "feed" | "shareable" | "embed",
 ): Promise<void> {
   supabase.from('lyric_dance_closing_picks' as any)
     .upsert({
@@ -40,6 +45,7 @@ export async function emitClosingPick(
       session_id: getSessionId(),
       hook_index: hookIndex,
       free_text: freeText?.trim() || null,
+      ...(source ? { source } : {}),
     }, { onConflict: 'dance_id,session_id' })
     .then();
 }

@@ -368,6 +368,7 @@ export default function ShareableLyricDance() {
               player?.seek(0);
               player?.play();
             }}
+            source="shareable"
           />
 
 
@@ -473,7 +474,7 @@ export default function ShareableLyricDance() {
                   const id = (data as any)?.id;
                   if (!id || !activeLine) return;
                   player?.fireFire(0);
-                  emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
+                  emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "shareable");
                   setFireStrengthByLine((prev) => ({
                     ...prev,
                     [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
@@ -486,7 +487,7 @@ export default function ShareableLyricDance() {
                   const id = (data as any)?.id;
                   if (!id || !activeLine) return;
                   player?.fireFire(holdMs);
-                  emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
+                  emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "shareable");
                   const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
                   setFireStrengthByLine((prev) => ({
                     ...prev,
@@ -530,12 +531,12 @@ export default function ShareableLyricDance() {
           const id = (data ?? (fetchedData as any))?.id;
           if (!id) return;
           player?.fireFire(holdMs);
-          emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs);
+          emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs, "shareable");
         }}
         onLineVisible={(lineIndex) => {
           const id = (data ?? (fetchedData as any))?.id;
           if (!id) return;
-          emitExposure(id, lineIndex);
+          emitExposure(id, lineIndex, "shareable");
         }}
         empowermentPromise={empowermentPromise}
         fmlyHookEnabled={fmlyHookEnabled}

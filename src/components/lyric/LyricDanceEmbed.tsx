@@ -410,6 +410,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             player?.seek(0);
             player?.play();
           }}
+          source="feed"
         />
 
         {!isBattleMode && (
@@ -510,7 +511,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 const id = (data ?? prefetchedData as any)?.id;
                 if (!id || !activeLine) return;
                 player?.fireFire(0);
-                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0);
+                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "feed");
                 setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1 }));
                 markFired();
               },
@@ -526,7 +527,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 const id = (data ?? (prefetchedData as any))?.id;
                 if (!id || !activeLine) return;
                 player?.fireFire(holdMs);
-                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs);
+                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
                 const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
                 setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
                 markFired();
@@ -579,13 +580,13 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             const id = (data ?? (prefetchedData as any))?.id;
             if (!id) return;
             player?.fireFire(holdMs);
-            emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs);
+            emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
             markFired();
           }}
           onLineVisible={(lineIndex) => {
             const id = (data ?? (prefetchedData as any))?.id;
             if (!id) return;
-            emitExposure(id, lineIndex);
+            emitExposure(id, lineIndex, "feed");
           }}
           empowermentPromise={empowermentPromise}
           fmlyHookEnabled={fmlyHookEnabled}
