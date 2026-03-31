@@ -995,7 +995,7 @@ serve(async (req) => {
     const transcriptionEngine = useAssemblyAI ? "assemblyai" : useGeminiTranscription ? "gemini" : "scribe_v2";
 
     // ── Stage 1: Transcription ──
-    let transcribePromise: Promise<{ words: WhisperWord[]; segments: Array<{ start: number; end: number; text: string }>; rawText: string; duration: number }>;
+    let transcribePromise: Promise<{ words: WhisperWord[]; segments: Array<{ start: number; end: number; text: string }>; rawText: string; duration: number; rawWordsFull: any[] }>;
 
     if (useAssemblyAI) {
       transcribePromise = withRetry(
