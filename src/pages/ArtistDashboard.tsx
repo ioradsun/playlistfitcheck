@@ -281,6 +281,8 @@ export default function ArtistDashboard() {
   const [signals, setSignals] = useState<SongSignal[]>([]);
   const [loading, setLoading] = useState(true);
   const [followCount, setFollowCount] = useState(0);
+  const [followerTimeline, setFollowerTimeline] = useState<Array<{ day: string; count: number }>>([]);
+  const [engagementTimeline, setEngagementTimeline] = useState<Array<{ day: string; fires: number; events: number }>>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -288,12 +290,52 @@ export default function ArtistDashboard() {
     Promise.all([
       fetchPortfolioData(user.id),
       supabase.from("songfit_follows").select("id", { count: "exact", head: true }).eq("followed_user_id", user.id),
-    ]).then(([data, follows]) => {
+      supabase.from("songfit_follows").select("created_at").eq("followed_user_id", user.id).order("created_at", { ascending: true }),
+    ]).then(([data, follows, followRows]) => {
       setSignals(data);
       setFollowCount(follows.count ?? 0);
+
+      // Build follower growth timeline
+      const days = new Map<string, number>();
+      let cumulative = 0;
+      for (const row of ((followRows.data ?? []) as any[])) {
+        const day = row.created_at.slice(0, 10);
+        cumulative++;
+        days.set(day, cumulative);
+      }
+      setFollowerTimeline(Array.from(days.entries()).map(([day, count]) => ({ day, count })));
+
       setLoading(false);
     });
   }, [user]);
+
+  useEffect(() => {
+    if (!user || signals.length === 0) return;
+    // Fetch all engagement events for the user's posts
+    const postIds = signals.map((s) => s.post.id);
+    if (postIds.length === 0) return;
+
+    supabase
+      .from("songfit_engagement_events" as any)
+      .select("created_at, event_type")
+      .in("post_id", postIds)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        const days = new Map<string, { fires: number; events: number }>();
+        for (const row of ((data ?? []) as any[])) {
+          const day = row.created_at.slice(0, 10);
+          if (!days.has(day)) days.set(day, { fires: 0, events: 0 });
+          const d = days.get(day)!;
+          d.events++;
+          if (row.event_type === "fire") d.fires++;
+        }
+        setEngagementTimeline(
+          Array.from(days.entries())
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([day, counts]) => ({ day, ...counts })),
+        );
+      });
+  }, [user, signals]);
 
   const totals = useMemo(() => {
     const fires = signals.reduce((s, sig) => s + sig.totalFires, 0);
@@ -360,10 +402,87 @@ export default function ArtistDashboard() {
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {signals.map((signal) => (
-              <SongCard key={signal.post.id} signal={signal} onClick={() => navigate(`/song/${signal.post.id}`)} />
-            ))}
+          <div className="space-y-4">
+            {/* Engagement over time */}
+            {engagementTimeline.length > 1 && (
+              <div className="glass-card rounded-xl p-4 space-y-3">
+                <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">engagement over time</p>
+                <div className="flex items-end gap-0.5" style={{ height: 48 }}>
+                  {engagementTimeline.map(({ day, events }) => {
+                    const max = engagementTimeline.reduce((m, d) => Math.max(m, d.events), 1);
+                    const pct = Math.max(6, Math.round((events / max) * 100));
+                    return (
+                      <div key={day} className="flex-1">
+                        <div
+                          className="w-full rounded-t"
+                          style={{
+                            height: `${pct}%`,
+                            minHeight: 3,
+                            background: events === max ? "rgba(168,85,247,0.7)" : "rgba(168,85,247,0.3)",
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex justify-between text-[8px] font-mono text-muted-foreground/30">
+                  <span>{engagementTimeline[0]?.day.slice(5)}</span>
+                  <span>{engagementTimeline[engagementTimeline.length - 1]?.day.slice(5)}</span>
+                </div>
+                {(() => {
+                  const recent = engagementTimeline.slice(-3);
+                  const earlier = engagementTimeline.slice(-6, -3);
+                  if (recent.length >= 2 && earlier.length >= 2) {
+                    const recentAvg = recent.reduce((s, d) => s + d.events, 0) / recent.length;
+                    const earlierAvg = earlier.reduce((s, d) => s + d.events, 0) / earlier.length;
+                    if (recentAvg > earlierAvg * 1.2) {
+                      return <p className="text-[11px] text-muted-foreground/50 leading-relaxed">Your engagement is trending up — keep posting and sharing.</p>;
+                    } else if (recentAvg < earlierAvg * 0.5) {
+                      return <p className="text-[11px] text-muted-foreground/50 leading-relaxed">Activity has slowed. A fresh post or share could re-ignite it.</p>;
+                    }
+                  }
+                  return null;
+                })()}
+              </div>
+            )}
+
+            {/* Follower growth */}
+            {followerTimeline.length > 1 && (
+              <div className="glass-card rounded-xl p-4 space-y-3">
+                <div className="flex items-baseline justify-between">
+                  <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">follower growth</p>
+                  <span className="text-[11px] font-mono text-foreground/70">{followCount}</span>
+                </div>
+                <div className="flex items-end gap-0.5" style={{ height: 40 }}>
+                  {followerTimeline.map(({ day, count }) => {
+                    const max = followerTimeline[followerTimeline.length - 1]?.count ?? 1;
+                    const pct = Math.max(6, Math.round((count / max) * 100));
+                    return (
+                      <div key={day} className="flex-1">
+                        <div
+                          className="w-full rounded-t"
+                          style={{
+                            height: `${pct}%`,
+                            minHeight: 3,
+                            background: "rgba(34,197,94,0.4)",
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex justify-between text-[8px] font-mono text-muted-foreground/30">
+                  <span>{followerTimeline[0]?.day.slice(5)}</span>
+                  <span>{followerTimeline[followerTimeline.length - 1]?.day.slice(5)}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {signals.map((signal) => (
+                <SongCard key={signal.post.id} signal={signal} onClick={() => navigate(`/song/${signal.post.id}`)} />
+              ))}
+            </div>
           </div>
         )}
       </div>
