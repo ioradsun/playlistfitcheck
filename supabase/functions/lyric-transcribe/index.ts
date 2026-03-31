@@ -142,6 +142,7 @@ async function runScribe(
   segments: Array<{ start: number; end: number; text: string }>;
   rawText: string;
   duration: number;
+  rawWordsFull: any[];
 }> {
   const scribeT0 = Date.now();
   const sms = () => `${Date.now() - scribeT0}ms`;
