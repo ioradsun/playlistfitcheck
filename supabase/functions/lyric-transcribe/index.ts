@@ -142,6 +142,7 @@ async function runScribe(
   segments: Array<{ start: number; end: number; text: string }>;
   rawText: string;
   duration: number;
+  rawWordsFull: any[];
 }> {
   const scribeT0 = Date.now();
   const sms = () => `${Date.now() - scribeT0}ms`;
@@ -211,6 +212,7 @@ async function runAssemblyAI(
   segments: Array<{ start: number; end: number; text: string }>;
   rawText: string;
   duration: number;
+  rawWordsFull: any[];
 }> {
   // Step 1: Upload audio
   const uploadRes = await fetch("https://api.assemblyai.com/v2/upload", {
@@ -279,7 +281,7 @@ async function runAssemblyAI(
   const duration = lastWord ? lastWord.end + 0.5 : 0;
   const rawText = result.text || words.map(w => w.word).join(" ");
 
-  return { words, segments, rawText, duration };
+  return { words, segments, rawText, duration, rawWordsFull: [] };
 }
 
 // ── Gemini Prompt: Song DNA (Hook + Insights + Metadata + Meaning) ────────────
@@ -801,6 +803,7 @@ async function runGeminiTranscribe(
   segments: Array<{ start: number; end: number; text: string }>;
   rawText: string;
   duration: number;
+  rawWordsFull: any[];
 }> {
   const content = await callGemini(DEFAULT_TRANSCRIBE_PROMPT, audioBase64, mimeType, lovableKey, model, 8000, "transcribe");
 
@@ -852,7 +855,7 @@ async function runGeminiTranscribe(
 
   
 
-  return { words, segments, rawText, duration };
+  return { words, segments, rawText, duration, rawWordsFull: [] };
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -992,7 +995,7 @@ serve(async (req) => {
     const transcriptionEngine = useAssemblyAI ? "assemblyai" : useGeminiTranscription ? "gemini" : "scribe_v2";
 
     // ── Stage 1: Transcription ──
-    let transcribePromise: Promise<{ words: WhisperWord[]; segments: Array<{ start: number; end: number; text: string }>; rawText: string; duration: number }>;
+    let transcribePromise: Promise<{ words: WhisperWord[]; segments: Array<{ start: number; end: number; text: string }>; rawText: string; duration: number; rawWordsFull: any[] }>;
 
     if (useAssemblyAI) {
       transcribePromise = withRetry(
