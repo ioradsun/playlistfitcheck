@@ -39,7 +39,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
   const { data: posts } = await supabase
     .from("songfit_posts")
     .select(
-      "id, track_title, album_art_url, created_at, impressions, likes_count, comments_count, tips_total, engagement_score, spotify_track_id, spotify_track_url, lyric_dance_id, lyric_dance_url, status, palette",
+      "id, track_title, album_art_url, created_at, impressions, likes_count, comments_count, tips_total, engagement_score, spotify_track_id, spotify_track_url, lyric_dance_id, lyric_dance_url, status",
     )
     .eq("user_id", userId)
     .eq("status", "live")

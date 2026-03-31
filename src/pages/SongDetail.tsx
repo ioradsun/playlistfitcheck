@@ -707,8 +707,8 @@ function BattleDrillDown({ post, navigate }: { post: SongFitPost; navigate: (pat
         .eq("hook_slug", hookSlug)
         .maybeSingle();
 
-      if (!hookRow?.battle_id) { setLoading(false); return; }
-      const battleId = hookRow.battle_id;
+      if (!(hookRow as any)?.battle_id) { setLoading(false); return; }
+      const battleId = (hookRow as any).battle_id;
 
       const { data: hooks } = await supabase
         .from("shareable_hooks" as any)
