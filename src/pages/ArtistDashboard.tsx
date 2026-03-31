@@ -20,7 +20,6 @@ interface PostRow {
   lyric_dance_id: string | null;
   lyric_dance_url: string | null;
   status: string;
-  palette: any;
 }
 
 interface SongSignal {
@@ -39,7 +38,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
   const { data: posts } = await supabase
     .from("songfit_posts")
     .select(
-      "id, track_title, album_art_url, created_at, impressions, likes_count, comments_count, tips_total, engagement_score, spotify_track_id, spotify_track_url, lyric_dance_id, lyric_dance_url, status, palette",
+      "id, track_title, album_art_url, created_at, impressions, likes_count, comments_count, tips_total, engagement_score, spotify_track_id, spotify_track_url, lyric_dance_id, lyric_dance_url, status",
     )
     .eq("user_id", userId)
     .eq("status", "live")
@@ -150,11 +149,11 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
         .eq("hook_slug", hookSlug)
         .maybeSingle();
 
-      if (hookRow?.battle_id) {
+      if ((hookRow as any)?.battle_id) {
         const { count } = await supabase
           .from("lyric_dance_angle_votes" as any)
           .select("id", { count: "exact", head: true })
-          .eq("dance_id", hookRow.battle_id);
+          .eq("dance_id", (hookRow as any).battle_id);
         votesByPost[post.id] = count ?? 0;
       }
     }

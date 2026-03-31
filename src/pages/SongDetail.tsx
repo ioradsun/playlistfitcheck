@@ -9,7 +9,7 @@ import { LyricDanceEmbed, type LyricDanceEmbedHandle } from "@/components/lyric/
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LazySpotifyEmbed } from "@/components/songfit/LazySpotifyEmbed";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Share2 } from "lucide-react";
+import { ArrowLeft, Loader2, Music, Share2 } from "lucide-react";
 import type { SongFitPost } from "@/components/songfit/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
@@ -707,8 +707,8 @@ function BattleDrillDown({ post, navigate }: { post: SongFitPost; navigate: (pat
         .eq("hook_slug", hookSlug)
         .maybeSingle();
 
-      if (!hookRow?.battle_id) { setLoading(false); return; }
-      const battleId = hookRow.battle_id;
+      if (!(hookRow as any)?.battle_id) { setLoading(false); return; }
+      const battleId = (hookRow as any).battle_id;
 
       const { data: hooks } = await supabase
         .from("shareable_hooks" as any)
