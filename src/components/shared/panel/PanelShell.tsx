@@ -6,7 +6,7 @@ interface PanelShellProps {
    * "embedded" — absolute, fills positioned ancestor (InStudio card default)
    * "fullscreen" — fixed, bottom-anchored, 88vh (ShareableLyricDance)
    */
-  variant?: 'embedded' | 'fullscreen' | 'reels';
+  variant?: 'embedded' | 'fullscreen';
   /** Pixels to extend upward beyond the positioned ancestor — covers the card
    *  profile header in embedded mode. Outer overflow:hidden clips cleanly. */
   topOffset?: number;
@@ -21,9 +21,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHei
   const positionClass =
     variant === 'fullscreen'
       ? 'fixed left-0 right-0 z-[70] h-[88vh]'
-      : variant === 'reels'
-        ? 'absolute inset-x-0 bottom-0 z-[500]'
-        : 'absolute inset-x-0 z-[400]';
+      : 'absolute inset-x-0 z-[400]';
 
   return (
     <AnimatePresence>
@@ -39,7 +37,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHei
             background: variant === 'embedded' ? 'rgba(10,10,10,0.97)' : '#0d0d0d',
             backdropFilter: variant === 'embedded' ? 'blur(12px)' : undefined,
             borderTop: variant !== 'embedded' ? '1px solid rgba(255,255,255,0.06)' : undefined,
-            top: variant === 'reels' ? 44 : variant === 'embedded' ? 0 : undefined,
+            top: variant === 'embedded' ? 0 : undefined,
             bottom: variant === 'fullscreen' || variant === 'embedded' ? bottomOffset : undefined,
             maxHeight: maxHeight ?? undefined,
             height: maxHeight ?? undefined,

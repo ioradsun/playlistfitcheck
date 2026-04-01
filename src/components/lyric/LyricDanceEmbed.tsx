@@ -664,7 +664,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           )}
 
           <LyricInteractionLayer
-            variant={reelsMode ? "reels" : "embedded"}
+            variant="embedded"
             danceId={data?.id ?? ""}
             currentMoment={currentMoment}
             activeLine={muted ? null : activeLine}
@@ -683,7 +683,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             fmlyHookEnabled={fmlyHookEnabled}
             refreshKey={commentRefreshKey}
             isLive={!effectiveShowCover && cardState === "active"}
-            muted={muted}
             hasFired={hasFired}
             totalFireCount={totalFireCount}
             lastFiredAt={lastFiredAt}
@@ -737,6 +736,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             onPause={handlePauseForInput}
             onResume={handleResumeAfterInput}
             onSeekTo={(sec) => player?.seek(sec)}
+            onPanelCloseWithPosition={(timeSec) => {
+              if (player && timeSec != null) {
+                player.seek(timeSec);
+                if (reelsMode) {
+                  player.setMuted(false);
+                  player.play();
+                }
+              }
+            }}
             source="feed"
           />
         </div>
