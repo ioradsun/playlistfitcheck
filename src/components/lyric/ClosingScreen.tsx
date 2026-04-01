@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { emitClosingPick } from "@/lib/fire";
 
 interface ClosingScreenProps {
@@ -23,11 +23,29 @@ const FALLBACK_FEELINGS = [
   "something I can't name yet",
 ];
 
+const GAP = "clamp(4px, 2.5cqh, 14px)";
+
 export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, onAnswer, source }: ClosingScreenProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const [freeText, setFreeText] = useState("");
+  const [showFreeText, setShowFreeText] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [confirmText, setConfirmText] = useState("");
+  const [isWide, setIsWide] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setIsWide(width > height || width > 380);
+    });
+
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const options = useMemo(() => (
     empowermentPromise?.hooks.length
@@ -46,10 +64,12 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
 
   return (
     <div
+      ref={rootRef}
       style={{
         position: "absolute",
         inset: 0,
         zIndex: 200,
+        containerType: "size",
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? "auto" : "none",
         transition: "opacity 0.25s ease, pointer-events 0.25s ease",
@@ -62,8 +82,9 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: "28px 24px",
+          padding: "clamp(10px, 4cqh, 28px) 24px",
           flexDirection: "column",
+          overflowY: "auto",
         }}
       >
         <div
@@ -73,10 +94,10 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
             color: "rgba(255,255,255,0.22)",
             letterSpacing: "0.18em",
             textTransform: "uppercase",
-            marginBottom: 16,
             display: "flex",
             alignItems: "center",
             gap: 8,
+            marginBottom: GAP,
           }}
         >
           <span>{empowermentPromise?.fromState ?? "before"}</span>
@@ -86,14 +107,15 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
 
         <p
           style={{
-            fontSize: 15,
+            fontSize: "clamp(11px, 2.8cqh, 15px)",
             fontWeight: 500,
             color: "rgba(255,255,255,0.82)",
             textAlign: "center",
-            marginBottom: 20,
             lineHeight: 1.4,
             fontFamily: "monospace",
             maxWidth: 260,
+            margin: 0,
+            marginBottom: GAP,
           }}
         >
           which of these just happened to you?
@@ -105,12 +127,16 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
               style={{
                 width: "100%",
                 maxWidth: 300,
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
+                display: "grid",
+                gridTemplateColumns: isWide ? "1fr 1fr" : "1fr",
+                gap: "clamp(3px, 1.2cqh, 6px)",
+                marginBottom: GAP,
               }}
             >
-              {options.map((opt, i) => (
+              {options.map((opt, i) => {
+                const isLast = i === options.length - 1;
+                const isOptOut = isWide && isLast;
+                return (
                 <button
                   key={i}
                   onClick={() => {
@@ -120,83 +146,109 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
                   }}
                   style={{
                     width: "100%",
-                    padding: "10px 14px",
+                    padding: "clamp(5px, 1.8cqh, 10px) 14px",
                     borderRadius: 10,
                     background: picked === i ? "rgba(168,85,247,0.15)" : "rgba(255,255,255,0.04)",
-                    border: `0.5px solid ${picked === i ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)"}`,
-                    fontSize: 11,
+                    border: `0.5px solid ${isOptOut ? "rgba(255,255,255,0.06)" : picked === i ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)"}`,
+                    fontSize: "clamp(9px, 2cqh, 11px)",
                     fontFamily: "monospace",
                     color: picked === i
                       ? "rgba(255,255,255,0.9)"
-                      : "rgba(255,255,255,0.5)",
+                      : isOptOut ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.5)",
+                    opacity: isOptOut ? 0.8 : 1,
                     cursor: "pointer",
                     textAlign: "left",
                     lineHeight: 1.45,
                     transition: "all 0.15s",
+                    gridColumn: isOptOut ? "1 / -1" : undefined,
                   }}
                 >
                   {opt}
                 </button>
-              ))}
+                );
+              })}
             </div>
 
-            <div style={{ width: "100%", maxWidth: 300, marginTop: 10 }}>
-              <input
-                type="text"
-                value={freeText}
-                onChange={(e) => setFreeText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && freeText.trim()) {
-                    onAnswer?.();
-                    handleSubmit(picked, freeText);
-                  }
-                }}
-                placeholder="or say it yourself..."
-                style={{
-                  width: "100%",
-                  padding: "9px 12px",
-                  background: "rgba(255,255,255,0.04)",
-                  border: "0.5px solid rgba(255,255,255,0.1)",
-                  borderRadius: 10,
-                  fontSize: 11,
-                  fontFamily: "monospace",
-                  color: "rgba(255,255,255,0.7)",
-                  outline: "none",
-                  caretColor: "#a855f7",
-                }}
-              />
-              {freeText.trim().length > 0 && (
+            <div style={{ width: "100%", maxWidth: 300, marginBottom: GAP }}>
+              {!showFreeText ? (
                 <button
-                  onClick={() => {
-                    onAnswer?.();
-                    handleSubmit(picked, freeText);
-                  }}
+                  onClick={() => setShowFreeText(true)}
                   style={{
-                    marginTop: 6,
-                    fontSize: 9,
+                    fontSize: 10,
                     fontFamily: "monospace",
-                    color: "rgba(168,85,247,0.7)",
+                    color: "rgba(255,255,255,0.38)",
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    letterSpacing: "0.1em",
+                    padding: 0,
+                    textDecoration: "underline",
+                    textUnderlineOffset: 2,
                   }}
                 >
-                  submit →
+                  or say it yourself...
                 </button>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={freeText}
+                    onChange={(e) => setFreeText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && freeText.trim()) {
+                        onAnswer?.();
+                        handleSubmit(picked, freeText);
+                      }
+                    }}
+                    placeholder="say it yourself..."
+                    style={{
+                      width: "100%",
+                      padding: "clamp(5px, 1.8cqh, 10px) 12px",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "0.5px solid rgba(255,255,255,0.1)",
+                      borderRadius: 10,
+                      fontSize: "clamp(9px, 2cqh, 11px)",
+                      fontFamily: "monospace",
+                      color: "rgba(255,255,255,0.7)",
+                      outline: "none",
+                      caretColor: "#a855f7",
+                    }}
+                  />
+                  {freeText.trim().length > 0 && (
+                    <button
+                      onClick={() => {
+                        onAnswer?.();
+                        handleSubmit(picked, freeText);
+                      }}
+                      style={{
+                        marginTop: "clamp(3px, 1.2cqh, 6px)",
+                        fontSize: 9,
+                        fontFamily: "monospace",
+                        color: "rgba(168,85,247,0.7)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      submit →
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </>
         ) : (
-          <div style={{ textAlign: "center" }}>
+          <div style={{ textAlign: "center", marginBottom: GAP }}>
             {confirmText && (
               <p
                 style={{
-                  fontSize: 16,
+                  fontSize: "clamp(12px, 3cqh, 16px)",
                   fontWeight: 500,
                   color: "rgba(255,255,255,0.88)",
                   fontFamily: "monospace",
-                  marginBottom: 12,
+                  margin: "0 auto",
+                  marginBottom: "clamp(4px, 1.5cqh, 12px)",
                   lineHeight: 1.4,
                   maxWidth: 260,
                 }}
@@ -209,7 +261,8 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
                 fontSize: 10,
                 fontFamily: "monospace",
                 color: "rgba(168,85,247,0.5)",
-                marginBottom: 24,
+                margin: 0,
+                marginTop: "clamp(4px, 1.5cqh, 10px)",
               }}
             >
               that matters.
@@ -220,7 +273,6 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
         <button
           onClick={onReplay}
           style={{
-            marginTop: submitted ? 0 : 20,
             fontSize: 9,
             fontFamily: "monospace",
             color: "rgba(255,255,255,0.18)",
