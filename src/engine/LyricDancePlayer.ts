@@ -1681,7 +1681,7 @@ export class LyricDancePlayer {
     this.rafHandle = requestAnimationFrame(this.tick);
   }
 
-  private primeAudio(): void {
+  primeAudio(): void {
     this.audio.preload = "auto";
     // Avoid calling load() on every play/resume: it resets currentTime and breaks seek-based resumes.
     if (this.audio.networkState === HTMLMediaElement.NETWORK_EMPTY) {
