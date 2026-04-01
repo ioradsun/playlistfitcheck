@@ -38,7 +38,7 @@ export function LyricDanceCover({
         className="absolute inset-0"
         style={{
           background: hideBackground
-            ? "linear-gradient(to bottom, rgba(0,0,0,0.60) 0%, rgba(0,0,0,0.50) 40%, rgba(0,0,0,0.80) 100%)"
+            ? "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.30) 40%, rgba(0,0,0,0.70) 100%)"
             : "linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.55) 40%, rgba(0,0,0,0.82) 100%)",
         }}
       />

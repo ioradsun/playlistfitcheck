@@ -201,6 +201,11 @@ export default function ShareableLyricDance() {
 
   const renderData = fetchedData ?? data;
 
+  useEffect(() => {
+    if (!player) return;
+    player.setCoverMode(showCover);
+  }, [player, showCover]);
+
   // ── Fetch historical fire data ─────────────────────────────────────
   useEffect(() => {
     const id = renderData?.id;
