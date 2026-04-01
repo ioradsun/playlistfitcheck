@@ -11,10 +11,19 @@ type GhostProfileRow = {
 };
 
 type ArtistLyricVideoRow = {
+  lyric_dance_id?: string | null;
   track_title: string;
   artist_name: string;
   album_art_url: string | null;
   lyric_dance_url: string | null;
+  created_at: string;
+};
+
+type ClaimDanceRow = {
+  id: string;
+  song_name: string;
+  album_art_url: string | null;
+  section_images: string[] | null;
   created_at: string;
 };
 
@@ -23,9 +32,11 @@ export default function ArtistClaimPage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<GhostProfileRow | null>(null);
   const [latestVideo, setLatestVideo] = useState<ArtistLyricVideoRow | null>(null);
+  const [latestDance, setLatestDance] = useState<ClaimDanceRow | null>(null);
 
   useEffect(() => {
     let active = true;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
     async function load() {
       if (!username) {
@@ -44,33 +55,66 @@ export default function ArtistClaimPage() {
 
       if (!ghostProfile?.id) {
         setLatestVideo(null);
+        setLatestDance(null);
         setLoading(false);
         return;
       }
 
-      const { data: video } = await (supabase as any)
-        .from("artist_lyric_videos")
-        .select("track_title, artist_name, album_art_url, lyric_dance_url, created_at")
-        .eq("ghost_profile_id", ghostProfile.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const [{ data: video }, { data: dance }] = await Promise.all([
+        (supabase as any)
+          .from("artist_lyric_videos")
+          .select("track_title, artist_name, album_art_url, lyric_dance_url, lyric_dance_id, created_at")
+          .eq("ghost_profile_id", ghostProfile.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        (supabase as any)
+          .from("shareable_lyric_dances")
+          .select("id, song_name, album_art_url, section_images, created_at")
+          .eq("artist_slug", username)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
 
       if (!active) return;
       setLatestVideo((video as ArtistLyricVideoRow | null) ?? null);
+      setLatestDance((dance as ClaimDanceRow | null) ?? null);
+
+      const hasReadyDance = !!(dance?.id && Array.isArray(dance.section_images) && dance.section_images.length > 0);
+      const hasPublishedVideo = !!video?.lyric_dance_url;
+
       setLoading(false);
+
+      if (!hasReadyDance && !hasPublishedVideo) {
+        pollTimer = setTimeout(() => {
+          if (active) void load();
+        }, 5000);
+      }
     }
 
     void load();
     return () => {
       active = false;
+      if (pollTimer) clearTimeout(pollTimer);
     };
   }, [username]);
+
+  const readyDanceUrl = useMemo(() => {
+    if (latestVideo?.lyric_dance_url) return latestVideo.lyric_dance_url;
+    if (!username || !latestDance?.id) return null;
+    const sectionImages = latestDance.section_images;
+    if (!Array.isArray(sectionImages) || sectionImages.length === 0) return null;
+    return `/${username}/${slugifySong(latestDance.song_name)}/lyric-dance`;
+  }, [latestDance?.id, latestDance?.section_images, latestDance?.song_name, latestVideo?.lyric_dance_url, username]);
 
   const artistName = useMemo(
     () => latestVideo?.artist_name ?? profile?.display_name ?? username?.toUpperCase() ?? "Artist",
     [latestVideo?.artist_name, profile?.display_name, username],
   );
+
+  const coverArtUrl = latestVideo?.album_art_url ?? latestDance?.album_art_url ?? null;
+  const displaySongName = latestVideo?.track_title ?? latestDance?.song_name ?? undefined;
 
   if (loading) {
     return (
@@ -84,8 +128,8 @@ export default function ArtistClaimPage() {
     <div className="min-h-screen bg-background text-foreground">
       <ClaimBanner
         artistSlug={profile?.spotify_artist_slug ?? username}
-        coverArtUrl={latestVideo?.album_art_url ?? null}
-        songName={latestVideo?.track_title}
+        coverArtUrl={coverArtUrl}
+        songName={displaySongName}
         artistName={artistName}
       />
 
@@ -100,15 +144,15 @@ export default function ArtistClaimPage() {
           </h1>
 
           <p className="mt-3 text-sm text-muted-foreground">
-            {latestVideo?.lyric_dance_url
-              ? `Latest lyric dance: ${latestVideo.track_title || "Untitled"}`
+            {readyDanceUrl
+              ? `Latest lyric dance: ${displaySongName || "Untitled"}`
               : "This artist page is ready, but the lyric dance is still being generated."}
           </p>
 
-          {latestVideo?.lyric_dance_url ? (
+          {readyDanceUrl ? (
             <div className="mt-6 flex justify-center">
               <Link
-                to={`${latestVideo.lyric_dance_url}?from=claim`}
+                to={`${readyDanceUrl}?from=claim`}
                 className="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
               >
                 Open lyric dance
@@ -123,4 +167,12 @@ export default function ArtistClaimPage() {
       </main>
     </div>
   );
+}
+
+function slugifySong(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .slice(0, 50);
 }
