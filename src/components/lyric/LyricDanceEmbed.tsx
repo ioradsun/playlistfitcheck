@@ -504,7 +504,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   }, [reelsMode, isFeedEmbed, cardState]);
 
   return (
-    <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
+    <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a", position: "relative" }}>
       <div
         ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
