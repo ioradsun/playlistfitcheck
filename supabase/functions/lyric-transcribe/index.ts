@@ -155,6 +155,7 @@ async function runScribe(
   form.append("model_id", "scribe_v2");
   form.append("tag_audio_events", "true");
   form.append("diarize", "true");
+  form.append("language_code", "eng");
 
   
   const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
