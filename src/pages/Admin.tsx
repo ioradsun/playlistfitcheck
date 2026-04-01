@@ -598,6 +598,44 @@ export default function Admin() {
                   </div>
                 </div>
 
+                {/* ── Active Pipeline (LyricFitTab) ── */}
+                {reachPipelineMeta && reachPipelineFile && (
+                  <div className="glass-card rounded-xl overflow-hidden mb-6">
+                    <ClaimBanner
+                      artistSlug={reachPipelineMeta.slug}
+                      accent="#a855f7"
+                      coverArtUrl={reachPipelineMeta.albumArtUrl}
+                      songName={reachPipelineMeta.trackTitle}
+                      artistName={reachPipelineMeta.artistName}
+                    />
+                    <div className="h-[600px] overflow-auto">
+                      <LyricFitTab
+                        claimMeta={{
+                          artistSlug: reachPipelineMeta.slug,
+                          songSlug: reachPipelineMeta.trackTitle
+                            .toLowerCase()
+                            .replace(/\s+/g, "-")
+                            .replace(/[^a-z0-9-]/g, "")
+                            .slice(0, 50),
+                          artistName: reachPipelineMeta.artistName,
+                          songName: reachPipelineMeta.trackTitle,
+                          albumArtUrl: reachPipelineMeta.albumArtUrl,
+                          ghostProfileId: reachPipelineMeta.profileId,
+                          spotifyTrackId: reachPipelineMeta.trackId,
+                        }}
+                        autoSubmitFile={reachPipelineFile}
+                        onClaimPublished={(danceUrl) => {
+                          toast.success(`Lyric Dance ready → ${danceUrl}`);
+                          setReachPipelineMeta(null);
+                          setReachPipelineFile(null);
+                          setReachActiveSlug(null);
+                          fetchReachRows().catch(console.error);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* ── ReachDashboard table ── */}
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
