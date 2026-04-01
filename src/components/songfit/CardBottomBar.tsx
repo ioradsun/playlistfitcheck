@@ -239,6 +239,8 @@ export function CardBottomBar({
   const [scrollOffset, setScrollOffset] = useState(0);
   const scrollRafRef = useRef<number>(0);
   const momentTextRef = useRef<string>("");
+  const tickerStartRafRef = useRef<number>(0);
+  const tickerHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const py = variant === "embedded" ? "py-3" : "py-4";
   const textSize = variant === "fullscreen" ? "text-[13px]" : "text-[10px]";
@@ -341,6 +343,9 @@ export function CardBottomBar({
   // Scrolls the moment text from right to left at a steady pace.
   // Resets to 0 when the moment changes (detected by text change).
   useEffect(() => {
+    const GAP = 48;
+    const HOLD_MS = 1800;
+    const SPEED = 40; // pixels per second
     const text = currentMoment?.text ?? "";
     if (text !== momentTextRef.current) {
       // Moment changed — reset scroll
@@ -349,37 +354,48 @@ export function CardBottomBar({
     }
 
     if (barState !== "lyrics" || !text) {
+      if (tickerStartRafRef.current) cancelAnimationFrame(tickerStartRafRef.current);
+      if (tickerHoldTimerRef.current) {
+        clearTimeout(tickerHoldTimerRef.current);
+        tickerHoldTimerRef.current = null;
+      }
       if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
       return;
     }
 
-    let lastTime = performance.now();
-    const SPEED = 40; // pixels per second
+    tickerStartRafRef.current = requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const singleWidth = (el.scrollWidth - GAP) / 2;
+      const containerWidth = el.parentElement?.offsetWidth ?? 0;
+      if (singleWidth <= containerWidth) return;
 
-    const tick = (now: number) => {
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
-      setScrollOffset((prev) => prev + SPEED * dt);
-      scrollRafRef.current = requestAnimationFrame(tick);
-    };
+      tickerHoldTimerRef.current = setTimeout(() => {
+        let lastTime = performance.now();
 
-    scrollRafRef.current = requestAnimationFrame(tick);
+        const tick = (now: number) => {
+          const dt = (now - lastTime) / 1000;
+          lastTime = now;
+          setScrollOffset((prev) => {
+            const next = prev + SPEED * dt;
+            return next > singleWidth + GAP ? 0 : next;
+          });
+          scrollRafRef.current = requestAnimationFrame(tick);
+        };
+
+        scrollRafRef.current = requestAnimationFrame(tick);
+      }, HOLD_MS);
+    });
+
     return () => {
+      if (tickerStartRafRef.current) cancelAnimationFrame(tickerStartRafRef.current);
+      if (tickerHoldTimerRef.current) {
+        clearTimeout(tickerHoldTimerRef.current);
+        tickerHoldTimerRef.current = null;
+      }
       if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
     };
   }, [currentMoment?.text, barState]);
-
-  // Reset scroll position when first copy scrolls fully off-screen
-  useEffect(() => {
-    if (!scrollRef.current) return;
-    const el = scrollRef.current;
-    // The element contains two copies of the text + an 80px spacer.
-    // When we've scrolled past the first copy, snap back to 0.
-    const singleWidth = (el.scrollWidth - 80) / 2;
-    if (singleWidth > 0 && scrollOffset > singleWidth + 80) {
-      setScrollOffset(0);
-    }
-  }, [scrollOffset]);
 
   useEffect(() => {
     if (barState === "fired" || barState === "typing") {
@@ -541,7 +557,7 @@ export function CardBottomBar({
             >
               {displayText}
             </span>
-            <span style={{ display: "inline-block", width: 80 }} />
+            <span style={{ display: "inline-block", width: 48 }} />
             <span
               className={`${textSize} font-mono`}
               style={{
