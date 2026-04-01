@@ -1419,7 +1419,7 @@ export class LyricDancePlayer {
     // Disable native loop for region-based players — tick() handles region looping manually
     this.audio.loop = !(data.region_start != null && data.region_end != null);
     this.audio.muted = true;
-    this.audio.preload = "none";
+    this.audio.preload = "auto";
     this.bootMode = options?.bootMode ?? "minimal";
     // Single engine per battle card — no forced quality reduction needed.
     this._handleVisibilityChange = this._handleVisibilityChangeImpl.bind(this);
