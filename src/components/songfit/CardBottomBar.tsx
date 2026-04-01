@@ -60,20 +60,16 @@ function FireButton({
   onHoldEnd,
   py,
   hasFired,
-  accent,
   iconSize = 18,
   minWidth = "min-w-[52px]",
-  baseRingSize = 28,
 }: {
   onTap?: () => void;
   onHoldStart?: () => void;
   onHoldEnd?: (holdMs: number) => void;
   py: string;
   hasFired?: boolean;
-  accent: string;
   iconSize?: number;
   minWidth?: string;
-  baseRingSize?: number;
 }) {
   const holdStartRef = useRef<number | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -106,18 +102,6 @@ function FireButton({
     else onHoldEnd?.(ms);
   }, [onTap, onHoldEnd]);
 
-  const tier = holdProgress < 0.1 ? 0 : holdProgress < 0.33 ? 1 : holdProgress < 0.66 ? 2 : 3;
-  const ringSize = baseRingSize + tier * 6;
-  const isActive = hasFired || isHolding;
-
-  const FIRE_ORANGE = "#FF6B2B";
-  const strokeColor = isActive ? FIRE_ORANGE : withAlpha(accent, 0.35);
-  const fillColor = isActive ? FIRE_ORANGE : "none";
-  const glowFilter =
-    isHolding && tier >= 2
-      ? `drop-shadow(0 0 ${4 + tier * 3}px ${FIRE_ORANGE})`
-      : "none";
-
   return (
     <button
       onMouseDown={startHold}
@@ -132,36 +116,36 @@ function FireButton({
       className={`relative flex items-center justify-center px-4 ${minWidth} ${py} shrink-0`}
       style={{ touchAction: "manipulation" }}
     >
-      <div
-        style={{
-          position: "absolute",
-          width: ringSize,
-          height: ringSize,
-          borderRadius: "50%",
-          border: `1.5px solid ${isHolding ? withAlpha(accent, 0.4 + tier * 0.15) : "transparent"}`,
-          transition: isHolding ? "none" : "all 0.3s",
-          pointerEvents: "none",
-        }}
-      />
-      <svg
-        width={iconSize}
-        height={iconSize}
-        viewBox="0 0 24 24"
-        style={{
-          fill: fillColor,
-          stroke: strokeColor,
-          strokeWidth: 1.8,
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          transform: `scale(${isHolding ? 1 + holdProgress * 0.5 : 1})`,
-          transition: isHolding
-            ? "none"
-            : "transform 0.2s, fill 0.15s, stroke 0.15s",
-          filter: glowFilter,
-        }}
-      >
-        <path d="M12 2c0 0-5.5 5-5.5 10.5a5.5 5.5 0 0 0 11 0C17.5 9 15 6.5 15 6.5c0 0 .5 3-1.5 4.5C13.5 8 12 2 12 2z" />
-      </svg>
+      {hasFired && !isHolding ? (
+        <span
+          style={{
+            fontSize: iconSize,
+            lineHeight: 1,
+            userSelect: "none",
+          }}
+          role="img"
+          aria-label="Fired"
+        >
+          🔥
+        </span>
+      ) : (
+        <svg
+          width={iconSize}
+          height={iconSize}
+          viewBox="0 0 24 24"
+          style={{
+            fill: "none",
+            stroke: isHolding ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)",
+            strokeWidth: 1.8,
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+            transform: `scale(${isHolding ? 1 + holdProgress * 0.5 : 1})`,
+            transition: isHolding ? "none" : "stroke 0.2s",
+          }}
+        >
+          <path d="M12 2c0 0-5.5 5-5.5 10.5a5.5 5.5 0 0 0 11 0C17.5 9 15 6.5 15 6.5c0 0 .5 3-1.5 4.5C13.5 8 12 2 12 2z" />
+        </svg>
+      )}
     </button>
   );
 }
@@ -208,8 +192,10 @@ export function CardBottomBar({
       ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" }
       : {}),
   };
+  const commentActive = hasFired === true;
 
   const startListening = useCallback(() => {
+    onPauseForInput?.();
     const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
     if (!SR) return;
 
@@ -245,7 +231,6 @@ export function CardBottomBar({
 
     recognitionRef.current = recognition;
     recognition.start();
-    onPauseForInput?.();
   }, [onPauseForInput]);
 
   const stopListening = useCallback(() => {
@@ -270,48 +255,40 @@ export function CardBottomBar({
           panelOpen ? onClose() : onOpenReactions();
         }}
         className={`flex items-center gap-1.5 px-3 ${py} shrink-0`}
-        style={{ background: "none", border: "none", cursor: "pointer", minWidth: 72 }}
+        style={{ background: "none", border: "none", cursor: "pointer", minWidth: 60 }}
         aria-label={panelOpen ? "Close panel" : "Open reactions"}
       >
-        <svg
-          width={10}
-          height={10}
-          viewBox="0 0 10 6"
-          fill="none"
-          stroke="rgba(255,255,255,0.4)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{
-            transform: panelOpen ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "transform 0.2s ease",
-            flexShrink: 0,
-          }}
-        >
-          <path d="M1 1l4 4 4-4" />
-        </svg>
         <span
           className={`${subTextSize} font-mono`}
           style={{
-            color: momentLabel
-              ? "rgba(255,255,255,0.55)"
-              : "rgba(255,255,255,0.2)",
+            color: panelOpen
+              ? "rgba(255,255,255,0.7)"
+              : momentLabel
+                ? "rgba(255,255,255,0.55)"
+                : "rgba(255,255,255,0.2)",
             letterSpacing: "0.08em",
-            transition: "color 0.4s ease, opacity 0.4s ease",
-            opacity: momentLabel ? 1 : 0.5,
+            transition: "color 0.2s ease",
             whiteSpace: "nowrap",
           }}
         >
-          {momentLabel ?? (songEnded ? `${totalFireCount} marked` : "—")}
+          {panelOpen ? "✕" : momentLabel ?? (songEnded ? `${totalFireCount} marked` : "—")}
         </span>
       </button>
 
       <div style={{ width: "0.5px", background: "rgba(255,255,255,0.06)", alignSelf: "stretch", margin: "8px 0" }} />
-      <div className={`flex items-center gap-2 flex-1 min-w-0 px-3 ${py}`}>
+      <div
+        className={`flex items-center gap-2 flex-1 min-w-0 px-3 ${py}`}
+        style={{
+          opacity: commentActive ? 1 : 0.3,
+          pointerEvents: commentActive ? "auto" : "none",
+          transition: "opacity 0.3s ease, color 0.3s ease",
+        }}
+      >
         {speechSupported && (
           <button
             onClick={(e) => {
               e.stopPropagation();
+              if (!commentActive) return;
               isListening ? stopListening() : startListening();
             }}
             style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
@@ -322,7 +299,7 @@ export function CardBottomBar({
               height={13}
               viewBox="0 0 24 24"
               fill="none"
-              stroke={isListening ? "#ff4444" : "rgba(255,255,255,0.25)"}
+              stroke={isListening ? "#ff4444" : commentActive ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)"}
               style={{ transition: "stroke 0.2s" }}
               strokeWidth="2"
               strokeLinecap="round"
@@ -360,13 +337,18 @@ export function CardBottomBar({
               onResumeAfterInput?.();
             }
           }}
+          readOnly={!commentActive}
+          tabIndex={commentActive ? 0 : -1}
           placeholder="What hit?"
-          className="flex-1 min-w-0 bg-transparent outline-none font-mono"
+          className={`flex-1 min-w-0 bg-transparent outline-none font-mono ${
+            commentActive ? "placeholder:text-[rgba(255,255,255,0.35)]" : "placeholder:text-[rgba(255,255,255,0.1)]"
+          }`}
           style={{
             fontSize: variant === "fullscreen" ? 12 : 11,
-            color: "rgba(255,255,255,0.75)",
+            color: commentActive ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.35)",
             caretColor: accent ?? "#ff8c32",
             letterSpacing: "0.02em",
+            transition: "color 0.3s ease",
           }}
           autoComplete="off"
         />
@@ -379,10 +361,8 @@ export function CardBottomBar({
         onHoldEnd={onFireHoldEnd}
         py={py}
         hasFired={hasFired}
-        accent={accent}
         iconSize={fireIconSize}
         minWidth={fireMinWidth}
-        baseRingSize={variant === "fullscreen" ? 34 : 28}
       />
     </div>
   );
