@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
 
 // Applies alpha to a hex (#rrggbb) or rgba(...) accent string.
 // Falls back to the original string if format is unrecognised.
@@ -21,19 +20,6 @@ function withAlpha(color: string, alpha: number): string {
   const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
   if (m) return `rgba(${m[1]},${m[2]},${m[3]},${a})`;
   return color;
-}
-
-/** Format a UTC ISO timestamp as a short relative label if < 48h, else null */
-function formatRecency(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  try {
-    const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000);
-    if (h < 1) return "just now";
-    if (h < 48) return `${h}h ago`;
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 const speechSupported =
@@ -62,7 +48,6 @@ interface CardBottomBarProps {
   onPauseForInput?: () => void;
   onResumeAfterInput?: () => void;
   isLive?: boolean;
-  muted?: boolean;
   totalFireCount?: number;
   lastFiredAt?: string | null;
   /** True when the song has ended and closing screen is visible */
@@ -70,8 +55,6 @@ interface CardBottomBarProps {
 }
 
 function FireButton({
-  panelOpen,
-  onClose,
   onTap,
   onHoldStart,
   onHoldEnd,
@@ -82,8 +65,6 @@ function FireButton({
   minWidth = "min-w-[52px]",
   baseRingSize = 28,
 }: {
-  panelOpen: boolean;
-  onClose: () => void;
   onTap?: () => void;
   onHoldStart?: () => void;
   onHoldEnd?: (holdMs: number) => void;
@@ -102,7 +83,6 @@ function FireButton({
   const startHold = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
       e.stopPropagation();
-      if (panelOpen) return;
       holdStartRef.current = Date.now();
       setIsHolding(true);
       setHoldProgress(0);
@@ -112,7 +92,7 @@ function FireButton({
         setHoldProgress(Math.min(1, ms / 3000));
       }, 40);
     },
-    [panelOpen, onHoldStart],
+    [onHoldStart],
   );
 
   const endHold = useCallback(() => {
@@ -148,10 +128,7 @@ function FireButton({
         startHold(e);
       }}
       onTouchEnd={endHold}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (panelOpen) onClose();
-      }}
+      onClick={(e) => e.stopPropagation()}
       className={`relative flex items-center justify-center px-4 ${minWidth} ${py} shrink-0`}
       style={{ touchAction: "manipulation" }}
     >
@@ -166,41 +143,28 @@ function FireButton({
           pointerEvents: "none",
         }}
       />
-
-      {panelOpen ? (
-        <X
-          size={14}
-          style={{
-            color: withAlpha(accent, 0.45),
-            transition: "color 0.6s ease",
-          }}
-        />
-      ) : (
-        <svg
-          width={iconSize}
-          height={iconSize}
-          viewBox="0 0 24 24"
-          style={{
-            fill: fillColor,
-            stroke: strokeColor,
-            strokeWidth: 1.8,
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-            transform: `scale(${isHolding ? 1 + holdProgress * 0.5 : 1})`,
-            transition: isHolding
-              ? "none"
-              : "transform 0.2s, fill 0.15s, stroke 0.15s",
-            filter: glowFilter,
-          }}
-        >
-          <path d="M12 2c0 0-5.5 5-5.5 10.5a5.5 5.5 0 0 0 11 0C17.5 9 15 6.5 15 6.5c0 0 .5 3-1.5 4.5C13.5 8 12 2 12 2z" />
-        </svg>
-      )}
+      <svg
+        width={iconSize}
+        height={iconSize}
+        viewBox="0 0 24 24"
+        style={{
+          fill: fillColor,
+          stroke: strokeColor,
+          strokeWidth: 1.8,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          transform: `scale(${isHolding ? 1 + holdProgress * 0.5 : 1})`,
+          transition: isHolding
+            ? "none"
+            : "transform 0.2s, fill 0.15s, stroke 0.15s",
+          filter: glowFilter,
+        }}
+      >
+        <path d="M12 2c0 0-5.5 5-5.5 10.5a5.5 5.5 0 0 0 11 0C17.5 9 15 6.5 15 6.5c0 0 .5 3-1.5 4.5C13.5 8 12 2 12 2z" />
+      </svg>
     </button>
   );
 }
-
-type BarState = "lyrics" | "fired" | "typing";
 
 export function CardBottomBar({
   onOpenReactions,
@@ -217,21 +181,17 @@ export function CardBottomBar({
   onPauseForInput,
   onResumeAfterInput,
   isLive = false,
-  muted = true,
   totalFireCount = 0,
-  lastFiredAt,
+  lastFiredAt: _lastFiredAt,
   songEnded = false,
 }: CardBottomBarProps) {
-  const [barState, setBarState] = useState<BarState>("lyrics");
   const [commentText, setCommentText] = useState("");
   const [isListening, setIsListening] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
-  const prevMomentIndexRef = useRef<number | null>(null);
 
   const py = variant === "embedded" ? "py-3" : "py-4";
-  const textSize = variant === "fullscreen" ? "text-[13px]" : "text-[10px]";
-  const dotSize = variant === "fullscreen" ? 6 : 5;
+  const subTextSize = variant === "fullscreen" ? "text-[11px]" : "text-[10px]";
   const fireIconSize = variant === "fullscreen" ? 22 : 18;
   const fireMinWidth = variant === "fullscreen" ? "min-w-[60px]" : "min-w-[52px]";
 
@@ -295,64 +255,59 @@ export function CardBottomBar({
     onResumeAfterInput?.();
   }, [onResumeAfterInput]);
 
-  useEffect(() => {
-    const momentIdx = currentMoment?.index ?? null;
-    if (prevMomentIndexRef.current !== null && momentIdx !== prevMomentIndexRef.current) {
-      if (isListening) {
-        stopListening();
-      } else if (barState === "typing") {
-        onResumeAfterInput?.();
-      }
-      setBarState("lyrics");
-      setCommentText("");
-    }
-    prevMomentIndexRef.current = momentIdx;
-  }, [barState, currentMoment?.index, isListening, onResumeAfterInput, stopListening]);
-
-  useEffect(() => {
-    if (barState === "fired" || barState === "typing") {
-      inputRef.current?.focus();
-    }
-  }, [barState]);
-
   useEffect(() => () => {
     recognitionRef.current?.abort();
   }, []);
-
-  const handleFireComplete = useCallback(() => {
-    setBarState("fired");
-    setCommentText("");
-  }, []);
-
-  const handleInputFocus = useCallback(() => {
-    setBarState("typing");
-    onPauseForInput?.();
-  }, [onPauseForInput]);
-
-  const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const text = commentText.trim();
-      if (text) {
-        onComment?.(text);
-      }
-      setCommentText("");
-      setBarState("lyrics");
-      onResumeAfterInput?.();
-    }
-  }, [commentText, onComment, onResumeAfterInput]);
-
-  const recency = formatRecency(lastFiredAt);
-  const momentSummary = currentMoment
+  const momentLabel = currentMoment
     ? `Moment ${currentMoment.index + 1}/${currentMoment.total}`
     : null;
-  const fireCountLabel = `${totalFireCount} FMLY Marked Moment${totalFireCount !== 1 ? "s" : ""}`;
 
-  let leftContent: React.ReactNode;
+  return (
+    <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          panelOpen ? onClose() : onOpenReactions();
+        }}
+        className={`flex items-center gap-1.5 px-3 ${py} shrink-0`}
+        style={{ background: "none", border: "none", cursor: "pointer", minWidth: 72 }}
+        aria-label={panelOpen ? "Close panel" : "Open reactions"}
+      >
+        <svg
+          width={10}
+          height={10}
+          viewBox="0 0 10 6"
+          fill="none"
+          stroke="rgba(255,255,255,0.4)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{
+            transform: panelOpen ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.2s ease",
+            flexShrink: 0,
+          }}
+        >
+          <path d="M1 1l4 4 4-4" />
+        </svg>
+        <span
+          className={`${subTextSize} font-mono`}
+          style={{
+            color: momentLabel
+              ? "rgba(255,255,255,0.55)"
+              : "rgba(255,255,255,0.2)",
+            letterSpacing: "0.08em",
+            transition: "color 0.4s ease, opacity 0.4s ease",
+            opacity: momentLabel ? 1 : 0.5,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {momentLabel ?? (songEnded ? `${totalFireCount} marked` : "—")}
+        </span>
+      </button>
 
-  if (barState === "fired" || barState === "typing") {
-    leftContent = (
-      <div className="flex items-center gap-2 min-w-0 flex-1">
+      <div style={{ width: "0.5px", background: "rgba(255,255,255,0.06)", alignSelf: "stretch", margin: "8px 0" }} />
+      <div className={`flex items-center gap-2 flex-1 min-w-0 px-3 ${py}`}>
         {speechSupported && (
           <button
             onClick={(e) => {
@@ -360,15 +315,15 @@ export function CardBottomBar({
               isListening ? stopListening() : startListening();
             }}
             style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
-            aria-label={isListening ? "Stop listening" : "Voice input"}
+            aria-label={isListening ? "Stop" : "Voice input"}
           >
             <svg
-              width={14}
-              height={14}
+              width={13}
+              height={13}
               viewBox="0 0 24 24"
               fill="none"
-              stroke={isListening ? "#ff4444" : "rgba(255,255,255,0.35)"}
-              style={{ animation: isListening ? "cfBlink 0.8s ease-in-out infinite" : "none" }}
+              stroke={isListening ? "#ff4444" : "rgba(255,255,255,0.25)"}
+              style={{ transition: "stroke 0.2s" }}
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -385,101 +340,43 @@ export function CardBottomBar({
           type="text"
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
-          onFocus={handleInputFocus}
-          onKeyDown={handleInputKeyDown}
-          placeholder={isListening ? "listening..." : "What hit?"}
+          onFocus={() => onPauseForInput?.()}
+          onBlur={() => {
+            if (!commentText.trim()) onResumeAfterInput?.();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              const text = commentText.trim();
+              if (text) onComment?.(text);
+              if (isListening) stopListening();
+              setCommentText("");
+              inputRef.current?.blur();
+              onResumeAfterInput?.();
+            }
+            if (e.key === "Escape") {
+              if (isListening) stopListening();
+              setCommentText("");
+              inputRef.current?.blur();
+              onResumeAfterInput?.();
+            }
+          }}
+          placeholder="What hit?"
           className="flex-1 min-w-0 bg-transparent outline-none font-mono"
           style={{
             fontSize: variant === "fullscreen" ? 12 : 11,
-            color: isListening ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.8)",
+            color: "rgba(255,255,255,0.75)",
             caretColor: accent ?? "#ff8c32",
             letterSpacing: "0.02em",
           }}
           autoComplete="off"
         />
       </div>
-    );
-  } else if (songEnded && !panelOpen) {
-    leftContent = (
-      <div className="flex items-center gap-1.5 min-w-0">
-        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.7)", flexShrink: 0, animation: (!muted && isLive && !songEnded)
-              ? "cfBlink 1.4s ease-in-out infinite"
-              : "none" }} />
-        <span
-          className={`${textSize} font-mono truncate`}
-          style={{ color: "rgba(255,255,255,0.5)", letterSpacing: "0.05em" }}
-        >
-          {fireCountLabel}
-        </span>
-      </div>
-    );
-  } else if (!panelOpen && momentSummary) {
-    leftContent = (
-      <div className="flex items-center gap-1.5 min-w-0">
-        <div
-          style={{
-            height: dotSize,
-            width: dotSize,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.7)",
-            flexShrink: 0,
-            animation: (!muted && isLive && !songEnded)
-              ? "cfBlink 1.4s ease-in-out infinite"
-              : "none",
-          }}
-        />
-        <span className={`${textSize} font-mono truncate`} style={{ color: "rgba(255,255,255,0.6)", letterSpacing: "0.05em" }}>
-          {momentSummary}
-        </span>
-      </div>
-    );
-  } else if (!panelOpen && (totalFireCount > 0 || isLive)) {
-    const socialLabel = totalFireCount > 0
-      ? (recency ? `${fireCountLabel} · ${recency}` : fireCountLabel)
-      : "mark your moment";
-    leftContent = (
-      <div className="flex items-center gap-1.5 min-w-0">
-        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.25)", flexShrink: 0, animation: (!muted && isLive && !songEnded)
-          ? "cfBlink 1.4s ease-in-out infinite"
-          : "none" }} />
-        <span className={`${textSize} font-mono truncate`} style={{ color: "rgba(255,255,255,0.45)", letterSpacing: "0.05em" }}>
-          {socialLabel}
-        </span>
-      </div>
-    );
-  } else if (!panelOpen) {
-    leftContent = (
-      <div className="flex items-center gap-1.5 min-w-0">
-        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.7)", flexShrink: 0, animation: (!muted && isLive && !songEnded)
-          ? "cfBlink 1.4s ease-in-out infinite"
-          : "none" }} />
-      </div>
-    );
-  }
 
-  return (
-    <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
-      <style>{`
-        @keyframes cfBlink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.15; }
-        }
-      `}</style>
-
-      <div
-        className={`flex-1 flex items-center px-3 ${py} min-w-0 cursor-pointer`}
-        onClick={barState === "lyrics" && !panelOpen ? onOpenReactions : undefined}
-      >
-        {leftContent}
-      </div>
-
-      <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />
+      <div style={{ width: "0.5px", background: "rgba(255,255,255,0.06)", alignSelf: "stretch", margin: "8px 0" }} />
       <FireButton
-        panelOpen={panelOpen}
-        onClose={onClose}
-        onTap={() => { onFireTap?.(); handleFireComplete(); }}
+        onTap={onFireTap}
         onHoldStart={onFireHoldStart}
-        onHoldEnd={(ms) => { onFireHoldEnd?.(ms); handleFireComplete(); }}
+        onHoldEnd={onFireHoldEnd}
         py={py}
         hasFired={hasFired}
         accent={accent}
