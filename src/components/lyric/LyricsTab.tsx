@@ -393,6 +393,7 @@ export function LyricsTab({
         }
         await quota.increment();
       } catch (e) {
+        console.error("[handleTranscribe] FAILED", e);
         clearTimeout(transcribeTimeout);
         if (projectId) {
           await supabase.from("saved_lyrics").delete().eq("id", projectId);
