@@ -343,11 +343,7 @@ export default function ShareableLyricDance() {
     return idx >= 0 ? idx : 0;
   }, [currentTimeSec, audioSections]);
 
-  const hasFired = firedMoments.has(currentMoment?.index ?? -1);
-  const markFired = useCallback(() => {
-    if (currentMoment?.index == null) return;
-    setFiredMoments((prev) => new Set([...prev, currentMoment.index]));
-  }, [currentMoment?.index]);
+  // hasFired/markFired moved below currentMoment declaration
 
   const barAccent = useMemo(() => {
     const autoPalettes = (renderData as any)?.auto_palettes;
