@@ -343,11 +343,7 @@ export default function ShareableLyricDance() {
     return idx >= 0 ? idx : 0;
   }, [currentTimeSec, audioSections]);
 
-  const hasFired = firedMoments.has(currentMoment?.index ?? -1);
-  const markFired = useCallback(() => {
-    if (currentMoment?.index == null) return;
-    setFiredMoments((prev) => new Set([...prev, currentMoment.index]));
-  }, [currentMoment?.index]);
+  
 
   const barAccent = useMemo(() => {
     const autoPalettes = (renderData as any)?.auto_palettes;
@@ -387,6 +383,12 @@ export default function ShareableLyricDance() {
       endSec: m.endSec,
     };
   }, [moments, currentTimeSec]);
+
+  const hasFired = firedMoments.has(currentMoment?.index ?? -1);
+  const markFired = useCallback(() => {
+    if (currentMoment?.index == null) return;
+    setFiredMoments((prev) => new Set([...prev, currentMoment.index]));
+  }, [currentMoment?.index]);
 
   useEffect(() => {
     return () => {
