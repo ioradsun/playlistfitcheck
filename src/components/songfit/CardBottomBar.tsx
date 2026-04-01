@@ -62,6 +62,7 @@ interface CardBottomBarProps {
   onPauseForInput?: () => void;
   onResumeAfterInput?: () => void;
   isLive?: boolean;
+  muted?: boolean;
   totalFireCount?: number;
   lastFiredAt?: string | null;
   /** True when the song has ended and closing screen is visible */
@@ -216,6 +217,7 @@ export function CardBottomBar({
   onPauseForInput,
   onResumeAfterInput,
   isLive = false,
+  muted = true,
   totalFireCount = 0,
   lastFiredAt,
   songEnded = false,
@@ -400,7 +402,9 @@ export function CardBottomBar({
   } else if (songEnded && !panelOpen) {
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.7)", flexShrink: 0, animation: "cfBlink 1.4s ease-in-out infinite" }} />
+        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.7)", flexShrink: 0, animation: (!muted && isLive && !songEnded)
+              ? "cfBlink 1.4s ease-in-out infinite"
+              : "none" }} />
         <span
           className={`${textSize} font-mono truncate`}
           style={{ color: "rgba(255,255,255,0.5)", letterSpacing: "0.05em" }}
@@ -419,7 +423,9 @@ export function CardBottomBar({
             borderRadius: "50%",
             background: "rgba(255,255,255,0.7)",
             flexShrink: 0,
-            animation: "cfBlink 1.4s ease-in-out infinite",
+            animation: (!muted && isLive && !songEnded)
+              ? "cfBlink 1.4s ease-in-out infinite"
+              : "none",
           }}
         />
         <span className={`${textSize} font-mono truncate`} style={{ color: "rgba(255,255,255,0.6)", letterSpacing: "0.05em" }}>
@@ -433,7 +439,9 @@ export function CardBottomBar({
       : "mark your moment";
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.25)", flexShrink: 0 }} />
+        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.25)", flexShrink: 0, animation: (!muted && isLive && !songEnded)
+          ? "cfBlink 1.4s ease-in-out infinite"
+          : "none" }} />
         <span className={`${textSize} font-mono truncate`} style={{ color: "rgba(255,255,255,0.45)", letterSpacing: "0.05em" }}>
           {socialLabel}
         </span>
@@ -442,7 +450,9 @@ export function CardBottomBar({
   } else if (!panelOpen) {
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.7)", flexShrink: 0, animation: "cfBlink 1.4s ease-in-out infinite" }} />
+        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.7)", flexShrink: 0, animation: (!muted && isLive && !songEnded)
+          ? "cfBlink 1.4s ease-in-out infinite"
+          : "none" }} />
       </div>
     );
   }

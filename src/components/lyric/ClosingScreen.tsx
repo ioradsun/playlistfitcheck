@@ -28,7 +28,6 @@ const GAP = "clamp(4px, 2.5cqh, 14px)";
 export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, onAnswer, source }: ClosingScreenProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const [freeText, setFreeText] = useState("");
-  const [showFreeText, setShowFreeText] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [isWide, setIsWide] = useState(false);
@@ -49,7 +48,7 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
 
   const options = useMemo(() => (
     empowermentPromise?.hooks.length
-      ? [...empowermentPromise.hooks, "none of these — it missed me"]
+      ? empowermentPromise.hooks.slice(0, 4)
       : FALLBACK_FEELINGS
   ), [empowermentPromise]);
 
@@ -57,7 +56,7 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
     if (submitted) return;
     setSubmitted(true);
     await emitClosingPick(danceId, hookIndex, text || null, source);
-    if (hookIndex !== null && hookIndex < options.length - 1) {
+    if (hookIndex !== null) {
       setConfirmText(options[hookIndex]);
     }
   };
@@ -118,7 +117,7 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
             marginBottom: GAP,
           }}
         >
-          which of these just happened to you?
+          what did this just do to you?
         </p>
 
         {!submitted ? (
@@ -170,71 +169,49 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
             </div>
 
             <div style={{ width: "100%", maxWidth: 300, marginBottom: GAP }}>
-              {!showFreeText ? (
+              <input
+                type="text"
+                value={freeText}
+                onChange={(e) => setFreeText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && freeText.trim()) {
+                    onAnswer?.();
+                    handleSubmit(null, freeText);
+                  }
+                }}
+                placeholder="or say it in your own words..."
+                style={{
+                  width: "100%",
+                  padding: "clamp(5px, 1.8cqh, 10px) 12px",
+                  background: "rgba(255,255,255,0.04)",
+                  border: "0.5px solid rgba(255,255,255,0.1)",
+                  borderRadius: 10,
+                  fontSize: "clamp(9px, 2cqh, 11px)",
+                  fontFamily: "monospace",
+                  color: "rgba(255,255,255,0.7)",
+                  outline: "none",
+                  caretColor: "#a855f7",
+                }}
+              />
+              {freeText.trim().length > 0 && (
                 <button
-                  onClick={() => setShowFreeText(true)}
+                  onClick={() => {
+                    onAnswer?.();
+                    handleSubmit(null, freeText);
+                  }}
                   style={{
-                    fontSize: 10,
+                    marginTop: "clamp(3px, 1.2cqh, 6px)",
+                    fontSize: 9,
                     fontFamily: "monospace",
-                    color: "rgba(255,255,255,0.38)",
+                    color: "rgba(168,85,247,0.7)",
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    padding: 0,
-                    textDecoration: "underline",
-                    textUnderlineOffset: 2,
+                    letterSpacing: "0.1em",
                   }}
                 >
-                  or say it yourself...
+                  submit →
                 </button>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    autoFocus
-                    value={freeText}
-                    onChange={(e) => setFreeText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && freeText.trim()) {
-                        onAnswer?.();
-                        handleSubmit(picked, freeText);
-                      }
-                    }}
-                    placeholder="say it yourself..."
-                    style={{
-                      width: "100%",
-                      padding: "clamp(5px, 1.8cqh, 10px) 12px",
-                      background: "rgba(255,255,255,0.04)",
-                      border: "0.5px solid rgba(255,255,255,0.1)",
-                      borderRadius: 10,
-                      fontSize: "clamp(9px, 2cqh, 11px)",
-                      fontFamily: "monospace",
-                      color: "rgba(255,255,255,0.7)",
-                      outline: "none",
-                      caretColor: "#a855f7",
-                    }}
-                  />
-                  {freeText.trim().length > 0 && (
-                    <button
-                      onClick={() => {
-                        onAnswer?.();
-                        handleSubmit(picked, freeText);
-                      }}
-                      style={{
-                        marginTop: "clamp(3px, 1.2cqh, 6px)",
-                        fontSize: 9,
-                        fontFamily: "monospace",
-                        color: "rgba(168,85,247,0.7)",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        letterSpacing: "0.1em",
-                      }}
-                    >
-                      submit →
-                    </button>
-                  )}
-                </>
               )}
             </div>
           </>
@@ -265,7 +242,7 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
                 marginTop: "clamp(4px, 1.5cqh, 10px)",
               }}
             >
-              that matters.
+              felt that.
             </p>
           </div>
         )}
