@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LyricFitTab } from "@/components/lyric/LyricFitTab";
+import ClaimBanner from "@/components/claim/ClaimBanner";
 import { preloadEssentia } from "@/hooks/useBeatGrid";
 import { motion } from "framer-motion";
 import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music, Bomb, X, RefreshCw } from "lucide-react";
