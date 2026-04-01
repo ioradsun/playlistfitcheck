@@ -190,14 +190,13 @@ serve(async (req) => {
       `${artistName} — "${trackTitle}" | preview: ${previewUrl ? (track.preview_url ? "api" : "embed") : "none"} | ${beatGrid.bpm}bpm`,
       slug);
 
-    // ── STEP 2: Ghost profile + lrclib IN PARALLEL ──
+    // ── STEP 2: Ghost profile ──
     await logStep("ghost_profile", "running", null, slug);
-    await logStep("lrclib_check", "running", null, slug);
 
-    const [profileResult, lrclibResult] = await Promise.allSettled([
-      upsertGhostProfile(slug, artistName, supabase),
-      fetchLrclib(trackTitle, artistName),
-    ]);
+    const profileResult = await Promise.resolve(upsertGhostProfile(slug, artistName, supabase)).then(
+      v => ({ status: "fulfilled" as const, value: v }),
+      r => ({ status: "rejected" as const, reason: r }),
+    );
 
     if (profileResult.status === "fulfilled") {
       const p = profileResult.value;
@@ -223,92 +222,13 @@ serve(async (req) => {
       });
     }
     if (profile.alreadyClaimed) {
-      await logStep("lrclib_check", "skipped", "Already claimed", slug);
       await logStep("complete", "done", `/artist/${slug}/claim-page`, slug);
       return new Response(JSON.stringify({ slug, alreadyClaimed: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const lrclib = lrclibResult.status === "fulfilled"
-      ? lrclibResult.value
-      : { syncedLyrics: null, plainLyrics: null };
-
-    if (lrclib.syncedLyrics) {
-      await logStep("lrclib_check", "done", "Hit — synced LRC found", slug);
-      await logStep("assemblyai_submit", "skipped", "lrclib hit — skipped", slug);
-      await logStep("assemblyai_poll", "skipped", "lrclib hit — skipped", slug);
-    } else if (lrclib.plainLyrics) {
-      await logStep("lrclib_check", "done", "Partial — plain lyrics only, using AssemblyAI for timing", slug);
-    } else {
-      await logStep("lrclib_check", "done", "Miss — no lyrics found", slug);
-    }
-
-    // ── STEP 3: AssemblyAI (only if no synced lyrics) ──
-    let syncedLrc: string | null = lrclib.syncedLyrics;
-    const plainLyrics: string | null = lrclib.plainLyrics;
-    let lyricsSource = lrclib.syncedLyrics ? "lrclib" : "none";
-
-    // ── Pre-populate transcribedLines from lrclib LRC if available ──────────
-    let transcribedLinesFromLrc: Array<{ start: number; end: number; text: string; tag: string }> = [];
-    if (lrclib.syncedLyrics) {
-      const lrcLines = lrclib.syncedLyrics.split("\n").filter((l: string) => l.trim());
-      const parsed: Array<{ start: number; text: string }> = [];
-      for (const line of lrcLines) {
-        const m = line.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
-        if (!m) continue;
-        const mins = parseInt(m[1], 10);
-        const secs = parseInt(m[2], 10);
-        const ms = m[3].length === 2 ? parseInt(m[3], 10) * 10 : parseInt(m[3], 10);
-        const startSec = mins * 60 + secs + ms / 1000;
-        const text = m[4].trim();
-        if (text) parsed.push({ start: startSec, text });
-      }
-      for (let i = 0; i < parsed.length; i++) {
-        const end = i + 1 < parsed.length ? parsed[i + 1].start : parsed[i].start + 4;
-        transcribedLinesFromLrc.push({
-          start: parsed[i].start,
-          end,
-          text: parsed[i].text,
-          tag: "",
-        });
-      }
-    }
-
-    if (!lrclib.syncedLyrics) {
-      if (!previewUrl) {
-        await logStep("assemblyai_submit", "skipped", "No preview URL available", slug);
-        await logStep("assemblyai_poll", "skipped", "No preview URL available", slug);
-      } else if (!assemblyKey) {
-        await logStep("assemblyai_submit", "skipped", "ASSEMBLYAI_API_KEY missing", slug);
-        await logStep("assemblyai_poll", "skipped", "ASSEMBLYAI_API_KEY missing", slug);
-      } else {
-        await logStep("assemblyai_submit", "running",
-          `Submitting: ${previewUrl.slice(0, 60)}…`, slug);
-        const { jobId: aiJobId, error: submitError } = await submitAssemblyAI(
-          previewUrl, plainLyrics, assemblyKey
-        );
-        if (!aiJobId) {
-          await logStep("assemblyai_submit", "error", submitError ?? "Submit failed", slug);
-          await logStep("assemblyai_poll", "skipped", "Submit failed", slug);
-        } else {
-          await logStep("assemblyai_submit", "done", `Job ID: ${aiJobId}`, slug);
-          await logStep("assemblyai_poll", "running", "Waiting for transcript…", slug);
-          const pollResult = await pollAssemblyAI(aiJobId, assemblyKey);
-          if (pollResult) {
-            syncedLrc = pollResult.lrc;
-            lyricsSource = "assemblyai";
-            await logStep("assemblyai_poll", "done",
-              `Transcript complete — ${pollResult.lrc.split("\n").length} lines, ${pollResult.words.length} words`,
-              slug);
-          } else {
-            await logStep("assemblyai_poll", "error", "Transcript failed or timed out", slug);
-          }
-        }
-      }
-    }
-
-    // ── STEP 4: Save lyric video row ──
+    // ── STEP 3: Save lyric video row ──
     await logStep("lyric_video_save", "running", null, slug);
     const { error: insertError } = await supabase.from("artist_lyric_videos").insert({
       ghost_profile_id: profile.profileId,
