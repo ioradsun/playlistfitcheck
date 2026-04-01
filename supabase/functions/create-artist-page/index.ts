@@ -540,8 +540,8 @@ serve(async (req) => {
       artistName,
       albumArtUrl,
       previewUrl,
-      lyricsFound: !!syncedLrc,
-      lyricsSource,
+      lyricsFound: true,
+      lyricsSource: "elevenlabs",
       alreadyClaimed: false,
     }), {
       status: 200,
