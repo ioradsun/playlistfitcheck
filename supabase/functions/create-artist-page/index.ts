@@ -515,7 +515,15 @@ serve(async (req) => {
         }
       }
 
-      // Skip if transcription failed
+      // Fallback: use lrclib-parsed lines if Scribe returned nothing
+      if (!transcribedLines.length && transcribedLinesFromLrc.length) {
+        transcribedLines = transcribedLinesFromLrc;
+        await logStep("lyric_dance_transcribe",
+          transcribedLines.length ? "done" : "skipped",
+          `Using lrclib LRC fallback — ${transcribedLines.length} lines (no word-level timing)`, slug);
+      }
+
+      // Skip if no lyrics from any source
       if (!transcribedLines.length) {
         await logStep("lyric_dance_save", "skipped", "No transcription — cannot create dance", slug);
       }
