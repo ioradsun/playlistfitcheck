@@ -14,7 +14,13 @@ import App from "./App.tsx";
 import "./index.css";
 
 hydrateLightningBarFlag();
-void refreshLightningBarFlagFromBackend();
+if (!isEmbedRoute) {
+  void refreshLightningBarFlagFromBackend();
+}
+
+if (isEmbedRoute && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw-claim.js").catch(() => {});
+}
 
 const syncAppViewportHeight = () => {
   if (typeof window === "undefined") return;

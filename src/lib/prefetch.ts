@@ -19,6 +19,8 @@ const _isEmbedRoute = _segments.length === 3;
 
 const CACHE_PREFIX = "tfm:";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours — stale after this
+const DANCE_CACHE_PREFIX = "dance:";
+const DANCE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface CacheEntry<T> {
   data: T;
@@ -41,6 +43,34 @@ function cacheRead<T>(key: string): T | null {
     const entry: CacheEntry<T> = JSON.parse(raw);
     if (Date.now() - entry.ts > CACHE_TTL_MS) {
       localStorage.removeItem(CACHE_PREFIX + key);
+      return null;
+    }
+    return entry.data;
+  } catch {
+    return null;
+  }
+}
+
+function danceCacheKey(artistSlug: string, songSlug: string): string {
+  return `${CACHE_PREFIX}${DANCE_CACHE_PREFIX}${artistSlug}/${songSlug}`;
+}
+
+export function cacheDanceData(artistSlug: string, songSlug: string, data: any): void {
+  try {
+    const entry: CacheEntry<any> = { data, ts: Date.now() };
+    localStorage.setItem(danceCacheKey(artistSlug, songSlug), JSON.stringify(entry));
+  } catch {
+    // localStorage full or unavailable — silent fail
+  }
+}
+
+export function readCachedDanceData(artistSlug: string, songSlug: string): any | null {
+  try {
+    const raw = localStorage.getItem(danceCacheKey(artistSlug, songSlug));
+    if (!raw) return null;
+    const entry: CacheEntry<any> = JSON.parse(raw);
+    if (Date.now() - entry.ts > DANCE_CACHE_TTL_MS) {
+      localStorage.removeItem(danceCacheKey(artistSlug, songSlug));
       return null;
     }
     return entry.data;
@@ -108,14 +138,6 @@ export function consumeFeedPrefetch() {
 }
 
 // ── Lyric dance prefetch — fires IN PARALLEL with feed posts ────────────────
-// On return visits, localStorage has cached feed posts with lyric_dance_ids.
-// We read those IDs at module eval and fire a FULL-column query for all uncached
-// lyric dances. This eliminates the entire Phase 1 → Phase 2 waterfall and
-// fixes a bug where Phase 2 data never reached React state on first visit.
-//
-// First visit (no cache): null — falls back to parallel queries in useFeedPosts.
-// Return visit: full lyric data arrives alongside feed posts — ~700ms faster.
-
 const _cachedFeedForLyric = !_isEmbedRoute ? cacheRead<any[]>("feed_posts") : null;
 const _cachedLyricData = !_isEmbedRoute ? cacheRead<Record<string, any>>("lyric_data") : null;
 const _topLyricIds = (_cachedFeedForLyric ?? [])
@@ -163,21 +185,12 @@ export function consumeSiteCopyPrefetch() {
   return p;
 }
 
-// ── Chunk prefetch — only needed for main app routes ─────────────────────────
 if (!_isEmbedRoute) {
   import("./routePrefetch").then(({ SongFitTabImport }) => void SongFitTabImport());
-  // Eagerly warm the main app shell chunk so it's cached before React lazy-loads it.
-  // This eliminates the sequential waterfall: main.tsx → (wait) → MainAppShell → (wait) → Index
   void import("../MainAppShell");
 }
 
-// Lyric engine chunk — always needed (both embed and main app use it)
 void import("@/engine/LyricDancePlayer");
-
-
-// ── Shareable page prefetch — fires at module eval for direct navigations ────
-// Reads slugs from window.location.pathname. Only fires on matching routes.
-// Consumed once by ShareableLyricDance / ShareableHook, then cleared.
 
 interface ShareablePrefetchResult {
   data: Promise<{ data: any; error: any }>;
@@ -186,30 +199,116 @@ interface ShareablePrefetchResult {
 
 let shareableDancePrefetch: ShareablePrefetchResult | null = null;
 let shareableHookPrefetch: Promise<{ data: any; error: any }> | null = null;
+let claimPageResolution: Promise<{ lyricDanceUrl: string } | null> | null = null;
 
 if (_segments.length === 3 && _segments[2] === "lyric-dance") {
   const [artistSlug, songSlug] = _segments;
-  const dataPromise = Promise.resolve(supabase
-    .from("shareable_lyric_dances" as any)
-    .select(LYRIC_DANCE_COLUMNS)
-    .eq("artist_slug", artistSlug)
-    .eq("song_slug", songSlug)
-    .maybeSingle())
-    .then((result: any) => {
-      if (result.data?.audio_url) {
+  const cached = readCachedDanceData(artistSlug, songSlug);
+
+  const networkPromise = Promise.resolve(
+    supabase
+      .from("shareable_lyric_dances" as any)
+      .select(LYRIC_DANCE_COLUMNS)
+      .eq("artist_slug", artistSlug)
+      .eq("song_slug", songSlug)
+      .maybeSingle(),
+  ).then((result: any) => {
+    if (result.data) {
+      cacheDanceData(artistSlug, songSlug, result.data);
+      if (result.data.audio_url) {
         const audio = new Audio();
         audio.preload = "auto";
         audio.src = result.data.audio_url;
-
-        const firstImg = result.data.section_images?.[0];
-        if (firstImg) {
-          const img = new Image();
-          img.src = firstImg;
-        }
       }
-      return result;
-    });
+      const firstImg = result.data.section_images?.[0];
+      if (firstImg) {
+        const img = new Image();
+        img.src = firstImg;
+      }
+    }
+    return result;
+  });
+
+  const dataPromise = cached
+    ? Promise.resolve({ data: cached, error: null })
+    : networkPromise;
+
+  if (cached?.audio_url) {
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.src = cached.audio_url;
+  }
+
+  if (cached) {
+    void networkPromise;
+  }
+
   shareableDancePrefetch = { data: dataPromise, audioPreloaded: true };
+} else if (_segments.length === 3 && _segments[0] === "artist" && _segments[2] === "claim-page") {
+  const username = _segments[1];
+  claimPageResolution = (async () => {
+    const { data: ghost } = await (supabase as any)
+      .from("ghost_artist_profiles")
+      .select("id")
+      .eq("spotify_artist_slug", username)
+      .maybeSingle();
+
+    let profileId = ghost?.id as string | undefined;
+    if (!profileId) {
+      const { data: profile } = await (supabase as any)
+        .from("profiles")
+        .select("id")
+        .eq("spotify_artist_slug", username)
+        .maybeSingle();
+      profileId = profile?.id;
+    }
+
+    if (!profileId) return null;
+
+    const { data: vid } = await (supabase as any)
+      .from("artist_lyric_videos")
+      .select("lyric_dance_url")
+      .or(`ghost_profile_id.eq.${profileId},user_id.eq.${profileId}`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const lyricDanceUrl = vid?.lyric_dance_url as string | undefined;
+    if (!lyricDanceUrl) return null;
+
+    const parts = lyricDanceUrl.replace(/^\//, "").split("/");
+    const artistSlug = parts[0];
+    const songSlug = parts[1];
+
+    if (artistSlug && songSlug) {
+      const cached = readCachedDanceData(artistSlug, songSlug);
+      if (cached?.audio_url) {
+        const audio = new Audio();
+        audio.preload = "auto";
+        audio.src = cached.audio_url;
+      }
+
+      const dataPromise = cached
+        ? Promise.resolve({ data: cached, error: null })
+        : Promise.resolve(
+            supabase
+              .from("shareable_lyric_dances" as any)
+              .select(LYRIC_DANCE_COLUMNS)
+              .eq("artist_slug", artistSlug)
+              .eq("song_slug", songSlug)
+              .maybeSingle(),
+          ).then((res: any) => {
+            if (res.data) {
+              cacheDanceData(artistSlug, songSlug, res.data);
+            }
+            return res;
+          });
+
+      shareableDancePrefetch = { data: dataPromise, audioPreloaded: true };
+    }
+
+    return { lyricDanceUrl };
+  })();
 } else if (
   _segments.length === 3 &&
   _segments[2] !== "lyric-dance" &&
@@ -230,6 +329,12 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
 export function consumeShareableDancePrefetch() {
   const p = shareableDancePrefetch;
   shareableDancePrefetch = null;
+  return p;
+}
+
+export function consumeClaimPageResolution() {
+  const p = claimPageResolution;
+  claimPageResolution = null;
   return p;
 }
 

@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
-import { consumeShareableDancePrefetch } from "@/lib/prefetch";
+import { consumeShareableDancePrefetch, readCachedDanceData } from "@/lib/prefetch";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
@@ -100,14 +100,22 @@ export default function ShareableLyricDance() {
 
         const userId = (row as any).user_id;
         if (userId) {
-          supabase
-            .from("profiles")
-            .select("display_name, avatar_url, is_verified")
-            .eq("id", userId)
-            .maybeSingle()
-            .then(({ data: pData }) => {
-              if (pData) setProfile(pData as ProfileInfo);
-            });
+          const loadProfile = () => {
+            supabase
+              .from("profiles")
+              .select("display_name, avatar_url, is_verified")
+              .eq("id", userId)
+              .maybeSingle()
+              .then(({ data: pData }) => {
+                if (pData) setProfile(pData as ProfileInfo);
+              });
+          };
+
+          if ("requestIdleCallback" in window) {
+            requestIdleCallback(loadProfile);
+          } else {
+            setTimeout(loadProfile, 1000);
+          }
         }
       });
   }, [artistSlug, songSlug]);
@@ -117,6 +125,11 @@ export default function ShareableLyricDance() {
     if (!data) return;
     const images = (data as any).section_images;
     if (Array.isArray(images) && images.some(Boolean)) return;
+
+    const cached = artistSlug && songSlug
+      ? readCachedDanceData(artistSlug, songSlug)
+      : null;
+    if (cached && (!Array.isArray(images) || !images.length)) return;
 
     let attempts = 0;
     const maxAttempts = 12;
@@ -194,7 +207,7 @@ export default function ShareableLyricDance() {
     if (!player || !id) return;
     let cancelled = false;
     fetchFireData(id).then((fires) => {
-      if (cancelled) return;
+      if (cancelled || !fires.length) return;
       player.setHistoricalFires(fires);
       setTotalFireCount(fires.length);
       if (fires.length > 0) {
