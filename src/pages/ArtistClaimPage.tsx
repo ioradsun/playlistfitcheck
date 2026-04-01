@@ -1,0 +1,126 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { Loader2, Music2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import ClaimBanner from "@/components/claim/ClaimBanner";
+
+type GhostProfileRow = {
+  id: string;
+  display_name: string;
+  spotify_artist_slug: string;
+};
+
+type ArtistLyricVideoRow = {
+  track_title: string;
+  artist_name: string;
+  album_art_url: string | null;
+  lyric_dance_url: string | null;
+  created_at: string;
+};
+
+export default function ArtistClaimPage() {
+  const { username } = useParams<{ username: string }>();
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<GhostProfileRow | null>(null);
+  const [latestVideo, setLatestVideo] = useState<ArtistLyricVideoRow | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      if (!username) {
+        if (active) setLoading(false);
+        return;
+      }
+
+      const { data: ghostProfile } = await (supabase as any)
+        .from("ghost_artist_profiles")
+        .select("id, display_name, spotify_artist_slug")
+        .eq("spotify_artist_slug", username)
+        .maybeSingle();
+
+      if (!active) return;
+      setProfile((ghostProfile as GhostProfileRow | null) ?? null);
+
+      if (!ghostProfile?.id) {
+        setLatestVideo(null);
+        setLoading(false);
+        return;
+      }
+
+      const { data: video } = await (supabase as any)
+        .from("artist_lyric_videos")
+        .select("track_title, artist_name, album_art_url, lyric_dance_url, created_at")
+        .eq("ghost_profile_id", ghostProfile.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!active) return;
+      setLatestVideo((video as ArtistLyricVideoRow | null) ?? null);
+      setLoading(false);
+    }
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [username]);
+
+  const artistName = useMemo(
+    () => latestVideo?.artist_name ?? profile?.display_name ?? username?.toUpperCase() ?? "Artist",
+    [latestVideo?.artist_name, profile?.display_name, username],
+  );
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background text-foreground">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <ClaimBanner
+        artistSlug={profile?.spotify_artist_slug ?? username}
+        coverArtUrl={latestVideo?.album_art_url ?? null}
+        songName={latestVideo?.track_title}
+        artistName={artistName}
+      />
+
+      <main className="mx-auto flex min-h-[calc(100vh-52px)] max-w-2xl flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="w-full max-w-xl rounded-3xl border border-border bg-card p-8 shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-foreground">
+            <Music2 className="h-6 w-6" />
+          </div>
+
+          <h1 className="text-3xl font-semibold tracking-tight text-card-foreground">
+            {artistName}
+          </h1>
+
+          <p className="mt-3 text-sm text-muted-foreground">
+            {latestVideo?.lyric_dance_url
+              ? `Latest lyric dance: ${latestVideo.track_title || "Untitled"}`
+              : "This artist page is ready, but the lyric dance is still being generated."}
+          </p>
+
+          {latestVideo?.lyric_dance_url ? (
+            <div className="mt-6 flex justify-center">
+              <Link
+                to={`${latestVideo.lyric_dance_url}?from=claim`}
+                className="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                Open lyric dance
+              </Link>
+            </div>
+          ) : (
+            <p className="mt-6 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              Generating preview experience…
+            </p>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
