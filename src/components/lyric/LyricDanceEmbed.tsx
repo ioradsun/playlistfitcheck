@@ -304,9 +304,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       } else {
         player.setMuted(true);
         setMuted(true);
-        if (cardState === "cold" || reelsPaused) {
-          player.pause();
-        }
+        // Always pause when not active — prevents audio drift and silent
+        // lyric advancement on warm cards. audio.load() (from primeAudio)
+        // continues buffering even when paused.
+        player.pause();
       }
       return;
     }
