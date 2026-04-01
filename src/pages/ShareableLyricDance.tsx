@@ -24,6 +24,7 @@ import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
 import { getSessionId } from "@/lib/sessionId";
+import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 
 const ALL_COLUMNS =
   "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name," +
@@ -49,6 +50,7 @@ export default function ShareableLyricDance() {
   const isMarketingView = searchParams.get("from") === "claim";
 
   const [data, setDataRaw] = useState<LyricDanceData | null>(null);
+  const [localEmpowerment, setLocalEmpowerment] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
@@ -60,6 +62,7 @@ export default function ShareableLyricDance() {
   const [totalFireCount, setTotalFireCount] = useState(0);
   const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const empowermentGenStarted = useRef(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -202,6 +205,56 @@ export default function ShareableLyricDance() {
   const renderData = fetchedData ?? data;
 
   useEffect(() => {
+    if (!isMarketingView || !playerReady) return;
+    handleListenNow();
+  }, [isMarketingView, playerReady, handleListenNow]);
+
+  useEffect(() => {
+    if (!isMarketingView) return;
+    if (!renderData?.id) return;
+    if (localEmpowerment ?? (renderData as any)?.empowerment_promise) return;
+    if (empowermentGenStarted.current) return;
+
+    const lines = Array.isArray((renderData as any)?.lyrics)
+      ? ((renderData as any).lyrics as any[])
+      : [];
+    if (!lines.length) return;
+
+    const lyricsText = lines
+      .filter((line: any) => line?.tag !== "adlib")
+      .map((line: any) => String(line?.text ?? "").trim())
+      .filter(Boolean)
+      .join("\n");
+
+    if (!lyricsText) return;
+
+    const cinematicDirection = (renderData as any)?.cinematic_direction ?? null;
+    empowermentGenStarted.current = true;
+
+    invokeWithTimeout(
+      "empowerment-promise",
+      {
+        songTitle: renderData?.song_name || "Untitled",
+        lyricsText,
+        emotionalArc: cinematicDirection?.emotionalArc ?? null,
+        sceneTone: cinematicDirection?.sceneTone ?? null,
+        chorusText: cinematicDirection?.chorusText ?? null,
+        meaning: null,
+      },
+      30_000,
+    )
+      .then(async ({ data: generated, error }) => {
+        if (error || !generated) return;
+        setLocalEmpowerment(generated);
+        await supabase
+          .from("shareable_lyric_dances" as any)
+          .update({ empowerment_promise: generated })
+          .eq("id", renderData.id);
+      })
+      .catch(() => {});
+  }, [isMarketingView, renderData, localEmpowerment]);
+
+  useEffect(() => {
     if (!player) return;
     player.setCoverMode(showCover);
   }, [player, showCover]);
@@ -274,7 +327,7 @@ export default function ShareableLyricDance() {
 
   const siteCopy = useSiteCopy();
   const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
-  const empowermentPromise = (renderData as any)?.empowerment_promise ?? null;
+  const empowermentPromise = localEmpowerment ?? (renderData as any)?.empowerment_promise ?? null;
   const coverSongName = renderData?.song_name ?? "";
   const coverArtist = profile?.display_name ?? renderData?.artist_name ?? "";
   const coverAvatarUrl = profile?.avatar_url ?? null;
