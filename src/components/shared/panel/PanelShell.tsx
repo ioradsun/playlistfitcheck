@@ -23,7 +23,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHei
       ? 'fixed left-0 right-0 z-[70] h-[88vh]'
       : variant === 'reels'
         ? 'absolute inset-x-0 bottom-0 z-[500]'
-        : 'absolute inset-x-0 bottom-0 z-[400]';
+        : 'absolute inset-x-0 z-[400]';
 
   return (
     <AnimatePresence>
@@ -40,7 +40,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHei
             backdropFilter: variant === 'embedded' ? 'blur(12px)' : undefined,
             borderTop: variant !== 'embedded' ? '1px solid rgba(255,255,255,0.06)' : undefined,
             top: variant === 'reels' ? 44 : variant === 'embedded' ? -topOffset : undefined,
-            bottom: variant === 'fullscreen' ? bottomOffset : undefined,
+            bottom: variant === 'fullscreen' || variant === 'embedded' ? bottomOffset : undefined,
             maxHeight: maxHeight ?? undefined,
             height: maxHeight ?? undefined,
           }}

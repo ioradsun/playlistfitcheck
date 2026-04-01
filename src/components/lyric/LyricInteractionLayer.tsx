@@ -114,11 +114,12 @@ export function LyricInteractionLayer({
   return (
     <>
       {variant === "embedded" ? (
-        <>
+        <div style={{ position: "relative", height: BAR_H, flexShrink: 0 }}>
           <ReactionPanel
             displayMode="embedded"
             isOpen={panelOpen}
             onClose={closePanel}
+            bottomOffset={BAR_H}
             refreshKey={refreshKey}
             danceId={danceId}
             activeLine={muted ? null : activeLine}
@@ -161,7 +162,7 @@ export function LyricInteractionLayer({
             lastFiredAt={lastFiredAt}
             songEnded={songEnded}
           />
-        </>
+        </div>
       ) : (
         <>
           <ReactionPanel
