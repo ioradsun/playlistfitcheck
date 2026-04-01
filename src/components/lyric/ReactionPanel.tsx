@@ -865,7 +865,7 @@ function ReactionPanel({
               }
             }}
             onFocus={() => onPause?.()}
-            placeholder={replyingTo ? "write a reply..." : "why did this hit?"}
+            placeholder={replyingTo ? "write a reply..." : "add to this moment..."}
             style={{
               flex: 1,
               background: 'transparent',
@@ -898,35 +898,6 @@ function ReactionPanel({
           )}
         </div>
 
-        <button
-          onClick={handlePanelClose}
-          style={{
-            flexShrink: 0,
-            width: 36,
-            height: 36,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: "rgba(255,255,255,0.3)",
-            borderRadius: 8,
-          }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          >
-            <line x1="2" y1="2" x2="12" y2="12" />
-            <line x1="12" y1="2" x2="2" y2="12" />
-          </svg>
-        </button>
       </div>
 
       {renderBottomBar && renderBottomBar(handlePanelClose)}

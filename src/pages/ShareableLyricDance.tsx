@@ -343,22 +343,6 @@ export default function ShareableLyricDance() {
   const ogDescription = isMarketingView
     ? "Your song. One click. AI lyric video. Claim your free artist page on tools.fm"
     : "Interactive lyric video on tools.fm · Run it back or skip";
-  const hookPhrase = (renderData as any)?.hook_phrase ?? null;
-  const activeLineFireCount = useMemo(() => {
-    if (!activeLine) return 0;
-    const currentTime = player?.audio?.currentTime ?? 0;
-    const activeStart = (renderData?.lyrics as any[])?.find(
-      (l: any) => l.start <= currentTime && l.end >= currentTime,
-    )?.start ?? 0;
-    const windowEnd = activeStart + 10;
-    const linesInWindow = (lyricSections.allLines ?? []).filter(
-      (l) => l.startSec >= activeStart - 1 && l.startSec <= windowEnd,
-    );
-    return linesInWindow.reduce((sum, l) => {
-      return sum + Object.values(reactionData).reduce((s, d) => s + (d.line[l.lineIndex] ?? 0), 0);
-    }, 0);
-  }, [activeLine, reactionData, lyricSections.allLines, player, renderData]);
-
   const activeSectionIndex = useMemo(() => {
     if (!audioSections.length) return 0;
     const idx = audioSections.findIndex(
@@ -600,74 +584,65 @@ export default function ShareableLyricDance() {
           />
         )}
 
-        {!reactionPanelOpen && (
-          <div className="w-full max-w-2xl mx-auto">
-            <CardBottomBar
-              {...({
-                variant: "fullscreen",
-                onOpenReactions: openReactionPanel,
-                onClose: closePanel,
-                panelOpen: reactionPanelOpen,
-                currentMoment,
-                onFireTap: () => {
-                  if (holdFireIntervalRef.current) {
-                    clearInterval(holdFireIntervalRef.current);
-                    holdFireIntervalRef.current = null;
-                  }
-                  const id = renderData?.id;
-                  if (!id || !activeLine) return;
-                  player?.fireFire(0);
-                  emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "shareable");
-                  setFireStrengthByLine((prev) => ({
-                    ...prev,
-                    [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
-                  }));
-                  setTotalFireCount((c) => c + 1);
-                  setLastFiredAt(new Date().toISOString());
-                  markFired();
-                },
-                onFireHoldStart: () => {
-                  if (holdFireIntervalRef.current) return;
-                  holdFireIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
-                },
-                onFireHoldEnd: (holdMs: number) => {
-                  if (holdFireIntervalRef.current) {
-                    clearInterval(holdFireIntervalRef.current);
-                    holdFireIntervalRef.current = null;
-                  }
-                  const id = renderData?.id;
-                  if (!id || !activeLine) return;
-                  player?.fireFire(holdMs);
-                  emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "shareable");
-                  const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
-                  setFireStrengthByLine((prev) => ({
-                    ...prev,
-                    [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
-                  }));
-                  setTotalFireCount((c) => c + 1);
-                  setLastFiredAt(new Date().toISOString());
-                  markFired();
-                },
-                onComment: (text: string) => {
-                  handleCommentFromBar(text, currentMoment?.index ?? null);
-                },
-                onPauseForInput: handlePauseForInput,
-                onResumeAfterInput: handleResumeAfterInput,
-                activeLineFireCount,
-                hookPhrase,
-                activeLineText: activeLine?.text ?? null,
-                accent: barAccent,
-                hasFired,
-                muted,
-                isLive: !showCover && playerReady,
-                totalFireCount,
-                lastFiredAt,
-                songEnded: closingVisible,
-                firedMomentCount: firedSections.size,
-              } as any)}
-            />
-          </div>
-        )}
+        <div className="w-full max-w-2xl mx-auto">
+          <CardBottomBar
+            variant="fullscreen"
+            onOpenReactions={openReactionPanel}
+            onClose={closePanel}
+            panelOpen={reactionPanelOpen}
+            currentMoment={currentMoment}
+            onFireTap={() => {
+              if (holdFireIntervalRef.current) {
+                clearInterval(holdFireIntervalRef.current);
+                holdFireIntervalRef.current = null;
+              }
+              const id = renderData?.id;
+              if (!id || !activeLine) return;
+              player?.fireFire(0);
+              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "shareable");
+              setFireStrengthByLine((prev) => ({
+                ...prev,
+                [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
+              }));
+              setTotalFireCount((c) => c + 1);
+              setLastFiredAt(new Date().toISOString());
+              markFired();
+            }}
+            onFireHoldStart={() => {
+              if (holdFireIntervalRef.current) return;
+              holdFireIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
+            }}
+            onFireHoldEnd={(holdMs: number) => {
+              if (holdFireIntervalRef.current) {
+                clearInterval(holdFireIntervalRef.current);
+                holdFireIntervalRef.current = null;
+              }
+              const id = renderData?.id;
+              if (!id || !activeLine) return;
+              player?.fireFire(holdMs);
+              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "shareable");
+              const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
+              setFireStrengthByLine((prev) => ({
+                ...prev,
+                [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
+              }));
+              setTotalFireCount((c) => c + 1);
+              setLastFiredAt(new Date().toISOString());
+              markFired();
+            }}
+            onComment={(text: string) => {
+              handleCommentFromBar(text, currentMoment?.index ?? null);
+            }}
+            onPauseForInput={handlePauseForInput}
+            onResumeAfterInput={handleResumeAfterInput}
+            accent={barAccent}
+            hasFired={hasFired}
+            isLive={!showCover && playerReady}
+            totalFireCount={totalFireCount}
+            lastFiredAt={lastFiredAt}
+            songEnded={closingVisible}
+          />
+        </div>
       </div>
 
       <ReactionPanel
