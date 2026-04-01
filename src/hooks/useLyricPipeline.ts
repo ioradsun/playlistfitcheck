@@ -919,12 +919,12 @@ export function useLyricPipeline({
           return;
         }
 
-        const { data: danceRow } = await supabase
+        const { data: danceRow } = await (supabase
           .from("shareable_lyric_dances" as any)
           .select("id")
           .eq("artist_slug", claimMeta.artistSlug)
           .eq("song_slug", claimMeta.songSlug)
-          .maybeSingle();
+          .maybeSingle() as any) as { data: { id: string } | null };
 
         const lyricDanceUrl = `/${claimMeta.artistSlug}/${claimMeta.songSlug}/lyric-dance`;
 
