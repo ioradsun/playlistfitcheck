@@ -182,7 +182,9 @@ export function LyricsTab({
 
   const handleTranscribe = useCallback(
     async (file: File, referenceLyrics?: string) => {
+      console.log("[handleTranscribe] START", { fileName: file.name, canUse: quota.canUse, tier: quota.tier, loading: quota.loading, user: !!user });
       if (!quota.canUse) {
+        console.warn("[handleTranscribe] BLOCKED by quota", { tier: quota.tier, used: quota.used, limit: quota.limit });
         toast.error(
           quota.tier === "anonymous"
             ? "Sign up for more uses"
@@ -195,6 +197,7 @@ export function LyricsTab({
       setLoading(true);
 
       const project = await handleFileSelected(file);
+      console.log("[handleTranscribe] handleFileSelected result", { projectId: project?.projectId, audioUrl: project?.audioUrl?.slice(0, 60) });
       const projectId = project?.projectId ?? null;
       const storageAudioUrl = project?.audioUrl ?? null;
       const draftTitle = resolveProjectTitle(null, file.name);
