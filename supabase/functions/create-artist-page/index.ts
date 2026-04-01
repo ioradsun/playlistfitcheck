@@ -88,7 +88,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { spotifyTrackUrl } = await req.json();
+    const body = await req.json();
+    const spotifyTrackUrl = body.spotifyTrackUrl || body.spotifyUrl || "";
     const trackId = extractTrackId(spotifyTrackUrl);
 
     if (!trackId) {
