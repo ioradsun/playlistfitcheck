@@ -56,7 +56,7 @@ export default function ShareableLyricDance() {
   const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
   const [closingVisible, setClosingVisible] = useState(false);
   const [closingAnswered, setClosingAnswered] = useState(false);
-  const [firedSections, setFiredSections] = useState<Set<number>>(new Set());
+  const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
   const [totalFireCount, setTotalFireCount] = useState(0);
   const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -343,10 +343,11 @@ export default function ShareableLyricDance() {
     return idx >= 0 ? idx : 0;
   }, [currentTimeSec, audioSections]);
 
-  const hasFired = firedSections.has(activeSectionIndex);
+  const hasFired = firedMoments.has(currentMoment?.index ?? -1);
   const markFired = useCallback(() => {
-    setFiredSections((prev) => new Set([...prev, activeSectionIndex]));
-  }, [activeSectionIndex]);
+    if (currentMoment?.index == null) return;
+    setFiredMoments((prev) => new Set([...prev, currentMoment.index]));
+  }, [currentMoment?.index]);
 
   const barAccent = useMemo(() => {
     const autoPalettes = (renderData as any)?.auto_palettes;
