@@ -203,11 +203,6 @@ export default function ShareableLyricDance() {
     lightningBarEnabled,
   } = core;
 
-  useEffect(() => {
-    if (fetchedData && fetchedData !== data) {
-      setDataRaw(fetchedData);
-    }
-  }, [fetchedData, data]);
   const renderData = fetchedData ?? data;
 
   // ── Fetch historical fire data ─────────────────────────────────────
@@ -489,7 +484,7 @@ export default function ShareableLyricDance() {
           <ClosingScreen
             visible={closingVisible && !reactionPanelOpen}
             empowermentPromise={empowermentPromise}
-            danceId={(data as any)?.id ?? ""}
+            danceId={renderData?.id ?? ""}
             onAnswer={() => setClosingAnswered(true)}
             onReplay={() => {
               setClosingVisible(false);
@@ -674,8 +669,8 @@ export default function ShareableLyricDance() {
         activeLine={activeLine}
         allLines={lyricSections.allLines}
         audioSections={audioSections}
-        phrases={(data as any)?.cinematic_direction?.phrases ?? null}
-        words={(data as any)?.words ?? null}
+        phrases={(renderData as any)?.cinematic_direction?.phrases ?? null}
+        words={(renderData as any)?.words ?? null}
         beatGrid={(renderData as any)?.beat_grid ?? null}
         currentTimeSec={currentTimeSec}
         palette={palette}
