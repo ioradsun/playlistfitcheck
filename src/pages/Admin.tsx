@@ -83,6 +83,15 @@ export default function Admin() {
   const [reachStatusMsg, setReachStatusMsg] = useState("");
   const [reachFocused, setReachFocused] = useState(false);
   const reachDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const [reachPipelineMeta, setReachPipelineMeta] = useState<{
+    slug: string;
+    artistName: string;
+    trackTitle: string;
+    albumArtUrl: string | null;
+    profileId: string;
+    trackId: string;
+  } | null>(null);
+  const [reachPipelineFile, setReachPipelineFile] = useState<File | null>(null);
 
   const fetchUsers = useCallback(async () => {
     const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", { body: { section: "users" } });
