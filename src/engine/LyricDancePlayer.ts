@@ -699,13 +699,28 @@ class DynamiteWickBar {
       this.waveformSmooth = new Float32Array(out);
       return;
     }
+
+    // Resample beatEnergies to DWB_W pixels
+    const raw = new Float32Array(DWB_W);
     for (let x = 0; x < DWB_W; x++) {
       const srcIdx = (x / DWB_W) * beatEnergies.length;
       const lo = Math.floor(srcIdx);
       const hi = Math.min(lo + 1, beatEnergies.length - 1);
       const frac = srcIdx - lo;
-      out[x] = Math.max(0.08, beatEnergies[lo] * (1 - frac) + beatEnergies[hi] * frac);
+      raw[x] = beatEnergies[lo] * (1 - frac) + beatEnergies[hi] * frac;
     }
+
+    // Local-window normalize so long flat songs get visible variation
+    const WIN = 80;
+    for (let x = 0; x < DWB_W; x++) {
+      const lo = Math.max(0, x - WIN);
+      const hi = Math.min(DWB_W - 1, x + WIN);
+      let localMax = 0;
+      for (let i = lo; i <= hi; i++) localMax = Math.max(localMax, raw[i]);
+      const norm = localMax > 0.001 ? raw[x] / localMax : 0;
+      out[x] = Math.max(0.10, Math.pow(norm, 0.55));
+    }
+
     this.waveform = out;
     const smooth = new Float32Array(DWB_W);
     const R = 3;
