@@ -277,9 +277,9 @@ export function CardBottomBar({
       <div
         className={`flex items-center gap-2 flex-1 min-w-0 px-3 ${py}`}
         style={{
-          opacity: commentActive ? 1 : 0.3,
+          opacity: commentActive ? 1 : 0.5,
           pointerEvents: commentActive ? "auto" : "none",
-          transition: "opacity 0.3s ease, color 0.3s ease",
+          transition: "opacity 0.4s ease",
         }}
       >
         {speechSupported && (
@@ -297,7 +297,7 @@ export function CardBottomBar({
               height={13}
               viewBox="0 0 24 24"
               fill="none"
-              stroke={isListening ? "#ff4444" : commentActive ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)"}
+              stroke={isListening ? "#ff4444" : commentActive ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.15)"}
               style={{ transition: "stroke 0.2s" }}
               strokeWidth="2"
               strokeLinecap="round"
@@ -339,14 +339,14 @@ export function CardBottomBar({
           tabIndex={commentActive ? 0 : -1}
           placeholder="What hit?"
           className={`flex-1 min-w-0 bg-transparent outline-none font-mono ${
-            commentActive ? "placeholder:text-[rgba(255,255,255,0.35)]" : "placeholder:text-[rgba(255,255,255,0.1)]"
+            commentActive ? "placeholder:text-[rgba(255,255,255,0.35)]" : "placeholder:text-[rgba(255,255,255,0.25)]"
           }`}
           style={{
             fontSize: variant === "fullscreen" ? 12 : 11,
-            color: commentActive ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.35)",
+            color: commentActive ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.45)",
             caretColor: accent ?? "#ff8c32",
             letterSpacing: "0.02em",
-            transition: "color 0.3s ease",
+            transition: "color 0.4s ease",
           }}
           autoComplete="off"
         />
