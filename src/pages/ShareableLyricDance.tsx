@@ -384,6 +384,12 @@ export default function ShareableLyricDance() {
     };
   }, [moments, currentTimeSec]);
 
+  const hasFired = firedMoments.has(currentMoment?.index ?? -1);
+  const markFired = useCallback(() => {
+    if (currentMoment?.index == null) return;
+    setFiredMoments((prev) => new Set([...prev, currentMoment.index]));
+  }, [currentMoment?.index]);
+
   useEffect(() => {
     return () => {
       if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current);
