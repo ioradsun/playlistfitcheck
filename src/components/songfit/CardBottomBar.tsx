@@ -176,8 +176,10 @@ export function CardBottomBar({
 }: CardBottomBarProps) {
   const [commentText, setCommentText] = useState("");
   const [isListening, setIsListening] = useState(false);
+  const [confirmMoment, setConfirmMoment] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const py = variant === "embedded" ? "py-3" : "py-4";
   const subTextSize = variant === "fullscreen" ? "text-[11px]" : "text-[10px]";
@@ -187,14 +189,20 @@ export function CardBottomBar({
   const wrapperClass =
     variant === "embedded"
       ? "flex items-stretch h-[48px]"
-      : "flex items-stretch mx-1 mt-1 rounded-lg overflow-hidden h-[64px]";
+      : "flex items-stretch rounded-2xl overflow-hidden h-[56px]";
 
   const wrapperStyle: React.CSSProperties = {
-    background: "#0a0a0a",
-    borderTop: `1px solid ${isLive ? withAlpha(accent, 0.25) : "rgba(255,255,255,0.06)"}`,
-    transition: "border-color 0.6s ease",
+    background: variant === "fullscreen" ? "rgba(10,10,10,0.95)" : "#0a0a0a",
+    borderTop: `1px solid ${
+      confirmMoment ? accent : isLive ? withAlpha(accent, 0.25) : "rgba(255,255,255,0.06)"
+    }`,
+    transition: "border-color 0.3s ease",
     ...(variant === "fullscreen"
-      ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" }
+      ? {
+          width: "min(340px, calc(100vw - 48px))",
+          backdropFilter: "blur(12px)",
+          border: `1px solid ${confirmMoment ? accent : "rgba(255,255,255,0.06)"}`,
+        }
       : {}),
   };
   const commentActive = hasFired === true;
@@ -247,6 +255,7 @@ export function CardBottomBar({
 
   useEffect(() => () => {
     recognitionRef.current?.abort();
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
   }, []);
   const momentLabel = currentMoment
     ? `Moment ${currentMoment.index + 1}/${currentMoment.total}`
@@ -280,7 +289,6 @@ export function CardBottomBar({
         </span>
       </button>
 
-      <div style={{ width: "0.5px", background: "rgba(255,255,255,0.06)", alignSelf: "stretch", margin: "8px 0" }} />
       <div
         className={`flex items-center gap-2 flex-1 min-w-0 px-3 ${py}`}
         style={{
@@ -321,7 +329,16 @@ export function CardBottomBar({
           ref={inputRef}
           type="text"
           value={commentText}
-          onChange={(e) => setCommentText(e.target.value)}
+          onChange={(e) => {
+            if (confirmMoment) {
+              setConfirmMoment(null);
+              if (confirmTimerRef.current) {
+                clearTimeout(confirmTimerRef.current);
+                confirmTimerRef.current = null;
+              }
+            }
+            setCommentText(e.target.value);
+          }}
           onFocus={() => onPauseForInput?.()}
           onBlur={() => {
             if (!commentText.trim()) onResumeAfterInput?.();
@@ -329,7 +346,13 @@ export function CardBottomBar({
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               const text = commentText.trim();
-              if (text) onComment?.(text);
+              if (text) {
+                onComment?.(text);
+                const label = currentMoment ? `Posted to Moment ${currentMoment.index + 1}` : "Posted";
+                setConfirmMoment(label);
+                if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+                confirmTimerRef.current = setTimeout(() => setConfirmMoment(null), 1800);
+              }
               if (isListening) stopListening();
               setCommentText("");
               inputRef.current?.blur();
@@ -344,22 +367,26 @@ export function CardBottomBar({
           }}
           readOnly={!commentActive}
           tabIndex={commentActive ? 0 : -1}
-          placeholder="What hit?"
+          placeholder={confirmMoment ?? "What hit?"}
           className={`flex-1 min-w-0 bg-transparent outline-none font-mono ${
-            commentActive ? "placeholder:text-[rgba(255,255,255,0.35)]" : "placeholder:text-[rgba(255,255,255,0.25)]"
+            confirmMoment
+              ? "placeholder:text-current"
+              : commentActive
+                ? "placeholder:text-[rgba(255,255,255,0.35)]"
+                : "placeholder:text-[rgba(255,255,255,0.25)]"
           }`}
           style={{
             fontSize: variant === "fullscreen" ? 12 : 11,
-            color: commentActive ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.45)",
+            color: confirmMoment ? accent : commentActive ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.45)",
             caretColor: accent ?? "#ff8c32",
             letterSpacing: "0.02em",
             transition: "color 0.4s ease",
+            ...(confirmMoment ? ({ "--placeholder-color": accent } as any) : {}),
           }}
           autoComplete="off"
         />
       </div>
 
-      <div style={{ width: "0.5px", background: "rgba(255,255,255,0.06)", alignSelf: "stretch", margin: "8px 0" }} />
       <FireButton
         onTap={onFireTap}
         onHoldStart={onFireHoldStart}

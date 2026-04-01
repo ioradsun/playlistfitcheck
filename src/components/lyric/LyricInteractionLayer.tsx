@@ -118,7 +118,17 @@ export function LyricInteractionLayer({
       style={{
         flexShrink: 0,
         ...(isFullscreen
-          ? { position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 80, background: "#0a0a0a" }
+          ? {
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 80,
+              background: "transparent",
+              display: "flex",
+              justifyContent: "center",
+              paddingBottom: "env(safe-area-inset-bottom, 0px)",
+            }
           : {}),
       }}
     >
