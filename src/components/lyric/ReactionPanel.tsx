@@ -88,6 +88,7 @@ interface ReactionPanelProps {
   lastBarFireEvent?: { lineIndex: number; ts: number } | null;
   /** Line index of the most recent bar comment — auto-expands that window's comments */
   lastBarCommentLineIndex?: number | null;
+  onCommentSubmitted?: { text: string; lineIndex: number | null; ts: number } | null;
 }
 
 function CommentReactPicker({
@@ -251,6 +252,7 @@ function ReactionPanel({
   renderBottomBar,
   lastBarFireEvent,
   lastBarCommentLineIndex,
+  onCommentSubmitted,
 }: ReactionPanelProps) {
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [collapsedWindows, setCollapsedWindows] = useState<Set<number>>(new Set());
@@ -404,6 +406,19 @@ function ReactionPanel({
     const timer = setTimeout(() => setSubmittedLineIndex(null), 800);
     return () => clearTimeout(timer);
   }, [lastBarFireEvent?.ts]);
+
+  useEffect(() => {
+    if (!onCommentSubmitted) return;
+    const optimistic: CommentRow = {
+      id: `optimistic-${onCommentSubmitted.ts}`,
+      text: onCommentSubmitted.text,
+      line_index: onCommentSubmitted.lineIndex,
+      submitted_at: new Date().toISOString(),
+      is_pinned: false,
+      parent_comment_id: null,
+    };
+    setComments((prev) => [...prev, optimistic]);
+  }, [onCommentSubmitted?.ts]);
 
   // Scroll fired line into view when panel is open.
   useEffect(() => {

@@ -205,7 +205,7 @@ export function CardBottomBar({
         }
       : {}),
   };
-  const commentActive = hasFired === true;
+  const commentActive = panelOpen || hasFired === true;
 
   const startListening = useCallback(() => {
     onPauseForInput?.();

@@ -94,6 +94,11 @@ export function LyricInteractionLayer({
   const [panelOpen, setPanelOpen] = useState(false);
   const [lastBarFireEvent, setLastBarFireEvent] = useState<{ lineIndex: number; ts: number } | null>(null);
   const [lastBarCommentLineIndex, setLastBarCommentLineIndex] = useState<number | null>(null);
+  const [lastSubmittedComment, setLastSubmittedComment] = useState<{
+    text: string;
+    lineIndex: number | null;
+    ts: number;
+  } | null>(null);
 
   useEffect(() => {
     if (externalPanelOpen !== undefined) setPanelOpen(externalPanelOpen);
@@ -109,6 +114,9 @@ export function LyricInteractionLayer({
   };
 
   const closePanel = () => {
+    const lastTime = player?.audio?.currentTime ?? null;
+    player?.setRegion(undefined, undefined);
+    onPanelCloseWithPosition?.(lastTime);
     setPanelOpen(false);
     onPanelOpenChange?.(false);
   };
@@ -136,8 +144,7 @@ export function LyricInteractionLayer({
         displayMode={panelDisplayMode}
         isOpen={panelOpen}
         onClose={closePanel}
-        onCloseWithPosition={(timeSec) => {
-          onPanelCloseWithPosition?.(timeSec);
+        onCloseWithPosition={() => {
           onResume?.();
         }}
         bottomOffset={BAR_H}
@@ -165,6 +172,7 @@ export function LyricInteractionLayer({
         fmlyHookEnabled={fmlyHookEnabled}
         lastBarFireEvent={lastBarFireEvent}
         lastBarCommentLineIndex={lastBarCommentLineIndex}
+        onCommentSubmitted={lastSubmittedComment}
       />
       <CardBottomBar
         variant={variant}
@@ -186,6 +194,7 @@ export function LyricInteractionLayer({
         onComment={(text) => {
           const li = activeLine?.lineIndex ?? null;
           setLastBarCommentLineIndex(li);
+          setLastSubmittedComment({ text, lineIndex: li, ts: Date.now() });
           onComment?.(text, currentMoment?.index ?? null);
         }}
         onPauseForInput={onPause}
