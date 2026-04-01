@@ -658,6 +658,7 @@ export default function ShareableLyricDance() {
                 activeLineText: activeLine?.text ?? null,
                 accent: barAccent,
                 hasFired,
+                muted,
                 isLive: !showCover && playerReady,
                 totalFireCount,
                 lastFiredAt,

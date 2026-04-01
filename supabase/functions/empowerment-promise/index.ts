@@ -24,17 +24,19 @@ Six empowerment buckets:
 Emotional movement: every strong song moves listener from one state to another.
 Examples: confused→clear, rejected→worthy, heartbroken→detached, invisible→powerful, stuck→free
 
-Return exactly 6 social media caption hooks. Rules:
+Return exactly 4 social media caption hooks. Rules:
 - Never use genre labels — name the MOMENT instead
 - Be ruthlessly specific about who this is for
-- Max 12 words per hook
+- Max 10 words per hook
+- Write like a music fan, not a marketer. Specific > general.
+  "for when you're driving home and finally stop pretending you're fine"
+  beats "for listeners experiencing emotional growth."
+- Use lowercase. Hooks are captions, not headlines.
 - Each hook uses a different formula:
   1. "This is the song for when…"
   2. "POV: you finally…"
   3. "Not a song. A soundtrack for…"
   4. "For the people who…"
-  5. "This is what [emotion] sounds like."
-  6. Name the exact transformation (your own variation)
 
 Return ONLY valid JSON, no markdown, no preamble.`;
 
@@ -83,7 +85,7 @@ Return JSON:
   "fromState": "listener's state before the song (3–6 words)",
   "toState": "listener's state after the song (3–6 words)",
   "promise": "the empowerment promise in one crisp line",
-  "hooks": ["hook1", "hook2", "hook3", "hook4", "hook5", "hook6"]
+  "hooks": ["hook1", "hook2", "hook3", "hook4"]
 }`;
 
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

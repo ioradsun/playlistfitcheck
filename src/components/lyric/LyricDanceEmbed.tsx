@@ -781,6 +781,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               activeLineText: effectiveShowCover ? null : (activeLine?.text ?? null),
               accent: barAccent,
               hasFired,
+              muted,
               isLive: !effectiveShowCover && cardState === "active",
               totalFireCount,
               lastFiredAt,
