@@ -83,6 +83,7 @@ interface ReactionPanelProps {
   fmlyHookEnabled?: boolean;
   onFireLine?: (lineIndex: number, holdMs: number) => void;
   onLineVisible?: (lineIndex: number) => void;
+  renderBottomBar?: (onClose: () => void) => React.ReactNode;
 }
 
 function CommentReactPicker({

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AudioSection } from "@/engine/sectionDetector";
+import type { CanonicalAudioSection } from "@/components/lyric/ReactionPanel";
 import type { LyricSectionLine } from "@/hooks/useLyricSections";
 import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
