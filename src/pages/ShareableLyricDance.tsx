@@ -203,11 +203,6 @@ export default function ShareableLyricDance() {
     lightningBarEnabled,
   } = core;
 
-  useEffect(() => {
-    if (fetchedData && fetchedData !== data) {
-      setDataRaw(fetchedData);
-    }
-  }, [fetchedData, data]);
   const renderData = fetchedData ?? data;
 
   // ── Fetch historical fire data ─────────────────────────────────────
