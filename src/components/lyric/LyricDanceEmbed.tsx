@@ -200,19 +200,13 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   }, [externalPanelOpen]);
 
   const handlePanelOpenChange = useCallback((open: boolean) => {
-    if (open && hideReactButton) {
-      onOpenReactions?.();
-      setPanelOpen(false);
-      onExternalPanelOpenChange?.(false);
-      return;
-    }
     setPanelOpen(open);
     onExternalPanelOpenChange?.(open);
     if (open && showCover) {
       userActivatedRef.current = true;
       onPlay?.();
     }
-  }, [hideReactButton, onOpenReactions, onExternalPanelOpenChange, onPlay, showCover]);
+  }, [onExternalPanelOpenChange, onPlay, showCover]);
 
   // ── Full-mode upgrade: when player is ready and card is warm/active ──
   useEffect(() => {
