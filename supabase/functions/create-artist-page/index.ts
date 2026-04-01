@@ -93,124 +93,7 @@ async function scrapePreviewFromEmbed(trackId: string): Promise<string | null> {
   }
 }
 
-// ── lrclib ───────────────────────────────────────────────────────────────────
-async function fetchLrclib(
-  trackTitle: string,
-  artistName: string
-): Promise<{ syncedLyrics: string | null; plainLyrics: string | null }> {
-  try {
-    const params = new URLSearchParams({ track_name: trackTitle, artist_name: artistName });
-    const res = await fetch(`https://lrclib.net/api/get?${params}`, {
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!res.ok) return { syncedLyrics: null, plainLyrics: null };
-    const data = await res.json();
-    return { syncedLyrics: data.syncedLyrics ?? null, plainLyrics: data.plainLyrics ?? null };
-  } catch {
-    return { syncedLyrics: null, plainLyrics: null };
-  }
-}
-
 // ── Ghost profile upsert (ghost_artist_profiles, no auth FK) ─────────────────
-async function upsertGhostProfile(
-  slug: string,
-  artistName: string,
-  supabase: any
-): Promise<{ profileId: string; isNew: boolean; alreadyClaimed: boolean; error?: string }> {
-  const { data: existing } = await supabase
-    .from("ghost_artist_profiles")
-    .select("id, is_claimed")
-    .eq("spotify_artist_slug", slug)
-    .maybeSingle();
-
-  if (existing) {
-    if (existing.is_claimed) return { profileId: existing.id, isNew: false, alreadyClaimed: true };
-    return { profileId: existing.id, isNew: false, alreadyClaimed: false };
-  }
-
-  const { data: newProfile, error: insertErr } = await supabase
-    .from("ghost_artist_profiles")
-    .insert({ display_name: artistName, spotify_artist_slug: slug })
-    .select("id")
-    .single();
-
-  if (insertErr) return { profileId: "", isNew: false, alreadyClaimed: false, error: insertErr.message };
-  return { profileId: newProfile.id, isNew: true, alreadyClaimed: false };
-}
-
-// ── AssemblyAI ────────────────────────────────────────────────────────────────
-function buildWordBoost(plainLyrics: string | null): string[] {
-  if (!plainLyrics) return [];
-  return [...new Set(
-    plainLyrics.split(/\s+/)
-      .map(w => w.replace(/[^a-zA-Z0-9']/g, ""))
-      .filter(w => w.length > 1)
-      .slice(0, 200)
-  )];
-}
-
-async function submitAssemblyAI(
-  audioUrl: string,
-  plainLyrics: string | null,
-  apiKey: string
-): Promise<{ jobId: string | null; error: string | null }> {
-  const wordBoost = buildWordBoost(plainLyrics);
-  const submitRes = await fetch("https://api.assemblyai.com/v2/transcript", {
-    method: "POST",
-    headers: { authorization: apiKey, "content-type": "application/json" },
-    body: JSON.stringify({
-      audio_url: audioUrl,
-      speech_models: ["universal-2"],
-      ...(wordBoost.length > 0 && { word_boost: wordBoost, boost_param: "high" }),
-      punctuate: false,
-      format_text: false,
-    }),
-  });
-  if (!submitRes.ok) {
-    const errText = await submitRes.text().catch(() => `HTTP ${submitRes.status}`);
-    return { jobId: null, error: `HTTP ${submitRes.status}: ${errText.slice(0, 200)}` };
-  }
-  const data = await submitRes.json();
-  const jobId = typeof data.id === "string" ? data.id : null;
-  if (!jobId) return { jobId: null, error: `No job ID: ${JSON.stringify(data).slice(0, 100)}` };
-  return { jobId, error: null };
-}
-
-async function pollAssemblyAI(
-  jobId: string,
-  apiKey: string
-): Promise<{ lrc: string; words: Array<{ word: string; start: number; end: number }> } | null> {
-  for (let i = 0; i < 20; i++) {
-    await new Promise(r => setTimeout(r, 1500));
-    const poll = await fetch(`https://api.assemblyai.com/v2/transcript/${jobId}`, {
-      headers: { authorization: apiKey },
-    });
-    if (!poll.ok) continue;
-    const data = await poll.json();
-    if (data.status === "error") return null;
-    if (data.status !== "completed") continue;
-    if (!data.words?.length) return null;
-
-    const WORDS_PER_LINE = 6;
-    const lines: string[] = [];
-    for (let w = 0; w < data.words.length; w += WORDS_PER_LINE) {
-      const chunk = data.words.slice(w, w + WORDS_PER_LINE);
-      const startSec = chunk[0].start / 1000;
-      const mins = Math.floor(startSec / 60).toString().padStart(2, "0");
-      const secs = (startSec % 60).toFixed(2).padStart(5, "0");
-      lines.push(`[${mins}:${secs}]${chunk.map((x: any) => x.text).join(" ")}`);
-    }
-
-    const words = data.words.map((w: any) => ({
-      word: w.text,
-      start: Math.round(w.start) / 1000,
-      end: Math.round(w.end) / 1000,
-    }));
-
-    return { lrc: lines.join("\n"), words };
-  }
-  return null;
-}
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 serve(async (req) => {
@@ -228,7 +111,7 @@ serve(async (req) => {
     if (!clientId) throw new Error("SPOTIFY_CLIENT_ID not configured");
     const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
     if (!clientSecret) throw new Error("SPOTIFY_CLIENT_SECRET not configured");
-    const assemblyKey = Deno.env.get("ASSEMBLYAI_API_KEY") ?? "";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const adminUserId = Deno.env.get("ADMIN_USER_ID");
@@ -307,14 +190,13 @@ serve(async (req) => {
       `${artistName} — "${trackTitle}" | preview: ${previewUrl ? (track.preview_url ? "api" : "embed") : "none"} | ${beatGrid.bpm}bpm`,
       slug);
 
-    // ── STEP 2: Ghost profile + lrclib IN PARALLEL ──
+    // ── STEP 2: Ghost profile ──
     await logStep("ghost_profile", "running", null, slug);
-    await logStep("lrclib_check", "running", null, slug);
 
-    const [profileResult, lrclibResult] = await Promise.allSettled([
-      upsertGhostProfile(slug, artistName, supabase),
-      fetchLrclib(trackTitle, artistName),
-    ]);
+    const profileResult = await Promise.resolve(upsertGhostProfile(slug, artistName, supabase)).then(
+      v => ({ status: "fulfilled" as const, value: v }),
+      r => ({ status: "rejected" as const, reason: r }),
+    );
 
     if (profileResult.status === "fulfilled") {
       const p = profileResult.value;
@@ -340,92 +222,13 @@ serve(async (req) => {
       });
     }
     if (profile.alreadyClaimed) {
-      await logStep("lrclib_check", "skipped", "Already claimed", slug);
       await logStep("complete", "done", `/artist/${slug}/claim-page`, slug);
       return new Response(JSON.stringify({ slug, alreadyClaimed: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const lrclib = lrclibResult.status === "fulfilled"
-      ? lrclibResult.value
-      : { syncedLyrics: null, plainLyrics: null };
-
-    if (lrclib.syncedLyrics) {
-      await logStep("lrclib_check", "done", "Hit — synced LRC found", slug);
-      await logStep("assemblyai_submit", "skipped", "lrclib hit — skipped", slug);
-      await logStep("assemblyai_poll", "skipped", "lrclib hit — skipped", slug);
-    } else if (lrclib.plainLyrics) {
-      await logStep("lrclib_check", "done", "Partial — plain lyrics only, using AssemblyAI for timing", slug);
-    } else {
-      await logStep("lrclib_check", "done", "Miss — no lyrics found", slug);
-    }
-
-    // ── STEP 3: AssemblyAI (only if no synced lyrics) ──
-    let syncedLrc: string | null = lrclib.syncedLyrics;
-    const plainLyrics: string | null = lrclib.plainLyrics;
-    let lyricsSource = lrclib.syncedLyrics ? "lrclib" : "none";
-
-    // ── Pre-populate transcribedLines from lrclib LRC if available ──────────
-    let transcribedLinesFromLrc: Array<{ start: number; end: number; text: string; tag: string }> = [];
-    if (lrclib.syncedLyrics) {
-      const lrcLines = lrclib.syncedLyrics.split("\n").filter((l: string) => l.trim());
-      const parsed: Array<{ start: number; text: string }> = [];
-      for (const line of lrcLines) {
-        const m = line.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
-        if (!m) continue;
-        const mins = parseInt(m[1], 10);
-        const secs = parseInt(m[2], 10);
-        const ms = m[3].length === 2 ? parseInt(m[3], 10) * 10 : parseInt(m[3], 10);
-        const startSec = mins * 60 + secs + ms / 1000;
-        const text = m[4].trim();
-        if (text) parsed.push({ start: startSec, text });
-      }
-      for (let i = 0; i < parsed.length; i++) {
-        const end = i + 1 < parsed.length ? parsed[i + 1].start : parsed[i].start + 4;
-        transcribedLinesFromLrc.push({
-          start: parsed[i].start,
-          end,
-          text: parsed[i].text,
-          tag: "",
-        });
-      }
-    }
-
-    if (!lrclib.syncedLyrics) {
-      if (!previewUrl) {
-        await logStep("assemblyai_submit", "skipped", "No preview URL available", slug);
-        await logStep("assemblyai_poll", "skipped", "No preview URL available", slug);
-      } else if (!assemblyKey) {
-        await logStep("assemblyai_submit", "skipped", "ASSEMBLYAI_API_KEY missing", slug);
-        await logStep("assemblyai_poll", "skipped", "ASSEMBLYAI_API_KEY missing", slug);
-      } else {
-        await logStep("assemblyai_submit", "running",
-          `Submitting: ${previewUrl.slice(0, 60)}…`, slug);
-        const { jobId: aiJobId, error: submitError } = await submitAssemblyAI(
-          previewUrl, plainLyrics, assemblyKey
-        );
-        if (!aiJobId) {
-          await logStep("assemblyai_submit", "error", submitError ?? "Submit failed", slug);
-          await logStep("assemblyai_poll", "skipped", "Submit failed", slug);
-        } else {
-          await logStep("assemblyai_submit", "done", `Job ID: ${aiJobId}`, slug);
-          await logStep("assemblyai_poll", "running", "Waiting for transcript…", slug);
-          const pollResult = await pollAssemblyAI(aiJobId, assemblyKey);
-          if (pollResult) {
-            syncedLrc = pollResult.lrc;
-            lyricsSource = "assemblyai";
-            await logStep("assemblyai_poll", "done",
-              `Transcript complete — ${pollResult.lrc.split("\n").length} lines, ${pollResult.words.length} words`,
-              slug);
-          } else {
-            await logStep("assemblyai_poll", "error", "Transcript failed or timed out", slug);
-          }
-        }
-      }
-    }
-
-    // ── STEP 4: Save lyric video row ──
+    // ── STEP 3: Save lyric video row ──
     await logStep("lyric_video_save", "running", null, slug);
     const { error: insertError } = await supabase.from("artist_lyric_videos").insert({
       ghost_profile_id: profile.profileId,
@@ -436,15 +239,14 @@ serve(async (req) => {
       album_art_url: albumArtUrl,
       spotify_track_url: trackUrl,
       preview_url: previewUrl,
-      synced_lyrics_lrc: syncedLrc,
-      plain_lyrics: plainLyrics,
-      lyrics_source: lyricsSource,
+      synced_lyrics_lrc: null,
+      plain_lyrics: null,
+      lyrics_source: "elevenlabs",
     });
     if (insertError) {
       await logStep("lyric_video_save", "error", insertError.message, slug);
     } else {
-      await logStep("lyric_video_save", "done",
-        `Source: ${lyricsSource} | lyrics: ${syncedLrc ? "yes" : "none"}`, slug);
+      await logStep("lyric_video_save", "done", "Saved", slug);
     }
 
     // ── STEP 5: Generate LyricDance ──────────────────────────────────────────
@@ -515,15 +317,8 @@ serve(async (req) => {
         }
       }
 
-      // Fallback: use lrclib-parsed lines if Scribe returned nothing
-      if (!transcribedLines.length && transcribedLinesFromLrc.length) {
-        transcribedLines = transcribedLinesFromLrc;
-        await logStep("lyric_dance_transcribe",
-          transcribedLines.length ? "done" : "skipped",
-          `Using lrclib LRC fallback — ${transcribedLines.length} lines (no word-level timing)`, slug);
-      }
 
-      // Skip if no lyrics from any source
+      // Skip if no lyrics
       if (!transcribedLines.length) {
         await logStep("lyric_dance_save", "skipped", "No transcription — cannot create dance", slug);
       }
@@ -745,8 +540,8 @@ serve(async (req) => {
       artistName,
       albumArtUrl,
       previewUrl,
-      lyricsFound: !!syncedLrc,
-      lyricsSource,
+      lyricsFound: true,
+      lyricsSource: "elevenlabs",
       alreadyClaimed: false,
     }), {
       status: 200,

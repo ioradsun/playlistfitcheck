@@ -7,25 +7,25 @@ type JobStatus = "running" | "done" | "error" | "skipped";
 type StepName =
   | "spotify_fetch"
   | "ghost_profile"
-  | "lrclib_check"
-  | "assemblyai_submit"
-  | "assemblyai_poll"
   | "lyric_video_save"
   | "lyric_dance_mp3"
+  | "lyric_dance_transcribe"
   | "lyric_dance_cinematic"
+  | "lyric_dance_phrases"
   | "lyric_dance_save"
+  | "section_images"
   | "complete";
 
 const STEP_ORDER: StepName[] = [
   "spotify_fetch",
   "ghost_profile",
-  "lrclib_check",
-  "assemblyai_submit",
-  "assemblyai_poll",
   "lyric_video_save",
   "lyric_dance_mp3",
+  "lyric_dance_transcribe",
   "lyric_dance_cinematic",
+  "lyric_dance_phrases",
   "lyric_dance_save",
+  "section_images",
   "complete",
 ];
 
