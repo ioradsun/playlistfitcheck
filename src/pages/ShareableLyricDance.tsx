@@ -600,7 +600,6 @@ export default function ShareableLyricDance() {
             fmlyHookEnabled={fmlyHookEnabled}
             refreshKey={commentRefreshKey}
             isLive={!showCover && playerReady}
-            muted={muted}
             hasFired={hasFired}
             totalFireCount={totalFireCount}
             lastFiredAt={lastFiredAt}
@@ -648,6 +647,13 @@ export default function ShareableLyricDance() {
             onPause={handlePauseForInput}
             onResume={handleResumeAfterInput}
             onSeekTo={(sec) => player?.seek(sec)}
+            onPanelCloseWithPosition={(timeSec) => {
+              if (player && timeSec != null) {
+                player.seek(timeSec);
+                player.setMuted(false);
+                player.play();
+              }
+            }}
             source="shareable"
           />
         </div>
