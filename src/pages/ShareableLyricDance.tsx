@@ -669,8 +669,8 @@ export default function ShareableLyricDance() {
         activeLine={activeLine}
         allLines={lyricSections.allLines}
         audioSections={audioSections}
-        phrases={(data as any)?.cinematic_direction?.phrases ?? null}
-        words={(data as any)?.words ?? null}
+        phrases={(renderData as any)?.cinematic_direction?.phrases ?? null}
+        words={(renderData as any)?.words ?? null}
         beatGrid={(renderData as any)?.beat_grid ?? null}
         currentTimeSec={currentTimeSec}
         palette={palette}
