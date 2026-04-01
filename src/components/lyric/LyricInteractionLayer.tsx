@@ -6,7 +6,7 @@ import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 
 interface LyricInteractionLayerProps {
-  variant: "embedded" | "fullscreen";
+  variant: "embedded" | "fullscreen" | "reels";
   danceId: string;
   currentMoment?: {
     index: number;
@@ -98,7 +98,7 @@ export function LyricInteractionLayer({
     if (externalPanelOpen !== undefined) setPanelOpen(externalPanelOpen);
   }, [externalPanelOpen]);
 
-  const isFullscreen = variant === "fullscreen";
+  const isFullscreen = variant === "fullscreen" || variant === "reels";
   const BAR_H = isFullscreen ? 68 : 48;
 
   const openPanel = () => {
@@ -167,6 +167,75 @@ export function LyricInteractionLayer({
             songEnded={songEnded}
           />
         </div>
+      ) : variant === "reels" ? (
+        <>
+          <ReactionPanel
+            displayMode="reels"
+            isOpen={panelOpen}
+            onClose={closePanel}
+            onCloseWithPosition={(timeSec) => {
+              if (player && timeSec != null) {
+                player.seek(timeSec);
+                player.setMuted(false);
+                player.play();
+              }
+              onResume?.();
+            }}
+            refreshKey={refreshKey}
+            danceId={danceId}
+            activeLine={activeLine}
+            allLines={allLines}
+            audioSections={audioSections as any}
+            phrases={phrases as any}
+            words={words as any}
+            beatGrid={beatGrid as any}
+            currentTimeSec={currentTimeSec}
+            palette={palette}
+            onSeekTo={(sec) => onSeekTo?.(sec)}
+            player={player}
+            durationSec={durationSec}
+            reactionData={reactionData}
+            onReactionDataChange={(data) => onReactionDataChange?.(data)}
+            onReactionFired={(emoji) => onReactionFired?.(emoji)}
+            onPause={onPause}
+            onResume={onResume}
+            onFireLine={onFireLine}
+            onLineVisible={onLineVisible}
+            empowermentPromise={empowermentPromise}
+            fmlyHookEnabled={fmlyHookEnabled}
+            bottomOffset={BAR_H}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 80,
+              background: "#0a0a0a",
+            }}
+          >
+            <CardBottomBar
+              variant="fullscreen"
+              panelOpen={panelOpen}
+              onOpenReactions={openPanel}
+              onClose={closePanel}
+              currentMoment={currentMoment}
+              onFireTap={onFireTap}
+              onFireHoldStart={onFireHoldStart}
+              onFireHoldEnd={onFireHoldEnd}
+              onComment={(text) => onComment?.(text, currentMoment?.index ?? null)}
+              onPauseForInput={onPause}
+              onResumeAfterInput={onResume}
+              accent={accent}
+              hasFired={hasFired}
+              isLive={isLive}
+              totalFireCount={totalFireCount}
+              lastFiredAt={lastFiredAt}
+              songEnded={songEnded}
+            />
+          </div>
+        </>
       ) : (
         <>
           <ReactionPanel
