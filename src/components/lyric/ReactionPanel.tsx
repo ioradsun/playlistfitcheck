@@ -72,6 +72,7 @@ interface ReactionPanelProps {
   /** Called when panel closes with the last audio position so the caller can resume there. */
   onCloseWithPosition?: (timeSec: number | null) => void;
   maxHeight?: string;
+  bottomOffset?: number;
   empowermentPromise?: {
     emotionalJob: string;
     fromState: string;
@@ -237,6 +238,7 @@ function ReactionPanel({
   refreshKey = 0,
   onCloseWithPosition,
   maxHeight,
+  bottomOffset,
   empowermentPromise: _empowermentPromise,
   fmlyHookEnabled: _fmlyHookEnabled,
   onFireLine,
@@ -518,7 +520,7 @@ function ReactionPanel({
   };
 
   return (
-    <PanelShell isOpen={isOpen} variant={displayMode} maxHeight={maxHeight}>
+    <PanelShell isOpen={isOpen} variant={displayMode} maxHeight={maxHeight} bottomOffset={bottomOffset}>
       <div
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto min-h-0"

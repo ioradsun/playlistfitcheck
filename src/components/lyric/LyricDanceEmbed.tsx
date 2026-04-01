@@ -16,15 +16,12 @@ import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
-import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReelsGestureLayer } from "./ReelsGestureLayer";
-import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
+import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
-import { supabase } from "@/integrations/supabase/client";
-import { getSessionId } from "@/lib/sessionId";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { isAudioUnlocked, onAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
@@ -154,17 +151,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     player,
     playerReady,
     data,
-    playerRef,
-    fetchedData,
     muted,
     setMuted,
     showCover,
     setShowCover,
     currentTimeSec,
-    reactionPanelOpen,
-    openPanel,
-    closePanel,
-    handlePanelClose,
     reactionData,
     setReactionData,
     durationSec,
@@ -177,12 +168,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     handleListenNow,
     handlePauseForInput,
     handleResumeAfterInput,
-    topReaction,
     isWaiting,
     commentRefreshKey,
     lightningBarEnabled,
     handleCommentFromBar,
-    setCommentRefreshKey,
   } = useLyricDanceCore({
     lyricDanceId,
     prefetchedData: prefetchedDataWithRegion,
@@ -199,36 +188,31 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [, setFireStrengthByLine] = useState<Record<number, number>>({});
   const [firedSections, setFiredSections] = useState<Set<number>>(new Set());
   const [closingVisible, setClosingVisible] = useState(false);
-  const [closingAnswered, setClosingAnswered] = useState(false);
+  const [, setClosingAnswered] = useState(false);
   const [totalFireCount, setTotalFireCount] = useState(0);
   const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const userActivatedRef = useRef(false);
+  const [panelOpen, setPanelOpen] = useState(externalPanelOpen ?? false);
 
-  const isControlled = externalPanelOpen !== undefined;
-  const handleClosePanelAndSync = useCallback(() => {
-    handlePanelClose();
-    if (isControlled) onExternalPanelOpenChange?.(false);
-  }, [handlePanelClose, isControlled, onExternalPanelOpenChange]);
+  useEffect(() => {
+    if (externalPanelOpen !== undefined) setPanelOpen(externalPanelOpen);
+  }, [externalPanelOpen]);
 
-  const handleOpenReactions = useCallback(() => {
-    if (hideReactButton) {
+  const handlePanelOpenChange = useCallback((open: boolean) => {
+    if (open && hideReactButton) {
       onOpenReactions?.();
+      setPanelOpen(false);
+      onExternalPanelOpenChange?.(false);
       return;
     }
-    if (isControlled) onExternalPanelOpenChange?.(true);
-    else openPanel();
-    if (showCover) {
+    setPanelOpen(open);
+    onExternalPanelOpenChange?.(open);
+    if (open && showCover) {
       userActivatedRef.current = true;
       onPlay?.();
     }
-  }, [hideReactButton, onOpenReactions, isControlled, onExternalPanelOpenChange, openPanel, showCover, onPlay]);
-
-  useEffect(() => {
-    if (!isControlled) return;
-    if (externalPanelOpen) openPanel();
-    else closePanel();
-  }, [isControlled, externalPanelOpen, openPanel, closePanel]);
+  }, [hideReactButton, onOpenReactions, onExternalPanelOpenChange, onPlay, showCover]);
 
   // ── Full-mode upgrade: when player is ready and card is warm/active ──
   useEffect(() => {
@@ -319,7 +303,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (!isFeedEmbed) return;
     const coverUp = showCover;
     const isUserEngaged = cardState === "active" || userActivatedRef.current;
-    if (reactionPanelOpen) return;
+    if (panelOpen) return;
     const shouldUnmuted = !coverUp && isUserEngaged && cardState !== "cold" && !forceDemoted;
     const shouldMuted = !coverUp && !isUserEngaged;
     if (shouldUnmuted) {
@@ -341,7 +325,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player.setMuted(true);
       setMuted(true);
     }
-  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reactionPanelOpen, reelsMode, reelsPaused]);
+  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, panelOpen, reelsMode, reelsPaused]);
 
   // ── Reels: auto-dismiss cover when audio is already unlocked ──
   // First card: cover stays (user must tap to unlock audio)
@@ -420,20 +404,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     return () => { cancelled = true; };
   }, [player, (data ?? prefetchedData as any)?.id]);
 
-  const activeLineFireCount = useMemo(() => {
-    if (!activeLine) return 0;
-    const activeStart = (data?.lyrics as any[])?.find(
-      (l: any) => l.start <= (player?.audio.currentTime ?? 0) && l.end >= (player?.audio.currentTime ?? 0),
-    )?.start ?? 0;
-    const windowEnd = activeStart + 10;
-    const linesInWindow = (lyricSections.allLines ?? []).filter(
-      (l) => l.startSec >= activeStart - 1 && l.startSec <= windowEnd,
-    );
-    return linesInWindow.reduce((sum, l) => {
-      return sum + Object.values(reactionData).reduce((s, d) => s + (d.line[l.lineIndex] ?? 0), 0);
-    }, 0);
-  }, [activeLine, reactionData, lyricSections.allLines, player, data]);
-
   const activeSectionIndex = useMemo(() => {
     if (!audioSections.length) return 0;
     const idx = audioSections.findIndex(
@@ -472,62 +442,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     };
   }, [moments, currentTimeSec]);
 
-  const handleVoiceNote = useCallback(async (audioBlob: Blob) => {
-    const danceId = (data ?? (prefetchedData as any))?.id;
-    if (!danceId) return;
-
-    const momentIdx = currentMoment?.index ?? null;
-    const filename = `voice-${danceId}-${Date.now()}.webm`;
-    const { error: uploadError } = await supabase.storage
-      .from("voice-notes")
-      .upload(filename, audioBlob, { contentType: "audio/webm" });
-
-    if (uploadError) {
-      console.error("[VoiceNote] Upload failed:", uploadError);
-      return;
-    }
-
-    const { data: urlData } = supabase.storage
-      .from("voice-notes")
-      .getPublicUrl(filename);
-    const audioUrl = urlData?.publicUrl ?? null;
-
-    const { data: commentRow } = await (supabase
-      .from("lyric_dance_comments" as any)
-      .insert({
-        dance_id: danceId,
-        text: "🎤 voice note",
-        audio_url: audioUrl,
-        session_id: getSessionId(),
-        line_index: activeLine?.lineIndex ?? null,
-        moment_index: momentIdx,
-        parent_comment_id: null,
-      })
-      .select("id")
-      .single() as any);
-
-    setCommentRefreshKey((k) => k + 1);
-
-    const cRow = commentRow as any;
-    if (audioUrl && cRow?.id) {
-      try {
-        const { data: transcribeData } = await supabase.functions.invoke(
-          "voice-note-transcribe",
-          { body: { audio_url: audioUrl, comment_id: cRow.id } },
-        );
-        if (transcribeData?.text) {
-          await supabase
-            .from("lyric_dance_comments" as any)
-            .update({ text: transcribeData.text })
-            .eq("id", cRow.id);
-          setCommentRefreshKey((k) => k + 1);
-        }
-      } catch {
-        // keep placeholder text on failure
-      }
-    }
-  }, [data, prefetchedData, currentMoment, activeLine, setCommentRefreshKey]);
-
   const barAccent = useMemo(() => {
     const autoPalettes = (data ?? (prefetchedData as any))?.auto_palettes;
     if (Array.isArray(autoPalettes) && autoPalettes[activeSectionIndex]) {
@@ -544,6 +458,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   const effectiveShowCover = showCover;
   void artistName;
+  void coverImageUrl;
+  void disableReactionPanel;
+  void preload;
 
   useEffect(() => {
     return () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); };
@@ -622,7 +539,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         )}
 
         <ClosingScreen
-          visible={closingVisible && !reactionPanelOpen && !effectiveShowCover}
+          visible={closingVisible && !panelOpen && !effectiveShowCover}
           empowermentPromise={empowermentPromise}
           danceId={((data ?? prefetchedData) as any)?.id ?? ""}
           onAnswer={() => setClosingAnswered(true)}
@@ -702,7 +619,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         )}
       </div>
 
-      {!isBattleMode && !reactionPanelOpen && (
+      {!isBattleMode && (
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
           {reelsMode && artistName && (effectiveShowCover || !playerReady) && (
             <div className="flex items-center gap-2 px-3 pt-2 pb-1">
@@ -734,110 +651,83 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             />
           )}
 
-          <CardBottomBar
-            {...({
-              variant: reelsMode ? "fullscreen" : "embedded",
-              onOpenReactions: handleOpenReactions,
-              onClose: handleClosePanelAndSync,
-              panelOpen: reactionPanelOpen,
-              currentMoment,
-              onFireTap: () => {
-                if (holdFireIntervalRef.current) {
-                  clearInterval(holdFireIntervalRef.current);
-                  holdFireIntervalRef.current = null;
-                }
-                const id = (data ?? prefetchedData as any)?.id;
-                if (!id || !activeLine) return;
-                player?.fireFire(0);
-                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "feed");
-                setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1 }));
-                markFired();
-              },
-              onFireHoldStart: () => {
-                if (holdFireIntervalRef.current) return;
-                holdFireIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
-              },
-              onFireHoldEnd: (holdMs: number) => {
-                if (holdFireIntervalRef.current) {
-                  clearInterval(holdFireIntervalRef.current);
-                  holdFireIntervalRef.current = null;
-                }
-                const id = (data ?? (prefetchedData as any))?.id;
-                if (!id || !activeLine) return;
-                player?.fireFire(holdMs);
-                emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
-                const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
-                setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
-                markFired();
-              },
-              onComment: (text: string) => {
-                handleCommentFromBar(text, currentMoment?.index ?? null);
-              },
-              onVoiceNote: handleVoiceNote,
-              onPauseForInput: handlePauseForInput,
-              onResumeAfterInput: handleResumeAfterInput,
-              activeLineFireCount: effectiveShowCover ? 0 : activeLineFireCount,
-              hookPhrase: null,
-              activeLineText: effectiveShowCover ? null : (activeLine?.text ?? null),
-              accent: barAccent,
-              hasFired,
-              muted,
-              isLive: !effectiveShowCover && cardState === "active",
-              totalFireCount,
-              lastFiredAt,
-              songEnded: closingVisible,
-              firedMomentCount: firedSections.size,
-            } as any)}
+          <LyricInteractionLayer
+            variant={reelsMode ? "fullscreen" : "embedded"}
+            danceId={data?.id ?? ""}
+            currentMoment={currentMoment}
+            activeLine={muted ? null : activeLine}
+            allLines={lyricSections.allLines}
+            audioSections={audioSections}
+            phrases={(data as any)?.cinematic_direction?.phrases ?? null}
+            words={(data as any)?.words ?? null}
+            beatGrid={(data as any)?.beat_grid ?? null}
+            currentTimeSec={currentTimeSec}
+            durationSec={durationSec}
+            palette={palette}
+            accent={barAccent}
+            reactionData={reactionData}
+            onReactionDataChange={setReactionData}
+            empowermentPromise={empowermentPromise}
+            fmlyHookEnabled={fmlyHookEnabled}
+            refreshKey={commentRefreshKey}
+            isLive={!effectiveShowCover && cardState === "active"}
+            muted={muted}
+            hasFired={hasFired}
+            totalFireCount={totalFireCount}
+            lastFiredAt={lastFiredAt}
+            songEnded={closingVisible}
+            player={player}
+            externalPanelOpen={panelOpen}
+            onPanelOpenChange={handlePanelOpenChange}
+            onFireTap={() => {
+              if (holdFireIntervalRef.current) {
+                clearInterval(holdFireIntervalRef.current);
+                holdFireIntervalRef.current = null;
+              }
+              const id = (data ?? prefetchedData as any)?.id;
+              if (!id || !activeLine) return;
+              player?.fireFire(0);
+              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "feed");
+              setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1 }));
+              markFired();
+            }}
+            onFireHoldStart={() => {
+              if (holdFireIntervalRef.current) return;
+              holdFireIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
+            }}
+            onFireHoldEnd={(holdMs) => {
+              if (holdFireIntervalRef.current) {
+                clearInterval(holdFireIntervalRef.current);
+                holdFireIntervalRef.current = null;
+              }
+              const id = (data ?? (prefetchedData as any))?.id;
+              if (!id || !activeLine) return;
+              player?.fireFire(holdMs);
+              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
+              const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
+              setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
+              markFired();
+            }}
+            onComment={(text, momentIndex) => handleCommentFromBar(text, momentIndex)}
+            onFireLine={(lineIndex, holdMs) => {
+              const id = (data ?? (prefetchedData as any))?.id;
+              if (!id) return;
+              player?.fireFire(holdMs);
+              emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
+              markFired();
+            }}
+            onLineVisible={(lineIndex) => {
+              const id = (data ?? (prefetchedData as any))?.id;
+              if (!id) return;
+              emitExposure(id, lineIndex, "feed");
+            }}
+            onReactionFired={(emoji) => player?.fireComment(emoji)}
+            onPause={handlePauseForInput}
+            onResume={handleResumeAfterInput}
+            onSeekTo={(sec) => player?.seek(sec)}
+            source="feed"
           />
         </div>
-      )}
-
-      {!disableReactionPanel && (
-        <ReactionPanel
-          displayMode={reelsMode ? "fullscreen" : "embedded"}
-          isOpen={reactionPanelOpen}
-          refreshKey={commentRefreshKey}
-          onClose={handleClosePanelAndSync}
-          onCloseWithPosition={(timeSec) => {
-            if (player && timeSec != null) {
-              player.seek(timeSec);
-              player.setMuted(false);
-              player.play();
-            }
-            setMuted(false);
-          }}
-          danceId={data?.id ?? ""}
-          activeLine={muted ? null : activeLine}
-          allLines={lyricSections.allLines}
-          audioSections={audioSections}
-          phrases={(data as any)?.cinematic_direction?.phrases ?? null}
-          words={(data as any)?.words ?? null}
-          beatGrid={(data as any)?.beat_grid ?? null}
-          currentTimeSec={currentTimeSec}
-          palette={palette}
-          onSeekTo={(sec) => player?.seek(sec)}
-          player={player}
-          durationSec={durationSec}
-          reactionData={reactionData}
-          onReactionDataChange={setReactionData}
-          onReactionFired={(emoji) => player?.fireComment(emoji)}
-          onPause={handlePauseForInput}
-          onResume={handleResumeAfterInput}
-          onFireLine={(lineIndex, holdMs) => {
-            const id = (data ?? (prefetchedData as any))?.id;
-            if (!id) return;
-            player?.fireFire(holdMs);
-            emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
-            markFired();
-          }}
-          onLineVisible={(lineIndex) => {
-            const id = (data ?? (prefetchedData as any))?.id;
-            if (!id) return;
-            emitExposure(id, lineIndex, "feed");
-          }}
-          empowermentPromise={empowermentPromise}
-          fmlyHookEnabled={fmlyHookEnabled}
-        />
       )}
     </div>
   );
