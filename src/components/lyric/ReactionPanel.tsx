@@ -2,7 +2,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
@@ -70,9 +69,6 @@ interface ReactionPanelProps {
   onVoteNo?: () => void;
   hideInput?: boolean;
   refreshKey?: number;
-  /** When provided, replaces the default "Run it back / Not for me" bottom bar.
-   *  Used by battle cards for Left Hook / Right Hook tab switching. */
-  renderBottomBar?: (onClose: () => void) => ReactNode;
   /** Called when panel closes with the last audio position so the caller can resume there. */
   onCloseWithPosition?: (timeSec: number | null) => void;
   maxHeight?: string;
@@ -228,18 +224,17 @@ function ReactionPanel({
   onSeekTo,
   player,
   durationSec,
-  onReactionFired,
+  onReactionFired: _onReactionFired,
   reactionData,
   onReactionDataChange: _onReactionDataChange,
-  onPause,
-  onResume,
+  onPause: _onPause,
+  onResume: _onResume,
   votedSide: _votedSide,
   score: _score,
   onVoteYes: _onVoteYes,
   onVoteNo: _onVoteNo,
   hideInput: _hideInput = false,
   refreshKey = 0,
-  renderBottomBar,
   onCloseWithPosition,
   maxHeight,
   empowermentPromise: _empowermentPromise,
@@ -247,11 +242,7 @@ function ReactionPanel({
   onFireLine,
   onLineVisible,
 }: ReactionPanelProps) {
-  const [textInput, setTextInput] = useState("");
-  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [comments, setComments] = useState<CommentRow[]>([]);
-  const [replyingTo, setReplyingTo] = useState<CommentRow | null>(null);
-  const [activeWindowIdx, setActiveWindowIdx] = useState<number | null>(null);
   const [showCommentsForWindow, setShowCommentsForWindow] = useState<number | null>(null);
   const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(
     null,
@@ -275,8 +266,6 @@ function ReactionPanel({
 
   const accent = palette[1] ?? "rgba(255,255,255,0.7)";
   const playheadLineIndex = activeLine?.lineIndex ?? null;
-  const displayLineIndex = playheadLineIndex ?? allLines[0]?.lineIndex ?? null;
-
   // Keep last known line while audio plays through silence
   if (playheadLineIndex !== null) lastActiveLineRef.current = playheadLineIndex;
   const heldLineIndex =
@@ -315,10 +304,6 @@ function ReactionPanel({
 
   useEffect(() => {
     if (!isOpen) return;
-    setHasSubmitted(false);
-    setTextInput("");
-    setReplyingTo(null);
-    setActiveWindowIdx(null);
     setShowCommentsForWindow(null);
     stopAtSecRef.current = null; // cleared — tapping a line will set it
     userTookControlRef.current = false; // re-enable auto-scroll for this session
@@ -466,74 +451,6 @@ function ReactionPanel({
       .insert({ comment_id: commentId, emoji, session_id: sessionId });
   };
 
-  const handleTextSubmit = async () => {
-    if (!textInput.trim() || !danceId || hasSubmitted) return;
-    const text = textInput.trim().slice(0, 200);
-    const sessionId = getSessionId();
-
-    const { data: inserted, error } = await supabase
-      .from("lyric_dance_comments" as any)
-      .insert({
-        dance_id: danceId,
-        text,
-        session_id: sessionId,
-        line_index:
-          activeWindowIdx !== null
-            ? (clipWindows[activeWindowIdx]?.lines[0]?.lineIndex ??
-              displayLineIndex)
-            : displayLineIndex,
-        parent_comment_id: replyingTo?.id ?? null,
-      })
-      .select(
-        "id, text, line_index, submitted_at, is_pinned, parent_comment_id",
-      )
-      .single();
-
-    if (error) {
-      console.error("Comment insert failed:", error);
-      return;
-    }
-
-    if (!inserted) return;
-
-    const newComment = inserted as unknown as CommentRow;
-    if (replyingTo) {
-      setComments((prev) =>
-        prev.map((comment) =>
-          comment.id === replyingTo.id
-            ? { ...comment, replies: [...(comment.replies ?? []), newComment] }
-            : comment,
-        ),
-      );
-    } else {
-      setComments((prev) => {
-        const withReplies = { ...newComment, replies: [] };
-        const pinned = prev.filter((c) => c.is_pinned);
-        const unpinned = prev.filter((c) => !c.is_pinned);
-        return [...pinned, withReplies, ...unpinned];
-      });
-    }
-
-    if (activeWindowIdx !== null) {
-      const firstLineIdx = clipWindows[activeWindowIdx]?.lines[0]?.lineIndex;
-      if (firstLineIdx != null) {
-        setSubmittedLineIndex(firstLineIdx);
-        setTimeout(() => setSubmittedLineIndex(null), 600);
-      }
-    } else if (displayLineIndex != null) {
-      setSubmittedLineIndex(displayLineIndex);
-      setTimeout(() => setSubmittedLineIndex(null), 600);
-    }
-
-    setHasSubmitted(true);
-    setTextInput("");
-    setReplyingTo(null);
-    onReactionFired("fire");
-    onResume?.();
-    setTimeout(() => setHasSubmitted(false), 500);
-  };
-
-
   // ── Build moments from AI phrases (never breaks mid-phrase) ──
   const phraseInputs = (phrases ?? []).map((p: any) => {
     // AI phrases use milliseconds for start/end, convert to seconds
@@ -595,10 +512,6 @@ function ReactionPanel({
   const handlePanelClose = () => {
     player?.setRegion(undefined, undefined);
     previewingWindowRef.current = null;
-    if (replyingTo) {
-      setReplyingTo(null);
-      return;
-    }
     const lastTime = player?.audio?.currentTime ?? null;
     onCloseWithPosition?.(lastTime);
     onClose();
@@ -669,7 +582,6 @@ function ReactionPanel({
                     player?.seek(win.startSec);
                     player?.play();
                     previewingWindowRef.current = wi;
-                    setActiveWindowIdx(wi);
                   }}
                 >
                   {win.isActive && (
@@ -820,87 +732,6 @@ function ReactionPanel({
         </div>
       </div>
 
-      {/* ── Bottom comment bar ── */}
-      <div
-        style={{
-          flexShrink: 0,
-          borderTop: '0.5px solid rgba(255,255,255,0.06)',
-          background: '#0a0a0a',
-          padding: '8px 12px',
-          paddingBottom: displayMode === 'fullscreen'
-            ? 'max(8px, env(safe-area-inset-bottom, 8px))'
-            : '8px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <style>{`
-          .reaction-comment-input::placeholder {
-            color: rgba(255,255,255,0.22);
-          }
-        `}</style>
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            background: 'rgba(255,255,255,0.05)',
-            border: '0.5px solid rgba(255,255,255,0.09)',
-            borderRadius: 20,
-            padding: '7px 14px',
-            minWidth: 0,
-          }}
-        >
-          <input
-            className="reaction-comment-input"
-            type="text"
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleTextSubmit();
-              }
-            }}
-            onFocus={() => onPause?.()}
-            placeholder={replyingTo ? "write a reply..." : "add to this moment..."}
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              fontSize: 13,
-              color: 'rgba(255,255,255,0.75)',
-              fontFamily: 'inherit',
-              caretColor: accent,
-              minWidth: 0,
-              ["::placeholder" as any]: undefined,
-            }}
-          />
-          {textInput.trim().length > 0 && (
-            <button
-              onClick={handleTextSubmit}
-              style={{
-                fontSize: 9,
-                fontFamily: 'monospace',
-                color: accent,
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                letterSpacing: '0.1em',
-                flexShrink: 0,
-              }}
-            >
-              post
-            </button>
-          )}
-        </div>
-
-      </div>
-
-      {renderBottomBar && renderBottomBar(handlePanelClose)}
     </PanelShell>
   );
 }

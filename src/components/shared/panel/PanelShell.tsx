@@ -18,7 +18,7 @@ interface PanelShellProps {
 export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHeight, children }: PanelShellProps) {
   const positionClass =
     variant === 'fullscreen'
-      ? 'fixed bottom-0 left-0 right-0 z-[70] h-[88vh]'
+      ? 'fixed bottom-[48px] left-0 right-0 z-[70] h-[88vh]'
       : variant === 'reels'
         ? 'absolute inset-x-0 bottom-0 z-[500]'
         : 'absolute inset-x-0 bottom-0 z-[400]';
