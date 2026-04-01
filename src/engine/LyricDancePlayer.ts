@@ -690,6 +690,76 @@ class DynamiteWickBar {
 
   setAccent(hex: string): void { this.accent = hexToRgb(hex); }
 
+  /**
+   * Fallback waveform source derived from beat-grid spacing.
+   * Shorter inter-beat gaps -> denser/faster sections -> higher relative energy.
+   */
+  static deriveWaveformFromBeats(beats: number[], width: number = DWB_W): number[] {
+    if (!Array.isArray(beats) || beats.length < 3 || width <= 0) {
+      return new Array(Math.max(1, width)).fill(0.15);
+    }
+
+    const out = new Array<number>(width).fill(0.15);
+    const firstBeat = beats[0];
+    const lastBeat = beats[beats.length - 1];
+    const totalSpan = Math.max(1e-3, lastBeat - firstBeat);
+
+    // Convert IBI to "energy-like" values: shorter intervals => higher values.
+    const ibiEnergy: number[] = [];
+    for (let i = 1; i < beats.length; i++) {
+      const ibi = Math.max(1e-3, beats[i] - beats[i - 1]);
+      ibiEnergy.push(1 / ibi);
+    }
+    if (ibiEnergy.length === 0) return out;
+
+    let minE = Infinity;
+    let maxE = -Infinity;
+    for (const e of ibiEnergy) {
+      if (e < minE) minE = e;
+      if (e > maxE) maxE = e;
+    }
+    const range = Math.max(1e-6, maxE - minE);
+
+    for (let x = 0; x < width; x++) {
+      const t = firstBeat + (x / Math.max(1, width - 1)) * totalSpan;
+
+      let lo = 0;
+      let hi = beats.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (beats[mid] < t) lo = mid + 1;
+        else hi = mid;
+      }
+      const beatIdx = Math.max(1, Math.min(beats.length - 1, lo));
+
+      const prevE = ibiEnergy[Math.max(0, beatIdx - 2)];
+      const nextE = ibiEnergy[Math.min(ibiEnergy.length - 1, beatIdx - 1)];
+      const t0 = beats[beatIdx - 1];
+      const t1 = beats[beatIdx];
+      const frac = t1 > t0 ? Math.max(0, Math.min(1, (t - t0) / (t1 - t0))) : 0;
+      const e = prevE * (1 - frac) + nextE * frac;
+      const norm = (e - minE) / range;
+      out[x] = 0.10 + Math.pow(Math.max(0, Math.min(1, norm)), 0.70) * 0.90;
+    }
+
+    // Mild smoothing to avoid jagged spikes from noisy beat spacing.
+    const smooth = new Array<number>(width);
+    const R = 2;
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      let count = 0;
+      for (let k = -R; k <= R; k++) {
+        const idx = x + k;
+        if (idx >= 0 && idx < width) {
+          sum += out[idx];
+          count++;
+        }
+      }
+      smooth[x] = count > 0 ? sum / count : out[x];
+    }
+    return smooth;
+  }
+
   /** Call once after beat analysis. Resamples beatEnergies to DWB_W and smooths. */
   setWaveformPreview(beatEnergies: number[]): void {
     const out = new Float32Array(DWB_W);
@@ -4534,6 +4604,10 @@ export class LyricDancePlayer {
         const analysisRef = (this.conductor as any)?._analysis as import('@/engine/audioAnalyzer').AudioAnalysis | null;
         if (analysisRef?.beatEnergies) {
           this._globalWickBar.setWaveformPreview(analysisRef.beatEnergies);
+        } else {
+          const beatGridBeats = this.data.beat_grid?.beats ?? [];
+          const derived = DynamiteWickBar.deriveWaveformFromBeats(beatGridBeats, DWB_W);
+          this._globalWickBar.setWaveformPreview(derived);
         }
       }
       if (this.wickBarEnabled && !this._wickSeekOverlay) {
