@@ -664,6 +664,9 @@ interface DWBSmoke {
 class DynamiteWickBar {
   private dwbCanvas: HTMLCanvasElement;
   private dwbCtx: CanvasRenderingContext2D;
+  private _dpr = 1;
+  private _W = DWB_W;  // logical width (always 640)
+  private _H = DWB_H;  // logical height (always 96)
   private accent: [number, number, number] = [255, 160, 20];
   private sparks: DWBSpark[] = [];
   private smokes: DWBSmoke[] = [];
@@ -677,11 +680,15 @@ class DynamiteWickBar {
   // Flame flicker state
   private flamePhase = 0;
 
-  constructor(accentHex: string) {
+  constructor(accentHex: string, dpr = 1) {
     this.dwbCanvas = document.createElement('canvas');
-    this.dwbCanvas.width = DWB_W;
-    this.dwbCanvas.height = DWB_H;
+    this._dpr = Math.max(1, dpr);
+    this._W = DWB_W;
+    this._H = DWB_H;
+    this.dwbCanvas.width = DWB_W * this._dpr;
+    this.dwbCanvas.height = DWB_H * this._dpr;
     this.dwbCtx = this.dwbCanvas.getContext('2d')!;
+    this.dwbCtx.scale(this._dpr, this._dpr);
     this.emberHeat = new Float32Array(DWB_W).fill(0);
     this.waveform = new Float32Array(DWB_W).fill(0.15);
     this.waveformSmooth = new Float32Array(DWB_W).fill(0.15);
@@ -689,6 +696,17 @@ class DynamiteWickBar {
   }
 
   setAccent(hex: string): void { this.accent = hexToRgb(hex); }
+
+  setDpr(dpr: number): void {
+    const d = Math.max(1, dpr);
+    if (d === this._dpr) return;
+    this._dpr = d;
+    this.dwbCanvas.width = DWB_W * d;
+    this.dwbCanvas.height = DWB_H * d;
+    this.dwbCtx = this.dwbCanvas.getContext('2d')!;
+    this.dwbCtx.scale(d, d);
+    this.setWaveformPreview(Array.from(this.waveform));
+  }
 
   /**
    * Fallback waveform source derived from beat-grid spacing.
@@ -817,8 +835,9 @@ class DynamiteWickBar {
     isDownbeat: boolean = false,
   ): void {
     const ctx = this.dwbCtx;
-    const W = DWB_W;
-    const H = DWB_H;
+    const W = this._W;
+    const H = this._H;
+    ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
     const baseY = H * 0.85;
     const maxPeakH = H * 0.72;
     const px = Math.max(0, Math.min(W - 1, Math.floor(progress * W)));
@@ -2179,6 +2198,7 @@ export class LyricDancePlayer {
    *  be 2–3×), cutting pixel fill by up to 75% with negligible visual degradation. */
   private _applyDprToCanvas(): void {
     const eDpr = this._effectiveDpr;
+    this._globalWickBar?.setDpr(eDpr);
     this.canvas.width = Math.floor(this.width * eDpr);
     this.canvas.height = Math.floor(this.height * eDpr);
     this.canvas.style.width = `${this.width}px`;
@@ -3315,8 +3335,9 @@ export class LyricDancePlayer {
             const visH = this.height * 0.18;
             const visTop = this.height - visH;
             this.ctx.globalAlpha = visAlpha;
-            this.ctx.imageSmoothingEnabled = true;
+            this.ctx.imageSmoothingEnabled = false;
             this.ctx.drawImage(activeCnv, 0, visTop, this.width, visH);
+            this.ctx.imageSmoothingEnabled = true;
             this.ctx.globalAlpha = 1;
           }
         } else {
@@ -4600,7 +4621,7 @@ export class LyricDancePlayer {
         this._globalBeatVis = new BeatVisSim(accentColor);
       }
       if (!this._globalWickBar) {
-        this._globalWickBar = new DynamiteWickBar(accentColor);
+        this._globalWickBar = new DynamiteWickBar(accentColor, this._effectiveDpr);
         const analysisRef = (this.conductor as any)?._analysis as import('@/engine/audioAnalyzer').AudioAnalysis | null;
         if (analysisRef?.beatEnergies) {
           this._globalWickBar.setWaveformPreview(analysisRef.beatEnergies);
