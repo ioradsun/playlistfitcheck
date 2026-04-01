@@ -1,9 +1,9 @@
+@import 'geist/dist/fonts/geist-sans/style.css';
+@import 'geist/dist/fonts/geist-mono/style.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import 'geist/dist/fonts/geist-sans/style.css';
-@import 'geist/dist/fonts/geist-mono/style.css';
 
 @layer base {
   :root {
