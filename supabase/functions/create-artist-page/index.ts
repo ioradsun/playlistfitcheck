@@ -112,7 +112,6 @@ serve(async (req) => {
     const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
     if (!clientSecret) throw new Error("SPOTIFY_CLIENT_SECRET not configured");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const adminUserId = Deno.env.get("ADMIN_USER_ID");
     if (!supabaseUrl || !supabaseServiceKey) throw new Error("Supabase service role not configured");
