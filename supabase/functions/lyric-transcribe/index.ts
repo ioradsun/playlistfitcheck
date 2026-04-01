@@ -155,6 +155,7 @@ async function runScribe(
   form.append("model_id", "scribe_v2");
   form.append("tag_audio_events", "true");
   form.append("diarize", "true");
+  form.append("language_code", "eng");
 
   
   const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
@@ -178,8 +179,15 @@ async function runScribe(
   const rawSample = (data.words || []).slice(0, 3).map((w: any) => Object.keys(w));
   console.log("[Scribe] raw word keys sample:", JSON.stringify(rawSample));
 
-  const words: WhisperWord[] = (data.words || [])
-    .filter((w: any) => w.type === "word" || !w.type)
+  const allWords = data.words || [];
+  const audioEvents = allWords.filter((w: any) => w.type === "audio_event");
+  const speechWords = allWords.filter((w: any) => w.type === "word" || !w.type);
+  console.log(`[Scribe] Total tokens: ${allWords.length}, speech: ${speechWords.length}, audio_events: ${audioEvents.length}`);
+  if (speechWords.length === 0 && audioEvents.length > 0) {
+    console.warn("[Scribe] Only audio_events returned — no speech detected. Events:", audioEvents.map((e: any) => e.text).join(", "));
+  }
+
+  const words: WhisperWord[] = speechWords
     .map((w: any) => ({
       word: String(w.text ?? w.word ?? "").trim(),
       start: Math.round((Number(w.start) || 0) * 1000) / 1000,
