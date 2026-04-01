@@ -49,9 +49,6 @@ interface CardBottomBarProps {
     startSec?: number;
     endSec?: number;
   } | null;
-  activeLineText?: string | null;
-  activeLineFireCount?: number;
-  hookPhrase?: string | null;
   accent?: string;
   hasFired?: boolean;
   onFireTap?: () => void;
@@ -66,8 +63,6 @@ interface CardBottomBarProps {
   lastFiredAt?: string | null;
   /** True when the song has ended and closing screen is visible */
   songEnded?: boolean;
-  /** Number of moments the user fired on (for end-state summary) */
-  firedMomentCount?: number;
 }
 
 function FireButton({
@@ -209,9 +204,6 @@ export function CardBottomBar({
   panelOpen = false,
   variant = "embedded",
   currentMoment = null,
-  activeLineText,
-  activeLineFireCount = 0,
-  hookPhrase,
   accent = "rgba(255,140,50,1)",
   hasFired = false,
   onFireTap,
@@ -225,7 +217,6 @@ export function CardBottomBar({
   totalFireCount = 0,
   lastFiredAt,
   songEnded = false,
-  firedMomentCount = 0,
 }: CardBottomBarProps) {
   const [barState, setBarState] = useState<BarState>("lyrics");
   const [commentText, setCommentText] = useState("");
@@ -235,16 +226,12 @@ export function CardBottomBar({
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [recordingSec, setRecordingSec] = useState(0);
   const prevMomentIndexRef = useRef<number | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const scrollRafRef = useRef<number>(0);
-  const momentTextRef = useRef<string>("");
-  const tickerStartRafRef = useRef<number>(0);
-  const tickerHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const waveformHeights = useRef<number[]>(
+    Array.from({ length: 10 }, () => 3 + Math.floor(Math.random() * 11)),
+  );
 
   const py = variant === "embedded" ? "py-3" : "py-4";
   const textSize = variant === "fullscreen" ? "text-[13px]" : "text-[10px]";
-  const subTextSize = variant === "fullscreen" ? "text-[11px]" : "text-[9px]";
   const dotSize = variant === "fullscreen" ? 6 : 5;
   const fireIconSize = variant === "fullscreen" ? 22 : 18;
   const fireMinWidth = variant === "fullscreen" ? "min-w-[60px]" : "min-w-[52px]";
@@ -339,64 +326,6 @@ export function CardBottomBar({
     prevMomentIndexRef.current = momentIdx;
   }, [barState, currentMoment?.index, onResumeAfterInput, stopRecording]);
 
-  // ── Ticker scroll animation ──
-  // Scrolls the moment text from right to left at a steady pace.
-  // Resets to 0 when the moment changes (detected by text change).
-  useEffect(() => {
-    const GAP = 48;
-    const HOLD_MS = 1800;
-    const SPEED = 40; // pixels per second
-    const text = currentMoment?.text ?? "";
-    if (text !== momentTextRef.current) {
-      // Moment changed — reset scroll
-      momentTextRef.current = text;
-      setScrollOffset(0);
-    }
-
-    if (barState !== "lyrics" || !text) {
-      if (tickerStartRafRef.current) cancelAnimationFrame(tickerStartRafRef.current);
-      if (tickerHoldTimerRef.current) {
-        clearTimeout(tickerHoldTimerRef.current);
-        tickerHoldTimerRef.current = null;
-      }
-      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
-      return;
-    }
-
-    tickerStartRafRef.current = requestAnimationFrame(() => {
-      const el = scrollRef.current;
-      if (!el) return;
-      const singleWidth = (el.scrollWidth - GAP) / 2;
-      const containerWidth = el.parentElement?.offsetWidth ?? 0;
-      if (singleWidth <= containerWidth) return;
-
-      tickerHoldTimerRef.current = setTimeout(() => {
-        let lastTime = performance.now();
-
-        const tick = (now: number) => {
-          const dt = (now - lastTime) / 1000;
-          lastTime = now;
-          setScrollOffset((prev) => {
-            const next = prev + SPEED * dt;
-            return next > singleWidth + GAP ? 0 : next;
-          });
-          scrollRafRef.current = requestAnimationFrame(tick);
-        };
-
-        scrollRafRef.current = requestAnimationFrame(tick);
-      }, HOLD_MS);
-    });
-
-    return () => {
-      if (tickerStartRafRef.current) cancelAnimationFrame(tickerStartRafRef.current);
-      if (tickerHoldTimerRef.current) {
-        clearTimeout(tickerHoldTimerRef.current);
-        tickerHoldTimerRef.current = null;
-      }
-      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
-    };
-  }, [currentMoment?.text, barState]);
-
   useEffect(() => {
     if (barState === "fired" || barState === "typing") {
       inputRef.current?.focus();
@@ -433,48 +362,69 @@ export function CardBottomBar({
   }, [commentText, onComment, onResumeAfterInput]);
 
   const recency = formatRecency(lastFiredAt);
-  const momentLabel = currentMoment ? `Moment ${currentMoment.index + 1}` : null;
+  const momentSummary = currentMoment
+    ? `Moment ${currentMoment.index + 1}/${currentMoment.total}`
+    : null;
+  const fireCountLabel = `${totalFireCount} FMLY Marked Moment${totalFireCount !== 1 ? "s" : ""}`;
 
   let leftContent: React.ReactNode;
 
   if (barState === "recording") {
     leftContent = (
-      <div className="flex items-center gap-2 min-w-0">
-        {momentLabel && (
-          <span className={`${subTextSize} font-mono shrink-0`} style={{ color: accent ?? "rgba(255,140,50,0.8)" }}>
-            🔥 {momentLabel}
-          </span>
-        )}
-        <div className="flex items-center gap-1.5">
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ff4444", animation: "cfBlink 0.8s ease-in-out infinite" }} />
-          <span className={`${textSize} font-mono`} style={{ color: "rgba(255,255,255,0.6)" }}>
-            {recordingSec}s
-          </span>
-          <div className="flex items-center gap-px" style={{ height: 16 }}>
-            {[...Array(8)].map((_, i) => (
-              <div
-                key={i}
-                style={{
-                  width: 2,
-                  height: 4 + Math.random() * 12,
-                  background: "rgba(255,255,255,0.3)",
-                  borderRadius: 1,
-                  transition: "height 0.1s",
-                }}
-              />
-            ))}
-          </div>
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <button
+          type="button"
+          className="shrink-0 flex items-center justify-center w-5 h-5"
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            stopRecording(true);
+          }}
+          onMouseUp={() => stopRecording(true)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Stop recording"
+        >
+          <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ff4444", animation: "cfBlink 0.8s ease-in-out infinite" }} />
+        </button>
+        <div className="flex items-center gap-1 flex-1 min-w-0" style={{ height: 16 }}>
+          {waveformHeights.current.map((base, i) => (
+            <div
+              key={i}
+              style={{
+                width: 2,
+                height: Math.min(16, base + ((recordingSec + i) % 2 === 0 ? 2 : -1)),
+                background: "rgba(255,68,68,0.45)",
+                borderRadius: 1,
+                transition: "height 0.25s ease",
+              }}
+            />
+          ))}
         </div>
+        <span className={`${textSize} font-mono shrink-0`} style={{ color: "rgba(255,255,255,0.6)" }}>
+          {recordingSec}s
+        </span>
       </div>
     );
   } else if (barState === "fired" || barState === "typing") {
     leftContent = (
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        {momentLabel && (
-          <span className={`${subTextSize} font-mono shrink-0`} style={{ color: accent ?? "rgba(255,140,50,0.8)" }}>
-            🔥 {momentLabel}
-          </span>
-        )}
+        <button
+          type="button"
+          className="shrink-0 flex items-center justify-center w-5 h-5"
+          onTouchStart={(e) => {
+            e.preventDefault();
+            startRecording();
+          }}
+          onMouseDown={() => startRecording()}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Hold to record"
+        >
+          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="1" width="6" height="12" rx="3" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" y1="19" x2="12" y2="23" />
+            <line x1="8" y1="23" x2="16" y2="23" />
+          </svg>
+        </button>
         <input
           ref={inputRef}
           type="text"
@@ -497,105 +447,22 @@ export function CardBottomBar({
   } else if (songEnded && !panelOpen) {
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
+        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.7)", flexShrink: 0, animation: "cfBlink 1.4s ease-in-out infinite" }} />
         <span
           className={`${textSize} font-mono truncate`}
           style={{ color: "rgba(255,255,255,0.5)", letterSpacing: "0.05em" }}
         >
-          {firedMomentCount > 0
-            ? `✓ ${firedMomentCount} moment${firedMomentCount !== 1 ? "s" : ""} marked`
-            : "song complete"}
+          {fireCountLabel}
         </span>
       </div>
     );
-  } else if (!panelOpen && (currentMoment?.text || activeLineText)) {
-    const isHook = !!(hookPhrase && activeLineText === hookPhrase);
-    const displayText = currentMoment?.text || activeLineText || "";
-
-    leftContent = (
-      <div className="flex items-center gap-1.5 min-w-0" style={{ overflow: "hidden" }}>
-        <div
-          style={{
-            height: dotSize,
-            width: dotSize,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.7)",
-            flexShrink: 0,
-            animation: "cfBlink 1.4s ease-in-out infinite",
-          }}
-        />
-        {momentLabel && (
-          <span className={`${subTextSize} font-mono shrink-0`} style={{ color: "rgba(255,255,255,0.30)", letterSpacing: "0.05em" }}>
-            {momentLabel}
-          </span>
-        )}
-        <div
-          style={{
-            flex: 1,
-            minWidth: 0,
-            overflow: "hidden",
-            position: "relative",
-            maskImage: "linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)",
-            WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)",
-          }}
-        >
-          <div
-            ref={scrollRef}
-            style={{
-              display: "inline-block",
-              whiteSpace: "nowrap",
-              transform: `translateX(-${scrollOffset}px)`,
-              willChange: "transform",
-            }}
-          >
-            <span
-              className={`${textSize} font-mono`}
-              style={{
-                color: isHook ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.75)",
-                fontWeight: isHook ? 600 : 400,
-                letterSpacing: "0.03em",
-              }}
-            >
-              {displayText}
-            </span>
-            <span style={{ display: "inline-block", width: 48 }} />
-            <span
-              className={`${textSize} font-mono`}
-              style={{
-                color: isHook ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.75)",
-                fontWeight: isHook ? 600 : 400,
-                letterSpacing: "0.03em",
-              }}
-            >
-              {displayText}
-            </span>
-          </div>
-        </div>
-        {activeLineFireCount > 0 && (
-          <span className={`${subTextSize} font-mono shrink-0`} style={{ color: "rgba(255,255,255,0.35)" }}>
-            🔥{activeLineFireCount}
-          </span>
-        )}
-      </div>
-    );
-  } else if (!panelOpen && totalFireCount > 0) {
-    const label = recency ? `${totalFireCount} marks · ${recency}` : `${totalFireCount} marks`;
-    leftContent = (
-      <div className="flex items-center gap-1.5 min-w-0">
-        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.25)", flexShrink: 0 }} />
-        <span className={`${textSize} font-mono truncate`} style={{ letterSpacing: "0.05em" }}>
-          <span style={{ marginRight: 2 }}>🔥</span>
-          <span style={{ color: "rgba(255,255,255,0.65)", fontWeight: 600 }}>FMLY</span>
-          <span style={{ color: "rgba(255,255,255,0.4)" }}>{" · "}{label}</span>
-        </span>
-      </div>
-    );
-  } else if (!panelOpen && isLive) {
+  } else if (!panelOpen && momentSummary) {
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
         <div
           style={{
-            width: dotSize,
             height: dotSize,
+            width: dotSize,
             borderRadius: "50%",
             background: "rgba(255,255,255,0.7)",
             flexShrink: 0,
@@ -603,17 +470,26 @@ export function CardBottomBar({
           }}
         />
         <span className={`${textSize} font-mono truncate`} style={{ color: "rgba(255,255,255,0.6)", letterSpacing: "0.05em" }}>
-          mark your moment
+          {momentSummary}
+        </span>
+      </div>
+    );
+  } else if (!panelOpen && (totalFireCount > 0 || isLive)) {
+    const socialLabel = totalFireCount > 0
+      ? (recency ? `${fireCountLabel} · ${recency}` : fireCountLabel)
+      : "mark your moment";
+    leftContent = (
+      <div className="flex items-center gap-1.5 min-w-0">
+        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.25)", flexShrink: 0 }} />
+        <span className={`${textSize} font-mono truncate`} style={{ color: "rgba(255,255,255,0.45)", letterSpacing: "0.05em" }}>
+          {socialLabel}
         </span>
       </div>
     );
   } else if (!panelOpen) {
     leftContent = (
       <div className="flex items-center gap-1.5 min-w-0">
-        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.15)", flexShrink: 0 }} />
-        <span className={`${textSize} font-mono truncate`} style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.05em" }}>
-          be the first to mark a moment
-        </span>
+        <div style={{ width: dotSize, height: dotSize, borderRadius: "50%", background: "rgba(255,255,255,0.7)", flexShrink: 0, animation: "cfBlink 1.4s ease-in-out infinite" }} />
       </div>
     );
   }
@@ -634,91 +510,20 @@ export function CardBottomBar({
         {leftContent}
       </div>
 
-      {barState === "lyrics" ? (
-        songEnded ? (
-          <>
-            <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />
-            <button
-              className={`flex items-center justify-center ${py} ${fireMinWidth}`}
-              style={{ touchAction: "manipulation" }}
-              onClick={(e) => { e.stopPropagation(); onOpenReactions(); }}
-              aria-label="Replay"
-            >
-              <svg
-                width={fireIconSize}
-                height={fireIconSize}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(255,255,255,0.35)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="1 4 1 10 7 10" />
-                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-              </svg>
-            </button>
-          </>
-        ) : (
-          <>
-            <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />
-            <FireButton
-              panelOpen={panelOpen}
-              onClose={onClose}
-              onTap={() => { onFireTap?.(); handleFireComplete(); }}
-              onHoldStart={onFireHoldStart}
-              onHoldEnd={(ms) => { onFireHoldEnd?.(ms); handleFireComplete(); }}
-              py={py}
-              hasFired={hasFired}
-              accent={accent}
-              iconSize={fireIconSize}
-              minWidth={fireMinWidth}
-              baseRingSize={variant === "fullscreen" ? 34 : 28}
-            />
-          </>
-        )
-      ) : (
-        <>
-          <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />
-          <button
-            className={`flex items-center justify-center ${py} ${fireMinWidth}`}
-            style={{ touchAction: "manipulation" }}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              if (barState === "fired" || barState === "typing") startRecording();
-            }}
-            onTouchEnd={() => {
-              if (barState === "recording") stopRecording(true);
-            }}
-            onMouseDown={() => {
-              if (barState === "fired" || barState === "typing") startRecording();
-            }}
-            onMouseUp={() => {
-              if (barState === "recording") stopRecording(true);
-            }}
-            onMouseLeave={() => {
-              if (barState === "recording") stopRecording(true);
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <svg
-              width={fireIconSize}
-              height={fireIconSize}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={barState === "recording" ? "#ff4444" : "rgba(255,255,255,0.45)"}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="9" y="1" width="6" height="12" rx="3" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-          </button>
-        </>
-      )}
+      <div style={{ width: "0.5px", background: "rgba(255,255,255,0.08)", alignSelf: "stretch", margin: "8px 0" }} />
+      <FireButton
+        panelOpen={panelOpen}
+        onClose={onClose}
+        onTap={() => { onFireTap?.(); handleFireComplete(); }}
+        onHoldStart={onFireHoldStart}
+        onHoldEnd={(ms) => { onFireHoldEnd?.(ms); handleFireComplete(); }}
+        py={py}
+        hasFired={hasFired}
+        accent={accent}
+        iconSize={fireIconSize}
+        minWidth={fireMinWidth}
+        baseRingSize={variant === "fullscreen" ? 34 : 28}
+      />
     </div>
   );
 }
