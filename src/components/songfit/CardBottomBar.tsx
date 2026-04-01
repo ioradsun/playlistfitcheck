@@ -58,7 +58,6 @@ function FireButton({
   onHoldStart,
   onHoldEnd,
   py,
-  hasFired,
   iconSize = 18,
   minWidth = "min-w-[52px]",
 }: {
@@ -66,26 +65,32 @@ function FireButton({
   onHoldStart?: () => void;
   onHoldEnd?: (holdMs: number) => void;
   py: string;
-  hasFired?: boolean;
   iconSize?: number;
   minWidth?: string;
 }) {
   const holdStartRef = useRef<number | null>(null);
-  const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [holdProgress, setHoldProgress] = useState(0);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isHolding, setIsHolding] = useState(false);
+  const [tapFlash, setTapFlash] = useState(false);
+
+  useEffect(
+    () => () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    },
+    [],
+  );
 
   const startHold = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
       e.stopPropagation();
       holdStartRef.current = Date.now();
       setIsHolding(true);
-      setHoldProgress(0);
+      setTapFlash(false);
+      if (flashTimerRef.current) {
+        clearTimeout(flashTimerRef.current);
+        flashTimerRef.current = null;
+      }
       onHoldStart?.();
-      holdTimerRef.current = setInterval(() => {
-        const ms = Date.now() - (holdStartRef.current ?? Date.now());
-        setHoldProgress(Math.min(1, ms / 3000));
-      }, 40);
     },
     [onHoldStart],
   );
@@ -95,11 +100,15 @@ function FireButton({
     const ms = Date.now() - holdStartRef.current;
     holdStartRef.current = null;
     setIsHolding(false);
-    setHoldProgress(0);
-    if (holdTimerRef.current) clearInterval(holdTimerRef.current);
-    if (ms < 150) onTap?.();
-    else onHoldEnd?.(ms);
+    if (ms < 150) {
+      onTap?.();
+      setTapFlash(true);
+      flashTimerRef.current = setTimeout(() => setTapFlash(false), 350);
+    } else {
+      onHoldEnd?.(ms);
+    }
   }, [onTap, onHoldEnd]);
+  const showEmoji = isHolding || tapFlash;
 
   return (
     <button
@@ -115,7 +124,7 @@ function FireButton({
       className={`relative flex items-center justify-center px-4 ${minWidth} ${py} shrink-0`}
       style={{ touchAction: "manipulation" }}
     >
-      {hasFired && !isHolding ? (
+      {showEmoji ? (
         <span
           style={{
             fontSize: iconSize + 2,
@@ -134,12 +143,10 @@ function FireButton({
           viewBox="0 0 24 24"
           style={{
             fill: "none",
-            stroke: isHolding ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)",
+            stroke: "rgba(255,255,255,0.4)",
             strokeWidth: 1.8,
             strokeLinecap: "round",
             strokeLinejoin: "round",
-            transform: `scale(${isHolding ? 1 + holdProgress * 0.5 : 1})`,
-            transition: isHolding ? "none" : "stroke 0.2s",
           }}
         >
           <path d="M12 2c0 0-5.5 5-5.5 10.5a5.5 5.5 0 0 0 11 0C17.5 9 15 6.5 15 6.5c0 0 .5 3-1.5 4.5C13.5 8 12 2 12 2z" />
@@ -358,7 +365,6 @@ export function CardBottomBar({
         onHoldStart={onFireHoldStart}
         onHoldEnd={onFireHoldEnd}
         py={py}
-        hasFired={hasFired}
         iconSize={fireIconSize}
         minWidth={fireMinWidth}
       />
