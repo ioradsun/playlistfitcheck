@@ -84,6 +84,10 @@ interface ReactionPanelProps {
   onFireLine?: (lineIndex: number, holdMs: number) => void;
   onLineVisible?: (lineIndex: number) => void;
   renderBottomBar?: (onClose: () => void) => React.ReactNode;
+  /** Signals a fire from the bottom bar — triggers pulse on the matching line */
+  lastBarFireEvent?: { lineIndex: number; ts: number } | null;
+  /** Line index of the most recent bar comment — auto-expands that window's comments */
+  lastBarCommentLineIndex?: number | null;
 }
 
 function CommentReactPicker({
@@ -245,6 +249,8 @@ function ReactionPanel({
   onFireLine,
   onLineVisible,
   renderBottomBar,
+  lastBarFireEvent,
+  lastBarCommentLineIndex,
 }: ReactionPanelProps) {
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [showCommentsForWindow, setShowCommentsForWindow] = useState<number | null>(null);
@@ -391,6 +397,33 @@ function ReactionPanel({
     }
   }, [isOpen]);
 
+  // Fire pulse from bar
+  useEffect(() => {
+    if (!lastBarFireEvent) return;
+    setSubmittedLineIndex(lastBarFireEvent.lineIndex);
+    const timer = setTimeout(() => setSubmittedLineIndex(null), 800);
+    return () => clearTimeout(timer);
+  }, [lastBarFireEvent?.ts]);
+
+  // Scroll fired line into view when panel is open.
+  useEffect(() => {
+    if (!lastBarFireEvent || !isOpen) return;
+    const row = rowRefs.current[lastBarFireEvent.lineIndex];
+    const container = scrollContainerRef.current;
+    if (!row || !container) return;
+
+    const rowTop = row.offsetTop;
+    const containerTop = container.scrollTop;
+    const containerBottom = containerTop + container.clientHeight;
+
+    if (rowTop < containerTop || rowTop > containerBottom - 40) {
+      container.scrollTo({
+        top: Math.max(0, rowTop - container.clientHeight * 0.3),
+        behavior: "smooth",
+      });
+    }
+  }, [lastBarFireEvent?.ts, isOpen]);
+
   useEffect(() => {
     if (!danceId) return;
 
@@ -511,6 +544,19 @@ function ReactionPanel({
     );
   });
 
+  useEffect(() => {
+    if (lastBarCommentLineIndex == null || !isOpen) return;
+    const wi = clipWindows.findIndex((win) =>
+      win.lines.some((l) => l.lineIndex === lastBarCommentLineIndex),
+    );
+    if (wi >= 0) {
+      setShowCommentsForWindow(wi);
+      setSubmittedLineIndex(lastBarCommentLineIndex);
+      const timer = setTimeout(() => setSubmittedLineIndex(null), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [refreshKey, lastBarCommentLineIndex, isOpen, clipWindows]);
+
   const previewingWindowRef = useRef<number | null>(null);
 
   const handlePanelClose = () => {
@@ -535,7 +581,14 @@ function ReactionPanel({
               (l) => submittedLineIndex === l.lineIndex,
             );
             return (
-              <div key={wi}>
+              <div
+                key={wi}
+                style={{
+                  backgroundColor: isCommentPulsing ? `${accent}10` : "transparent",
+                  transition: "background-color 0.6s ease-out",
+                  borderRadius: 8,
+                }}
+              >
                 {win.shouldShowSectionHeader && (
                   <div className={wi === 0 ? "mb-1" : "mt-6 mb-1"}>
                     <div className="flex items-center gap-2 px-3">
@@ -727,7 +780,11 @@ function ReactionPanel({
                 <div className="h-[1px] mx-3">
                   <div
                     className="h-full rounded-full"
-                    style={{ background: accent, opacity: isCommentPulsing ? 0.6 : 0 }}
+                    style={{
+                      background: accent,
+                      opacity: isCommentPulsing ? 0.6 : 0,
+                      transition: "opacity 0.6s ease-out",
+                    }}
                   />
                 </div>
               </div>

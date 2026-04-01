@@ -75,7 +75,6 @@ export function LyricInteractionLayer({
   isLive = false,
   hasFired = false,
   totalFireCount = 0,
-  lastFiredAt = null,
   songEnded = false,
   player = null,
   onFireTap,
@@ -93,6 +92,8 @@ export function LyricInteractionLayer({
   onPanelOpenChange,
 }: LyricInteractionLayerProps) {
   const [panelOpen, setPanelOpen] = useState(false);
+  const [lastBarFireEvent, setLastBarFireEvent] = useState<{ lineIndex: number; ts: number } | null>(null);
+  const [lastBarCommentLineIndex, setLastBarCommentLineIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (externalPanelOpen !== undefined) setPanelOpen(externalPanelOpen);
@@ -152,6 +153,8 @@ export function LyricInteractionLayer({
         onLineVisible={onLineVisible}
         empowermentPromise={empowermentPromise}
         fmlyHookEnabled={fmlyHookEnabled}
+        lastBarFireEvent={lastBarFireEvent}
+        lastBarCommentLineIndex={lastBarCommentLineIndex}
       />
       <CardBottomBar
         variant={variant}
@@ -159,17 +162,28 @@ export function LyricInteractionLayer({
         onOpenReactions={openPanel}
         onClose={closePanel}
         currentMoment={currentMoment}
-        onFireTap={onFireTap}
+        onFireTap={() => {
+          onFireTap?.();
+          const li = activeLine?.lineIndex ?? null;
+          if (li != null) setLastBarFireEvent({ lineIndex: li, ts: Date.now() });
+        }}
         onFireHoldStart={onFireHoldStart}
-        onFireHoldEnd={onFireHoldEnd}
-        onComment={(text) => onComment?.(text, currentMoment?.index ?? null)}
+        onFireHoldEnd={(holdMs) => {
+          onFireHoldEnd?.(holdMs);
+          const li = activeLine?.lineIndex ?? null;
+          if (li != null) setLastBarFireEvent({ lineIndex: li, ts: Date.now() });
+        }}
+        onComment={(text) => {
+          const li = activeLine?.lineIndex ?? null;
+          setLastBarCommentLineIndex(li);
+          onComment?.(text, currentMoment?.index ?? null);
+        }}
         onPauseForInput={onPause}
         onResumeAfterInput={onResume}
         accent={accent}
         hasFired={hasFired}
         isLive={isLive}
         totalFireCount={totalFireCount}
-        lastFiredAt={lastFiredAt}
         songEnded={songEnded}
       />
     </div>

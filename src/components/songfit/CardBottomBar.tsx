@@ -49,7 +49,6 @@ interface CardBottomBarProps {
   onResumeAfterInput?: () => void;
   isLive?: boolean;
   totalFireCount?: number;
-  lastFiredAt?: string | null;
   /** True when the song has ended and closing screen is visible */
   songEnded?: boolean;
 }
@@ -119,7 +118,7 @@ function FireButton({
       {hasFired && !isHolding ? (
         <span
           style={{
-            fontSize: iconSize,
+            fontSize: iconSize + 2,
             lineHeight: 1,
             userSelect: "none",
           }}
@@ -166,7 +165,6 @@ export function CardBottomBar({
   onResumeAfterInput,
   isLive = false,
   totalFireCount = 0,
-  lastFiredAt: _lastFiredAt,
   songEnded = false,
 }: CardBottomBarProps) {
   const [commentText, setCommentText] = useState("");
@@ -254,15 +252,15 @@ export function CardBottomBar({
           e.stopPropagation();
           panelOpen ? onClose() : onOpenReactions();
         }}
-        className={`flex items-center gap-1.5 px-3 ${py} shrink-0`}
-        style={{ background: "none", border: "none", cursor: "pointer", minWidth: 60 }}
+        className={`flex items-center px-3 ${py} shrink-0`}
+        style={{ background: "none", border: "none", cursor: "pointer", minWidth: 56 }}
         aria-label={panelOpen ? "Close panel" : "Open reactions"}
       >
         <span
           className={`${subTextSize} font-mono`}
           style={{
             color: panelOpen
-              ? "rgba(255,255,255,0.7)"
+              ? "rgba(255,255,255,0.5)"
               : momentLabel
                 ? "rgba(255,255,255,0.55)"
                 : "rgba(255,255,255,0.2)",
@@ -271,7 +269,7 @@ export function CardBottomBar({
             whiteSpace: "nowrap",
           }}
         >
-          {panelOpen ? "✕" : momentLabel ?? (songEnded ? `${totalFireCount} marked` : "—")}
+          {panelOpen ? "Close" : momentLabel ?? (songEnded ? `${totalFireCount} marked` : "—")}
         </span>
       </button>
 
