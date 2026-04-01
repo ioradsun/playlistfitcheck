@@ -1,7 +1,7 @@
 /* cache-bust: 2026-03-06-V2 */
 
 import * as React from "react";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import {
@@ -29,6 +29,17 @@ interface Props {
     projectId: string | null;
     title: string;
   }) => void;
+  claimMeta?: {
+    artistSlug: string;
+    songSlug: string;
+    artistName: string;
+    songName: string;
+    albumArtUrl: string | null;
+    ghostProfileId: string;
+    spotifyTrackId: string;
+  } | null;
+  autoSubmitFile?: File | null;
+  onClaimPublished?: (danceUrl: string) => void;
 }
 
 export function LyricFitTab({
@@ -38,6 +49,9 @@ export function LyricFitTab({
   onHeaderProject,
   onSavedId,
   onUploadStarted: onUploadStartedProp,
+  claimMeta,
+  autoSubmitFile = null,
+  onClaimPublished,
 }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
@@ -53,6 +67,8 @@ export function LyricFitTab({
     onProjectSaved,
     onNewProject,
     onSavedId,
+    claimMeta: claimMeta ?? null,
+    onClaimPublished,
   });
 
   const handleViewChange = useCallback((nextView: LyricFitView) => {
@@ -70,6 +86,13 @@ export function LyricFitTab({
     () => handleViewChange("lyrics"),
     [handleViewChange],
   );
+
+  useEffect(() => {
+    if (!claimMeta) return;
+    if (p.lyricData && p.audioFile && activeTab === "lyrics") {
+      setActiveTab("fit");
+    }
+  }, [claimMeta, p.lyricData, p.audioFile, activeTab]);
 
   const sceneInputNode = !p.lyricData ? (
     <div className="space-y-1.5">
@@ -142,6 +165,7 @@ export function LyricFitTab({
             onUploadStartedProp?.(payload);
           }}
           onTitleChange={p.handleTitleChange}
+          autoSubmitFile={autoSubmitFile}
         />
       </div>
 

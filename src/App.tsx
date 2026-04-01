@@ -15,8 +15,7 @@ const _isEmbed = _segs.length === 3;
 // ── Embed-only lazy pages ──
 const ShareableHook = lazy(ShareableHookImport);
 const ShareableLyricDance = lazy(ShareableLyricDanceImport);
-const ArtistClaimPage = lazy(() => import("./pages/ArtistClaimPage"));
-const CreateArtistPage = lazy(() => import("./pages/CreateArtistPage"));
+const ClaimCreatePage = lazy(() => import("./pages/ClaimCreatePage"));
 
 // ── Main app shell — lazy so embed routes never download providers, Index, Toasters, etc. ──
 // Retry with cache-bust on stale-chunk failures (e.g. after a deploy)
@@ -64,8 +63,8 @@ const App = () => {
                 <Route path="/:artistSlug/:songSlug/lyric-dance" element={
                   <Suspense fallback={<LyricDanceFallback />}><ShareableLyricDance /></Suspense>
                 } />
-                <Route path="/artist/:username/claim-page" element={<Suspense fallback={null}><ArtistClaimPage /></Suspense>} />
-                <Route path="/create" element={<Suspense fallback={null}><CreateArtistPage /></Suspense>} />
+                <Route path="/create" element={<Suspense fallback={null}><ClaimCreatePage /></Suspense>} />
+                <Route path="/artist/:username/claim-page" element={<Suspense fallback={null}><ClaimCreatePage /></Suspense>} />
                 {/* ── Hook embed: lightweight path ── */}
                 <Route path="/:artistSlug/:songSlug/:hookSlug" element={
                   <Suspense fallback={<HookEmbedFallback />}><ShareableHook /></Suspense>

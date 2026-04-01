@@ -473,6 +473,16 @@ interface UseLyricPipelineParams {
   onProjectSaved?: () => void;
   onNewProject?: () => void;
   onSavedId?: (id: string) => void;
+  claimMeta?: {
+    artistSlug: string;
+    songSlug: string;
+    artistName: string;
+    songName: string;
+    albumArtUrl: string | null;
+    ghostProfileId: string;
+    spotifyTrackId: string;
+  } | null;
+  onClaimPublished?: (danceUrl: string) => void;
 }
 
 export function useLyricPipeline({
@@ -481,6 +491,8 @@ export function useLyricPipeline({
   siteCopy,
   sceneDescription,
   onNewProject,
+  claimMeta = null,
+  onClaimPublished,
 }: UseLyricPipelineParams) {
   const hottestHooksEnabled = siteCopy?.features?.hookfit_hottest_hooks !== false;
 
@@ -847,6 +859,106 @@ export function useLyricPipeline({
       }
     })();
   }, [user, initialLyric, cinematicDirection, pipelineDanceId]);
+
+  const claimPublishedRef = useRef(false);
+  useEffect(() => {
+    if (!claimMeta || claimPublishedRef.current) return;
+    if (!cinematicDirection?.phrases?.length) return;
+    if (!audioFile || !lines?.length) return;
+
+    claimPublishedRef.current = true;
+
+    void (async () => {
+      try {
+        const storagePath = `ghost/${claimMeta.artistSlug}/${claimMeta.spotifyTrackId}/preview.mp3`;
+        const { error: uploadErr } = await supabase.storage
+          .from("audio-clips")
+          .upload(storagePath, audioFile, {
+            upsert: true,
+            contentType: audioFile.type || "audio/mpeg",
+          });
+
+        const { data: urlData } = supabase.storage
+          .from("audio-clips")
+          .getPublicUrl(storagePath);
+        const audioStorageUrl = urlData?.publicUrl;
+
+        if (uploadErr || !audioStorageUrl) {
+          console.error("[ClaimPublish] Audio upload failed:", uploadErr);
+          claimPublishedRef.current = false;
+          return;
+        }
+
+        const { error: danceErr } = await supabase
+          .from("shareable_lyric_dances" as any)
+          .upsert({
+            user_id: user?.id ?? null,
+            artist_slug: claimMeta.artistSlug,
+            song_slug: claimMeta.songSlug,
+            artist_name: claimMeta.artistName,
+            song_name: claimMeta.songName,
+            audio_url: audioStorageUrl,
+            lyrics: lines.map((l: any) => ({
+              start: l.start,
+              end: l.end,
+              text: l.text,
+              tag: l.tag ?? "main",
+            })),
+            words: words?.length ? words : null,
+            cinematic_direction: cinematicDirection,
+            beat_grid: beatGrid ?? { bpm: 120, beats: [], confidence: 0 },
+            palette: cinematicDirection?.defaults?.palette ?? ["#ffffff", "#a855f7", "#ec4899"],
+            section_images: null,
+            auto_palettes: null,
+            album_art_url: claimMeta.albumArtUrl,
+          }, { onConflict: "artist_slug,song_slug" });
+
+        if (danceErr) {
+          console.error("[ClaimPublish] Upsert failed:", danceErr);
+          claimPublishedRef.current = false;
+          return;
+        }
+
+        const { data: danceRow } = await supabase
+          .from("shareable_lyric_dances" as any)
+          .select("id")
+          .eq("artist_slug", claimMeta.artistSlug)
+          .eq("song_slug", claimMeta.songSlug)
+          .maybeSingle();
+
+        const lyricDanceUrl = `/${claimMeta.artistSlug}/${claimMeta.songSlug}/lyric-dance`;
+
+        await supabase
+          .from("artist_lyric_videos" as any)
+          .upsert({
+            ghost_profile_id: claimMeta.ghostProfileId,
+            user_id: user?.id ?? null,
+            spotify_track_id: claimMeta.spotifyTrackId,
+            track_title: claimMeta.songName,
+            artist_name: claimMeta.artistName,
+            album_art_url: claimMeta.albumArtUrl,
+            preview_url: audioStorageUrl,
+            lyric_dance_url: lyricDanceUrl,
+            lyric_dance_id: danceRow?.id ?? null,
+          }, { onConflict: "ghost_profile_id,spotify_track_id" });
+
+        if (danceRow?.id) {
+          supabase.functions
+            .invoke("generate-section-images", {
+              body: { lyric_dance_id: danceRow.id },
+            })
+            .catch(() => {});
+        }
+
+        setPipelineDanceId(danceRow?.id ?? null);
+        setPipelineDanceUrl(lyricDanceUrl);
+        onClaimPublished?.(lyricDanceUrl);
+      } catch (e) {
+        console.error("[ClaimPublish] Error:", e);
+        claimPublishedRef.current = false;
+      }
+    })();
+  }, [claimMeta, cinematicDirection, audioFile, lines, words, beatGrid, user, onClaimPublished]);
 
   useEffect(() => {
     const id = savedIdRef.current;
@@ -1420,6 +1532,7 @@ export function useLyricPipeline({
     setFitUnlocked(false);
     setPipelineDanceId(null);
     setPipelineDanceUrl(null);
+    claimPublishedRef.current = false;
     cinematicTriggeredRef.current = false;
     pipelineTriggeredRef.current = false;
     hookDetectionRunRef.current = false;
