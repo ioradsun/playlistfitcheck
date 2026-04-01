@@ -736,6 +736,7 @@ function ReactionPanel({
         </div>
       </div>
 
+      {renderBottomBar?.(onClose)}
     </PanelShell>
   );
 }
