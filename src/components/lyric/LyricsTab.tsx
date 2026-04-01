@@ -182,7 +182,9 @@ export function LyricsTab({
 
   const handleTranscribe = useCallback(
     async (file: File, referenceLyrics?: string) => {
+      console.log("[handleTranscribe] START", { fileName: file.name, canUse: quota.canUse, tier: quota.tier, loading: quota.loading, user: !!user });
       if (!quota.canUse) {
+        console.warn("[handleTranscribe] BLOCKED by quota", { tier: quota.tier, used: quota.used, limit: quota.limit });
         toast.error(
           quota.tier === "anonymous"
             ? "Sign up for more uses"
@@ -195,6 +197,7 @@ export function LyricsTab({
       setLoading(true);
 
       const project = await handleFileSelected(file);
+      console.log("[handleTranscribe] handleFileSelected result", { projectId: project?.projectId, audioUrl: project?.audioUrl?.slice(0, 60) });
       const projectId = project?.projectId ?? null;
       const storageAudioUrl = project?.audioUrl ?? null;
       const draftTitle = resolveProjectTitle(null, file.name);
@@ -333,7 +336,7 @@ export function LyricsTab({
 
         const data = await response.json();
         clearTimeout(transcribeTimeout);
-        
+        console.log("[handleTranscribe] response OK", { linesCount: data.lines?.length, wordsCount: data.words?.length, error: data.error });
 
         if (data.error) throw new Error(data.error);
         if (!data.lines) throw new Error("Invalid response format");
@@ -390,6 +393,7 @@ export function LyricsTab({
         }
         await quota.increment();
       } catch (e) {
+        console.error("[handleTranscribe] FAILED", e);
         clearTimeout(transcribeTimeout);
         if (projectId) {
           await supabase.from("saved_lyrics").delete().eq("id", projectId);
@@ -413,8 +417,10 @@ export function LyricsTab({
   // ── Auto-submit for claim pages ──────────────────────────────────────
   const autoSubmitProcessed = useRef(false);
   useEffect(() => {
+    console.log("[LyricsTab] autoSubmit effect", { hasFile: !!autoSubmitFile, processed: autoSubmitProcessed.current });
     if (!autoSubmitFile || autoSubmitProcessed.current) return;
     autoSubmitProcessed.current = true;
+    console.log("[LyricsTab] autoSubmit → calling handleTranscribe");
     handleTranscribe(autoSubmitFile);
   }, [autoSubmitFile, handleTranscribe]);
 
