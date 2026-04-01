@@ -18,7 +18,7 @@ interface LyricInteractionLayerProps {
   } | null;
   activeLine?: { text: string; lineIndex: number; sectionLabel: string | null } | null;
   allLines?: LyricSectionLine[];
-  audioSections?: AudioSection[];
+  audioSections?: CanonicalAudioSection[];
   phrases?: any[] | null;
   words?: any[] | null;
   beatGrid?: any | null;
