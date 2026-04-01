@@ -25,13 +25,11 @@ import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
 import { getSessionId } from "@/lib/sessionId";
 
-const COVER_COLUMNS =
+const ALL_COLUMNS =
   "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name," +
   "audio_url,section_images,palette,auto_palettes,album_art_url," +
-  "empowerment_promise,beat_grid";
-
-const HEAVY_COLUMNS =
-  "id,lyrics,words,motion_profile_spec:physics_spec,cinematic_direction," +
+  "empowerment_promise,beat_grid," +
+  "lyrics,words,motion_profile_spec:physics_spec,cinematic_direction," +
   "scene_context,scene_manifest,system_type,seed,artist_dna";
 
 interface ProfileInfo {
@@ -85,7 +83,7 @@ export default function ShareableLyricDance() {
 
     supabase
       .from("shareable_lyric_dances" as any)
-      .select(COVER_COLUMNS)
+      .select(ALL_COLUMNS)
       .eq("artist_slug", artistSlug)
       .eq("song_slug", songSlug)
       .maybeSingle()
@@ -111,21 +109,6 @@ export default function ShareableLyricDance() {
               if (pData) setProfile(pData as ProfileInfo);
             });
         }
-
-        supabase
-          .from("shareable_lyric_dances" as any)
-          .select(HEAVY_COLUMNS)
-          .eq("id", (row as any).id)
-          .maybeSingle()
-          .then(({ data: heavy }: any) => {
-            if (heavy) {
-              setDataRaw((prev) => (
-                prev
-                  ? { ...prev, ...(heavy as any) }
-                  : prev
-              ));
-            }
-          });
       });
   }, [artistSlug, songSlug]);
 
