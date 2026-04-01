@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AudioSection } from "@/engine/sectionDetector";
+import type { CanonicalAudioSection } from "@/components/lyric/ReactionPanel";
 import type { LyricSectionLine } from "@/hooks/useLyricSections";
 import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
@@ -18,7 +18,7 @@ interface LyricInteractionLayerProps {
   } | null;
   activeLine?: { text: string; lineIndex: number; sectionLabel: string | null } | null;
   allLines?: LyricSectionLine[];
-  audioSections?: AudioSection[];
+  audioSections?: CanonicalAudioSection[];
   phrases?: any[] | null;
   words?: any[] | null;
   beatGrid?: any | null;

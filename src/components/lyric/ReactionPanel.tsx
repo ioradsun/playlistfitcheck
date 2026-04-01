@@ -83,6 +83,7 @@ interface ReactionPanelProps {
   fmlyHookEnabled?: boolean;
   onFireLine?: (lineIndex: number, holdMs: number) => void;
   onLineVisible?: (lineIndex: number) => void;
+  renderBottomBar?: (onClose: () => void) => React.ReactNode;
 }
 
 function CommentReactPicker({
@@ -243,6 +244,7 @@ function ReactionPanel({
   fmlyHookEnabled: _fmlyHookEnabled,
   onFireLine,
   onLineVisible,
+  renderBottomBar,
 }: ReactionPanelProps) {
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [showCommentsForWindow, setShowCommentsForWindow] = useState<number | null>(null);
@@ -734,6 +736,7 @@ function ReactionPanel({
         </div>
       </div>
 
+      {renderBottomBar?.(onClose)}
     </PanelShell>
   );
 }
