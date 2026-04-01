@@ -7,11 +7,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── Spotify token cache ──────────────────────────────────────────────────────
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 async function getSpotifyToken(clientId: string, clientSecret: string): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.token;
+
   const resp = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
     headers: {
@@ -20,13 +20,17 @@ async function getSpotifyToken(clientId: string, clientSecret: string): Promise<
     },
     body: "grant_type=client_credentials",
   });
+
   if (!resp.ok) throw new Error(`Spotify auth failed [${resp.status}]`);
+
   const data = await resp.json();
-  cachedToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 60) * 1000 };
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + (data.expires_in - 60) * 1000,
+  };
   return cachedToken.token;
 }
 
-// ── Fetch Spotify track metadata ─────────────────────────────────────────────
 async function fetchSpotifyTrack(trackId: string, token: string) {
   const resp = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -35,11 +39,10 @@ async function fetchSpotifyTrack(trackId: string, token: string) {
   return resp.json();
 }
 
-// ── Fetch Spotify audio features (BPM, duration) ─────────────────────────────
 async function fetchSpotifyAudioFeatures(
   trackId: string,
   token: string,
-): Promise<{ tempo: number; durationMs: number } | null> {
+): Promise<{ tempo: number } | null> {
   try {
     const resp = await fetch(`https://api.spotify.com/v1/audio-features/${trackId}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -47,45 +50,28 @@ async function fetchSpotifyAudioFeatures(
     });
     if (!resp.ok) return null;
     const data = await resp.json();
-    return {
-      tempo: typeof data.tempo === "number" ? data.tempo : 0,
-      durationMs: typeof data.duration_ms === "number" ? data.duration_ms : 0,
-    };
+    return { tempo: typeof data.tempo === "number" ? data.tempo : 0 };
   } catch {
     return null;
   }
 }
 
-// ── Generate synthetic beat grid from BPM ─────────────────────────────────────
-function buildBeatGrid(
-  bpm: number,
-  durationSec: number,
-): { bpm: number; beats: number[]; confidence: number } {
-  if (bpm <= 0 || durationSec <= 0) {
-    return { bpm: 120, beats: [], confidence: 0 };
-  }
-  const period = 60 / bpm;
-  const beats: number[] = [];
-  for (let t = 0; t < durationSec; t += period) {
-    beats.push(Math.round(t * 1000) / 1000);
-  }
-  return { bpm: Math.round(bpm), beats, confidence: 0.7 };
-}
-
-// ── Scrape preview URL from embed page ───────────────────────────────────────
 async function scrapePreviewFromEmbed(trackId: string): Promise<string | null> {
   try {
     const res = await fetch(`https://open.spotify.com/embed/track/${trackId}`, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
+        Accept: "text/html,application/xhtml+xml",
       },
       signal: AbortSignal.timeout(5000),
     });
+
     if (!res.ok) return null;
+
     const html = await res.text();
     const match = html.match(/"audioPreview"\s*:\s*\{"url"\s*:\s*"([^"]+)"/);
     if (match?.[1]) return match[1];
+
     const fallback = html.match(/https:\/\/p\.scdn\.co\/mp3-preview\/[a-zA-Z0-9]+/);
     return fallback?.[0] ?? null;
   } catch {
@@ -93,495 +79,86 @@ async function scrapePreviewFromEmbed(trackId: string): Promise<string | null> {
   }
 }
 
-// ── Ghost profile upsert (ghost_artist_profiles, no auth FK) ─────────────────
-async function upsertGhostProfile(
-  slug: string,
-  displayName: string,
-  supabase: ReturnType<typeof createClient>,
-): Promise<{ profileId: string; isNew: boolean; alreadyClaimed: boolean; error?: string }> {
-  // Check if profile already exists
-  const { data: existing, error: fetchErr } = await supabase
-    .from("ghost_artist_profiles")
-    .select("id, is_claimed")
-    .eq("spotify_artist_slug", slug)
-    .maybeSingle();
-
-  if (fetchErr) return { profileId: "", isNew: false, alreadyClaimed: false, error: fetchErr.message };
-
-  if (existing) {
-    return { profileId: existing.id, isNew: false, alreadyClaimed: !!existing.is_claimed };
-  }
-
-  // Create new ghost profile
-  const { data: created, error: insertErr } = await supabase
-    .from("ghost_artist_profiles")
-    .insert({
-      spotify_artist_slug: slug,
-      display_name: displayName,
-    })
-    .select("id")
-    .single();
-
-  if (insertErr) return { profileId: "", isNew: false, alreadyClaimed: false, error: insertErr.message };
-  return { profileId: created.id, isNew: true, alreadyClaimed: false };
+function extractTrackId(spotifyTrackUrl: string): string | null {
+  const match = spotifyTrackUrl?.match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
+  return match?.[1] ?? null;
 }
 
-// ── Main handler ──────────────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const { spotifyTrackUrl } = await req.json();
+    const trackId = extractTrackId(spotifyTrackUrl);
+
+    if (!trackId) {
+      return new Response(JSON.stringify({ error: "Invalid Spotify URL" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ── Env vars ──
-    const clientId = Deno.env.get("SPOTIFY_CLIENT_ID");
-    if (!clientId) throw new Error("SPOTIFY_CLIENT_ID not configured");
-    const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
-    if (!clientSecret) throw new Error("SPOTIFY_CLIENT_SECRET not configured");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const adminUserId = Deno.env.get("ADMIN_USER_ID");
-    if (!supabaseUrl || !supabaseServiceKey) throw new Error("Supabase service role not configured");
-    if (!adminUserId) throw new Error("ADMIN_USER_ID not configured");
-
+    const clientId = Deno.env.get("SPOTIFY_CLIENT_ID")!;
+    const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const jobId = crypto.randomUUID();
 
-    // ── Step logger (always awaited — no fire-and-forget) ──
-    async function logStep(
-      step: string,
-      status: "running" | "done" | "error" | "skipped",
-      detail: string | null,
-      slug: string
-    ) {
-      const now = new Date().toISOString();
-      try {
-        if (status === "running") {
-          await supabase.from("claim_page_jobs").insert({
-            job_id: jobId, spotify_artist_slug: slug,
-            step, status: "running", detail, started_at: now,
-          });
-          return;
-        }
-        const { data: updated } = await supabase
-          .from("claim_page_jobs")
-          .update({ status, detail, completed_at: now })
-          .eq("job_id", jobId).eq("step", step).eq("status", "running")
-          .select("id").limit(1);
-        if (!updated?.length) {
-          await supabase.from("claim_page_jobs").insert({
-            job_id: jobId, spotify_artist_slug: slug,
-            step, status, detail, started_at: now, completed_at: now,
-          });
-        }
-      } catch { /* log failures are non-fatal */ }
-    }
-
-    // ── Parse request ──
-    const { spotifyUrl } = await req.json();
-    const match = spotifyUrl?.match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
-    if (!match) {
-      return new Response(JSON.stringify({ error: "Invalid Spotify track URL" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const trackId = match[1];
-
-    // ── STEP 1: Spotify fetch ──
-    await logStep("spotify_fetch", "running", null, trackId);
     const token = await getSpotifyToken(clientId, clientSecret);
-    const [track, audioFeatures] = await Promise.all([
-      fetchSpotifyTrack(trackId, token),
-      fetchSpotifyAudioFeatures(trackId, token),
-    ]);
+    const track = await fetchSpotifyTrack(trackId, token);
 
     const trackTitle = track.name;
     const artistName = track.artists[0].name;
     const albumArtUrl = track.album.images[0]?.url ?? null;
-    const trackUrl = track.external_urls.spotify;
-    let previewUrl: string | null = track.preview_url ?? null;
 
+    let previewUrl: string | null = track.preview_url ?? null;
     if (!previewUrl) previewUrl = await scrapePreviewFromEmbed(trackId);
 
-    const previewDurationSec = 30;
-    const beatGrid = buildBeatGrid(
-      audioFeatures?.tempo ?? 0,
-      previewDurationSec,
+    const audioFeatures = await fetchSpotifyAudioFeatures(trackId, token);
+    const bpm = audioFeatures?.tempo ?? 0;
+
+    const slug = artistName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+
+    const { data: existingGhost } = await supabase
+      .from("ghost_artist_profiles" as any)
+      .select("id")
+      .eq("spotify_artist_slug", slug)
+      .maybeSingle();
+
+    let profileId: string;
+    if (existingGhost?.id) {
+      profileId = existingGhost.id;
+    } else {
+      const { data: newGhost, error: ghostErr } = await supabase
+        .from("ghost_artist_profiles" as any)
+        .insert({ spotify_artist_slug: slug, display_name: artistName })
+        .select("id")
+        .single();
+
+      if (ghostErr) throw new Error(ghostErr.message);
+      profileId = newGhost.id;
+    }
+
+    return new Response(
+      JSON.stringify({
+        trackId,
+        trackTitle,
+        artistName,
+        albumArtUrl,
+        previewUrl,
+        bpm,
+        slug,
+        profileId,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
-
-    const slug = artistName.toLowerCase()
-      .replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-
-    await logStep("spotify_fetch", "done",
-      `${artistName} — "${trackTitle}" | preview: ${previewUrl ? (track.preview_url ? "api" : "embed") : "none"} | ${beatGrid.bpm}bpm`,
-      slug);
-
-    // ── STEP 2: Ghost profile ──
-    await logStep("ghost_profile", "running", null, slug);
-
-    const profileResult = await Promise.resolve(upsertGhostProfile(slug, artistName, supabase)).then(
-      v => ({ status: "fulfilled" as const, value: v }),
-      r => ({ status: "rejected" as const, reason: r }),
-    );
-
-    if (profileResult.status === "fulfilled") {
-      const p = profileResult.value;
-      if (p.error) {
-        await logStep("ghost_profile", "error", p.error, slug);
-      } else {
-        await logStep("ghost_profile",
-          p.alreadyClaimed ? "skipped" : "done",
-          p.alreadyClaimed ? "Already claimed"
-            : p.isNew ? `New profile created — id: ${p.profileId}`
-              : `Existing profile found — id: ${p.profileId}`,
-          slug);
-      }
-    } else {
-      await logStep("ghost_profile", "error", profileResult.reason?.message ?? "Failed", slug);
-    }
-
-    const profile = profileResult.status === "fulfilled" ? profileResult.value : null;
-    if (!profile || profile.error) {
-      await logStep("complete", "error", "Profile creation failed", slug);
-      return new Response(JSON.stringify({ error: "Failed to create profile" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (profile.alreadyClaimed) {
-      await logStep("complete", "done", `/artist/${slug}/claim-page`, slug);
-      return new Response(JSON.stringify({ slug, alreadyClaimed: true }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // ── STEP 3: Save lyric video row ──
-    await logStep("lyric_video_save", "running", null, slug);
-    const { error: insertError } = await supabase.from("artist_lyric_videos").insert({
-      ghost_profile_id: profile.profileId,
-      user_id: adminUserId,
-      spotify_track_id: trackId,
-      track_title: trackTitle,
-      artist_name: artistName,
-      album_art_url: albumArtUrl,
-      spotify_track_url: trackUrl,
-      preview_url: previewUrl,
-      synced_lyrics_lrc: null,
-      plain_lyrics: null,
-      lyrics_source: "elevenlabs",
-    });
-    if (insertError) {
-      await logStep("lyric_video_save", "error", insertError.message, slug);
-    } else {
-      await logStep("lyric_video_save", "done", "Saved", slug);
-    }
-
-    // ── STEP 5: Generate LyricDance ──────────────────────────────────────────
-    if (previewUrl) {
-
-      // 5a: Fetch MP3 + upload to storage
-      await logStep("lyric_dance_mp3", "running", "Fetching preview MP3…", slug);
-      let audioStorageUrl: string | null = null;
-      try {
-        const mp3Res = await fetch(previewUrl, { signal: AbortSignal.timeout(15000) });
-        if (!mp3Res.ok) throw new Error(`MP3 fetch ${mp3Res.status}`);
-        const mp3Bytes = new Uint8Array(await mp3Res.arrayBuffer());
-
-        const storagePath = `ghost/${slug}/${trackId}/preview.mp3`;
-        const { error: uploadErr } = await supabase.storage
-          .from("audio-clips")
-          .upload(storagePath, mp3Bytes, { upsert: true, contentType: "audio/mpeg" });
-        if (uploadErr) throw new Error(`Upload: ${uploadErr.message}`);
-
-        const { data: urlData } = supabase.storage
-          .from("audio-clips").getPublicUrl(storagePath);
-        audioStorageUrl = urlData.publicUrl;
-        await logStep("lyric_dance_mp3", "done",
-          `Stored: ghost/${slug}/${trackId}/preview.mp3`, slug);
-      } catch (e: any) {
-        await logStep("lyric_dance_mp3", "error", e.message ?? "MP3 fetch/upload failed", slug);
-      }
-
-      // ── 5b: Transcribe with Scribe (same as FitTab) ──────────────────────
-      let transcribedLines: Array<{ start: number; end: number; text: string; tag: string }> = [];
-      let transcribedWords: Array<{ word: string; start: number; end: number; speaker_id?: string }> = [];
-
-      if (audioStorageUrl) {
-        await logStep("lyric_dance_transcribe", "running", "Transcribing via Scribe v2…", slug);
-        try {
-          const transcribeRes = await fetch(`${supabaseUrl}/functions/v1/lyric-transcribe`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-            },
-            body: JSON.stringify({
-              audioUrl: audioStorageUrl,
-              title: trackTitle,
-              artist: artistName,
-            }),
-            signal: AbortSignal.timeout(60_000),
-          });
-
-          if (transcribeRes.ok) {
-            const tData = await transcribeRes.json();
-            if (tData.lines?.length) {
-              transcribedLines = tData.lines;
-              transcribedWords = tData.words ?? [];
-              await logStep("lyric_dance_transcribe", "done",
-                `${transcribedLines.length} lines, ${transcribedWords.length} words`, slug);
-            } else {
-              await logStep("lyric_dance_transcribe", "error", "No lines returned", slug);
-            }
-          } else {
-            const errText = await transcribeRes.text().catch(() => "");
-            await logStep("lyric_dance_transcribe", "error",
-              `HTTP ${transcribeRes.status}: ${errText.slice(0, 100)}`, slug);
-          }
-        } catch (e: any) {
-          const msg = e.name === "TimeoutError" ? "Timed out" : (e.message ?? "Failed");
-          await logStep("lyric_dance_transcribe", "error", msg, slug);
-        }
-      }
-
-
-      // Skip if no lyrics
-      if (!transcribedLines.length) {
-        await logStep("lyric_dance_save", "skipped", "No transcription — cannot create dance", slug);
-      }
-
-      // ── 5c: Cinematic direction — scene mode ──────────────────────────
-      let cinematicDirection: any = null;
-
-      if (transcribedLines.length) {
-        await logStep("lyric_dance_cinematic", "running", "Generating cinematic direction (scene)…", slug);
-        const lyricsText = transcribedLines.map((l) => l.text).join("\n");
-        const cdBody = JSON.stringify({
-          title: trackTitle,
-          artist: artistName,
-          lines: transcribedLines,
-          lyrics: lyricsText,
-          mode: "scene",
-          beat_grid: beatGrid.bpm > 0
-            ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence, totalBeats: beatGrid.beats.length }
-            : undefined,
-        });
-        const cdHeaders = {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-        };
-
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            const cdRes = await fetch(`${supabaseUrl}/functions/v1/cinematic-direction`, {
-              method: "POST",
-              headers: cdHeaders,
-              body: cdBody,
-              signal: AbortSignal.timeout(45000),
-            });
-            if (cdRes.ok) {
-              const cdData = await cdRes.json();
-              cinematicDirection = cdData.cinematicDirection ?? null;
-              await logStep("lyric_dance_cinematic", "done",
-                `Scene ready${attempt > 1 ? ` (attempt ${attempt})` : ""}`, slug);
-              break;
-            } else {
-              const errText = await cdRes.text().catch(() => "");
-              if (attempt < 3 && (cdRes.status === 429 || cdRes.status >= 500)) {
-                await logStep("lyric_dance_cinematic", "running",
-                  `Attempt ${attempt} failed (${cdRes.status}), retrying…`, slug);
-                await new Promise(r => setTimeout(r, attempt === 1 ? 3000 : 8000));
-                continue;
-              }
-              await logStep("lyric_dance_cinematic", "error",
-                `HTTP ${cdRes.status}: ${errText.slice(0, 120)}`, slug);
-              break;
-            }
-          } catch (e: any) {
-            const errMsg = e.name === "TimeoutError"
-              ? `Timeout (attempt ${attempt})`
-              : (e.message ?? "Failed");
-            if (attempt < 3) {
-              await logStep("lyric_dance_cinematic", "running", `${errMsg}, retrying…`, slug);
-              await new Promise(r => setTimeout(r, 3000));
-              continue;
-            }
-            await logStep("lyric_dance_cinematic", "error", errMsg, slug);
-            break;
-          }
-        }
-      }
-
-      // ── 5d: Cinematic direction — words mode (phrases) ──────────────
-      // This is the step FitTab does that claim was missing.
-      // Generates AI phrase groupings + hookPhrase + chorusText.
-      if (cinematicDirection && transcribedWords.length) {
-        await logStep("lyric_dance_phrases", "running", "Generating phrases (words mode)…", slug);
-        try {
-          const wordRes = await fetch(`${supabaseUrl}/functions/v1/cinematic-direction`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-            },
-            body: JSON.stringify({
-              title: trackTitle,
-              artist: artistName,
-              lines: transcribedLines,
-              lyrics: transcribedLines.map((l) => l.text).join("\n"),
-              mode: "words",
-              sceneDirection: cinematicDirection,
-              words: transcribedWords,
-              beat_grid: beatGrid.bpm > 0
-                ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence, totalBeats: beatGrid.beats.length }
-                : undefined,
-            }),
-            signal: AbortSignal.timeout(45000),
-          });
-
-          if (wordRes.ok) {
-            const wordData = await wordRes.json();
-            if (wordData.cinematicDirection) {
-              const { phrases, hookPhrase, chorusText } = wordData.cinematicDirection;
-              // Merge phrases into the scene direction (same as FitTab)
-              if (phrases?.length) {
-                cinematicDirection = {
-                  ...cinematicDirection,
-                  phrases,
-                  hookPhrase: hookPhrase ?? cinematicDirection.hookPhrase,
-                  chorusText: chorusText ?? cinematicDirection.chorusText,
-                };
-                await logStep("lyric_dance_phrases", "done",
-                  `${phrases.length} phrases, hook: "${hookPhrase ?? "none"}"`, slug);
-              } else {
-                await logStep("lyric_dance_phrases", "done", "No phrases returned", slug);
-              }
-            } else {
-              await logStep("lyric_dance_phrases", "done", "No word direction returned", slug);
-            }
-          } else {
-            const errText = await wordRes.text().catch(() => "");
-            await logStep("lyric_dance_phrases", "error",
-              `HTTP ${wordRes.status}: ${errText.slice(0, 100)}`, slug);
-          }
-        } catch (e: any) {
-          const msg = e.name === "TimeoutError" ? "Timed out" : (e.message ?? "Failed");
-          await logStep("lyric_dance_phrases", "error", msg, slug);
-          // Non-fatal: engine falls back to mechanical grouping
-        }
-      }
-
-      // 5c: Upsert shareable_lyric_dances
-      if (audioStorageUrl) {
-        await logStep("lyric_dance_save", "running", "Writing LyricDance row…", slug);
-        try {
-          const songSlug = trackTitle.toLowerCase()
-            .replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 50);
-
-          const { error: danceErr } = await supabase
-            .from("shareable_lyric_dances")
-            .upsert({
-              user_id: adminUserId,
-              artist_slug: slug,
-              song_slug: songSlug,
-              artist_name: artistName,
-              song_name: trackTitle,
-              audio_url: audioStorageUrl,
-              lyrics: transcribedLines,
-              words: transcribedWords.length > 0 ? transcribedWords : null,
-              cinematic_direction: cinematicDirection,
-              beat_grid: beatGrid,
-              palette: cinematicDirection?.defaults?.palette ??
-                ["#ffffff", "#a855f7", "#ec4899"],
-              section_images: null,
-              auto_palettes: null,
-              album_art_url: albumArtUrl,
-            }, { onConflict: "artist_slug,song_slug" });
-
-          if (danceErr) throw new Error(danceErr.message);
-
-          const { data: danceRow } = await supabase
-            .from("shareable_lyric_dances")
-            .select("id")
-            .eq("artist_slug", slug)
-            .eq("song_slug", songSlug)
-            .maybeSingle();
-
-          const lyricDanceUrl = `/${slug}/${songSlug}/lyric-dance`;
-
-          await supabase.from("artist_lyric_videos")
-            .update({
-              lyric_dance_url: lyricDanceUrl,
-              lyric_dance_id: danceRow?.id ?? null,
-            })
-            .eq("ghost_profile_id", profile.profileId)
-            .eq("spotify_track_id", trackId);
-
-          await logStep("lyric_dance_save", "done", `Live at ${lyricDanceUrl}`, slug);
-
-          // Trigger section image generation — await with timeout
-          if (danceRow?.id) {
-            await logStep("section_images", "running", "Generating section images…", slug);
-            try {
-              const imgRes = await fetch(`${supabaseUrl}/functions/v1/generate-section-images`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-                },
-                body: JSON.stringify({ lyric_dance_id: danceRow.id }),
-                signal: AbortSignal.timeout(120_000),
-              });
-              if (imgRes.ok) {
-                const imgData = await imgRes.json();
-                const count = imgData.generated ?? 0;
-                await logStep("section_images", "done", `${count} images generated`, slug);
-              } else {
-                const errText = await imgRes.text().catch(() => String(imgRes.status));
-                await logStep("section_images", "error", `HTTP ${imgRes.status}: ${errText.slice(0, 100)}`, slug);
-              }
-            } catch (e: any) {
-              const msg = e.name === "TimeoutError" ? "Timed out after 120s" : (e.message ?? "Image gen failed");
-              await logStep("section_images", "error", msg, slug);
-            }
-          }
-        } catch (e: any) {
-          await logStep("lyric_dance_save", "error", e.message ?? "Dance save failed", slug);
-        }
-      } else {
-        await logStep("lyric_dance_save", "skipped", "No audio URL — MP3 step failed", slug);
-      }
-    } else {
-      await logStep("lyric_dance_mp3", "skipped", "No preview URL", slug);
-      await logStep("lyric_dance_cinematic", "skipped", "No preview URL", slug);
-      await logStep("lyric_dance_save", "skipped", "No preview URL", slug);
-    }
-
-    // ── COMPLETE ──
-    await logStep("complete", "done", `/artist/${slug}/claim-page`, slug);
-
-    return new Response(JSON.stringify({
-      slug,
-      profileId: profile.profileId,
-      trackTitle,
-      artistName,
-      albumArtUrl,
-      previewUrl,
-      lyricsFound: true,
-      lyricsSource: "elevenlabs",
-      alreadyClaimed: false,
-    }), {
-      status: 200,
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-
-  } catch (error) {
-    console.error("create-artist-page error:", error);
-    return new Response(JSON.stringify({ error: "An internal error occurred" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

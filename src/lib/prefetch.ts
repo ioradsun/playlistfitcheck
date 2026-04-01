@@ -199,7 +199,6 @@ interface ShareablePrefetchResult {
 
 let shareableDancePrefetch: ShareablePrefetchResult | null = null;
 let shareableHookPrefetch: Promise<{ data: any; error: any }> | null = null;
-let claimPageResolution: Promise<{ lyricDanceUrl: string } | null> | null = null;
 
 if (_segments.length === 3 && _segments[2] === "lyric-dance") {
   const [artistSlug, songSlug] = _segments;
@@ -244,71 +243,6 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
   }
 
   shareableDancePrefetch = { data: dataPromise, audioPreloaded: true };
-} else if (_segments.length === 3 && _segments[0] === "artist" && _segments[2] === "claim-page") {
-  const username = _segments[1];
-  claimPageResolution = (async () => {
-    const { data: ghost } = await (supabase as any)
-      .from("ghost_artist_profiles")
-      .select("id")
-      .eq("spotify_artist_slug", username)
-      .maybeSingle();
-
-    let profileId = ghost?.id as string | undefined;
-    if (!profileId) {
-      const { data: profile } = await (supabase as any)
-        .from("profiles")
-        .select("id")
-        .eq("spotify_artist_slug", username)
-        .maybeSingle();
-      profileId = profile?.id;
-    }
-
-    if (!profileId) return null;
-
-    const { data: vid } = await (supabase as any)
-      .from("artist_lyric_videos")
-      .select("lyric_dance_url")
-      .or(`ghost_profile_id.eq.${profileId},user_id.eq.${profileId}`)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const lyricDanceUrl = vid?.lyric_dance_url as string | undefined;
-    if (!lyricDanceUrl) return null;
-
-    const parts = lyricDanceUrl.replace(/^\//, "").split("/");
-    const artistSlug = parts[0];
-    const songSlug = parts[1];
-
-    if (artistSlug && songSlug) {
-      const cached = readCachedDanceData(artistSlug, songSlug);
-      if (cached?.audio_url) {
-        const audio = new Audio();
-        audio.preload = "auto";
-        audio.src = cached.audio_url;
-      }
-
-      const dataPromise = cached
-        ? Promise.resolve({ data: cached, error: null })
-        : Promise.resolve(
-            supabase
-              .from("shareable_lyric_dances" as any)
-              .select(LYRIC_DANCE_COLUMNS)
-              .eq("artist_slug", artistSlug)
-              .eq("song_slug", songSlug)
-              .maybeSingle(),
-          ).then((res: any) => {
-            if (res.data) {
-              cacheDanceData(artistSlug, songSlug, res.data);
-            }
-            return res;
-          });
-
-      shareableDancePrefetch = { data: dataPromise, audioPreloaded: true };
-    }
-
-    return { lyricDanceUrl };
-  })();
 } else if (
   _segments.length === 3 &&
   _segments[2] !== "lyric-dance" &&
@@ -332,11 +266,6 @@ export function consumeShareableDancePrefetch() {
   return p;
 }
 
-export function consumeClaimPageResolution() {
-  const p = claimPageResolution;
-  claimPageResolution = null;
-  return p;
-}
 
 export function consumeShareableHookPrefetch() {
   const p = shareableHookPrefetch;

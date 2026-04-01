@@ -3,7 +3,7 @@
  * No analysis, no DNA, no cinematic direction.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -113,6 +113,8 @@ interface Props {
   onAudioSubmitted?: (file: File) => void;
   onUploadStarted?: (payload: { file: File; projectId: string | null; title: string }) => void;
   onTitleChange?: (newTitle: string) => void;
+  /** When set, auto-submits this file for transcription on mount. Used by claim pages. */
+  autoSubmitFile?: File | null;
 }
 
 export function LyricsTab({
@@ -142,6 +144,7 @@ export function LyricsTab({
   onAudioSubmitted,
   onUploadStarted,
   onTitleChange,
+  autoSubmitFile = null,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [debugData, setDebugData] = useState<any | null>(null);
@@ -406,6 +409,14 @@ export function LyricsTab({
     },
     [analysisModel, transcriptionModel, quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted],
   );
+
+  // ── Auto-submit for claim pages ──────────────────────────────────────
+  const autoSubmitProcessed = useRef(false);
+  useEffect(() => {
+    if (!autoSubmitFile || autoSubmitProcessed.current) return;
+    autoSubmitProcessed.current = true;
+    handleTranscribe(autoSubmitFile);
+  }, [autoSubmitFile, handleTranscribe]);
 
   const handleBack = useCallback(() => {
     setLyricData(null);
