@@ -487,7 +487,7 @@ serve(async (req) => {
               "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
             },
             body: JSON.stringify({
-              audio_url: audioStorageUrl,
+              audioUrl: audioStorageUrl,
               title: trackTitle,
               artist: artistName,
             }),
