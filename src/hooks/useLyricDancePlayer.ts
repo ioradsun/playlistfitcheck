@@ -119,6 +119,10 @@ export function useLyricDancePlayer(
         if (!containerRef.current.contains(textCanvas)) {
           containerRef.current.appendChild(textCanvas);
         }
+        bgCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+        bgCanvas.style.zIndex = "1";
+        textCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+        textCanvas.style.zIndex = "2";
       }
     } else {
       bgCanvas = canvasRef.current;

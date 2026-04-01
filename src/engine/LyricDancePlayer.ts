@@ -2201,13 +2201,9 @@ export class LyricDancePlayer {
     this._globalWickBar?.setDpr(eDpr);
     this.canvas.width = Math.floor(this.width * eDpr);
     this.canvas.height = Math.floor(this.height * eDpr);
-    this.canvas.style.width = `${this.width}px`;
-    this.canvas.style.height = `${this.height}px`;
     // Text canvas is kept matched (never drawn to, but must agree on dimensions)
     this.textCanvas.width = this.canvas.width;
     this.textCanvas.height = this.canvas.height;
-    this.textCanvas.style.width = `${this.width}px`;
-    this.textCanvas.style.height = `${this.height}px`;
     // Invalidate bg cache — was baked at previous DPR
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
@@ -4052,13 +4048,9 @@ export class LyricDancePlayer {
     this.height = height;
     this.canvas.width = Math.floor(width * this.dpr);
     this.canvas.height = Math.floor(height * this.dpr);
-    this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${height}px`;
 
     this.textCanvas.width = this.canvas.width;
     this.textCanvas.height = this.canvas.height;
-    this.textCanvas.style.width = `${width}px`;
-    this.textCanvas.style.height = `${height}px`;
 
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.buildBgCache();
