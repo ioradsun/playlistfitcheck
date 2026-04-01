@@ -36,6 +36,10 @@ function formatRecency(iso: string | null | undefined): string | null {
   }
 }
 
+const speechSupported =
+  typeof window !== "undefined" &&
+  ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+
 interface CardBottomBarProps {
   onOpenReactions: () => void;
   onClose: () => void;
@@ -55,7 +59,6 @@ interface CardBottomBarProps {
   onFireHoldStart?: () => void;
   onFireHoldEnd?: (holdMs: number) => void;
   onComment?: (text: string) => void;
-  onVoiceNote?: (audioBlob: Blob) => void;
   onPauseForInput?: () => void;
   onResumeAfterInput?: () => void;
   isLive?: boolean;
@@ -196,7 +199,7 @@ function FireButton({
   );
 }
 
-type BarState = "lyrics" | "fired" | "typing" | "recording";
+type BarState = "lyrics" | "fired" | "typing";
 
 export function CardBottomBar({
   onOpenReactions,
@@ -210,7 +213,6 @@ export function CardBottomBar({
   onFireHoldStart,
   onFireHoldEnd,
   onComment,
-  onVoiceNote,
   onPauseForInput,
   onResumeAfterInput,
   isLive = false,
@@ -220,15 +222,10 @@ export function CardBottomBar({
 }: CardBottomBarProps) {
   const [barState, setBarState] = useState<BarState>("lyrics");
   const [commentText, setCommentText] = useState("");
+  const [isListening, setIsListening] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [recordingSec, setRecordingSec] = useState(0);
+  const recognitionRef = useRef<any>(null);
   const prevMomentIndexRef = useRef<number | null>(null);
-  const waveformHeights = useRef<number[]>(
-    Array.from({ length: 10 }, () => 3 + Math.floor(Math.random() * 11)),
-  );
 
   const py = variant === "embedded" ? "py-3" : "py-4";
   const textSize = variant === "fullscreen" ? "text-[13px]" : "text-[10px]";
@@ -250,81 +247,65 @@ export function CardBottomBar({
       : {}),
   };
 
-  const stopRecording = useCallback((save: boolean) => {
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    const recorder = mediaRecorderRef.current;
-    if (!recorder) {
-      setBarState("lyrics");
-      setRecordingSec(0);
-      onResumeAfterInput?.();
-      return;
-    }
-    mediaRecorderRef.current = null;
+  const startListening = useCallback(() => {
+    const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SR) return;
 
-    if (save) {
-      recorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        if (blob.size > 0) {
-          onVoiceNote?.(blob);
-        }
-        recorder.stream.getTracks().forEach((t) => t.stop());
-      };
-    } else {
-      recorder.onstop = () => {
-        recorder.stream.getTracks().forEach((t) => t.stop());
-      };
-    }
-    recorder.stop();
-    setBarState("lyrics");
-    setRecordingSec(0);
+    const recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (e: any) => {
+      let interim = "";
+      let final = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) final += t;
+        else interim += t;
+      }
+      setCommentText((prev) => {
+        const base = prev.replace(/\u200B.*$/, "").trimEnd();
+        const live = (final || interim).trimStart();
+        return base ? `${base} ${live}` : live;
+      });
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+    recognition.onerror = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    onPauseForInput?.();
+  }, [onPauseForInput]);
+
+  const stopListening = useCallback(() => {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setIsListening(false);
     onResumeAfterInput?.();
-  }, [onResumeAfterInput, onVoiceNote]);
-
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      recorder.start();
-      mediaRecorderRef.current = recorder;
-      setBarState("recording");
-      setRecordingSec(0);
-      onPauseForInput?.();
-
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingSec((s) => {
-          if (s >= 9) {
-            stopRecording(true);
-            return 10;
-          }
-          return s + 1;
-        });
-      }, 1000);
-    } catch {
-      // Mic permission denied: stay in fired/typing.
-    }
-  }, [onPauseForInput, stopRecording]);
+  }, [onResumeAfterInput]);
 
   useEffect(() => {
     const momentIdx = currentMoment?.index ?? null;
     if (prevMomentIndexRef.current !== null && momentIdx !== prevMomentIndexRef.current) {
-      if (barState === "recording") {
-        stopRecording(false);
+      if (isListening) {
+        stopListening();
       } else if (barState === "typing") {
         onResumeAfterInput?.();
       }
       setBarState("lyrics");
       setCommentText("");
-      setRecordingSec(0);
     }
     prevMomentIndexRef.current = momentIdx;
-  }, [barState, currentMoment?.index, onResumeAfterInput, stopRecording]);
+  }, [barState, currentMoment?.index, isListening, onResumeAfterInput, stopListening]);
 
   useEffect(() => {
     if (barState === "fired" || barState === "typing") {
@@ -333,10 +314,8 @@ export function CardBottomBar({
   }, [barState]);
 
   useEffect(() => () => {
-    if (mediaRecorderRef.current) {
-      stopRecording(false);
-    }
-  }, [stopRecording]);
+    recognitionRef.current?.abort();
+  }, []);
 
   const handleFireComplete = useCallback(() => {
     setBarState("fired");
@@ -369,62 +348,36 @@ export function CardBottomBar({
 
   let leftContent: React.ReactNode;
 
-  if (barState === "recording") {
+  if (barState === "fired" || barState === "typing") {
     leftContent = (
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <button
-          type="button"
-          className="shrink-0 flex items-center justify-center w-5 h-5"
-          onTouchEnd={(e) => {
-            e.preventDefault();
-            stopRecording(true);
-          }}
-          onMouseUp={() => stopRecording(true)}
-          onClick={(e) => e.stopPropagation()}
-          aria-label="Stop recording"
-        >
-          <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#ff4444", animation: "cfBlink 0.8s ease-in-out infinite" }} />
-        </button>
-        <div className="flex items-center gap-1 flex-1 min-w-0" style={{ height: 16 }}>
-          {waveformHeights.current.map((base, i) => (
-            <div
-              key={i}
-              style={{
-                width: 2,
-                height: Math.min(16, base + ((recordingSec + i) % 2 === 0 ? 2 : -1)),
-                background: "rgba(255,68,68,0.45)",
-                borderRadius: 1,
-                transition: "height 0.25s ease",
-              }}
-            />
-          ))}
-        </div>
-        <span className={`${textSize} font-mono shrink-0`} style={{ color: "rgba(255,255,255,0.6)" }}>
-          {recordingSec}s
-        </span>
-      </div>
-    );
-  } else if (barState === "fired" || barState === "typing") {
-    leftContent = (
-      <div className="flex items-center gap-2 min-w-0 flex-1">
-        <button
-          type="button"
-          className="shrink-0 flex items-center justify-center w-5 h-5"
-          onTouchStart={(e) => {
-            e.preventDefault();
-            startRecording();
-          }}
-          onMouseDown={() => startRecording()}
-          onClick={(e) => e.stopPropagation()}
-          aria-label="Hold to record"
-        >
-          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="1" width="6" height="12" rx="3" />
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-            <line x1="12" y1="19" x2="12" y2="23" />
-            <line x1="8" y1="23" x2="16" y2="23" />
-          </svg>
-        </button>
+        {speechSupported && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              isListening ? stopListening() : startListening();
+            }}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
+            aria-label={isListening ? "Stop listening" : "Voice input"}
+          >
+            <svg
+              width={14}
+              height={14}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={isListening ? "#ff4444" : "rgba(255,255,255,0.35)"}
+              style={{ animation: isListening ? "cfBlink 0.8s ease-in-out infinite" : "none" }}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="9" y="1" width="6" height="12" rx="3" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+          </button>
+        )}
         <input
           ref={inputRef}
           type="text"
@@ -432,11 +385,11 @@ export function CardBottomBar({
           onChange={(e) => setCommentText(e.target.value)}
           onFocus={handleInputFocus}
           onKeyDown={handleInputKeyDown}
-          placeholder="What hit?"
+          placeholder={isListening ? "listening..." : "What hit?"}
           className="flex-1 min-w-0 bg-transparent outline-none font-mono"
           style={{
             fontSize: variant === "fullscreen" ? 12 : 11,
-            color: "rgba(255,255,255,0.8)",
+            color: isListening ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.8)",
             caretColor: accent ?? "#ff8c32",
             letterSpacing: "0.02em",
           }}

@@ -23,7 +23,6 @@ import { SeoHead } from "@/components/SeoHead";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
-import { getSessionId } from "@/lib/sessionId";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 
 const ALL_COLUMNS =
@@ -198,7 +197,6 @@ export default function ShareableLyricDance() {
     isWaiting,
     commentRefreshKey,
     handleCommentFromBar,
-    setCommentRefreshKey,
     lightningBarEnabled,
   } = core;
 
@@ -412,48 +410,6 @@ export default function ShareableLyricDance() {
       endSec: m.endSec,
     };
   }, [moments, currentTimeSec]);
-
-  const handleVoiceNote = useCallback(async (audioBlob: Blob) => {
-    const danceId = renderData?.id;
-    if (!danceId) return;
-
-    const momentIdx = currentMoment?.index ?? null;
-    const filename = `voice-${danceId}-${Date.now()}.webm`;
-    const { error: uploadError } = await supabase.storage
-      .from("voice-notes")
-      .upload(filename, audioBlob, { contentType: "audio/webm" });
-
-    if (uploadError) {
-      // eslint-disable-next-line no-console
-      console.error("[VoiceNote] Upload failed:", uploadError);
-      return;
-    }
-
-    const { data: urlData } = supabase.storage
-      .from("voice-notes")
-      .getPublicUrl(filename);
-    const audioUrl = urlData?.publicUrl ?? null;
-
-    await (supabase
-      .from("lyric_dance_comments" as any)
-      .insert({
-        dance_id: danceId,
-        text: "🎤 voice note",
-        audio_url: audioUrl,
-        session_id: getSessionId(),
-        line_index: activeLine?.lineIndex ?? null,
-        moment_index: momentIdx,
-        parent_comment_id: null,
-      }) as any);
-
-    setCommentRefreshKey((k: number) => k + 1);
-
-    if (audioUrl) {
-      supabase.functions.invoke("voice-note-transcribe", {
-        body: { audio_url: audioUrl },
-      }).catch(() => {});
-    }
-  }, [renderData, currentMoment, activeLine, setCommentRefreshKey]);
 
   useEffect(() => {
     return () => {
@@ -695,7 +651,6 @@ export default function ShareableLyricDance() {
                 onComment: (text: string) => {
                   handleCommentFromBar(text, currentMoment?.index ?? null);
                 },
-                onVoiceNote: handleVoiceNote,
                 onPauseForInput: handlePauseForInput,
                 onResumeAfterInput: handleResumeAfterInput,
                 activeLineFireCount,
