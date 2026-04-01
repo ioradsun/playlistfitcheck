@@ -253,7 +253,7 @@ function ReactionPanel({
   lastBarCommentLineIndex,
 }: ReactionPanelProps) {
   const [comments, setComments] = useState<CommentRow[]>([]);
-  const [showCommentsForWindow, setShowCommentsForWindow] = useState<number | null>(null);
+  const [collapsedWindows, setCollapsedWindows] = useState<Set<number>>(new Set());
   const [submittedLineIndex, setSubmittedLineIndex] = useState<number | null>(
     null,
   );
@@ -314,7 +314,7 @@ function ReactionPanel({
 
   useEffect(() => {
     if (!isOpen) return;
-    setShowCommentsForWindow(null);
+    setCollapsedWindows(new Set());
     stopAtSecRef.current = null; // cleared — tapping a line will set it
     userTookControlRef.current = false; // re-enable auto-scroll for this session
   }, [isOpen]);
@@ -550,7 +550,11 @@ function ReactionPanel({
       win.lines.some((l) => l.lineIndex === lastBarCommentLineIndex),
     );
     if (wi >= 0) {
-      setShowCommentsForWindow(wi);
+      setCollapsedWindows((prev) => {
+        const next = new Set(prev);
+        next.delete(wi);
+        return next;
+      });
       setSubmittedLineIndex(lastBarCommentLineIndex);
       const timer = setTimeout(() => setSubmittedLineIndex(null), 800);
       return () => clearTimeout(timer);
@@ -712,13 +716,18 @@ function ReactionPanel({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setShowCommentsForWindow((prev) => prev === wi ? null : wi);
+                        setCollapsedWindows((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(wi)) next.delete(wi);
+                          else next.add(wi);
+                          return next;
+                        });
                       }}
                       style={{
                         marginTop: 6,
-                        fontSize: 9,
+                        fontSize: 10,
                         fontFamily: "monospace",
-                        color: showCommentsForWindow === wi ? accent : "rgba(255,255,255,0.25)",
+                        color: collapsedWindows.has(wi) ? "rgba(255,255,255,0.40)" : accent,
                         background: "none",
                         border: "none",
                         cursor: "pointer",
@@ -740,11 +749,11 @@ function ReactionPanel({
                       >
                         <path d="M1 1.5h9M1 5h6M1 8.5h4" />
                       </svg>
-                      {commentsByWindow[wi].length}
+                      {commentsByWindow[wi].length} {commentsByWindow[wi].length === 1 ? "thought" : "thoughts"}
                     </button>
                   )}
 
-                  {showCommentsForWindow === wi && (
+                  {!collapsedWindows.has(wi) && commentsByWindow[wi].length > 0 && (
                     <div style={{ paddingTop: 8, paddingBottom: 4 }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {commentsByWindow[wi].map((comment) => (
