@@ -12,13 +12,15 @@ interface PanelShellProps {
   topOffset?: number;
   /** Maximum height as CSS value. Panel content scrolls within this constraint. */
   maxHeight?: string;
+  /** Bottom offset in px for fixed fullscreen variant. */
+  bottomOffset?: number;
   children: React.ReactNode;
 }
 
-export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHeight, children }: PanelShellProps) {
+export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHeight, bottomOffset = 0, children }: PanelShellProps) {
   const positionClass =
     variant === 'fullscreen'
-      ? 'fixed bottom-[48px] left-0 right-0 z-[70] h-[88vh]'
+      ? 'fixed left-0 right-0 z-[70] h-[88vh]'
       : variant === 'reels'
         ? 'absolute inset-x-0 bottom-0 z-[500]'
         : 'absolute inset-x-0 bottom-0 z-[400]';
@@ -38,6 +40,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHei
             backdropFilter: variant === 'embedded' ? 'blur(12px)' : undefined,
             borderTop: variant !== 'embedded' ? '1px solid rgba(255,255,255,0.06)' : undefined,
             top: variant === 'reels' ? 44 : variant === 'embedded' ? -topOffset : undefined,
+            bottom: variant === 'fullscreen' ? bottomOffset : undefined,
             maxHeight: maxHeight ?? undefined,
             height: maxHeight ?? undefined,
           }}

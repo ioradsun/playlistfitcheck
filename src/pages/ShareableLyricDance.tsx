@@ -12,18 +12,17 @@ import { Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { consumeShareableDancePrefetch, readCachedDanceData } from "@/lib/prefetch";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
-import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import ClaimBanner from "@/components/claim/ClaimBanner";
-import { CardBottomBar } from "@/components/songfit/CardBottomBar";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { SeoHead } from "@/components/SeoHead";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
+import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 
 const ALL_COLUMNS =
   "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name," +
@@ -178,10 +177,6 @@ export default function ShareableLyricDance() {
     muted,
     showCover,
     currentTimeSec,
-    reactionPanelOpen,
-    openPanel,
-    closePanel,
-    handlePanelClose,
     reactionData,
     setReactionData,
     durationSec,
@@ -276,9 +271,6 @@ export default function ShareableLyricDance() {
     return () => { cancelled = true; };
   }, [player, renderData?.id]);
 
-  const openReactionPanel = useCallback(() => {
-    openPanel();
-  }, [openPanel]);
 
   useEffect(() => {
     const t = setTimeout(() => setBadgeVisible(true), 1000);
@@ -476,7 +468,7 @@ export default function ShareableLyricDance() {
           />
 
           <ClosingScreen
-            visible={closingVisible && !reactionPanelOpen}
+            visible={closingVisible}
             empowermentPromise={empowermentPromise}
             danceId={renderData?.id ?? ""}
             onAnswer={() => setClosingAnswered(true)}
@@ -585,25 +577,38 @@ export default function ShareableLyricDance() {
         )}
 
         <div className="w-full max-w-2xl mx-auto">
-          <CardBottomBar
+          <LyricInteractionLayer
             variant="fullscreen"
-            onOpenReactions={openReactionPanel}
-            onClose={closePanel}
-            panelOpen={reactionPanelOpen}
+            danceId={renderData?.id ?? ""}
             currentMoment={currentMoment}
+            activeLine={activeLine}
+            allLines={lyricSections.allLines}
+            audioSections={audioSections}
+            phrases={(renderData as any)?.cinematic_direction?.phrases ?? null}
+            words={(renderData as any)?.words ?? null}
+            beatGrid={(renderData as any)?.beat_grid ?? null}
+            currentTimeSec={currentTimeSec}
+            durationSec={durationSec}
+            palette={palette}
+            accent={barAccent}
+            reactionData={reactionData}
+            onReactionDataChange={setReactionData}
+            empowermentPromise={empowermentPromise}
+            fmlyHookEnabled={fmlyHookEnabled}
+            refreshKey={commentRefreshKey}
+            isLive={!showCover && playerReady}
+            muted={muted}
+            hasFired={hasFired}
+            totalFireCount={totalFireCount}
+            lastFiredAt={lastFiredAt}
+            songEnded={closingVisible}
+            player={player}
             onFireTap={() => {
-              if (holdFireIntervalRef.current) {
-                clearInterval(holdFireIntervalRef.current);
-                holdFireIntervalRef.current = null;
-              }
               const id = renderData?.id;
               if (!id || !activeLine) return;
               player?.fireFire(0);
               emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "shareable");
-              setFireStrengthByLine((prev) => ({
-                ...prev,
-                [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1,
-              }));
+              setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1 }));
               setTotalFireCount((c) => c + 1);
               setLastFiredAt(new Date().toISOString());
               markFired();
@@ -612,77 +617,38 @@ export default function ShareableLyricDance() {
               if (holdFireIntervalRef.current) return;
               holdFireIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
             }}
-            onFireHoldEnd={(holdMs: number) => {
-              if (holdFireIntervalRef.current) {
-                clearInterval(holdFireIntervalRef.current);
-                holdFireIntervalRef.current = null;
-              }
+            onFireHoldEnd={(holdMs) => {
+              if (holdFireIntervalRef.current) { clearInterval(holdFireIntervalRef.current); holdFireIntervalRef.current = null; }
               const id = renderData?.id;
               if (!id || !activeLine) return;
               player?.fireFire(holdMs);
               emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "shareable");
               const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
-              setFireStrengthByLine((prev) => ({
-                ...prev,
-                [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight,
-              }));
+              setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
               setTotalFireCount((c) => c + 1);
               setLastFiredAt(new Date().toISOString());
               markFired();
             }}
-            onComment={(text: string) => {
-              handleCommentFromBar(text, currentMoment?.index ?? null);
+            onComment={(text, momentIndex) => handleCommentFromBar(text, momentIndex)}
+            onFireLine={(lineIndex, holdMs) => {
+              const id = renderData?.id;
+              if (!id) return;
+              player?.fireFire(holdMs);
+              emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs, "shareable");
             }}
-            onPauseForInput={handlePauseForInput}
-            onResumeAfterInput={handleResumeAfterInput}
-            accent={barAccent}
-            hasFired={hasFired}
-            isLive={!showCover && playerReady}
-            totalFireCount={totalFireCount}
-            lastFiredAt={lastFiredAt}
-            songEnded={closingVisible}
+            onLineVisible={(lineIndex) => {
+              const id = renderData?.id;
+              if (!id) return;
+              emitExposure(id, lineIndex, "shareable");
+            }}
+            onReactionFired={(emoji) => player?.fireComment(emoji)}
+            onPause={handlePauseForInput}
+            onResume={handleResumeAfterInput}
+            onSeekTo={(sec) => player?.seek(sec)}
+            source="shareable"
           />
         </div>
       </div>
-
-      <ReactionPanel
-        displayMode="fullscreen"
-        isOpen={reactionPanelOpen}
-        refreshKey={commentRefreshKey}
-        onClose={handlePanelClose}
-        danceId={renderData?.id ?? ""}
-        activeLine={activeLine}
-        allLines={lyricSections.allLines}
-        audioSections={audioSections}
-        phrases={(renderData as any)?.cinematic_direction?.phrases ?? null}
-        words={(renderData as any)?.words ?? null}
-        beatGrid={(renderData as any)?.beat_grid ?? null}
-        currentTimeSec={currentTimeSec}
-        palette={palette}
-        onSeekTo={(sec) => player?.seek(sec)}
-        player={player}
-        durationSec={durationSec}
-        reactionData={reactionData}
-        onReactionDataChange={setReactionData}
-        onReactionFired={(emoji) => {
-          player?.fireComment(emoji);
-        }}
-        onPause={handlePauseForInput}
-        onResume={handleResumeAfterInput}
-        onFireLine={(lineIndex, holdMs) => {
-          const id = (data ?? (fetchedData as any))?.id;
-          if (!id) return;
-          player?.fireFire(holdMs);
-          emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs, "shareable");
-        }}
-        onLineVisible={(lineIndex) => {
-          const id = (data ?? (fetchedData as any))?.id;
-          if (!id) return;
-          emitExposure(id, lineIndex, "shareable");
-        }}
-        empowermentPromise={empowermentPromise}
-        fmlyHookEnabled={fmlyHookEnabled}
-      />
     </div>
   );
 }
