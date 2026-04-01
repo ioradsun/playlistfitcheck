@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LyricFitTab } from "@/components/lyric/LyricFitTab";
+import ClaimBanner from "@/components/claim/ClaimBanner";
 import { preloadEssentia } from "@/hooks/useBeatGrid";
 import { motion } from "framer-motion";
 import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music, Bomb, X, RefreshCw } from "lucide-react";
@@ -81,6 +83,15 @@ export default function Admin() {
   const [reachStatusMsg, setReachStatusMsg] = useState("");
   const [reachFocused, setReachFocused] = useState(false);
   const reachDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const [reachPipelineMeta, setReachPipelineMeta] = useState<{
+    slug: string;
+    artistName: string;
+    trackTitle: string;
+    albumArtUrl: string | null;
+    profileId: string;
+    trackId: string;
+  } | null>(null);
+  const [reachPipelineFile, setReachPipelineFile] = useState<File | null>(null);
 
   const fetchUsers = useCallback(async () => {
     const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", { body: { section: "users" } });
@@ -186,12 +197,13 @@ export default function Admin() {
     if (!reachSelected) return;
     setReachGenerating(true);
     setReachActiveSlug(null);
+    setReachPipelineMeta(null);
+    setReachPipelineFile(null);
 
     const STATUS = [
       "Fetching track from Spotify…",
-      "Transcribing audio via ElevenLabs…",
-      "Generating cinematic direction…",
-      "Building artist page…",
+      "Downloading preview audio…",
+      "Preparing pipeline…",
     ];
     let msgIdx = 0;
     setReachStatusMsg(STATUS[0]);
@@ -206,31 +218,43 @@ export default function Admin() {
       });
       const spotifyUrl = trackData?.spotifyUrl ?? reachSelected.url;
 
-      const artistName = trackData?.artists?.[0]?.name ?? reachSelected.artists ?? "";
-      const slug = artistName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-      setReachActiveSlug(slug);
-
       const { data, error } = await supabase.functions.invoke("create-artist-page", {
         body: { spotifyUrl },
       });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      if (!data?.previewUrl) throw new Error("No preview audio available for this track");
+
+      msgIdx = 1;
+      setReachStatusMsg(STATUS[1]);
+
+      // Fetch the preview MP3
+      const mp3Res = await fetch(data.previewUrl);
+      if (!mp3Res.ok) throw new Error(`Failed to fetch preview audio (${mp3Res.status})`);
+      const blob = await mp3Res.blob();
+      const file = new File([blob], `${data.trackTitle}.mp3`, { type: "audio/mpeg" });
+
       clearInterval(interval);
 
-      if (error) throw error;
-
-      if (data?.alreadyClaimed) {
-        toast.info("This artist has already claimed their page.");
-      } else if (data?.slug) {
-        toast.success(`Page ready → /artist/${data.slug}/claim-page`);
-        setReachSelected(null);
-        setReachQuery("");
-      }
-      // Always refresh table after generation regardless of result
-      await fetchReachRows();
-      setReachActiveSlug(null);
+      const slug = data.slug;
+      setReachActiveSlug(slug);
+      setReachPipelineMeta({
+        slug,
+        artistName: data.artistName,
+        trackTitle: data.trackTitle,
+        albumArtUrl: data.albumArtUrl,
+        profileId: data.profileId,
+        trackId: data.trackId,
+      });
+      setReachPipelineFile(file);
+      setReachSelected(null);
+      setReachQuery("");
+      setReachGenerating(false);
+      setReachStatusMsg("");
     } catch (e: any) {
       clearInterval(interval);
       toast.error(e.message || "Generation failed");
-    } finally {
       setReachGenerating(false);
       setReachStatusMsg("");
     }
@@ -573,6 +597,44 @@ export default function Admin() {
                     )}
                   </div>
                 </div>
+
+                {/* ── Active Pipeline (LyricFitTab) ── */}
+                {reachPipelineMeta && reachPipelineFile && (
+                  <div className="glass-card rounded-xl overflow-hidden mb-6">
+                    <ClaimBanner
+                      artistSlug={reachPipelineMeta.slug}
+                      accent="#a855f7"
+                      coverArtUrl={reachPipelineMeta.albumArtUrl}
+                      songName={reachPipelineMeta.trackTitle}
+                      artistName={reachPipelineMeta.artistName}
+                    />
+                    <div className="h-[600px] overflow-auto">
+                      <LyricFitTab
+                        claimMeta={{
+                          artistSlug: reachPipelineMeta.slug,
+                          songSlug: reachPipelineMeta.trackTitle
+                            .toLowerCase()
+                            .replace(/\s+/g, "-")
+                            .replace(/[^a-z0-9-]/g, "")
+                            .slice(0, 50),
+                          artistName: reachPipelineMeta.artistName,
+                          songName: reachPipelineMeta.trackTitle,
+                          albumArtUrl: reachPipelineMeta.albumArtUrl,
+                          ghostProfileId: reachPipelineMeta.profileId,
+                          spotifyTrackId: reachPipelineMeta.trackId,
+                        }}
+                        autoSubmitFile={reachPipelineFile}
+                        onClaimPublished={(danceUrl) => {
+                          toast.success(`Lyric Dance ready → ${danceUrl}`);
+                          setReachPipelineMeta(null);
+                          setReachPipelineFile(null);
+                          setReachActiveSlug(null);
+                          fetchReachRows().catch(console.error);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* ── ReachDashboard table ── */}
                 <div className="flex items-center justify-between mb-2">
