@@ -189,8 +189,8 @@ export default function Admin() {
 
     const STATUS = [
       "Fetching track from Spotify…",
-      "Checking lrclib for synced lyrics…",
-      "Syncing with AssemblyAI…",
+      "Transcribing audio via ElevenLabs…",
+      "Generating cinematic direction…",
       "Building artist page…",
     ];
     let msgIdx = 0;
