@@ -647,7 +647,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           )}
 
           <LyricInteractionLayer
-            variant={reelsMode ? "fullscreen" : "embedded"}
+            variant={reelsMode ? "reels" : "embedded"}
             danceId={data?.id ?? ""}
             currentMoment={currentMoment}
             activeLine={muted ? null : activeLine}
