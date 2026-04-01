@@ -114,7 +114,7 @@ export function LyricInteractionLayer({
   return (
     <>
       {variant === "embedded" ? (
-        <div style={{ position: "relative", height: BAR_H, flexShrink: 0 }}>
+        <div style={{ flexShrink: 0 }}>
           <ReactionPanel
             displayMode="embedded"
             isOpen={panelOpen}

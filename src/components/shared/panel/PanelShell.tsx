@@ -39,7 +39,7 @@ export function PanelShell({ isOpen, variant = 'embedded', topOffset = 0, maxHei
             background: variant === 'embedded' ? 'rgba(10,10,10,0.97)' : '#0d0d0d',
             backdropFilter: variant === 'embedded' ? 'blur(12px)' : undefined,
             borderTop: variant !== 'embedded' ? '1px solid rgba(255,255,255,0.06)' : undefined,
-            top: variant === 'reels' ? 44 : variant === 'embedded' ? -topOffset : undefined,
+            top: variant === 'reels' ? 44 : variant === 'embedded' ? 0 : undefined,
             bottom: variant === 'fullscreen' || variant === 'embedded' ? bottomOffset : undefined,
             maxHeight: maxHeight ?? undefined,
             height: maxHeight ?? undefined,
