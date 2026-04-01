@@ -484,7 +484,7 @@ export default function ShareableLyricDance() {
           <ClosingScreen
             visible={closingVisible && !reactionPanelOpen}
             empowermentPromise={empowermentPromise}
-            danceId={(data as any)?.id ?? ""}
+            danceId={renderData?.id ?? ""}
             onAnswer={() => setClosingAnswered(true)}
             onReplay={() => {
               setClosingVisible(false);
