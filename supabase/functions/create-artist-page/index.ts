@@ -246,8 +246,7 @@ serve(async (req) => {
     if (insertError) {
       await logStep("lyric_video_save", "error", insertError.message, slug);
     } else {
-      await logStep("lyric_video_save", "done",
-        `Source: ${lyricsSource} | lyrics: ${syncedLrc ? "yes" : "none"}`, slug);
+      await logStep("lyric_video_save", "done", "Saved", slug);
     }
 
     // ── STEP 5: Generate LyricDance ──────────────────────────────────────────
