@@ -111,7 +111,7 @@ serve(async (req) => {
     if (!clientId) throw new Error("SPOTIFY_CLIENT_ID not configured");
     const clientSecret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
     if (!clientSecret) throw new Error("SPOTIFY_CLIENT_SECRET not configured");
-    const assemblyKey = Deno.env.get("ASSEMBLYAI_API_KEY") ?? "";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const adminUserId = Deno.env.get("ADMIN_USER_ID");
