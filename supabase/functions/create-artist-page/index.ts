@@ -366,6 +366,32 @@ serve(async (req) => {
     const plainLyrics: string | null = lrclib.plainLyrics;
     let lyricsSource = lrclib.syncedLyrics ? "lrclib" : "none";
 
+    // ── Pre-populate transcribedLines from lrclib LRC if available ──────────
+    let transcribedLinesFromLrc: Array<{ start: number; end: number; text: string; tag: string }> = [];
+    if (lrclib.syncedLyrics) {
+      const lrcLines = lrclib.syncedLyrics.split("\n").filter((l: string) => l.trim());
+      const parsed: Array<{ start: number; text: string }> = [];
+      for (const line of lrcLines) {
+        const m = line.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
+        if (!m) continue;
+        const mins = parseInt(m[1], 10);
+        const secs = parseInt(m[2], 10);
+        const ms = m[3].length === 2 ? parseInt(m[3], 10) * 10 : parseInt(m[3], 10);
+        const startSec = mins * 60 + secs + ms / 1000;
+        const text = m[4].trim();
+        if (text) parsed.push({ start: startSec, text });
+      }
+      for (let i = 0; i < parsed.length; i++) {
+        const end = i + 1 < parsed.length ? parsed[i + 1].start : parsed[i].start + 4;
+        transcribedLinesFromLrc.push({
+          start: parsed[i].start,
+          end,
+          text: parsed[i].text,
+          tag: "",
+        });
+      }
+    }
+
     if (!lrclib.syncedLyrics) {
       if (!previewUrl) {
         await logStep("assemblyai_submit", "skipped", "No preview URL available", slug);
@@ -489,7 +515,15 @@ serve(async (req) => {
         }
       }
 
-      // Skip if transcription failed
+      // Fallback: use lrclib-parsed lines if Scribe returned nothing
+      if (!transcribedLines.length && transcribedLinesFromLrc.length) {
+        transcribedLines = transcribedLinesFromLrc;
+        await logStep("lyric_dance_transcribe",
+          transcribedLines.length ? "done" : "skipped",
+          `Using lrclib LRC fallback — ${transcribedLines.length} lines (no word-level timing)`, slug);
+      }
+
+      // Skip if no lyrics from any source
       if (!transcribedLines.length) {
         await logStep("lyric_dance_save", "skipped", "No transcription — cannot create dance", slug);
       }
