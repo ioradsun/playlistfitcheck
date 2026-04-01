@@ -336,7 +336,7 @@ export function LyricsTab({
 
         const data = await response.json();
         clearTimeout(transcribeTimeout);
-        
+        console.log("[handleTranscribe] response OK", { linesCount: data.lines?.length, wordsCount: data.words?.length, error: data.error });
 
         if (data.error) throw new Error(data.error);
         if (!data.lines) throw new Error("Invalid response format");
