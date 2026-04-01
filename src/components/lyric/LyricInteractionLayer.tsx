@@ -119,6 +119,10 @@ export function LyricInteractionLayer({
             displayMode="embedded"
             isOpen={panelOpen}
             onClose={closePanel}
+            onCloseWithPosition={(timeSec) => {
+              if (player && timeSec != null) player.seek(timeSec);
+              onResume?.();
+            }}
             bottomOffset={BAR_H}
             refreshKey={refreshKey}
             danceId={danceId}
@@ -169,6 +173,14 @@ export function LyricInteractionLayer({
             displayMode="fullscreen"
             isOpen={panelOpen}
             onClose={closePanel}
+            onCloseWithPosition={(timeSec) => {
+              if (player && timeSec != null) {
+                player.seek(timeSec);
+                player.setMuted(false);
+                player.play();
+              }
+              onResume?.();
+            }}
             refreshKey={refreshKey}
             danceId={danceId}
             activeLine={activeLine}

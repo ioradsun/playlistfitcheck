@@ -186,7 +186,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   const [forceDemoted, setForceDemoted] = useState(false);
   const [, setFireStrengthByLine] = useState<Record<number, number>>({});
-  const [firedSections, setFiredSections] = useState<Set<number>>(new Set());
+  const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
   const [closingVisible, setClosingVisible] = useState(false);
   const [, setClosingAnswered] = useState(false);
   const [totalFireCount, setTotalFireCount] = useState(0);
@@ -445,10 +445,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     return palette[1] ?? palette[0] ?? "rgba(255,140,50,1)";
   }, [data, prefetchedData, activeSectionIndex, palette]);
 
-  const hasFired = firedSections.has(activeSectionIndex);
+  const hasFired = firedMoments.has(currentMoment?.index ?? -1);
   const markFired = useCallback(() => {
-    setFiredSections((prev) => new Set([...prev, activeSectionIndex]));
-  }, [activeSectionIndex]);
+    if (currentMoment?.index == null) return;
+    setFiredMoments((prev) => new Set([...prev, currentMoment.index]));
+  }, [currentMoment?.index]);
 
   const effectiveShowCover = showCover;
   void artistName;
