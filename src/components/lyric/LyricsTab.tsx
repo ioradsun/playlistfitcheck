@@ -416,8 +416,10 @@ export function LyricsTab({
   // ── Auto-submit for claim pages ──────────────────────────────────────
   const autoSubmitProcessed = useRef(false);
   useEffect(() => {
+    console.log("[LyricsTab] autoSubmit effect", { hasFile: !!autoSubmitFile, processed: autoSubmitProcessed.current });
     if (!autoSubmitFile || autoSubmitProcessed.current) return;
     autoSubmitProcessed.current = true;
+    console.log("[LyricsTab] autoSubmit → calling handleTranscribe");
     handleTranscribe(autoSubmitFile);
   }, [autoSubmitFile, handleTranscribe]);
 
