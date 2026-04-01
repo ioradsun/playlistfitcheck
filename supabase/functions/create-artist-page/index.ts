@@ -212,28 +212,6 @@ async function pollAssemblyAI(
   return null;
 }
 
-// ── LRC → LyricDancePlayer lyrics JSON ───────────────────────────────────────
-function lrcToLyricsJson(
-  lrc: string
-): Array<{ start: number; end: number; text: string; tag: string }> {
-  const parsed = lrc.split("\n").flatMap(line => {
-    const matches = [...line.matchAll(/\[(\d{2}):(\d{2}\.\d{2,3})\]/g)];
-    const text = line.replace(/\[\d{2}:\d{2}\.\d{2,3}\]/g, "").trim();
-    if (!text || !matches.length) return [];
-    return matches.map(m => ({
-      time: parseInt(m[1]) * 60 + parseFloat(m[2]),
-      text,
-    }));
-  }).sort((a, b) => a.time - b.time);
-
-  return parsed.map((line, i) => ({
-    start: line.time,
-    end: parsed[i + 1]?.time ?? line.time + 3,
-    text: line.text,
-    tag: "main" as const,
-  }));
-}
-
 // ── Main handler ──────────────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -387,7 +365,6 @@ serve(async (req) => {
     let syncedLrc: string | null = lrclib.syncedLyrics;
     const plainLyrics: string | null = lrclib.plainLyrics;
     let lyricsSource = lrclib.syncedLyrics ? "lrclib" : "none";
-    let transcriptWords: Array<{ word: string; start: number; end: number }> = [];
 
     if (!lrclib.syncedLyrics) {
       if (!previewUrl) {
@@ -411,7 +388,6 @@ serve(async (req) => {
           const pollResult = await pollAssemblyAI(aiJobId, assemblyKey);
           if (pollResult) {
             syncedLrc = pollResult.lrc;
-            transcriptWords = pollResult.words;
             lyricsSource = "assemblyai";
             await logStep("assemblyai_poll", "done",
               `Transcript complete — ${pollResult.lrc.split("\n").length} lines, ${pollResult.words.length} words`,
@@ -446,7 +422,7 @@ serve(async (req) => {
     }
 
     // ── STEP 5: Generate LyricDance ──────────────────────────────────────────
-    if (syncedLrc && previewUrl) {
+    if (previewUrl) {
 
       // 5a: Fetch MP3 + upload to storage
       await logStep("lyric_dance_mp3", "running", "Fetching preview MP3…", slug);
@@ -471,11 +447,12 @@ serve(async (req) => {
         await logStep("lyric_dance_mp3", "error", e.message ?? "MP3 fetch/upload failed", slug);
       }
 
-      // 5a-ii: Re-transcribe the actual preview audio for accurate timestamps
-      // Lrclib timestamps are for the full song, but the audio is a 30-sec preview
-      // from the middle. We MUST transcribe the actual audio to get matching timestamps.
+      // ── 5b: Transcribe with Scribe (same as FitTab) ──────────────────────
+      let transcribedLines: Array<{ start: number; end: number; text: string; tag: string }> = [];
+      let transcribedWords: Array<{ word: string; start: number; end: number; speaker_id?: string }> = [];
+
       if (audioStorageUrl) {
-        await logStep("lyric_dance_transcribe", "running", "Transcribing preview audio for accurate timestamps…", slug);
+        await logStep("lyric_dance_transcribe", "running", "Transcribing via Scribe v2…", slug);
         try {
           const transcribeRes = await fetch(`${supabaseUrl}/functions/v1/lyric-transcribe`, {
             method: "POST",
@@ -492,26 +469,14 @@ serve(async (req) => {
           });
 
           if (transcribeRes.ok) {
-            const transcribeData = await transcribeRes.json();
-            if (transcribeData.words?.length) {
-              transcriptWords = transcribeData.words;
-              // Rebuild LRC from transcription words (overrides lrclib)
-              const WORDS_PER_LINE = 6;
-              const newLines: string[] = [];
-              for (let w = 0; w < transcribeData.words.length; w += WORDS_PER_LINE) {
-                const chunk = transcribeData.words.slice(w, w + WORDS_PER_LINE);
-                const t = chunk[0].start;
-                const mm = String(Math.floor(t / 60)).padStart(2, "0");
-                const ss = (t % 60).toFixed(2).padStart(5, "0");
-                const text = chunk.map((c: any) => c.word).join(" ");
-                newLines.push(`[${mm}:${ss}]${text}`);
-              }
-              syncedLrc = `[ti:${trackTitle}]\n` + newLines.join("\n");
-              lyricsSource = "scribe_v2";
+            const tData = await transcribeRes.json();
+            if (tData.lines?.length) {
+              transcribedLines = tData.lines;
+              transcribedWords = tData.words ?? [];
               await logStep("lyric_dance_transcribe", "done",
-                `${transcribeData.words.length} words — timestamps now match preview audio`, slug);
+                `${transcribedLines.length} lines, ${transcribedWords.length} words`, slug);
             } else {
-              await logStep("lyric_dance_transcribe", "done", "No words returned — keeping lrclib lyrics", slug);
+              await logStep("lyric_dance_transcribe", "error", "No lines returned", slug);
             }
           } else {
             const errText = await transcribeRes.text().catch(() => "");
@@ -519,69 +484,134 @@ serve(async (req) => {
               `HTTP ${transcribeRes.status}: ${errText.slice(0, 100)}`, slug);
           }
         } catch (e: any) {
-          const msg = e.name === "TimeoutError" ? "Timed out after 60s" : (e.message ?? "Transcribe failed");
+          const msg = e.name === "TimeoutError" ? "Timed out" : (e.message ?? "Failed");
           await logStep("lyric_dance_transcribe", "error", msg, slug);
-          // Non-fatal: falls back to lrclib timestamps (drifted but better than nothing)
         }
       }
 
-      // 5b: Cinematic direction (with retry)
-      let cinematicDirection: any = null;
-      await logStep("lyric_dance_cinematic", "running", "Generating cinematic direction…", slug);
-      const lyrics = lrcToLyricsJson(syncedLrc);
-      const cdBody = JSON.stringify({
-        title: trackTitle,
-        artist: artistName,
-        lines: lyrics,
-        lyrics: lyrics.map((l: any) => l.text).join("\n"),
-        mode: "scene",
-      });
-      const cdHeaders = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-      };
+      // Skip if transcription failed
+      if (!transcribedLines.length) {
+        await logStep("lyric_dance_save", "skipped", "No transcription — cannot create dance", slug);
+      }
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const cdRes = await fetch(`${supabaseUrl}/functions/v1/cinematic-direction`, {
-            method: "POST",
-            headers: cdHeaders,
-            body: cdBody,
-            signal: AbortSignal.timeout(45000),
-          });
-          if (cdRes.ok) {
-            const cdData = await cdRes.json();
-            cinematicDirection = cdData.cinematicDirection ?? null;
-            await logStep("lyric_dance_cinematic", "done",
-              `Theme: ${cinematicDirection?.defaults?.scene_tone ?? "generated"}${attempt > 1 ? ` (attempt ${attempt})` : ""}`, slug);
-            break;
-          } else {
-            const errText = await cdRes.text().catch(() => "");
-            const errMsg = `HTTP ${cdRes.status}: ${errText.slice(0, 120)}`;
-            if (attempt < 3 && (cdRes.status === 429 || cdRes.status >= 500)) {
-              // Retryable error — wait and try again
-              const delay = attempt === 1 ? 3000 : 8000;
-              await logStep("lyric_dance_cinematic", "running",
-                `Attempt ${attempt} failed (${cdRes.status}), retrying in ${delay / 1000}s…`, slug);
-              await new Promise(r => setTimeout(r, delay));
+      // ── 5c: Cinematic direction — scene mode ──────────────────────────
+      let cinematicDirection: any = null;
+
+      if (transcribedLines.length) {
+        await logStep("lyric_dance_cinematic", "running", "Generating cinematic direction (scene)…", slug);
+        const lyricsText = transcribedLines.map((l) => l.text).join("\n");
+        const cdBody = JSON.stringify({
+          title: trackTitle,
+          artist: artistName,
+          lines: transcribedLines,
+          lyrics: lyricsText,
+          mode: "scene",
+          beat_grid: beatGrid.bpm > 0
+            ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence, totalBeats: beatGrid.beats.length }
+            : undefined,
+        });
+        const cdHeaders = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+        };
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const cdRes = await fetch(`${supabaseUrl}/functions/v1/cinematic-direction`, {
+              method: "POST",
+              headers: cdHeaders,
+              body: cdBody,
+              signal: AbortSignal.timeout(45000),
+            });
+            if (cdRes.ok) {
+              const cdData = await cdRes.json();
+              cinematicDirection = cdData.cinematicDirection ?? null;
+              await logStep("lyric_dance_cinematic", "done",
+                `Scene ready${attempt > 1 ? ` (attempt ${attempt})` : ""}`, slug);
+              break;
+            } else {
+              const errText = await cdRes.text().catch(() => "");
+              if (attempt < 3 && (cdRes.status === 429 || cdRes.status >= 500)) {
+                await logStep("lyric_dance_cinematic", "running",
+                  `Attempt ${attempt} failed (${cdRes.status}), retrying…`, slug);
+                await new Promise(r => setTimeout(r, attempt === 1 ? 3000 : 8000));
+                continue;
+              }
+              await logStep("lyric_dance_cinematic", "error",
+                `HTTP ${cdRes.status}: ${errText.slice(0, 120)}`, slug);
+              break;
+            }
+          } catch (e: any) {
+            const errMsg = e.name === "TimeoutError"
+              ? `Timeout (attempt ${attempt})`
+              : (e.message ?? "Failed");
+            if (attempt < 3) {
+              await logStep("lyric_dance_cinematic", "running", `${errMsg}, retrying…`, slug);
+              await new Promise(r => setTimeout(r, 3000));
               continue;
             }
-            // Non-retryable or final attempt
             await logStep("lyric_dance_cinematic", "error", errMsg, slug);
             break;
           }
-        } catch (e: any) {
-          const errMsg = e.name === "TimeoutError"
-            ? `Timeout after 45s (attempt ${attempt})`
-            : (e.message ?? "Cinematic direction failed");
-          if (attempt < 3) {
-            await logStep("lyric_dance_cinematic", "running",
-              `Attempt ${attempt} failed: ${errMsg}, retrying…`, slug);
-            await new Promise(r => setTimeout(r, 3000));
-            continue;
+        }
+      }
+
+      // ── 5d: Cinematic direction — words mode (phrases) ──────────────
+      // This is the step FitTab does that claim was missing.
+      // Generates AI phrase groupings + hookPhrase + chorusText.
+      if (cinematicDirection && transcribedWords.length) {
+        await logStep("lyric_dance_phrases", "running", "Generating phrases (words mode)…", slug);
+        try {
+          const wordRes = await fetch(`${supabaseUrl}/functions/v1/cinematic-direction`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+            },
+            body: JSON.stringify({
+              title: trackTitle,
+              artist: artistName,
+              lines: transcribedLines,
+              lyrics: transcribedLines.map((l) => l.text).join("\n"),
+              mode: "words",
+              sceneDirection: cinematicDirection,
+              words: transcribedWords,
+              beat_grid: beatGrid.bpm > 0
+                ? { bpm: beatGrid.bpm, confidence: beatGrid.confidence, totalBeats: beatGrid.beats.length }
+                : undefined,
+            }),
+            signal: AbortSignal.timeout(45000),
+          });
+
+          if (wordRes.ok) {
+            const wordData = await wordRes.json();
+            if (wordData.cinematicDirection) {
+              const { phrases, hookPhrase, chorusText } = wordData.cinematicDirection;
+              // Merge phrases into the scene direction (same as FitTab)
+              if (phrases?.length) {
+                cinematicDirection = {
+                  ...cinematicDirection,
+                  phrases,
+                  hookPhrase: hookPhrase ?? cinematicDirection.hookPhrase,
+                  chorusText: chorusText ?? cinematicDirection.chorusText,
+                };
+                await logStep("lyric_dance_phrases", "done",
+                  `${phrases.length} phrases, hook: "${hookPhrase ?? "none"}"`, slug);
+              } else {
+                await logStep("lyric_dance_phrases", "done", "No phrases returned", slug);
+              }
+            } else {
+              await logStep("lyric_dance_phrases", "done", "No word direction returned", slug);
+            }
+          } else {
+            const errText = await wordRes.text().catch(() => "");
+            await logStep("lyric_dance_phrases", "error",
+              `HTTP ${wordRes.status}: ${errText.slice(0, 100)}`, slug);
           }
-          await logStep("lyric_dance_cinematic", "error", errMsg, slug);
-          break;
+        } catch (e: any) {
+          const msg = e.name === "TimeoutError" ? "Timed out" : (e.message ?? "Failed");
+          await logStep("lyric_dance_phrases", "error", msg, slug);
+          // Non-fatal: engine falls back to mechanical grouping
         }
       }
 
@@ -589,7 +619,6 @@ serve(async (req) => {
       if (audioStorageUrl) {
         await logStep("lyric_dance_save", "running", "Writing LyricDance row…", slug);
         try {
-          const lyrics = lrcToLyricsJson(syncedLrc);
           const songSlug = trackTitle.toLowerCase()
             .replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 50);
 
@@ -602,8 +631,8 @@ serve(async (req) => {
               artist_name: artistName,
               song_name: trackTitle,
               audio_url: audioStorageUrl,
-              lyrics,
-              words: transcriptWords.length > 0 ? transcriptWords : null,
+              lyrics: transcribedLines,
+              words: transcribedWords.length > 0 ? transcribedWords : null,
               cinematic_direction: cinematicDirection,
               beat_grid: beatGrid,
               palette: cinematicDirection?.defaults?.palette ??
@@ -667,10 +696,9 @@ serve(async (req) => {
         await logStep("lyric_dance_save", "skipped", "No audio URL — MP3 step failed", slug);
       }
     } else {
-      await logStep("lyric_dance_mp3", "skipped",
-        syncedLrc ? "No preview URL" : "No lyrics", slug);
-      await logStep("lyric_dance_cinematic", "skipped", "No lyrics or preview", slug);
-      await logStep("lyric_dance_save", "skipped", "No lyrics or preview", slug);
+      await logStep("lyric_dance_mp3", "skipped", "No preview URL", slug);
+      await logStep("lyric_dance_cinematic", "skipped", "No preview URL", slug);
+      await logStep("lyric_dance_save", "skipped", "No preview URL", slug);
     }
 
     // ── COMPLETE ──
