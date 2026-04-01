@@ -502,7 +502,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 10;
+const BAKER_VERSION = 11;
 
 // ── Module-level compiled scene cache ───────────────────────────
 // Survives player destroy(). Cards that return to view after eviction
