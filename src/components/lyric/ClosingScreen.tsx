@@ -117,7 +117,7 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
             marginBottom: GAP,
           }}
         >
-          what did this just do to you?
+          which fits best?
         </p>
 
         {!submitted ? (
@@ -133,8 +133,7 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
               }}
             >
               {options.map((opt, i) => {
-                const isLast = i === options.length - 1;
-                const isOptOut = isWide && isLast;
+                const isOptOut = false;
                 return (
                 <button
                   key={i}
