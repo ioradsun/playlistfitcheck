@@ -94,6 +94,37 @@ async function scrapePreviewFromEmbed(trackId: string): Promise<string | null> {
 }
 
 // ── Ghost profile upsert (ghost_artist_profiles, no auth FK) ─────────────────
+async function upsertGhostProfile(
+  slug: string,
+  displayName: string,
+  supabase: ReturnType<typeof createClient>,
+): Promise<{ profileId: string; isNew: boolean; alreadyClaimed: boolean; error?: string }> {
+  // Check if profile already exists
+  const { data: existing, error: fetchErr } = await supabase
+    .from("ghost_artist_profiles")
+    .select("id, is_claimed")
+    .eq("spotify_artist_slug", slug)
+    .maybeSingle();
+
+  if (fetchErr) return { profileId: "", isNew: false, alreadyClaimed: false, error: fetchErr.message };
+
+  if (existing) {
+    return { profileId: existing.id, isNew: false, alreadyClaimed: !!existing.is_claimed };
+  }
+
+  // Create new ghost profile
+  const { data: created, error: insertErr } = await supabase
+    .from("ghost_artist_profiles")
+    .insert({
+      spotify_artist_slug: slug,
+      display_name: displayName,
+    })
+    .select("id")
+    .single();
+
+  if (insertErr) return { profileId: "", isNew: false, alreadyClaimed: false, error: insertErr.message };
+  return { profileId: created.id, isNew: true, alreadyClaimed: false };
+}
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 serve(async (req) => {
