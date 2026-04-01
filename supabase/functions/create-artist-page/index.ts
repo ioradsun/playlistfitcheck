@@ -471,6 +471,60 @@ serve(async (req) => {
         await logStep("lyric_dance_mp3", "error", e.message ?? "MP3 fetch/upload failed", slug);
       }
 
+      // 5a-ii: Re-transcribe the actual preview audio for accurate timestamps
+      // Lrclib timestamps are for the full song, but the audio is a 30-sec preview
+      // from the middle. We MUST transcribe the actual audio to get matching timestamps.
+      if (audioStorageUrl) {
+        await logStep("lyric_dance_transcribe", "running", "Transcribing preview audio for accurate timestamps…", slug);
+        try {
+          const transcribeRes = await fetch(`${supabaseUrl}/functions/v1/lyric-transcribe`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+            },
+            body: JSON.stringify({
+              audio_url: audioStorageUrl,
+              title: trackTitle,
+              artist: artistName,
+            }),
+            signal: AbortSignal.timeout(60_000),
+          });
+
+          if (transcribeRes.ok) {
+            const transcribeData = await transcribeRes.json();
+            if (transcribeData.words?.length) {
+              transcriptWords = transcribeData.words;
+              // Rebuild LRC from transcription words (overrides lrclib)
+              const WORDS_PER_LINE = 6;
+              const newLines: string[] = [];
+              for (let w = 0; w < transcribeData.words.length; w += WORDS_PER_LINE) {
+                const chunk = transcribeData.words.slice(w, w + WORDS_PER_LINE);
+                const t = chunk[0].start;
+                const mm = String(Math.floor(t / 60)).padStart(2, "0");
+                const ss = (t % 60).toFixed(2).padStart(5, "0");
+                const text = chunk.map((c: any) => c.word).join(" ");
+                newLines.push(`[${mm}:${ss}]${text}`);
+              }
+              syncedLrc = `[ti:${trackTitle}]\n` + newLines.join("\n");
+              lyricsSource = "scribe_v2";
+              await logStep("lyric_dance_transcribe", "done",
+                `${transcribeData.words.length} words — timestamps now match preview audio`, slug);
+            } else {
+              await logStep("lyric_dance_transcribe", "done", "No words returned — keeping lrclib lyrics", slug);
+            }
+          } else {
+            const errText = await transcribeRes.text().catch(() => "");
+            await logStep("lyric_dance_transcribe", "error",
+              `HTTP ${transcribeRes.status}: ${errText.slice(0, 100)}`, slug);
+          }
+        } catch (e: any) {
+          const msg = e.name === "TimeoutError" ? "Timed out after 60s" : (e.message ?? "Transcribe failed");
+          await logStep("lyric_dance_transcribe", "error", msg, slug);
+          // Non-fatal: falls back to lrclib timestamps (drifted but better than nothing)
+        }
+      }
+
       // 5b: Cinematic direction (with retry)
       let cinematicDirection: any = null;
       await logStep("lyric_dance_cinematic", "running", "Generating cinematic direction…", slug);
