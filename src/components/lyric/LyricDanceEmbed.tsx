@@ -193,6 +193,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const userActivatedRef = useRef(false);
+  /** True once this card has been played at least once. Survives warm transitions. Only resets on cold. */
+  const hasPlayedRef = useRef(false);
   const [panelOpen, setPanelOpen] = useState(externalPanelOpen ?? false);
 
   useEffect(() => {
@@ -215,6 +217,16 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player.scheduleFullModeUpgrade();
     }
   }, [player, playerReady, isFeedEmbed, cardState]);
+
+  // ── Reels: prime audio during warm phase ─────────────────────────
+  // Start downloading audio bytes while the user is still on the previous card.
+  // By the time this card activates, audio.readyState is likely >= HAVE_FUTURE_DATA.
+  useEffect(() => {
+    if (!reelsMode || !isFeedEmbed || !player || !playerReady) return;
+    if (cardState === "warm" || cardState === "active") {
+      player.primeAudio();
+    }
+  }, [reelsMode, isFeedEmbed, player, playerReady, cardState]);
 
   // ── Media deactivate listener ──────────────────────────────────────
   useEffect(() => {
@@ -239,19 +251,22 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (cardState === "cold") {
       setShowCover(true);
       userActivatedRef.current = false;
+      hasPlayedRef.current = false;
       if (postId) {
         window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", {
           detail: { cardId: postId },
         }));
       }
     } else if (reelsMode && cardState === "warm") {
-      // Reels: restore cover when swiped away (warm = adjacent card).
-      // Next time this card enters center, the auto-dismiss effect
-      // will clear the cover if audio is already unlocked.
-      setShowCover(true);
+      // Reels: only restore cover if card was never played.
+      // If user already heard this card, skip the cover on re-entry
+      // so swiping back gives instant resume (Instagram behavior).
+      if (!hasPlayedRef.current) {
+        setShowCover(true);
+      }
       userActivatedRef.current = false;
     }
-  }, [cardState, isFeedEmbed, isBattleMode, lyricDanceId, setShowCover, reelsMode]);
+  }, [cardState, isFeedEmbed, isBattleMode, lyricDanceId, postId, setShowCover, reelsMode]);
 
   // ── Audio / mute driven purely by cardState ────────────────────────
   useEffect(() => {
@@ -280,6 +295,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         if (isAudioUnlocked()) {
           player.setMuted(false);
           setMuted(false);
+          hasPlayedRef.current = true;
         } else {
           // No gesture yet — play muted, cover is still showing for gesture
           player.setMuted(true);
@@ -326,7 +342,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   // Card 2+: audio already unlocked → dismiss cover immediately → auto-play
   useEffect(() => {
     if (!reelsMode || !isFeedEmbed) return;
-    if (cardState === "active" && showCover && isAudioUnlocked()) {
+    if (cardState === "active" && showCover && (isAudioUnlocked() || hasPlayedRef.current)) {
       setShowCover(false);
     }
   }, [reelsMode, isFeedEmbed, cardState, showCover, setShowCover]);

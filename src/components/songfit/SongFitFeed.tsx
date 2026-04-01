@@ -107,7 +107,7 @@ const ObservedCard = memo(function ObservedCard({
           store.setState(post.id, "cold");
         }
       },
-      { rootMargin: reelsMode ? "10% 0px" : "200px 0px" },
+      { rootMargin: reelsMode ? "50% 0px" : "200px 0px" },
     );
 
     observer.observe(el);
