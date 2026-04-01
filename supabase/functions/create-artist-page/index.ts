@@ -239,9 +239,9 @@ serve(async (req) => {
       album_art_url: albumArtUrl,
       spotify_track_url: trackUrl,
       preview_url: previewUrl,
-      synced_lyrics_lrc: syncedLrc,
-      plain_lyrics: plainLyrics,
-      lyrics_source: lyricsSource,
+      synced_lyrics_lrc: null,
+      plain_lyrics: null,
+      lyrics_source: "elevenlabs",
     });
     if (insertError) {
       await logStep("lyric_video_save", "error", insertError.message, slug);
