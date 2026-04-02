@@ -108,7 +108,7 @@ interface RequestBody {
   id?: string;
   artist_direction?: string;
   audioSections?: AudioSectionInput[];
-  /** Word-level timestamps from Whisper — used for held-word hero detection */
+  /** Word-level timestamps from ElevenLabs Scribe */
   words?: Array<{ word: string; start: number; end: number }>;
   mode?: "scene" | "words";
   sceneDirection?: Record<string, any>;
@@ -141,110 +141,7 @@ const ENUMS = {
   emotionalArc: ["slow-burn", "surge", "collapse", "dawn", "eruption"],
 } as const;
 
-const FILLER = new Set([
-  "the",
-  "a",
-  "an",
-  "in",
-  "on",
-  "at",
-  "to",
-  "of",
-  "and",
-  "or",
-  "but",
-  "is",
-  "it",
-  "as",
-  "for",
-  "with",
-  "from",
-  "by",
-  "than",
-  "i",
-  "me",
-  "my",
-  "im",
-  "mine",
-  "myself",
-  "you",
-  "your",
-  "yours",
-  "he",
-  "him",
-  "his",
-  "she",
-  "her",
-  "we",
-  "us",
-  "our",
-  "they",
-  "them",
-  "their",
-  "be",
-  "been",
-  "was",
-  "were",
-  "am",
-  "are",
-  "got",
-  "get",
-  "do",
-  "did",
-  "dont",
-  "have",
-  "has",
-  "had",
-  "can",
-  "cant",
-  "will",
-  "wont",
-  "ill",
-  "ive",
-  "oh",
-  "yeah",
-  "yo",
-  "uh",
-  "um",
-  "ah",
-  "ooh",
-  "hey",
-  "wow",
-  "nah",
-  "yah",
-  "aye",
-  "mmm",
-  "huh",
-  "woo",
-  "la",
-  "na",
-  "da",
-  "that",
-  "this",
-  "its",
-  "those",
-  "these",
-  "what",
-  "where",
-  "who",
-  "how",
-  "when",
-  "which",
-  "so",
-  "if",
-  "up",
-  "out",
-  "not",
-  "no",
-  "just",
-  "like",
-  "all",
-  "too",
-  "very",
-  "real",
-  "bout",
-  "some",
-]);
+
 
 interface ValidationResult {
   ok: boolean;
@@ -617,7 +514,7 @@ function splitOversized(phrase: WordMeta[]): WordMeta[][] {
   let bestIndex = Math.floor(mid) - 1;
   for (let i = 0; i < phrase.length - 1; i++) {
     const gap = phrase[i].gap;
-    const isWeak = FILLER.has(phrase[i].clean);
+    const isWeak = phrase[i].clean.length <= 1;
     const hasComma = COMMA_END.test(phrase[i].word);
     const balanceBonus = -Math.abs(i - mid) * 10;
     const score = gap + (isWeak ? -500 : 0) + (hasComma ? 200 : 0) + balanceBonus;
@@ -643,7 +540,6 @@ function applySoloSplits(blocks: PhraseBlock[]): PhraseBlock[] {
       ? Math.round((remainingWords[remainingWords.length - 1].end - remainingWords[0].start) * 1000)
       : 0;
     const canSplit = last.d >= SOLO_THRESHOLD_MS &&
-      !FILLER.has(last.clean) &&
       last.clean.length > 1 &&
       remainingWords.length >= 1 &&
       remainingDurationMs >= SOLO_THRESHOLD_MS;
@@ -676,8 +572,8 @@ function applySoloSplits(blocks: PhraseBlock[]): PhraseBlock[] {
 function selectHeroWord(block: PhraseBlock): { heroWord: string; heroMs: number } {
   let best = block.words[0];
   for (const word of block.words) {
-    const usable = word.clean.length > 1 && !FILLER.has(word.clean);
-    const bestUsable = best.clean.length > 1 && !FILLER.has(best.clean);
+    const usable = word.clean.length > 1;
+    const bestUsable = best.clean.length > 1;
     if (usable && !bestUsable) {
       best = word;
       continue;
@@ -1010,19 +906,9 @@ async function callScene(
 }
 
 function callWords(
-  _apiKey: string,
-  _title: string,
-  _artist: string,
   lines: LyricLine[],
-  _sceneDirection: Record<string, any>,
   words?: Array<{ word: string; start: number; end: number }>,
-  _bpm?: number,
 ): Record<string, any> {
-  void _apiKey;
-  void _title;
-  void _artist;
-  void _sceneDirection;
-  void _bpm;
   return words?.length
     ? buildDeterministicPhrases(words, lines)
     : { hookPhrase: "", phrases: [] };
@@ -1161,15 +1047,7 @@ serve(async (req) => {
     }
 
     if (body.mode === "words") {
-      const wordResult = callWords(
-        apiKey,
-        title,
-        artist,
-        lines,
-        body.sceneDirection || {},
-        body.words,
-        bpm,
-      );
+      const wordResult = callWords(lines, body.words);
 
       return new Response(JSON.stringify({
         cinematicDirection: wordResult,

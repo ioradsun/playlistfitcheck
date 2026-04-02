@@ -32,7 +32,6 @@ const MODEL_OPTIONS = [
 const MODEL_PROMPT_CONFIGS: ModelPromptConfig[] = [
   { slug: "analysis-model", label: "Analysis Model" },
   { slug: "scene-model", label: "Cinematic Scene Model" },
-  { slug: "words-model", label: "Cinematic Words Model" },
 ];
 
 const MODEL_SLUGS = MODEL_PROMPT_CONFIGS.map((config) => config.slug);
