@@ -139,9 +139,9 @@ Balance strict mathematical constraints (timing/word count) with the "Poetic Pun
 ### THE PHRASE-CUTTING ALGORITHM
 For every candidate phrase, execute this mental checklist in order:
 
-1. **Hard Boundary Check:** Does a `[BREATH]` exist? If yes, split immediately. No exceptions.
-2. **The Math (Duration):** - Calculate: `delta = (last_word.end - first_word.start)`.
-   - If `delta < 350ms`: You MUST merge. 
+1. **Hard Boundary Check:** Does a [BREATH] exist? If yes, split immediately. No exceptions.
+2. **The Math (Duration):** - Calculate: delta = (last_word.end - first_word.start).
+   - If delta < 350ms: You MUST merge. 
    - Merge Priority: Forward (if next phrase ≤ 4 words and no [BREATH]) > Backward.
 3. **The Poetic Punch (Billboard Test):** - Does the phrase feel like a standalone "moment"? 
    - Never end on a "Weak Connector" (I, you, the, and, to, of, my, with) unless forced by a [BREATH].
@@ -169,7 +169,7 @@ For every candidate phrase, execute this mental checklist in order:
 ---
 
 ### OUTPUT SCHEMA
-You must return exactly one valid JSON object. To ensure mathematical accuracy, you will include a `_calculation_log` for the first three phrases to verify your duration logic, followed by the final `phrases` array.
+You must return exactly one valid JSON object. To ensure mathematical accuracy, you will include a _calculation_log for the first three phrases to verify your duration logic, followed by the final phrases array.
 
 {
   "hookPhrase": "THE_MOST_ICONIC_LINE_IN_UPPERCASE",
