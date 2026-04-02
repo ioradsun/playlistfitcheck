@@ -1166,12 +1166,13 @@ export function useLyricPipeline({
               120_000,
             );
 
-            console.log('[Pipeline] Word mode response:', wordResult ? Object.keys(wordResult) : 'null', 'has cinematicDirection:', !!wordResult?.cinematicDirection);
+            console.log('[Pipeline] Word mode response keys:', wordResult ? Object.keys(wordResult) : 'null', 'has cinematicDirection:', !!wordResult?.cinematicDirection, '_meta:', JSON.stringify(wordResult?._meta ?? 'MISSING'));
             if (wordResult?.cinematicDirection) {
               const { phrases, hookPhrase, chorusText } =
                 wordResult.cinematicDirection;
 
               const wordMeta = wordResult._meta || null;
+              console.log('[Pipeline] wordMeta:', JSON.stringify(wordMeta));
               const merged = {
                 ...enrichedScene,
                 phrases: phrases || [],
