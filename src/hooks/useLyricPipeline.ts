@@ -1166,6 +1166,7 @@ export function useLyricPipeline({
               120_000,
             );
 
+            console.log('[Pipeline] Word mode response:', wordResult ? Object.keys(wordResult) : 'null', 'has cinematicDirection:', !!wordResult?.cinematicDirection);
             if (wordResult?.cinematicDirection) {
               const { phrases, hookPhrase, chorusText } =
                 wordResult.cinematicDirection;
