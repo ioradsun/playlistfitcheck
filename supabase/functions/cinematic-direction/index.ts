@@ -1272,7 +1272,14 @@ async function callScene(
     };
   }
 
-  const completion = await resp.json();
+  const sceneRespText = await resp.text();
+  let completion: any;
+  try {
+    completion = JSON.parse(sceneRespText);
+  } catch {
+    console.error("[cinematic-direction] scene response not valid JSON, length:", sceneRespText.length, "preview:", sceneRespText.slice(0, 200));
+    throw { status: 502, message: "Scene direction AI returned invalid response" };
+  }
   const finishReason = completion?.choices?.[0]?.finish_reason;
   const raw = String(completion?.choices?.[0]?.message?.content ?? "");
 
