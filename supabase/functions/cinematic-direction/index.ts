@@ -81,28 +81,6 @@ VISUAL WORLD RULES:
 5. One section per audio section provided. Match section count exactly.
 `;
 
-
-const WORD_DIRECTION_PROMPT = `
-Role: Lyric Video Director (Auteur Style).
-Task: Transform word stream into a sequence of Emotional Phrases.
-
-CREATIVE INTENT
-1. Impact over Information: The screen is a canvas, not a teleprompter. Frame the soul of the line.
-2. The Pulse: Use d (duration) and gap to sense the artist's heartbeat. Longer d = heavier visual weight. H flag (hold, d >= 600ms) = the emotional center — build the phrase around it.
-3. The Pivot: Every phrase must be a complete emotional thought. 
-4. Hero Selection: The heroWord is the punchline or the wound — the word carrying the most narrative gravity. UPPERCASE, letters only. Never: I A THE AND BUT OR IS IT TO OF IN ON YOU WE MY WITH.
-
-HARD CONSTRAINTS
-- 1 to 6 words per phrase
-- Minimum phrase duration: sum of d + gap values >= 350ms. If too short, absorb into adjacent phrase.
-- Absolute scene cut: H + B flags together = mandatory phrase boundary, never cross
-- Soft boundary: B flag alone = split here unless it would orphan a phrase
-- Energy matching: high d / short gap = slam or burn. Vulnerable / sparse = dissolve or fade. Floating = drift_up. Aggression or stutter = glitch. C flag = collapsed alignment artifact, never make it a heroWord.
-- Never repeat the same exitEffect in a row
-
-OUTPUT: valid JSON only, no markdown, no commentary.
-{"hookPhrase": "string", "phrases": [{"wordRange": [startIndex, endIndex], "heroWord": "WORD", "exitEffect": "effect"}]}`;
-
 interface LyricLine {
   text: string;
   start?: number;
@@ -163,7 +141,7 @@ const ENUMS = {
   emotionalArc: ["slow-burn", "surge", "collapse", "dawn", "eruption"],
 } as const;
 
-const LYRIC_FILLER = new Set([
+const FILLER = new Set([
   "the",
   "a",
   "an",
@@ -267,83 +245,6 @@ const LYRIC_FILLER = new Set([
   "bout",
   "some",
 ]);
-interface HeldWord {
-  word: string;
-  clean: string;
-  durationMs: number;
-  songPosition: number;
-}
-function extractHeldWords(
-  words: Array<{ word: string; start: number; end: number }>,
-  songStart: number,
-  songEnd: number,
-): { heldWords: HeldWord[]; medianMs: number; totalCount: number } {
-  const songDur = Math.max(0.01, songEnd - songStart);
-  const durations: number[] = [];
-  const held: HeldWord[] = [];
-  for (const w of words) {
-    const dur = w.end - w.start;
-    durations.push(dur);
-    if (dur < 0.6) continue;
-    const clean = w.word.replace(/[^a-zA-Z]/g, "").toLowerCase();
-    if (!clean || clean.length < 2) continue;
-    if (LYRIC_FILLER.has(clean)) continue;
-    held.push({
-      word: w.word,
-      clean,
-      durationMs: Math.round(dur * 1000),
-      songPosition: (w.start - songStart) / songDur,
-    });
-  }
-  const byClean = new Map<string, HeldWord>();
-  for (const hw of held) {
-    const existing = byClean.get(hw.clean);
-    if (!existing || hw.durationMs > existing.durationMs)
-      byClean.set(hw.clean, hw);
-  }
-  const deduped = [...byClean.values()].sort(
-    (a, b) => a.songPosition - b.songPosition,
-  );
-  const sorted = [...durations].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)] ?? 0.2;
-  return {
-    heldWords: deduped,
-    medianMs: Math.round(median * 1000),
-    totalCount: words.length,
-  };
-}
-function formatHeldWordsBlock(
-  words: Array<{ word: string; start: number; end: number }>,
-  lines: LyricLine[],
-): string {
-  if (!words || words.length === 0) return "";
-  const songStart = lines[0]?.start ?? 0;
-  const songEnd = lines[lines.length - 1]?.end ?? 1;
-  const { heldWords, medianMs } = extractHeldWords(words, songStart, songEnd);
-  if (heldWords.length === 0) return "";
-  const entries = heldWords.map(
-    (hw) =>
-      `  "${hw.clean}" — ${hw.durationMs}ms (${(hw.songPosition * 100).toFixed(0)}% into song)`,
-  );
-  return `
-═══════════════════════════════════════
-HELD WORDS — artist vocal emphasis
-═══════════════════════════════════════
-
-These words were held ≥600ms by the artist (median word is ${medianMs}ms).
-Long duration = deliberate artistic emphasis. Prioritize these as heroWord candidates.
-
-${entries.join("\n")}
-
-Guidelines:
-  ≥1500ms → strongest heroWord candidate, use high-impact exitEffect (slam, burn, glitch)
-  1000-1499ms → strong heroWord candidate, use emphatic exitEffect (scatter, cascade)
-  700-999ms → good heroWord candidate
-  600-699ms → consider for heroWord if contextually important
-
-You may select up to 5 additional short-duration words as heroWords if narratively critical (title words, emotional peaks).
-`;
-}
 
 interface ValidationResult {
   ok: boolean;
@@ -358,345 +259,6 @@ function fmt(sec: number): string {
 }
 
 
-/**
- * Hard-enforce phrase rules that the AI can't be trusted with:
- * - Max 6 words per phrase
- * - Min duration floors
- * Splits oversized phrases at the largest internal gap.
- */
-function enforcePhraseLimits(
-  phrases: Array<{ wordRange: [number, number]; heroWord?: string }>,
-  words: Array<{ word: string; start: number; end: number }>,
-  maxWords: number = 6,
-): Array<{ wordRange: [number, number]; heroWord?: string }> {
-  const result: Array<{ wordRange: [number, number]; heroWord?: string }> = [];
-
-  for (const phrase of phrases) {
-    const [start, end] = phrase.wordRange;
-    const count = end - start + 1;
-
-    if (count <= maxWords) {
-      result.push(phrase);
-      continue;
-    }
-
-    // Split at the largest gap within this phrase
-    let bestSplitIdx = start + Math.floor(count / 2); // fallback: midpoint
-    let bestGap = -1;
-
-    for (let i = start; i < end; i++) {
-      if (i + 1 >= words.length) continue;
-      const lastWord = words[i].word.replace(/[^a-zA-Z']/g, "").toLowerCase();
-      const isConnector = CONNECTORS.has(lastWord);
-      const gap = words[i + 1].start - words[i].end;
-      const effectiveGap = isConnector ? 0 : gap;
-      if (effectiveGap > bestGap) {
-        bestGap = effectiveGap;
-        bestSplitIdx = i;
-      }
-    }
-
-    // Determine which half the heroWord belongs to
-    let heroInFirst = true;
-    if (phrase.heroWord) {
-      const heroClean = phrase.heroWord.toLowerCase().replace(/[^a-z0-9]/g, "");
-      heroInFirst = false;
-      for (let hi = start; hi <= bestSplitIdx && hi < words.length; hi++) {
-        const wClean = words[hi].word.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (wClean === heroClean) { heroInFirst = true; break; }
-      }
-    }
-
-    const firstHalf: typeof phrase = {
-      wordRange: [start, bestSplitIdx],
-      heroWord: heroInFirst ? phrase.heroWord : undefined,
-    };
-    const secondHalf: typeof phrase = {
-      wordRange: [bestSplitIdx + 1, end],
-      heroWord: heroInFirst ? undefined : phrase.heroWord,
-    };
-
-    // Recursively enforce on each half
-    result.push(...enforcePhraseLimits([firstHalf], words, maxWords));
-    result.push(...enforcePhraseLimits([secondHalf], words, maxWords));
-  }
-
-  return result;
-}
-
-/**
- * Ensure every word belongs to exactly one phrase.
- * Fills gaps left by the AI with mechanical phrases.
- */
-function fillPhraseGaps(
-  phrases: Array<{ wordRange: [number, number]; heroWord?: string }>,
-  totalWords: number,
-): Array<{ wordRange: [number, number]; heroWord?: string }> {
-  if (totalWords === 0) return phrases;
-
-  // Sort by start index
-  const sorted = [...phrases].sort((a, b) => a.wordRange[0] - b.wordRange[0]);
-  const result: Array<{ wordRange: [number, number]; heroWord?: string }> = [];
-  let nextExpected = 0;
-
-  for (const phrase of sorted) {
-    const [start, end] = phrase.wordRange;
-    // Fill gap before this phrase
-    if (start > nextExpected) {
-      // Only fill if the gap indices are within the valid word count
-      if (nextExpected < totalWords) {
-        result.push({ wordRange: [nextExpected, start - 1] });
-      }
-    }
-    result.push(phrase);
-    nextExpected = end + 1;
-  }
-
-  // Fill gap after last phrase
-  if (nextExpected < totalWords) {
-    result.push({ wordRange: [nextExpected, totalWords - 1] });
-  }
-
-  return result;
-}
-
-/**
- * Validate existing heroWords against the phrase range, then fill missing
- * heroWords with the longest-duration word in the phrase.
- * Every phrase needs a heroWord for accent color highlighting.
- */
-function fillMissingHeroWords(
-  phrases: Array<{ wordRange: [number, number]; heroWord?: string }>,
-  words: Array<{ word: string; start: number; end: number }>,
-): void {
-  for (const phrase of phrases) {
-    if (phrase.heroWord) {
-      const heroClean = phrase.heroWord.toLowerCase().replace(/[^a-z0-9]/g, "");
-      let found = false;
-
-      for (
-        let i = phrase.wordRange[0];
-        i <= phrase.wordRange[1] && i < words.length;
-        i++
-      ) {
-        const wordClean = words[i].word.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (wordClean === heroClean) {
-          found = true;
-          break;
-        }
-      }
-
-      if (!found) phrase.heroWord = undefined;
-    }
-
-    if (!phrase.heroWord) {
-      let bestWord = "";
-      let bestDur = -1;
-
-      for (
-        let i = phrase.wordRange[0];
-        i <= phrase.wordRange[1] && i < words.length;
-        i++
-      ) {
-        const rawWord = words[i].word;
-        const clean = rawWord.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (!clean) continue;
-
-        const dur = words[i].end - words[i].start;
-        const fillerPenalty = LYRIC_FILLER.has(clean) ? 0.25 : 1;
-        const score = dur * fillerPenalty;
-
-        if (score > bestDur) {
-          bestDur = score;
-          bestWord = rawWord;
-        }
-      }
-
-      if (bestWord) {
-        phrase.heroWord = bestWord.toUpperCase().replace(/[^A-Z0-9]/g, "");
-      }
-    }
-  }
-}
-
-/**
- * Merge orphan single-word phrases (< 350ms) into adjacent phrases.
- * Single-word phrases are only valid for impact exclamations (≥ 350ms).
- * Filler words, articles, and line-boundary artifacts get absorbed.
- */
-function mergeOrphanPhrases(
-  phrases: Array<{ wordRange: [number, number]; heroWord?: string }>,
-  words: Array<{ word: string; start: number; end: number }>,
-): Array<{ wordRange: [number, number]; heroWord?: string }> {
-  const sorted = [...phrases].sort((a, b) => a.wordRange[0] - b.wordRange[0]);
-
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    const phrase = sorted[i];
-    const count = phrase.wordRange[1] - phrase.wordRange[0] + 1;
-    if (count > 1) continue;
-
-    const wordIdx = phrase.wordRange[0];
-    if (wordIdx >= words.length) continue;
-
-    const durMs = Math.round((words[wordIdx].end - words[wordIdx].start) * 1000);
-    if (durMs >= 350) continue;
-
-    if (i > 0 && sorted[i - 1].wordRange[1] === phrase.wordRange[0] - 1) {
-      sorted[i - 1].wordRange[1] = phrase.wordRange[1];
-      sorted.splice(i, 1);
-    } else if (
-      i < sorted.length - 1 &&
-      sorted[i + 1].wordRange[0] === phrase.wordRange[1] + 1
-    ) {
-      sorted[i + 1].wordRange[0] = phrase.wordRange[0];
-      sorted.splice(i, 1);
-    }
-  }
-
-  return sorted;
-}
-
-const CONNECTORS = new Set([
-  "i", "you", "we", "they", "he", "she", "it", "im", "i'm",
-  "and", "but", "or", "so", "because", "if", "when", "while", "that", "then",
-  "the", "a", "an",
-  "in", "on", "at", "to", "for", "of", "with", "from", "by",
-  "won't", "dont", "don't", "can't", "didn't", "isn't", "wasn't",
-  "couldn't", "wouldn't", "shouldn't", "ain't", "wont", "cant", "didnt",
-]);
-
-function repairPhraseBoundaries(
-  phrases: Array<{ wordRange: [number, number]; heroWord?: string; section?: string }>,
-  words: Array<{ word: string; start: number; end: number }>,
-): Array<{ wordRange: [number, number]; heroWord?: string; section?: string }> {
-  if (phrases.length < 2 || words.length === 0) return phrases;
-  const sorted = [...phrases].sort((a, b) => a.wordRange[0] - b.wordRange[0]);
-  let changed = true;
-  let iterations = 0;
-
-  while (changed && iterations < 3) {
-    changed = false;
-    iterations++;
-    for (let i = 0; i < sorted.length - 1; i++) {
-      const phrase = sorted[i];
-      const next = sorted[i + 1];
-      const lastWordIdx = phrase.wordRange[1];
-      if (phrase.wordRange[0] >= phrase.wordRange[1]) continue;
-      if (lastWordIdx < words.length) {
-        const lastWord = words[lastWordIdx].word.replace(/[^a-zA-Z']/g, "").toLowerCase();
-        if (CONNECTORS.has(lastWord)) {
-          phrase.wordRange[1] = lastWordIdx - 1;
-          next.wordRange[0] = lastWordIdx;
-          changed = true;
-          if (phrase.heroWord) {
-            const heroClean = phrase.heroWord.toLowerCase().replace(/[^a-z0-9]/g, "");
-            if (heroClean === lastWord) phrase.heroWord = undefined;
-          }
-        }
-      }
-    }
-  }
-  return sorted.filter((p) => p.wordRange[0] <= p.wordRange[1]);
-}
-
-function buildWordUserMessage(
-  title: string,
-  artist: string,
-  lines: LyricLine[],
-  sceneDirection: Record<string, any>,
-  words?: Array<{ word: string; start: number; end: number }>,
-  bpm?: number,
-): string {
-  let msg = "";
-
-  msg += `Song: ${artist} — ${title}\n`;
-  if (bpm && bpm > 0) msg += `BPM: ${Math.round(bpm)}\n`;
-  msg += "\n";
-
-  msg += `SCENE DIRECTION (stay inside this visual world):\n`;
-  msg += `sceneTone: ${sceneDirection.sceneTone || "dark"}\n`;
-  if (Array.isArray(sceneDirection.sections)) {
-    for (const s of sceneDirection.sections) {
-      msg += `  Section ${s.sectionIndex}: ${s.description || "?"} (${s.dominantColor || "?"})\n`;
-    }
-  }
-  msg += "\n";
-
-  if (words && words.length > 0) {
-    // Pre-pass: detect Whisper timestamp collapse
-    // Words with d < 10ms OR runs of 2+ words sharing the same start
-    // are alignment failures — mark as collapsed, exclude from stream
-    const COLLAPSE_MS = 10;
-    const isCollapsed = new Uint8Array(words.length);
-
-    let i = 0;
-    while (i < words.length) {
-      const d = Math.round((words[i].end - words[i].start) * 1000);
-
-      if (d < COLLAPSE_MS) {
-        isCollapsed[i] = 1;
-        i++;
-        continue;
-      }
-
-      const thisStart = Math.round(words[i].start * 1000);
-      let runEnd = i;
-      while (
-        runEnd + 1 < words.length &&
-        Math.abs(Math.round(words[runEnd + 1].start * 1000) - thisStart) < COLLAPSE_MS
-      ) {
-        runEnd++;
-      }
-
-      if (runEnd > i) {
-        for (let j = i; j <= runEnd; j++) {
-          isCollapsed[j] = 1;
-        }
-        i = runEnd + 1;
-      } else {
-        i++;
-      }
-    }
-
-    // Pipe-delimited format: INDEX:WORD|DUR_MS|GAP_MS|FLAGS
-    // FLAGS: H = hold (d >= 600ms, artist held note)
-    //        B = breath (gap >= 400ms, natural break)
-    //        C = collapsed alignment artifact (deprioritize)
-    msg += `WORD STREAM — format: INDEX:WORD|DUR_MS|GAP_MS|FLAGS\n`;
-    msg += `FLAGS: H=hold(>=600ms) B=breath(gap>=400ms) C=collapsed(alignment artifact, deprioritize). Use wordRange indices.\n\n`;
-
-    for (let i = 0; i < words.length; i++) {
-      const w = words[i];
-      const d = Math.round((w.end - w.start) * 1000);
-      const gap = i < words.length - 1
-        ? Math.round((words[i + 1].start - w.end) * 1000)
-        : 0;
-
-      let flags = "";
-      if (isCollapsed[i]) flags += "C";
-      if (d >= 600) flags += "H";
-      if (gap >= 400) flags += "B";
-
-      msg += `${i}:${w.word}|${d}|${gap}|${flags}\n`;
-    }
-    msg += "\n";
-
-    const heldBlock = formatHeldWordsBlock(words, lines);
-    if (heldBlock) {
-      msg += heldBlock + "\n";
-    }
-  } else {
-    msg += `LYRICS (fallback line mode):\n`;
-    for (let i = 0; i < lines.length; i++) {
-      msg += `  [${i}] "${lines[i].text}"\n`;
-    }
-    msg += "\n";
-  }
-
-  msg += "Return JSON only. Return only hookPhrase and phrases. Do not return derived fields like text, start, end, or wordCount.\n";
-  msg += '{ "hookPhrase": "string", "phrases": [{ "wordRange": [0, 2], "heroWord": "WORD", "exitEffect": "fade" }] }';
-  return msg;
-}
 
 function unwrapNested(obj: Record<string, any>): Record<string, any> {
   // If the AI wrapped everything under a single key, unwrap it
@@ -957,42 +519,219 @@ function normalizePhraseText(text: string): string {
     .trim();
 }
 
-function buildDeterministicWordFallback(
-  words: Array<{ word: string; start: number; end: number }>,
-): { hookPhrase: string; phrases: Array<{ wordRange: [number, number]; heroWord: string; exitEffect: string; text: string; wordCount: number; start: number; end: number }> } {
-  if (!words.length) {
-    return { hookPhrase: "", phrases: [] };
-  }
+const MAX_PHRASE_WORDS = 6;
+const SOLO_THRESHOLD_MS = 350;
+const COLLAPSE_MS = 10;
+const PUNCT_END = /[.?!]["'"']?\s*$/;
+const COMMA_END = /,\s*$/;
+const VALID_EXIT_EFFECTS = new Set([
+  "fade", "drift_up", "shrink", "dissolve",
+  "cascade", "scatter", "slam", "glitch", "burn",
+]);
 
-  const rawPhrases: Array<{ wordRange: [number, number]; heroWord?: string; exitEffect?: string }> = [];
-  let startIndex = 0;
+type RawWord = { word: string; start: number; end: number };
+type WordMeta = RawWord & {
+  index: number;
+  d: number;
+  gap: number;
+  clean: string;
+};
+type PhraseBlock = {
+  words: WordMeta[];
+  durationMs: number;
+  startTime: number;
+  endTime: number;
+  text: string;
+  wordCount: number;
+};
 
-  while (startIndex < words.length) {
-    let endIndex = Math.min(startIndex + 3, words.length - 1);
-
-    for (let i = startIndex; i < Math.min(startIndex + 5, words.length - 1); i++) {
-      const gapMs = (words[i + 1].start - words[i].end) * 1000;
-      if (gapMs >= 450) {
-        endIndex = i;
-        break;
-      }
+function detectCollapsedRuns(
+  words: RawWord[],
+): { mainWords: Array<RawWord & { index: number }>; adlibIndices: Set<number> } {
+  const adlibIndices = new Set<number>();
+  let i = 0;
+  while (i < words.length) {
+    const startMs = Math.round(words[i].start * 1000);
+    let j = i;
+    while (j + 1 < words.length) {
+      const nextStartMs = Math.round(words[j + 1].start * 1000);
+      if (Math.abs(nextStartMs - startMs) > COLLAPSE_MS) break;
+      j++;
     }
 
-    rawPhrases.push({
-      wordRange: [startIndex, endIndex],
-      exitEffect: rawPhrases.length % 2 === 0 ? "fade" : "drift_up",
-    });
-    startIndex = endIndex + 1;
+    const clusterSize = j - i + 1;
+    if (clusterSize >= 2) {
+      for (let k = i; k <= j; k++) adlibIndices.add(k);
+      i = j + 1;
+      continue;
+    }
+
+    const d = Math.round((words[i].end - words[i].start) * 1000);
+    const prevD = i > 0 ? Math.round((words[i - 1].end - words[i - 1].start) * 1000) : Infinity;
+    const nextD = i < words.length - 1
+      ? Math.round((words[i + 1].end - words[i + 1].start) * 1000)
+      : Infinity;
+    if (d < COLLAPSE_MS && (prevD < COLLAPSE_MS || nextD < COLLAPSE_MS)) {
+      adlibIndices.add(i);
+    }
+    i++;
   }
 
-  fillMissingHeroWords(rawPhrases, words);
-  const hydrated = hydrateWordPhrases(rawPhrases, words);
-  const hookPhrase = inferHookPhrase(hydrated);
+  const mainWords = words
+    .map((w, index) => ({ ...w, index }))
+    .filter((w) => !adlibIndices.has(w.index));
+  return { mainWords, adlibIndices };
+}
 
-  return {
-    hookPhrase,
-    phrases: hydrated,
+function splitOnPunctuation(words: WordMeta[]): WordMeta[][] {
+  const phrases: WordMeta[][] = [];
+  let current: WordMeta[] = [];
+  for (const word of words) {
+    current.push(word);
+    if (PUNCT_END.test(word.word)) {
+      phrases.push(current);
+      current = [];
+    }
+  }
+  if (current.length) phrases.push(current);
+  return phrases;
+}
+
+function splitOversized(phrase: WordMeta[]): WordMeta[][] {
+  if (phrase.length <= MAX_PHRASE_WORDS) return [phrase];
+
+  const splitAt = (idx: number): WordMeta[][] => {
+    const left = phrase.slice(0, idx + 1);
+    const right = phrase.slice(idx + 1);
+    return [...splitOversized(left), ...splitOversized(right)];
   };
+
+  for (let i = 0; i < phrase.length - 1; i++) {
+    if (COMMA_END.test(phrase[i].word)) {
+      return splitAt(i);
+    }
+  }
+
+  const mid = phrase.length / 2;
+  let bestScore = -Infinity;
+  let bestIndex = Math.floor(mid) - 1;
+  for (let i = 0; i < phrase.length - 1; i++) {
+    const gap = phrase[i].gap;
+    const isWeak = FILLER.has(phrase[i].clean);
+    const hasComma = COMMA_END.test(phrase[i].word);
+    const balanceBonus = -Math.abs(i - mid) * 10;
+    const score = gap + (isWeak ? -500 : 0) + (hasComma ? 200 : 0) + balanceBonus;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+  return splitAt(bestIndex);
+}
+
+function applySoloSplits(blocks: PhraseBlock[]): PhraseBlock[] {
+  const output: PhraseBlock[] = [];
+  for (const block of blocks) {
+    const last = block.words[block.words.length - 1];
+    if (!last) {
+      output.push(block);
+      continue;
+    }
+
+    const remainingWords = block.words.slice(0, -1);
+    const remainingDurationMs = remainingWords.length
+      ? Math.round((remainingWords[remainingWords.length - 1].end - remainingWords[0].start) * 1000)
+      : 0;
+    const canSplit = last.d >= SOLO_THRESHOLD_MS &&
+      !FILLER.has(last.clean) &&
+      last.clean.length > 1 &&
+      remainingWords.length >= 1 &&
+      remainingDurationMs >= SOLO_THRESHOLD_MS;
+
+    if (!canSplit) {
+      output.push(block);
+      continue;
+    }
+
+    output.push({
+      words: remainingWords,
+      durationMs: remainingDurationMs,
+      startTime: remainingWords[0].start,
+      endTime: remainingWords[remainingWords.length - 1].end,
+      text: normalizePhraseText(remainingWords.map((w) => w.word).join(" ")),
+      wordCount: remainingWords.length,
+    });
+    output.push({
+      words: [last],
+      durationMs: last.d,
+      startTime: last.start,
+      endTime: last.end,
+      text: normalizePhraseText(last.word),
+      wordCount: 1,
+    });
+  }
+  return output;
+}
+
+function selectHeroWord(block: PhraseBlock): { heroWord: string; heroMs: number } {
+  let best = block.words[0];
+  for (const word of block.words) {
+    const usable = word.clean.length > 1 && !FILLER.has(word.clean);
+    const bestUsable = best.clean.length > 1 && !FILLER.has(best.clean);
+    if (usable && !bestUsable) {
+      best = word;
+      continue;
+    }
+    if (usable === bestUsable && word.d > best.d) best = word;
+  }
+  return {
+    heroWord: best.clean.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+    heroMs: best.d,
+  };
+}
+
+function calcExitEffect(
+  block: PhraseBlock,
+  nextBlock: PhraseBlock | null,
+  prevEffect: string | null,
+): string {
+  const lastMs = block.words[block.words.length - 1]?.d ?? 0;
+  const gapAfterMs = nextBlock ? Math.round((nextBlock.startTime - block.endTime) * 1000) : 2000;
+  const wps = block.durationMs > 0 ? block.wordCount / (block.durationMs / 1000) : block.wordCount;
+  const isSolo = block.wordCount === 1 && lastMs >= SOLO_THRESHOLD_MS;
+  let effect: string;
+
+  if (isSolo) {
+    if (lastMs >= 1000) effect = gapAfterMs >= 600 ? "dissolve" : "slam";
+    else if (lastMs >= 500) effect = gapAfterMs >= 600 ? "fade" : "burn";
+    else effect = gapAfterMs >= 600 ? "drift_up" : "fade";
+  } else if (wps >= 5) {
+    effect = gapAfterMs < 300 ? "glitch" : "scatter";
+  } else if (gapAfterMs >= 1000) {
+    effect = "dissolve";
+  } else if (gapAfterMs >= 500) {
+    effect = "drift_up";
+  } else if (lastMs >= 600) {
+    effect = "burn";
+  } else if (wps <= 2) {
+    effect = "drift_up";
+  } else {
+    effect = "fade";
+  }
+
+  if (effect === prevEffect) {
+    const fallback: Record<string, string> = {
+      slam: "burn",
+      burn: "slam",
+      dissolve: "fade",
+      fade: "dissolve",
+      drift_up: "fade",
+      glitch: "scatter",
+      scatter: "glitch",
+    };
+    effect = fallback[effect] ?? "fade";
+  }
+  return VALID_EXIT_EFFECTS.has(effect) ? effect : "fade";
 }
 
 function normalizeHookKey(text: string): string {
@@ -1001,50 +740,6 @@ function normalizeHookKey(text: string): string {
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
-}
-
-function hydrateWordPhrases(
-  phrases: Array<{ wordRange: [number, number]; heroWord?: string; exitEffect?: string }>,
-  words: Array<{ word: string; start: number; end: number }>,
-): Array<{
-  wordRange: [number, number];
-  start: number;
-  end: number;
-  text: string;
-  wordCount: number;
-  heroWord: string;
-  exitEffect: string;
-}> {
-  const VALID_EXIT_EFFECTS = new Set([
-    "fade", "drift_up", "shrink", "dissolve",
-    "cascade", "scatter", "slam", "glitch", "burn",
-  ]);
-
-  return [...phrases]
-    .sort((a, b) => a.wordRange[0] - b.wordRange[0])
-    .map((phrase) => {
-      const [startIdx, endIdx] = phrase.wordRange;
-      const slice = words.slice(startIdx, endIdx + 1);
-      const text = normalizePhraseText(slice.map((w) => w.word).join(" "));
-      const start = slice[0]?.start ?? 0;
-      const end = slice[slice.length - 1]?.end ?? start;
-      const heroWord = String(phrase.heroWord || "")
-        .replace(/[^A-Z0-9]/gi, "")
-        .toUpperCase();
-      const exitEffect = VALID_EXIT_EFFECTS.has(String(phrase.exitEffect))
-        ? String(phrase.exitEffect)
-        : "fade";
-
-      return {
-        wordRange: [startIdx, endIdx] as [number, number],
-        start,
-        end,
-        text,
-        wordCount: Math.max(0, endIdx - startIdx + 1),
-        heroWord,
-        exitEffect,
-      };
-    });
 }
 
 function inferHookPhrase(
@@ -1078,68 +773,60 @@ function inferHookPhrase(
   return bestText;
 }
 
-function validateWords(
-  raw: Record<string, any>,
-  words?: Array<{ word: string; start: number; end: number }>,
-): ValidationResult {
-  const errors: string[] = [];
-  const v = { ...raw };
+function buildDeterministicPhrases(
+  words: RawWord[],
+  _lines: LyricLine[],
+): { hookPhrase: string; phrases: Array<{ wordRange: [number, number]; heroWord: string; exitEffect: string; text: string; wordCount: number; start: number; end: number }>; chorusText?: string } {
+  void _lines;
+  if (!words.length) return { hookPhrase: "", phrases: [] };
 
-  void words;
-  if (!Array.isArray(v.phrases)) v.phrases = [];
+  const { mainWords } = detectCollapsedRuns(words);
+  if (!mainWords.length) return { hookPhrase: "", phrases: [] };
 
-  const VALID_EXIT_EFFECTS = new Set([
-    "fade", "drift_up", "shrink", "dissolve",
-    "cascade", "scatter", "slam", "glitch", "burn",
-  ]);
+  const wordMeta: WordMeta[] = mainWords.map((w, idx) => {
+    const next = mainWords[idx + 1];
+    return {
+      ...w,
+      d: Math.round((w.end - w.start) * 1000),
+      gap: next ? Math.round((next.start - w.end) * 1000) : 0,
+      clean: w.word.toLowerCase().replace(/[^a-z0-9]/g, ""),
+    };
+  });
 
-  for (const p of v.phrases) {
-    if (!Array.isArray(p.wordRange) || p.wordRange.length !== 2) {
-      p.wordRange = [0, 0];
-    }
+  const punctPhrases = splitOnPunctuation(wordMeta);
+  const subPhrases = punctPhrases.flatMap((phrase) => splitOversized(phrase));
+  const initialBlocks: PhraseBlock[] = subPhrases.filter((p) => p.length > 0).map((p) => ({
+    words: p,
+    durationMs: Math.round((p[p.length - 1].end - p[0].start) * 1000),
+    startTime: p[0].start,
+    endTime: p[p.length - 1].end,
+    text: normalizePhraseText(p.map((w) => w.word).join(" ")),
+    wordCount: p.length,
+  }));
 
-    p.wordRange[0] =
-      typeof p.wordRange[0] === "number"
-        ? Math.max(0, Math.round(p.wordRange[0]))
-        : 0;
-    p.wordRange[1] =
-      typeof p.wordRange[1] === "number"
-        ? Math.max(p.wordRange[0], Math.round(p.wordRange[1]))
-        : p.wordRange[0];
-
-    if (p.heroWord && typeof p.heroWord !== "string") delete p.heroWord;
-    if (!p.exitEffect || !VALID_EXIT_EFFECTS.has(p.exitEffect)) {
-      p.exitEffect = "fade";
-    }
-
-    delete p.effect;
-    delete p.section;
-    delete p.start;
-    delete p.end;
-    delete p.text;
-    delete p.wordCount;
-    delete p.isChorus;
+  const finalBlocks = applySoloSplits(initialBlocks);
+  const phrases: Array<{ wordRange: [number, number]; heroWord: string; exitEffect: string; text: string; wordCount: number; start: number; end: number }> = [];
+  let prevEffect: string | null = null;
+  for (let i = 0; i < finalBlocks.length; i++) {
+    const block = finalBlocks[i];
+    const next = i < finalBlocks.length - 1 ? finalBlocks[i + 1] : null;
+    const { heroWord } = selectHeroWord(block);
+    const exitEffect = calcExitEffect(block, next, prevEffect);
+    prevEffect = exitEffect;
+    const startIndex = block.words[0].index;
+    const endIndex = block.words[block.words.length - 1].index;
+    phrases.push({
+      wordRange: [startIndex, endIndex],
+      heroWord,
+      exitEffect,
+      text: block.text,
+      wordCount: block.wordCount,
+      start: block.startTime,
+      end: block.endTime,
+    });
   }
-
-  const hookPhrase =
-    typeof v.hookPhrase === "string" && v.hookPhrase.trim()
-      ? v.hookPhrase.trim()
-      : undefined;
-
-  const chorusText =
-    typeof v.chorusText === "string" && v.chorusText.trim()
-      ? v.chorusText.trim()
-      : undefined;
-
-  return {
-    ok: errors.length === 0,
-    errors,
-    value: {
-      phrases: v.phrases,
-      hookPhrase,
-      chorusText,
-    },
-  };
+  const hookPhrase = inferHookPhrase(phrases);
+  return { hookPhrase, phrases };
 }
 
 async function callScene(
@@ -1322,237 +1009,35 @@ async function callScene(
   return result.value;
 }
 
-async function callWords(
-  apiKey: string,
-  title: string,
-  artist: string,
+function callWords(
+  _apiKey: string,
+  _title: string,
+  _artist: string,
   lines: LyricLine[],
   _sceneDirection: Record<string, any>,
   words?: Array<{ word: string; start: number; end: number }>,
-  bpm?: number,
-  wordSystemPrompt: string = WORD_DIRECTION_PROMPT,
-  modelOverride: string = PRIMARY_MODEL,
-): Promise<Record<string, any>> {
-  const wordMessage = buildWordUserMessage(
-    title,
-    artist,
-    lines,
-    _sceneDirection,
-    words,
-    bpm,
-  );
-
-  const callWordAI = async (
-    messages: Array<{ role: string; content: string }>,
-    model: string = modelOverride,
-  ) => {
-    let resp: Response;
-    try {
-      resp = await fetchWithTimeout(
-        "https://ai.gateway.lovable.dev/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            messages,
-            response_format: { type: "json_object" },
-            max_completion_tokens: 32000,
-          }),
-        },
-        120000,
-      );
-    } catch (error) {
-      const normalized = normalizeAbortError(
-        error,
-        `Word direction AI timed out for model ${model}`,
-      );
-      if ((normalized as any)?.status === 504 && model === modelOverride && modelOverride !== FALLBACK_MODEL) {
-        console.warn(
-          `[cinematic-direction] words primary model timed out, trying fallback ${FALLBACK_MODEL}`,
-        );
-        await new Promise((r) => setTimeout(r, 1500));
-        return callWordAI(messages, FALLBACK_MODEL);
-      }
-      throw normalized;
-    }
-
-    // If primary model fails with retryable error, try fallback
-    if (!resp.ok && model === modelOverride && (resp.status === 429 || resp.status >= 500)) {
-      const errText = await resp.text().catch(() => "");
-      console.warn(
-        `[cinematic-direction] words primary model failed (${resp.status}): ${errText.slice(0, 100)}, trying fallback`,
-      );
-      await new Promise((r) => setTimeout(r, 2000));
-      return callWordAI(messages, FALLBACK_MODEL);
-    }
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      console.error("[cinematic-direction] words AI error", resp.status, text);
-      throw {
-        status: resp.status,
-        message:
-          resp.status === 429
-            ? "Rate limited"
-            : "Word direction AI request failed",
-      };
-    }
-
-    const respText = await resp.text();
-    let completion: any;
-    try {
-      completion = JSON.parse(respText);
-    } catch {
-      console.error("[cinematic-direction] words response not valid JSON, length:", respText.length, "preview:", respText.slice(0, 200));
-      throw { status: 502, message: "Word direction AI returned invalid response" };
-    }
-    const finishReason = completion?.choices?.[0]?.finish_reason;
-    const raw = String(completion?.choices?.[0]?.message?.content ?? "");
-
-    if (finishReason === "length") {
-      console.warn(
-        "[cinematic-direction] words response truncated (finish_reason=length), raw length:",
-        raw.length,
-      );
-    }
-
-    return { raw, finishReason };
-  };
-
-  const messages = [
-    { role: "system", content: wordSystemPrompt },
-    { role: "user", content: wordMessage },
-  ];
-
-  let raw: string;
-  let finishReason: string | undefined;
-  try {
-    ({ raw, finishReason } = await callWordAI(messages));
-  } catch (error: any) {
-    if (error?.status === 504 && words?.length) {
-      console.warn("[cinematic-direction] words timed out, returning deterministic fallback phrases");
-      return buildDeterministicWordFallback(words);
-    }
-    throw error;
-  }
-  let parsed = extractJson(raw);
-
-  if (!parsed || finishReason === "length") {
-    console.warn(
-      "[cinematic-direction] words first attempt failed to parse or was truncated, retrying. Raw preview:",
-      raw.slice(0, 300),
-    );
-
-    const retryMessages = [
-      ...messages,
-      {
-        role: "user",
-        content:
-          'Your previous response was malformed or truncated. Return ONLY valid JSON: { "hookPhrase": "string", "phrases": [{ "wordRange": [0, 2], "heroWord": "WORD", "exitEffect": "fade" }] }. No markdown. No explanation.',
-      },
-    ];
-
-    let retryRaw: string;
-    try {
-      ({ raw: retryRaw } = await callWordAI(retryMessages));
-    } catch (error: any) {
-      if (error?.status === 504 && words?.length) {
-        console.warn("[cinematic-direction] words retry timed out, returning deterministic fallback phrases");
-        return buildDeterministicWordFallback(words);
-      }
-      throw error;
-    }
-    const retryParsed = extractJson(retryRaw);
-
-    if (retryParsed) {
-      parsed = retryParsed;
-    } else if (!parsed) {
-      console.error(
-        "[cinematic-direction] words retry also failed. Raw preview:",
-        retryRaw.slice(0, 500),
-      );
-      throw {
-        status: 422,
-        message: "Invalid JSON from word direction AI after retry",
-      };
-    }
-  }
-
-  const result = validateWords(parsed, words);
-
-  if (words && Array.isArray(result.value.phrases)) {
-    let phrases = result.value.phrases as Array<any>;
-
-    phrases = fillPhraseGaps(phrases, words.length);
-    phrases = repairPhraseBoundaries(phrases, words);
-    phrases = enforcePhraseLimits(phrases, words, 6);
-    phrases = mergeOrphanPhrases(phrases, words);
-    phrases = enforcePhraseLimits(phrases, words, 6);
-    phrases = fillPhraseGaps(phrases, words.length);
-
-    for (const phrase of phrases) {
-      if (phrase.heroWord) {
-        phrase.heroWord = String(phrase.heroWord)
-          .replace(/[^A-Z0-9]/gi, "")
-          .toUpperCase();
-      }
-    }
-
-    const VALID_EFFECTS = new Set([
-      "fade", "drift_up", "shrink", "dissolve",
-      "cascade", "scatter", "slam", "glitch", "burn",
-    ]);
-
-    for (let pi = 0; pi < phrases.length; pi++) {
-      if (!phrases[pi].exitEffect || !VALID_EFFECTS.has(phrases[pi].exitEffect)) {
-        const prev = pi > 0 ? phrases[pi - 1].exitEffect : null;
-        phrases[pi].exitEffect = prev && prev !== "drift_up" ? "drift_up" : "fade";
-      }
-    }
-
-    fillMissingHeroWords(phrases, words);
-
-    const hydrated = hydrateWordPhrases(phrases, words);
-    const hookPhrase = result.value.hookPhrase && result.value.hookPhrase.trim()
-      ? normalizePhraseText(result.value.hookPhrase.trim())
-      : inferHookPhrase(hydrated);
-
-    return {
-      hookPhrase,
-      phrases: hydrated,
-      chorusText: result.value.chorusText,
-    };
-  }
-
-  if (
-    !Array.isArray(result.value.phrases) ||
-    result.value.phrases.length === 0
-  ) {
-    throw {
-      status: 422,
-      message: "Word direction returned empty phrases",
-    };
-  }
-
-  return result.value;
+  _bpm?: number,
+): Record<string, any> {
+  void _apiKey;
+  void _title;
+  void _artist;
+  void _sceneDirection;
+  void _bpm;
+  return words?.length
+    ? buildDeterministicPhrases(words, lines)
+    : { hookPhrase: "", phrases: [] };
 }
 
 /** Fetch custom prompts + models from ai_prompts table, falling back to hardcoded defaults. */
 let _promptCache: {
-  value: { scenePrompt: string; wordPrompt: string; sceneModel: string; wordsModel: string };
+  value: { scenePrompt: string; sceneModel: string };
   expiresAt: number;
 } | null = null;
 const PROMPT_CACHE_TTL_MS = 60_000;
 
 async function loadCustomPrompts(): Promise<{
   scenePrompt: string;
-  wordPrompt: string;
   sceneModel: string;
-  wordsModel: string;
 }> {
   if (_promptCache && Date.now() < _promptCache.expiresAt) {
     return _promptCache.value;
@@ -1560,16 +1045,14 @@ async function loadCustomPrompts(): Promise<{
 
   const defaults = {
     scenePrompt: SCENE_DIRECTION_PROMPT,
-    wordPrompt: WORD_DIRECTION_PROMPT,
     sceneModel: PRIMARY_MODEL,
-    wordsModel: PRIMARY_MODEL,
   };
   const sbUrl = Deno.env.get("SUPABASE_URL");
   const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!sbUrl || !sbKey) return defaults;
 
   try {
-    const slugs = ["cinematic-scene", "cinematic-words", "scene-model", "words-model", "analysis-model"];
+    const slugs = ["cinematic-scene", "scene-model", "analysis-model"];
     const res = await fetchWithTimeout(
       `${sbUrl}/rest/v1/ai_prompts?slug=in.(${slugs.join(",")})&select=slug,prompt`,
       {
@@ -1592,9 +1075,7 @@ async function loadCustomPrompts(): Promise<{
     const legacyModel = bySlug["analysis-model"]?.trim() || PRIMARY_MODEL;
     const value = {
       scenePrompt: bySlug["cinematic-scene"] || SCENE_DIRECTION_PROMPT,
-      wordPrompt: bySlug["cinematic-words"] || WORD_DIRECTION_PROMPT,
       sceneModel: bySlug["scene-model"]?.trim() || legacyModel,
-      wordsModel: bySlug["words-model"]?.trim() || legacyModel,
     };
 
     _promptCache = { value, expiresAt: Date.now() + PROMPT_CACHE_TTL_MS };
@@ -1680,35 +1161,19 @@ serve(async (req) => {
     }
 
     if (body.mode === "words") {
-      if (!body.sceneDirection) {
-        return new Response(
-          JSON.stringify({ error: "sceneDirection required for mode=words" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
-
-      const wordResult = await callWords(
+      const wordResult = callWords(
         apiKey,
         title,
         artist,
         lines,
-        body.sceneDirection,
+        body.sceneDirection || {},
         body.words,
         bpm,
-        customPrompts.wordPrompt,
-        customPrompts.wordsModel,
       );
 
       return new Response(JSON.stringify({
         cinematicDirection: wordResult,
-        _meta: {
-          model: customPrompts.wordsModel,
-          wordPromptSource: customPrompts.wordPrompt === WORD_DIRECTION_PROMPT ? "default" : "admin",
-          wordPromptLength: customPrompts.wordPrompt.length,
-        },
+        _meta: { mode: "deterministic_v3" },
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
