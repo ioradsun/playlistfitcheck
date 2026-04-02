@@ -10,7 +10,7 @@ import { SiteCopyProvider } from "@/hooks/useSiteCopy";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { VoteGateProvider } from "@/hooks/useVoteGate";
 import { Navigate, Routes, Route } from "react-router-dom";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense } from "react";
 import { AdminPageImport } from "@/lib/routePrefetch";
 import { importWithRetry } from "@/lib/importWithRetry";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -38,14 +38,6 @@ const PageLayout = lazy(() => importWithRetry(() => import("@/components/PageLay
 const Admin = lazy(AdminPageImport);
 
 export default function MainAppShell() {
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem('__LYRIC_DANCE_LIGHTNING_BAR')) {
-        (window as any).__LYRIC_DANCE_LIGHTNING_BAR = true;
-      }
-    } catch {}
-  }, []);
-
   return (
     <AuthProvider>
       <SiteCopyProvider>

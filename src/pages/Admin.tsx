@@ -58,14 +58,6 @@ export default function Admin() {
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? "");
 
   useEffect(() => {
-    try {
-      if (sessionStorage.getItem('__LYRIC_DANCE_LIGHTNING_BAR')) {
-        (window as any).__LYRIC_DANCE_LIGHTNING_BAR = true;
-      }
-    } catch {}
-  }, []);
-
-  useEffect(() => {
     (window as any).__forceAdminRerender = () => forceAdminRerender((v) => v + 1);
     return () => {
       delete (window as any).__forceAdminRerender;
@@ -745,41 +737,9 @@ export default function Admin() {
 
           {/* ── LABS TAB ── */}
           <TabsContent value="labs" className="mt-4 space-y-4">
-            <div className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-4">
-              <h3 className="text-sm font-semibold tracking-wide uppercase text-white/60">Engine Feature Flags</h3>
-              <div className="flex items-center justify-between py-2 border-b border-white/5">
-                <div>
-                  <p className="text-sm font-medium text-white/90">Dynamite Wick</p>
-                  <p className="text-xs text-white/40 mt-0.5">
-                    Replaces beat bars with a lit dynamite fuse. Waveform peaks = fuse cord.
-                    Flame burns at playhead. Ember trail glows behind. Sparks + smoke on hits. Click to seek.
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    const win = window as any;
-                    const next = !win.__LYRIC_DANCE_LIGHTNING_BAR;
-                    win.__LYRIC_DANCE_LIGHTNING_BAR = next;
-                    try { sessionStorage.setItem('__LYRIC_DANCE_LIGHTNING_BAR', next ? '1' : ''); } catch {}
-                    setTab('labs');
-                  }}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    (window as any).__LYRIC_DANCE_LIGHTNING_BAR
-                      ? 'bg-orange-500'
-                      : 'bg-white/10'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      (window as any).__LYRIC_DANCE_LIGHTNING_BAR
-                        ? 'translate-x-6'
-                        : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-              <p className="text-[10px] text-white/25 italic">
-                Flags apply to new lyric dances loaded after toggling. Refresh pages with active players to see changes.
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <p className="text-xs text-white/50">
+                No experimental engine flags are currently available.
               </p>
             </div>
           </TabsContent>

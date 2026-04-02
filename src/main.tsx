@@ -2,7 +2,6 @@
 
 import "./lib/prefetch"; // side-effect: starts network requests immediately
 import { isEmbedRoute } from "./lib/prefetch";
-import { hydrateLightningBarFlag, refreshLightningBarFlagFromBackend } from "./lib/lyricDanceFlags";
 
 // Buffer polyfill — only needed by crypto/wallet features, never on embed routes
 if (!isEmbedRoute) {
@@ -12,11 +11,6 @@ if (!isEmbedRoute) {
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-
-hydrateLightningBarFlag();
-if (!isEmbedRoute) {
-  void refreshLightningBarFlagFromBackend();
-}
 
 // --- Cache invalidation (bump CACHE_VERSION to force-clear all caches) ---
 const CACHE_VERSION = 3;

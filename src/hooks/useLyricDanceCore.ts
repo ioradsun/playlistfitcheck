@@ -78,7 +78,6 @@ export function useLyricDanceCore({
   const [showCover, setShowCover] = useState(true);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
-  const lightningBarEnabled = true;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -449,7 +448,6 @@ export function useLyricDanceCore({
     setShowCover,
     currentTimeSec,
     progress,
-    lightningBarEnabled,
     reactionData,
     setReactionData,
     durationSec,
