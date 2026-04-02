@@ -173,18 +173,18 @@ function formatTimeShort(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function toLRC(data: LyricData): string {
-  const mainLines = data.lines.filter((l) => l.tag !== "adlib");
+function toLRC(title: string, artist: string | undefined, lines: LyricLine[]): string {
+  const mainLines = lines.filter((l) => l.tag !== "adlib");
   return [
-    `[ti:${data.title}]`,
-    ...(data.artist ? [`[ar:${data.artist}]`] : []),
+    `[ti:${title}]`,
+    ...(artist ? [`[ar:${artist}]`] : []),
     "",
     ...mainLines.map((l) => `[${formatTimeLRC(l.start)}]${l.text}`),
   ].join("\n");
 }
 
-function toSRT(data: LyricData): string {
-  const mainLines = data.lines.filter((l) => l.tag !== "adlib");
+function toSRT(lines: LyricLine[]): string {
+  const mainLines = lines.filter((l) => l.tag !== "adlib");
   return mainLines
     .map(
       (l, i) =>
@@ -193,8 +193,8 @@ function toSRT(data: LyricData): string {
     .join("\n");
 }
 
-function toPlainText(data: LyricData): string {
-  const mainLines = data.lines.filter((l) => l.tag !== "adlib");
+function toPlainText(lines: LyricLine[]): string {
+  const mainLines = lines.filter((l) => l.tag !== "adlib");
   return mainLines.map((l) => l.text).join("\n");
 }
 
@@ -212,9 +212,8 @@ function downloadFile(content: string, filename: string, mime: string) {
 function applyLineFormat(
   lines: LyricLine[],
   format: LineFormat,
-  naturalLines?: LyricLine[],
 ): LyricLine[] {
-  if (format === "natural") return naturalLines?.length ? naturalLines : lines;
+  if (format === "natural") return lines;
 
   const result: LyricLine[] = [];
 
@@ -446,24 +445,33 @@ export function LyricDisplay({
 
 
   // ── Active lines (format applied) ─────────────────────────────────────────
-  const activeLinesRaw =
-    activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
-  const activeMeta = activeVersion === "explicit" ? explicitMeta : fmlyMeta;
-  const phraseLines: LyricLine[] = useMemo(() => {
-    if (!words?.length) return activeLinesRaw;
+  const phrasesSynced = useRef(false);
+  const wordsSyncKey = useMemo(() => {
+    if (!words?.length) return "";
+    const first = words[0];
+    const last = words[words.length - 1];
+    return `${words.length}:${first.start}:${last.end}`;
+  }, [words]);
+  useEffect(() => {
+    phrasesSynced.current = false;
+  }, [wordsSyncKey]);
+  useEffect(() => {
+    if (!words?.length || phrasesSynced.current) return;
+    phrasesSynced.current = true;
     const result = buildPhrases(words);
-    return result.phrases.map((p) => ({
+    const phraseLines: LyricLine[] = result.phrases.map((p) => ({
       start: p.start,
       end: p.end,
       text: p.text,
       tag: "main" as const,
     }));
-  }, [words, activeLinesRaw]);
-  const activeLines = applyLineFormat(
-    activeLinesRaw,
-    activeMeta.lineFormat,
-    phraseLines,
-  );
+    setExplicitLines(phraseLines);
+  }, [words, wordsSyncKey]);
+
+  const activeLinesRaw =
+    activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
+  const activeMeta = activeVersion === "explicit" ? explicitMeta : fmlyMeta;
+  const activeLines = applyLineFormat(activeLinesRaw, activeMeta.lineFormat);
 
   // Use currentTime directly (no offset)
   // Bug 2: epsilon prevents flickering at floating-point boundaries
@@ -874,15 +882,13 @@ export function LyricDisplay({
   ).replace(/\s+/g, "_");
   const versionSuffix =
     activeVersion === "explicit" ? "Explicit" : "FMLY_Friendly";
-  const editedData: LyricData = { ...data, lines: activeLines };
-
   const handleCopy = (format: ExportFormat) => {
     const content =
       format === "lrc"
-        ? toLRC(editedData)
+        ? toLRC(data.title, data.artist, activeLines)
         : format === "srt"
-          ? toSRT(editedData)
-          : toPlainText(editedData);
+          ? toSRT(activeLines)
+          : toPlainText(activeLines);
     navigator.clipboard.writeText(content);
     setCopied(format);
     toast.success(`${format.toUpperCase()} copied`);
@@ -892,10 +898,10 @@ export function LyricDisplay({
   const handleDownload = (format: ExportFormat) => {
     const filename = `${baseName}_${versionSuffix}.${format}`;
     if (format === "lrc")
-      downloadFile(toLRC(editedData), filename, "text/plain");
+      downloadFile(toLRC(data.title, data.artist, activeLines), filename, "text/plain");
     else if (format === "srt")
-      downloadFile(toSRT(editedData), filename, "text/plain");
-    else downloadFile(toPlainText(editedData), filename, "text/plain");
+      downloadFile(toSRT(activeLines), filename, "text/plain");
+    else downloadFile(toPlainText(activeLines), filename, "text/plain");
     toast.success(`${format.toUpperCase()} downloaded`);
   };
 
