@@ -1278,6 +1278,7 @@ async function callWords(
           max_completion_tokens: 32000,
         }),
       },
+      120000,
     );
 
     // If primary model fails with retryable error, try fallback
