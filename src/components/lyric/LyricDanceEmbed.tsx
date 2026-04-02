@@ -58,6 +58,7 @@ interface LyricDanceEmbedProps {
 
 export interface LyricDanceEmbedHandle {
   getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;
+  reloadTranscript: (lines: any[], words?: any[]) => void;
 }
 
 export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed({
@@ -182,7 +183,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     evicted,
   });
 
-  useImperativeHandle(ref, () => ({ getPlayer: () => player ?? null }), [player]);
+  useImperativeHandle(ref, () => ({
+    getPlayer: () => player ?? null,
+    reloadTranscript: (lines: any[], words?: any[]) => {
+      player?.updateTranscript(lines, words ?? null);
+    },
+  }), [player]);
 
   const [forceDemoted, setForceDemoted] = useState(false);
   const [, setFireStrengthByLine] = useState<Record<number, number>>({});
