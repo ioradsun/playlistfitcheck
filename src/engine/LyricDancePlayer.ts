@@ -1350,8 +1350,6 @@ export class LyricDancePlayer {
     panEndX: number;
     panEndY: number;
   }> = [];
-  /** Song-level grade: computed once, used for entire song — no per-section chaos */
-  private _songGrade: MoodGrade | null = null;
   private _grainCanvas: HTMLCanvasElement | null = null;
   private _grainPool: ImageData[] = [];      // pre-generated noise frames
   private _grainPoolW = 0;
@@ -1742,7 +1740,6 @@ export class LyricDancePlayer {
           // Still need payload + conductor for audio sync
           const payload = this.buildScenePayload();
           this.payload = payload;
-          this._songGrade = null;
           this.resolvePlayerState(payload);
           await this.preloadFonts(); // near-zero — fontReadinessCache hit
           this.songStartSec = payload.songStart;
@@ -1775,7 +1772,6 @@ export class LyricDancePlayer {
 
         const payload = this.buildScenePayload();
         this.payload = payload;
-        this._songGrade = null; // force recomputation for new song
         this.resolvePlayerState(payload);
         await this.preloadFonts();
         this.songStartSec = payload.songStart;
@@ -2331,7 +2327,6 @@ export class LyricDancePlayer {
     this.data = { ...this.data, cinematic_direction: direction };
     if (!this.payload) return;
     this.payload = { ...this.payload, cinematic_direction: direction };
-    this._songGrade = null; // cinematic direction changed — recompute grade
     this.resolvePlayerState(this.payload);
     this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this._markCompiledViewport(this.width || 960, this.height || 540);
@@ -3268,8 +3263,17 @@ export class LyricDancePlayer {
         }
       }
       this._drawChapterImageToCtx(snapCtx, imgIdx, nextImgIdx, crossfade);
-      // Contrast scrim — guarantees white text readability against bright images
-      const scrimOpacity = this._sectionScrimOpacity[imgIdx] ?? 0;
+      // Grade-aware scrim — reduce scrim when mood grade already darkens the image
+      const baseScrim = this._sectionScrimOpacity[imgIdx] ?? 0;
+      const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+      const sections = (cd?.sections as any[]) ?? [];
+      const sectionMood = sections[imgIdx]?.visualMood as string | undefined;
+      const sectionGrade = getMoodGrade(sectionMood);
+      // If the grade brightness is below 0.45, the image is already dark — reduce scrim
+      const gradeCompensation = sectionGrade.brightness < 0.45
+        ? Math.max(0, 1 - ((0.45 - sectionGrade.brightness) / 0.20))
+        : 1.0;
+      const scrimOpacity = baseScrim * gradeCompensation;
       if (scrimOpacity > 0.01) {
         this._drawContrastScrim(snapCtx, scrimOpacity);
       }
@@ -4365,20 +4369,15 @@ export class LyricDancePlayer {
 
     const current = this.chapterImages[chapterIdx];
     const next = this.chapterImages[nextChapterIdx];
-    // ═══ SONG-LEVEL GRADE: one look for the entire song ═══
-    // Computed once from the dominant mood, then locked in.
-    if (!this._songGrade) {
-      const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-      const sections = (cd?.sections as any[]) ?? [];
-      // Use the first section's mood as the song's vibe, or fall back to default
-      const dominantMood = sections[0]?.visualMood as string | undefined;
-      this._songGrade = getMoodGrade(dominantMood);
-    }
-    let activeGrade = this._songGrade;
+    // ═══ PER-SECTION GRADE: each section gets its own cinematic look ═══
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+    const sections = (cd?.sections as any[]) ?? [];
+    const sectionMood = sections[chapterIdx]?.visualMood as string | undefined;
+    let activeGrade = getMoodGrade(sectionMood);
 
     // ═══ THEME OVERRIDE: modify grade for forced light/dark ═══
     if (this.themeOverride !== 'auto' && activeGrade) {
-      // Clone the grade to avoid mutating the cached _songGrade
+      // Clone the section grade so theme override stays local
       activeGrade = { ...activeGrade, blur: { ...activeGrade.blur }, grain: { ...activeGrade.grain } };
       if (this.themeOverride === 'light') {
         // Push brightness way up, reduce contrast, desaturate slightly
