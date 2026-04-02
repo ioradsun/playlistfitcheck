@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs: number = 55000,
+  timeoutMs: number = 120000,
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -1110,22 +1110,52 @@ async function callScene(
     { role: "user", content: userMessage },
   ];
 
-  const makeRequest = (model: string) =>
-    fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        response_format: { type: "json_object" },
-        max_completion_tokens: 8000,
-      }),
-    });
+  const makeRequest = async (model: string) => {
+    try {
+      return await fetchWithTimeout(
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            response_format: { type: "json_object" },
+            max_completion_tokens: 8000,
+          }),
+        },
+        120000,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        console.error(`[cinematic-direction] scene request timed out for model ${model}`);
+        throw {
+          status: 504,
+          message: `Scene direction AI timed out for model ${model}`,
+        };
+      }
+      throw error;
+    }
+  };
 
-  let resp = await makeRequest(modelOverride);
+  let resp: Response;
+  try {
+    resp = await makeRequest(modelOverride);
+  } catch (error: any) {
+    const status = error?.status ?? 500;
+    if (status === 504 && modelOverride !== FALLBACK_MODEL) {
+      console.warn(
+        `[cinematic-direction] scene primary model timed out, trying fallback ${FALLBACK_MODEL}`,
+      );
+      await new Promise((r) => setTimeout(r, 1500));
+      resp = await makeRequest(FALLBACK_MODEL);
+    } else {
+      throw error;
+    }
+  }
 
   // If primary model fails with retryable error, try fallback
   if (!resp.ok && (resp.status === 429 || resp.status >= 500)) {
