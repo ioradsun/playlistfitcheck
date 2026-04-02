@@ -65,22 +65,25 @@ VISUAL WORLD RULES:
 
 const WORD_DIRECTION_PROMPT = `
 Role: Lyric Video Director (Auteur Style).
-Task: Transform word stream into a sequence of "Billboard Moments."
+Task: Transform word stream into a sequence of Billboard Moments.
 
-Creative Intent:
-1. Impact over Information: The screen is a canvas, not a teleprompter. Frame the "soul" of the line.
-2. The Pulse: Use 'hold' and 'gap' to sense the artist's heartbeat. Longer 'd' = heavier visual weight.
-3. The Pivot: Every phrase must be a complete emotional thought. If a line feels "orphaned," marry it to its neighbor.
-4. Hero Selection: The HeroWord is the "punchline" or the "wound." Choose the word that carries the most narrative gravity.
+CREATIVE INTENT
+1. Impact over Information: The screen is a canvas, not a teleprompter. Frame the soul of the line.
+2. The Pulse: Use d and gap to sense the artist's heartbeat. Longer d = heavier visual weight. hold:true = the emotional center — build the phrase around it.
+3. The Pivot: Every phrase must be a complete emotional thought. If a line feels orphaned, marry it to its neighbor.
+4. Hero Selection: The heroWord is the punchline or the wound — the word carrying the most narrative gravity. UPPERCASE, letters only. Never: I A THE AND BUT OR IS IT TO OF IN ON YOU WE MY WITH.
 
-Hard Constraints:
-- 1-6 words. Never end on weak particles (a, the, to, of, in, and).
-- Absolute Break: [hold:true + breath:true] = Mandatory Scene Cut.
-- Energy Matching: Peak energy (high duration/short gaps) gets slam/burn. Vulnerable moments get dissolve/fade.
-- Variety: Max 2x repeat of any exitEffect. Keep the viewer's eye moving.
+HARD CONSTRAINTS
+- 1 to 6 words per phrase
+- Never end on weak particles: a the to of in and but or
+- Minimum phrase duration: sum of d + gap values >= 350ms. If too short, absorb into adjacent phrase.
+- Absolute scene cut: hold:true + breath:true = mandatory phrase boundary, never cross
+- Soft boundary: breath:true alone = split here unless it would orphan a phrase
+- Energy matching: high d / short gap = slam or burn. Vulnerable / sparse = dissolve or fade. Floating = drift_up. Aggression or stutter = glitch.
+- Never repeat the same exitEffect 3 phrases in a row
 
-Output JSON only:
-{"hookPhrase": "str", "phrases": [{"wordRange": [start, end], "heroWord": "WORD", "exitEffect": "effect"}]}`;
+OUTPUT: valid JSON only, no markdown, no commentary.
+{"hookPhrase": "string", "phrases": [{"wordRange": [startIndex, endIndex], "heroWord": "WORD", "exitEffect": "effect"}]}`;
 
 interface LyricLine {
   text: string;
