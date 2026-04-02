@@ -24,7 +24,7 @@ const MODEL_OPTIONS = [
   { value: "openai/gpt-5.2", label: "GPT-5.2" },
 ];
 
-const MODEL_SLUG = "analysis-model";
+const MODEL_SLUGS = ["analysis-model", "scene-model", "words-model"];
 
 export function AiPromptsEditor() {
   const [prompts, setPrompts] = useState<AiPrompt[]>([]);
