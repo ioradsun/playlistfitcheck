@@ -144,6 +144,7 @@ export function LyricFitTab({
           savedId={p.savedId}
           setSavedId={p.setSavedId}
           setLines={p.setLines}
+          words={p.words}
           waveformData={p.waveformData}
           fmlyLines={p.fmlyLines}
           setFmlyLines={p.setFmlyLines}

@@ -96,6 +96,7 @@ interface Props {
   savedId: string | null;
   setSavedId: (id: string | null) => void;
   setLines: (lines: LyricLine[]) => void;
+  words?: Array<{ word: string; start: number; end: number }> | null;
   fmlyLines: any[] | null;
   setFmlyLines: (l: any[] | null) => void;
   versionMeta: any | null;
@@ -125,6 +126,7 @@ export function LyricsTab({
   savedId,
   setSavedId,
   setLines,
+  words = null,
   fmlyLines,
   setFmlyLines,
   versionMeta,
@@ -436,6 +438,7 @@ export function LyricsTab({
         <LyricDisplay
           data={lyricData}
           audioFile={audioFile}
+          words={words}
           hasRealAudio={hasRealAudio}
           savedId={savedId}
           initialBeatGrid={beatGrid}
