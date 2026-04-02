@@ -377,7 +377,6 @@ export function PostCommentPanel({
           accent={accent}
           isLive={cardState === "active"}
           totalFireCount={totalFireCount}
-          lastFiredAt={lastFiredAt}
         />
       </div>
     </div>
