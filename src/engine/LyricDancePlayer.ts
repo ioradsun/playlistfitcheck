@@ -637,9 +637,9 @@ class BeatVisSim {
 }
 
 // ═══ DynamiteWickBar: fuse-cord waveform progress + beat visualizer ═══
-// TODO: DynamiteWickBar is superseded by MomentFuseStrip (React overlay).
-// Beat energy is now bridged to MomentFuseStrip via LyricInteractionLayer polling.
-// The canvas-level wick bar can be removed once MomentFuseStrip is stable.
+// TODO: DynamiteWickBar is superseded by canvas moment fuse (React overlay).
+// Beat energy is now bridged to canvas moment fuse via LyricInteractionLayer polling.
+// The canvas-level wick bar can be removed once canvas moment fuse is stable.
 // Admin flag: window.__LYRIC_DANCE_LIGHTNING_BAR
 // Unplayed = warm rope-textured fuse cord (ridgeline from beatEnergies).
 // Playhead = crackling flame that breathes with energy.
@@ -665,6 +665,13 @@ interface DWBSmoke {
   trail: Array<{ x: number; y: number }>;
 }
 
+interface MomentSegment {
+  startRatio: number;
+  endRatio: number;
+  sectionIndex: number;
+  fireCount: number;
+}
+
 class DynamiteWickBar {
   private dwbCanvas: HTMLCanvasElement;
   private dwbCtx: CanvasRenderingContext2D;
@@ -683,6 +690,8 @@ class DynamiteWickBar {
   private waveformSmooth: Float32Array;
   // Flame flicker state
   private flamePhase = 0;
+  private _momentSegments: MomentSegment[] = [];
+  private _momentFireCounts: Record<number, number> = {};
 
   constructor(accentHex: string, dpr = 1) {
     this.dwbCanvas = document.createElement('canvas');
@@ -827,6 +836,29 @@ class DynamiteWickBar {
     this.waveformSmooth = smooth;
   }
 
+  setMoments(
+    moments: Array<{ startSec: number; endSec: number; sectionIndex: number }>,
+    songDurationSec: number,
+  ): void {
+    if (!moments.length || songDurationSec <= 0) {
+      this._momentSegments = [];
+      return;
+    }
+    this._momentSegments = moments.map((m) => ({
+      startRatio: m.startSec / songDurationSec,
+      endRatio: m.endSec / songDurationSec,
+      sectionIndex: m.sectionIndex,
+      fireCount: 0,
+    }));
+  }
+
+  setMomentFireCounts(counts: Record<number, number>): void {
+    this._momentFireCounts = counts;
+    for (let i = 0; i < this._momentSegments.length; i++) {
+      this._momentSegments[i].fireCount = counts[i] ?? 0;
+    }
+  }
+
   update(
     energy: number,
     pulse: number,
@@ -844,97 +876,99 @@ class DynamiteWickBar {
     ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
     const baseY = H * 0.85;
     const maxPeakH = H * 0.72;
-    const px = Math.max(0, Math.min(W - 1, Math.floor(progress * W)));
+    const isNewBeat = beatIndex !== this.lastBeatIndex;
 
     this.frame++;
-    const f = this.frame;
     this.flamePhase += 0.2 + energy * 0.3;
-    const isNewBeat = beatIndex !== this.lastBeatIndex;
-    this.lastBeatIndex = beatIndex;
-    const wf = this.waveformSmooth;
-    const accentBoost = 0.75 + brightness * 0.35 + beatPhase * 0.1;
 
-    // ── Clear to transparent; smoke trails are redrawn from trail history each frame ──
     ctx.clearRect(0, 0, W, H);
 
-    // ── Ember heat: inject at playhead, decay behind ──
+    if (this._momentSegments.length > 0) {
+      this._renderMomentFuse(ctx, W, H, baseY, maxPeakH, progress, energy, pulse, hitStrength, beatPhase, beatIndex, hitType, brightness, isDownbeat, isNewBeat);
+    } else {
+      this._renderContinuousFuse(ctx, W, H, baseY, maxPeakH, progress, energy, pulse, hitStrength, beatPhase, beatIndex, hitType, brightness, isDownbeat, isNewBeat);
+    }
+    this.lastBeatIndex = beatIndex;
+  }
+
+  private _renderContinuousFuse(
+    ctx: CanvasRenderingContext2D,
+    W: number,
+    H: number,
+    baseY: number,
+    maxPeakH: number,
+    progress: number,
+    energy: number,
+    pulse: number,
+    hitStrength: number,
+    beatPhase: number,
+    beatIndex: number,
+    hitType: 'transient' | 'bass' | 'tonal' | 'none',
+    brightness: number,
+    isDownbeat: boolean,
+    isNewBeat: boolean,
+  ): void {
+    const px = Math.max(0, Math.min(W - 1, Math.floor(progress * W)));
+    const wf = this.waveformSmooth;
     const heat = this.emberHeat;
-    // Beat injects heat near playhead
+    const accentBoost = 0.75 + brightness * 0.35 + beatPhase * 0.1;
+
     if (pulse > 0.3) {
       for (let i = Math.max(0, px - 20); i <= px; i++) {
-        heat[i] = Math.min(1, heat[i] + (pulse * energy) * 0.15);
+        heat[i] = Math.min(1, heat[i] + pulse * energy * 0.15);
       }
     }
-    // Decay
     for (let i = 0; i < W; i++) {
       heat[i] *= 0.975;
-      // Distance-based base heat near playhead
       const dist = Math.abs(i - px);
       if (i <= px && dist < 80) {
         heat[i] = Math.max(heat[i], Math.max(0, 1 - dist / 80) * 0.5);
       }
     }
-    // Bass hit: pulse heat through entire ember trail
     if (hitType === 'bass' && hitStrength > 0.3) {
       for (let i = 0; i <= px; i++) {
         heat[i] = Math.min(1, heat[i] + hitStrength * 0.25 * (1 - (px - i) / Math.max(1, px)));
       }
     }
 
-    const getPeakH = (x: number): number => {
-      return Math.min(maxPeakH, (wf[x] || 0.08) * maxPeakH);
-    };
+    const getPeakH = (x: number): number => Math.min(maxPeakH, (wf[x] || 0.08) * maxPeakH);
 
-    // ════════════════════════════════════════════════════
-    // FUSE CORD (unplayed) — warm rope texture
-    // ════════════════════════════════════════════════════
-    {
-      // Filled shape — warm dark brown
-      ctx.beginPath();
-      ctx.moveTo(Math.max(px, 0), baseY);
-      for (let x = Math.max(px, 0); x < W; x++) {
-        ctx.lineTo(x, baseY - getPeakH(x));
-      }
-      ctx.lineTo(W, baseY);
-      ctx.closePath();
-      // Warm brown gradient
-      const fuseGrad = ctx.createLinearGradient(0, baseY - maxPeakH, 0, baseY);
-      fuseGrad.addColorStop(0, 'rgba(160,110,60,0.35)');
-      fuseGrad.addColorStop(0.5, 'rgba(130,85,45,0.25)');
-      fuseGrad.addColorStop(1, 'rgba(90,60,30,0.15)');
-      ctx.fillStyle = fuseGrad;
-      ctx.fill();
-
-      // Rope texture: top edge with slight roughness
-      ctx.beginPath();
-      for (let x = Math.max(px + 2, 0); x < W; x++) {
-        const peakH = getPeakH(x);
-        // Tiny jitter for rope texture feel
-        const jitter = Math.sin(x * 2.3 + 17.1) * 0.8 + Math.sin(x * 5.7 + 3.2) * 0.4;
-        const y = baseY - peakH + jitter;
-        x === Math.max(px + 2, 0) ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }
-      ctx.strokeStyle = 'rgba(180,130,70,0.4)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Inner braid lines for rope feel
-      ctx.beginPath();
-      for (let x = Math.max(px + 2, 0); x < W; x++) {
-        const peakH = getPeakH(x);
-        const braidY = baseY - peakH * 0.5 + Math.sin(x * 0.3) * peakH * 0.15;
-        x === Math.max(px + 2, 0) ? ctx.moveTo(x, braidY) : ctx.lineTo(x, braidY);
-      }
-      ctx.strokeStyle = 'rgba(140,100,55,0.15)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(Math.max(px, 0), baseY);
+    for (let x = Math.max(px, 0); x < W; x++) {
+      ctx.lineTo(x, baseY - getPeakH(x));
     }
+    ctx.lineTo(W, baseY);
+    ctx.closePath();
+    const fuseGrad = ctx.createLinearGradient(0, baseY - maxPeakH, 0, baseY);
+    fuseGrad.addColorStop(0, 'rgba(160,110,60,0.35)');
+    fuseGrad.addColorStop(0.5, 'rgba(130,85,45,0.25)');
+    fuseGrad.addColorStop(1, 'rgba(90,60,30,0.15)');
+    ctx.fillStyle = fuseGrad;
+    ctx.fill();
 
-    // ════════════════════════════════════════════════════
-    // EMBER TRAIL (played) — charred wick, glowing embers
-    // ════════════════════════════════════════════════════
+    ctx.beginPath();
+    for (let x = Math.max(px + 2, 0); x < W; x++) {
+      const peakH = getPeakH(x);
+      const jitter = Math.sin(x * 2.3 + 17.1) * 0.8 + Math.sin(x * 5.7 + 3.2) * 0.4;
+      const y = baseY - peakH + jitter;
+      x === Math.max(px + 2, 0) ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = 'rgba(180,130,70,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    for (let x = Math.max(px + 2, 0); x < W; x++) {
+      const peakH = getPeakH(x);
+      const braidY = baseY - peakH * 0.5 + Math.sin(x * 0.3) * peakH * 0.15;
+      x === Math.max(px + 2, 0) ? ctx.moveTo(x, braidY) : ctx.lineTo(x, braidY);
+    }
+    ctx.strokeStyle = 'rgba(140,100,55,0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
     if (px > 0) {
-      // Base charred shape — dark
       ctx.beginPath();
       ctx.moveTo(0, baseY);
       for (let x = 0; x <= px; x++) {
@@ -945,22 +979,17 @@ class DynamiteWickBar {
       ctx.fillStyle = 'rgba(30,15,10,0.6)';
       ctx.fill();
 
-      // Ember glow overlay — per-column based on heat
       for (let x = 0; x <= px; x++) {
         const h = heat[x] || 0;
         if (h < 0.02) continue;
         const peakH = getPeakH(x);
         if (peakH < 1) continue;
-
-        // Color: hot = bright orange/yellow, cooling = deep red, cold = dark
         const temp = h;
         const [ar, ag, ab] = this.accent;
-        const r = Math.min(255, Math.floor((255 * Math.min(1, temp * 2)) * 0.7 + ar * 0.3));
+        const r = Math.min(255, Math.floor(Math.min(1, temp * 2) * 255 * 0.7 + ar * 0.3));
         const g = Math.min(255, Math.floor((80 + 140 * Math.max(0, temp - 0.3)) * 0.65 + ag * 0.35 * accentBoost));
         const b = Math.min(255, Math.floor((20 * Math.max(0, temp - 0.6)) * 0.4 + ab * 0.18));
         const a = h * 0.7;
-
-        // Glow column
         const glowGrad = ctx.createLinearGradient(x, baseY - peakH, x, baseY);
         glowGrad.addColorStop(0, `rgba(${r},${g},${b},${a * 0.9})`);
         glowGrad.addColorStop(0.6, `rgba(${r},${Math.floor(g * 0.6)},${b},${a * 0.5})`);
@@ -969,7 +998,6 @@ class DynamiteWickBar {
         ctx.fillRect(x, baseY - peakH, 1.5, peakH);
       }
 
-      // Top edge: glowing ember line
       ctx.beginPath();
       for (let x = 0; x <= px; x++) {
         const y = baseY - getPeakH(x);
@@ -984,110 +1012,206 @@ class DynamiteWickBar {
       ctx.shadowBlur = 3 + energy * 5;
       ctx.stroke();
       ctx.shadowBlur = 0;
+    }
 
-      // Beat pulse: flash embers brighter on beat
-      if (isNewBeat && pulse > 0.4) {
+    this._drawFlame(ctx, px, baseY, maxPeakH, energy, pulse, hitStrength, brightness, isDownbeat);
+    this._updateSparks(ctx, px, baseY - getPeakH(px), energy, pulse, hitStrength, beatIndex, isDownbeat, isNewBeat);
+    this._drawSmoke(ctx);
+  }
+
+  private _renderMomentFuse(
+    ctx: CanvasRenderingContext2D,
+    W: number,
+    _H: number,
+    baseY: number,
+    maxPeakH: number,
+    progress: number,
+    energy: number,
+    pulse: number,
+    hitStrength: number,
+    _beatPhase: number,
+    beatIndex: number,
+    _hitType: 'transient' | 'bass' | 'tonal' | 'none',
+    brightness: number,
+    isDownbeat: boolean,
+    isNewBeat: boolean,
+  ): void {
+    const GAP = 3;
+    const segments = this._momentSegments;
+    const wf = this.waveformSmooth;
+    const maxFire = Math.max(1, ...segments.map((s) => s.fireCount));
+    let activePx = Math.max(0, Math.min(W - 1, Math.floor(progress * W)));
+
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const x0 = Math.floor(seg.startRatio * W) + (i > 0 ? GAP / 2 : 0);
+      const x1 = Math.floor(seg.endRatio * W) - (i < segments.length - 1 ? GAP / 2 : 0);
+      const segW = x1 - x0;
+      if (segW <= 0) continue;
+
+      const isPast = seg.endRatio < progress;
+      const isActive = seg.startRatio <= progress && progress < seg.endRatio;
+
+      if (isPast) {
+        const heat = seg.fireCount / maxFire;
+        ctx.save();
+        ctx.globalAlpha = 0.25 + heat * 0.35;
         ctx.beginPath();
-        ctx.moveTo(Math.max(0, px - 60), baseY);
-        for (let x = Math.max(0, px - 60); x <= px; x++) {
-          ctx.lineTo(x, baseY - getPeakH(x));
+        ctx.moveTo(x0, baseY);
+        for (let x = x0; x <= x1; x++) {
+          const peakH = (wf[x] || 0.08) * maxPeakH * 0.6;
+          ctx.lineTo(x, baseY - peakH);
+        }
+        ctx.lineTo(x1, baseY);
+        ctx.closePath();
+        const [r, g, b] = this.accent;
+        ctx.fillStyle = `rgba(${r},${Math.floor(g * 0.6)},${Math.floor(b * 0.3)},${0.4 + heat * 0.4})`;
+        ctx.fill();
+        ctx.restore();
+      } else if (isActive) {
+        const localProgress = (progress - seg.startRatio) / Math.max(0.001, seg.endRatio - seg.startRatio);
+        const px = x0 + Math.floor(localProgress * segW);
+        activePx = px;
+
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(Math.max(px, x0), baseY);
+        for (let x = Math.max(px, x0); x <= x1; x++) {
+          const peakH = (wf[x] || 0.08) * maxPeakH;
+          ctx.lineTo(x, baseY - peakH);
+        }
+        ctx.lineTo(x1, baseY);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(${this.accent[0]},${this.accent[1]},${this.accent[2]},0.15)`;
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(x0, baseY);
+        for (let x = x0; x <= px; x++) {
+          const peakH = (wf[x] || 0.08) * maxPeakH * 0.6;
+          ctx.lineTo(x, baseY - peakH);
         }
         ctx.lineTo(px, baseY);
         ctx.closePath();
-        ctx.fillStyle = `rgba(${Math.min(255, this.accent[0] + 40)},${Math.min(255, this.accent[1] + 20)},20,${(pulse * energy) * 0.12})`;
+        const [r, g, b] = this.accent;
+        ctx.fillStyle = `rgba(${r},${Math.floor(g * 0.7)},${Math.floor(b * 0.4)},0.5)`;
         ctx.fill();
-      }
-    }
+        ctx.restore();
 
-    // ════════════════════════════════════════════════════
-    // BURN POINT (playhead) — crackling flame
-    // ════════════════════════════════════════════════════
-    {
-      const peakH = getPeakH(px);
-      const flameBase = baseY - peakH;
-      const flameH = 8 + energy * 18 + (pulse * energy) * 8;
-      const flicker1 = Math.sin(this.flamePhase * 1.7) * 0.3;
-      const flicker2 = Math.sin(this.flamePhase * 2.9 + 1.3) * 0.2;
-      const flicker3 = Math.sin(this.flamePhase * 4.3 + 2.7) * 0.15;
-      const [ar, ag, ab] = this.accent;
-
-      // Outer flame glow (large soft)
-      const outerGlow = ctx.createRadialGradient(
-        px, flameBase - flameH * 0.3, 0,
-        px, flameBase - flameH * 0.3, flameH * 1.5 + 10,
-      );
-      outerGlow.addColorStop(0, `rgba(${Math.min(255, ar + 80)},${Math.max(70, ag)},${Math.max(10, Math.floor(ab * 0.35))},${0.25 + energy * 0.15})`);
-      outerGlow.addColorStop(0.5, `rgba(${Math.min(255, ar + 40)},${Math.floor(Math.max(60, ag * 0.5))},0,${0.1 + energy * 0.05})`);
-      outerGlow.addColorStop(1, 'rgba(255,30,0,0)');
-      ctx.fillStyle = outerGlow;
-      ctx.fillRect(px - flameH * 2, flameBase - flameH * 2, flameH * 4, flameH * 2.5);
-
-      // Flame tongues (3 overlapping bezier shapes)
-      for (let tongue = 0; tongue < 3; tongue++) {
-        const xOff = (tongue - 1) * (3 + energy * 3) + flicker1 * 4;
-        const hMult = tongue === 1 ? 1.0 : 0.65 + flicker2 * 0.2;
-        const tongueH = flameH * hMult;
-        const tongueW = 4 + energy * 4 + flicker3 * 2;
-
+        this._drawFlame(ctx, px, baseY, maxPeakH, energy, pulse, hitStrength, brightness, isDownbeat);
+      } else {
+        ctx.save();
+        ctx.globalAlpha = 0.12;
         ctx.beginPath();
-        ctx.moveTo(px + xOff - tongueW / 2, flameBase);
-        ctx.quadraticCurveTo(
-          px + xOff - tongueW * 0.3 + flicker2 * 3,
-          flameBase - tongueH * 0.6,
-          px + xOff + flicker1 * 2,
-          flameBase - tongueH,
-        );
-        ctx.quadraticCurveTo(
-          px + xOff + tongueW * 0.3 - flicker3 * 3,
-          flameBase - tongueH * 0.5,
-          px + xOff + tongueW / 2,
-          flameBase,
-        );
-        ctx.closePath();
-
-        const flameGrad = ctx.createLinearGradient(
-          px + xOff, flameBase,
-          px + xOff, flameBase - tongueH,
-        );
-        if (tongue === 1) {
-          flameGrad.addColorStop(0, 'rgba(255,220,150,0.9)');
-          flameGrad.addColorStop(0.2, `rgba(${Math.min(255, ar + 40)},${Math.min(255, ag + 30)},50,0.85)`);
-          flameGrad.addColorStop(0.5, `rgba(${Math.min(255, ar + 20)},${Math.max(90, ag)},20,0.7)`);
-          flameGrad.addColorStop(0.8, 'rgba(255,60,10,0.5)');
-          flameGrad.addColorStop(1, 'rgba(200,30,0,0.1)');
-        } else {
-          flameGrad.addColorStop(0, `rgba(${Math.min(255, ar + 10)},${Math.max(120, ag * 0.9)},40,0.7)`);
-          flameGrad.addColorStop(0.4, `rgba(${Math.min(255, ar + 20)},80,10,0.5)`);
-          flameGrad.addColorStop(1, 'rgba(180,20,0,0.05)');
+        ctx.moveTo(x0, baseY);
+        for (let x = x0; x <= x1; x++) {
+          const peakH = (wf[x] || 0.08) * maxPeakH;
+          ctx.lineTo(x, baseY - peakH);
         }
-        ctx.fillStyle = flameGrad;
+        ctx.lineTo(x1, baseY);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(${this.accent[0]},${this.accent[1]},${this.accent[2]},0.2)`;
         ctx.fill();
-      }
-
-      const coreGlow = ctx.createRadialGradient(px, flameBase, 0, px, flameBase, 5 + energy * 3);
-      coreGlow.addColorStop(0, `rgba(255,255,230,${0.7 + (pulse * energy) * 0.3})`);
-      coreGlow.addColorStop(0.5, `rgba(${Math.min(255, ar + 40)},${Math.min(255, ag + 20)},100,0.3)`);
-      coreGlow.addColorStop(1, `rgba(${Math.min(255, ar)},${Math.max(90, ag * 0.7)},20,0)`);
-      ctx.fillStyle = coreGlow;
-      ctx.beginPath();
-      ctx.arc(px, flameBase, 6 + energy * 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (hitStrength > 0.4) {
-        const flareR = 15 + hitStrength * 25;
-        const flareGrad = ctx.createRadialGradient(px, flameBase - flameH * 0.3, 0, px, flameBase - flameH * 0.3, flareR);
-        flareGrad.addColorStop(0, `rgba(255,255,200,${hitStrength * 0.5})`);
-        flareGrad.addColorStop(0.4, `rgba(${Math.min(255, ar + 50)},${Math.min(255, ag + 10)},30,${hitStrength * 0.3})`);
-        flareGrad.addColorStop(1, 'rgba(255,50,0,0)');
-        ctx.fillStyle = flareGrad;
-        ctx.fillRect(px - flareR, flameBase - flameH - flareR, flareR * 2, flareR * 2);
+        ctx.restore();
       }
     }
 
-    if (energy > 0.35 && f % 2 === 0) {
-      const numSparks = Math.floor(energy * 3) + (isNewBeat && isDownbeat ? 4 : 0)
-        + (hitStrength > 0.5 ? Math.floor(hitStrength * 6) : 0);
-      const spawnY = baseY - getPeakH(px);
+    const flameY = baseY - (wf[Math.max(0, Math.min(W - 1, Math.floor(activePx)))] || 0.08) * maxPeakH;
+    this._updateSparks(ctx, activePx, flameY, energy, pulse, hitStrength, beatIndex, isDownbeat, isNewBeat);
+    this._drawSmoke(ctx);
+  }
+
+  private _drawFlame(
+    ctx: CanvasRenderingContext2D,
+    px: number,
+    baseY: number,
+    maxPeakH: number,
+    energy: number,
+    pulse: number,
+    hitStrength: number,
+    _brightness: number,
+    _isDownbeat: boolean,
+  ): void {
+    const wf = this.waveformSmooth;
+    const peakH = Math.min(maxPeakH, (wf[Math.max(0, Math.min(this._W - 1, px))] || 0.08) * maxPeakH);
+    const flameBase = baseY - peakH;
+    const flameH = 8 + energy * 18 + pulse * energy * 8;
+    const flicker1 = Math.sin(this.flamePhase * 1.7) * 0.3;
+    const flicker2 = Math.sin(this.flamePhase * 2.9 + 1.3) * 0.2;
+    const flicker3 = Math.sin(this.flamePhase * 4.3 + 2.7) * 0.15;
+    const [ar, ag, ab] = this.accent;
+
+    const outerGlow = ctx.createRadialGradient(px, flameBase - flameH * 0.3, 0, px, flameBase - flameH * 0.3, flameH * 1.5 + 10);
+    outerGlow.addColorStop(0, `rgba(${Math.min(255, ar + 80)},${Math.max(70, ag)},${Math.max(10, Math.floor(ab * 0.35))},${0.25 + energy * 0.15})`);
+    outerGlow.addColorStop(0.5, `rgba(${Math.min(255, ar + 40)},${Math.floor(Math.max(60, ag * 0.5))},0,${0.1 + energy * 0.05})`);
+    outerGlow.addColorStop(1, 'rgba(255,30,0,0)');
+    ctx.fillStyle = outerGlow;
+    ctx.fillRect(px - flameH * 2, flameBase - flameH * 2, flameH * 4, flameH * 2.5);
+
+    for (let tongue = 0; tongue < 3; tongue++) {
+      const xOff = (tongue - 1) * (3 + energy * 3) + flicker1 * 4;
+      const hMult = tongue === 1 ? 1.0 : 0.65 + flicker2 * 0.2;
+      const tongueH = flameH * hMult;
+      const tongueW = 4 + energy * 4 + flicker3 * 2;
+      ctx.beginPath();
+      ctx.moveTo(px + xOff - tongueW / 2, flameBase);
+      ctx.quadraticCurveTo(px + xOff - tongueW * 0.3 + flicker2 * 3, flameBase - tongueH * 0.6, px + xOff + flicker1 * 2, flameBase - tongueH);
+      ctx.quadraticCurveTo(px + xOff + tongueW * 0.3 - flicker3 * 3, flameBase - tongueH * 0.5, px + xOff + tongueW / 2, flameBase);
+      ctx.closePath();
+
+      const flameGrad = ctx.createLinearGradient(px + xOff, flameBase, px + xOff, flameBase - tongueH);
+      if (tongue === 1) {
+        flameGrad.addColorStop(0, 'rgba(255,220,150,0.9)');
+        flameGrad.addColorStop(0.2, `rgba(${Math.min(255, ar + 40)},${Math.min(255, ag + 30)},50,0.85)`);
+        flameGrad.addColorStop(0.5, `rgba(${Math.min(255, ar + 20)},${Math.max(90, ag)},20,0.7)`);
+        flameGrad.addColorStop(0.8, 'rgba(255,60,10,0.5)');
+        flameGrad.addColorStop(1, 'rgba(200,30,0,0.1)');
+      } else {
+        flameGrad.addColorStop(0, `rgba(${Math.min(255, ar + 10)},${Math.max(120, ag * 0.9)},40,0.7)`);
+        flameGrad.addColorStop(0.4, `rgba(${Math.min(255, ar + 20)},80,10,0.5)`);
+        flameGrad.addColorStop(1, 'rgba(180,20,0,0.05)');
+      }
+      ctx.fillStyle = flameGrad;
+      ctx.fill();
+    }
+
+    const coreGlow = ctx.createRadialGradient(px, flameBase, 0, px, flameBase, 5 + energy * 3);
+    coreGlow.addColorStop(0, `rgba(255,255,230,${0.7 + pulse * energy * 0.3})`);
+    coreGlow.addColorStop(0.5, `rgba(${Math.min(255, ar + 40)},${Math.min(255, ag + 20)},100,0.3)`);
+    coreGlow.addColorStop(1, `rgba(${Math.min(255, ar)},${Math.max(90, ag * 0.7)},20,0)`);
+    ctx.fillStyle = coreGlow;
+    ctx.beginPath();
+    ctx.arc(px, flameBase, 6 + energy * 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (hitStrength > 0.4) {
+      const flareR = 15 + hitStrength * 25;
+      const flareGrad = ctx.createRadialGradient(px, flameBase - flameH * 0.3, 0, px, flameBase - flameH * 0.3, flareR);
+      flareGrad.addColorStop(0, `rgba(255,255,200,${hitStrength * 0.5})`);
+      flareGrad.addColorStop(0.4, `rgba(${Math.min(255, ar + 50)},${Math.min(255, ag + 10)},30,${hitStrength * 0.3})`);
+      flareGrad.addColorStop(1, 'rgba(255,50,0,0)');
+      ctx.fillStyle = flareGrad;
+      ctx.fillRect(px - flareR, flameBase - flameH - flareR, flareR * 2, flareR * 2);
+    }
+  }
+
+  private _updateSparks(
+    ctx: CanvasRenderingContext2D,
+    px: number,
+    spawnY: number,
+    energy: number,
+    pulse: number,
+    hitStrength: number,
+    beatIndex: number,
+    isDownbeat: boolean,
+    isNewBeat: boolean,
+  ): void {
+    if (energy > 0.35 && this.frame % 2 === 0) {
+      const numSparks = Math.floor(energy * 3) + (isNewBeat && isDownbeat ? 4 : 0) + (hitStrength > 0.5 ? Math.floor(hitStrength * 6) : 0);
       for (let s = 0; s < numSparks; s++) {
         this.sparks.push({
           x: px + (Math.random() - 0.5) * 6,
@@ -1101,7 +1225,7 @@ class DynamiteWickBar {
       }
     }
 
-    this.sparks = this.sparks.filter(s => s.life > 0.02);
+    this.sparks = this.sparks.filter((s) => s.life > 0.02);
     for (const s of this.sparks) {
       s.x += s.vx;
       s.y += s.vy;
@@ -1110,33 +1234,24 @@ class DynamiteWickBar {
       s.life -= 0.025;
 
       const temp = s.life * s.bright;
-      const sr = 255;
       const sg = Math.min(255, Math.floor(100 + 155 * temp));
       const sb = Math.min(255, Math.floor(30 * temp));
       const sa = s.life * 0.8;
 
       ctx.beginPath();
-      ctx.fillStyle = `rgba(${sr},${sg},${sb},${sa})`;
+      ctx.fillStyle = `rgba(255,${sg},${sb},${sa})`;
       ctx.arc(s.x, s.y, Math.max(0.1, s.size * s.life), 0, Math.PI * 2);
       ctx.fill();
-
-      if (s.bright > 0.6 && s.life > 0.3) {
-        ctx.beginPath();
-        ctx.moveTo(s.x, s.y);
-        ctx.lineTo(s.x - s.vx * 2, s.y - s.vy * 2);
-        ctx.strokeStyle = `rgba(255,${sg},0,${s.life * 0.3})`;
-        ctx.lineWidth = Math.max(0.1, s.size * s.life * 0.5);
-        ctx.stroke();
-      }
     }
 
-    if (f % 4 === 0 && energy > 0.2) {
+    if (this.sparks.length > 80) this.sparks = this.sparks.slice(-80);
+
+    if (this.frame % 4 === 0 && energy > 0.2) {
       const numSmoke = 1 + (hitStrength > 0.3 ? 1 : 0);
-      const spawnY = baseY - getPeakH(px) - 10 - energy * 10;
       for (let s = 0; s < numSmoke; s++) {
         this.smokes.push({
           x: px + (Math.random() - 0.5) * 8,
-          y: spawnY,
+          y: spawnY - 10 - energy * 10,
           vx: (Math.random() - 0.5) * 0.8,
           vy: -(0.5 + Math.random() * 1.2),
           life: 1,
@@ -1145,8 +1260,10 @@ class DynamiteWickBar {
         });
       }
     }
+  }
 
-    this.smokes = this.smokes.filter(s => s.life > 0.03);
+  private _drawSmoke(ctx: CanvasRenderingContext2D): void {
+    this.smokes = this.smokes.filter((s) => s.life > 0.03);
     for (const s of this.smokes) {
       s.x += s.vx;
       s.y += s.vy;
@@ -1169,7 +1286,6 @@ class DynamiteWickBar {
       }
     }
 
-    if (this.sparks.length > 80) this.sparks = this.sparks.slice(-80);
     if (this.smokes.length > 15) this.smokes = this.smokes.slice(-15);
   }
 
@@ -1618,7 +1734,7 @@ export class LyricDancePlayer {
   // Compatibility with existing React shell
   async init(): Promise<void> {
     this.perfDebugEnabled = Boolean((window as Window & { __LYRIC_DANCE_DEBUG_PERF?: boolean }).__LYRIC_DANCE_DEBUG_PERF);
-    this.wickBarEnabled = Boolean((window as Window & { __LYRIC_DANCE_LIGHTNING_BAR?: boolean }).__LYRIC_DANCE_LIGHTNING_BAR);
+    this.wickBarEnabled = true;
     this._firstPaintMarked = false;
     this._fontLayoutReflowPending = false;
     performance.clearMarks("engine:start");
@@ -2335,6 +2451,17 @@ export class LyricDancePlayer {
     this._moments = Array.isArray(moments) ? moments : [];
     this._frameMomentIdx = -1;
     this._bgSnapshotMomentIdx = -1;
+    if (this._globalWickBar) {
+      const duration = Math.max(0.01, this.songEndSec - this.songStartSec);
+      this._globalWickBar.setMoments(
+        this._moments.map((m) => ({
+          startSec: m.startSec,
+          endSec: m.endSec,
+          sectionIndex: m.sectionIndex ?? 0,
+        })),
+        duration,
+      );
+    }
   }
 
   updateCinematicDirection(direction: CinematicDirection): void {
@@ -4655,6 +4782,15 @@ export class LyricDancePlayer {
           this._globalWickBar.setWaveformPreview(derived);
         }
       }
+      const duration = Math.max(0.01, this.songEndSec - this.songStartSec);
+      this._globalWickBar.setMoments(
+        this._moments.map((m) => ({
+          startSec: m.startSec,
+          endSec: m.endSec,
+          sectionIndex: m.sectionIndex ?? 0,
+        })),
+        duration,
+      );
       if (this.wickBarEnabled && !this._wickSeekOverlay) {
         this._mountWickSeekOverlay();
       }
@@ -4698,8 +4834,17 @@ export class LyricDancePlayer {
     const seekFromEvent = (clientX: number) => {
       const rect = overlay.getBoundingClientRect();
       const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      const timeSec = this.songStartSec + ratio * (this.songEndSec - this.songStartSec);
-      this.seek(timeSec);
+      const duration = this.songEndSec - this.songStartSec;
+      const clickTimeSec = this.songStartSec + ratio * duration;
+      if (this._moments.length > 0) {
+        for (const moment of this._moments) {
+          if (clickTimeSec >= moment.startSec && clickTimeSec < moment.endSec) {
+            this.seek(moment.startSec);
+            return;
+          }
+        }
+      }
+      this.seek(clickTimeSec);
     };
 
     const onDown = (e: MouseEvent | TouchEvent) => {
