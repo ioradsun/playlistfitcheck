@@ -132,16 +132,6 @@ interface RequestBody {
 
 const ENUMS = {
   sceneTone: ["dark", "light", "mixed"],
-  typography: [
-    "bold-impact",
-    "clean-modern",
-    "elegant-serif",
-    "raw-condensed",
-    "whisper-soft",
-    "tech-mono",
-    "display-heavy",
-    "editorial-light",
-  ],
   visualMood: [
     "intimate",
     "anthemic",
@@ -335,28 +325,18 @@ HELD WORDS — artist vocal emphasis
 ═══════════════════════════════════════
 
 These words were held ≥600ms by the artist (median word is ${medianMs}ms).
-Long duration = deliberate artistic emphasis. These are your PRIMARY hero candidates.
-Every held word below should get a wordDirective unless truly low-impact in context.
+Long duration = deliberate artistic emphasis. Prioritize these as heroWord candidates.
 
 ${entries.join("\n")}
 
-Map duration to emphasisLevel:
-  ≥1500ms → emphasisLevel 5 (the artist REALLY held this)
-  1000-1499ms → emphasisLevel 4
-  700-999ms → emphasisLevel 3
-  600-699ms → emphasisLevel 2
+Guidelines:
+  ≥1500ms → strongest heroWord candidate, use high-impact exitEffect (slam, burn, glitch)
+  1000-1499ms → strong heroWord candidate, use emphatic exitEffect (scatter, cascade)
+  700-999ms → good heroWord candidate
+  600-699ms → consider for heroWord if contextually important
 
-You may add up to 5 additional short words if narratively critical (title words, emotional peaks).
+You may select up to 5 additional short-duration words as heroWords if narratively critical (title words, emotional peaks).
 `;
-}
-
-interface WordSegment {
-  startIdx: number;
-  endIdx: number;
-  words: Array<{ word: string; start: number; end: number }>;
-  durationMs: number;
-  wordCount: number;
-  pauses: Array<{ afterWordIdx: number; gapMs: number }>;
 }
 
 interface ValidationResult {
@@ -371,55 +351,6 @@ function fmt(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-// buildUserMessage() removed — legacy no-mode path deleted
-function preSegmentAtBreaths(
-  words: Array<{ word: string; start: number; end: number }>,
-  breathThresholdMs: number = 300,
-): WordSegment[] {
-  if (!words || words.length === 0) return [];
-
-  const segments: WordSegment[] = [];
-  let segStart = 0;
-
-  for (let i = 0; i < words.length; i++) {
-    const isLast = i === words.length - 1;
-    let shouldSplit = isLast;
-
-    if (!isLast) {
-      const gapMs = Math.round((words[i + 1].start - words[i].end) * 1000);
-      if (gapMs >= breathThresholdMs) shouldSplit = true;
-    }
-
-    if (shouldSplit) {
-      const segWords = words.slice(segStart, i + 1);
-      const durationMs = Math.round(
-        (segWords[segWords.length - 1].end - segWords[0].start) * 1000,
-      );
-
-      // Find internal pauses (≥150ms gaps within the segment)
-      const pauses: Array<{ afterWordIdx: number; gapMs: number }> = [];
-      for (let j = 0; j < segWords.length - 1; j++) {
-        const gap = Math.round((segWords[j + 1].start - segWords[j].end) * 1000);
-        if (gap >= 150) {
-          pauses.push({ afterWordIdx: segStart + j, gapMs: gap });
-        }
-      }
-
-      segments.push({
-        startIdx: segStart,
-        endIdx: i,
-        words: segWords,
-        durationMs,
-        wordCount: segWords.length,
-        pauses,
-      });
-
-      segStart = i + 1;
-    }
-  }
-
-  return segments;
-}
 
 /**
  * Hard-enforce phrase rules that the AI can't be trusted with:
@@ -459,13 +390,24 @@ function enforcePhraseLimits(
       }
     }
 
-    // Split into two halves at the largest gap
+    // Determine which half the heroWord belongs to
+    let heroInFirst = true;
+    if (phrase.heroWord) {
+      const heroClean = phrase.heroWord.toLowerCase().replace(/[^a-z0-9]/g, "");
+      heroInFirst = false;
+      for (let hi = start; hi <= bestSplitIdx && hi < words.length; hi++) {
+        const wClean = words[hi].word.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (wClean === heroClean) { heroInFirst = true; break; }
+      }
+    }
+
     const firstHalf: typeof phrase = {
       wordRange: [start, bestSplitIdx],
-      heroWord: phrase.heroWord,
+      heroWord: heroInFirst ? phrase.heroWord : undefined,
     };
     const secondHalf: typeof phrase = {
       wordRange: [bestSplitIdx + 1, end],
+      heroWord: heroInFirst ? undefined : phrase.heroWord,
     };
 
     // Recursively enforce on each half
@@ -838,11 +780,6 @@ function validateScene(
       }
     }
   }
-  if (v.typography && typeof v.typography === 'string') {
-    const allowed = ENUMS.typography as readonly string[];
-    if (!allowed.includes(v.typography)) delete v.typography;
-  }
-
   if (typeof v.description === "string")
     v.description = v.description.trim().slice(0, 200);
   if (typeof v.mood === "string") v.mood = v.mood.trim().toLowerCase();
@@ -1487,11 +1424,21 @@ async function callWords(
 }
 
 /** Fetch custom prompts + model from ai_prompts table, falling back to hardcoded defaults. */
+let _promptCache: {
+  value: { scenePrompt: string; wordPrompt: string; model: string };
+  expiresAt: number;
+} | null = null;
+const PROMPT_CACHE_TTL_MS = 60_000;
+
 async function loadCustomPrompts(): Promise<{
   scenePrompt: string;
   wordPrompt: string;
   model: string;
 }> {
+  if (_promptCache && Date.now() < _promptCache.expiresAt) {
+    return _promptCache.value;
+  }
+
   const defaults = {
     scenePrompt: SCENE_DIRECTION_PROMPT,
     wordPrompt: WORD_DIRECTION_PROMPT,
@@ -1502,7 +1449,7 @@ async function loadCustomPrompts(): Promise<{
   if (!sbUrl || !sbKey) return defaults;
 
   try {
-    const slugs = ["cinematic-scene", "analysis-model"];
+    const slugs = ["cinematic-scene", "cinematic-words", "analysis-model"];
     const res = await fetchWithTimeout(
       `${sbUrl}/rest/v1/ai_prompts?slug=in.(${slugs.join(",")})&select=slug,prompt`,
       {
@@ -1521,11 +1468,14 @@ async function loadCustomPrompts(): Promise<{
     const rows: Array<{ slug: string; prompt: string }> = await res.json();
     const bySlug = Object.fromEntries(rows.map((r) => [r.slug, r.prompt]));
 
-    return {
+    const value = {
       scenePrompt: bySlug["cinematic-scene"] || SCENE_DIRECTION_PROMPT,
-      wordPrompt: WORD_DIRECTION_PROMPT,
+      wordPrompt: bySlug["cinematic-words"] || WORD_DIRECTION_PROMPT,
       model: bySlug["analysis-model"]?.trim() || PRIMARY_MODEL,
     };
+
+    _promptCache = { value, expiresAt: Date.now() + PROMPT_CACHE_TTL_MS };
+    return value;
   } catch (e) {
     console.warn("[cinematic-direction] Error loading custom prompts:", e);
     return defaults;
