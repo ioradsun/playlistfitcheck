@@ -1169,7 +1169,6 @@ async function callScene(
         model,
         messages,
         response_format: { type: "json_object" },
-        temperature: 0.7,
         max_completion_tokens: 8000,
       }),
     });
@@ -1245,7 +1244,6 @@ async function callScene(
             },
           ],
           response_format: { type: "json_object" },
-          temperature: 0.5,
           max_completion_tokens: 8000,
         }),
       },
@@ -1325,7 +1323,6 @@ async function callWords(
           model,
           messages,
           response_format: { type: "json_object" },
-          temperature: 0.7,
           max_completion_tokens: 32000,
         }),
       },
