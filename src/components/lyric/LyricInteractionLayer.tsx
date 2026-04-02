@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Moment } from "@/lib/buildMoments";
 
 interface LyricInteractionLayerProps {
@@ -36,50 +36,122 @@ function FireButton({
   onFireTap,
   onFireHoldStart,
   onFireHoldEnd,
+  player,
 }: {
   onFireTap?: () => void;
   onFireHoldStart?: () => void;
   onFireHoldEnd?: (holdMs: number) => void;
+  player?: any;
 }) {
   const holdStartRef = useRef<number | null>(null);
+  const holdTickRef = useRef<number | null>(null);
+  const [fireFlash, setFireFlash] = useState(false);
+  const [fireHolding, setFireHolding] = useState(false);
+  const [fireShrink, setFireShrink] = useState(false);
+  const [sparks, setSparks] = useState<Array<{ id: number; xOffset: number; durationMs: number }>>([]);
+  const sparkIdRef = useRef(0);
+
+  const spawnFireSparks = (count = 5) => {
+    for (let i = 0; i < count; i += 1) {
+      const id = sparkIdRef.current++;
+      const durationMs = 500;
+      const xOffset = (Math.random() - 0.5) * 16;
+      setSparks((prev) => [...prev, { id, xOffset, durationMs }]);
+      window.setTimeout(() => {
+        setSparks((prev) => prev.filter((spark) => spark.id !== id));
+      }, durationMs);
+    }
+  };
 
   const handleFireStart = () => {
     holdStartRef.current = performance.now();
+    setFireHolding(true);
+    setFireFlash(false);
+    spawnFireSparks(5);
+    player?.startContinuousFire?.();
     onFireHoldStart?.();
+    holdTickRef.current = window.setInterval(() => {
+      spawnFireSparks(2);
+    }, 100);
   };
 
   const handleFireEnd = () => {
+    if (holdTickRef.current != null) {
+      window.clearInterval(holdTickRef.current);
+      holdTickRef.current = null;
+    }
+    player?.stopContinuousFire?.();
+    setFireHolding(false);
     const start = holdStartRef.current;
     holdStartRef.current = null;
     if (start == null) return;
     const holdMs = Math.max(0, performance.now() - start);
     if (holdMs < 180) {
+      spawnFireSparks(6);
+      player?.fireMoment?.();
+      setFireFlash(true);
+      setFireShrink(true);
+      window.setTimeout(() => setFireShrink(false), 100);
+      window.setTimeout(() => setFireFlash(false), 300);
       onFireTap?.();
       return;
     }
     onFireHoldEnd?.(holdMs);
   };
 
+  useEffect(() => {
+    return () => {
+      if (holdTickRef.current != null) {
+        window.clearInterval(holdTickRef.current);
+      }
+    };
+  }, []);
+
   return (
-    <button
-      type="button"
-      onPointerDown={handleFireStart}
-      onPointerUp={handleFireEnd}
-      onPointerLeave={handleFireEnd}
-      onTouchEnd={handleFireEnd}
-      aria-label="Fire"
-      style={{
-        width: 50,
-        height: 50,
-        borderRadius: "50%",
-        border: "1.5px solid rgba(255,170,0,0.3)",
-        background: "rgba(255,150,0,0.1)",
-        color: "rgba(255,220,140,0.85)",
-        fontSize: 20,
-      }}
-    >
-      🔥
-    </button>
+    <div style={{ position: "relative", width: 50, height: 50 }}>
+      {sparks.map((spark) => (
+        <span
+          key={spark.id}
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: "50%",
+            width: 3,
+            height: 3,
+            borderRadius: "50%",
+            background: "#FFD700",
+            opacity: 1,
+            pointerEvents: "none",
+            transform: `translate(${spark.xOffset}px, 0px)`,
+            animation: `spark-to-canvas ${spark.durationMs}ms ease-out forwards`,
+          }}
+        />
+      ))}
+      <button
+        type="button"
+        onPointerDown={handleFireStart}
+        onPointerUp={handleFireEnd}
+        onPointerLeave={handleFireEnd}
+        onTouchEnd={handleFireEnd}
+        aria-label="Fire"
+        style={{
+          width: 50,
+          height: 50,
+          borderRadius: "50%",
+          border: "1px solid rgba(255,255,255,0.08)",
+          background: "transparent",
+          color: "rgba(255,220,140,0.85)",
+          display: "grid",
+          placeItems: "center",
+          transition: "transform 100ms ease, opacity 200ms ease",
+          transform: fireShrink ? "scale(0.92)" : "scale(1)",
+        }}
+      >
+        <svg viewBox="0 0 24 24" width="22" height="22" fill={fireFlash || fireHolding ? "rgba(255,215,0,0.9)" : "none"} stroke={fireFlash || fireHolding ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.3)"} strokeWidth="1.5" style={{ opacity: fireHolding ? 0.6 : 1, transition: "fill 200ms ease, stroke 300ms ease, opacity 200ms ease" }}>
+          <path d="M12 23c-3.6 0-7-2.4-7-7 0-3.1 2.1-5.7 4-7.6.3-.3.8-.1.8.3v2c0 .2.2.4.4.3 2.1-1.1 4.8-3.5 4.8-7 0-.3.4-.5.6-.3C18.2 6 20 10 20 13.5c0 5.3-3.6 9.5-8 9.5z" />
+        </svg>
+      </button>
+    </div>
   );
 }
 
@@ -93,6 +165,7 @@ export function LyricInteractionLayer({
   onFireHoldStart,
   onFireHoldEnd,
   onSeekTo,
+  player,
 }: LyricInteractionLayerProps) {
   const isFullscreen = variant === "fullscreen";
   const safeMoments = moments ?? [];
@@ -127,6 +200,13 @@ export function LyricInteractionLayer({
         pointerEvents: "none",
       }}
     >
+      <style>{`
+        @keyframes spark-to-canvas {
+          0% { transform: translateY(0) scale(1); opacity: 1; }
+          70% { transform: translateY(-60px) scale(0.6); opacity: 0.8; }
+          100% { transform: translateY(-80px) scale(0.2); opacity: 0; }
+        }
+      `}</style>
       <div
         style={{
           display: "flex",
@@ -185,6 +265,7 @@ export function LyricInteractionLayer({
           onFireTap={onFireTap}
           onFireHoldStart={onFireHoldStart}
           onFireHoldEnd={onFireHoldEnd}
+          player={player}
         />
 
         <button
