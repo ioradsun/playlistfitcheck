@@ -22,8 +22,9 @@ import {
   type Keyframe,
   type ScenePayload,
 } from "@/lib/sceneCompiler";
+import type { Moment } from "@/lib/buildMoments";
 import { enrichSections } from "@/engine/directionResolvers";
-import { getMoodGrade, buildGradeFilter, type MoodGrade } from "@/engine/moodGrades";
+import { getMoodGrade, buildGradeFilter, modulateGradeByEnergy, type MoodGrade } from "@/engine/moodGrades";
 // getSectionTones removed — song-level grade model
 import { getEffectTier, canShowElemental, canShowHeroGlow, getParticleDensity, getGlowCap } from "@/engine/timeTiers";
 import { PARTICLE_SYSTEM_MAP, ParticleEngine } from "@/engine/ParticleEngine";
@@ -1363,6 +1364,7 @@ export class LyricDancePlayer {
   // Text animation draws on top of this, cutting bg+filter cost to near-zero per frame.
   private _bgSnapshot: HTMLCanvasElement | null = null;
   private _bgSnapshotSection = -999; // section index when snapshot was last baked
+  private _bgSnapshotMomentIdx = -1; // moment index when snapshot was last baked
   private _bgSnapshotQTier = -1;     // quality tier when snapshot was last baked
   private _bgLastBakeMs = 0;         // timestamp of last snapshot bake
   private _bgRebakeIntervalMs = 500; // rebake background every 500ms
@@ -1386,8 +1388,10 @@ export class LyricDancePlayer {
   private _vignetteBeatPulse = 0;
   // ═══ Per-frame caches — computed once in tick(), reused everywhere ═══
   private _frameSectionIdx = -1;
+  private _frameMomentIdx = -1;
   private _framePalette: string[] | null = null;
   private _framePaletteTime = -1; // audio time when palette was last resolved
+  private _moments: Moment[] = [];
   private _smokePhraseAge = 999;
   private _currentSectionPalette: SectionPalette = deserializeSectionPalette([
     '#0a0a0f',
@@ -2045,6 +2049,7 @@ export class LyricDancePlayer {
 
     // Reset background snapshot so first export frame gets a fresh bake
     this._bgSnapshotSection = -999;
+    this._bgSnapshotMomentIdx = -1;
     this._bgLastBakeMs = 0;
     this.seek(this.songStartSec);
   }
@@ -2204,6 +2209,7 @@ export class LyricDancePlayer {
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
     this._bgSnapshotSection = -999; // force rebake at new resolution
+    this._bgSnapshotMomentIdx = -1;
     if (this.payload) this.buildBgCache();
   }
 
@@ -2273,6 +2279,7 @@ export class LyricDancePlayer {
     this._exitTriggeredForGroup = -1;
     this._resetBgParallax();
     this._bgSnapshotSection = -1;
+    this._bgSnapshotMomentIdx = -1;
   }
 
   /**
@@ -2319,6 +2326,12 @@ export class LyricDancePlayer {
   /** Enable/disable the emoji stream overlay. Disabled when reaction panel is open. */
   setEmojiStreamEnabled(enabled: boolean): void {
     this.emojiStreamEnabled = enabled;
+  }
+
+  setMoments(moments: Moment[]): void {
+    this._moments = Array.isArray(moments) ? moments : [];
+    this._frameMomentIdx = -1;
+    this._bgSnapshotMomentIdx = -1;
   }
 
   updateCinematicDirection(direction: CinematicDirection): void {
@@ -2410,6 +2423,7 @@ export class LyricDancePlayer {
   updateSectionImages(urls: string[]): void {
     this.data = { ...this.data, section_images: urls };
     this._bgSnapshotSection = -999; // force snapshot rebake with new images
+    this._bgSnapshotMomentIdx = -1;
     this.loadSectionImages();
   }
 
@@ -2738,6 +2752,8 @@ export class LyricDancePlayer {
         this._frameSectionIdx = sections.length > 0
           ? this.resolveSectionIndex(sections, sectionTime, dur)
           : -1;
+        const activeMoment = this._resolveCurrentMoment(smoothedTime);
+        this._frameMomentIdx = activeMoment?.index ?? -1;
         // Palette: only re-resolve if section changed
         const secIdx = this._frameSectionIdx;
         if (secIdx !== this._framePaletteTime) {
@@ -2915,6 +2931,13 @@ export class LyricDancePlayer {
       }
     }
     return Math.max(0, sections.length - 1);
+  }
+
+  private _resolveCurrentMoment(tSec: number): Moment | null {
+    for (let i = this._moments.length - 1; i >= 0; i -= 1) {
+      if (tSec >= this._moments[i].startSec - 0.1) return this._moments[i];
+    }
+    return this._moments[0] ?? null;
   }
 
   /** Return per-frame cached palette */
@@ -3222,6 +3245,7 @@ export class LyricDancePlayer {
     // This trades real-time Ken Burns smoothness for drastically lower CPU,
     // freeing frame budget for jitter-free text animation.
     const curSection = this._frameSectionIdx;
+    const curMomentIdx = this._frameMomentIdx;
     const nowMsBg = performance.now();
     const snapshotDimsMismatch = this._bgSnapshot
       ? (this._bgSnapshot.width !== Math.floor(this.width * this._effectiveDpr)
@@ -3229,6 +3253,7 @@ export class LyricDancePlayer {
       : false;
     const snapshotStale =
       curSection !== this._bgSnapshotSection
+      || curMomentIdx !== this._bgSnapshotMomentIdx
       || qTier !== this._bgSnapshotQTier
       || (nowMsBg - this._bgLastBakeMs > this._bgRebakeIntervalMs)
       || snapshotDimsMismatch
@@ -3292,6 +3317,7 @@ export class LyricDancePlayer {
       snapCtx.setTransform(1, 0, 0, 1, 0, 0);
 
       this._bgSnapshotSection = curSection;
+      this._bgSnapshotMomentIdx = curMomentIdx;
       this._bgSnapshotQTier = qTier;
       this._bgLastBakeMs = nowMsBg;
     }
@@ -4369,11 +4395,15 @@ export class LyricDancePlayer {
 
     const current = this.chapterImages[chapterIdx];
     const next = this.chapterImages[nextChapterIdx];
-    // ═══ PER-SECTION GRADE: each section gets its own cinematic look ═══
+    // ═══ PER-MOMENT GRADE: section mood + moment energy ═══
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const sections = (cd?.sections as any[]) ?? [];
+    const currentMoment = this._resolveCurrentMoment(this.audio?.currentTime ?? 0);
     const sectionMood = sections[chapterIdx]?.visualMood as string | undefined;
-    let activeGrade = getMoodGrade(sectionMood);
+    const baseGrade = getMoodGrade(sectionMood);
+    let activeGrade = currentMoment
+      ? modulateGradeByEnergy(baseGrade, currentMoment.energy, currentMoment.sectionProgress)
+      : baseGrade;
 
     // ═══ THEME OVERRIDE: modify grade for forced light/dark ═══
     if (this.themeOverride !== 'auto' && activeGrade) {
@@ -4392,7 +4422,7 @@ export class LyricDancePlayer {
       }
     }
 
-    // Emotional intensity: use a fixed mid-level — no per-section variation
+    // Emotional intensity: use a fixed mid-level — beat pulse remains separate
     const intensity = 0.5;
 
     // Beat response amplified by IntensityRouter section intensity
@@ -4489,7 +4519,7 @@ export class LyricDancePlayer {
       this.ctx.restore();
     }
 
-    // ─── Film grain: consistent level from song grade ───
+    // ─── Film grain: derived from active moment-modulated grade ───
     // Skip grain at tier 1+ (overlay composite + putImageData is expensive)
     if (!this._coverMode && this._qualityTier === 0) {
       const grainIntensity = Math.min(0.15, activeGrade.grain.intensity);

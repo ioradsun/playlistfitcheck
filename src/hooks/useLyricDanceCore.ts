@@ -7,6 +7,7 @@ import { useReactionPanel } from "@/hooks/useReactionPanel";
 import { getSessionId } from "@/lib/sessionId";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { LIGHTNING_BAR_FLAG_EVENT, readLightningBarFlag } from "@/lib/lyricDanceFlags";
+import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 
@@ -189,6 +190,19 @@ export function useLyricDanceCore({
     onPanelClose: closePanel,
   });
 
+  const moments = useMemo<Moment[]>(() => {
+    const phrases = (data as any)?.cinematic_direction?.phrases ?? [];
+    const phraseInputs = phrases.map((p: any) => {
+      const isMs = p.start > 500;
+      return {
+        start: isMs ? p.start / 1000 : p.start,
+        end: isMs ? p.end / 1000 : p.end,
+        text: p.text ?? "",
+      };
+    });
+    return buildMoments(phraseInputs, audioSections, lyricSections.allLines, durationSec);
+  }, [data, audioSections, lyricSections.allLines, durationSec]);
+
   useEffect(() => {
     setReactionPanelOpen(panelOpen);
   }, [panelOpen, setReactionPanelOpen]);
@@ -210,6 +224,11 @@ export function useLyricDanceCore({
     if (!player) return;
     player.setEmojiStreamEnabled(!reactionPanelOpen && !showCover);
   }, [player, reactionPanelOpen, showCover]);
+
+  useEffect(() => {
+    if (!player) return;
+    player.setMoments(moments);
+  }, [player, moments]);
 
   useEffect(() => {
     if (!data?.id) return;

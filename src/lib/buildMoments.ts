@@ -26,12 +26,55 @@ export interface Moment {
   lines: LyricSectionLine[];
   /** AI phrase indices that belong to this moment */
   phraseIndices: number[];
+  /** 0-1 energy level derived from phrase density and dynamics */
+  energy: number;
+  /** Section index this moment belongs to (for image selection) */
+  sectionIndex: number;
+  /** 0-1 position within the section (0 = section start, 1 = section end) */
+  sectionProgress: number;
 }
 
 interface PhraseInput {
   start: number;
   end: number;
   text: string;
+}
+
+function getWordCount(text: string | null | undefined): number {
+  const trimmed = text?.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+function computeMomentEnergy(momentPhrases: PhraseInput[]): number {
+  if (!momentPhrases.length) return 0.5;
+
+  const totalDurationSec = momentPhrases.reduce((sum, p) => sum + (p.end - p.start), 0);
+  const totalWords = momentPhrases.reduce((sum, p) => sum + getWordCount(p.text), 0);
+  const wps = totalDurationSec > 0 ? totalWords / totalDurationSec : 0;
+
+  const soloCount = momentPhrases.filter((p) => getWordCount(p.text) === 1).length;
+  const soloRatio = soloCount / momentPhrases.length;
+
+  const wpsNorm = Math.min(1, Math.max(0, (wps - 1) / 5));
+  const soloBoost = soloRatio * 0.2;
+  const raw = wpsNorm * 0.7 + soloBoost + 0.15;
+
+  return Math.min(1, Math.max(0, raw));
+}
+
+function assignSectionProgress(moments: Moment[]): void {
+  const sectionMoments = new Map<number, Moment[]>();
+  for (const m of moments) {
+    const list = sectionMoments.get(m.sectionIndex) ?? [];
+    list.push(m);
+    sectionMoments.set(m.sectionIndex, list);
+  }
+  for (const [, mList] of sectionMoments) {
+    mList.forEach((m, i) => {
+      m.sectionProgress = mList.length > 1 ? i / (mList.length - 1) : 0.5;
+    });
+  }
 }
 
 /** True if text ends with sentence-ending punctuation */
@@ -84,6 +127,9 @@ export function buildMoments(
       label: first.label,
       lines: momentLines,
       phraseIndices: accumulator.map((a) => a.phraseIdx),
+      energy: computeMomentEnergy(accumulator.map((a) => a.phrase)),
+      sectionIndex: first.sectionIdx,
+      sectionProgress: 0.5,
     });
 
     accumulator = [];
@@ -144,6 +190,7 @@ export function buildMoments(
         (l) => l.startSec >= prev.startSec - 0.15 && l.startSec < prev.endSec + 0.15,
       );
       prev.phraseIndices.push(...moment.phraseIndices);
+      prev.energy = computeMomentEnergy(prev.phraseIndices.map((idx) => phrases[idx]).filter(Boolean));
     } else if (dur < MIN_SEC && merged.length === 0 && moments.indexOf(moment) < moments.length - 1) {
       merged.push({ ...moment });
     } else {
@@ -154,6 +201,7 @@ export function buildMoments(
   merged.forEach((m, i) => {
     m.index = i;
   });
+  assignSectionProgress(merged);
 
   return merged;
 }
@@ -185,6 +233,9 @@ function buildSectionFallback(
         label,
         lines: momentLines,
         phraseIndices: [],
+        energy: 0.5,
+        sectionIndex: section.sectionIndex ?? 0,
+        sectionProgress: 0.5,
       });
     } else {
       let cursor = section.startSec;
@@ -200,11 +251,16 @@ function buildSectionFallback(
           label,
           lines: momentLines,
           phraseIndices: [],
+          energy: 0.5,
+          sectionIndex: section.sectionIndex ?? 0,
+          sectionProgress: 0.5,
         });
         cursor = end;
       }
     }
   }
+
+  assignSectionProgress(moments);
 
   return moments;
 }
