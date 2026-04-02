@@ -1272,7 +1272,14 @@ async function callScene(
     };
   }
 
-  const completion = await resp.json();
+  const sceneRespText = await resp.text();
+  let completion: any;
+  try {
+    completion = JSON.parse(sceneRespText);
+  } catch {
+    console.error("[cinematic-direction] scene response not valid JSON, length:", sceneRespText.length, "preview:", sceneRespText.slice(0, 200));
+    throw { status: 502, message: "Scene direction AI returned invalid response" };
+  }
   const finishReason = completion?.choices?.[0]?.finish_reason;
   const raw = String(completion?.choices?.[0]?.message?.content ?? "");
 
@@ -1319,7 +1326,14 @@ async function callScene(
     );
 
     if (retryResp.ok) {
-      const retryCompletion = await retryResp.json();
+      const retryRespText = await retryResp.text();
+      let retryCompletion: any;
+      try {
+        retryCompletion = JSON.parse(retryRespText);
+      } catch {
+        console.error("[cinematic-direction] scene retry response not valid JSON, preview:", retryRespText.slice(0, 200));
+        retryCompletion = null;
+      }
       const retryRaw = String(
         retryCompletion?.choices?.[0]?.message?.content ?? "",
       );
@@ -1413,7 +1427,14 @@ async function callWords(
       };
     }
 
-    const completion = await resp.json();
+    const respText = await resp.text();
+    let completion: any;
+    try {
+      completion = JSON.parse(respText);
+    } catch {
+      console.error("[cinematic-direction] words response not valid JSON, length:", respText.length, "preview:", respText.slice(0, 200));
+      throw { status: 502, message: "Word direction AI returned invalid response" };
+    }
     const finishReason = completion?.choices?.[0]?.finish_reason;
     const raw = String(completion?.choices?.[0]?.message?.content ?? "");
 
