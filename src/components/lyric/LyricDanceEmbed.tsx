@@ -14,18 +14,29 @@ import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImper
 import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
-import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReelsGestureLayer } from "./ReelsGestureLayer";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
-import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
+import { emitFire, fetchFireData } from "@/lib/fire";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { isAudioUnlocked, onAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+
+function deriveSectionColors(cd: any | null | undefined): Record<number, string> {
+  const colors: Record<number, string> = {};
+  const sections = cd?.sections;
+  if (!Array.isArray(sections)) return colors;
+  for (const s of sections) {
+    if (typeof s.sectionIndex === "number" && typeof s.dominantColor === "string") {
+      colors[s.sectionIndex] = s.dominantColor;
+    }
+  }
+  return colors;
+}
 
 interface LyricDanceEmbedProps {
   lyricDanceId: string;
@@ -39,7 +50,6 @@ interface LyricDanceEmbedProps {
   regionStart?: number;
   regionEnd?: number;
   showExpandButton?: boolean;
-  disableReactionPanel?: boolean;
   hideReactButton?: boolean;
   reelsMode?: boolean;
   postId?: string;
@@ -73,7 +83,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   regionStart,
   regionEnd,
   showExpandButton = true,
-  disableReactionPanel = false,
   hideReactButton = false,
   reelsMode = false,
   postId,
@@ -89,9 +98,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 }, ref) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
-  const siteCopy = useSiteCopy();
   const empowermentPromise = (prefetchedData as any)?.empowerment_promise ?? null;
-  const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
 
   // ── Eviction: controls whether a player exists ─────────────────────
   // Warm/active cards keep a player; cold cards evict after a short debounce.
@@ -158,7 +165,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     setShowCover,
     currentTimeSec,
     reactionData,
-    setReactionData,
     durationSec,
     lyricSections,
     audioSections,
@@ -172,7 +178,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     isWaiting,
     commentRefreshKey,
     lightningBarEnabled,
-    handleCommentFromBar,
   } = useLyricDanceCore({
     lyricDanceId,
     prefetchedData: prefetchedDataWithRegion,
@@ -196,7 +201,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [closingVisible, setClosingVisible] = useState(false);
   const [, setClosingAnswered] = useState(false);
   const [totalFireCount, setTotalFireCount] = useState(0);
-  const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const userActivatedRef = useRef(false);
   /** True once this card has been played at least once. Survives warm transitions. Only resets on cold. */
@@ -415,7 +419,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         const latest = fires.reduce((a, b) =>
           (a.created_at ?? "") > (b.created_at ?? "") ? a : b,
         );
-        setLastFiredAt(latest.created_at ?? null);
       }
     });
     return () => { cancelled = true; };
@@ -477,7 +480,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const effectiveShowCover = showCover;
   void artistName;
   void coverImageUrl;
-  void disableReactionPanel;
   void preload;
 
   useEffect(() => {
@@ -672,30 +674,19 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           <LyricInteractionLayer
             variant="embedded"
             danceId={data?.id ?? ""}
-            currentMoment={currentMoment}
-            activeLine={muted ? null : activeLine}
-            allLines={lyricSections.allLines}
-            audioSections={audioSections}
-            phrases={(data as any)?.cinematic_direction?.phrases ?? null}
-            words={(data as any)?.words ?? null}
-            beatGrid={(data as any)?.beat_grid ?? null}
+            moments={moments}
             currentTimeSec={currentTimeSec}
             durationSec={durationSec}
             palette={palette}
             accent={barAccent}
             reactionData={reactionData}
-            onReactionDataChange={setReactionData}
-            empowermentPromise={empowermentPromise}
-            fmlyHookEnabled={fmlyHookEnabled}
             refreshKey={commentRefreshKey}
             isLive={!effectiveShowCover && cardState === "active"}
             hasFired={hasFired}
             totalFireCount={totalFireCount}
-            lastFiredAt={lastFiredAt}
             songEnded={closingVisible}
             player={player}
-            externalPanelOpen={panelOpen}
-            onPanelOpenChange={handlePanelOpenChange}
+            sectionColors={deriveSectionColors((data as any)?.cinematic_direction ?? null)}
             onFireTap={() => {
               if (holdFireIntervalRef.current) {
                 clearInterval(holdFireIntervalRef.current);
@@ -725,32 +716,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
               markFired();
             }}
-            onComment={(text, momentIndex) => handleCommentFromBar(text, momentIndex)}
-            onFireLine={(lineIndex, holdMs) => {
-              const id = (data ?? (prefetchedData as any))?.id;
-              if (!id) return;
-              player?.fireFire(holdMs);
-              emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
-              markFired();
-            }}
-            onLineVisible={(lineIndex) => {
-              const id = (data ?? (prefetchedData as any))?.id;
-              if (!id) return;
-              emitExposure(id, lineIndex, "feed");
-            }}
-            onReactionFired={(emoji) => player?.fireComment(emoji)}
             onPause={handlePauseForInput}
             onResume={handleResumeAfterInput}
             onSeekTo={(sec) => player?.seek(sec)}
-            onPanelCloseWithPosition={(timeSec) => {
-              if (player && timeSec != null) {
-                player.seek(timeSec);
-                if (reelsMode) {
-                  player.setMuted(false);
-                  player.play();
-                }
-              }
-            }}
             source="feed"
           />
         </div>

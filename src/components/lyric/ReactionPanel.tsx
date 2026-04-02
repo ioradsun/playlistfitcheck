@@ -8,18 +8,14 @@ import { getSessionId } from "@/lib/sessionId";
 import type { LyricSectionLine } from "@/hooks/useLyricSections";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
+import type { CanonicalAudioSection } from "@/types/audioSections";
 import { PanelShell } from "@/components/shared/panel/PanelShell";
 import {
   EMOJIS,
   type EmojiKey,
 } from "@/components/shared/panel/panelConstants";
 
-export interface CanonicalAudioSection {
-  sectionIndex: number;
-  startSec: number;
-  endSec: number;
-  role: string | null;
-}
+export type { CanonicalAudioSection } from "@/types/audioSections";
 
 interface CommentRow {
   id: string;

@@ -9,7 +9,7 @@
  *  5. If no AI phrases, fall back to section-level moments
  */
 
-import type { CanonicalAudioSection } from "@/components/lyric/ReactionPanel";
+import type { CanonicalAudioSection } from "@/types/audioSections";
 import type { LyricSectionLine } from "@/hooks/useLyricSections";
 
 const TARGET_SEC = 8;
