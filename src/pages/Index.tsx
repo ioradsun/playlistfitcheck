@@ -154,7 +154,6 @@ const Index = () => {
   );
   const hookfitEnabled = siteCopy.features?.tools_enabled?.hookfit !== false;
   const isMobile = useIsMobile();
-  const reelsEnabled = siteCopy.features?.crowdfit_reels === true;
   const location = useLocation();
   const navigate = useNavigate();
   const transitionNavigate = useCallback(
@@ -178,7 +177,7 @@ const Index = () => {
       ? "songfit"
       : rawTabFromPath;
   const [activeTab, setActiveTabState] = useState(tabFromPath);
-  const reelsMode = isMobile && activeTab === "songfit" && reelsEnabled;
+  const reelsMode = isMobile && activeTab === "songfit";
   const [reelsScrolled, setReelsScrolled] = useState(false);
   const playlistQuota = useUsageQuota("playlist", {
     enabled: activeTab === "playlist",
