@@ -15,7 +15,7 @@ interface LyricLine {
   confidence?: number;
 }
 
-interface WhisperWord {
+interface ScribeWord {
   word: string;
   start: number;
   end: number;
@@ -91,8 +91,8 @@ function buildSegmentsFromWords(
  * to nextWord.start - 0.05, or start + 3.0 for the last word.
  */
 function normalizeWordDurations(
-  words: WhisperWord[]
-): WhisperWord[] {
+  words: ScribeWord[]
+): ScribeWord[] {
   if (words.length === 0) return words;
   const MAX_WORD_DURATION = 3.0;
   const result = words.map(w => ({ ...w }));
@@ -129,7 +129,7 @@ async function runScribe(
   mimeType: string,
   apiKey: string
 ): Promise<{
-  words: WhisperWord[];
+  words: ScribeWord[];
   segments: Array<{ start: number; end: number; text: string }>;
   rawText: string;
   duration: number;
@@ -175,14 +175,14 @@ async function runScribe(
     console.warn("[Scribe] Only audio_events returned — no speech detected. Events:", audioEvents.map((e: any) => e.text).join(", "));
   }
 
-  const words: WhisperWord[] = speechWords
+  const words: ScribeWord[] = speechWords
     .map((w: any) => ({
       word: String(w.text ?? w.word ?? "").trim(),
       start: Math.round((Number(w.start) || 0) * 1000) / 1000,
       end: Math.round((Number(w.end) || 0) * 1000) / 1000,
       ...(w.speaker_id ? { speaker_id: String(w.speaker_id) } : {}),
     }))
-    .filter((w: WhisperWord) => w.word.length > 0 && w.end >= w.start);
+    .filter((w: ScribeWord) => w.word.length > 0 && w.end >= w.start);
 
   // Capture full raw words before any stripping (all original fields from provider)
   const rawWordsFull = (data.words || []);
@@ -225,9 +225,9 @@ function normalizeWord(s: string): string {
 }
 
 function applyReferenceLyricsDiff(
-  words: WhisperWord[],
+  words: ScribeWord[],
   referenceLyrics: string
-): WhisperWord[] {
+): ScribeWord[] {
   const refWords = referenceLyrics
     .split(/\s+/)
     .map((w) => w.trim())
@@ -337,7 +337,7 @@ function applyReferenceLyricsDiff(
   }
   ops.reverse();
 
-  const result: WhisperWord[] = [];
+  const result: ScribeWord[] = [];
 
   for (const op of ops) {
     if (op.op === "keep") {
@@ -543,7 +543,7 @@ serve(async (req) => {
       confidence: 1.0,
     }));
 
-    // ── Title/artist defaults (Song DNA analysis is now separate) ──────────
+    // ── Title/artist defaults ──────────
     const title = "Unknown";
     const artist = "Unknown";
 

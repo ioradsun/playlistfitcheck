@@ -637,6 +637,9 @@ class BeatVisSim {
 }
 
 // ═══ DynamiteWickBar: fuse-cord waveform progress + beat visualizer ═══
+// TODO: DynamiteWickBar is superseded by MomentFuseStrip (React overlay).
+// Beat energy is now bridged to MomentFuseStrip via LyricInteractionLayer polling.
+// The canvas-level wick bar can be removed once MomentFuseStrip is stable.
 // Admin flag: window.__LYRIC_DANCE_LIGHTNING_BAR
 // Unplayed = warm rope-textured fuse cord (ridgeline from beatEnergies).
 // Playhead = crackling flame that breathes with energy.

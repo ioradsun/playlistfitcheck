@@ -1,3 +1,7 @@
+/**
+ * @deprecated This hook is orphaned in the main lyric dance flow and kept only
+ * for backward compatibility while BattleEmbed-related paths are audited.
+ */
 import { useState, useMemo, useCallback } from 'react';
 import type { LyricDancePlayer } from '@/engine/LyricDancePlayer';
 import type { UseLyricSectionsResult as LyricSections } from '@/hooks/useLyricSections';

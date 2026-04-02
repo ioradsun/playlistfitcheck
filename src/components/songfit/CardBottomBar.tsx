@@ -1,3 +1,7 @@
+/**
+ * @deprecated Used only by PostCommentPanel for feed card interactions.
+ * The main lyric dance flow uses MomentFuseStrip instead.
+ */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 // Applies alpha to a hex (#rrggbb) or rgba(...) accent string.
