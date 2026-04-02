@@ -1110,20 +1110,36 @@ async function callScene(
     { role: "user", content: userMessage },
   ];
 
-  const makeRequest = (model: string) =>
-    fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        response_format: { type: "json_object" },
-        max_completion_tokens: 8000,
-      }),
-    });
+  const makeRequest = async (model: string) => {
+    try {
+      return await fetchWithTimeout(
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            response_format: { type: "json_object" },
+            max_completion_tokens: 8000,
+          }),
+        },
+        120000,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        console.error(`[cinematic-direction] scene request timed out for model ${model}`);
+        throw {
+          status: 504,
+          message: `Scene direction AI timed out for model ${model}`,
+        };
+      }
+      throw error;
+    }
+  };
 
   let resp = await makeRequest(modelOverride);
 
