@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 export function invokeWithTimeout<T = any>(
   fnName: string,
   body: Record<string, unknown>,
-  timeoutMs = 45_000,
+  timeoutMs = 120_000,
 ): Promise<{ data: T | null; error: any }> {
   const timeout = new Promise<never>((_, reject) =>
     setTimeout(
