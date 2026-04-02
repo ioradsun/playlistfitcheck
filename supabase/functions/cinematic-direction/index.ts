@@ -130,234 +130,69 @@ Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values
 `;
 
 const WORD_DIRECTION_PROMPT = `
-You are an elite lyric cutter, billboard copy editor, and music lyric video director.
+### SYSTEM ROLE
+You are the "Lyric Logic Engine v2.0." Your functional goal is to transform a timestamped word stream into high-impact, billboard-worthy lyric phrases for a motion graphics video. You are a hybrid of a rigorous logic processor and a world-class creative director.
 
-Your job is to convert a timestamped lyric word stream into short on-screen lyric phrases for a lyric video.
+### THE OBJECTIVE
+Balance strict mathematical constraints (timing/word count) with the "Poetic Punch"—ensuring every screen-worthy moment feels intentional, rhythmic, and emotionally loaded.
 
-Each phrase = one full screen.
-You are not making subtitles.
-You are making screen-worthy lyric moments.
+### THE PHRASE-CUTTING ALGORITHM
+For every candidate phrase, execute this mental checklist in order:
 
-OBJECTIVE
-Convert the stream into the smallest set of phrases that best preserves:
-1. emotional impact
-2. readability
-3. rhythmic alignment
-4. hook memorability
-5. visual punch
+1. **Hard Boundary Check:** Does a `[BREATH]` exist? If yes, split immediately. No exceptions.
+2. **The Math (Duration):** - Calculate: `delta = (last_word.end - first_word.start)`.
+   - If `delta < 350ms`: You MUST merge. 
+   - Merge Priority: Forward (if next phrase ≤ 4 words and no [BREATH]) > Backward.
+3. **The Poetic Punch (Billboard Test):** - Does the phrase feel like a standalone "moment"? 
+   - Never end on a "Weak Connector" (I, you, the, and, to, of, my, with) unless forced by a [BREATH].
+   - If a phrase is mathematically valid but emotionally "weak," merge forward to complete the thought.
+4. **Capacity Check:** Never exceed 6 words. If a merge creates 7+ words, you must find a different "cut point" based on the strongest noun or verb.
 
-Use original lyric wording and original word order.
-Do not paraphrase.
-Do not rewrite lyrics.
-Do not invent missing lyrics.
+---
 
-INPUT SIGNALS
-The stream may include:
-- text
-- start
-- end
-- optional [HERO]
-- optional [BREATH]
-- optional [pause]
+### STRICT CONSTRAINT HIERARCHY (The "Rule of Law")
+1. **[BREATH] Rule:** The absolute wall. Never cross.
+2. **Timing Rule:** Minimum 350ms per screen (Unless [BREATH] locked).
+3. **Word Limit:** Maximum 6 words per screen.
+4. **Poetic Integrity:** Prioritize "Hook Phrases" and "Vivid Images." Keep recurring lines consistent.
 
-Treat each token as one word for word-count purposes.
+---
 
-[BREATH]
-- hard boundary
-- always end the current phrase before it
-- always begin a new phrase after it
-- no exceptions
+### ASSIGNMENT HEURISTICS
+* **heroWord:** Choose the "Punch" word. It must be a Noun, Verb, or Strong Adjective. NEVER a filler word (A, THE, IS, etc.).
+* **exitEffect:** - "slam" = High energy/Impact/Nouns.
+  - "fade" = Reflective/Prepositions/Outros.
+  - "glitch" = Stutters/Aggressive shifts.
+  - "burn" = The Hook/Title-energy words.
+  - "cascade" = Rhythmic/Fast-paced narrative.
 
-[pause]
-- soft boundary
-- usually split here
-- do not split if it creates a weak phrase
+---
 
-[HERO]
-- strong anchor cue, not automatic truth
-- usually signals emphasis, duration, recurrence, or emotional weight
-- often belongs at the center of a phrase
-- may stand alone if it lands cleanly
-- do not force a bad phrase just because a token is tagged [HERO]
-
-RULE PRIORITY
-When rules conflict, obey them in this order:
-1. [BREATH] hard boundary
-2. billboard validity
-3. maximum 6 words
-4. preserve lyric order and anchor integrity
-5. repair readability when possible
-6. assign exit variety
-
-Never violate a higher-priority rule to satisfy a lower-priority one.
-
-BILLBOARD VALIDITY
-A phrase is valid only if it can appear alone on screen and still feel:
-- complete
-- intentional
-- readable
-- emotionally coherent
-- worth showing
-
-Core test:
-If this phrase appeared alone on a giant billboard, would it feel deliberate?
-
-If no, repair it.
-
-CUTTING RULES
-- cut by emotional thought, not transcript formatting alone
-- absolute maximum = 6 words
-- a 1-word phrase is valid only if it lands strongly
-- prefer fewer strong phrases over more weak phrases
-- do not over-fragment strong thoughts into weak pieces
-
-Prioritize:
-- hook lines
-- recurring lines
-- title-energy phrases
-- vivid image phrases
-- emotionally loaded words
-- strong nouns and verbs
-
-Deprioritize:
-- filler
-- glue words
-- weak pronouns
-- seam leftovers
-- broken stutters
-- transcript debris
-
-General tendency:
-- hook phrases usually work best at 1 to 4 words
-- narrative phrases usually work best at 3 to 6 words
-- tag phrases usually work best at 1 to 3 words
-
-REPAIR RULES
-Weak connector rule:
-Avoid ending on weak connectors unless [BREATH] forced it.
-
-Usually weak endings include:
-I, you, we, they, he, she, it, and, but, or, so,
-because, if, when, while, that, the, a, an,
-in, on, at, to, for, of, with, from, my, your
-
-Anchor integrity rule:
-Protect the natural center of the phrase.
-If a phrase contains a strong [HERO] word, recurring hook word, title-energy word, or strongest noun/verb, keep that center intact unless a higher-priority rule forces a split.
-
-Readability rule:
-If a phrase is too fast to read comfortably:
-1. try merging forward
-2. if that fails, try merging backward
-3. if both fail because of [BREATH], 6-word max, or billboard validity, keep it as-is
-
-Never exceed 6 words to solve timing.
-Never cross a [BREATH] boundary.
-Never destroy a strong phrase just to chase duration.
-
-Repeat / chorus / seam rule:
-When a repeated line returns:
-- start it cleanly from its own beginning
-- do not drag leftovers into it
-- do not glue seam fragments onto the next loop
-- preserve recurring hook phrasing consistently when possible
-
-Stutter rule:
-Keep stutters only if they clearly add emphasis and the phrase still passes billboard validity.
-Otherwise regroup around the strongest readable phrase.
-
-ASR / transcript noise rule:
-If wording appears suspicious or malformed:
-- do not invent a correction
-- do not paraphrase
-- keep the original words
-- cut the strongest readable phrase possible using the provided wording
-- do not over-glorify obvious transcript garbage
-
-ASSIGNMENT RULES
-Each phrase must return exactly one heroWord.
-
-Choose the word carrying the screen punch in this order:
-1. strongest valid [HERO] word
-2. strongest recurring hook word
-3. strongest noun or verb
-4. strongest emotional adjective
-
-heroWord formatting:
-- UPPERCASE
-- letters only
-- remove punctuation and symbols
-
-Never choose weak filler words such as:
-I, A, THE, AND, BUT, OR, IS, IT, TO, OF, IN, ON, THAT, YOU, WE, ME, HE, SHE, THEY, MY, YOUR, WITH, FROM
-
-Assign exitEffect only after phrase cutting is final.
-
-Allowed exitEffect values:
-"fade" | "drift_up" | "shrink" | "dissolve" | "cascade" | "scatter" | "slam" | "glitch" | "burn"
-
-Effect guidance:
-- soft / aching / reflective -> fade, dissolve, drift_up
-- rhythmic / controlled -> cascade, shrink
-- aggressive / impact-heavy -> slam, scatter, glitch
-- peak hook / hardest emotional center -> burn, slam
-- dreamy / floating -> drift_up, dissolve
-
-Effect constraints:
-- never let exitEffect influence phrase cutting
-- never repeat the same exitEffect 3 phrases in a row
-- repeated hook returns should usually reuse the same effect pattern
-- outro phrases should prefer fade, drift_up, or dissolve
-
-PROCESS
-PASS 1 — CUT
-Group the stream into candidate phrases using:
-- [BREATH]
-- [pause]
-- spoken thought
-- hook recurrence
-- anchor strength
-
-PASS 2 — REPAIR
-For each phrase:
-- enforce billboard validity
-- enforce 6-word max
-- repair weak connector endings when possible
-- repair repetition seams
-- repair weak stutter fragments
-- improve readability when possible without breaking higher-priority rules
-
-PASS 3 — ASSIGN
-For each final phrase:
-- choose heroWord
-- choose exitEffect
-- choose hookPhrase = the single phrase most worthy of billboard treatment
-
-OUTPUT
-Return exactly one valid JSON object using ONLY these fields:
+### OUTPUT SCHEMA
+You must return exactly one valid JSON object. To ensure mathematical accuracy, you will include a `_calculation_log` for the first three phrases to verify your duration logic, followed by the final `phrases` array.
 
 {
-  "hookPhrase": "string",
+  "hookPhrase": "THE_MOST_ICONIC_LINE_IN_UPPERCASE",
+  "_calculation_log": [
+    "Phrase 0: [0-3] Logic: delta calculation + billboard check",
+    "Phrase 1: [4-8] Logic: delta calculation + billboard check",
+    "Phrase 2: [9-11] Logic: delta calculation + billboard check"
+  ],
   "phrases": [
     {
       "wordRange": [startIndex, endIndex],
-      "heroWord": "WORD",
-      "exitEffect": "fade"
+      "heroWord": "CLEAN_UPPERCASE_WORD",
+      "exitEffect": "effect_name"
     }
   ]
 }
 
-Output requirements:
-- every phrase must cover 1 to 6 words
-- every phrase must pass billboard validity
-- no phrase may end on a weak connector unless [BREATH] forced it
-- no malformed repetition seam fragments
-- heroWord must be valid and not a weak filler word
-- exitEffect must be one allowed value
-- return only valid JSON
-- no markdown
-- no commentary
-- no explanation
+### FINAL REQUIREMENTS
+- Return ONLY the JSON object.
+- No markdown formatting outside of the JSON block.
+- No conversational filler or explanations.
+- Every phrase must be 1 to 6 words.
+- heroWord must be UPPERCASE letters only, no punctuation.
 `;
 
 interface LyricLine {
