@@ -155,7 +155,6 @@ export function LyricFitTab({
           onNewProject={p.resetProject}
           onHeaderProject={activeTab === "lyrics" ? onHeaderProject : undefined}
           onSavedId={onSavedId}
-          analysisModel={p.analysisModel}
           transcriptionModel={p.transcriptionModel}
           sceneInput={sceneInputNode}
           onAudioSubmitted={p.handleAudioSubmitted}
