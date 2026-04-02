@@ -328,8 +328,6 @@ export function SongFitPostCard({
                 coverImageUrl={post.album_art_url}
                 hideReactButton
                 reelsMode={reelsMode}
-                externalPanelOpen={panelOpen}
-                onExternalPanelOpenChange={setPanelOpen}
                 onOpenReactions={handleOpenPanel}
                 prefetchedData={lyricDanceData ?? null}
                 avatarUrl={post.profiles?.avatar_url}

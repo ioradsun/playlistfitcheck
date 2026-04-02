@@ -8,17 +8,9 @@ import {
   Copy,
   Repeat2,
   MoreHorizontal,
-  AlertCircle,
   RotateCcw,
   X,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -63,11 +55,6 @@ export interface LyricLine {
   end: number;
   text: string;
   tag?: "main" | "adlib";
-  isFloating?: boolean; // v2.2: adlib has no Whisper word match within ±1.5s
-  geminiConflict?: string; // v2.2: Whisper alternative text when Gemini text diverges
-  confidence?: number; // v2.2: per-adlib confidence from Gemini
-  isCorrection?: boolean; // v3.7: line had a phonetic QA word swap applied
-  correctedWord?: string; // v3.7: the replacement word (e.g. "rain") for purple underline
 }
 
 export interface LyricHook {
@@ -406,12 +393,6 @@ export function LyricDisplay({
 
   // (anchor state removed)
 
-  // v2.2: Conflict resolution modal
-  const [conflictLine, setConflictLine] = useState<{
-    lineIndex: number;
-    whisperText: string;
-    geminiText: string;
-  } | null>(null);
 
   const [artistFingerprint, setArtistFingerprint] = useState<ArtistDNA | null>(
     null,
@@ -439,7 +420,6 @@ export function LyricDisplay({
   }, [user]);
 
 
-  // Song DNA — on-demand generation
   const [renderData, setRenderData] = useState<Record<string, any> | null>(normalizeRenderDataWithManifest(initialRenderData, data.title) ?? null);
   useEffect(() => {
     // Font preloading — uses the same cache as the player
@@ -447,7 +427,6 @@ export function LyricDisplay({
     if (fontFamily) void ensureFontReady(fontFamily);
   }, [initialRenderData]);
 
-  // Reset Song DNA when audio file changes (e.g. reupload)
   const audioFileRef = useRef(audioFile);
   useEffect(() => {
     if (audioFile !== audioFileRef.current) {
@@ -1042,7 +1021,6 @@ export function LyricDisplay({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      {/* Metadata strip removed — mood/description now in Song DNA */}
 
       <div className="max-w-3xl mx-auto space-y-4">
         {/* ── Waveform — centered full width ── */}
@@ -1166,10 +1144,6 @@ export function LyricDisplay({
               ) : (
                 activeLines.map((line, i) => {
                   const isAdlib = line.tag === "adlib";
-                  const isFloating = isAdlib && line.isFloating;
-                  // v3.8: hide conflict marker on QA-corrected lines (purple badge already shown)
-                  const hasConflict =
-                    isAdlib && !!line.geminiConflict && !line.isCorrection;
                   const isActive = activeLineIndices.has(i);
                   const isPrimary = i === primaryActiveLine;
                   const isEditing = i === editingIndex;
@@ -1184,42 +1158,7 @@ export function LyricDisplay({
 
                   // v6.0: No standalone chips — all adlibs render inline regardless of orphan/floating status
 
-                  // v3.7: render corrected word with purple underline
                   const renderLineText = () => {
-                    if (
-                      !isEditing &&
-                      !isAdlib &&
-                      line.isCorrection &&
-                      line.correctedWord &&
-                      line.text.includes(line.correctedWord)
-                    ) {
-                      const parts = line.text.split(line.correctedWord);
-                      return (
-                        <span
-                          className={`leading-relaxed cursor-text flex-1 select-text text-sm ${isSelected ? "bg-primary/10 rounded px-0.5" : ""}`}
-                          onDoubleClick={() => startEditing(i)}
-                          onMouseUp={() => {
-                            const sel = window.getSelection();
-                            if (sel && !sel.isCollapsed) {
-                              setSelectionLineIndex(i);
-                              setCapturedSelectionText(sel.toString());
-                            } else {
-                              setSelectionLineIndex(null);
-                              setCapturedSelectionText("");
-                            }
-                          }}
-                        >
-                          {parts[0]}
-                          <span
-                            className="underline decoration-purple-400 decoration-2 underline-offset-2 text-purple-300"
-                            title={`AI correction: was "${line.geminiConflict ?? "?"}" in transcript`}
-                          >
-                            {line.correctedWord}
-                          </span>
-                          {parts.slice(1).join(line.correctedWord)}
-                        </span>
-                      );
-                    }
                     // Word-level highlighting: interpolate timestamps per word
                     const words = line.text.split(/(\s+)/);
                     const nonSpaceWords = words.filter(
@@ -1312,10 +1251,6 @@ export function LyricDisplay({
                       className={`group flex items-start gap-3 px-3 py-1 rounded-lg transition-all ${
                         isAdlib ? "ml-6 opacity-70" : ""
                       } ${
-                        isFloating
-                          ? "border-l-2 border-dashed border-primary/30"
-                          : ""
-                      } ${
                         isActive
                           ? isAdlib
                             ? "bg-primary/5 text-foreground"
@@ -1349,40 +1284,6 @@ export function LyricDisplay({
                         />
                       ) : (
                         renderLineText()
-                      )}
-                      {/* v2.2: Floating chip badge */}
-                      {isFloating && (
-                        <span
-                          className="shrink-0 text-[9px] font-mono text-primary/50 border border-primary/20 rounded px-1 py-0.5 self-center"
-                          title="Floating adlib — no matching word in Whisper timeline"
-                        >
-                          float
-                        </span>
-                      )}
-                      {/* v3.7: QA correction badge on main lines */}
-                      {!isAdlib && line.isCorrection && (
-                        <span
-                          className="shrink-0 text-[9px] font-mono text-purple-400/70 border border-purple-400/20 rounded px-1 py-0.5 self-center"
-                          title={`AI corrected: "${line.geminiConflict}" → "${line.correctedWord}"`}
-                        >
-                          ✱ fix
-                        </span>
-                      )}
-                      {/* v2.2: Conflict indicator 💡 */}
-                      {hasConflict && (
-                        <button
-                          className="shrink-0 opacity-60 hover:opacity-100 transition-opacity self-center"
-                          title="Gemini and Whisper text differ — click to resolve"
-                          onClick={() =>
-                            setConflictLine({
-                              lineIndex: i,
-                              whisperText: line.geminiConflict!,
-                              geminiText: line.text,
-                            })
-                          }
-                        >
-                          <AlertCircle size={12} className="text-yellow-500" />
-                        </button>
                       )}
                       {/* Three-dot context menu */}
                       <DropdownMenu>
@@ -1420,7 +1321,6 @@ export function LyricDisplay({
             </div>
           </div>
 
-          {/* Song DNA card removed — DNA now auto-generates in Fit tab */}
         </div>
 
         {/* ── RIGHT: Controls panel ── */}
@@ -1556,87 +1456,7 @@ export function LyricDisplay({
 
        <SignUpToSaveBanner />
 
-      {/* v2.2: Conflict Resolution Modal — keeps Whisper timestamps, lets artist swap text */}
-      <Dialog
-        open={!!conflictLine}
-        onOpenChange={(open) => {
-          if (!open) setConflictLine(null);
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-sm flex items-center gap-2">
-              <AlertCircle size={14} className="text-yellow-500" />
-              Text Conflict Detected
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Gemini and Whisper identified different words at this timestamp.
-              Whisper's timestamps are kept regardless — choose which text to
-              display.
-            </DialogDescription>
-          </DialogHeader>
-          {conflictLine && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <div className="rounded-lg border border-border/40 p-3 space-y-1">
-                  <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                    Gemini (AI label)
-                  </p>
-                  <p className="text-sm font-medium text-foreground">
-                    "{conflictLine.geminiText}"
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border/40 p-3 space-y-1">
-                  <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                    Whisper (transcription)
-                  </p>
-                  <p className="text-sm font-medium text-foreground">
-                    "{conflictLine.whisperText}"
-                  </p>
-                </div>
-              </div>
-              <p className="text-[10px] text-muted-foreground font-mono">
-                Timestamps always stay from Whisper — you're only choosing what
-                text is shown.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  className="flex-1 text-xs font-mono border border-border/50 rounded-lg py-2 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
-                  onClick={() => setConflictLine(null)}
-                >
-                  Keep Gemini
-                </button>
-                <button
-                  className="flex-1 text-xs font-mono bg-primary/10 border border-primary/40 rounded-lg py-2 text-primary hover:bg-primary/20 transition-colors"
-                  onClick={() => {
-                    if (!conflictLine) return;
-                    const line = activeLines[conflictLine.lineIndex];
-                    const updater = (prev: LyricLine[]) =>
-                      prev.map((l) =>
-                        l.start === line.start && l.text === line.text
-                          ? {
-                              ...l,
-                              text: conflictLine.whisperText,
-                              geminiConflict: undefined,
-                            }
-                          : l,
-                      );
-                    if (activeVersion === "explicit") {
-                      setExplicitLines(updater);
-                    } else {
-                      setFmlyLines((prev) => (prev ? updater(prev) : prev));
-                    }
-                    setConflictLine(null);
-                    toast.success("Switched to Whisper transcription text");
-                  }}
-                >
-                  Use Whisper text
-                </button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+
 
 
       {/* Battle Page Popup Overlay */}

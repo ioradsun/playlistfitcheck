@@ -2072,7 +2072,7 @@ export function FitTab({
               </p>
               <div className="space-y-1.5 text-xs text-muted-foreground">
                 <div>Rhythm: {generationStatus.beatGrid}</div>
-                <div>Song DNA: {generationStatus.renderData}</div>
+                <div>Render data: {generationStatus.renderData}</div>
                 <div>
                   Cinematic direction: {generationStatus.cinematicDirection}
                 </div>
@@ -2237,7 +2237,7 @@ export function FitTab({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  Song DNA
+                  Scene Data
                 </span>
               </div>
 

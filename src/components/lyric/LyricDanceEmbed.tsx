@@ -53,8 +53,6 @@ interface LyricDanceEmbedProps {
   hideReactButton?: boolean;
   reelsMode?: boolean;
   postId?: string;
-  externalPanelOpen?: boolean;
-  onExternalPanelOpenChange?: (open: boolean) => void;
   autoPlay?: boolean;
   forceMuted?: boolean;
   onOpenReactions?: () => void;
@@ -86,8 +84,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   hideReactButton = false,
   reelsMode = false,
   postId,
-  externalPanelOpen,
-  onExternalPanelOpenChange,
   autoPlay = false,
   forceMuted = false,
   onOpenReactions,
@@ -205,21 +201,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const userActivatedRef = useRef(false);
   /** True once this card has been played at least once. Survives warm transitions. Only resets on cold. */
   const hasPlayedRef = useRef(false);
-  const [panelOpen, setPanelOpen] = useState(externalPanelOpen ?? false);
-
-  useEffect(() => {
-    if (externalPanelOpen !== undefined) setPanelOpen(externalPanelOpen);
-  }, [externalPanelOpen]);
-
-  const handlePanelOpenChange = useCallback((open: boolean) => {
-    setPanelOpen(open);
-    onExternalPanelOpenChange?.(open);
-    if (open && showCover) {
-      userActivatedRef.current = true;
-      onPlay?.();
-    }
-  }, [onExternalPanelOpenChange, onPlay, showCover]);
-
   // ── Full-mode upgrade: when player is ready and card is warm/active ──
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
@@ -324,7 +305,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (!isFeedEmbed) return;
     const coverUp = showCover;
     const isUserEngaged = cardState === "active" || userActivatedRef.current;
-    if (panelOpen) return;
     const shouldUnmuted = !coverUp && isUserEngaged && cardState !== "cold" && !forceDemoted;
     const shouldMuted = !coverUp && !isUserEngaged;
     if (shouldUnmuted) {
@@ -346,7 +326,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player.setMuted(true);
       setMuted(true);
     }
-  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, panelOpen, reelsMode, reelsPaused]);
+  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reelsMode, reelsPaused]);
 
   // ── Reels: auto-dismiss cover when audio is already unlocked ──
   // First card: cover stays (user must tap to unlock audio)
@@ -559,7 +539,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         )}
 
         <ClosingScreen
-          visible={closingVisible && !panelOpen && !effectiveShowCover}
           empowermentPromise={empowermentPromise}
           danceId={((data ?? prefetchedData) as any)?.id ?? ""}
           onAnswer={() => setClosingAnswered(true)}
@@ -612,7 +591,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           </AnimatePresence>
         )}
 
-        {!isBattleMode && playerReady && !reelsMode && !panelOpen && (
+        {!isBattleMode && playerReady && !reelsMode && (
           <div
             className="absolute top-0 left-0 right-0 z-[510] flex items-center justify-between p-2 pointer-events-none"
             onClick={(e) => e.stopPropagation()}
