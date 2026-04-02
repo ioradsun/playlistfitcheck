@@ -2,8 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { LyricFitTab } from "@/components/lyric/LyricFitTab";
 import ClaimBanner from "@/components/claim/ClaimBanner";
 import { preloadEssentia } from "@/hooks/useBeatGrid";
-import { motion } from "framer-motion";
-import { Search, Loader2, Users, Database, Trash2, MousePointerClick, FileText, Bot, CheckCircle2, Wrench, Music, Bomb, X, RefreshCw } from "lucide-react";
+import { Loader2, Users, Trash2, MousePointerClick, Music, Bomb, X, RefreshCw } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,15 +20,11 @@ const AiPromptsEditor = lazy(() => import("@/components/admin/AiPromptsEditor").
 const PendingVerifications = lazy(() => import("@/components/admin/PendingVerifications").then((m) => ({ default: m.PendingVerifications })));
 const ToolsEditor = lazy(() => import("@/components/admin/ToolsEditor").then((m) => ({ default: m.ToolsEditor })));
 const FmlyArtists = lazy(() => import("@/components/admin/FmlyArtists").then((m) => ({ default: m.FmlyArtists })));
-const GlobalCssEditor = lazy(() => import("@/components/admin/GlobalCssEditor").then((m) => ({ default: m.GlobalCssEditor })));
 const ReachDashboard = lazy(() =>
   import("@/components/admin/ReachDashboard").then((m) => ({
     default: m.ReachDashboard,
   }))
 );
-
-interface CheckFit { playlist_name: string | null; playlist_url: string | null; song_name: string | null; song_url: string | null; count: number; last_checked: string; }
-interface DashboardData { totalEngagements: number; totalSearches: number; checkFits: CheckFit[]; }
 
 interface AdminUser {
   id: string; email: string; display_name: string | null; avatar_url: string | null;
@@ -45,9 +40,7 @@ export default function Admin() {
   const [tab, setTab] = useState("users");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [data, setData] = useState<DashboardData | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [dataLoaded, setDataLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -132,13 +125,6 @@ export default function Admin() {
     }
   }, []);
 
-  const fetchData = useCallback(async () => {
-    const { data: result, error: fnError } = await supabase.functions.invoke("admin-dashboard", { body: { section: "data" } });
-    if (fnError) throw fnError;
-    if (result?.error) throw new Error(result.error);
-    return result as DashboardData;
-  }, []);
-
   useEffect(() => {
     if (authLoading) return;
     if (!user || !isAdmin) { navigate("/"); return; }
@@ -148,13 +134,6 @@ export default function Admin() {
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
   }, [authLoading, user, isAdmin, fetchUsers, navigate]);
-
-  useEffect(() => {
-    if (tab === "data" && !dataLoaded && isAdmin) {
-      setRefreshing(true);
-      fetchData().then((d) => { setData(d); setDataLoaded(true); }).catch(console.error).finally(() => setRefreshing(false));
-    }
-  }, [tab, dataLoaded, isAdmin, fetchData]);
 
   // Fetch reach rows when tab switches
   useEffect(() => {
@@ -274,7 +253,6 @@ export default function Admin() {
     setRefreshing(true);
     try {
       if (tab === "users") { setUsers(await fetchUsers()); }
-      else { setData(await fetchData()); }
     } catch (e) { console.error("Refresh failed", e); }
     finally { setRefreshing(false); }
   };
@@ -304,8 +282,6 @@ export default function Admin() {
       if (result?.error) throw new Error(result.error);
       toast.success(`All data deleted. ${result.deletedUsers} users removed.${result.errors?.length ? ` ${result.errors.length} warnings.` : ""}`);
       setUsers([]);
-      setData(null);
-      setDataLoaded(false);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Delete failed"); }
     finally { setNuking(false); setNukeOpen(false); setNukeConfirmText(""); }
   };
@@ -337,12 +313,9 @@ export default function Admin() {
             <TabsTrigger value="artists">Artists</TabsTrigger>
             <TabsTrigger value="reach">Reach</TabsTrigger>
             <TabsTrigger value="verify">Verify</TabsTrigger>
-            <TabsTrigger value="data">Data</TabsTrigger>
             <TabsTrigger value="tools">Tools</TabsTrigger>
             <TabsTrigger value="copy">Copy</TabsTrigger>
             <TabsTrigger value="prompts">AI</TabsTrigger>
-            <TabsTrigger value="css">CSS</TabsTrigger>
-            <TabsTrigger value="labs">Labs</TabsTrigger>
           </TabsList>
 
           {/* ── USERS TAB ── */}
@@ -658,47 +631,6 @@ export default function Admin() {
             )}
           </TabsContent>
 
-          {/* ── DATA TAB ── */}
-          <TabsContent value="data" className="mt-4 space-y-6">
-            {refreshing && !data ? (
-              <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-primary" size={20} /></div>
-            ) : (
-              <>
-                <div className="flex gap-3 text-xs font-mono text-muted-foreground">
-                  <span>{data?.totalSearches ?? 0} fits checked</span>
-                </div>
-
-                {/* Check Fits */}
-                <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                    <Search size={14} className="text-primary" />
-                    <span className="text-sm font-mono font-medium">Check Fits</span>
-                  </div>
-                  {data?.checkFits && data.checkFits.length > 0 ? (
-                    <div className="divide-y divide-border">
-                      {data.checkFits.map((fit, i) => (
-                        <div key={i} className="px-4 py-2.5 flex items-center gap-3">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm truncate">{fit.playlist_name || fit.playlist_url || "—"}</p>
-                            {fit.song_name && <p className="text-xs text-muted-foreground truncate">× {fit.song_name}</p>}
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {fit.count > 1 && <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">×{fit.count}</span>}
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {(() => { const d = new Date(fit.last_checked || (fit as any).created_at); return isNaN(d.getTime()) ? "—" : d.toLocaleDateString(); })()}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="px-4 py-8 text-center text-sm text-muted-foreground">No PlaylistFit checks yet.</div>
-                  )}
-                </motion.div>
-              </>
-            )}
-          </TabsContent>
-
           {/* ── TOOLS TAB ── */}
           <TabsContent value="tools" className="mt-4">
             {tab === "tools" && (
@@ -726,23 +658,6 @@ export default function Admin() {
             )}
           </TabsContent>
 
-          {/* ── CSS TAB ── */}
-          <TabsContent value="css" className="mt-4">
-            {tab === "css" && (
-              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
-                <GlobalCssEditor />
-              </Suspense>
-            )}
-          </TabsContent>
-
-          {/* ── LABS TAB ── */}
-          <TabsContent value="labs" className="mt-4 space-y-4">
-            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-              <p className="text-xs text-white/50">
-                No experimental engine flags are currently available.
-              </p>
-            </div>
-          </TabsContent>
         </Tabs>
       </div>
 
