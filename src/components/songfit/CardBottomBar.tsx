@@ -293,10 +293,48 @@ export function CardBottomBar({
         className={`flex items-center gap-2 flex-1 min-w-0 px-3 ${py}`}
         style={{
           opacity: commentActive ? 1 : 0.5,
-          pointerEvents: commentActive ? "auto" : "none",
+          pointerEvents: "auto",
           transition: "opacity 0.4s ease",
         }}
       >
+        {/* Comment bubble — toggles panel open/close */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            panelOpen ? onClose() : onOpenReactions();
+          }}
+          style={{ background: "none", border: "none", cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
+          aria-label={panelOpen ? "Close comments" : "Open comments"}
+        >
+          {panelOpen ? (
+            <svg
+              width={13}
+              height={13}
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="rgba(255,255,255,0.5)"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            >
+              <line x1="2" y1="2" x2="12" y2="12" />
+              <line x1="12" y1="2" x2="2" y2="12" />
+            </svg>
+          ) : (
+            <svg
+              width={13}
+              height={13}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="rgba(255,255,255,0.3)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          )}
+        </button>
+
         {speechSupported && (
           <button
             onClick={(e) => {
