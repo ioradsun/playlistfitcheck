@@ -94,6 +94,12 @@ const FONT_LIBRARY: FontEntry[] = [
   { name: 'JetBrains Mono', cssFamily: '"JetBrains Mono", monospace', family: 'mono', width: 'normal', weights: [400, 500, 700], force: 'low', intimacy: 'low', polish: 'raw', usable: true },
   { name: 'Space Mono', cssFamily: '"Space Mono", monospace', family: 'mono', width: 'normal', weights: [400, 700], force: 'medium', intimacy: 'low', polish: 'raw', usable: true },
   { name: 'Caveat', cssFamily: '"Caveat", cursive', family: 'handwriting', width: 'normal', weights: [400, 700], force: 'low', intimacy: 'high', polish: 'raw', usable: true },
+  // ── New: fills raw sans gaps ──
+  { name: 'Archivo', cssFamily: '"Archivo", sans-serif', family: 'sans', width: 'normal', weights: [400, 600, 700, 800], force: 'high', intimacy: 'low', polish: 'raw', usable: true },
+  { name: 'Rubik', cssFamily: '"Rubik", sans-serif', family: 'sans', width: 'normal', weights: [400, 500, 700], force: 'medium', intimacy: 'medium', polish: 'raw', usable: true },
+  { name: 'Sora', cssFamily: '"Sora", sans-serif', family: 'sans', width: 'normal', weights: [400, 600, 700], force: 'medium', intimacy: 'low', polish: 'clean', usable: true },
+  { name: 'Bitter', cssFamily: '"Bitter", serif', family: 'serif', width: 'normal', weights: [400, 700], force: 'medium', intimacy: 'medium', polish: 'raw', usable: true },
+  { name: 'Permanent Marker', cssFamily: '"Permanent Marker", cursive', family: 'handwriting', width: 'normal', weights: [400], force: 'high', intimacy: 'medium', polish: 'raw', usable: true },
 ];
 
 function emotionalScore(font: FontEntry, profile: FontProfile): number {
