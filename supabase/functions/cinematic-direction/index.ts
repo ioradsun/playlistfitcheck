@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs: number = 55000,
+  timeoutMs: number = 120000,
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
