@@ -18,6 +18,40 @@ if (!isEmbedRoute) {
   void refreshLightningBarFlagFromBackend();
 }
 
+// --- Cache invalidation (bump CACHE_VERSION to force-clear all caches) ---
+const CACHE_VERSION = 2;
+const CACHE_VERSION_KEY = "tfm:cache_version";
+(() => {
+  try {
+    const prev = parseInt(localStorage.getItem(CACHE_VERSION_KEY) || "0", 10);
+    if (prev < CACHE_VERSION) {
+      // Clear localStorage caches
+      const keysToRemove = Object.keys(localStorage).filter(
+        (k) => k.startsWith("tfm:transcript_cache") || k.startsWith("profit_history")
+      );
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+      // Clear all Cache Storage (Workbox, sw-claim, etc.)
+      if ("caches" in window) {
+        caches.keys().then((names) => names.forEach((name) => caches.delete(name)));
+      }
+
+      // Unregister all service workers so fresh ones install
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then((regs) =>
+          regs.forEach((r) => r.unregister())
+        );
+      }
+
+      localStorage.setItem(CACHE_VERSION_KEY, String(CACHE_VERSION));
+      console.info("[cache] Invalidated all caches — version", CACHE_VERSION);
+    }
+  } catch {}
+})();
+
+// Clear in-memory session audio cache on every full page load
+import("@/lib/sessionAudioCache").then(({ sessionAudio }) => sessionAudio.clearAll()).catch(() => {});
+
 if (isEmbedRoute && "serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw-claim.js").catch(() => {});
 }

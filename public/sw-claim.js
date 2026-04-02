@@ -1,4 +1,4 @@
-const CACHE_NAME = "tfm-claim-v1";
+const CACHE_NAME = "tfm-claim-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME));
