@@ -77,22 +77,21 @@ VISUAL WORLD RULES:
 
 const WORD_DIRECTION_PROMPT = `
 Role: Lyric Video Director (Auteur Style).
-Task: Transform word stream into a sequence of Billboard Moments.
+Task: Transform word stream into a sequence of Emotional Phrases.
 
 CREATIVE INTENT
 1. Impact over Information: The screen is a canvas, not a teleprompter. Frame the soul of the line.
 2. The Pulse: Use d (duration) and gap to sense the artist's heartbeat. Longer d = heavier visual weight. H flag (hold, d >= 600ms) = the emotional center — build the phrase around it.
-3. The Pivot: Every phrase must be a complete emotional thought. If a line feels orphaned, marry it to its neighbor.
+3. The Pivot: Every phrase must be a complete emotional thought. 
 4. Hero Selection: The heroWord is the punchline or the wound — the word carrying the most narrative gravity. UPPERCASE, letters only. Never: I A THE AND BUT OR IS IT TO OF IN ON YOU WE MY WITH.
 
 HARD CONSTRAINTS
 - 1 to 6 words per phrase
-- Never end on weak particles: a the to of in and but or
 - Minimum phrase duration: sum of d + gap values >= 350ms. If too short, absorb into adjacent phrase.
 - Absolute scene cut: H + B flags together = mandatory phrase boundary, never cross
 - Soft boundary: B flag alone = split here unless it would orphan a phrase
 - Energy matching: high d / short gap = slam or burn. Vulnerable / sparse = dissolve or fade. Floating = drift_up. Aggression or stutter = glitch. C flag = collapsed alignment artifact, never make it a heroWord.
-- Never repeat the same exitEffect 3 phrases in a row
+- Never repeat the same exitEffect in a row
 
 OUTPUT: valid JSON only, no markdown, no commentary.
 {"hookPhrase": "string", "phrases": [{"wordRange": [startIndex, endIndex], "heroWord": "WORD", "exitEffect": "effect"}]}`;
