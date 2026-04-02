@@ -539,7 +539,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         )}
 
         <ClosingScreen
-          visible={showClosing}
+          visible={closingVisible}
           empowermentPromise={empowermentPromise}
           danceId={((data ?? prefetchedData) as any)?.id ?? ""}
           onAnswer={() => setClosingAnswered(true)}
