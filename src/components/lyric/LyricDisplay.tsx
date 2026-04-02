@@ -57,6 +57,7 @@ import type {
   ArtistDNA,
   FingerprintSongContext,
 } from "./ArtistFingerprintTypes";
+import { buildPhrases } from "@/lib/phraseEngine";
 export interface LyricLine {
   start: number;
   end: number;
@@ -122,6 +123,7 @@ function normalizeRenderDataWithManifest(
 interface Props {
   data: LyricData;
   audioFile: File;
+  words?: Array<{ word: string; start: number; end: number }> | null;
   hasRealAudio?: boolean;
   savedId?: string | null;
   fmlyLines?: LyricLine[] | null;
@@ -207,8 +209,12 @@ function downloadFile(content: string, filename: string, mime: string) {
 }
 
 /** Re-split main lines by format while preserving timestamps */
-function applyLineFormat(lines: LyricLine[], format: LineFormat): LyricLine[] {
-  if (format === "natural") return lines;
+function applyLineFormat(
+  lines: LyricLine[],
+  format: LineFormat,
+  naturalLines?: LyricLine[],
+): LyricLine[] {
+  if (format === "natural") return naturalLines?.length ? naturalLines : lines;
 
   const result: LyricLine[] = [];
 
@@ -293,6 +299,7 @@ const ADMIN_EMAILS = ["sunpatel@gmail.com", "spatel@iorad.com"];
 export function LyricDisplay({
   data,
   audioFile,
+  words = null,
   hasRealAudio = true,
   savedId,
   fmlyLines: initFmlyLines,
@@ -442,7 +449,21 @@ export function LyricDisplay({
   const activeLinesRaw =
     activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
   const activeMeta = activeVersion === "explicit" ? explicitMeta : fmlyMeta;
-  const activeLines = applyLineFormat(activeLinesRaw, activeMeta.lineFormat);
+  const phraseLines: LyricLine[] = useMemo(() => {
+    if (!words?.length) return activeLinesRaw;
+    const result = buildPhrases(words);
+    return result.phrases.map((p) => ({
+      start: p.start,
+      end: p.end,
+      text: p.text,
+      tag: "main" as const,
+    }));
+  }, [words, activeLinesRaw]);
+  const activeLines = applyLineFormat(
+    activeLinesRaw,
+    activeMeta.lineFormat,
+    phraseLines,
+  );
 
   // Use currentTime directly (no offset)
   // Bug 2: epsilon prevents flickering at floating-point boundaries

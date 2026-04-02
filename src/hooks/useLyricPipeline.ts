@@ -11,6 +11,7 @@ import {
 } from "@/hooks/useBeatGrid";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import { extractPeaks } from "@/lib/audioUtils";
+import { buildPhrases } from "@/lib/phraseEngine";
 import type { LyricData, LyricLine } from "@/components/lyric/LyricDisplay";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 
@@ -548,6 +549,7 @@ export function useLyricPipeline({
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(
     null,
   );
+  const phraseResultRef = useRef<ReturnType<typeof buildPhrases> | null>(null);
   const [pipelineDanceId, setPipelineDanceId] = useState<string | null>(
     (initialLyric as any)?.render_data?.pipelineDanceId ?? null,
   );
@@ -662,6 +664,23 @@ export function useLyricPipeline({
       });
     }
   }, [detectedGrid, beatGrid]);
+
+  useEffect(() => {
+    if (!words?.length) {
+      phraseResultRef.current = null;
+      return;
+    }
+
+    const phraseResult = buildPhrases(words);
+    phraseResultRef.current = phraseResult;
+
+    setCinematicDirection((prev: any) => ({
+      ...(prev || {}),
+      phrases: phraseResult.phrases,
+      hookPhrase: phraseResult.hookPhrase,
+      _phraseSource: "client_v1",
+    }));
+  }, [words]);
 
   const allAnalysisLoaded = !!(beatGrid && cinematicDirection);
   useEffect(() => {
@@ -1104,15 +1123,20 @@ export function useLyricPipeline({
 
         if (!mountedRef.current) return;
 
+        const phraseResult = phraseResultRef.current ?? (words?.length ? buildPhrases(words) : null);
         const enrichedScene = {
           ...(beatGrid
             ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
             : { ...sceneDirection }),
+          phrases: phraseResult?.phrases ?? [],
+          hookPhrase: phraseResult?.hookPhrase || undefined,
+          _phraseSource: "client_v1",
           _artistDirection: sceneDescription?.trim() || undefined,
           _meta: { scene: sceneMeta },
         };
 
         setCinematicDirection(enrichedScene);
+        cinematicDirectionRef.current = enrichedScene;
 
         {
           const updatedRenderData = {
@@ -1140,81 +1164,6 @@ export function useLyricPipeline({
         const typoPreset = enrichedScene.typography || "clean-modern";
         getTypography(typoPreset);
         deriveFrameState(enrichedScene, 0, 0.5);
-
-        const wordPromise = (async () => {
-          if (!mountedRef.current) return;
-
-          try {
-            const { data: wordResult } = await invokeWithTimeout(
-              "cinematic-direction",
-              {
-                ...sharedBody,
-                mode: "words",
-                sceneDirection: enrichedScene,
-                words: words ?? undefined,
-              },
-              120_000,
-            );
-
-            console.log('[Pipeline] Word mode response keys:', wordResult ? Object.keys(wordResult) : 'null', 'has cinematicDirection:', !!wordResult?.cinematicDirection, '_meta:', JSON.stringify(wordResult?._meta ?? 'MISSING'));
-            if (wordResult?.cinematicDirection) {
-              const { phrases, hookPhrase, chorusText } =
-                wordResult.cinematicDirection;
-
-              const wordMeta = wordResult._meta || null;
-              console.log('[Pipeline] wordMeta:', JSON.stringify(wordMeta));
-              const merged = {
-                ...enrichedScene,
-                phrases: phrases || [],
-                hookPhrase: hookPhrase || undefined,
-                chorusText: chorusText || undefined,
-                _meta: { scene: enrichedScene._meta?.scene, words: wordMeta },
-              };
-
-              console.log('[Pipeline] Word mode SUCCESS:', phrases?.length, 'phrases, hookPhrase:', hookPhrase);
-              setCinematicDirection(merged);
-              cinematicDirectionRef.current = merged;
-
-              if (savedIdRef.current) {
-                setRenderData((prev: any) => {
-                  const updated = {
-                    ...(prev || {}),
-                    cinematicDirection: merged,
-                  };
-                  persistQueue.enqueue({
-                    table: "saved_lyrics",
-                    id: savedIdRef.current!,
-                    payload: {
-                      render_data: updated,
-                    },
-                  });
-                  return updated;
-                });
-              }
-
-              // Persist merged data (with phrases + presentation modes) to shareable_lyric_dances
-              // Without this, the player loads scene-only data and never sees word-level choreography.
-              if (user) {
-                const _slugify = (await import("@/lib/slugify")).slugify;
-                const _artistSlug = _slugify(artistNameRef.current || "artist");
-                const _songSlug = _slugify(lyricData?.title || "untitled");
-                supabase
-                  .from("shareable_lyric_dances" as any)
-                  .update({ cinematic_direction: merged } as any)
-                  .eq("artist_slug", _artistSlug)
-                  .eq("song_slug", _songSlug)
-                  .eq("user_id", user.id)
-                  .then(({ error }) => {
-                    if (error) console.warn('[Pipeline] Failed to persist word data to dance row:', error);
-                    else console.log('[Pipeline] Persisted word-level data to shareable_lyric_dances');
-                  });
-              }
-            }
-          } catch (wordErr: any) {
-            console.error('[Pipeline] Word mode FAILED:', wordErr);
-            console.error('[Pipeline] Word error details:', wordErr?.message, wordErr?.status, typeof wordErr === 'string' ? wordErr : JSON.stringify(wordErr).slice(0, 500));
-          }
-        })();
 
         const imagePromise = (async () => {
           const dirSections = enrichedScene?.sections;
@@ -1394,7 +1343,7 @@ export function useLyricPipeline({
           }
         })();
 
-        await Promise.allSettled([wordPromise, imagePromise]);
+        await Promise.allSettled([imagePromise]);
 
         if (!mountedRef.current) return;
         setGenerationStatus((prev) => ({
