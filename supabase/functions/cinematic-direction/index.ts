@@ -10,113 +10,45 @@ const PRIMARY_MODEL = "google/gemini-3-flash-preview";
 const FALLBACK_MODEL = "google/gemini-2.5-flash";
 
 const SCENE_DIRECTION_PROMPT = `
-You are a lyric-video creative director producing structured visual direction for a song.
+You are a lyric video director. Return JSON only. No markdown. No commentary.
 
-You will receive:
-1. Song lyrics
-2. Audio-detected sections (if available)
+OUTPUT SCHEMA:
+{
+  "description": "one sentence, max 15 words",
+  "sceneTone": "dark|light|mixed",
+  "fontProfile": {
+    "force": "low|medium|high",
+    "intimacy": "low|medium|high",
+    "polish": "raw|clean|elegant",
+    "theatricality": "low|medium|high",
+    "era": "timeless|modern|futuristic"
+  },
+  "emotionalArc": "slow-burn|surge|collapse|dawn|eruption",
+  "sections": [
+    {
+      "sectionIndex": 0,
+      "description": "one evocative sentence",
+      "dominantColor": "#hex",
+      "visualMood": "mood",
+      "texture": "texture"
+    }
+  ]
+}
 
-Your job is to infer the song's emotional world, then return a compact JSON direction system that a renderer can use reliably.
+MOODS: intimate, anthemic, dreamy, aggressive, melancholy, euphoric, eerie,
+vulnerable, triumphant, nostalgic, defiant, hopeful, raw, hypnotic, ethereal,
+haunted, celestial, noir, rebellious
 
-WORK IN THIS ORDER:
-1. Infer the song's emotional core: intensity, softness, tension, intimacy, grit, polish.
-2. Infer a font emotional profile (force/intimacy/polish/theatricality/era).
-3. Choose the emotionalArc for the full song.
-4. Design section visuals that feel distinct but still belong to the same visual world.
+TEXTURES: dust, embers, smoke, rain, snow, stars, fireflies, petals, ash,
+crystals, confetti, lightning, bubbles, moths, glare, glitch, fire
 
-TOP-LEVEL FIELDS — return all of these:
-- "description": one evocative sentence, max 15 words
-- "sceneTone": "dark" | "light" | "mixed"
-- "fontProfile": object with 5 emotional axes (see below)
-- "emotionalArc": one of the 5 options below
-- "sections": array of section objects
-
-FONT PROFILE — describe the song's typographic personality through emotional axes, not font names or styling choices.
-
-Return a "fontProfile" object with these 5 fields:
-- "force": "low" | "medium" | "high" — how forceful, loud, aggressive the song feels
-- "intimacy": "low" | "medium" | "high" — how close, personal, confessional it feels
-- "polish": "raw" | "clean" | "elegant" — the surface texture of the production
-- "theatricality": "low" | "medium" | "high" — how much spectacle, drama, performance
-- "era": "timeless" | "modern" | "futuristic" — where it sits in time
-
-FONT PROFILE DECISION LOGIC:
-First ask about the song:
-- Is it soft or forceful?
-- Is it personal or public?
-- Is it rough or polished?
-- Is it understated or theatrical?
-- Does it feel classic, current, or futuristic?
-
-Examples:
-- Trap banger, aggressive, modern production → force: high, intimacy: low, polish: raw, theatricality: high, era: modern
-- Acoustic ballad, confessional, stripped-back → force: low, intimacy: high, polish: raw, theatricality: low, era: timeless
-- Pop anthem, polished, arena-sized → force: high, intimacy: low, polish: clean, theatricality: high, era: modern
-- R&B slow jam, intimate, lush production → force: low, intimacy: high, polish: elegant, theatricality: low, era: modern
-- Synthwave, detached, futuristic → force: medium, intimacy: low, polish: clean, theatricality: medium, era: futuristic
-- Art pop, expressive, theatrical → force: medium, intimacy: medium, polish: elegant, theatricality: high, era: modern
-
-Do NOT pick font names. Do NOT pick font families. Just describe the emotional personality. The system maps it to fonts.
-
-EMOTIONAL ARC:
-- "slow-burn": gradual build to a late peak
-- "surge": early lift, then sustained momentum
-- "collapse": begins intense and drains into quiet or emptiness
-- "dawn": restrained for most of the song, then opens up near the end
-- "eruption": explosive from the beginning
-
-SECTION FIELDS — for EACH section return:
-- "sectionIndex": integer starting at 0
-- "description": vivid 1-sentence visual scene rooted in the same world as the rest of the song
-- "dominantColor": hex color #RRGGBB
-- "visualMood": one of the 19 options below
-- "texture": one of the 17 options below
-
-VISUAL MOOD OPTIONS:
-intimate | anthemic | dreamy | aggressive | melancholy | euphoric | eerie | vulnerable | triumphant | nostalgic | defiant | hopeful | raw | hypnotic | ethereal | haunted | celestial | noir | rebellious
-
-VISUAL MOOD GUIDANCE — grouped by emotional family:
-- intimate, vulnerable → close, personal, restrained, human-scale
-- anthemic, triumphant → expansive, rising, public, high-lift
-- dreamy, ethereal, celestial → soft, floating, luminous, surreal
-- aggressive, defiant, rebellious, raw → forceful, jagged, confrontational
-- melancholy, haunted, noir, eerie → shadowed, lonely, cold, haunted space
-- nostalgic, hopeful, euphoric → warm lift, memory, glow, emotional openness
-- hypnotic → repetitive, entrancing, pulsing, locked-in
-
-TEXTURE OPTIONS:
-dust | embers | smoke | rain | snow | stars | fireflies | petals | ash | crystals | confetti | lightning | bubbles | moths | glare | glitch | fire
-
-TEXTURE GUIDANCE:
-- quiet / intimate → dust, fireflies, moths, stars
-- warm / intense → embers, smoke, ash, fire
-- cold / distant → snow, crystals, rain
-- celebratory / blooming → confetti, petals, glare
-- dark / unstable → lightning, glitch, smoke
-- dreamy / surreal → bubbles, stars, petals, fireflies
-
-SECTION DESIGN RULES:
-- Keep the entire song inside one coherent visual universe.
-- Sections may evolve, but should NOT feel like unrelated music videos.
-- Repeated sections may intentionally echo the same visual language.
-- Color should feel cohesive across the song. Do NOT force maximum uniqueness per section.
-- Adjacent sections should shift in emphasis, not abandon the palette completely.
-- Prefer cinematic restraint over novelty.
-- Use texture as atmosphere, not as gimmick.
-- If no ARTIST DIRECTION is provided, derive the visual world entirely from the lyrics' emotional content, imagery, and themes. The lyrics are always the fallback brief — read them closely and let the words drive every visual choice: sceneTone, texture, atmosphere, and color.
-
-SCENE TONE GUIDANCE:
-- Use 'dark' ONLY when the song is predominantly shadowed throughout — no relief, no lift, no contrast.
-- Use 'mixed' when the song has both dark and light emotional spaces, even if it leans dark overall. A song about struggle AND transcendence is always 'mixed'.
-- Use 'light' for songs that are primarily warm, open, or euphoric.
-- When in doubt between 'dark' and 'mixed', choose 'mixed'.
-
-DOMINANT COLOR GUIDANCE:
-- dominantColor should reflect the section's EMOTIONAL peak, not just its setting. A triumphant section in a dark song should still have a lifted color — gold, amber, violet — not near-black.
-- Avoid #000000 to #222222 range except for sections that are deliberately void-like or isolated.
-- Sections with visualMood triumphant, euphoric, hopeful, celestial, anthemic must have dominantColor luminance above 40%.
-
-Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values exactly.
+RULES:
+1. Build one cohesive visual world across all sections — don't force variety.
+2. Color should reflect peak emotion, not just setting.
+   Luminance > 40% for lift/triumph. Dark for dread/isolation.
+3. One section per audio section provided. Match section count exactly.
+4. If ARTIST DIRECTION is provided, treat it as law — it defines the visual world.
+   Otherwise derive everything from the lyrics' emotional content and imagery.
 
 {
   "description": "A bruised heart pushing through darkness toward release",
@@ -747,11 +679,9 @@ function buildWordUserMessage(
   msg += "\n";
 
   if (words && words.length > 0) {
-    msg += `WORD STREAM — one JSON object per line. Index = position in array.\n\n`;
-
     // Pre-pass: detect Whisper timestamp collapse
-    // Words with d < 10ms OR consecutive words sharing the same start time
-    // are alignment failures — mark as adlib, exclude from phrase stream
+    // Words with d < 10ms OR consecutive words sharing the same start
+    // are alignment failures — mark as collapsed, exclude from stream
     const COLLAPSE_MS = 10;
     const isCollapsed = new Uint8Array(words.length);
 
@@ -761,10 +691,9 @@ function buildWordUserMessage(
         isCollapsed[i] = 1;
         continue;
       }
-      // Detect run: 2+ consecutive words with identical start time
       if (i < words.length - 1) {
-        const nextStart = Math.round(words[i + 1].start * 1000);
         const thisStart = Math.round(words[i].start * 1000);
+        const nextStart = Math.round(words[i + 1].start * 1000);
         if (Math.abs(nextStart - thisStart) < COLLAPSE_MS) {
           isCollapsed[i] = 1;
           isCollapsed[i + 1] = 1;
@@ -772,27 +701,27 @@ function buildWordUserMessage(
       }
     }
 
-    for (let wi = 0; wi < words.length; wi++) {
-      if (isCollapsed[wi]) continue;
+    // Pipe-delimited format: INDEX:WORD|DUR_MS|GAP_MS|FLAGS
+    // FLAGS: H = hold (d >= 600ms, artist held note)
+    //        B = breath (gap >= 400ms, natural break)
+    // Collapsed words (Whisper alignment failures) are skipped entirely
+    msg += `WORD STREAM — format: INDEX:WORD|DUR_MS|GAP_MS|FLAGS\n`;
+    msg += `FLAGS: H=hold(>=600ms) B=breath(gap>=400ms). Use wordRange indices.\n\n`;
 
-      const w = words[wi];
+    for (let i = 0; i < words.length; i++) {
+      if (isCollapsed[i]) continue;
+
+      const w = words[i];
       const d = Math.round((w.end - w.start) * 1000);
-      const gap = wi < words.length - 1
-        ? Math.round((words[wi + 1].start - w.end) * 1000)
+      const gap = i < words.length - 1
+        ? Math.round((words[i + 1].start - w.end) * 1000)
         : 0;
 
-      const entry: Record<string, any> = { w: w.word, d, gap };
+      let flags = "";
+      if (d >= 600) flags += "H";
+      if (gap >= 400) flags += "B";
 
-      // hold: word held >= 600ms — stretched vowel / beat landing
-      if (d >= 600) entry.hold = true;
-
-      // hero: pre-tagged anchor word
-      if (d >= 350) entry.hero = true;
-
-      // breath: hard boundary when on a hold word, soft otherwise
-      if (gap >= 400) entry.breath = true;
-
-      msg += JSON.stringify(entry) + "\n";
+      msg += `${i}:${w.word}|${d}|${gap}|${flags}\n`;
     }
     msg += "\n";
   } else {
