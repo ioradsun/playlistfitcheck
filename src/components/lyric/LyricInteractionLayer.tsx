@@ -188,18 +188,13 @@ export function LyricInteractionLayer({
   return (
     <div
       style={{
-        position: "absolute",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 30,
+        width: "100%",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        paddingBottom: isFullscreen ? "env(safe-area-inset-bottom, 0px)" : "8px",
-        pointerEvents: "none",
-        background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 60%, transparent 100%)",
-        paddingTop: 24,
+        background: "#0a0a0a",
+        paddingBottom: isFullscreen ? "env(safe-area-inset-bottom, 0px)" : "6px",
+        paddingTop: 4,
       }}
     >
       <style>{`
@@ -217,7 +212,6 @@ export function LyricInteractionLayer({
           padding: "0 16px 4px",
           fontSize: 9,
           color: "rgba(255,255,255,0.22)",
-          pointerEvents: "none",
         }}
       >
         <span style={{ fontFamily: "monospace" }}>{formatTime(currentTimeSec)}</span>
@@ -237,7 +231,6 @@ export function LyricInteractionLayer({
           justifyContent: "center",
           gap: 20,
           padding: "6px 0",
-          pointerEvents: "auto",
         }}
       >
         <button
