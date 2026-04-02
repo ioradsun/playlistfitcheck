@@ -30,7 +30,6 @@ const MODEL_OPTIONS = [
 ];
 
 const MODEL_PROMPT_CONFIGS: ModelPromptConfig[] = [
-  { slug: "analysis-model", label: "Analysis Model" },
   { slug: "scene-model", label: "Cinematic Scene Model" },
 ];
 
@@ -184,13 +183,12 @@ export function AiPromptsEditor() {
   }
 
   const promptMap = new Map(prompts.map((prompt) => [prompt.slug, prompt]));
-  const analysisFallback = promptMap.get("analysis-model")?.prompt ?? DEFAULT_MODEL;
   const modelPrompts = MODEL_PROMPT_CONFIGS.map((config) => {
     const existing = promptMap.get(config.slug);
     return existing ?? {
       slug: config.slug,
       label: config.label,
-      prompt: config.slug === "analysis-model" ? analysisFallback : analysisFallback,
+      prompt: DEFAULT_MODEL,
       updated_at: new Date(0).toISOString(),
     };
   });

@@ -20,13 +20,7 @@ const ALL_TOOLS = [
 const DEFAULT_ORDER = ALL_TOOLS.map(t => t.key);
 
 // ── LyricFit pipeline model types ─────────────────────────────────────────────
-type TranscriptionModel = "scribe" | "gemini" | "assemblyai";
-type AnalysisModel =
-  | "google/gemini-3-flash-preview"
-  | "google/gemini-2.5-flash"
-  | "google/gemini-2.5-pro"
-  | "google/gemini-3-pro-preview"
-  | "disabled";
+type TranscriptionModel = "scribe";
 
 interface FeaturesState {
   crypto_tipping: boolean;
@@ -36,7 +30,6 @@ interface FeaturesState {
   tools_order: string[];
   
   lyric_transcription_model: TranscriptionModel;
-  lyric_analysis_model: AnalysisModel;
   lyric_video: boolean;
   hookfit_hottest_hooks: boolean;
   export_video: boolean;
@@ -52,7 +45,6 @@ const DEFAULT_FEATURES: FeaturesState = {
   tools_order: DEFAULT_ORDER,
   
   lyric_transcription_model: "scribe",
-  lyric_analysis_model: "google/gemini-3-flash-preview",
   lyric_video: false,
   hookfit_hottest_hooks: true,
   export_video: false,
@@ -180,8 +172,7 @@ export function ToolsEditor() {
           tools_enabled,
           tools_order: merged,
           
-          lyric_transcription_model: (["scribe", "gemini", "assemblyai"].includes(f.lyric_transcription_model)) ? f.lyric_transcription_model : "scribe",
-          lyric_analysis_model: f.lyric_analysis_model ?? f.lyric_gemini_model ?? "google/gemini-3-flash-preview",
+          lyric_transcription_model: "scribe",
           lyric_video: f.lyric_video ?? false,
           hookfit_hottest_hooks: f.hookfit_hottest_hooks ?? true,
           export_video: f.export_video ?? false,
@@ -265,8 +256,6 @@ export function ToolsEditor() {
       await patchFeatures({ lyric_transcription_model: model });
       const labels: Record<TranscriptionModel, string> = {
         scribe: "Transcription → ElevenLabs Scribe",
-        gemini: "Transcription → Gemini (audio-only)",
-        assemblyai: "Transcription → AssemblyAI",
       };
       toast.success(labels[model]);
     } catch {
@@ -277,20 +266,7 @@ export function ToolsEditor() {
     }
   };
 
-  const setAnalysisModel = async (model: AnalysisModel) => {
-    const prev = features.lyric_analysis_model;
-    setFeatures(f => ({ ...f, lyric_analysis_model: model }));
-    setSavingKey("lyric_analysis");
-    try {
-      await patchFeatures({ lyric_analysis_model: model });
-      toast.success(model === "disabled" ? "Analysis disabled (transcription only)" : `Analysis → ${model.split("/")[1]}`);
-    } catch {
-      setFeatures(f => ({ ...f, lyric_analysis_model: prev }));
-      toast.error("Failed to update");
-    } finally {
-      setSavingKey(null);
-    }
-  };
+
 
 
   const saveQuotas = async () => {
@@ -377,46 +353,8 @@ export function ToolsEditor() {
             onClick={() => setTranscriptionModel("scribe")}
             title="ElevenLabs Scribe v2"
             desc="Native word-level timestamps, diarization, audio event tagging. Requires ELEVENLABS_API_KEY."
-            badge="recommended"
+            badge="active"
           />
-          <RadioOption
-            active={features.lyric_transcription_model === "assemblyai"}
-            disabled={savingKey === "lyric_transcription"}
-            onClick={() => setTranscriptionModel("assemblyai")}
-            title="AssemblyAI"
-            desc="Word-level timestamps, language detection, high accuracy. Requires ASSEMBLYAI_API_KEY."
-          />
-          <RadioOption
-            active={features.lyric_transcription_model === "gemini"}
-            disabled={savingKey === "lyric_transcription"}
-            onClick={() => setTranscriptionModel("gemini")}
-            title="Gemini (audio-only)"
-            desc="No external API dependency. Gemini handles timestamps — less precise but zero extra API keys."
-          />
-        </div>
-
-        {/* Stage 2: Analysis */}
-        <div className="px-4 py-2 bg-muted/30 border-b border-border border-t border-border mt-0">
-          <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">Stage 2 — Analysis (adlibs · hook · metadata)</p>
-        </div>
-        <div className="divide-y divide-border">
-          {([
-            { value: "google/gemini-3-flash-preview", title: "Gemini 3 Flash Preview", desc: "Fast, next-gen. Best balance of speed + audio quality.", badge: "default" },
-            { value: "google/gemini-2.5-flash",       title: "Gemini 2.5 Flash",       desc: "Stable, balanced — good multimodal + reasoning." },
-            { value: "google/gemini-2.5-pro",         title: "Gemini 2.5 Pro",         desc: "Top-tier accuracy. Slower, best for complex tracks." },
-            { value: "google/gemini-3-pro-preview",   title: "Gemini 3 Pro Preview",   desc: "Next-gen Pro — highest capability, experimental.", badge: "exp" },
-            { value: "disabled",                      title: "Disabled",               desc: "Skip analysis — transcription timestamps only, no adlibs or hooks." },
-          ] satisfies { value: AnalysisModel; title: string; desc: string; badge?: string }[]).map(({ value, title, desc, badge }) => (
-            <RadioOption
-              key={value}
-              active={features.lyric_analysis_model === value}
-              disabled={savingKey === "lyric_analysis"}
-              onClick={() => setAnalysisModel(value)}
-              title={title}
-              desc={desc}
-              badge={badge}
-            />
-          ))}
         </div>
       </div>
 

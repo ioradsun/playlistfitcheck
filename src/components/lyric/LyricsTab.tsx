@@ -107,7 +107,6 @@ interface Props {
   onNewProject?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onSavedId?: (id: string) => void;
-  analysisModel: string;
   transcriptionModel: string;
   sceneInput?: ReactNode;
   onAudioSubmitted?: (file: File) => void;
@@ -138,7 +137,6 @@ export function LyricsTab({
   onNewProject,
   onHeaderProject,
   onSavedId,
-  analysisModel,
   transcriptionModel,
   sceneInput,
   onAudioSubmitted,
@@ -297,8 +295,7 @@ export function LyricsTab({
                 body: JSON.stringify({
                   audioUrl: storageAudioUrl,
                   format: uploadFile.name.split(".").pop()?.toLowerCase() || "webm",
-                  analysisModel,
-                  transcriptionModel,
+                                  transcriptionModel,
                   ...(referenceLyrics?.trim() ? { referenceLyrics: referenceLyrics.trim() } : {}),
                 }),
                 signal: transcribeAbort.signal,
@@ -307,7 +304,6 @@ export function LyricsTab({
           } else {
             const formData = new FormData();
             formData.append("audio", uploadFile, uploadFile.name);
-            formData.append("analysisModel", analysisModel);
             formData.append("transcriptionModel", transcriptionModel);
             if (referenceLyrics?.trim()) formData.append("referenceLyrics", referenceLyrics.trim());
             response = await fetch(
@@ -411,7 +407,7 @@ export function LyricsTab({
         setLoading(false);
       }
     },
-    [analysisModel, transcriptionModel, quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted],
+    [transcriptionModel, quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted],
   );
 
   // ── Auto-submit for claim pages ──────────────────────────────────────

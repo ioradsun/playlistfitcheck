@@ -938,7 +938,7 @@ async function loadCustomPrompts(): Promise<{
   if (!sbUrl || !sbKey) return defaults;
 
   try {
-    const slugs = ["cinematic-scene", "scene-model", "analysis-model"];
+    const slugs = ["cinematic-scene", "scene-model"];
     const res = await fetchWithTimeout(
       `${sbUrl}/rest/v1/ai_prompts?slug=in.(${slugs.join(",")})&select=slug,prompt`,
       {
@@ -957,11 +957,9 @@ async function loadCustomPrompts(): Promise<{
     const rows: Array<{ slug: string; prompt: string }> = await res.json();
     const bySlug = Object.fromEntries(rows.map((r) => [r.slug, r.prompt]));
 
-    // Separate model slugs for scene vs words, with legacy analysis-model fallback
-    const legacyModel = bySlug["analysis-model"]?.trim() || PRIMARY_MODEL;
     const value = {
       scenePrompt: bySlug["cinematic-scene"] || SCENE_DIRECTION_PROMPT,
-      sceneModel: bySlug["scene-model"]?.trim() || legacyModel,
+      sceneModel: bySlug["scene-model"]?.trim() || PRIMARY_MODEL,
     };
 
     _promptCache = { value, expiresAt: Date.now() + PROMPT_CACHE_TTL_MS };

@@ -599,7 +599,6 @@ export function useLyricPipeline({
   );
   const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
 
-  const [analysisModel, setAnalysisModel] = useState("google/gemini-2.5-flash");
   const [transcriptionModel, setTranscriptionModel] = useState("scribe");
 
   const timestampedLines = useMemo(() => {
@@ -708,7 +707,6 @@ export function useLyricPipeline({
 
   useEffect(() => {
     const f = (siteCopy as any).features || {};
-    if (f.lyric_analysis_model) setAnalysisModel(f.lyric_analysis_model);
     if (f.lyric_transcription_model)
       setTranscriptionModel(f.lyric_transcription_model);
   }, [siteCopy]);
@@ -1596,7 +1594,6 @@ export function useLyricPipeline({
     setWaveformData,
     transcriptionDone,
     beatGridDone,
-    analysisModel,
     transcriptionModel,
     generationStatus,
     setGenerationStatus,
