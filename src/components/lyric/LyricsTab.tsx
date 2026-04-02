@@ -107,7 +107,6 @@ interface Props {
   onNewProject?: () => void;
   onHeaderProject?: HeaderProjectSetter;
   onSavedId?: (id: string) => void;
-  transcriptionModel: string;
   sceneInput?: ReactNode;
   onAudioSubmitted?: (file: File) => void;
   onUploadStarted?: (payload: { file: File; projectId: string | null; title: string }) => void;
@@ -137,7 +136,6 @@ export function LyricsTab({
   onNewProject,
   onHeaderProject,
   onSavedId,
-  transcriptionModel,
   sceneInput,
   onAudioSubmitted,
   onUploadStarted,
@@ -295,8 +293,9 @@ export function LyricsTab({
                 body: JSON.stringify({
                   audioUrl: storageAudioUrl,
                   format: uploadFile.name.split(".").pop()?.toLowerCase() || "webm",
-                                  transcriptionModel,
-                  ...(referenceLyrics?.trim() ? { referenceLyrics: referenceLyrics.trim() } : {}),
+                  ...(referenceLyrics?.trim()
+                    ? { referenceLyrics: referenceLyrics.trim() }
+                    : {}),
                 }),
                 signal: transcribeAbort.signal,
               },
@@ -304,7 +303,6 @@ export function LyricsTab({
           } else {
             const formData = new FormData();
             formData.append("audio", uploadFile, uploadFile.name);
-            formData.append("transcriptionModel", transcriptionModel);
             if (referenceLyrics?.trim()) formData.append("referenceLyrics", referenceLyrics.trim());
             response = await fetch(
               `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lyric-transcribe`,
@@ -407,7 +405,7 @@ export function LyricsTab({
         setLoading(false);
       }
     },
-    [transcriptionModel, quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted],
+    [quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted],
   );
 
   // ── Auto-submit for claim pages ──────────────────────────────────────
