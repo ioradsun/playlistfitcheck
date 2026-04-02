@@ -19,7 +19,7 @@ if (!isEmbedRoute) {
 }
 
 // --- Cache invalidation (bump CACHE_VERSION to force-clear all caches) ---
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const CACHE_VERSION_KEY = "tfm:cache_version";
 (() => {
   try {
