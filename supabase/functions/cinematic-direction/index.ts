@@ -1,5 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number = 55000,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() =>
+    clearTimeout(timer),
+  );
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -69,7 +81,7 @@ Task: Transform word stream into a sequence of Billboard Moments.
 
 CREATIVE INTENT
 1. Impact over Information: The screen is a canvas, not a teleprompter. Frame the soul of the line.
-2. The Pulse: Use d and gap to sense the artist's heartbeat. Longer d = heavier visual weight. hold:true = the emotional center — build the phrase around it.
+2. The Pulse: Use d (duration) and gap to sense the artist's heartbeat. Longer d = heavier visual weight. H flag (hold, d >= 600ms) = the emotional center — build the phrase around it.
 3. The Pivot: Every phrase must be a complete emotional thought. If a line feels orphaned, marry it to its neighbor.
 4. Hero Selection: The heroWord is the punchline or the wound — the word carrying the most narrative gravity. UPPERCASE, letters only. Never: I A THE AND BUT OR IS IT TO OF IN ON YOU WE MY WITH.
 
@@ -77,9 +89,9 @@ HARD CONSTRAINTS
 - 1 to 6 words per phrase
 - Never end on weak particles: a the to of in and but or
 - Minimum phrase duration: sum of d + gap values >= 350ms. If too short, absorb into adjacent phrase.
-- Absolute scene cut: hold:true + breath:true = mandatory phrase boundary, never cross
-- Soft boundary: breath:true alone = split here unless it would orphan a phrase
-- Energy matching: high d / short gap = slam or burn. Vulnerable / sparse = dissolve or fade. Floating = drift_up. Aggression or stutter = glitch.
+- Absolute scene cut: H + B flags together = mandatory phrase boundary, never cross
+- Soft boundary: B flag alone = split here unless it would orphan a phrase
+- Energy matching: high d / short gap = slam or burn. Vulnerable / sparse = dissolve or fade. Floating = drift_up. Aggression or stutter = glitch. C flag = collapsed alignment artifact, never make it a heroWord.
 - Never repeat the same exitEffect 3 phrases in a row
 
 OUTPUT: valid JSON only, no markdown, no commentary.
@@ -701,13 +713,11 @@ function buildWordUserMessage(
     // Pipe-delimited format: INDEX:WORD|DUR_MS|GAP_MS|FLAGS
     // FLAGS: H = hold (d >= 600ms, artist held note)
     //        B = breath (gap >= 400ms, natural break)
-    // Collapsed words (Whisper alignment failures) are skipped entirely
+    //        C = collapsed alignment artifact (deprioritize)
     msg += `WORD STREAM — format: INDEX:WORD|DUR_MS|GAP_MS|FLAGS\n`;
-    msg += `FLAGS: H=hold(>=600ms) B=breath(gap>=400ms). Use wordRange indices.\n\n`;
+    msg += `FLAGS: H=hold(>=600ms) B=breath(gap>=400ms) C=collapsed(alignment artifact, deprioritize). Use wordRange indices.\n\n`;
 
     for (let i = 0; i < words.length; i++) {
-      if (isCollapsed[i]) continue;
-
       const w = words[i];
       const d = Math.round((w.end - w.start) * 1000);
       const gap = i < words.length - 1
@@ -715,12 +725,18 @@ function buildWordUserMessage(
         : 0;
 
       let flags = "";
+      if (isCollapsed[i]) flags += "C";
       if (d >= 600) flags += "H";
       if (gap >= 400) flags += "B";
 
       msg += `${i}:${w.word}|${d}|${gap}|${flags}\n`;
     }
     msg += "\n";
+
+    const heldBlock = formatHeldWordsBlock(words, lines);
+    if (heldBlock) {
+      msg += heldBlock + "\n";
+    }
   } else {
     msg += `LYRICS (fallback line mode):\n`;
     for (let i = 0; i < lines.length; i++) {
@@ -1159,7 +1175,7 @@ async function callScene(
   ];
 
   const makeRequest = (model: string) =>
-    fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -1224,7 +1240,7 @@ async function callScene(
       raw.slice(0, 300),
     );
 
-    const retryResp = await fetch(
+    const retryResp = await fetchWithTimeout(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
         method: "POST",
@@ -1311,7 +1327,7 @@ async function callWords(
     messages: Array<{ role: string; content: string }>,
     model: string = modelOverride,
   ) => {
-    const resp = await fetch(
+    const resp = await fetchWithTimeout(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
         method: "POST",
@@ -1420,6 +1436,7 @@ async function callWords(
     phrases = repairPhraseBoundaries(phrases, words);
     phrases = enforcePhraseLimits(phrases, words, 6);
     phrases = mergeOrphanPhrases(phrases, words);
+    phrases = enforcePhraseLimits(phrases, words, 6);
     phrases = fillPhraseGaps(phrases, words.length);
 
     for (const phrase of phrases) {
@@ -1486,7 +1503,7 @@ async function loadCustomPrompts(): Promise<{
 
   try {
     const slugs = ["cinematic-scene", "analysis-model"];
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${sbUrl}/rest/v1/ai_prompts?slug=in.(${slugs.join(",")})&select=slug,prompt`,
       {
         headers: {
@@ -1494,6 +1511,7 @@ async function loadCustomPrompts(): Promise<{
           Authorization: `Bearer ${sbKey}`,
         },
       },
+      5000,
     );
     if (!res.ok) {
       console.warn("[cinematic-direction] Failed to load custom prompts, using defaults");
@@ -1555,7 +1573,7 @@ serve(async (req) => {
     if (body.mode === "scene") {
       // Build user message for scene mode inline
       const sectionList = (body.audioSections || [])
-        .map((s: any, i: number) => `  Section ${i + 1}: "${s.label || `Section ${i + 1}`}" (${fmt(s.start)}–${fmt(s.end)}, energy: ${(s.avgEnergy ?? 0).toFixed(2)}, beats/sec: ${(s.beatDensity ?? 0).toFixed(1)})`)
+        .map((s: AudioSectionInput, i: number) => `  Section ${i + 1}: "${s.role || `Section ${i + 1}`}" (${fmt(s.startSec)}–${fmt(s.endSec)}, energy: ${(s.avgEnergy ?? 0).toFixed(2)}, beats/sec: ${(s.beatDensity ?? 0).toFixed(1)})`)
         .join("\n");
       const sceneUserMessage = [
         body.artist_direction
