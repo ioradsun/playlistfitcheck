@@ -1102,7 +1102,7 @@ export function useLyricPipeline({
         const { data: sceneResult } = await invokeWithTimeout(
           "cinematic-direction",
           { ...sharedBody, mode: "scene" },
-          45_000,
+          120_000,
         );
 
         if (!sceneResult?.cinematicDirection) {
@@ -1163,7 +1163,7 @@ export function useLyricPipeline({
                 sceneDirection: enrichedScene,
                 words: words ?? undefined,
               },
-              45_000,
+              120_000,
             );
 
             if (wordResult?.cinematicDirection) {
