@@ -1141,7 +1141,21 @@ async function callScene(
     }
   };
 
-  let resp = await makeRequest(modelOverride);
+  let resp: Response;
+  try {
+    resp = await makeRequest(modelOverride);
+  } catch (error: any) {
+    const status = error?.status ?? 500;
+    if (status === 504 && modelOverride !== FALLBACK_MODEL) {
+      console.warn(
+        `[cinematic-direction] scene primary model timed out, trying fallback ${FALLBACK_MODEL}`,
+      );
+      await new Promise((r) => setTimeout(r, 1500));
+      resp = await makeRequest(FALLBACK_MODEL);
+    } else {
+      throw error;
+    }
+  }
 
   // If primary model fails with retryable error, try fallback
   if (!resp.ok && (resp.status === 429 || resp.status >= 500)) {
