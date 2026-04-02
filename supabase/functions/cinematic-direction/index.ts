@@ -1581,13 +1581,13 @@ serve(async (req) => {
         body.words,
         bpm,
         customPrompts.wordPrompt,
-        customPrompts.model,
+        customPrompts.wordsModel,
       );
 
       return new Response(JSON.stringify({
         cinematicDirection: wordResult,
         _meta: {
-          model: customPrompts.model,
+          model: customPrompts.wordsModel,
           wordPromptSource: customPrompts.wordPrompt === WORD_DIRECTION_PROMPT ? "default" : "admin",
           wordPromptLength: customPrompts.wordPrompt.length,
         },
