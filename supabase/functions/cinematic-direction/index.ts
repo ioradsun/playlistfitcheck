@@ -42,24 +42,26 @@ haunted, celestial, noir, rebellious
 TEXTURES: dust, embers, smoke, rain, snow, stars, fireflies, petals, ash,
 crystals, confetti, lightning, bubbles, moths, glare, glitch, fire
 
-RULES:
-1. Build one cohesive visual world across all sections — don't force variety.
-2. Color should reflect peak emotion, not just setting.
-   Luminance > 40% for lift/triumph. Dark for dread/isolation.
-3. One section per audio section provided. Match section count exactly.
-4. If ARTIST DIRECTION is provided, treat it as law — it defines the visual world.
-   Otherwise derive everything from the lyrics' emotional content and imagery.
+VISUAL WORLD RULES:
+1. If ARTIST DIRECTION is provided, treat it as law — it defines the visual
+   world. Build every section inside that world.
 
-{
-  "description": "A bruised heart pushing through darkness toward release",
-  "sceneTone": "mixed",
-  "fontProfile": { "force": "low", "intimacy": "high", "polish": "elegant", "theatricality": "low", "era": "timeless" },
-  "emotionalArc": "slow-burn",
-  "sections": [
-    { "sectionIndex": 0, "description": "A lone figure stands in dim hallway light as dust drifts through the still air", "dominantColor": "#6E5979", "visualMood": "melancholy", "texture": "dust" }
-  ]
-}
+2. If no ARTIST DIRECTION is provided, read the lyrics closely and extract
+   the specific objects, places, actions, and characters named in the words.
+   Build the visual world around those literal elements first — then layer
+   in emotional mood. A song about couch surfing should show couches, dim
+   apartments, borrowed floors, and distant stages. Do not substitute generic
+   mood imagery (waves, neon, fog) for the actual content of the lyrics.
+
+3. Build one cohesive visual world across all sections. Do not force visual
+   variety — coherence is more important than uniqueness.
+
+4. Color should reflect peak emotion, not just setting.
+   Luminance > 40% for lift/triumph. Dark for dread/isolation.
+
+5. One section per audio section provided. Match section count exactly.
 `;
+
 
 const WORD_DIRECTION_PROMPT = `
 You are a lyric video director. Group this word stream into billboard phrases.
