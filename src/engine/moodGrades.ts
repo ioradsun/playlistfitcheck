@@ -47,222 +47,237 @@ export interface MoodGrade {
 }
 
 const MOOD_GRADES: Record<string, MoodGrade> = {
-  intimate: {
-    brightness: 0.35,
-    saturation: 0.65,
-    contrast: 1.0,
-    temperature: 0.2,
+
+  // ── DARK MOODS (cool, desaturated, contrasty — but VISIBLE) ──
+
+  noir: {
+    brightness: 0.40,
+    saturation: 0.45,
+    contrast: 1.30,
+    temperature: -0.25,
     blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.15, size: 1.5 },
-    motionIntent: 'push-in',
-    beatBrightnessGain: 0.06,
+    grain: { intensity: 0.12, size: 1.2 },
+    motionIntent: 'stable',
+    beatBrightnessGain: 0.05,
   },
 
-  anthemic: {
-    brightness: 0.55,
-    saturation: 0.9,
-    contrast: 1.2,
-    temperature: 0.0,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.0, size: 0 },
-    motionIntent: 'pull-out',
-    beatBrightnessGain: 0.12,
-  },
-
-  dreamy: {
-    brightness: 0.50,
-    saturation: 0.50,
-    contrast: 0.85,
-    temperature: 0.3,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.15, size: 2.0 },
-    motionIntent: 'drift-lateral',
-    beatBrightnessGain: 0.03,
-  },
-
-  aggressive: {
+  haunted: {
     brightness: 0.38,
-    saturation: 0.7,
-    contrast: 1.4,
-    temperature: -0.3,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.15, size: 1.0 },
-    motionIntent: 'handheld',
-    beatBrightnessGain: 0.18,
-  },
-
-  melancholy: {
-    brightness: 0.32,
     saturation: 0.40,
-    contrast: 1.0,
-    temperature: -0.1,
+    contrast: 1.20,
+    temperature: -0.30,
     blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.15, size: 1.5 },
-    motionIntent: 'drift-down',
-    beatBrightnessGain: 0.03,
-  },
-
-  euphoric: {
-    brightness: 0.65,
-    saturation: 1.15,
-    contrast: 1.1,
-    temperature: 0.2,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.0, size: 0 },
-    motionIntent: 'pull-out',
-    beatBrightnessGain: 0.15,
+    grain: { intensity: 0.12, size: 1.8 },
+    motionIntent: 'handheld',
+    beatBrightnessGain: 0.04,
   },
 
   eerie: {
-    brightness: 0.28,
-    saturation: 0.30,
-    contrast: 1.3,
-    temperature: -0.4,
+    brightness: 0.40,
+    saturation: 0.45,
+    contrast: 1.25,
+    temperature: -0.30,
     blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.15, size: 0.8 },
+    grain: { intensity: 0.10, size: 0.8 },
     motionIntent: 'drift-lateral',
+    beatBrightnessGain: 0.06,
+  },
+
+  melancholy: {
+    brightness: 0.42,
+    saturation: 0.50,
+    contrast: 1.05,
+    temperature: -0.05,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.10, size: 1.5 },
+    motionIntent: 'drift-down',
+    beatBrightnessGain: 0.04,
+  },
+
+  // ── MEDIUM MOODS (warm or neutral, moderate treatment) ──
+
+  intimate: {
+    brightness: 0.45,
+    saturation: 0.70,
+    contrast: 1.05,
+    temperature: 0.15,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.10, size: 1.5 },
+    motionIntent: 'push-in',
     beatBrightnessGain: 0.06,
   },
 
   vulnerable: {
-    brightness: 0.40,
-    saturation: 0.50,
-    contrast: 0.9,
-    temperature: 0.15,
+    brightness: 0.47,
+    saturation: 0.60,
+    contrast: 0.95,
+    temperature: 0.10,
     blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.15, size: 1.5 },
+    grain: { intensity: 0.10, size: 1.5 },
     motionIntent: 'breathing',
-    beatBrightnessGain: 0.03,
-  },
-
-  triumphant: {
-    brightness: 0.60,
-    saturation: 1.0,
-    contrast: 1.25,
-    temperature: 0.15,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.0, size: 0 },
-    motionIntent: 'stable',
-    beatBrightnessGain: 0.12,
+    beatBrightnessGain: 0.04,
   },
 
   nostalgic: {
-    brightness: 0.45,
-    saturation: 0.55,
-    contrast: 0.95,
-    temperature: 0.35,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.15, size: 2.0 },
-    motionIntent: 'drift-lateral',
-    beatBrightnessGain: 0.03,
-  },
-
-  defiant: {
-    brightness: 0.42,
-    saturation: 0.80,
-    contrast: 1.3,
-    temperature: -0.15,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.1, size: 1.0 },
-    motionIntent: 'push-in',
-    beatBrightnessGain: 0.12,
-  },
-
-  hopeful: {
-    brightness: 0.58,
-    saturation: 0.70,
-    contrast: 1.0,
-    temperature: 0.3,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.05, size: 1.0 },
-    motionIntent: 'drift-up',
-    beatBrightnessGain: 0.09,
-  },
-
-  raw: {
-    brightness: 0.38,
+    brightness: 0.50,
     saturation: 0.60,
-    contrast: 1.35,
-    temperature: 0.0,
+    contrast: 1.00,
+    temperature: 0.30,
     blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.15, size: 1.2 },
-    motionIntent: 'handheld',
-    beatBrightnessGain: 0.09,
+    grain: { intensity: 0.12, size: 2.0 },
+    motionIntent: 'drift-lateral',
+    beatBrightnessGain: 0.04,
+  },
+
+  dreamy: {
+    brightness: 0.52,
+    saturation: 0.55,
+    contrast: 0.90,
+    temperature: 0.25,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.10, size: 2.0 },
+    motionIntent: 'drift-lateral',
+    beatBrightnessGain: 0.04,
   },
 
   hypnotic: {
-    brightness: 0.35,
-    saturation: 0.70,
-    contrast: 1.1,
-    temperature: -0.1,
+    brightness: 0.45,
+    saturation: 0.75,
+    contrast: 1.10,
+    temperature: -0.05,
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.05, size: 1.0 },
     motionIntent: 'slow-zoom',
     beatBrightnessGain: 0.06,
+  },
+
+  raw: {
+    brightness: 0.45,
+    saturation: 0.65,
+    contrast: 1.25,
+    temperature: 0.0,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.12, size: 1.2 },
+    motionIntent: 'handheld',
+    beatBrightnessGain: 0.08,
+  },
+
+  defiant: {
+    brightness: 0.48,
+    saturation: 0.80,
+    contrast: 1.20,
+    temperature: -0.10,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.08, size: 1.0 },
+    motionIntent: 'push-in',
+    beatBrightnessGain: 0.10,
+  },
+
+  aggressive: {
+    brightness: 0.44,
+    saturation: 0.75,
+    contrast: 1.30,
+    temperature: -0.20,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.10, size: 1.0 },
+    motionIntent: 'handheld',
+    beatBrightnessGain: 0.15,
+  },
+
+  rebellious: {
+    brightness: 0.48,
+    saturation: 0.85,
+    contrast: 1.20,
+    temperature: 0.05,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.08, size: 1.0 },
+    motionIntent: 'handheld',
+    beatBrightnessGain: 0.12,
+  },
+
+  // ── BRIGHT MOODS (warm, saturated, open — the payoff) ──
+
+  hopeful: {
+    brightness: 0.58,
+    saturation: 0.75,
+    contrast: 1.05,
+    temperature: 0.25,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.03, size: 1.0 },
+    motionIntent: 'drift-up',
+    beatBrightnessGain: 0.08,
+  },
+
+  triumphant: {
+    brightness: 0.62,
+    saturation: 1.00,
+    contrast: 1.15,
+    temperature: 0.15,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.0, size: 0 },
+    motionIntent: 'stable',
+    beatBrightnessGain: 0.10,
+  },
+
+  anthemic: {
+    brightness: 0.58,
+    saturation: 0.95,
+    contrast: 1.15,
+    temperature: 0.0,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.0, size: 0 },
+    motionIntent: 'pull-out',
+    beatBrightnessGain: 0.10,
+  },
+
+  euphoric: {
+    brightness: 0.65,
+    saturation: 1.10,
+    contrast: 1.10,
+    temperature: 0.15,
+    blur: { type: 'none', radius: 0 },
+    grain: { intensity: 0.0, size: 0 },
+    motionIntent: 'pull-out',
+    beatBrightnessGain: 0.12,
   },
 
   ethereal: {
     brightness: 0.58,
-    saturation: 0.35,
-    contrast: 0.85,
-    temperature: -0.15,
+    saturation: 0.45,
+    contrast: 0.90,
+    temperature: -0.10,
     blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.05, size: 1.0 },
+    grain: { intensity: 0.03, size: 1.0 },
     motionIntent: 'drift-up',
-    beatBrightnessGain: 0.03,
-  },
-
-  haunted: {
-    brightness: 0.25,
-    saturation: 0.25,
-    contrast: 1.2,
-    temperature: -0.35,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.15, size: 1.8 },
-    motionIntent: 'handheld',
-    beatBrightnessGain: 0.03,
+    beatBrightnessGain: 0.04,
   },
 
   celestial: {
     brightness: 0.62,
-    saturation: 0.50,
-    contrast: 0.9,
-    temperature: -0.1,
+    saturation: 0.55,
+    contrast: 0.95,
+    temperature: -0.05,
     blur: { type: 'none', radius: 0 },
     grain: { intensity: 0.0, size: 0 },
     motionIntent: 'slow-zoom',
     beatBrightnessGain: 0.06,
   },
-
-  noir: {
-    brightness: 0.22,
-    saturation: 0.15,
-    contrast: 1.4,
-    temperature: -0.3,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.15, size: 1.2 },
-    motionIntent: 'stable',
-    beatBrightnessGain: 0.03,
-  },
-
-  rebellious: {
-    brightness: 0.42,
-    saturation: 0.85,
-    contrast: 1.3,
-    temperature: 0.1,
-    blur: { type: 'none', radius: 0 },
-    grain: { intensity: 0.1, size: 1.0 },
-    motionIntent: 'handheld',
-    beatBrightnessGain: 0.15,
-  },
 };
 
-/** Default grade when no visualMood is set */
-const DEFAULT_MOOD_GRADE = MOOD_GRADES.intimate;
+const DEFAULT_MOOD_GRADE: MoodGrade = {
+  brightness: 0.50,
+  saturation: 0.75,
+  contrast: 1.05,
+  temperature: 0.0,
+  blur: { type: 'none', radius: 0 },
+  grain: { intensity: 0.05, size: 1.0 },
+  motionIntent: 'stable',
+  beatBrightnessGain: 0.06,
+};
 
 /**
  * Resolve the mood grade for a section.
- * Falls back to 'intimate' for unknown keywords.
+ * Falls back to a neutral mid-grade for unknown keywords.
  */
 export function getMoodGrade(visualMood: string | undefined | null): MoodGrade {
   if (!visualMood) return DEFAULT_MOOD_GRADE;

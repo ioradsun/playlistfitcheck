@@ -78,6 +78,21 @@ VISUAL WORLD RULES:
 4. Color should reflect peak emotion, not just setting.
    Luminance > 40% for lift/triumph. Dark for dread/isolation.
 
+DOMINANT COLOR RULES:
+- dominantColor is a TINT DIRECTION applied as a wash over the section image, NOT a
+  background fill. It should be a mid-tone color (RGB values 60-180 range) that
+  identifies the section's emotional color identity.
+- NEVER use near-black colors (any channel below 30). Dark mood is conveyed by the
+  mood grade system, not by dark dominantColors.
+- NEVER use near-white colors (all channels above 220). Bright mood still needs a
+  visible color direction.
+- Think of dominantColor as a color gel on a film light — it TINTS the scene, it
+  doesn't PAINT it.
+- Good: "#4A6B8A" (steel blue for noir), "#7B5A9E" (electric violet for ambition),
+  "#3D7A8F" (ocean teal for waves), "#C4962E" (rich amber for triumph)
+- Bad: "#0D0F14" (black — no color identity), "#1B1026" (too dark to see), "#FFFFFF"
+  (no direction)
+
 5. One section per audio section provided. Match section count exactly.
 `;
 
