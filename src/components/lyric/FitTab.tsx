@@ -1468,11 +1468,11 @@ export function FitTab({
                         "no words available",
                     };
                     navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
-                    const model = meta?.scene?.model || meta?.words?.model || (meta ? "unknown" : "loaded from DB");
+                    const model = meta?.scene?.model || (meta ? "unknown" : "loaded from DB");
                     const sceneSource = meta?.scene?.scenePromptSource || (meta ? "?" : "saved");
-                    const wordSource = meta?.words?.wordPromptSource || (meta ? "?" : "saved");
+                    const phraseMode = meta?.mode || "deterministic_v3";
                     const phraseCount = cinematicDirection?.phrases?.length ?? 0;
-                    toast.success(`Copied — model: ${model} | scene: ${sceneSource} | words: ${wordSource} | phrases: ${phraseCount}`);
+                    toast.success(`Copied — model: ${model} | scene: ${sceneSource} | phrases: ${phraseMode} (${phraseCount})`);
                   }}
                   className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border border-border/40 hover:border-primary/40 text-muted-foreground hover:text-primary rounded-lg px-3 py-2.5"
                 >
