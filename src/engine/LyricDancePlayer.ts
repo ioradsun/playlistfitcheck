@@ -640,7 +640,6 @@ class BeatVisSim {
 // TODO: DynamiteWickBar is superseded by canvas moment fuse (React overlay).
 // Beat energy is now bridged to canvas moment fuse via LyricInteractionLayer polling.
 // The canvas-level wick bar can be removed once canvas moment fuse is stable.
-// Admin flag: window.__LYRIC_DANCE_LIGHTNING_BAR
 // Unplayed = warm rope-textured fuse cord (ridgeline from beatEnergies).
 // Playhead = crackling flame that breathes with energy.
 // Played = charred ember trail glowing orange→red→ash.
@@ -1603,7 +1602,7 @@ export class LyricDancePlayer {
   private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
   private _barVisStyles: BarVisStyle[] = []; // per-chapter bar style from AI mood
   private lastSimFrame = -1;
-  // ═══ Dynamite Wick Bar (feature flag: window.__LYRIC_DANCE_LIGHTNING_BAR) ═══
+  // ═══ Dynamite Wick Bar (always enabled) ═══
   private _globalWickBar: DynamiteWickBar | null = null;
   private _wickSeekOverlay: HTMLDivElement | null = null;
   public wickBarEnabled = false;
