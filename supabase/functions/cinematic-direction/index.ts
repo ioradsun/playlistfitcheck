@@ -1081,6 +1081,88 @@ function inferHookPhrase(
   return bestText;
 }
 
+const WORD_AI_TIMEOUT_MS = 45_000;
+const LONG_WORD_STREAM_THRESHOLD = 450;
+const FAST_WORD_MODEL = "openai/gpt-5-mini";
+const SLOW_WORD_MODELS = new Set([
+  "openai/gpt-5",
+  "openai/gpt-5.2",
+  "google/gemini-3.1-pro-preview",
+  "google/gemini-2.5-pro",
+]);
+
+function buildDeterministicWordFallback(
+  words: Array<{ word: string; start: number; end: number }>,
+): Record<string, any> {
+  if (!words.length) {
+    return { hookPhrase: "", phrases: [] };
+  }
+
+  let phrases = preSegmentAtBreaths(words, 350).map((segment) => ({
+    wordRange: [segment.startIdx, segment.endIdx] as [number, number],
+  }));
+
+  if (phrases.length === 0) {
+    phrases = [];
+    for (let i = 0; i < words.length; i += 4) {
+      phrases.push({
+        wordRange: [i, Math.min(words.length - 1, i + 3)] as [number, number],
+      });
+    }
+  }
+
+  phrases = fillPhraseGaps(phrases, words.length);
+  phrases = repairPhraseBoundaries(phrases, words);
+  phrases = enforcePhraseLimits(phrases, words, 6);
+  phrases = mergeOrphanPhrases(phrases, words);
+  phrases = fillPhraseGaps(phrases, words.length);
+
+  const effectCycle = ["fade", "drift_up", "dissolve", "slam", "scatter", "burn"] as const;
+  const withEffects = phrases.map((phrase, index) => {
+    const [startIdx, endIdx] = phrase.wordRange;
+    const startWord = words[startIdx];
+    const endWord = words[Math.min(endIdx, words.length - 1)] ?? startWord;
+    const durationMs = Math.max(0, Math.round((endWord.end - startWord.start) * 1000));
+    const wordCount = endIdx - startIdx + 1;
+
+    let exitEffect: (typeof effectCycle)[number] = "fade";
+    if (durationMs >= 1400) exitEffect = "burn";
+    else if (wordCount <= 2 && durationMs >= 450) exitEffect = "slam";
+    else if (durationMs >= 900) exitEffect = "dissolve";
+    else if (durationMs <= 500) exitEffect = "drift_up";
+    else if (index % 5 === 4) exitEffect = "scatter";
+
+    if (
+      index >= 2 &&
+      withEffectsSafe[index - 1]?.exitEffect === exitEffect &&
+      withEffectsSafe[index - 2]?.exitEffect === exitEffect
+    ) {
+      exitEffect = effectCycle[index % effectCycle.length];
+    }
+
+    const nextPhrase = {
+      ...phrase,
+      exitEffect,
+    };
+    withEffectsSafe.push(nextPhrase);
+    return nextPhrase;
+  });
+
+  fillMissingHeroWords(withEffects, words);
+  const hydrated = hydrateWordPhrases(withEffects, words);
+
+  return {
+    hookPhrase: inferHookPhrase(hydrated),
+    phrases: hydrated,
+  };
+}
+
+const withEffectsSafe: Array<{
+  wordRange: [number, number];
+  heroWord?: string;
+  exitEffect?: string;
+}> = [];
+
 function validateWords(
   raw: Record<string, any>,
   words?: Array<{ word: string; start: number; end: number }>,
@@ -1307,68 +1389,92 @@ async function callWords(
     bpm,
   );
 
+  const wordCount = words?.length ?? 0;
+  const longWordStream = wordCount >= LONG_WORD_STREAM_THRESHOLD;
+  const modelCandidates = Array.from(new Set([
+    longWordStream && SLOW_WORD_MODELS.has(modelOverride)
+      ? FAST_WORD_MODEL
+      : modelOverride,
+    modelOverride,
+    FALLBACK_MODEL,
+  ].filter(Boolean))) as string[];
+  const maxCompletionTokens = longWordStream ? 16000 : 32000;
+
   const callWordAI = async (
     messages: Array<{ role: string; content: string }>,
-    model: string = modelOverride,
   ) => {
-    const resp = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          response_format: { type: "json_object" },
-          max_completion_tokens: 32000,
-        }),
-      },
-    );
+    let lastError: any = null;
 
-    // If primary model fails with retryable error, try fallback
-    if (!resp.ok && model === modelOverride && (resp.status === 429 || resp.status >= 500)) {
-      const errText = await resp.text().catch(() => "");
-      console.warn(
-        `[cinematic-direction] words primary model failed (${resp.status}): ${errText.slice(0, 100)}, trying fallback`,
-      );
-      await new Promise((r) => setTimeout(r, 2000));
-      return callWordAI(messages, FALLBACK_MODEL);
+    for (const model of modelCandidates) {
+      try {
+        const resp = await fetch(
+          "https://ai.gateway.lovable.dev/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            signal: AbortSignal.timeout(WORD_AI_TIMEOUT_MS),
+            body: JSON.stringify({
+              model,
+              messages,
+              response_format: { type: "json_object" },
+              max_completion_tokens: maxCompletionTokens,
+            }),
+          },
+        );
+
+        if (!resp.ok) {
+          const text = await resp.text();
+          console.error("[cinematic-direction] words AI error", model, resp.status, text);
+          lastError = {
+            status: resp.status,
+            message:
+              resp.status === 429
+                ? "Rate limited"
+                : `Word direction AI request failed (HTTP ${resp.status})`,
+          };
+          continue;
+        }
+
+        const respText = await resp.text();
+        let completion: any;
+        try {
+          completion = JSON.parse(respText);
+        } catch {
+          console.error("[cinematic-direction] words response not valid JSON, length:", respText.length, "preview:", respText.slice(0, 200));
+          lastError = { status: 502, message: "Word direction AI returned invalid response" };
+          continue;
+        }
+
+        const finishReason = completion?.choices?.[0]?.finish_reason;
+        const raw = String(completion?.choices?.[0]?.message?.content ?? "");
+
+        if (finishReason === "length") {
+          console.warn(
+            `[cinematic-direction] words response truncated (${model}) (finish_reason=length), raw length:`,
+            raw.length,
+          );
+        }
+
+        return { raw, finishReason, modelUsed: model };
+      } catch (error: any) {
+        const isTimeout =
+          error?.name === "TimeoutError" ||
+          error?.name === "AbortError" ||
+          String(error?.message ?? "").toLowerCase().includes("timed out");
+        console.warn(
+          `[cinematic-direction] words model failed: ${model}`,
+          isTimeout ? "timeout" : error,
+        );
+        lastError = isTimeout
+          ? { status: 504, message: `Word direction AI timed out on ${model}` }
+          : error;
+      }
     }
 
-    if (!resp.ok) {
-      const text = await resp.text();
-      console.error("[cinematic-direction] words AI error", resp.status, text);
-      throw {
-        status: resp.status,
-        message:
-          resp.status === 429
-            ? "Rate limited"
-            : "Word direction AI request failed",
-      };
-    }
-
-    const respText = await resp.text();
-    let completion: any;
-    try {
-      completion = JSON.parse(respText);
-    } catch {
-      console.error("[cinematic-direction] words response not valid JSON, length:", respText.length, "preview:", respText.slice(0, 200));
-      throw { status: 502, message: "Word direction AI returned invalid response" };
-    }
-    const finishReason = completion?.choices?.[0]?.finish_reason;
-    const raw = String(completion?.choices?.[0]?.message?.content ?? "");
-
-    if (finishReason === "length") {
-      console.warn(
-        "[cinematic-direction] words response truncated (finish_reason=length), raw length:",
-        raw.length,
-      );
-    }
-
-    return { raw, finishReason };
+    throw lastError ?? { status: 504, message: "Word direction AI failed" };
   };
 
   const messages = [
@@ -1376,97 +1482,105 @@ async function callWords(
     { role: "user", content: wordMessage },
   ];
 
-  const { raw, finishReason } = await callWordAI(messages);
-  let parsed = extractJson(raw);
+  try {
+    const { raw, finishReason } = await callWordAI(messages);
+    let parsed = extractJson(raw);
 
-  if (!parsed || finishReason === "length") {
-    console.warn(
-      "[cinematic-direction] words first attempt failed to parse or was truncated, retrying. Raw preview:",
-      raw.slice(0, 300),
-    );
-
-    const retryMessages = [
-      ...messages,
-      {
-        role: "user",
-        content:
-          'Your previous response was malformed or truncated. Return ONLY valid JSON: { "hookPhrase": "string", "phrases": [{ "wordRange": [0, 2], "heroWord": "WORD", "exitEffect": "fade" }] }. No markdown. No explanation.',
-      },
-    ];
-
-    const { raw: retryRaw } = await callWordAI(retryMessages);
-    const retryParsed = extractJson(retryRaw);
-
-    if (retryParsed) {
-      parsed = retryParsed;
-    } else if (!parsed) {
-      console.error(
-        "[cinematic-direction] words retry also failed. Raw preview:",
-        retryRaw.slice(0, 500),
+    if (!parsed || finishReason === "length") {
+      console.warn(
+        "[cinematic-direction] words first attempt failed to parse or was truncated, retrying. Raw preview:",
+        raw.slice(0, 300),
       );
-      throw {
-        status: 422,
-        message: "Invalid JSON from word direction AI after retry",
-      };
-    }
-  }
 
-  const result = validateWords(parsed, words);
+      const retryMessages = [
+        ...messages,
+        {
+          role: "user",
+          content:
+            'Your previous response was malformed or truncated. Return ONLY valid JSON: { "hookPhrase": "string", "phrases": [{ "wordRange": [0, 2], "heroWord": "WORD", "exitEffect": "fade" }] }. No markdown. No explanation.',
+        },
+      ];
 
-  if (words && Array.isArray(result.value.phrases)) {
-    let phrases = result.value.phrases as Array<any>;
+      const { raw: retryRaw } = await callWordAI(retryMessages);
+      const retryParsed = extractJson(retryRaw);
 
-    phrases = fillPhraseGaps(phrases, words.length);
-    phrases = repairPhraseBoundaries(phrases, words);
-    phrases = enforcePhraseLimits(phrases, words, 6);
-    phrases = mergeOrphanPhrases(phrases, words);
-    phrases = fillPhraseGaps(phrases, words.length);
-
-    for (const phrase of phrases) {
-      if (phrase.heroWord) {
-        phrase.heroWord = String(phrase.heroWord)
-          .replace(/[^A-Z0-9]/gi, "")
-          .toUpperCase();
+      if (retryParsed) {
+        parsed = retryParsed;
+      } else if (!parsed) {
+        console.error(
+          "[cinematic-direction] words retry also failed. Raw preview:",
+          retryRaw.slice(0, 500),
+        );
+        throw {
+          status: 422,
+          message: "Invalid JSON from word direction AI after retry",
+        };
       }
     }
 
-    const VALID_EFFECTS = new Set([
-      "fade", "drift_up", "shrink", "dissolve",
-      "cascade", "scatter", "slam", "glitch", "burn",
-    ]);
+    const result = validateWords(parsed, words);
 
-    for (let pi = 0; pi < phrases.length; pi++) {
-      if (!phrases[pi].exitEffect || !VALID_EFFECTS.has(phrases[pi].exitEffect)) {
-        const prev = pi > 0 ? phrases[pi - 1].exitEffect : null;
-        phrases[pi].exitEffect = prev && prev !== "drift_up" ? "drift_up" : "fade";
+    if (words && Array.isArray(result.value.phrases)) {
+      let phrases = result.value.phrases as Array<any>;
+
+      phrases = fillPhraseGaps(phrases, words.length);
+      phrases = repairPhraseBoundaries(phrases, words);
+      phrases = enforcePhraseLimits(phrases, words, 6);
+      phrases = mergeOrphanPhrases(phrases, words);
+      phrases = fillPhraseGaps(phrases, words.length);
+
+      for (const phrase of phrases) {
+        if (phrase.heroWord) {
+          phrase.heroWord = String(phrase.heroWord)
+            .replace(/[^A-Z0-9]/gi, "")
+            .toUpperCase();
+        }
+      }
+
+      const VALID_EFFECTS = new Set([
+        "fade", "drift_up", "shrink", "dissolve",
+        "cascade", "scatter", "slam", "glitch", "burn",
+      ]);
+
+      for (let pi = 0; pi < phrases.length; pi++) {
+        if (!phrases[pi].exitEffect || !VALID_EFFECTS.has(phrases[pi].exitEffect)) {
+          const prev = pi > 0 ? phrases[pi - 1].exitEffect : null;
+          phrases[pi].exitEffect = prev && prev !== "drift_up" ? "drift_up" : "fade";
+        }
+      }
+
+      fillMissingHeroWords(phrases, words);
+
+      const hydrated = hydrateWordPhrases(phrases, words);
+      const hookPhrase = result.value.hookPhrase && result.value.hookPhrase.trim()
+        ? normalizePhraseText(result.value.hookPhrase.trim())
+        : inferHookPhrase(hydrated);
+
+      if (hydrated.length > 0) {
+        return {
+          hookPhrase,
+          phrases: hydrated,
+          chorusText: result.value.chorusText,
+        };
       }
     }
 
-    fillMissingHeroWords(phrases, words);
-
-    const hydrated = hydrateWordPhrases(phrases, words);
-    const hookPhrase = result.value.hookPhrase && result.value.hookPhrase.trim()
-      ? normalizePhraseText(result.value.hookPhrase.trim())
-      : inferHookPhrase(hydrated);
-
-    return {
-      hookPhrase,
-      phrases: hydrated,
-      chorusText: result.value.chorusText,
-    };
-  }
-
-  if (
-    !Array.isArray(result.value.phrases) ||
-    result.value.phrases.length === 0
-  ) {
     throw {
       status: 422,
       message: "Word direction returned empty phrases",
     };
-  }
+  } catch (error) {
+    console.warn(
+      "[cinematic-direction] words AI failed; using deterministic fallback",
+      error,
+    );
 
-  return result.value;
+    if (words && words.length > 0) {
+      return buildDeterministicWordFallback(words);
+    }
+
+    throw error;
+  }
 }
 
 /** Fetch custom prompts + model from ai_prompts table, falling back to hardcoded defaults. */
