@@ -130,69 +130,165 @@ Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values
 `;
 
 const WORD_DIRECTION_PROMPT = `
-### SYSTEM ROLE
-You are the "Lyric Logic Engine v2.0." Your functional goal is to transform a timestamped word stream into high-impact, billboard-worthy lyric phrases for a motion graphics video. You are a hybrid of a rigorous logic processor and a world-class creative director.
+You are the Lyric Assembler. Your job is to group a pre-calculated word
+stream into high-impact billboard phrases for a motion graphics lyric video.
 
-### THE OBJECTIVE
-Balance strict mathematical constraints (timing/word count) with the "Poetic Punch"—ensuring every screen-worthy moment feels intentional, rhythmic, and emotionally loaded.
+Each phrase = one full screen.
+You are not making subtitles.
+You are making screen-worthy lyric moments.
 
-### THE PHRASE-CUTTING ALGORITHM
-For every candidate phrase, execute this mental checklist in order:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INPUT FIELD DEFINITIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+w        The word text.
+d        Duration of this word in milliseconds (pre-calculated).
+gap      Silence after this word before the next word starts, in ms.
+hero     Pre-tagged anchor word from the pipeline.
+hold     Word duration >= 600ms. Stretched vowel, beat landing, or held
+         note. Primary heroWord candidate. Natural phrase endpoint.
+breath   Gap after this word >= 400ms. Hard boundary when combined with
+         hold: true. Soft boundary (like pause) otherwise.
 
-1. **Hard Boundary Check:** Does a [BREATH] exist? If yes, split immediately. No exceptions.
-2. **The Math (Duration):** - Calculate: delta = (last_word.end - first_word.start).
-   - If delta < 350ms: You MUST merge. 
-   - Merge Priority: Forward (if next phrase ≤ 4 words and no [BREATH]) > Backward.
-3. **The Poetic Punch (Billboard Test):** - Does the phrase feel like a standalone "moment"? 
-   - Never end on a "Weak Connector" (I, you, the, and, to, of, my, with) unless forced by a [BREATH].
-   - If a phrase is mathematically valid but emotionally "weak," merge forward to complete the thought.
-4. **Capacity Check:** Never exceed 6 words. If a merge creates 7+ words, you must find a different "cut point" based on the strongest noun or verb.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE PRIORITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. breath: true on a hold: true word   — hard boundary, never cross
+2. minimum phrase duration >= 350ms
+3. billboard validity
+4. maximum 6 words per phrase
+5. preserve lyric order and anchor integrity
+6. repair readability
+7. assign exit variety
 
----
+Never violate a higher-priority rule to satisfy a lower-priority one.
 
-### STRICT CONSTRAINT HIERARCHY (The "Rule of Law")
-1. **[BREATH] Rule:** The absolute wall. Never cross.
-2. **Timing Rule:** Minimum 350ms per screen (Unless [BREATH] locked).
-3. **Word Limit:** Maximum 6 words per screen.
-4. **Poetic Integrity:** Prioritize "Hook Phrases" and "Vivid Images." Keep recurring lines consistent.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHRASE DURATION CALCULATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Phrase duration = sum of all d values + sum of all gap values for words
+in the phrase, minus the final trailing gap.
 
----
+A phrase is valid only if its duration >= 350ms.
 
-### ASSIGNMENT HEURISTICS
-* **heroWord:** Choose the "Punch" word. It must be a Noun, Verb, or Strong Adjective. NEVER a filler word (A, THE, IS, etc.).
-* **exitEffect:** - "slam" = High energy/Impact/Nouns.
-  - "fade" = Reflective/Prepositions/Outros.
-  - "glitch" = Stutters/Aggressive shifts.
-  - "burn" = The Hook/Title-energy words.
-  - "cascade" = Rhythmic/Fast-paced narrative.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BILLBOARD VALIDITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A phrase must stand alone on screen and feel complete, intentional,
+readable, emotionally coherent, and worth showing.
 
----
+Core test: if this phrase appeared alone on a giant billboard, would
+it feel deliberate? If no, repair it.
 
-### OUTPUT SCHEMA
-You must return exactly one valid JSON object. To ensure mathematical accuracy, you will include a _calculation_log for the first three phrases to verify your duration logic, followed by the final phrases array.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CUTTING PHILOSOPHY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Cut by emotional thought, not word count alone.
+Prefer fewer strong phrases over more weak ones.
+Do not over-fragment strong thoughts into weak pieces.
+
+Prioritize: hook lines, recurring lines, title-energy phrases, vivid
+image phrases, emotionally loaded words, strong nouns and verbs.
+
+Deprioritize: filler, glue words, weak pronouns, seam leftovers,
+broken stutters, ASR transcript debris.
+
+Phrase length tendency:
+- hook phrases: 1–4 words
+- narrative phrases: 3–6 words
+- tag / response phrases: 1–3 words
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROCESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PASS 1 — CUT
+Group the stream into candidate phrases using:
+- breath boundaries (hard when hold: true, soft otherwise)
+- hold words as natural phrase endpoints
+- spoken emotional thought
+- hook recurrence and anchor strength
+
+PASS 2 — REPAIR (apply in this exact order)
+
+Step 1 — Duration repair:
+  Compute phrase duration. If < 350ms:
+  A. Merge forward — if combined <= 6 words and no hard boundary between.
+     Prefer when forward phrase is weaker or shorter.
+  B. Merge backward — if combined <= 6 words and no hard boundary between.
+     Prefer when forward merge would destroy a strong phrase.
+  C. Keep as-is only if hard boundaries block both AND 6-word limit
+     prevents merge in either direction.
+     Forced exception: exitEffect "slam" if word is strong, "fade" if weak.
+
+Step 2 — Billboard validity repair:
+  Confirm billboard test. Merge or recut until it passes.
+
+Step 3 — Weak connector repair:
+  Never end on: I you we they he she it and but or so because if when
+  while that the a an in on at to for of with from my your
+  Merge forward if possible, else backward, else keep if hard boundary forces.
+
+Step 4 — Readability repair:
+  If too short to read at display speed, merge forward then backward.
+  Never exceed 6 words or cross a hard boundary.
+
+Step 5 — Seam and stutter repair:
+  Chorus seam: start repeated lines cleanly from their own beginning.
+  Stutter grouping: group consecutive word repeats into one phrase.
+
+PASS 3 — ASSIGN
+
+heroWord selection priority:
+  1. Strongest hold: true word that is a strong noun or verb
+  2. Strongest hero: true word
+  3. Strongest recurring hook word
+  4. Strongest noun or verb
+  5. Strongest emotional adjective
+  Formatting: UPPERCASE, letters only, no punctuation.
+  Never choose: I A THE AND BUT OR IS IT TO OF IN ON THAT YOU WE ME
+  HE SHE THEY MY YOUR WITH FROM SO AT BE AS AN BY DO
+
+exitEffect:
+  Allowed: "fade" | "drift_up" | "shrink" | "dissolve" | "cascade" |
+           "scatter" | "slam" | "glitch" | "burn"
+  - soft / aching / reflective      → fade, dissolve, drift_up
+  - rhythmic / controlled            → cascade, shrink
+  - aggressive / impact-heavy        → slam, scatter, glitch
+  - peak hook / hardest emotion      → burn, slam
+  - hold word landing alone          → slam or burn
+  - dreamy / floating                → drift_up, dissolve
+  Never repeat same effect 3 phrases in a row.
+  Repeated hook returns reuse same effect pattern.
+  Outro phrases prefer fade, drift_up, dissolve.
+
+hookPhrase: single phrase most worthy of billboard treatment.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ASR NOISE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Never invent corrections. Keep original words. Cut the strongest
+readable phrase possible from the provided wording.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Return exactly one valid JSON object. No markdown. No commentary.
 
 {
-  "hookPhrase": "THE_MOST_ICONIC_LINE_IN_UPPERCASE",
-  "_calculation_log": [
-    "Phrase 0: [0-3] Logic: delta calculation + billboard check",
-    "Phrase 1: [4-8] Logic: delta calculation + billboard check",
-    "Phrase 2: [9-11] Logic: delta calculation + billboard check"
-  ],
+  "hookPhrase": "string",
   "phrases": [
     {
       "wordRange": [startIndex, endIndex],
-      "heroWord": "CLEAN_UPPERCASE_WORD",
+      "heroWord": "WORD",
       "exitEffect": "effect_name"
     }
   ]
 }
 
-### FINAL REQUIREMENTS
-- Return ONLY the JSON object.
-- No markdown formatting outside of the JSON block.
-- No conversational filler or explanations.
-- Every phrase must be 1 to 6 words.
-- heroWord must be UPPERCASE letters only, no punctuation.
+Every phrase: 1–6 words, passes billboard validity, duration >= 350ms
+unless hard boundaries block merging in both directions.
+heroWord must not be a filler or weak function word.
+exitEffect must be one of the nine allowed values.
 `;
 
 interface LyricLine {
@@ -386,7 +482,7 @@ function extractHeldWords(
   for (const w of words) {
     const dur = w.end - w.start;
     durations.push(dur);
-    if (dur < 0.5) continue;
+    if (dur < 0.6) continue;
     const clean = w.word.replace(/[^a-zA-Z]/g, "").toLowerCase();
     if (!clean || clean.length < 2) continue;
     if (LYRIC_FILLER.has(clean)) continue;
@@ -432,7 +528,7 @@ function formatHeldWordsBlock(
 HELD WORDS — artist vocal emphasis
 ═══════════════════════════════════════
 
-These words were held ≥500ms by the artist (median word is ${medianMs}ms).
+These words were held ≥600ms by the artist (median word is ${medianMs}ms).
 Long duration = deliberate artistic emphasis. These are your PRIMARY hero candidates.
 Every held word below should get a wordDirective unless truly low-impact in context.
 
@@ -442,7 +538,7 @@ Map duration to emphasisLevel:
   ≥1500ms → emphasisLevel 5 (the artist REALLY held this)
   1000-1499ms → emphasisLevel 4
   700-999ms → emphasisLevel 3
-  500-699ms → emphasisLevel 2
+  600-699ms → emphasisLevel 2
 
 You may add up to 5 additional short words if narratively critical (title words, emotional peaks).
 `;
@@ -770,32 +866,29 @@ function buildWordUserMessage(
   msg += "\n";
 
   if (words && words.length > 0) {
-    msg += `WORD STREAM (one word per line):\n`;
-    msg += `Use the w-numbers for wordRange. [BREATH] = hard boundary.\n\n`;
+    msg += `WORD STREAM — one JSON object per line. Index = position in array.\n\n`;
 
     for (let wi = 0; wi < words.length; wi++) {
       const w = words[wi];
-      const durMs = Math.round((w.end - w.start) * 1000);
-      const isHero = durMs >= 350;
-      const pad = String(wi).padStart(3, " ");
-      const wordPad = w.word.padEnd(18, " ");
-      let line = `  w${pad}  ${wordPad} ${durMs}ms${isHero ? "  [HERO]" : ""}`;
+      const d = Math.round((w.end - w.start) * 1000);
+      const gap = wi < words.length - 1
+        ? Math.round((words[wi + 1].start - w.end) * 1000)
+        : 0;
 
-      if (wi < words.length - 1) {
-        const gapMs = Math.round((words[wi + 1].start - w.end) * 1000);
-        if (gapMs >= 300) {
-          line += `  [BREATH ${gapMs}ms]`;
-        } else if (gapMs >= 150) {
-          line += `  [pause ${gapMs}ms]`;
-        }
-      }
+      const entry: Record<string, any> = { w: w.word, d, gap };
 
-      msg += line + "\n";
+      // hold: word held >= 600ms — stretched vowel / beat landing
+      if (d >= 600) entry.hold = true;
+
+      // hero: pre-tagged anchor word
+      if (d >= 350) entry.hero = true;
+
+      // breath: hard boundary when on a hold word, soft otherwise
+      if (gap >= 400) entry.breath = true;
+
+      msg += JSON.stringify(entry) + "\n";
     }
     msg += "\n";
-
-    const heldBlock = formatHeldWordsBlock(words, lines);
-    if (heldBlock) msg += heldBlock + "\n";
   } else {
     msg += `LYRICS (fallback line mode):\n`;
     for (let i = 0; i < lines.length; i++) {
