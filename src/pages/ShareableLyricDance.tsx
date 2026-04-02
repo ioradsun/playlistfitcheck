@@ -13,7 +13,6 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { consumeShareableDancePrefetch, readCachedDanceData } from "@/lib/prefetch";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
-import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import ClaimBanner from "@/components/claim/ClaimBanner";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -192,7 +191,6 @@ export default function ShareableLyricDance() {
     isWaiting,
     commentRefreshKey,
     handleCommentFromBar,
-    lightningBarEnabled,
   } = core;
 
   const renderData = fetchedData ?? data;
@@ -567,18 +565,6 @@ export default function ShareableLyricDance() {
           ...(isMobile ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
         }}
       >
-        {!showCover && !isWaiting && renderData && !lightningBarEnabled && !closingVisible && (
-          <LyricDanceProgressBar
-            player={player}
-            data={renderData}
-            onSeekStart={() => {}}
-            onSeekEnd={() => {}}
-            palette={
-              palette.length ? palette : ["#ffffff", "#ffffff", "#ffffff"]
-            }
-          />
-        )}
-
         <div className="w-full max-w-2xl mx-auto">
           <LyricInteractionLayer
             variant="fullscreen"
@@ -655,6 +641,8 @@ export default function ShareableLyricDance() {
               }
             }}
             source="shareable"
+            moments={moments}
+            cinematicDirection={(renderData as any)?.cinematic_direction ?? null}
           />
         </div>
       </div>
