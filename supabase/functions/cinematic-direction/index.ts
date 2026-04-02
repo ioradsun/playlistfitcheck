@@ -680,24 +680,37 @@ function buildWordUserMessage(
 
   if (words && words.length > 0) {
     // Pre-pass: detect Whisper timestamp collapse
-    // Words with d < 10ms OR consecutive words sharing the same start
+    // Words with d < 10ms OR runs of 2+ words sharing the same start
     // are alignment failures — mark as collapsed, exclude from stream
     const COLLAPSE_MS = 10;
     const isCollapsed = new Uint8Array(words.length);
 
-    for (let i = 0; i < words.length; i++) {
+    let i = 0;
+    while (i < words.length) {
       const d = Math.round((words[i].end - words[i].start) * 1000);
+
       if (d < COLLAPSE_MS) {
         isCollapsed[i] = 1;
+        i++;
         continue;
       }
-      if (i < words.length - 1) {
-        const thisStart = Math.round(words[i].start * 1000);
-        const nextStart = Math.round(words[i + 1].start * 1000);
-        if (Math.abs(nextStart - thisStart) < COLLAPSE_MS) {
-          isCollapsed[i] = 1;
-          isCollapsed[i + 1] = 1;
+
+      const thisStart = Math.round(words[i].start * 1000);
+      let runEnd = i;
+      while (
+        runEnd + 1 < words.length &&
+        Math.abs(Math.round(words[runEnd + 1].start * 1000) - thisStart) < COLLAPSE_MS
+      ) {
+        runEnd++;
+      }
+
+      if (runEnd > i) {
+        for (let j = i; j <= runEnd; j++) {
+          isCollapsed[j] = 1;
         }
+        i = runEnd + 1;
+      } else {
+        i++;
       }
     }
 
