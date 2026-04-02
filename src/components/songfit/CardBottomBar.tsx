@@ -1,6 +1,6 @@
 /**
  * @deprecated Used only by PostCommentPanel for feed card interactions.
- * The main lyric dance flow uses MomentFuseStrip instead.
+ * The main lyric dance flow uses canvas moment fuse instead.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 

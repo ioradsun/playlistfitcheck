@@ -1,6 +1,6 @@
 /**
  * @deprecated This component is only used by BattleEmbed for hook battles.
- * The main lyric dance flow uses MomentFuseStrip instead.
+ * The main lyric dance flow uses canvas moment fuse instead.
  * Do not add new features here.
  */
 import {

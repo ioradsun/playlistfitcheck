@@ -232,6 +232,23 @@ export function useLyricDanceCore({
   }, [player, moments]);
 
   useEffect(() => {
+    if (!player || !moments.length) return;
+    const wickBar = (player as any)._globalWickBar;
+    if (!wickBar?.setMomentFireCounts) return;
+    const counts: Record<number, number> = {};
+    for (let i = 0; i < moments.length; i++) {
+      let total = 0;
+      for (const emojiData of Object.values(reactionData)) {
+        for (const line of moments[i].lines) {
+          total += emojiData.line[line.lineIndex] ?? 0;
+        }
+      }
+      counts[i] = total;
+    }
+    wickBar.setMomentFireCounts(counts);
+  }, [player, moments, reactionData]);
+
+  useEffect(() => {
     if (!data?.id) return;
     // Subscribe first to avoid missing events during initial fetch
     const channel = supabase

@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
+import { useMemo, useRef } from "react";
 import type { Moment } from "@/lib/buildMoments";
-import { MomentFuseStrip } from "@/components/lyric/MomentFuseStrip";
 
 interface LyricInteractionLayerProps {
   variant: "embedded" | "fullscreen";
@@ -12,13 +10,12 @@ interface LyricInteractionLayerProps {
   palette?: string[];
   accent?: string;
   reactionData?: Record<string, { line: Record<number, number>; total: number }>;
-  player?: LyricDancePlayer | null;
+  player?: any;
   isLive?: boolean;
   hasFired?: boolean;
   totalFireCount?: number;
   songEnded?: boolean;
   refreshKey?: number;
-  /** Section colors from cinematic direction */
   sectionColors?: Record<number, string>;
   onFireTap?: () => void;
   onFireHoldStart?: () => void;
@@ -29,55 +26,77 @@ interface LyricInteractionLayerProps {
   source?: "feed" | "shareable" | "embed";
 }
 
-function deriveMomentFireCounts(
-  reactionData: Record<string, { line: Record<number, number>; total: number }>,
-  moments: Moment[] | undefined,
-): Record<number, number> {
-  if (!moments?.length) return {};
-  const counts: Record<number, number> = {};
-  for (let mi = 0; mi < moments.length; mi += 1) {
-    let total = 0;
-    for (const emojiData of Object.values(reactionData)) {
-      for (const line of moments[mi].lines) {
-        total += emojiData.line[line.lineIndex] ?? 0;
-      }
+function formatTime(sec: number): string {
+  const m = Math.floor(Math.max(0, sec) / 60);
+  const s = Math.floor(Math.max(0, sec) % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function FireButton({
+  onFireTap,
+  onFireHoldStart,
+  onFireHoldEnd,
+}: {
+  onFireTap?: () => void;
+  onFireHoldStart?: () => void;
+  onFireHoldEnd?: (holdMs: number) => void;
+}) {
+  const holdStartRef = useRef<number | null>(null);
+
+  const handleFireStart = () => {
+    holdStartRef.current = performance.now();
+    onFireHoldStart?.();
+  };
+
+  const handleFireEnd = () => {
+    const start = holdStartRef.current;
+    holdStartRef.current = null;
+    if (start == null) return;
+    const holdMs = Math.max(0, performance.now() - start);
+    if (holdMs < 180) {
+      onFireTap?.();
+      return;
     }
-    counts[mi] = total;
-  }
-  return counts;
+    onFireHoldEnd?.(holdMs);
+  };
+
+  return (
+    <button
+      type="button"
+      onPointerDown={handleFireStart}
+      onPointerUp={handleFireEnd}
+      onPointerLeave={handleFireEnd}
+      onTouchEnd={handleFireEnd}
+      aria-label="Fire"
+      style={{
+        width: 50,
+        height: 50,
+        borderRadius: "50%",
+        border: "1.5px solid rgba(255,170,0,0.3)",
+        background: "rgba(255,150,0,0.1)",
+        color: "rgba(255,220,140,0.85)",
+        fontSize: 20,
+      }}
+    >
+      🔥
+    </button>
+  );
 }
 
 export function LyricInteractionLayer({
   variant,
+  moments,
   currentTimeSec = 0,
   durationSec = 0,
-  accent,
   reactionData = {},
-  player = null,
   onFireTap,
   onFireHoldStart,
   onFireHoldEnd,
   onSeekTo,
-  moments,
-  sectionColors = {},
 }: LyricInteractionLayerProps) {
   const isFullscreen = variant === "fullscreen";
-  const [beatState, setBeatState] = useState({ energy: 0, hit: false });
-
-  useEffect(() => {
-    if (!player) return;
-    const interval = setInterval(() => {
-      const bs = (player as any)._lastBeatState ?? (player as any).lastBeatState;
-      if (!bs) return;
-      setBeatState({
-        energy: bs.energy ?? 0,
-        hit: (bs.hitStrength ?? 0) > 0.3,
-      });
-    }, 50);
-    return () => clearInterval(interval);
-  }, [player]);
-
   const safeMoments = moments ?? [];
+
   const currentMomentIdx = useMemo(() => {
     for (let i = safeMoments.length - 1; i >= 0; i -= 1) {
       if (currentTimeSec >= safeMoments[i].startSec - 0.1) return i;
@@ -85,65 +104,111 @@ export function LyricInteractionLayer({
     return 0;
   }, [safeMoments, currentTimeSec]);
 
-  const momentFireCounts = useMemo(
-    () => deriveMomentFireCounts(reactionData, safeMoments),
-    [reactionData, safeMoments],
-  );
   const totalFires = useMemo(
-    () => Object.values(reactionData).reduce((s, d) => s + d.total, 0),
+    () => Object.values(reactionData).reduce((sum, data) => sum + data.total, 0),
     [reactionData],
   );
+
+  const canPrev = currentMomentIdx > 0;
+  const canNext = currentMomentIdx < safeMoments.length - 1;
 
   return (
     <div
       style={{
-        flexShrink: 0,
-        ...(isFullscreen
-          ? {
-              position: "fixed",
-              bottom: 0,
-              left: 0,
-              right: 0,
-              zIndex: 80,
-              background: "linear-gradient(180deg, rgba(10,10,10,0), rgba(10,10,10,0.9) 34%)",
-              display: "flex",
-              justifyContent: "center",
-              paddingBottom: "env(safe-area-inset-bottom, 0px)",
-            }
-          : {}),
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 10,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        paddingBottom: isFullscreen ? "env(safe-area-inset-bottom, 0px)" : "8px",
+        pointerEvents: "none",
       }}
     >
-      <div style={{ width: "min(680px, 100%)" }}>
-        <MomentFuseStrip
-          moments={safeMoments}
-          currentTimeSec={currentTimeSec}
-          durationSec={durationSec}
-          momentFireCounts={momentFireCounts}
-          totalFires={totalFires}
-          beatEnergy={beatState.energy}
-          beatHit={beatState.hit}
-          onSeekToMoment={(idx) => {
-            const m = safeMoments[idx];
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          width: "100%",
+          padding: "0 16px 4px",
+          fontSize: 9,
+          color: "rgba(255,255,255,0.22)",
+          pointerEvents: "none",
+        }}
+      >
+        <span style={{ fontFamily: "monospace" }}>{formatTime(currentTimeSec)}</span>
+        <span>
+          moment {Math.min(safeMoments.length, currentMomentIdx + 1)} of {safeMoments.length}
+          {totalFires > 0 && (
+            <span style={{ color: "rgba(255,215,0,0.4)", marginLeft: 8 }}>{totalFires} fires</span>
+          )}
+        </span>
+        <span style={{ fontFamily: "monospace" }}>{formatTime(durationSec)}</span>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 20,
+          padding: "6px 0",
+          pointerEvents: "auto",
+        }}
+      >
+        <button
+          type="button"
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.06)",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: canPrev ? 1 : 0.3,
+          }}
+          disabled={!canPrev}
+          onClick={() => {
+            const m = safeMoments[currentMomentIdx - 1];
             if (m) onSeekTo?.(m.startSec);
           }}
-          onFireTap={() => {
-            onFireTap?.();
-          }}
+        >
+          <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 20, lineHeight: 1 }}>‹</span>
+        </button>
+
+        <FireButton
+          onFireTap={onFireTap}
           onFireHoldStart={onFireHoldStart}
           onFireHoldEnd={onFireHoldEnd}
-          onPrevMoment={() => {
-            const prevIdx = Math.max(0, currentMomentIdx - 1);
-            const m = safeMoments[prevIdx];
-            if (m) onSeekTo?.(m.startSec);
-          }}
-          onNextMoment={() => {
-            const nextIdx = Math.min(Math.max(0, safeMoments.length - 1), currentMomentIdx + 1);
-            const m = safeMoments[nextIdx];
-            if (m) onSeekTo?.(m.startSec);
-          }}
-          sectionColors={sectionColors}
-          accent={accent}
         />
+
+        <button
+          type="button"
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.06)",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: canNext ? 1 : 0.3,
+          }}
+          disabled={!canNext}
+          onClick={() => {
+            const m = safeMoments[currentMomentIdx + 1];
+            if (m) onSeekTo?.(m.startSec);
+          }}
+        >
+          <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 20, lineHeight: 1 }}>›</span>
+        </button>
       </div>
     </div>
   );
