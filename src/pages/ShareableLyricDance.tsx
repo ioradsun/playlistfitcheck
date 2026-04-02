@@ -271,7 +271,7 @@ export default function ShareableLyricDance() {
         const latest = fires.reduce((a, b) =>
           (a.created_at ?? "") > (b.created_at ?? "") ? a : b,
         );
-        setLastFiredAt(latest.created_at ?? null);
+        // lastFiredAt tracked internally
       }
     });
     return () => { cancelled = true; };
