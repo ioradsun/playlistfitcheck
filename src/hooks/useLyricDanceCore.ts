@@ -3,13 +3,13 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
-import { useReactionPanel } from "@/hooks/useReactionPanel";
 import { getSessionId } from "@/lib/sessionId";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { LIGHTNING_BAR_FLAG_EVENT, readLightningBarFlag } from "@/lib/lyricDanceFlags";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
+import type { CanonicalAudioSection } from "@/types/audioSections";
 
 const EMOJI_SYMBOLS: Record<string, string> = {
   fire: "🔥",
@@ -168,27 +168,40 @@ export function useLyricDanceCore({
     durationSec,
   );
 
-  const [panelOpen, setPanelOpen] = useState(false);
-  const openPanel = useCallback(() => setPanelOpen(true), []);
-  const closePanel = useCallback(() => setPanelOpen(false), []);
+  const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
+  const activeLine = useMemo(() => {
+    if (!lyricSections.isReady) return null;
+    const line = lyricSections.allLines.find(
+      (l) => currentTimeSec >= l.startSec && currentTimeSec < l.endSec + 0.1,
+    ) ?? null;
+    if (!line) return null;
+    const section = lyricSections.sections.find((s) =>
+      s.lines.some((sl) => sl.lineIndex === line.lineIndex),
+    ) ?? null;
+    return {
+      text: line.text,
+      lineIndex: line.lineIndex,
+      sectionLabel: section?.label ?? null,
+    };
+  }, [lyricSections, currentTimeSec]);
 
-  const {
-    reactionPanelOpen,
-    setReactionPanelOpen,
-    reactionData,
-    setReactionData,
-    activeLine,
-    audioSections,
-    palette,
-    handlePanelClose,
-  } = useReactionPanel({
-    player,
-    lyricSections,
-    currentTimeSec,
-    data,
-    durationSec,
-    onPanelClose: closePanel,
-  });
+  const audioSections = useMemo<CanonicalAudioSection[]>(() => {
+    const sections = lyricSections.sections;
+    return sections.map((s, i) => ({
+      sectionIndex: i,
+      startSec: s.startSec,
+      endSec: s.endSec,
+      role: s.role,
+    }));
+  }, [lyricSections.sections]);
+
+  const palette = useMemo(() => {
+    const cd = data?.cinematic_direction;
+    if (cd?.sections && Array.isArray(cd.sections)) {
+      return cd.sections.map((s: any) => s.dominantColor ?? "#6B7A8E");
+    }
+    return ["#ffffff", "#ffffff", "#ffffff"];
+  }, [data]);
 
   const moments = useMemo<Moment[]>(() => {
     const phrases = (data as any)?.cinematic_direction?.phrases ?? [];
@@ -204,26 +217,14 @@ export function useLyricDanceCore({
   }, [data, audioSections, lyricSections.allLines, durationSec]);
 
   useEffect(() => {
-    setReactionPanelOpen(panelOpen);
-  }, [panelOpen, setReactionPanelOpen]);
-
-  useEffect(() => {
-    if (!reactionPanelOpen || !player) return;
-    if (showCover) setShowCover(false);
-    player.setMuted(false);
-    player.pause();
-    setMuted(false);
-  }, [reactionPanelOpen, player, showCover]);
-
-  useEffect(() => {
     if (!player) return;
     player.setReactionData(reactionData);
   }, [player, reactionData]);
 
   useEffect(() => {
     if (!player) return;
-    player.setEmojiStreamEnabled(!reactionPanelOpen && !showCover);
-  }, [player, reactionPanelOpen, showCover]);
+    player.setEmojiStreamEnabled(!showCover);
+  }, [player, showCover]);
 
   useEffect(() => {
     if (!player) return;
@@ -445,10 +446,6 @@ export function useLyricDanceCore({
     currentTimeSec,
     progress,
     lightningBarEnabled,
-    reactionPanelOpen,
-    openPanel,
-    closePanel,
-    handlePanelClose,
     reactionData,
     setReactionData,
     durationSec,

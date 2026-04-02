@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import type { LyricSectionLine } from "@/hooks/useLyricSections";
 import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
 import type { Moment } from "@/lib/buildMoments";
 import { MomentFuseStrip } from "@/components/lyric/MomentFuseStrip";
@@ -7,51 +6,27 @@ import { MomentFuseStrip } from "@/components/lyric/MomentFuseStrip";
 interface LyricInteractionLayerProps {
   variant: "embedded" | "fullscreen";
   danceId: string;
-  currentMoment?: {
-    index: number;
-    total: number;
-    label: string | null;
-    text?: string;
-    startSec?: number;
-    endSec?: number;
-  } | null;
-  activeLine?: { text: string; lineIndex: number; sectionLabel: string | null } | null;
-  allLines?: LyricSectionLine[];
-  audioSections?: any[];
-  phrases?: any[] | null;
-  words?: any[] | null;
-  beatGrid?: any | null;
+  moments?: Moment[];
   currentTimeSec?: number;
   durationSec?: number;
   palette?: string[];
   accent?: string;
   reactionData?: Record<string, { line: Record<number, number>; total: number }>;
-  onReactionDataChange?: (data: any) => void;
-  empowermentPromise?: any | null;
-  fmlyHookEnabled?: boolean;
-  refreshKey?: number;
+  player?: LyricDancePlayer | null;
   isLive?: boolean;
   hasFired?: boolean;
   totalFireCount?: number;
-  lastFiredAt?: string | null;
   songEnded?: boolean;
-  player?: LyricDancePlayer | null;
+  refreshKey?: number;
+  /** Section colors from cinematic direction */
+  sectionColors?: Record<number, string>;
   onFireTap?: () => void;
   onFireHoldStart?: () => void;
   onFireHoldEnd?: (holdMs: number) => void;
-  onFireLine?: (lineIndex: number, holdMs: number) => void;
-  onLineVisible?: (lineIndex: number) => void;
-  onReactionFired?: (emoji: string) => void;
-  onComment?: (text: string, momentIndex: number | null) => void;
+  onSeekTo?: (sec: number) => void;
   onPause?: () => void;
   onResume?: () => void;
-  onSeekTo?: (sec: number) => void;
-  onPanelCloseWithPosition?: (timeSec: number | null) => void;
-  externalPanelOpen?: boolean;
-  onPanelOpenChange?: (open: boolean) => void;
   source?: "feed" | "shareable" | "embed";
-  moments?: Moment[];
-  cinematicDirection?: any | null;
 }
 
 function deriveMomentFireCounts(
@@ -72,18 +47,6 @@ function deriveMomentFireCounts(
   return counts;
 }
 
-function deriveSectionColors(cd: any | null | undefined): Record<number, string> {
-  const colors: Record<number, string> = {};
-  const sections = cd?.sections;
-  if (!Array.isArray(sections)) return colors;
-  for (const s of sections) {
-    if (typeof s.sectionIndex === "number" && typeof s.dominantColor === "string") {
-      colors[s.sectionIndex] = s.dominantColor;
-    }
-  }
-  return colors;
-}
-
 export function LyricInteractionLayer({
   variant,
   currentTimeSec = 0,
@@ -96,7 +59,7 @@ export function LyricInteractionLayer({
   onFireHoldEnd,
   onSeekTo,
   moments,
-  cinematicDirection,
+  sectionColors = {},
 }: LyricInteractionLayerProps) {
   const isFullscreen = variant === "fullscreen";
   const [beatState, setBeatState] = useState({ energy: 0, hit: false });
@@ -122,7 +85,6 @@ export function LyricInteractionLayer({
     return 0;
   }, [safeMoments, currentTimeSec]);
 
-  const sectionColors = useMemo(() => deriveSectionColors(cinematicDirection), [cinematicDirection]);
   const momentFireCounts = useMemo(
     () => deriveMomentFireCounts(reactionData, safeMoments),
     [reactionData, safeMoments],

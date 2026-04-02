@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import type { LyricDancePlayer } from '@/engine/LyricDancePlayer';
 import type { UseLyricSectionsResult as LyricSections } from '@/hooks/useLyricSections';
-import type { CanonicalAudioSection } from '@/components/lyric/ReactionPanel';
+import type { CanonicalAudioSection } from '@/types/audioSections';
 
 interface UseReactionPanelOptions {
   player: LyricDancePlayer | null;

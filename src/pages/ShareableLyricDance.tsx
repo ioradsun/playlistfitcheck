@@ -17,11 +17,22 @@ import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import ClaimBanner from "@/components/claim/ClaimBanner";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { SeoHead } from "@/components/SeoHead";
-import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
-import { emitFire, emitExposure, fetchFireData } from "@/lib/fire";
+import { emitFire, fetchFireData } from "@/lib/fire";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
+
+function deriveSectionColors(cd: any | null | undefined): Record<number, string> {
+  const colors: Record<number, string> = {};
+  const sections = cd?.sections;
+  if (!Array.isArray(sections)) return colors;
+  for (const s of sections) {
+    if (typeof s.sectionIndex === "number" && typeof s.dominantColor === "string") {
+      colors[s.sectionIndex] = s.dominantColor;
+    }
+  }
+  return colors;
+}
 
 const ALL_COLUMNS =
   "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name," +
@@ -57,7 +68,6 @@ export default function ShareableLyricDance() {
   const [closingAnswered, setClosingAnswered] = useState(false);
   const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
   const [totalFireCount, setTotalFireCount] = useState(0);
-  const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const empowermentGenStarted = useRef(false);
   const isMobile = useIsMobile();
@@ -177,7 +187,6 @@ export default function ShareableLyricDance() {
     showCover,
     currentTimeSec,
     reactionData,
-    setReactionData,
     durationSec,
     lyricSections,
     audioSections,
@@ -190,7 +199,6 @@ export default function ShareableLyricDance() {
     handleResumeAfterInput,
     isWaiting,
     commentRefreshKey,
-    handleCommentFromBar,
   } = core;
 
   const renderData = fetchedData ?? data;
@@ -313,8 +321,6 @@ export default function ShareableLyricDance() {
     );
   }
 
-  const siteCopy = useSiteCopy();
-  const fmlyHookEnabled = siteCopy.features?.fmly_hook === true;
   const empowermentPromise = localEmpowerment ?? (renderData as any)?.empowerment_promise ?? null;
   const coverSongName = renderData?.song_name ?? "";
   const coverArtist = profile?.display_name ?? renderData?.artist_name ?? "";
@@ -569,28 +575,19 @@ export default function ShareableLyricDance() {
           <LyricInteractionLayer
             variant="fullscreen"
             danceId={renderData?.id ?? ""}
-            currentMoment={currentMoment}
-            activeLine={activeLine}
-            allLines={lyricSections.allLines}
-            audioSections={audioSections}
-            phrases={(renderData as any)?.cinematic_direction?.phrases ?? null}
-            words={(renderData as any)?.words ?? null}
-            beatGrid={(renderData as any)?.beat_grid ?? null}
+            moments={moments}
             currentTimeSec={currentTimeSec}
             durationSec={durationSec}
             palette={palette}
             accent={barAccent}
             reactionData={reactionData}
-            onReactionDataChange={setReactionData}
-            empowermentPromise={empowermentPromise}
-            fmlyHookEnabled={fmlyHookEnabled}
             refreshKey={commentRefreshKey}
             isLive={!showCover && playerReady}
             hasFired={hasFired}
             totalFireCount={totalFireCount}
-            lastFiredAt={lastFiredAt}
             songEnded={closingVisible}
             player={player}
+            sectionColors={deriveSectionColors((renderData as any)?.cinematic_direction ?? null)}
             onFireTap={() => {
               const id = renderData?.id;
               if (!id || !activeLine) return;
@@ -598,7 +595,6 @@ export default function ShareableLyricDance() {
               emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "shareable");
               setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1 }));
               setTotalFireCount((c) => c + 1);
-              setLastFiredAt(new Date().toISOString());
               markFired();
             }}
             onFireHoldStart={() => {
@@ -614,35 +610,12 @@ export default function ShareableLyricDance() {
               const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
               setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
               setTotalFireCount((c) => c + 1);
-              setLastFiredAt(new Date().toISOString());
               markFired();
             }}
-            onComment={(text, momentIndex) => handleCommentFromBar(text, momentIndex)}
-            onFireLine={(lineIndex, holdMs) => {
-              const id = renderData?.id;
-              if (!id) return;
-              player?.fireFire(holdMs);
-              emitFire(id, lineIndex, player?.audio.currentTime ?? 0, holdMs, "shareable");
-            }}
-            onLineVisible={(lineIndex) => {
-              const id = renderData?.id;
-              if (!id) return;
-              emitExposure(id, lineIndex, "shareable");
-            }}
-            onReactionFired={(emoji) => player?.fireComment(emoji)}
             onPause={handlePauseForInput}
             onResume={handleResumeAfterInput}
             onSeekTo={(sec) => player?.seek(sec)}
-            onPanelCloseWithPosition={(timeSec) => {
-              if (player && timeSec != null) {
-                player.seek(timeSec);
-                player.setMuted(false);
-                player.play();
-              }
-            }}
             source="shareable"
-            moments={moments}
-            cinematicDirection={(renderData as any)?.cinematic_direction ?? null}
           />
         </div>
       </div>
