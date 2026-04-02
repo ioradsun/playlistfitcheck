@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Coins, Rocket, Wrench, GripVertical, Target, Mic, Video, Zap, Film, Smartphone } from "lucide-react";
+import { Loader2, Coins, Rocket, Wrench, GripVertical, Target, Mic, Video, Zap, Film } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Reorder, useDragControls } from "framer-motion";
@@ -33,7 +33,6 @@ interface FeaturesState {
   lyric_video: boolean;
   hookfit_hottest_hooks: boolean;
   export_video: boolean;
-  crowdfit_reels: boolean;
   fmly_hook: boolean;
 }
 
@@ -48,7 +47,6 @@ const DEFAULT_FEATURES: FeaturesState = {
   lyric_video: false,
   hookfit_hottest_hooks: true,
   export_video: false,
-  crowdfit_reels: false,
   fmly_hook: false,
 };
 
@@ -176,7 +174,6 @@ export function ToolsEditor() {
           lyric_video: f.lyric_video ?? false,
           hookfit_hottest_hooks: f.hookfit_hottest_hooks ?? true,
           export_video: f.export_video ?? false,
-          crowdfit_reels: f.crowdfit_reels ?? false,
           fmly_hook: f.fmly_hook ?? false,
         });
         setOrderedKeys(merged);
@@ -418,38 +415,6 @@ export function ToolsEditor() {
               }
             }}
             disabled={savingKey === "export_video"}
-          />
-        </div>
-      </div>
-
-      {/* ── CrowdFit Reels ── */}
-      <div className="glass-card rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <Smartphone size={14} className="text-primary" />
-          <span className="text-sm font-mono font-medium">CrowdFit Reels</span>
-        </div>
-        <div className="px-4 py-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">Reels layout on mobile</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Fullscreen vertical-snap cards on mobile CrowdFit</p>
-          </div>
-          <Switch
-            checked={features.crowdfit_reels}
-            onCheckedChange={async (enabled) => {
-              const prev = features.crowdfit_reels;
-              setFeatures(f => ({ ...f, crowdfit_reels: enabled }));
-              setSavingKey("crowdfit_reels");
-              try {
-                await patchFeatures({ crowdfit_reels: enabled });
-                toast.success(enabled ? "CrowdFit Reels enabled" : "CrowdFit Reels disabled");
-              } catch {
-                setFeatures(f => ({ ...f, crowdfit_reels: prev }));
-                toast.error("Failed to update");
-              } finally {
-                setSavingKey(null);
-              }
-            }}
-            disabled={savingKey === "crowdfit_reels"}
           />
         </div>
       </div>
