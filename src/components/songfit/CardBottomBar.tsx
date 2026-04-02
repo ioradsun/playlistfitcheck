@@ -171,8 +171,6 @@ export function CardBottomBar({
   onPauseForInput,
   onResumeAfterInput,
   isLive = false,
-  totalFireCount = 0,
-  songEnded = false,
 }: CardBottomBarProps) {
   const [commentText, setCommentText] = useState("");
   const [isListening, setIsListening] = useState(false);
@@ -182,7 +180,6 @@ export function CardBottomBar({
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const py = variant === "embedded" ? "py-3" : "py-4";
-  const subTextSize = variant === "fullscreen" ? "text-[11px]" : "text-[10px]";
   const fireIconSize = variant === "fullscreen" ? 22 : 18;
   const fireMinWidth = variant === "fullscreen" ? "min-w-[60px]" : "min-w-[52px]";
 
@@ -257,38 +254,8 @@ export function CardBottomBar({
     recognitionRef.current?.abort();
     if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
   }, []);
-  const momentLabel = currentMoment
-    ? `Moment ${currentMoment.index + 1}/${currentMoment.total}`
-    : null;
-
   return (
     <div className={wrapperClass} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          panelOpen ? onClose() : onOpenReactions();
-        }}
-        className={`flex items-center px-3 ${py} shrink-0`}
-        style={{ background: "none", border: "none", cursor: "pointer", minWidth: 56 }}
-        aria-label={panelOpen ? "Close panel" : "Open reactions"}
-      >
-        <span
-          className={`${subTextSize} font-mono`}
-          style={{
-            color: panelOpen
-              ? "rgba(255,255,255,0.5)"
-              : momentLabel
-                ? "rgba(255,255,255,0.55)"
-                : "rgba(255,255,255,0.2)",
-            letterSpacing: "0.08em",
-            transition: "color 0.2s ease",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {panelOpen ? "Close" : momentLabel ?? (songEnded ? `${totalFireCount} marked` : "—")}
-        </span>
-      </button>
-
       <div
         className={`flex items-center gap-2 flex-1 min-w-0 px-3 ${py}`}
         style={{
