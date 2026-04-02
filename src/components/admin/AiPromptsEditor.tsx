@@ -24,7 +24,7 @@ const MODEL_OPTIONS = [
   { value: "openai/gpt-5.2", label: "GPT-5.2" },
 ];
 
-const MODEL_SLUG = "analysis-model";
+const MODEL_SLUGS = ["analysis-model", "scene-model", "words-model"];
 
 export function AiPromptsEditor() {
   const [prompts, setPrompts] = useState<AiPrompt[]>([]);
@@ -118,20 +118,20 @@ export function AiPromptsEditor() {
     });
   };
 
-  const handleModelChange = async (value: string) => {
-    setSaving(MODEL_SLUG);
+  const handleModelChange = async (slug: string, value: string) => {
+    setSaving(slug);
     const { error } = await supabase
       .from("ai_prompts")
       .update({ prompt: value })
-      .eq("slug", MODEL_SLUG);
+      .eq("slug", slug);
 
     if (error) {
       toast.error("Failed to save model");
       console.error(error);
     } else {
-      toast.success(`Model → ${value}`);
+      toast.success(`${slug} → ${value}`);
       setPrompts((prev) =>
-        prev.map((p) => (p.slug === MODEL_SLUG ? { ...p, prompt: value, updated_at: new Date().toISOString() } : p))
+        prev.map((p) => (p.slug === slug ? { ...p, prompt: value, updated_at: new Date().toISOString() } : p))
       );
     }
     setSaving(null);
@@ -147,23 +147,23 @@ export function AiPromptsEditor() {
     );
   }
 
-  const modelPrompt = prompts.find((p) => p.slug === MODEL_SLUG);
-  const textPrompts = prompts.filter((p) => p.slug !== MODEL_SLUG);
+  const modelPrompts = prompts.filter((p) => MODEL_SLUGS.includes(p.slug));
+  const textPrompts = prompts.filter((p) => !MODEL_SLUGS.includes(p.slug));
 
   return (
     <div className="space-y-3">
-      {/* Model selector */}
-      {modelPrompt && (
-        <div className="glass-card rounded-xl p-4">
+      {/* Model selectors */}
+      {modelPrompts.map((mp) => (
+        <div key={mp.slug} className="glass-card rounded-xl p-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <span className="text-sm font-mono font-medium">{modelPrompt.label}</span>
-              <span className="text-[10px] text-muted-foreground ml-2 font-mono">{modelPrompt.slug}</span>
+              <span className="text-sm font-mono font-medium">{mp.label}</span>
+              <span className="text-[10px] text-muted-foreground ml-2 font-mono">{mp.slug}</span>
             </div>
             <Select
-              value={modelPrompt.prompt}
-              onValueChange={handleModelChange}
-              disabled={saving === MODEL_SLUG}
+              value={mp.prompt}
+              onValueChange={(v) => handleModelChange(mp.slug, v)}
+              disabled={saving === mp.slug}
             >
               <SelectTrigger className="w-[280px] text-xs font-mono">
                 <SelectValue />
@@ -178,7 +178,7 @@ export function AiPromptsEditor() {
             </Select>
           </div>
         </div>
-      )}
+      ))}
 
       {/* Prompt collapsibles */}
       {textPrompts.map((p) => {
