@@ -12,6 +12,13 @@ function fetchWithTimeout(
   );
 }
 
+function normalizeAbortError(error: unknown, message: string, status = 504) {
+  if (error instanceof Error && error.name === "AbortError") {
+    return { status, message };
+  }
+  return error;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -950,6 +957,44 @@ function normalizePhraseText(text: string): string {
     .trim();
 }
 
+function buildDeterministicWordFallback(
+  words: Array<{ word: string; start: number; end: number }>,
+): { hookPhrase: string; phrases: Array<{ wordRange: [number, number]; heroWord: string; exitEffect: string; text: string; wordCount: number; start: number; end: number }> } {
+  if (!words.length) {
+    return { hookPhrase: "", phrases: [] };
+  }
+
+  const rawPhrases: Array<{ wordRange: [number, number]; heroWord?: string; exitEffect?: string }> = [];
+  let startIndex = 0;
+
+  while (startIndex < words.length) {
+    let endIndex = Math.min(startIndex + 3, words.length - 1);
+
+    for (let i = startIndex; i < Math.min(startIndex + 5, words.length - 1); i++) {
+      const gapMs = (words[i + 1].start - words[i].end) * 1000;
+      if (gapMs >= 450) {
+        endIndex = i;
+        break;
+      }
+    }
+
+    rawPhrases.push({
+      wordRange: [startIndex, endIndex],
+      exitEffect: rawPhrases.length % 2 === 0 ? "fade" : "drift_up",
+    });
+    startIndex = endIndex + 1;
+  }
+
+  fillMissingHeroWords(rawPhrases, words);
+  const hydrated = hydrateWordPhrases(rawPhrases, words);
+  const hookPhrase = inferHookPhrase(hydrated);
+
+  return {
+    hookPhrase,
+    phrases: hydrated,
+  };
+}
+
 function normalizeHookKey(text: string): string {
   return text
     .toLowerCase()
@@ -1206,30 +1251,38 @@ async function callScene(
       raw.slice(0, 300),
     );
 
-    const retryResp = await fetchWithTimeout(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
+    let retryResp: Response;
+    try {
+      retryResp = await fetchWithTimeout(
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: modelOverride,
+            messages: [
+              { role: "system", content: sceneSystemPrompt },
+              { role: "user", content: userMessage },
+              {
+                role: "user",
+                content:
+                  'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "fontProfile", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
+              },
+            ],
+            response_format: { type: "json_object" },
+            max_completion_tokens: 8000,
+          }),
         },
-        body: JSON.stringify({
-          model: modelOverride,
-          messages: [
-            { role: "system", content: sceneSystemPrompt },
-            { role: "user", content: userMessage },
-            {
-              role: "user",
-              content:
-                'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "fontProfile", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
-            },
-          ],
-          response_format: { type: "json_object" },
-          max_completion_tokens: 8000,
-        }),
-      },
-    );
+      );
+    } catch (error) {
+      throw normalizeAbortError(
+        error,
+        `Scene direction AI timed out during retry for model ${modelOverride}`,
+      );
+    }
 
     if (retryResp.ok) {
       const retryRespText = await retryResp.text();
@@ -1293,23 +1346,39 @@ async function callWords(
     messages: Array<{ role: string; content: string }>,
     model: string = modelOverride,
   ) => {
-    const resp = await fetchWithTimeout(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
+    let resp: Response;
+    try {
+      resp = await fetchWithTimeout(
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            response_format: { type: "json_object" },
+            max_completion_tokens: 32000,
+          }),
         },
-        body: JSON.stringify({
-          model,
-          messages,
-          response_format: { type: "json_object" },
-          max_completion_tokens: 32000,
-        }),
-      },
-      120000,
-    );
+        120000,
+      );
+    } catch (error) {
+      const normalized = normalizeAbortError(
+        error,
+        `Word direction AI timed out for model ${model}`,
+      );
+      if ((normalized as any)?.status === 504 && model === modelOverride && modelOverride !== FALLBACK_MODEL) {
+        console.warn(
+          `[cinematic-direction] words primary model timed out, trying fallback ${FALLBACK_MODEL}`,
+        );
+        await new Promise((r) => setTimeout(r, 1500));
+        return callWordAI(messages, FALLBACK_MODEL);
+      }
+      throw normalized;
+    }
 
     // If primary model fails with retryable error, try fallback
     if (!resp.ok && model === modelOverride && (resp.status === 429 || resp.status >= 500)) {
@@ -1359,7 +1428,17 @@ async function callWords(
     { role: "user", content: wordMessage },
   ];
 
-  const { raw, finishReason } = await callWordAI(messages);
+  let raw: string;
+  let finishReason: string | undefined;
+  try {
+    ({ raw, finishReason } = await callWordAI(messages));
+  } catch (error: any) {
+    if (error?.status === 504 && words?.length) {
+      console.warn("[cinematic-direction] words timed out, returning deterministic fallback phrases");
+      return buildDeterministicWordFallback(words);
+    }
+    throw error;
+  }
   let parsed = extractJson(raw);
 
   if (!parsed || finishReason === "length") {
@@ -1377,7 +1456,16 @@ async function callWords(
       },
     ];
 
-    const { raw: retryRaw } = await callWordAI(retryMessages);
+    let retryRaw: string;
+    try {
+      ({ raw: retryRaw } = await callWordAI(retryMessages));
+    } catch (error: any) {
+      if (error?.status === 504 && words?.length) {
+        console.warn("[cinematic-direction] words retry timed out, returning deterministic fallback phrases");
+        return buildDeterministicWordFallback(words);
+      }
+      throw error;
+    }
     const retryParsed = extractJson(retryRaw);
 
     if (retryParsed) {
