@@ -1326,7 +1326,14 @@ async function callScene(
     );
 
     if (retryResp.ok) {
-      const retryCompletion = await retryResp.json();
+      const retryRespText = await retryResp.text();
+      let retryCompletion: any;
+      try {
+        retryCompletion = JSON.parse(retryRespText);
+      } catch {
+        console.error("[cinematic-direction] scene retry response not valid JSON, preview:", retryRespText.slice(0, 200));
+        retryCompletion = null;
+      }
       const retryRaw = String(
         retryCompletion?.choices?.[0]?.message?.content ?? "",
       );
