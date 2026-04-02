@@ -284,6 +284,27 @@ export function getMoodGrade(visualMood: string | undefined | null): MoodGrade {
   return MOOD_GRADES[visualMood.toLowerCase().trim()] ?? DEFAULT_MOOD_GRADE;
 }
 
+export function modulateGradeByEnergy(
+  base: MoodGrade,
+  energy: number,
+  sectionProgress: number,
+): MoodGrade {
+  const clampedEnergy = Math.max(0, Math.min(1, energy));
+  const clampedProgress = Math.max(0, Math.min(1, sectionProgress));
+  const energyDelta = clampedEnergy - 0.5;
+
+  const brightness = Math.min(0.72, Math.max(0.38, base.brightness + energyDelta * 0.12));
+  const saturation = Math.min(1.20, Math.max(0.40, base.saturation + energyDelta * 0.15));
+  const temperature = base.temperature + clampedProgress * 0.06;
+
+  return {
+    ...base,
+    brightness,
+    saturation,
+    temperature,
+  };
+}
+
 /**
  * Build a CSS filter string from a mood grade + dynamic modifiers.
  *
