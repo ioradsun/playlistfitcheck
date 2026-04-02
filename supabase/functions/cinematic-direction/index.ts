@@ -1546,13 +1546,13 @@ serve(async (req) => {
         body.audioSections?.length ?? 0,
         body,
         customPrompts.scenePrompt,
-        customPrompts.model,
+        customPrompts.sceneModel,
       );
 
       return new Response(JSON.stringify({
         cinematicDirection: sceneResult,
         _meta: {
-          model: customPrompts.model,
+          model: customPrompts.sceneModel,
           scenePromptSource: customPrompts.scenePrompt === SCENE_DIRECTION_PROMPT ? "default" : "admin",
           scenePromptLength: customPrompts.scenePrompt.length,
         },
