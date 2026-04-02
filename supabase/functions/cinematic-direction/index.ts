@@ -1423,9 +1423,9 @@ async function callWords(
   return result.value;
 }
 
-/** Fetch custom prompts + model from ai_prompts table, falling back to hardcoded defaults. */
+/** Fetch custom prompts + models from ai_prompts table, falling back to hardcoded defaults. */
 let _promptCache: {
-  value: { scenePrompt: string; wordPrompt: string; model: string };
+  value: { scenePrompt: string; wordPrompt: string; sceneModel: string; wordsModel: string };
   expiresAt: number;
 } | null = null;
 const PROMPT_CACHE_TTL_MS = 60_000;
@@ -1433,7 +1433,8 @@ const PROMPT_CACHE_TTL_MS = 60_000;
 async function loadCustomPrompts(): Promise<{
   scenePrompt: string;
   wordPrompt: string;
-  model: string;
+  sceneModel: string;
+  wordsModel: string;
 }> {
   if (_promptCache && Date.now() < _promptCache.expiresAt) {
     return _promptCache.value;
@@ -1442,14 +1443,15 @@ async function loadCustomPrompts(): Promise<{
   const defaults = {
     scenePrompt: SCENE_DIRECTION_PROMPT,
     wordPrompt: WORD_DIRECTION_PROMPT,
-    model: PRIMARY_MODEL,
+    sceneModel: PRIMARY_MODEL,
+    wordsModel: PRIMARY_MODEL,
   };
   const sbUrl = Deno.env.get("SUPABASE_URL");
   const sbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!sbUrl || !sbKey) return defaults;
 
   try {
-    const slugs = ["cinematic-scene", "cinematic-words", "analysis-model"];
+    const slugs = ["cinematic-scene", "cinematic-words", "scene-model", "words-model", "analysis-model"];
     const res = await fetchWithTimeout(
       `${sbUrl}/rest/v1/ai_prompts?slug=in.(${slugs.join(",")})&select=slug,prompt`,
       {
@@ -1468,10 +1470,13 @@ async function loadCustomPrompts(): Promise<{
     const rows: Array<{ slug: string; prompt: string }> = await res.json();
     const bySlug = Object.fromEntries(rows.map((r) => [r.slug, r.prompt]));
 
+    // Separate model slugs for scene vs words, with legacy analysis-model fallback
+    const legacyModel = bySlug["analysis-model"]?.trim() || PRIMARY_MODEL;
     const value = {
       scenePrompt: bySlug["cinematic-scene"] || SCENE_DIRECTION_PROMPT,
       wordPrompt: bySlug["cinematic-words"] || WORD_DIRECTION_PROMPT,
-      model: bySlug["analysis-model"]?.trim() || PRIMARY_MODEL,
+      sceneModel: bySlug["scene-model"]?.trim() || legacyModel,
+      wordsModel: bySlug["words-model"]?.trim() || legacyModel,
     };
 
     _promptCache = { value, expiresAt: Date.now() + PROMPT_CACHE_TTL_MS };
