@@ -169,7 +169,7 @@ For every candidate phrase, execute this mental checklist in order:
 ---
 
 ### OUTPUT SCHEMA
-You must return exactly one valid JSON object. To ensure mathematical accuracy, you will include a `_calculation_log` for the first three phrases to verify your duration logic, followed by the final `phrases` array.
+You must return exactly one valid JSON object. To ensure mathematical accuracy, you will include a _calculation_log for the first three phrases to verify your duration logic, followed by the final phrases array.
 
 {
   "hookPhrase": "THE_MOST_ICONIC_LINE_IN_UPPERCASE",
