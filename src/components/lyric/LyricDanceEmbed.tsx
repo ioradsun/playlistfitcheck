@@ -15,7 +15,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
-import { LyricDanceProgressBar } from "@/components/lyric/LyricDanceProgressBar";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReelsGestureLayer } from "./ReelsGestureLayer";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
@@ -173,7 +172,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     handleResumeAfterInput,
     isWaiting,
     commentRefreshKey,
-    lightningBarEnabled,
   } = useLyricDanceCore({
     lyricDanceId,
     prefetchedData: prefetchedDataWithRegion,
@@ -641,15 +639,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             </div>
           )}
 
-          {!effectiveShowCover && !isWaiting && playerReady && data && !lightningBarEnabled && !closingVisible && (
-            <LyricDanceProgressBar
-              player={player}
-              data={data}
-              onSeekStart={() => {}}
-              onSeekEnd={() => {}}
-              palette={palette.length ? palette : ["#ffffff", "#ffffff", "#ffffff"]}
-            />
-          )}
 
           <LyricInteractionLayer
             variant="embedded"

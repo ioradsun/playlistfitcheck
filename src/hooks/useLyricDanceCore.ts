@@ -5,7 +5,6 @@ import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { getSessionId } from "@/lib/sessionId";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
-import { LIGHTNING_BAR_FLAG_EVENT, readLightningBarFlag } from "@/lib/lyricDanceFlags";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
@@ -79,25 +78,13 @@ export function useLyricDanceCore({
   const [showCover, setShowCover] = useState(true);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
-  const [lightningBarEnabled, setLightningBarEnabled] = useState(() => readLightningBarFlag());
+  const lightningBarEnabled = true;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentTimeSecRef = useRef(0);
   const activeLineRef = useRef<{ text: string; lineIndex: number; sectionLabel: string | null } | null>(null);
-
-  useEffect(() => {
-    const syncFromGlobal = () => {
-      setLightningBarEnabled(Boolean((window as any).__LYRIC_DANCE_LIGHTNING_BAR));
-    };
-
-    syncFromGlobal();
-    window.addEventListener(LIGHTNING_BAR_FLAG_EVENT, syncFromGlobal as EventListener);
-    return () => {
-      window.removeEventListener(LIGHTNING_BAR_FLAG_EVENT, syncFromGlobal as EventListener);
-    };
-  }, []);
 
   useEffect(() => {
     if (prefetchedData) {
