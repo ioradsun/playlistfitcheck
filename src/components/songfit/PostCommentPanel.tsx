@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -109,41 +109,6 @@ export function PostCommentPanel({
   const [sessionCommentReacted, setSessionCommentReacted] = useState<
     Set<string>
   >(new Set());
-
-  // ── Panel comment input state ──
-  const [text, setText] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = useCallback(async () => {
-    const content = text.trim();
-    if (!content || !user || submitting) return;
-    setSubmitting(true);
-    const optimistic: Comment = {
-      id: `optimistic-${Date.now()}`,
-      content,
-      created_at: new Date().toISOString(),
-      user_id: user.id,
-      parent_comment_id: null,
-      profiles: { display_name: user.email ?? null, avatar_url: null },
-      replies: [],
-    };
-    setComments((prev) => [...prev, optimistic]);
-    setText("");
-    try {
-      await supabase
-        .from("songfit_comments")
-        .insert({
-          post_id: postId,
-          user_id: user.id,
-          content,
-          parent_comment_id: null,
-        });
-    } catch {
-      // silent
-    } finally {
-      setSubmitting(false);
-    }
-  }, [text, user, submitting, postId]);
 
   useEffect(() => {
     if (!isOpen || !postId) return;
@@ -355,12 +320,13 @@ export function PostCommentPanel({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
-            className="absolute inset-x-0 bottom-0 flex flex-col pointer-events-auto overflow-hidden"
+            className="absolute inset-x-0 flex flex-col pointer-events-auto overflow-hidden"
             onClick={(e) => e.stopPropagation()}
             style={{
               background: "rgba(10,10,10,0.97)",
               backdropFilter: "blur(12px)",
-              maxHeight: "62%",
+              top: 0,
+              bottom: 48,
               borderTop: "0.5px solid rgba(255,255,255,0.06)",
             }}
           >
@@ -379,138 +345,41 @@ export function PostCommentPanel({
               )}
             </div>
 
-            {/* ── Bottom comment bar — matches ReactionPanel ── */}
-            <div
-              style={{
-                flexShrink: 0,
-                borderTop: "0.5px solid rgba(255,255,255,0.06)",
-                background: "#0a0a0a",
-                padding: "8px 12px",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  background: "rgba(255,255,255,0.05)",
-                  border: "0.5px solid rgba(255,255,255,0.09)",
-                  borderRadius: 20,
-                  padding: "7px 14px",
-                  minWidth: 0,
-                }}
-              >
-                <input
-                  type="text"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleSubmit();
-                    }
-                  }}
-                  placeholder="why did this hit?"
-                  style={{
-                    flex: 1,
-                    background: "transparent",
-                    border: "none",
-                    outline: "none",
-                    fontSize: 13,
-                    color: "rgba(255,255,255,0.75)",
-                    fontFamily: "inherit",
-                    minWidth: 0,
-                  }}
-                />
-                {text.trim().length > 0 && (
-                  <button
-                    onClick={handleSubmit}
-                    style={{
-                      fontSize: 9,
-                      fontFamily: "monospace",
-                      color: "rgba(255,255,255,0.5)",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      letterSpacing: "0.1em",
-                      flexShrink: 0,
-                    }}
-                  >
-                    post
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={onClose}
-                style={{
-                  flexShrink: 0,
-                  width: 36,
-                  height: 36,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "rgba(255,255,255,0.3)",
-                  borderRadius: 8,
-                }}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                >
-                  <line x1="2" y1="2" x2="12" y2="12" />
-                  <line x1="12" y1="2" x2="2" y2="12" />
-                </svg>
-              </button>
-            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Caption + CardBottomBar — visible when panel closed ── */}
-      {!isOpen && (
-        <div className="pointer-events-auto relative z-[10]">
-          {caption && caption.trim() && (
-            <div className="px-3 pt-1.5 pb-1" style={{ background: "#0a0a0a" }}>
-              <p className="text-[13px] leading-snug text-white/50 line-clamp-2">
-                {caption}
-              </p>
-            </div>
-          )}
-          <CardBottomBar
-            variant={variant === "reels" ? "fullscreen" : "embedded"}
-            onOpenReactions={onOpen ?? (() => {})}
-            onClose={onClose}
-            panelOpen={false}
-            hasFired={hasFired}
-            onFireTap={() => {
-              if (!hasFired) {
-                setHasFired(true);
-                setTotalFireCount((c) => c + 1);
-                setLastFiredAt(new Date().toISOString());
-                if (postId) {
-                  logEngagementEvent(postId, user?.id ?? sessionId, "fire");
-                }
+      {/* ── Caption + CardBottomBar ── */}
+      <div className="pointer-events-auto relative z-[10]">
+        {!isOpen && caption && caption.trim() && (
+          <div className="px-3 pt-1.5 pb-1" style={{ background: "#0a0a0a" }}>
+            <p className="text-[13px] leading-snug text-white/50 line-clamp-2">
+              {caption}
+            </p>
+          </div>
+        )}
+        <CardBottomBar
+          variant={variant === "reels" ? "fullscreen" : "embedded"}
+          onOpenReactions={onOpen ?? (() => {})}
+          onClose={onClose}
+          panelOpen={isOpen}
+          hasFired={hasFired}
+          onFireTap={() => {
+            if (!hasFired) {
+              setHasFired(true);
+              setTotalFireCount((c) => c + 1);
+              setLastFiredAt(new Date().toISOString());
+              if (postId) {
+                logEngagementEvent(postId, user?.id ?? sessionId, "fire");
               }
-            }}
-            accent={accent}
-            isLive={cardState === "active"}
-            totalFireCount={totalFireCount}
-            lastFiredAt={lastFiredAt}
-          />
-        </div>
-      )}
+            }
+          }}
+          accent={accent}
+          isLive={cardState === "active"}
+          totalFireCount={totalFireCount}
+          lastFiredAt={lastFiredAt}
+        />
+      </div>
     </div>
   );
 }
