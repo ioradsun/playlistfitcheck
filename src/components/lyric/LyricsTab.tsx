@@ -19,6 +19,7 @@ import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { ReactNode } from "react";
 import { AuthNudge } from "@/components/ui/AuthNudge";
 import { persistQueue } from "@/lib/persistQueue";
+import { buildPhrases } from "@/lib/phraseEngine";
 
 const MAX_RAW_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 const MAX_TRANSCRIBE_ATTEMPTS = 2;
@@ -49,6 +50,22 @@ interface TranscriptCacheEntry {
   fingerprint: string;
   result: any;
   ts: number;
+}
+
+/** Convert Scribe word timestamps to phrase-engine lines. Falls back to raw segments. */
+function wordsToLines(
+  words: Array<{ word: string; start: number; end: number }> | null | undefined,
+  fallbackLines: LyricLine[],
+): LyricLine[] {
+  if (!words?.length) return fallbackLines;
+  const result = buildPhrases(words);
+  if (!result.phrases.length) return fallbackLines;
+  return result.phrases.map((p) => ({
+    start: p.start,
+    end: p.end,
+    text: p.text,
+    tag: "main" as const,
+  }));
 }
 
 function readTranscriptCache(): TranscriptCacheEntry[] {
@@ -222,15 +239,16 @@ export function LyricsTab({
         const cached: any = null; // getCachedTranscript(fingerprint);
         if (cached && cached.lines?.length > 0) {
           // Cache hit — skip the edge function entirely
+          const phraseLines = wordsToLines(cached.words, cached.lines);
           const newLyricData: LyricData = {
             title: resolveProjectTitle(cached.title, file.name),
             artist: cached.artist || undefined,
-            lines: cached.lines,
+            lines: phraseLines,
             hooks: cached.hooks,
             metadata: cached.metadata,
           };
           setLyricData(newLyricData);
-          setLines(cached.lines);
+          setLines(phraseLines);
           setWords?.(cached.words ?? null);
           setAudioFile(file);
           setHasRealAudio(true);
@@ -247,7 +265,7 @@ export function LyricsTab({
               payload: {
                 user_id: user?.id,
                 title: resolveProjectTitle(cached.title, file.name),
-                lines: cached.lines,
+                lines: phraseLines,
                 words: cached.words ?? null,
                 filename: file.name,
               },
@@ -336,9 +354,9 @@ export function LyricsTab({
 
         if (data.error) throw new Error(data.error);
         if (!data.lines) throw new Error("Invalid response format");
+        const phraseLines = wordsToLines(data.words, data.lines);
 
         if (user && projectId) {
-          
           // Non-blocking — don't let DB persist block the UI
           persistQueue.enqueue({
             table: "saved_lyrics",
@@ -346,23 +364,21 @@ export function LyricsTab({
             payload: {
               user_id: user.id,
               title: resolveProjectTitle(data.title, file.name),
-              lines: data.lines,
+              lines: phraseLines,
               words: data.words ?? null,
               filename: file.name,
             },
           });
         }
-
-        
         const newLyricData: LyricData = {
           title: resolveProjectTitle(data.title, file.name),
           artist: data.artist || undefined,
-          lines: data.lines,
+          lines: phraseLines,
           hooks: data.hooks,
           metadata: data.metadata,
         };
         setLyricData(newLyricData);
-        setLines(data.lines);
+        setLines(phraseLines);
         setWords?.(data.words ?? null);
         setAudioFile(file);
         setHasRealAudio(true);
@@ -371,7 +387,7 @@ export function LyricsTab({
 
         // Cache the transcription for re-uploads of the same file
         setCachedTranscript(fingerprint, {
-          lines: data.lines,
+          lines: phraseLines,
           words: data.words ?? null,
           title: data.title,
           artist: data.artist,
