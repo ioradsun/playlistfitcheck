@@ -342,13 +342,26 @@ export function LyricDisplay({
   const clipProgressRafRef = useRef<number | null>(null);
   const loopRegionRef = useRef<{ start: number; end: number } | null>(null);
 
+  const initialLines: LyricLine[] = (() => {
+    if (words?.length) {
+      const result = buildPhrases(words);
+      return result.phrases.map((p) => ({
+        start: p.start,
+        end: p.end,
+        text: p.text,
+        tag: "main" as const,
+      }));
+    }
+    return data.lines;
+  })();
+
   // Version state
   const [activeVersion, setActiveVersion] = useState<ActiveVersion>("explicit");
-  const [explicitLines, setExplicitLines] = useState<LyricLine[]>(data.lines);
+  const [explicitLines, setExplicitLines] = useState<LyricLine[]>(initialLines);
   const [fmlyLines, setFmlyLines] = useState<LyricLine[] | null>(
     initFmlyLines ?? null,
   );
-  const originalLines = useRef<LyricLine[]>(data.lines);
+  const originalLines = useRef<LyricLine[]>(initialLines);
   const [fmlyReport, setFmlyReport] = useState<ProfanityReport | null>(null);
 
   // Per-version meta
@@ -445,7 +458,7 @@ export function LyricDisplay({
 
 
   // ── Active lines (format applied) ─────────────────────────────────────────
-  const phrasesSynced = useRef(false);
+  const phrasesSynced = useRef(!!words?.length);
   const wordsSyncKey = useMemo(() => {
     if (!words?.length) return "";
     const first = words[0];
