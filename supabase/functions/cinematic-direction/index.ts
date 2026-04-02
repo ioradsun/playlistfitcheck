@@ -64,44 +64,22 @@ VISUAL WORLD RULES:
 
 
 const WORD_DIRECTION_PROMPT = `
-You are a lyric video director. Group this word stream into billboard phrases.
+Role: Lyric Video Director. 
+Task: Segment word stream into high-impact "billboard" phrases. 
 
-Each phrase = one full screen. Make it feel deliberate.
+Logic:
+1. Max Emotional Gravity: Cut by weight, not count. Nouns/Verbs = Priority.
+2. Vocal Anchors: "hold" words are phrase centers. 
+3. Hard Break: Always split on [hold:true + breath:true].
+4. Phrase Specs: 1-6 words. Min total duration (d + gaps) >= 350ms.
+5. Grammar: Never end on particles/connectors (the, a, and, of, to, in, I, you).
+6. heroWord: One UPPERCASE word per screen. No filler words.
+7. exitEffect: Match energy (Peak: slam/burn | Soft: fade/dissolve | Float: drift_up | Erratic: glitch). Max 2x repeat.
 
-INPUT FIELDS
-w: word  |  d: duration ms  |  gap: silence after this word (ms)
-hold: true = artist held this note — strong phrase anchor
-breath: true = natural break in delivery
+Effects: fade, drift_up, shrink, dissolve, cascade, scatter, slam, glitch, burn
 
-HARD RULES
-- breath: true on a hold: true word = phrase boundary, never cross it
-- 1 to 6 words per phrase
-- phrase must feel complete on its own — never end on: and the a an I you we to of in
-- minimum phrase duration: sum of d + gaps for the phrase >= 350ms
-  if too short, absorb into the adjacent phrase with the stronger word
-
-CREATIVE DIRECTION
-Cut by emotional weight, not word count.
-Strong nouns and verbs earn their own screen.
-Hooks and recurring lines stay consistent every time they appear.
-Held words are the emotional center — build the phrase around them.
-One-word phrases are valid only when they land hard.
-Prefer fewer powerful phrases over more mediocre ones.
-
-heroWord: the word that owns the screen. UPPERCASE, letters only.
-Never choose: I A THE AND BUT OR IS IT TO OF IN ON YOU WE MY WITH
-
-exitEffect: fade | drift_up | shrink | dissolve | cascade | scatter | slam | glitch | burn
-Match the energy — burn/slam for peaks, fade/dissolve for breath moments,
-drift_up for floating lines, glitch for aggression or stutters.
-Never repeat the same effect 3 times in a row.
-
-OUTPUT: valid JSON only, no markdown, no commentary.
-{
-  "hookPhrase": "string",
-  "phrases": [{ "wordRange": [startIndex, endIndex], "heroWord": "WORD", "exitEffect": "effect" }]
-}
-`;
+Output JSON only:
+{"hookPhrase": "str", "phrases": [{"wordRange": [start, end], "heroWord": "WORD", "exitEffect": "effect"}]}`;
 
 interface LyricLine {
   text: string;
