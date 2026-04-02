@@ -13,6 +13,11 @@ interface AiPrompt {
   updated_at: string;
 }
 
+interface ModelPromptConfig {
+  slug: string;
+  label: string;
+}
+
 const MODEL_OPTIONS = [
   { value: "google/gemini-3-flash-preview", label: "Gemini 3 Flash (default)" },
   { value: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
@@ -24,7 +29,14 @@ const MODEL_OPTIONS = [
   { value: "openai/gpt-5.2", label: "GPT-5.2" },
 ];
 
-const MODEL_SLUGS = ["analysis-model", "scene-model", "words-model"];
+const MODEL_PROMPT_CONFIGS: ModelPromptConfig[] = [
+  { slug: "analysis-model", label: "Analysis Model" },
+  { slug: "scene-model", label: "Cinematic Scene Model" },
+  { slug: "words-model", label: "Cinematic Words Model" },
+];
+
+const MODEL_SLUGS = MODEL_PROMPT_CONFIGS.map((config) => config.slug);
+const DEFAULT_MODEL = MODEL_OPTIONS[0].value;
 
 export function AiPromptsEditor() {
   const [prompts, setPrompts] = useState<AiPrompt[]>([]);
@@ -118,21 +130,46 @@ export function AiPromptsEditor() {
     });
   };
 
+  const upsertPromptRow = async (slug: string, prompt: string) => {
+    const fallbackLabel =
+      MODEL_PROMPT_CONFIGS.find((config) => config.slug === slug)?.label ??
+      prompts.find((existing) => existing.slug === slug)?.label ??
+      slug;
+
+    return supabase
+      .from("ai_prompts")
+      .upsert({ slug, label: fallbackLabel, prompt }, { onConflict: "slug" })
+      .select("slug, label, prompt, updated_at")
+      .single();
+  };
+
   const handleModelChange = async (slug: string, value: string) => {
     setSaving(slug);
-    const { error } = await supabase
-      .from("ai_prompts")
-      .update({ prompt: value })
-      .eq("slug", slug);
+    const { data, error } = await upsertPromptRow(slug, value);
 
     if (error) {
       toast.error("Failed to save model");
       console.error(error);
     } else {
       toast.success(`${slug} → ${value}`);
-      setPrompts((prev) =>
-        prev.map((p) => (p.slug === slug ? { ...p, prompt: value, updated_at: new Date().toISOString() } : p))
-      );
+      setPrompts((prev) => {
+        const nextRow = data ?? {
+          slug,
+          label:
+            MODEL_PROMPT_CONFIGS.find((config) => config.slug === slug)?.label ??
+            prompts.find((existing) => existing.slug === slug)?.label ??
+            slug,
+          prompt: value,
+          updated_at: new Date().toISOString(),
+        };
+
+        const existingIndex = prev.findIndex((promptRow) => promptRow.slug === slug);
+        if (existingIndex === -1) {
+          return [...prev, nextRow].sort((a, b) => a.label.localeCompare(b.label));
+        }
+
+        return prev.map((promptRow) => (promptRow.slug === slug ? nextRow : promptRow));
+      });
     }
     setSaving(null);
   };
@@ -147,7 +184,17 @@ export function AiPromptsEditor() {
     );
   }
 
-  const modelPrompts = prompts.filter((p) => MODEL_SLUGS.includes(p.slug));
+  const promptMap = new Map(prompts.map((prompt) => [prompt.slug, prompt]));
+  const analysisFallback = promptMap.get("analysis-model")?.prompt ?? DEFAULT_MODEL;
+  const modelPrompts = MODEL_PROMPT_CONFIGS.map((config) => {
+    const existing = promptMap.get(config.slug);
+    return existing ?? {
+      slug: config.slug,
+      label: config.label,
+      prompt: config.slug === "analysis-model" ? analysisFallback : analysisFallback,
+      updated_at: new Date(0).toISOString(),
+    };
+  });
   const textPrompts = prompts.filter((p) => !MODEL_SLUGS.includes(p.slug));
 
   return (
