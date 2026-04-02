@@ -31,8 +31,8 @@ function formatClock(seconds: number): string {
 }
 
 function getLineEnergy(line: LyricLine): number {
-  if (typeof line.confidence === "number") {
-    return Math.max(0.15, Math.min(line.confidence, 1));
+  if (typeof (line as any).confidence === "number") {
+    return Math.max(0.15, Math.min((line as any).confidence, 1));
   }
   const words = line.text.split(/\s+/).filter(Boolean).length;
   const duration = Math.max(line.end - line.start, 0.5);
