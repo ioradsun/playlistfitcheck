@@ -1163,7 +1163,7 @@ export function useLyricPipeline({
                 sceneDirection: enrichedScene,
                 words: words ?? undefined,
               },
-              45_000,
+              120_000,
             );
 
             if (wordResult?.cinematicDirection) {
