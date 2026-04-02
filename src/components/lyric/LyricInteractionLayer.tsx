@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
-import type { CanonicalAudioSection } from "@/components/lyric/ReactionPanel";
+import { useEffect, useMemo, useState } from "react";
 import type { LyricSectionLine } from "@/hooks/useLyricSections";
 import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
-import { CardBottomBar } from "@/components/songfit/CardBottomBar";
-import { ReactionPanel } from "@/components/lyric/ReactionPanel";
+import type { Moment } from "@/lib/buildMoments";
+import { MomentFuseStrip } from "@/components/lyric/MomentFuseStrip";
 
 interface LyricInteractionLayerProps {
   variant: "embedded" | "fullscreen";
@@ -18,7 +17,7 @@ interface LyricInteractionLayerProps {
   } | null;
   activeLine?: { text: string; lineIndex: number; sectionLabel: string | null } | null;
   allLines?: LyricSectionLine[];
-  audioSections?: CanonicalAudioSection[];
+  audioSections?: any[];
   phrases?: any[] | null;
   words?: any[] | null;
   beatGrid?: any | null;
@@ -51,75 +50,87 @@ interface LyricInteractionLayerProps {
   externalPanelOpen?: boolean;
   onPanelOpenChange?: (open: boolean) => void;
   source?: "feed" | "shareable" | "embed";
+  moments?: Moment[];
+  cinematicDirection?: any | null;
+}
+
+function deriveMomentFireCounts(
+  reactionData: Record<string, { line: Record<number, number>; total: number }>,
+  moments: Moment[] | undefined,
+): Record<number, number> {
+  if (!moments?.length) return {};
+  const counts: Record<number, number> = {};
+  for (let mi = 0; mi < moments.length; mi += 1) {
+    let total = 0;
+    for (const emojiData of Object.values(reactionData)) {
+      for (const line of moments[mi].lines) {
+        total += emojiData.line[line.lineIndex] ?? 0;
+      }
+    }
+    counts[mi] = total;
+  }
+  return counts;
+}
+
+function deriveSectionColors(cd: any | null | undefined): Record<number, string> {
+  const colors: Record<number, string> = {};
+  const sections = cd?.sections;
+  if (!Array.isArray(sections)) return colors;
+  for (const s of sections) {
+    if (typeof s.sectionIndex === "number" && typeof s.dominantColor === "string") {
+      colors[s.sectionIndex] = s.dominantColor;
+    }
+  }
+  return colors;
 }
 
 export function LyricInteractionLayer({
   variant,
-  danceId,
-  currentMoment,
-  activeLine = null,
-  allLines = [],
-  audioSections = [],
-  phrases = null,
-  words = null,
-  beatGrid = null,
   currentTimeSec = 0,
   durationSec = 0,
-  palette = ["#ffffff", "#ffffff", "#ffffff"],
   accent,
   reactionData = {},
-  onReactionDataChange,
-  empowermentPromise = null,
-  fmlyHookEnabled,
-  refreshKey = 0,
-  isLive = false,
-  hasFired = false,
-  totalFireCount = 0,
-  songEnded = false,
   player = null,
   onFireTap,
   onFireHoldStart,
   onFireHoldEnd,
-  onFireLine,
-  onLineVisible,
-  onReactionFired,
-  onComment,
-  onPause,
-  onResume,
   onSeekTo,
-  onPanelCloseWithPosition,
-  externalPanelOpen,
-  onPanelOpenChange,
+  moments,
+  cinematicDirection,
 }: LyricInteractionLayerProps) {
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [lastBarFireEvent, setLastBarFireEvent] = useState<{ lineIndex: number; ts: number } | null>(null);
-  const [lastBarCommentLineIndex, setLastBarCommentLineIndex] = useState<number | null>(null);
-  const [lastSubmittedComment, setLastSubmittedComment] = useState<{
-    text: string;
-    lineIndex: number | null;
-    ts: number;
-  } | null>(null);
+  const isFullscreen = variant === "fullscreen";
+  const [beatState, setBeatState] = useState({ energy: 0, hit: false });
 
   useEffect(() => {
-    if (externalPanelOpen !== undefined) setPanelOpen(externalPanelOpen);
-  }, [externalPanelOpen]);
+    if (!player) return;
+    const interval = setInterval(() => {
+      const bs = (player as any)._lastBeatState ?? (player as any).lastBeatState;
+      if (!bs) return;
+      setBeatState({
+        energy: bs.energy ?? 0,
+        hit: (bs.hitStrength ?? 0) > 0.3,
+      });
+    }, 50);
+    return () => clearInterval(interval);
+  }, [player]);
 
-  const isFullscreen = variant === "fullscreen";
-  const BAR_H = isFullscreen ? 68 : 48;
-  const panelDisplayMode = isFullscreen ? "fullscreen" : "embedded";
+  const safeMoments = moments ?? [];
+  const currentMomentIdx = useMemo(() => {
+    for (let i = safeMoments.length - 1; i >= 0; i -= 1) {
+      if (currentTimeSec >= safeMoments[i].startSec - 0.1) return i;
+    }
+    return 0;
+  }, [safeMoments, currentTimeSec]);
 
-  const openPanel = () => {
-    setPanelOpen(true);
-    onPanelOpenChange?.(true);
-  };
-
-  const closePanel = () => {
-    const lastTime = player?.audio?.currentTime ?? null;
-    player?.setRegion(undefined, undefined);
-    onPanelCloseWithPosition?.(lastTime);
-    setPanelOpen(false);
-    onPanelOpenChange?.(false);
-  };
+  const sectionColors = useMemo(() => deriveSectionColors(cinematicDirection), [cinematicDirection]);
+  const momentFireCounts = useMemo(
+    () => deriveMomentFireCounts(reactionData, safeMoments),
+    [reactionData, safeMoments],
+  );
+  const totalFires = useMemo(
+    () => Object.values(reactionData).reduce((s, d) => s + d.total, 0),
+    [reactionData],
+  );
 
   return (
     <div
@@ -132,7 +143,7 @@ export function LyricInteractionLayer({
               left: 0,
               right: 0,
               zIndex: 80,
-              background: "transparent",
+              background: "linear-gradient(180deg, rgba(10,10,10,0), rgba(10,10,10,0.9) 34%)",
               display: "flex",
               justifyContent: "center",
               paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -140,71 +151,38 @@ export function LyricInteractionLayer({
           : {}),
       }}
     >
-      <ReactionPanel
-        displayMode={panelDisplayMode}
-        isOpen={panelOpen}
-        onClose={closePanel}
-        onCloseWithPosition={() => {
-          onResume?.();
-        }}
-        bottomOffset={BAR_H}
-        refreshKey={refreshKey}
-        danceId={danceId}
-        activeLine={activeLine}
-        allLines={allLines}
-        audioSections={audioSections as any}
-        phrases={phrases as any}
-        words={words as any}
-        beatGrid={beatGrid as any}
-        currentTimeSec={currentTimeSec}
-        palette={palette}
-        onSeekTo={(sec) => onSeekTo?.(sec)}
-        player={player}
-        durationSec={durationSec}
-        reactionData={reactionData}
-        onReactionDataChange={(data) => onReactionDataChange?.(data)}
-        onReactionFired={(emoji) => onReactionFired?.(emoji)}
-        onPause={onPause}
-        onResume={onResume}
-        onFireLine={onFireLine}
-        onLineVisible={onLineVisible}
-        empowermentPromise={empowermentPromise}
-        fmlyHookEnabled={fmlyHookEnabled}
-        lastBarFireEvent={lastBarFireEvent}
-        lastBarCommentLineIndex={lastBarCommentLineIndex}
-        onCommentSubmitted={lastSubmittedComment}
-      />
-      <CardBottomBar
-        variant={variant}
-        panelOpen={panelOpen}
-        onOpenReactions={openPanel}
-        onClose={closePanel}
-        currentMoment={currentMoment}
-        onFireTap={() => {
-          onFireTap?.();
-          const li = activeLine?.lineIndex ?? null;
-          if (li != null) setLastBarFireEvent({ lineIndex: li, ts: Date.now() });
-        }}
-        onFireHoldStart={onFireHoldStart}
-        onFireHoldEnd={(holdMs) => {
-          onFireHoldEnd?.(holdMs);
-          const li = activeLine?.lineIndex ?? null;
-          if (li != null) setLastBarFireEvent({ lineIndex: li, ts: Date.now() });
-        }}
-        onComment={(text) => {
-          const li = activeLine?.lineIndex ?? null;
-          setLastBarCommentLineIndex(li);
-          setLastSubmittedComment({ text, lineIndex: li, ts: Date.now() });
-          onComment?.(text, currentMoment?.index ?? null);
-        }}
-        onPauseForInput={onPause}
-        onResumeAfterInput={onResume}
-        accent={accent}
-        hasFired={hasFired}
-        isLive={isLive}
-        totalFireCount={totalFireCount}
-        songEnded={songEnded}
-      />
+      <div style={{ width: "min(680px, 100%)" }}>
+        <MomentFuseStrip
+          moments={safeMoments}
+          currentTimeSec={currentTimeSec}
+          durationSec={durationSec}
+          momentFireCounts={momentFireCounts}
+          totalFires={totalFires}
+          beatEnergy={beatState.energy}
+          beatHit={beatState.hit}
+          onSeekToMoment={(idx) => {
+            const m = safeMoments[idx];
+            if (m) onSeekTo?.(m.startSec);
+          }}
+          onFireTap={() => {
+            onFireTap?.();
+          }}
+          onFireHoldStart={onFireHoldStart}
+          onFireHoldEnd={onFireHoldEnd}
+          onPrevMoment={() => {
+            const prevIdx = Math.max(0, currentMomentIdx - 1);
+            const m = safeMoments[prevIdx];
+            if (m) onSeekTo?.(m.startSec);
+          }}
+          onNextMoment={() => {
+            const nextIdx = Math.min(Math.max(0, safeMoments.length - 1), currentMomentIdx + 1);
+            const m = safeMoments[nextIdx];
+            if (m) onSeekTo?.(m.startSec);
+          }}
+          sectionColors={sectionColors}
+          accent={accent}
+        />
+      </div>
     </div>
   );
 }
