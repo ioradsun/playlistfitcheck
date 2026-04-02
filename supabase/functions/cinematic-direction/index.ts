@@ -130,165 +130,43 @@ Return ONLY valid JSON. No markdown. No explanation. Use only the allowed values
 `;
 
 const WORD_DIRECTION_PROMPT = `
-You are the Lyric Assembler. Your job is to group a pre-calculated word
-stream into high-impact billboard phrases for a motion graphics lyric video.
+You are a lyric video director. Group this word stream into billboard phrases.
 
-Each phrase = one full screen.
-You are not making subtitles.
-You are making screen-worthy lyric moments.
+Each phrase = one full screen. Make it feel deliberate.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-INPUT FIELD DEFINITIONS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-w        The word text.
-d        Duration of this word in milliseconds (pre-calculated).
-gap      Silence after this word before the next word starts, in ms.
-hero     Pre-tagged anchor word from the pipeline.
-hold     Word duration >= 600ms. Stretched vowel, beat landing, or held
-         note. Primary heroWord candidate. Natural phrase endpoint.
-breath   Gap after this word >= 400ms. Hard boundary when combined with
-         hold: true. Soft boundary (like pause) otherwise.
+INPUT FIELDS
+w: word  |  d: duration ms  |  gap: silence after this word (ms)
+hold: true = artist held this note — strong phrase anchor
+breath: true = natural break in delivery
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-RULE PRIORITY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. breath: true on a hold: true word   — hard boundary, never cross
-2. minimum phrase duration >= 350ms
-3. billboard validity
-4. maximum 6 words per phrase
-5. preserve lyric order and anchor integrity
-6. repair readability
-7. assign exit variety
+HARD RULES
+- breath: true on a hold: true word = phrase boundary, never cross it
+- 1 to 6 words per phrase
+- phrase must feel complete on its own — never end on: and the a an I you we to of in
+- minimum phrase duration: sum of d + gaps for the phrase >= 350ms
+  if too short, absorb into the adjacent phrase with the stronger word
 
-Never violate a higher-priority rule to satisfy a lower-priority one.
+CREATIVE DIRECTION
+Cut by emotional weight, not word count.
+Strong nouns and verbs earn their own screen.
+Hooks and recurring lines stay consistent every time they appear.
+Held words are the emotional center — build the phrase around them.
+One-word phrases are valid only when they land hard.
+Prefer fewer powerful phrases over more mediocre ones.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHRASE DURATION CALCULATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Phrase duration = sum of all d values + sum of all gap values for words
-in the phrase, minus the final trailing gap.
+heroWord: the word that owns the screen. UPPERCASE, letters only.
+Never choose: I A THE AND BUT OR IS IT TO OF IN ON YOU WE MY WITH
 
-A phrase is valid only if its duration >= 350ms.
+exitEffect: fade | drift_up | shrink | dissolve | cascade | scatter | slam | glitch | burn
+Match the energy — burn/slam for peaks, fade/dissolve for breath moments,
+drift_up for floating lines, glitch for aggression or stutters.
+Never repeat the same effect 3 times in a row.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BILLBOARD VALIDITY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-A phrase must stand alone on screen and feel complete, intentional,
-readable, emotionally coherent, and worth showing.
-
-Core test: if this phrase appeared alone on a giant billboard, would
-it feel deliberate? If no, repair it.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CUTTING PHILOSOPHY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Cut by emotional thought, not word count alone.
-Prefer fewer strong phrases over more weak ones.
-Do not over-fragment strong thoughts into weak pieces.
-
-Prioritize: hook lines, recurring lines, title-energy phrases, vivid
-image phrases, emotionally loaded words, strong nouns and verbs.
-
-Deprioritize: filler, glue words, weak pronouns, seam leftovers,
-broken stutters, ASR transcript debris.
-
-Phrase length tendency:
-- hook phrases: 1–4 words
-- narrative phrases: 3–6 words
-- tag / response phrases: 1–3 words
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PROCESS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PASS 1 — CUT
-Group the stream into candidate phrases using:
-- breath boundaries (hard when hold: true, soft otherwise)
-- hold words as natural phrase endpoints
-- spoken emotional thought
-- hook recurrence and anchor strength
-
-PASS 2 — REPAIR (apply in this exact order)
-
-Step 1 — Duration repair:
-  Compute phrase duration. If < 350ms:
-  A. Merge forward — if combined <= 6 words and no hard boundary between.
-     Prefer when forward phrase is weaker or shorter.
-  B. Merge backward — if combined <= 6 words and no hard boundary between.
-     Prefer when forward merge would destroy a strong phrase.
-  C. Keep as-is only if hard boundaries block both AND 6-word limit
-     prevents merge in either direction.
-     Forced exception: exitEffect "slam" if word is strong, "fade" if weak.
-
-Step 2 — Billboard validity repair:
-  Confirm billboard test. Merge or recut until it passes.
-
-Step 3 — Weak connector repair:
-  Never end on: I you we they he she it and but or so because if when
-  while that the a an in on at to for of with from my your
-  Merge forward if possible, else backward, else keep if hard boundary forces.
-
-Step 4 — Readability repair:
-  If too short to read at display speed, merge forward then backward.
-  Never exceed 6 words or cross a hard boundary.
-
-Step 5 — Seam and stutter repair:
-  Chorus seam: start repeated lines cleanly from their own beginning.
-  Stutter grouping: group consecutive word repeats into one phrase.
-
-PASS 3 — ASSIGN
-
-heroWord selection priority:
-  1. Strongest hold: true word that is a strong noun or verb
-  2. Strongest hero: true word
-  3. Strongest recurring hook word
-  4. Strongest noun or verb
-  5. Strongest emotional adjective
-  Formatting: UPPERCASE, letters only, no punctuation.
-  Never choose: I A THE AND BUT OR IS IT TO OF IN ON THAT YOU WE ME
-  HE SHE THEY MY YOUR WITH FROM SO AT BE AS AN BY DO
-
-exitEffect:
-  Allowed: "fade" | "drift_up" | "shrink" | "dissolve" | "cascade" |
-           "scatter" | "slam" | "glitch" | "burn"
-  - soft / aching / reflective      → fade, dissolve, drift_up
-  - rhythmic / controlled            → cascade, shrink
-  - aggressive / impact-heavy        → slam, scatter, glitch
-  - peak hook / hardest emotion      → burn, slam
-  - hold word landing alone          → slam or burn
-  - dreamy / floating                → drift_up, dissolve
-  Never repeat same effect 3 phrases in a row.
-  Repeated hook returns reuse same effect pattern.
-  Outro phrases prefer fade, drift_up, dissolve.
-
-hookPhrase: single phrase most worthy of billboard treatment.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ASR NOISE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Never invent corrections. Keep original words. Cut the strongest
-readable phrase possible from the provided wording.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OUTPUT FORMAT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Return exactly one valid JSON object. No markdown. No commentary.
-
+OUTPUT: valid JSON only, no markdown, no commentary.
 {
   "hookPhrase": "string",
-  "phrases": [
-    {
-      "wordRange": [startIndex, endIndex],
-      "heroWord": "WORD",
-      "exitEffect": "effect_name"
-    }
-  ]
+  "phrases": [{ "wordRange": [startIndex, endIndex], "heroWord": "WORD", "exitEffect": "effect" }]
 }
-
-Every phrase: 1–6 words, passes billboard validity, duration >= 350ms
-unless hard boundaries block merging in both directions.
-heroWord must not be a filler or weak function word.
-exitEffect must be one of the nine allowed values.
 `;
 
 interface LyricLine {
@@ -689,7 +567,10 @@ function fillPhraseGaps(
     const [start, end] = phrase.wordRange;
     // Fill gap before this phrase
     if (start > nextExpected) {
-      result.push({ wordRange: [nextExpected, start - 1] });
+      // Only fill if the gap indices are within the valid word count
+      if (nextExpected < totalWords) {
+        result.push({ wordRange: [nextExpected, start - 1] });
+      }
     }
     result.push(phrase);
     nextExpected = end + 1;
@@ -868,7 +749,32 @@ function buildWordUserMessage(
   if (words && words.length > 0) {
     msg += `WORD STREAM — one JSON object per line. Index = position in array.\n\n`;
 
+    // Pre-pass: detect Whisper timestamp collapse
+    // Words with d < 10ms OR consecutive words sharing the same start time
+    // are alignment failures — mark as adlib, exclude from phrase stream
+    const COLLAPSE_MS = 10;
+    const isCollapsed = new Uint8Array(words.length);
+
+    for (let i = 0; i < words.length; i++) {
+      const d = Math.round((words[i].end - words[i].start) * 1000);
+      if (d < COLLAPSE_MS) {
+        isCollapsed[i] = 1;
+        continue;
+      }
+      // Detect run: 2+ consecutive words with identical start time
+      if (i < words.length - 1) {
+        const nextStart = Math.round(words[i + 1].start * 1000);
+        const thisStart = Math.round(words[i].start * 1000);
+        if (Math.abs(nextStart - thisStart) < COLLAPSE_MS) {
+          isCollapsed[i] = 1;
+          isCollapsed[i + 1] = 1;
+        }
+      }
+    }
+
     for (let wi = 0; wi < words.length; wi++) {
+      if (isCollapsed[wi]) continue;
+
       const w = words[wi];
       const d = Math.round((w.end - w.start) * 1000);
       const gap = wi < words.length - 1
