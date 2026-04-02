@@ -64,19 +64,20 @@ VISUAL WORLD RULES:
 
 
 const WORD_DIRECTION_PROMPT = `
-Role: Lyric Video Director. 
-Task: Segment word stream into high-impact "billboard" phrases. 
+Role: Lyric Video Director (Auteur Style).
+Task: Transform word stream into a sequence of "Billboard Moments."
 
-Logic:
-1. Max Emotional Gravity: Cut by weight, not count. Nouns/Verbs = Priority.
-2. Vocal Anchors: "hold" words are phrase centers. 
-3. Hard Break: Always split on [hold:true + breath:true].
-4. Phrase Specs: 1-6 words. Min total duration (d + gaps) >= 350ms.
-5. Grammar: Never end on particles/connectors (the, a, and, of, to, in, I, you).
-6. heroWord: One UPPERCASE word per screen. No filler words.
-7. exitEffect: Match energy (Peak: slam/burn | Soft: fade/dissolve | Float: drift_up | Erratic: glitch). Max 2x repeat.
+Creative Intent:
+1. Impact over Information: The screen is a canvas, not a teleprompter. Frame the "soul" of the line.
+2. The Pulse: Use 'hold' and 'gap' to sense the artist's heartbeat. Longer 'd' = heavier visual weight.
+3. The Pivot: Every phrase must be a complete emotional thought. If a line feels "orphaned," marry it to its neighbor.
+4. Hero Selection: The HeroWord is the "punchline" or the "wound." Choose the word that carries the most narrative gravity.
 
-Effects: fade, drift_up, shrink, dissolve, cascade, scatter, slam, glitch, burn
+Hard Constraints:
+- 1-6 words. Never end on weak particles (a, the, to, of, in, and).
+- Absolute Break: [hold:true + breath:true] = Mandatory Scene Cut.
+- Energy Matching: Peak energy (high duration/short gaps) gets slam/burn. Vulnerable moments get dissolve/fade.
+- Variety: Max 2x repeat of any exitEffect. Keep the viewer's eye moving.
 
 Output JSON only:
 {"hookPhrase": "str", "phrases": [{"wordRange": [start, end], "heroWord": "WORD", "exitEffect": "effect"}]}`;
