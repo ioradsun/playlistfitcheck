@@ -6,6 +6,7 @@ import {
   type SectionRole,
   type TimestampedLine,
 } from "@/engine/sectionDetector";
+import { buildPhrases } from "@/lib/phraseEngine";
 import type { SongSignature } from "@/lib/songSignatureAnalyzer";
 import type { CinematicDirection } from "@/types/CinematicDirection";
 
@@ -33,67 +34,7 @@ export interface UseLyricSectionsResult {
   isReady: boolean;
 }
 
-const GAP_THRESHOLD_SEC = 0.4;
-const MAX_WORDS_PER_LINE = 6;
-const END_TRAIL_SEC = 0.15;
-const LINE_END_BUFFER_SEC = 0.05;
-
-type WordTiming = { word: string; start: number; end: number };
 type BeatGrid = { bpm: number; beats: number[]; confidence: number };
-
-function deriveLines(words: WordTiming[]): LyricSectionLine[] {
-  if (!words.length) return [];
-
-  const lineGroups: WordTiming[][] = [];
-  let currentGroup: WordTiming[] = [];
-
-  for (let i = 0; i < words.length; i += 1) {
-    const current = words[i];
-    const previous = words[i - 1];
-
-    if (!currentGroup.length) {
-      currentGroup.push(current);
-      continue;
-    }
-
-    const gapSec = previous ? current.start - previous.end : 0;
-    const shouldBreakByGap = gapSec > GAP_THRESHOLD_SEC;
-    const shouldBreakByCount = currentGroup.length >= MAX_WORDS_PER_LINE;
-
-    if (shouldBreakByGap || shouldBreakByCount) {
-      lineGroups.push(currentGroup);
-      currentGroup = [current];
-      continue;
-    }
-
-    currentGroup.push(current);
-  }
-
-  if (currentGroup.length) {
-    lineGroups.push(currentGroup);
-  }
-
-  const lines = lineGroups.map((group, index) => {
-    const first = group[0];
-    const last = group[group.length - 1];
-    return {
-      lineIndex: index,
-      text: group.map((w) => w.word).join(" "),
-      startSec: first.start,
-      endSec: last.end + END_TRAIL_SEC,
-    };
-  });
-
-  for (let i = 0; i < lines.length - 1; i += 1) {
-    const nextStart = lines[i + 1].startSec;
-    const maxAllowedEnd = nextStart - LINE_END_BUFFER_SEC;
-    if (lines[i].endSec > maxAllowedEnd) {
-      lines[i].endSec = Math.max(lines[i].startSec, maxAllowedEnd);
-    }
-  }
-
-  return lines;
-}
 
 function computeConfidence(section: AudioSection): number {
   let c = 0;
@@ -145,7 +86,13 @@ export function useLyricSections(
       return { sections: [], allLines: [], isReady: false };
     }
 
-    const allLines = deriveLines(words);
+    const phraseResult = buildPhrases(words);
+    const allLines: LyricSectionLine[] = phraseResult.phrases.map((p, index) => ({
+      lineIndex: index,
+      text: p.text,
+      startSec: p.start,
+      endSec: p.end,
+    }));
 
     const timestampedLines: TimestampedLine[] = allLines.map((line) => ({
       text: line.text,
