@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Moment } from "@/lib/buildMoments";
+import { deriveMomentFireCounts } from "@/lib/momentUtils";
 
 interface LyricInteractionLayerProps {
   variant: "embedded" | "fullscreen";
@@ -260,17 +261,7 @@ export function LyricInteractionLayer({
     : 0;
 
   const momentFireCounts = useMemo(() => {
-    const counts: Record<number, number> = {};
-    for (let i = 0; i < safeMoments.length; i += 1) {
-      let total = 0;
-      for (const emojiData of Object.values(reactionData)) {
-        for (const line of safeMoments[i].lines) {
-          total += emojiData.line[line.lineIndex] ?? 0;
-        }
-      }
-      counts[i] = total;
-    }
-    return counts;
+    return deriveMomentFireCounts(reactionData, safeMoments);
   }, [safeMoments, reactionData]);
 
   const maxFireCount = Math.max(1, ...Object.values(momentFireCounts));

@@ -65,6 +65,11 @@ export function ClosingScreen({
     return maxIdx;
   }, [moments, momentFireCounts]);
 
+  const maxMomentFires = useMemo(
+    () => Math.max(1, ...Object.values(momentFireCounts ?? {})),
+    [momentFireCounts],
+  );
+
   useEffect(() => {
     if (visible && moments?.length) {
       onSeekToMoment?.(hottestMomentIdx);
@@ -165,14 +170,13 @@ export function ClosingScreen({
             <div style={{ display: "flex", gap: 2, alignItems: "center", width: "100%" }}>
               {moments.map((moment, index) => {
                 const fires = momentFireCounts?.[index] ?? 0;
-                const maxFires = Math.max(1, ...Object.values(momentFireCounts ?? {}));
-                const heat = fires / maxFires;
+                const heat = fires / maxMomentFires;
                 const isHottest = index === hottestMomentIdx;
                 const flex = Math.max(1, moment.endSec - moment.startSec);
 
-                const r = Math.round(100 + heat * 140);
-                const g = Math.round(50 + heat * 100);
-                const b = Math.round(10 + heat * 10);
+                const r = Math.round(160 + heat * 80);
+                const g = Math.round(90 + heat * 60);
+                const b = 20;
                 const opacity = 0.15 + heat * 0.7;
 
                 return (
