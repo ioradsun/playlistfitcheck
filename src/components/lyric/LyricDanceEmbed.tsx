@@ -14,6 +14,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImper
 import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { toast } from "sonner";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReelsGestureLayer } from "./ReelsGestureLayer";
@@ -21,6 +22,7 @@ import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
+import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { isAudioUnlocked, onAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -543,6 +545,17 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           onAnswer={() => setClosingAnswered(true)}
           onReplay={dismissClosingAndReplay}
           source="feed"
+          moments={moments}
+          momentFireCounts={deriveMomentFireCounts(reactionData, moments)}
+          onSeekToMoment={(idx) => {
+            const m = moments[idx];
+            if (m) player?.seek(m.startSec);
+          }}
+          onShareClip={(momentIdx, caption) => {
+            void momentIdx;
+            navigator.clipboard.writeText(caption);
+            toast.success("Caption copied — clip export coming soon");
+          }}
         />
 
         {!isBattleMode && (
