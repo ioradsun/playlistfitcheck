@@ -178,7 +178,6 @@ export default function ShareableHook() {
             battleId={hook.battle_id}
             battleUrl={`/${artistSlug}/${songSlug}/${hookSlug}`}
             songTitle={songDisplayName}
-            showExpandButton={false}
             showSplitCover={false}
           />
         </div>
@@ -220,7 +219,6 @@ export default function ShareableHook() {
           prefetchedData={danceData}
           regionStart={hook.hook_start}
           regionEnd={hook.hook_end}
-          showExpandButton={false}
         />
       </div>
     </div>

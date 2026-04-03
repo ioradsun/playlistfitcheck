@@ -39,7 +39,7 @@ import { FinaleEffect } from "@/engine/FinaleEffect";
 import { ExitEffect } from '@/engine/ExitEffect';
 import { HeroSmokeEffect } from '@/engine/HeroSmokeEffect';
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
-import { preloadImage } from "@/lib/imagePreloadCache";
+import { preloadImage, getPreloadedImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
 import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
 import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalette";
@@ -1725,9 +1725,6 @@ export class LyricDancePlayer {
   // Health monitor + adaptive quality
   private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
   private frameCount = 0;
-  /** When true, engine is playing behind a cover — throttle to half frame rate,
-   *  skip particles and camera movement, skip beat reactivity. */
-  private _coverMode = false;
   private currentTSec = 0;
 
   // ═══ Adaptive Quality Tier ═══
@@ -2147,15 +2144,30 @@ export class LyricDancePlayer {
   private drawMinimalFirstFrame(): void {
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
-    // ── SOLID BLACK only ────────────────────────────────────────────────────
-    // Previously drew a palette[1] gradient here which bled through the
-    // rgba(0,0,0,0.72) cover overlay, causing a visible purple/tinted flash.
-    // The cover overlay sits on top — there is NO reason to show palette colors
-    // beneath it. Just black, always, until the cover is dismissed and the
-    // real frame pipeline fires.
+
     const isLight = this.themeOverride === 'light';
     this.ctx.fillStyle = isLight ? '#f5f5f5' : '#0a0a0a';
     this.ctx.fillRect(0, 0, this.width, this.height);
+
+    // Preview image: show the first section image or album art while scene compiles.
+    // The feed prefetches section images (useFeedPosts → preloadImage). If cached,
+    // draw it now so the card isn't a black rectangle during the compilation gap.
+    const previewUrl =
+      this.data?.section_images?.[0]
+      ?? this.data?.cover_image_url
+      ?? (this.data as any)?.album_art_url
+      ?? null;
+
+    if (previewUrl) {
+      const img = getPreloadedImage(previewUrl);
+      if (img && img.naturalWidth > 0) {
+        this._drawImageCoverCropped(this.ctx, img, 0, 0, this.width, this.height);
+        // Dark scrim for text readability when real frames take over
+        this.ctx.fillStyle = isLight ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.55)';
+        this.ctx.fillRect(0, 0, this.width, this.height);
+      }
+    }
+
     this.perfMarks.tFirstFrameDrawn = this.perfMarks.tFirstFrameDrawn ?? performance.now();
     this.markFirstPaintOnce();
   }
@@ -2573,11 +2585,6 @@ export class LyricDancePlayer {
     if (!muted) this.audio.play().catch(() => {});
   }
 
-  /** Toggle cover preview mode. When on: half frame rate, no particles, no camera. */
-  setCoverMode(enabled: boolean): void {
-    this._coverMode = enabled;
-  }
-
   /** Set vertical text bias in canvas pixels — shifts text up to account for bottom overlays (playbar, battle bar). */
   setTextVerticalBias(px: number): void {
     this._textVerticalBias = px;
@@ -2744,7 +2751,6 @@ export class LyricDancePlayer {
     if (this.destroyed) return;
     this.destroyed = true;
     this.playing = false;
-    this._coverMode = false;
     this.stopHealthMonitor();
     if (this.rafHandle) {
       cancelAnimationFrame(this.rafHandle);
@@ -2946,13 +2952,6 @@ export class LyricDancePlayer {
       this.rafHandle = 0;
       return;
     }
-    // ── Cover mode: skip every other frame for ~30fps ──
-    if (this._coverMode && this.frameCount % 2 !== 0) {
-      this.frameCount++;
-      this.rafHandle = requestAnimationFrame(this.tick);
-      return;
-    }
-
     try {
       // Guard: canvas context may be lost after prolonged backgrounding.
       if (!this.ctx || !this.bgCanvas?.getContext) {
@@ -3053,7 +3052,6 @@ export class LyricDancePlayer {
       const frame = this.evaluateFrame(smoothedTime);
 
       // ═══ V2: Update CameraRig with LOOKAHEAD — anticipate hero words ═══
-      if (!this._coverMode) {
         const vocalActive = frame ? frame.chunks.some((c: any) => c.visible && c.alpha > 0.3) : false;
         const upcoming = this._getUpcomingHero(smoothedTime);
 
@@ -3102,7 +3100,6 @@ export class LyricDancePlayer {
           this.cameraRig.setAmplitudeScale(0);
           this.cameraRig.softReset();
         }
-      }
 
       this.update(deltaMs, smoothedTime, frame, beatState);
       this.draw(smoothedTime, frame);
@@ -3442,7 +3439,7 @@ export class LyricDancePlayer {
 
     const particleBeatIntensity = (beatState?.pulse ?? 0) * (1 + (this._motionProfile?.bgPulseAmplitude ?? 0));
     const beatIntensityClamped = Math.max(0, Math.min(1, particleBeatIntensity));
-    if (!this._coverMode && this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
+    if (this._qualityTier < 3) this.ambientParticleEngine?.update(deltaMs, beatIntensityClamped);
   }
 
   private draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
@@ -3903,11 +3900,9 @@ export class LyricDancePlayer {
     }
 
     // Comment comets — after text, before watermark
-    if (!this._coverMode) {
-      this.drawComments(frameNowSec);
-      // Emoji stream — community reactions rising from bottom-right
-      this.drawEmojiRisers();
-    }
+    this.drawComments(frameNowSec);
+    // Emoji stream — community reactions rising from bottom-right
+    this.drawEmojiRisers();
 
     // ═══ Near-plane particles — Lubezki's envelope ═══
     // Foreground particles (depth >= 0.5) drawn AFTER text.
@@ -3920,7 +3915,7 @@ export class LyricDancePlayer {
     // ═══ Breathing vignette — Fincher's darkness ═══
     // Drawn LAST before UI (watermark/perf) — sits on top of everything.
     // Like a lens: the optics don't exist inside the scene, they shape how you see it.
-    if (!this._coverMode && this._qualityTier < 3) {
+    if (this._qualityTier < 3) {
       this.drawVignette();
     }
 
@@ -4817,7 +4812,7 @@ export class LyricDancePlayer {
 
     // ─── Film grain: derived from active moment-modulated grade ───
     // Skip grain at tier 1+ (overlay composite + putImageData is expensive)
-    if (!this._coverMode && this._qualityTier === 0) {
+    if (this._qualityTier === 0) {
       const grainIntensity = Math.min(0.15, activeGrade.grain.intensity);
       if (grainIntensity > 0.02) {
         this.renderFilmGrain(grainIntensity, activeGrade.grain.size);
