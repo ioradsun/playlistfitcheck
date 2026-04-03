@@ -23,6 +23,7 @@ import { emitFire, fetchFireData } from "@/lib/fire";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
+import { CanvasTopPills } from "@/components/lyric/CanvasTopPills";
 
 function deriveSectionColors(cd: any | null | undefined): Record<number, string> {
   const colors: Record<number, string> = {};
@@ -41,7 +42,13 @@ const ALL_COLUMNS =
   "audio_url,section_images,palette,auto_palettes,album_art_url," +
   "empowerment_promise,beat_grid," +
   "lyrics,words,motion_profile_spec:physics_spec,cinematic_direction," +
-  "scene_context,scene_manifest,system_type,seed,artist_dna";
+  "scene_context,scene_manifest,system_type,seed,artist_dna,spotify_track_id";
+
+function formatTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 interface ProfileInfo {
   display_name: string | null;
@@ -479,6 +486,53 @@ export default function ShareableLyricDance() {
             className="absolute inset-0 w-full h-full pointer-events-none"
             style={{ zIndex: 2 }}
           />
+          <CanvasTopPills
+            spotifyTrackId={(renderData as any)?.spotify_track_id ?? null}
+            leftSlot={(
+              !showCover && playerReady && !isMarketingView
+                ? (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+                      aria-label={muted ? "Unmute" : "Mute"}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        background: "rgba(0,0,0,0.35)",
+                        border: "none",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {muted
+                        ? <VolumeX size={12} style={{ color: "rgba(255,255,255,0.4)" }} />
+                        : <Volume2 size={12} style={{ color: "rgba(255,255,255,0.4)" }} />}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleReplay(); }}
+                      aria-label="Replay"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        background: "rgba(0,0,0,0.35)",
+                        border: "none",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <RotateCcw size={12} style={{ color: "rgba(255,255,255,0.4)" }} />
+                    </button>
+                  </>
+                  )
+                : null
+            )}
+          />
 
           <ClosingScreen
             visible={closingVisible}
@@ -551,12 +605,14 @@ export default function ShareableLyricDance() {
               >
                 <LyricDanceCover
                   songName={coverSongName}
+                  artistName={coverArtist}
+                  avatarUrl={coverAvatarUrl}
                   claimArtistName={renderData?.artist_name ?? ""}
                   claimSongName={renderData?.song_name ?? ""}
                   isMarketingCover={isMarketingView}
                   waiting={false}
                   hideBackground={playerReady}
-                  badge={null}
+                  duration={durationSec > 0 ? formatTime(durationSec) : undefined}
                   onExpand={undefined}
                   onListen={handleListenNow}
                 />
@@ -586,27 +642,12 @@ export default function ShareableLyricDance() {
                       <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={10} /></span>
                     )}
                   </div>
-                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400">
-                    {coverArtist ? `In Studio · ${coverArtist}` : "In Studio"}
+                  <span className="text-[10px] text-white/55 max-w-[45vw] truncate">
+                    {coverArtist || "Artist"}
                   </span>
                 </div>
               ) : <span />}
-              <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5">
-                <button
-                  onClick={toggleMute}
-                  className="p-1 text-white/40 hover:text-white/70 transition-colors"
-                  aria-label={muted ? "Unmute" : "Mute"}
-                >
-                  {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                </button>
-                <button
-                  onClick={handleReplay}
-                  className="p-1 text-white/40 hover:text-white/70 transition-colors"
-                  aria-label="Replay"
-                >
-                  <RotateCcw size={14} />
-                </button>
-              </div>
+              <span />
             </div>
           )}
         </div>

@@ -12,14 +12,14 @@
  */
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
-import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { Volume2, VolumeX } from "lucide-react";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReelsGestureLayer } from "./ReelsGestureLayer";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
+import { CanvasTopPills } from "@/components/lyric/CanvasTopPills";
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
@@ -37,6 +37,12 @@ function deriveSectionColors(cd: any | null | undefined): Record<number, string>
     }
   }
   return colors;
+}
+
+function formatTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 interface LyricDanceEmbedProps {
@@ -522,6 +528,38 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           </>
         )}
 
+        <CanvasTopPills
+          spotifyTrackId={(data ?? prefetchedData as any)?.spotify_track_id ?? null}
+          leftSlot={(
+            !effectiveShowCover && playerReady && !reelsMode
+              ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleMute(e);
+                  }}
+                  aria-label={muted ? "Unmute" : "Mute"}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    background: "rgba(0,0,0,0.35)",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {muted
+                    ? <VolumeX size={12} style={{ color: "rgba(255,255,255,0.4)" }} />
+                    : <Volume2 size={12} style={{ color: "rgba(255,255,255,0.4)" }} />}
+                </button>
+                )
+              : null
+          )}
+        />
+
         {/* Reels: gesture layer for seek/pause (only when cover is dismissed) */}
         {reelsMode && isFeedEmbed && !effectiveShowCover && !isWaiting && (
           <ReelsGestureLayer
@@ -623,9 +661,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 >
                   <LyricDanceCover
                     songName={songTitle}
+                    artistName={artistName}
+                    avatarUrl={avatarUrl}
                     waiting={isWaiting}
                     hideBackground={playerReady}
-                    badge={null}
+                    duration={durationSec > 0 ? formatTime(durationSec) : undefined}
+                    onExpand={showExpandButton ? () => window.open(lyricDanceUrl, "_blank") : undefined}
                     onListen={(e) => {
                       userActivatedRef.current = true;
                       unlockAudio(); // User gesture context → unlock browser audio policy
@@ -637,57 +678,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             )}
           </AnimatePresence>
         )}
-
-        {!isBattleMode && playerReady && !reelsMode && (
-          <div
-            className="absolute top-0 left-0 right-0 z-[510] flex items-center justify-between p-2 pointer-events-none"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <span />
-            <div className="flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded px-1 py-0.5 pointer-events-auto">
-              <button onClick={toggleMute} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label={muted ? "Unmute" : "Mute"}>
-                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              </button>
-              <button onClick={dismissClosingAndReplay} className="p-1 text-white/40 hover:text-white/70 transition-colors" aria-label="Replay">
-                <RotateCcw size={14} />
-              </button>
-              {showExpandButton && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); window.open(lyricDanceUrl, "_blank"); }}
-                  className="p-1 text-white/40 hover:text-white/70 transition-colors"
-                  aria-label="Expand"
-                >
-                  <Maximize2 size={14} />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {!isBattleMode && (
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
-          {reelsMode && artistName && (effectiveShowCover || !playerReady) && (
-            <div className="flex items-center gap-2 px-3 pt-2 pb-1">
-              <div className="relative shrink-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onProfileClick?.(); }}>
-                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <User size={13} className="text-white/40" />
-                  )}
-                </div>
-                {isVerified && (
-                  <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={11} /></span>
-                )}
-              </div>
-              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate max-w-[60vw]">
-                {`In Studio · ${artistName}`}
-              </span>
-            </div>
-          )}
-
-
           <LyricInteractionLayer
             variant="embedded"
             danceId={data?.id ?? ""}
