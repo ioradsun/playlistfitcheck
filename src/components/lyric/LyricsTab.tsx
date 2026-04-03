@@ -129,6 +129,8 @@ interface Props {
   onAudioSubmitted?: (file: File) => void;
   onUploadStarted?: (payload: { file: File; projectId: string | null; title: string }) => void;
   onTitleChange?: (newTitle: string) => void;
+  spotifyTrackId: string | null;
+  setSpotifyTrackId: (id: string | null) => void;
   /** When set, auto-submits this file for transcription on mount. Used by claim pages. */
   autoSubmitFile?: File | null;
 }
@@ -159,12 +161,89 @@ export function LyricsTab({
   onAudioSubmitted,
   onUploadStarted,
   onTitleChange,
+  spotifyTrackId,
+  setSpotifyTrackId,
   autoSubmitFile = null,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [debugData, setDebugData] = useState<any | null>(null);
+  const [spotifySearchQuery, setSpotifySearchQuery] = useState("");
+  const [spotifyResults, setSpotifyResults] = useState<Array<{
+    id: string;
+    name: string;
+    artists: string;
+    image: string | null;
+    url: string;
+  }>>([]);
+  const [spotifySearching, setSpotifySearching] = useState(false);
+  const spotifyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { user } = useAuth();
   const quota = useUsageQuota("lyric");
+  const handleSpotifySearch = useCallback(async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setSpotifyResults([]);
+      return;
+    }
+    setSpotifySearching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("spotify-search", {
+        body: { query: query.trim(), type: "track" },
+      });
+      if (!error && data?.results) {
+        setSpotifyResults(data.results.slice(0, 5));
+      }
+    } catch (e) {
+      console.error("[SpotifySearch] failed", e);
+    } finally {
+      setSpotifySearching(false);
+    }
+  }, []);
+
+  const onSpotifyQueryChange = useCallback((value: string) => {
+    setSpotifySearchQuery(value);
+    if (spotifyDebounceRef.current) clearTimeout(spotifyDebounceRef.current);
+    spotifyDebounceRef.current = setTimeout(() => handleSpotifySearch(value), 400);
+  }, [handleSpotifySearch]);
+
+  const handleSpotifySelect = useCallback(async (track: {
+    id: string;
+    name: string;
+    artists: string;
+    image: string | null;
+    url: string;
+  }) => {
+    setSpotifyTrackId(track.id);
+    setSpotifySearchQuery(`${track.name} — ${track.artists}`);
+    setSpotifyResults([]);
+
+    if (savedId) {
+      persistQueue.enqueue({
+        table: "saved_lyrics",
+        id: savedId,
+        payload: {
+          spotify_track_id: track.id,
+          spotify_track_url: track.url,
+        },
+      });
+    }
+  }, [savedId, setSpotifyTrackId]);
+
+  const handleSpotifyClear = useCallback(() => {
+    setSpotifyTrackId(null);
+    setSpotifySearchQuery("");
+    setSpotifyResults([]);
+
+    if (savedId) {
+      persistQueue.enqueue({
+        table: "saved_lyrics",
+        id: savedId,
+        payload: {
+          spotify_track_id: null,
+          spotify_track_url: null,
+        },
+      });
+    }
+  }, [savedId, setSpotifyTrackId]);
 
   const resolveProjectTitle = useCallback(
     (title: string | null | undefined, filename: string) => {
@@ -180,6 +259,19 @@ export function LyricsTab({
     },
     [],
   );
+
+  useEffect(() => {
+    if (lyricData?.title && !spotifyTrackId && !spotifySearchQuery) {
+      setSpotifySearchQuery(lyricData.title);
+      void handleSpotifySearch(lyricData.title);
+    }
+  }, [lyricData?.title, spotifyTrackId, spotifySearchQuery, handleSpotifySearch]);
+
+  useEffect(() => {
+    return () => {
+      if (spotifyDebounceRef.current) clearTimeout(spotifyDebounceRef.current);
+    };
+  }, []);
   const { handleFileSelected, showAuthNudge, dismissAuthNudge } = useAudioProject({
     tool: "lyric",
     dbTable: "saved_lyrics",
@@ -254,6 +346,10 @@ export function LyricsTab({
           setHasRealAudio(true);
           setSavedId(projectId);
           setDebugData(cached._debug ?? null);
+          if (cached.spotify_track_id) {
+            setSpotifyTrackId(cached.spotify_track_id);
+            setSpotifySearchQuery(cached.title || "");
+          }
 
           if (projectId) {
             sessionAudio.set("lyric", projectId, file, { ttlMs: 20 * 60 * 1000 });
@@ -384,6 +480,10 @@ export function LyricsTab({
         setHasRealAudio(true);
         setSavedId(projectId);
         setDebugData(data._debug ?? null);
+        if (data.spotify_track_id) {
+          setSpotifyTrackId(data.spotify_track_id);
+          setSpotifySearchQuery(data.title || "");
+        }
 
         // Cache the transcription for re-uploads of the same file
         setCachedTranscript(fingerprint, {
@@ -423,7 +523,7 @@ export function LyricsTab({
         setLoading(false);
       }
     },
-    [quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted],
+    [quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted, setSpotifyTrackId],
   );
 
   // ── Auto-submit for claim pages ──────────────────────────────────────
@@ -444,13 +544,168 @@ export function LyricsTab({
     setFmlyLines(null);
     setVersionMeta(null);
     setDebugData(null);
+    setSpotifyTrackId(null);
+    setSpotifySearchQuery("");
+    setSpotifyResults([]);
     onNewProject?.();
-  }, [onNewProject, setLyricData, setAudioFile, setHasRealAudio, setSavedId, setFmlyLines, setVersionMeta]);
+  }, [onNewProject, setLyricData, setAudioFile, setHasRealAudio, setSavedId, setFmlyLines, setVersionMeta, setSpotifyTrackId]);
 
   // State A: lines loaded → full editor
   if (lyricData && audioFile && lyricData.lines.length > 0) {
     return (
       <div className="flex-1 px-4 py-6 space-y-3">
+        <div style={{
+          padding: "8px 0",
+          borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+          marginBottom: 8,
+        }}>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 6,
+          }}>
+            <svg viewBox="0 0 24 24" width="14" height="14" style={{ flexShrink: 0 }}>
+              <path fill="rgba(30,215,96,0.6)" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02z" />
+            </svg>
+            <span style={{
+              fontSize: 10,
+              color: "rgba(255,255,255,0.3)",
+              fontFamily: "monospace",
+              letterSpacing: "0.05em",
+            }}>
+              {spotifyTrackId ? "Linked to Spotify" : "Link to Spotify (optional)"}
+            </span>
+          </div>
+          {spotifyTrackId ? (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 10px",
+              background: "rgba(30,215,96,0.06)",
+              border: "0.5px solid rgba(30,215,96,0.12)",
+              borderRadius: 8,
+            }}>
+              <span style={{
+                flex: 1,
+                fontSize: 12,
+                color: "rgba(255,255,255,0.6)",
+                fontFamily: "monospace",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}>
+                {spotifySearchQuery}
+              </span>
+              <button
+                onClick={handleSpotifyClear}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "rgba(255,255,255,0.25)",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  lineHeight: 1,
+                  padding: 2,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div style={{ position: "relative" }}>
+              <input
+                type="text"
+                value={spotifySearchQuery}
+                onChange={(e) => onSpotifyQueryChange(e.target.value)}
+                placeholder="Search for your song on Spotify..."
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  background: "rgba(255,255,255,0.03)",
+                  border: "0.5px solid rgba(255,255,255,0.08)",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontFamily: "monospace",
+                  color: "rgba(255,255,255,0.6)",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              {spotifyResults.length > 0 && (
+                <div style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0, right: 0,
+                  zIndex: 50,
+                  background: "#1a1a1f",
+                  border: "0.5px solid rgba(255,255,255,0.08)",
+                  borderRadius: 8,
+                  marginTop: 4,
+                  overflow: "hidden",
+                  maxHeight: 240,
+                  overflowY: "auto",
+                }}>
+                  {spotifyResults.map((track) => (
+                    <button
+                      key={track.id}
+                      onClick={() => void handleSpotifySelect(track)}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "8px 10px",
+                        background: "transparent",
+                        border: "none",
+                        borderBottom: "0.5px solid rgba(255,255,255,0.04)",
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                    >
+                      {track.image && (
+                        <img
+                          src={track.image}
+                          alt=""
+                          style={{
+                            width: 32, height: 32, borderRadius: 4,
+                            objectFit: "cover", flexShrink: 0,
+                          }}
+                        />
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: 12,
+                          color: "rgba(255,255,255,0.7)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}>
+                          {track.name}
+                        </div>
+                        <div style={{
+                          fontSize: 10,
+                          color: "rgba(255,255,255,0.3)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}>
+                          {track.artists}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {spotifySearching && (
+                <div style={{ fontSize: 10, marginTop: 4, color: "rgba(255,255,255,0.25)", fontFamily: "monospace" }}>
+                  Searching Spotify…
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <LyricDisplay
           data={lyricData}
           audioFile={audioFile}
