@@ -204,28 +204,6 @@ export function useLyricDancePlayer(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataReady, data?.id, usePool, postId, evicted, retryTick]);
 
-  useEffect(() => {
-    if (!evicted) return;
-    const container = containerRef.current;
-    const bgCanvas = slotRef.current?.bg ?? null;
-    const textCanvas = slotRef.current?.text ?? null;
-    if (container && bgCanvas && container.contains(bgCanvas)) {
-      container.removeChild(bgCanvas);
-    }
-    if (container && textCanvas && container.contains(textCanvas)) {
-      container.removeChild(textCanvas);
-    }
-    if (postId) {
-      releaseCanvasSlot(postId);
-    }
-    slotRef.current = null;
-    playerRef.current?.destroy();
-    playerRef.current = null;
-    initRef.current = false;
-    setPlayer(null);
-    setPlayerReady(false);
-  }, [evicted, postId, containerRef]);
-
   // ── Section images hot-patch ──────────────────────────────────────────
   useEffect(() => {
     if (!playerRef.current || !data?.section_images?.length) return;

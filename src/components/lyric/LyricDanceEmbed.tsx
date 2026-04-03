@@ -120,6 +120,14 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
   }, [player, playerReady, isFeedEmbed, cardState]);
 
+  // Preload audio when warm (adjacent to active) — don't wait for play().
+  useEffect(() => {
+    if (!player || !playerReady || !isFeedEmbed) return;
+    if (cardState === "warm" && preload) {
+      player.primeAudio();
+    }
+  }, [player, playerReady, isFeedEmbed, cardState, preload]);
+
   useEffect(() => {
     if (!player || !playerReady) return;
     if (cardState === "active" || !isFeedEmbed) {
@@ -230,7 +238,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   }, []);
 
   void lyricDanceUrl;
-  void preload;
   void firedMoments;
 
   return (
