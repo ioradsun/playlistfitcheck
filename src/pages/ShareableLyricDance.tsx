@@ -548,7 +548,6 @@ export default function ShareableLyricDance() {
                 player.play();
               }
             }}
-            source="shareable"
             moments={moments}
             momentFireCounts={deriveMomentFireCounts(reactionData, moments)}
             onSeekToMoment={(idx) => {
@@ -662,21 +661,9 @@ export default function ShareableLyricDance() {
       >
         <div className="w-full max-w-2xl mx-auto">
           <LyricInteractionLayer
-            variant="fullscreen"
-            danceId={renderData?.id ?? ""}
             moments={moments}
-            currentTimeSec={currentTimeSec}
-            durationSec={durationSec}
-            palette={palette}
-            accent={barAccent}
             reactionData={reactionData}
-            refreshKey={commentRefreshKey}
-            isLive={!showCover && playerReady}
-            hasFired={hasFired}
-            totalFireCount={totalFireCount}
-            songEnded={closingVisible}
             player={player}
-            sectionColors={deriveSectionColors((renderData as any)?.cinematic_direction ?? null)}
             onFireTap={() => {
               const id = renderData?.id;
               if (!id || !activeLine) return;
@@ -701,10 +688,7 @@ export default function ShareableLyricDance() {
               setTotalFireCount((c) => c + 1);
               markFired();
             }}
-            onPause={handlePauseForInput}
-            onResume={handleResumeAfterInput}
             onSeekTo={(sec) => player?.seek(sec)}
-            source="shareable"
           />
         </div>
       </div>
