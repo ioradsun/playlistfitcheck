@@ -150,7 +150,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     const handler = (e: Event) => {
       const activeId = (e as CustomEvent).detail?.activeCardId;
       if (activeId && activeId !== postId) {
-        player.pause();
+        // Only stop audio — don't pause visual animation on warm cards.
+        // Warm cards run play(false) with no audio, so just mute.
+        // If this card had audio playing, stop it.
+        if (!player.audio.paused) {
+          player.audio.pause();
+        }
         player.setMuted(true);
       }
     };
@@ -163,13 +168,17 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     const handler = (e: Event) => {
       const next = (e as CustomEvent).detail?.muted;
       if (typeof next === "boolean") {
-        setMuted(next);
-        if (player) player.setMuted(next);
+        setMuted(next); // update local state for UI (mute indicator)
+        // Only change audio mute on the active card.
+        // Warm cards stay muted — they have no audio.
+        if (player && (cardState === "active" || !isFeedEmbed)) {
+          player.setMuted(next);
+        }
       }
     };
     window.addEventListener("crowdfit:mute-change", handler);
     return () => window.removeEventListener("crowdfit:mute-change", handler);
-  }, [player, setMuted]);
+  }, [player, setMuted, cardState, isFeedEmbed]);
 
   useEffect(() => {
     if (!player || !playerReady || !forceMuted) return;
@@ -215,10 +224,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (closingVisible) {
       setClosingVisible(false);
     }
+    unlockAudio();
     player?.seek(timeSec);
     player?.play();
     player?.setMuted(false);
     setMuted(false);
+    setGlobalMuted(false);
   }, [closingVisible, player, setMuted]);
 
   useEffect(() => {
