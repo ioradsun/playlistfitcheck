@@ -122,6 +122,18 @@ export function useLyricDanceCore({
     };
   }, [lyricDanceId, prefetchedData]);
 
+  useEffect(() => {
+    // Safety valve: if loading takes >15 seconds, stop waiting
+    if (!loading) return;
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("[LyricDanceCore] Data fetch timeout — releasing cover");
+        setLoading(false);
+      }
+    }, 15000);
+    return () => clearTimeout(timeout);
+  }, [loading]);
+
   const { player, playerReady, data, playerRef } = useLyricDancePlayer(
     fetchedData,
     canvasRef,
@@ -430,6 +442,18 @@ export function useLyricDanceCore({
       audio.removeEventListener("pause", onPause);
     };
   }, [player, playerReady, data?.lyrics]);
+
+  // DEBUG: trace player lifecycle
+  useEffect(() => {
+    console.log("[LyricDanceCore] state", {
+      lyricDanceId,
+      loading,
+      hasFetchedData: !!fetchedData,
+      hasCinematicDirection: !!fetchedData?.cinematic_direction,
+      playerReady,
+      isWaiting: loading || !fetchedData,
+    });
+  }, [lyricDanceId, loading, fetchedData, playerReady]);
 
   return {
     canvasRef,
