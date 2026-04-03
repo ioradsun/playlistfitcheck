@@ -9,7 +9,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { VolumeX } from "lucide-react";
-import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { consumeShareableDancePrefetch, readCachedDanceData } from "@/lib/prefetch";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
@@ -17,7 +16,6 @@ import { ClipComposer } from "@/components/lyric/ClipComposer";
 import ClaimBanner from "@/components/claim/ClaimBanner";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { SeoHead } from "@/components/SeoHead";
-import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
@@ -201,6 +199,7 @@ export default function ShareableLyricDance() {
     durationSec,
     lyricSections,
     audioSections,
+    moments,
     activeLine,
     palette,
     toggleMute,
@@ -324,9 +323,6 @@ export default function ShareableLyricDance() {
   const coverSongName = renderData?.song_name ?? "";
   const coverArtist = profile?.display_name ?? renderData?.artist_name ?? "";
   const coverAvatarUrl = profile?.avatar_url ?? null;
-  const coverInitial = (renderData?.artist_name ||
-    renderData?.song_name ||
-    "♪")[0].toUpperCase();
   const ogImage = renderData?.section_images?.find((u: string | null) => !!u)
     ?? (renderData as any)?.album_art_url
     ?? "https://tools.fm/og/homepage.png";
@@ -356,19 +352,6 @@ export default function ShareableLyricDance() {
     }
     return palette[1] ?? palette[0] ?? "rgba(255,140,50,1)";
   }, [renderData, activeSectionIndex, palette]);
-
-  const moments = useMemo<Moment[]>(() => {
-    const phrases = (renderData as any)?.cinematic_direction?.phrases ?? [];
-    const phraseInputs = phrases.map((p: any) => {
-      const isMs = p.start > 500;
-      return {
-        start: isMs ? p.start / 1000 : p.start,
-        end: isMs ? p.end / 1000 : p.end,
-        text: p.text ?? "",
-      };
-    });
-    return buildMoments(phraseInputs, audioSections, lyricSections.allLines, durationSec);
-  }, [renderData, audioSections, lyricSections.allLines, durationSec]);
 
   const currentMoment = useMemo(() => {
     const m = moments.find(
@@ -533,39 +516,6 @@ export default function ShareableLyricDance() {
                   player?.setRegion(undefined, undefined);
                 }}
               />
-            </div>
-          )}
-
-
-
-          {(
-            <div
-              className="absolute top-0 left-0 right-0 z-[80] px-4 py-3 flex items-center justify-between"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {!isMarketingView ? (
-                <div
-                  className="flex items-center gap-2.5 cursor-pointer"
-                  onClick={() => renderData?.user_id && navigate(`/u/${renderData.user_id}`)}
-                >
-                  <div className="relative shrink-0">
-                    {coverAvatarUrl ? (
-                      <img src={coverAvatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/[0.06]" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                        <span className="text-[11px] font-mono text-white/30">{coverInitial}</span>
-                      </div>
-                    )}
-                    {profile?.is_verified && (
-                      <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={10} /></span>
-                    )}
-                  </div>
-                  <span className="text-[10px] text-white/55 max-w-[45vw] truncate">
-                    {coverArtist || "Artist"}
-                  </span>
-                </div>
-              ) : <span />}
-              <span />
             </div>
           )}
         </div>

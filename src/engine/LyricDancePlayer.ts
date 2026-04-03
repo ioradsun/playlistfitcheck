@@ -1605,6 +1605,7 @@ export class LyricDancePlayer {
   // ═══ Dynamite Wick Bar (always enabled) ═══
   private _globalWickBar: DynamiteWickBar | null = null;
   private _wickSeekOverlay: HTMLDivElement | null = null;
+  public beatVisEnabled = false;
   public wickBarEnabled = false;
   private chapterImages: HTMLImageElement[] = [];
   private _sectionScrimOpacity: number[] = [];
@@ -1882,6 +1883,7 @@ export class LyricDancePlayer {
   // Compatibility with existing React shell
   async init(): Promise<void> {
     this.perfDebugEnabled = Boolean((window as Window & { __LYRIC_DANCE_DEBUG_PERF?: boolean }).__LYRIC_DANCE_DEBUG_PERF);
+    this.beatVisEnabled = false;
     this.wickBarEnabled = false;
     this._firstPaintMarked = false;
     this._fontLayoutReflowPending = false;
@@ -2203,11 +2205,11 @@ export class LyricDancePlayer {
     // Defer audio until fullModeEnabled, then start automatically.
     if (!this.fullModeEnabled) {
       this._audioDeferredUntilReady = true;
-      // Start the upgrade — audio will start when it completes
+      // Immediate upgrade — no 100ms delay for play() calls.
+      // Cards are already visible when play() fires (active state).
       if (!this._bakePromise) {
-        this.scheduleFullModeUpgrade();
+        void this.prepareFullMode();
       }
-      // Start RAF loop so drawMinimalFirstFrame keeps rendering
       if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
       this.rafHandle = requestAnimationFrame(this.tick);
       return;
@@ -3501,8 +3503,7 @@ export class LyricDancePlayer {
     if (qTier < 2) {
       try { this.updateSims(tSec, frame); } catch (e) { console.error('[LyricEngine] sim crash:', e); }
     } else {
-      // At tier >= 2, skip expensive fire/water/aurora sims but still update beat visualizer
-      // (beat vis is always drawn — it's a single cheap drawImage).
+      // At tier >= 2, skip expensive fire/water/aurora sims but still update optional beat visualizer.
       if (this.wickBarEnabled && this._globalWickBar) {
         const bs = this._lastBeatState;
         const songDuration = Math.max(0.01, this.songEndSec - this.songStartSec);
@@ -3511,7 +3512,7 @@ export class LyricDancePlayer {
           bs?.energy ?? 0, bs?.pulse ?? 0, bs?.hitStrength ?? 0, bs?.phase ?? 0, bs?.beatIndex ?? 0,
           songProgress, bs?.hitType ?? 'none', bs?.brightness ?? 0.5, bs?.isDownbeat ?? false,
         );
-      } else if (this._globalBeatVis) {
+      } else if (this.beatVisEnabled && this._globalBeatVis) {
         const bs = this._lastBeatState;
         this._globalBeatVis.update(bs?.energy ?? 0, bs?.pulse ?? 0, bs?.hitStrength ?? 0, bs?.phase ?? 0, bs?.beatIndex ?? 0);
       }
@@ -3623,7 +3624,7 @@ export class LyricDancePlayer {
     // ═══ Beat visualizer strip — drawn every frame on main canvas (not in snapshot) ═══
     // Single lightweight drawImage of 320×64 offscreen canvas. Costs ~0.1ms/frame.
     // Must be outside snapshot path to stay synced to real-time beat state.
-    {
+    if (this.beatVisEnabled || this.wickBarEnabled) {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
@@ -5081,7 +5082,7 @@ export class LyricDancePlayer {
           bs?.brightness ?? 0.5,
           bs?.isDownbeat ?? false,
         );
-      } else if (this._globalBeatVis) {
+      } else if (this.beatVisEnabled && this._globalBeatVis) {
         const bs = this._lastBeatState;
         this._globalBeatVis.update(
           bs?.energy ?? 0,       // RMS energy — goes to 0 during silence

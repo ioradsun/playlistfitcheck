@@ -449,6 +449,7 @@ export function useLyricDanceCore({
     durationSec,
     lyricSections,
     audioSections,
+    moments,
     activeLine,
     palette,
     toggleMute,
