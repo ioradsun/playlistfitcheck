@@ -35,6 +35,8 @@ interface ExportOptions {
   maxQueueDepth?: number;
   /** Override bitrate in bps. Default scales with resolution. */
   bitrate?: number;
+  /** White caption bar text rendered at top of frame. */
+  captionBar?: string;
 }
 
 // ── Bitrate heuristic: ~5 bits/pixel/frame, clamped to [2Mbps, 20Mbps] ──
@@ -130,6 +132,22 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
 
       // ── Render ──
       player.drawAtTime((options.startOffset ?? 0) + i / fps);
+
+      if (options.captionBar) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const barHeight = Math.round(height * 0.08);
+          ctx.fillStyle = "rgba(255,255,255,0.95)";
+          ctx.fillRect(0, 0, width, barHeight);
+
+          const fontSize = Math.round(barHeight * 0.45);
+          ctx.font = `600 ${fontSize}px system-ui, -apple-system, sans-serif`;
+          ctx.fillStyle = "#0a0a0a";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(`this song made me feel ${options.captionBar}`, width / 2, barHeight / 2, width - 40);
+        }
+      }
 
       // ── Create VideoFrame (zero-copy when possible) ──
       const timestamp = i * usPerFrame;

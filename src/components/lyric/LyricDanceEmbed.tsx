@@ -14,11 +14,11 @@ import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImper
 import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, Volume2, VolumeX, RotateCcw, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
-import { toast } from "sonner";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ReelsGestureLayer } from "./ReelsGestureLayer";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
+import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
@@ -197,6 +197,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [closingVisible, setClosingVisible] = useState(false);
   const [, setClosingAnswered] = useState(false);
   const [totalFireCount, setTotalFireCount] = useState(0);
+  const [clipStart, setClipStart] = useState(0);
+  const [clipEnd, setClipEnd] = useState(0);
+  const [clipCaption, setClipCaption] = useState("");
+  const [showClipComposer, setShowClipComposer] = useState(false);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const userActivatedRef = useRef(false);
   /** True once this card has been played at least once. Survives warm transitions. Only resets on cold. */
@@ -549,14 +553,45 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           momentFireCounts={deriveMomentFireCounts(reactionData, moments)}
           onSeekToMoment={(idx) => {
             const m = moments[idx];
-            if (m) player?.seek(m.startSec);
+            if (m && player) {
+              player.seek(m.startSec);
+              player.setRegion(m.startSec, m.endSec);
+            }
           }}
           onShareClip={(momentIdx, caption) => {
-            void momentIdx;
-            navigator.clipboard.writeText(caption);
-            toast.success("Caption copied — clip export coming soon");
+            const m = moments[momentIdx];
+            if (!m) return;
+            setClipStart(m.startSec);
+            setClipEnd(m.endSec);
+            setClipCaption(caption);
+            setShowClipComposer(true);
           }}
         />
+
+        {showClipComposer && (
+          <div className="absolute inset-x-3 bottom-3 z-[540]" onClick={(e) => e.stopPropagation()}>
+            <ClipComposer
+              visible={showClipComposer}
+              player={player}
+              durationSec={durationSec}
+              fires={(reactionData ?? []) as any}
+              lines={lyricSections.allLines.map((l) => ({
+                lineIndex: l.lineIndex,
+                text: l.text,
+                startSec: l.startSec,
+                endSec: l.endSec ?? (l.startSec + 5),
+              }))}
+              initialStart={clipStart}
+              initialEnd={clipEnd}
+              initialCaption={clipCaption}
+              songTitle={songTitle}
+              onClose={() => {
+                setShowClipComposer(false);
+                player?.setRegion(undefined, undefined);
+              }}
+            />
+          </div>
+        )}
 
         {!isBattleMode && (
           <AnimatePresence>
