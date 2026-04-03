@@ -174,14 +174,21 @@ function FeedList({
   const [preloadId, setPreloadId] = useState<string | null>(null);
   const centerSetRef = useRef(new Set<string>());
   const activateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deactivateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const store = useCardLifecycleStore();
 
   // Track which cards are in the center zone. The most recent entrant wins.
   const onCenterEnter = useCallback((postId: string) => {
     centerSetRef.current.add(postId);
     setPreloadId(postId);
-    // Auto-activate the centered card in ALL modes.
-    // 100ms debounce prevents play/pause thrash during fast scroll.
+
+    // Cancel any pending deactivation — a new card is taking over
+    if (deactivateTimerRef.current) {
+      clearTimeout(deactivateTimerRef.current);
+      deactivateTimerRef.current = null;
+    }
+
+    // Debounced activation — the store automatically deactivates the previous card
     if (store) {
       if (activateTimerRef.current) clearTimeout(activateTimerRef.current);
       activateTimerRef.current = setTimeout(() => {
@@ -200,12 +207,20 @@ function FeedList({
       if (prev !== postId) return prev;
       const remaining = centerSetRef.current;
       if (remaining.size === 0) return null;
-      // Pick whichever is still in center
       return Array.from(remaining).pop()!;
     });
-    // Deactivate in ALL modes when card leaves center.
+
+    // Do NOT deactivate immediately — the store handles it when the next card activates.
+    // Only deactivate if NO card enters center within 150ms (scrolled to a gap).
     if (store) {
-      store.setState(postId, "warm");
+      if (deactivateTimerRef.current) clearTimeout(deactivateTimerRef.current);
+      deactivateTimerRef.current = setTimeout(() => {
+        deactivateTimerRef.current = null;
+        // Only deactivate if no card is in center and this card is still active
+        if (centerSetRef.current.size === 0 && store.getState(postId) === "active") {
+          store.setState(postId, "warm");
+        }
+      }, 150);
     }
   }, [store]);
 
@@ -214,6 +229,10 @@ function FeedList({
       if (activateTimerRef.current) {
         clearTimeout(activateTimerRef.current);
         activateTimerRef.current = null;
+      }
+      if (deactivateTimerRef.current) {
+        clearTimeout(deactivateTimerRef.current);
+        deactivateTimerRef.current = null;
       }
     };
   }, []);
