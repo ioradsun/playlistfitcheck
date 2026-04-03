@@ -8,6 +8,7 @@ interface FmlyBarProps {
   moments: Moment[];
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
   player: any;
+  currentTimeSec: number;
   onFireTap: () => void;
   onFireHoldStart: () => void;
   onFireHoldEnd: (holdMs: number) => void;
@@ -87,6 +88,7 @@ function Section({
             width: `${Math.max(0, Math.min(1, progress)) * 100}%`,
             background: `hsl(25,${s}%,${progL}%)`,
             boxShadow: `0 0 ${3 + h * 5}px rgba(255,${Math.round(140 + h * 40)},30,${progGlow}), 0 0 ${1 + h * 2}px rgba(255,180,60,${progGlow * 0.5})`,
+            transition: "width 100ms linear",
           }}
         />
       )}
@@ -210,35 +212,23 @@ export function FmlyBar({
   moments,
   reactionData,
   player,
+  currentTimeSec,
   onFireTap,
   onFireHoldStart,
   onFireHoldEnd,
   onSeekTo,
 }: FmlyBarProps) {
   const [loopMomentIdx, setLoopMomentIdx] = useState(0);
-  const [playheadSec, setPlayheadSec] = useState(0);
   const [flashIdx, setFlashIdx] = useState(-1);
-
-  // Track playhead
-  useEffect(() => {
-    if (!player?.audio) return;
-    let raf = 0;
-    const tick = () => {
-      setPlayheadSec(player.audio.currentTime ?? 0);
-      raf = window.requestAnimationFrame(tick);
-    };
-    raf = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(raf);
-  }, [player]);
 
   // Auto-select moment when loopMomentIdx is stale
   useEffect(() => {
     if (!moments.length) return;
-    const idx = moments.findIndex((m) => playheadSec >= m.startSec && playheadSec < m.endSec);
+    const idx = moments.findIndex((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec);
     if (idx >= 0 && (loopMomentIdx < 0 || loopMomentIdx >= moments.length)) {
       setLoopMomentIdx(idx);
     }
-  }, [moments, playheadSec, loopMomentIdx]);
+  }, [moments, currentTimeSec, loopMomentIdx]);
 
   const momentFireCounts = useMemo(
     () => deriveMomentFireCounts(reactionData, moments),
@@ -257,18 +247,18 @@ export function FmlyBar({
 
   const activeMoment = moments[loopMomentIdx] ?? null;
   const activeProgress = activeMoment
-    ? Math.max(0, Math.min(1, (playheadSec - activeMoment.startSec) / Math.max(0.0001, activeMoment.endSec - activeMoment.startSec)))
+    ? Math.max(0, Math.min(1, (currentTimeSec - activeMoment.startSec) / Math.max(0.0001, activeMoment.endSec - activeMoment.startSec)))
     : 0;
 
   // Proximity to hottest (0-1, ramps up over 4 seconds before it)
-  const currentIdx = moments.findIndex((m) => playheadSec >= m.startSec && playheadSec < m.endSec);
-  const timeToHottest = moments[hottestIdx] ? moments[hottestIdx].startSec - playheadSec : Infinity;
+  const currentIdx = moments.findIndex((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec);
+  const timeToHottest = moments[hottestIdx] ? moments[hottestIdx].startSec - currentTimeSec : Infinity;
   const proximity = timeToHottest > 0 && timeToHottest < 4
     ? 1 - timeToHottest / 4
     : currentIdx === hottestIdx ? 1 : 0;
 
   // Breathing button — slow sine, ~3 second cycle
-  const breath = Math.sin(playheadSec * 0.33 * Math.PI * 2);
+  const breath = Math.sin(currentTimeSec * 0.33 * Math.PI * 2);
   const breathScale = 1 + breath * 0.012 + proximity * breath * 0.016;
 
   const leftCount = Math.floor(moments.length / 2);
