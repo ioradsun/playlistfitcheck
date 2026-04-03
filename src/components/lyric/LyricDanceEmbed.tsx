@@ -4,6 +4,7 @@ import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
+import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
@@ -247,6 +248,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
+      <PlayerHeader
+        avatarUrl={avatarUrl}
+        artistName={artistName}
+        songTitle={songTitle}
+        spotifyTrackId={spotifyTrackId}
+      />
 
       <div
         ref={containerRef}
@@ -259,34 +266,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }} />
           </>
         )}
-
-        {/* Inline header overlay on canvas — artist info + Spotify link */}
-        <div
-          className="absolute top-0 left-0 right-0 z-[15] flex items-center justify-between px-2.5 py-2"
-          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 100%)" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {avatarUrl && (
-              <img src={avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover border border-white/[0.06] shrink-0" />
-            )}
-            <span className="text-[10px] text-white/50 truncate max-w-[50vw]" style={{ fontFamily: "monospace" }}>
-              {artistName ? `${artistName} · ` : ""}{songTitle}
-            </span>
-          </div>
-          {spotifyTrackId && (
-            <a
-              href={`https://open.spotify.com/track/${spotifyTrackId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-full"
-              style={{ background: "rgba(0,0,0,0.35)" }}
-            >
-              <svg viewBox="0 0 24 24" width="10" height="10"><path fill="rgba(30,215,96,0.8)" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2z"/></svg>
-              <span style={{ fontSize: 8, color: "rgba(30,215,96,0.7)", fontWeight: 500 }}>LISTEN</span>
-            </a>
-          )}
-        </div>
 
         {muted && (
           <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.5)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", opacity: showMuteIndicator ? 0.8 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 40 }}>
