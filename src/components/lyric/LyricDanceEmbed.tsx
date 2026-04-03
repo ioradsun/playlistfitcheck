@@ -6,7 +6,6 @@ import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import { emitFire, fetchFireData } from "@/lib/fire";
-import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { isAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
@@ -111,7 +110,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     reactionData,
     durationSec,
     lyricSections,
-    audioSections,
+    moments,
     activeLine,
     handleReplay,
   } = useLyricDanceCore({
@@ -230,15 +229,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     });
     return () => { cancelled = true; };
   }, [player, (data ?? prefetchedData as any)?.id]);
-
-  const moments = useMemo<Moment[]>(() => {
-    const phrases = (data as any)?.cinematic_direction?.phrases ?? [];
-    const phraseInputs = phrases.map((p: any) => {
-      const isMs = p.start > 500;
-      return { start: isMs ? p.start / 1000 : p.start, end: isMs ? p.end / 1000 : p.end, text: p.text ?? "" };
-    });
-    return buildMoments(phraseInputs, audioSections, lyricSections.allLines, durationSec);
-  }, [data, audioSections, lyricSections.allLines, durationSec]);
 
   const currentMoment = useMemo(() => moments.find((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec) ?? null, [moments, currentTimeSec]);
 

@@ -6,10 +6,9 @@
  * This keeps GPU memory and draw-call overhead constant at O(POOL_SIZE).
  */
 
-// 5 slots: covers a typical viewport of 3-4 visible cards + 1-2 buffer
-// for transitions during scroll. Cards that can't acquire a slot wait
-// for the crowdfit:pool-slot-freed event. GPU memory: ~8MB total.
-const POOL_SIZE = 5;
+// 8 slots: gives headroom for active + warm cards so upcoming cards can
+// pre-initialize without starving visible cards during fast scroll.
+const POOL_SIZE = 8;
 
 interface CanvasSlot {
   id: number;
