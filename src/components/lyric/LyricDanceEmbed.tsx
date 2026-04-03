@@ -27,24 +27,6 @@ import { isAudioUnlocked, onAudioUnlocked, unlockAudio } from "@/lib/reelsAudioU
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
-function deriveSectionColors(cd: any | null | undefined): Record<number, string> {
-  const colors: Record<number, string> = {};
-  const sections = cd?.sections;
-  if (!Array.isArray(sections)) return colors;
-  for (const s of sections) {
-    if (typeof s.sectionIndex === "number" && typeof s.dominantColor === "string") {
-      colors[s.sectionIndex] = s.dominantColor;
-    }
-  }
-  return colors;
-}
-
-function formatTime(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
 interface LyricDanceEmbedProps {
   lyricDanceId: string;
   lyricDanceUrl: string;
@@ -174,14 +156,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     lyricSections,
     audioSections,
     activeLine,
-    palette,
     toggleMute,
     handleReplay,
     handleListenNow,
-    handlePauseForInput,
-    handleResumeAfterInput,
     isWaiting,
-    commentRefreshKey,
   } = useLyricDanceCore({
     lyricDanceId,
     prefetchedData: prefetchedDataWithRegion,
@@ -454,16 +432,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     };
   }, [moments, currentTimeSec]);
 
-  const barAccent = useMemo(() => {
-    const autoPalettes = (data ?? (prefetchedData as any))?.auto_palettes;
-    if (Array.isArray(autoPalettes) && autoPalettes[activeSectionIndex]) {
-      const p = autoPalettes[activeSectionIndex] as string[];
-      return p[3] ?? p[1] ?? p[0] ?? "rgba(255,140,50,1)";
-    }
-    return palette[1] ?? palette[0] ?? "rgba(255,140,50,1)";
-  }, [data, prefetchedData, activeSectionIndex, palette]);
 
-  const hasFired = firedMoments.has(currentMoment?.index ?? -1);
   const markFired = useCallback(() => {
     if (currentMoment?.index == null) return;
     setFiredMoments((prev) => new Set([...prev, currentMoment.index]));
@@ -685,21 +654,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       {!isBattleMode && (
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
           <LyricInteractionLayer
-            variant="embedded"
-            danceId={data?.id ?? ""}
             moments={moments}
-            currentTimeSec={currentTimeSec}
-            durationSec={durationSec}
-            palette={palette}
-            accent={barAccent}
             reactionData={reactionData}
-            refreshKey={commentRefreshKey}
-            isLive={!effectiveShowCover && cardState === "active"}
-            hasFired={hasFired}
-            totalFireCount={totalFireCount}
-            songEnded={closingVisible}
             player={player}
-            sectionColors={deriveSectionColors((data as any)?.cinematic_direction ?? null)}
             onFireTap={() => {
               if (holdFireIntervalRef.current) {
                 clearInterval(holdFireIntervalRef.current);
@@ -729,10 +686,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
               markFired();
             }}
-            onPause={handlePauseForInput}
-            onResume={handleResumeAfterInput}
             onSeekTo={(sec) => player?.seek(sec)}
-            source="feed"
           />
         </div>
       )}
