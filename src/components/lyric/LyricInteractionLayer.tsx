@@ -114,7 +114,6 @@ function InlineFireButton({
   onFireHoldStart,
   onFireHoldEnd,
   player,
-  breathScale,
   proximity,
   isFlash,
 }: {
@@ -122,7 +121,6 @@ function InlineFireButton({
   onFireHoldStart: () => void;
   onFireHoldEnd: (holdMs: number) => void;
   player: any;
-  breathScale: number;
   proximity: number;
   isFlash: boolean;
 }) {
@@ -186,7 +184,7 @@ function InlineFireButton({
         justifyContent: "center",
         padding: 0,
         margin: 0,
-        transform: `scale(${breathScale})`,
+        animation: "fire-breath 3s ease-in-out infinite",
         boxShadow: `0 0 ${glow * 28}px rgba(255,145,35,${glow * 0.28})`,
         transition: "box-shadow 0.4s ease, border-color 0.4s ease",
         willChange: "transform",
@@ -257,10 +255,6 @@ export function FmlyBar({
     ? 1 - timeToHottest / 4
     : currentIdx === hottestIdx ? 1 : 0;
 
-  // Breathing button — slow sine, ~3 second cycle
-  const breath = Math.sin(currentTimeSec * 0.33 * Math.PI * 2);
-  const breathScale = 1 + breath * 0.012 + proximity * breath * 0.016;
-
   const leftCount = Math.floor(moments.length / 2);
   const leftMoments = moments.slice(0, leftCount);
   const rightMoments = moments.slice(leftCount);
@@ -305,6 +299,10 @@ export function FmlyBar({
           50%  { background-position: 100% 80%; }
           100% { background-position: 0% 100%; }
         }
+        @keyframes fire-breath {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.025); }
+        }
       `}</style>
 
       <div
@@ -344,7 +342,6 @@ export function FmlyBar({
           onFireHoldStart={onFireHoldStart}
           onFireHoldEnd={handleFireHoldEnd}
           player={player}
-          breathScale={breathScale}
           proximity={proximity}
           isFlash={flashIdx >= 0}
         />

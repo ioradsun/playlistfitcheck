@@ -1,11 +1,14 @@
+import { SidebarTrigger } from "@/components/ui/sidebar";
+
 interface PlayerHeaderProps {
   avatarUrl?: string | null;
   artistName?: string;
   songTitle: string;
   spotifyTrackId?: string | null;
+  showMenuButton?: boolean;
 }
 
-export function PlayerHeader({ avatarUrl, artistName, songTitle, spotifyTrackId }: PlayerHeaderProps) {
+export function PlayerHeader({ avatarUrl, artistName, songTitle, spotifyTrackId, showMenuButton = false }: PlayerHeaderProps) {
   return (
     <div
       style={{
@@ -21,6 +24,18 @@ export function PlayerHeader({ avatarUrl, artistName, songTitle, spotifyTrackId 
       }}
     >
       <div style={{ display: "flex", alignItems: "center", minWidth: 0, gap: 8 }}>
+        {showMenuButton && (
+          <SidebarTrigger
+            className="p-1 rounded-md text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors md:hidden"
+            style={{ flexShrink: 0 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <line x1="2" y1="4" x2="14" y2="4" />
+              <line x1="2" y1="8" x2="14" y2="8" />
+              <line x1="2" y1="12" x2="14" y2="12" />
+            </svg>
+          </SidebarTrigger>
+        )}
         <div
           style={{
             width: 32,
