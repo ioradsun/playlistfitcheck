@@ -4,7 +4,7 @@ import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
-import { PlayerHeader } from "@/components/lyric/PlayerHeader";
+
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { isAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
