@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Moment } from "@/lib/buildMoments";
-import { deriveMomentFireCounts } from "@/lib/momentUtils";
 
 interface LyricInteractionLayerProps {
   variant: "embedded" | "fullscreen";
@@ -31,6 +30,7 @@ function MomentPill({
   onClick,
 }: {
   moment: Moment;
+  index: number;
   state: "past" | "active" | "future";
   fireCount: number;
   maxFireCount: number;
@@ -67,7 +67,7 @@ function MomentPill({
           height: 5,
           borderRadius: 3,
           position: "relative",
-          background: "rgba(255,140,20,0.12)",
+          background: "rgba(255,140,20,0.20)",
           overflow: "hidden",
           border: "none",
           cursor: "pointer",
@@ -91,9 +91,9 @@ function MomentPill({
   }
 
   const heat = maxFireCount > 0 ? fireCount / maxFireCount : 0;
-  const r = Math.round(100 + heat * 140);
-  const g = Math.round(50 + heat * 100);
-  const b = Math.round(10 + heat * 10);
+  const r = Math.round(160 + heat * 80);
+  const g = Math.round(90 + heat * 60);
+  const b = 20;
   const opacity = 0.15 + heat * 0.7;
 
   return (
@@ -134,7 +134,6 @@ function FireButton({
   const emberOut = () => setMode("rest");
 
   const handleDown = () => {
-    if (holdTickRef.current != null) return;
     holdStartRef.current = performance.now();
     ignite();
     player?.fireMoment?.();
@@ -145,7 +144,7 @@ function FireButton({
   };
 
   const handleUp = () => {
-    if (holdTickRef.current != null) {
+    if (holdTickRef.current) {
       window.clearInterval(holdTickRef.current);
       holdTickRef.current = null;
     }
@@ -167,7 +166,7 @@ function FireButton({
 
   useEffect(
     () => () => {
-      if (holdTickRef.current != null) {
+      if (holdTickRef.current) {
         window.clearInterval(holdTickRef.current);
       }
     },
@@ -180,7 +179,6 @@ function FireButton({
       onPointerDown={handleDown}
       onPointerUp={handleUp}
       onPointerLeave={handleUp}
-      onPointerCancel={handleUp}
       style={{
         width: 44,
         height: 44,
@@ -261,10 +259,19 @@ export function LyricInteractionLayer({
       )
     : 0;
 
-  const momentFireCounts = useMemo(
-    () => deriveMomentFireCounts(reactionData, safeMoments),
-    [safeMoments, reactionData],
-  );
+  const momentFireCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (let i = 0; i < safeMoments.length; i += 1) {
+      let total = 0;
+      for (const emojiData of Object.values(reactionData)) {
+        for (const line of safeMoments[i].lines) {
+          total += emojiData.line[line.lineIndex] ?? 0;
+        }
+      }
+      counts[i] = total;
+    }
+    return counts;
+  }, [safeMoments, reactionData]);
 
   const maxFireCount = Math.max(1, ...Object.values(momentFireCounts));
 
@@ -288,9 +295,10 @@ export function LyricInteractionLayer({
             transform: "translateY(-50%)",
             height: 5,
             borderRadius: 3,
-            background: "rgba(255,140,20,0.06)",
+            background: "rgba(255,140,20,0.15)",
           }}
         />
+
         <div
           style={{
             position: "absolute",
@@ -343,8 +351,9 @@ export function LyricInteractionLayer({
 
           return (
             <MomentPill
-              key={`${moment.startSec}-${moment.endSec}-${index}`}
+              key={index}
               moment={moment}
+              index={index}
               state={state}
               fireCount={momentFireCounts[index] ?? 0}
               maxFireCount={maxFireCount}
