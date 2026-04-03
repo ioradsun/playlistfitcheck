@@ -124,11 +124,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (!player || !playerReady) return;
     if (cardState === "cold" && isFeedEmbed) {
       player.pause();
+    } else if (cardState === "active" || !isFeedEmbed) {
+      player.play(true); // active: RAF + audio
     } else {
-      // Both warm and active cards animate.
-      // Warm: wall clock drives animation (audio muted/paused).
-      // Active: real audio drives animation.
-      player.play();
+      player.play(false); // warm: RAF only, wall clock drives animation
     }
   }, [player, playerReady, cardState, isFeedEmbed]);
 
