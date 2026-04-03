@@ -164,6 +164,8 @@ export function LyricFitTab({
             onUploadStartedProp?.(payload);
           }}
           onTitleChange={p.handleTitleChange}
+          spotifyTrackId={p.spotifyTrackId}
+          setSpotifyTrackId={p.setSpotifyTrackId}
           autoSubmitFile={autoSubmitFile}
         />
       </div>

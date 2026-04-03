@@ -362,8 +362,10 @@ export function FitTab({
               caption: "",
               lyric_dance_url: publishedUrl,
               lyric_dance_id: publishedDanceId,
-              spotify_track_url: null,
-              spotify_track_id: null,
+              spotify_track_id: pipeline.spotifyTrackId ?? null,
+              spotify_track_url: pipeline.spotifyTrackId
+                ? `https://open.spotify.com/track/${pipeline.spotifyTrackId}`
+                : null,
               album_art_url: null,
               tags_json: [],
               track_artists_json: [],
@@ -762,8 +764,10 @@ export function FitTab({
               caption: "",
               lyric_dance_url: url,
               lyric_dance_id: danceId,
-              spotify_track_url: null,
-              spotify_track_id: null,
+              spotify_track_id: pipeline.spotifyTrackId ?? null,
+              spotify_track_url: pipeline.spotifyTrackId
+                ? `https://open.spotify.com/track/${pipeline.spotifyTrackId}`
+                : null,
               album_art_url: null,
               tags_json: [],
               track_artists_json: [],
@@ -1025,8 +1029,10 @@ export function FitTab({
                 caption: "",
                 lyric_dance_url: battleUrl,
                 lyric_dance_id: null,
-                spotify_track_url: null,
-                spotify_track_id: null,
+                spotify_track_id: pipeline.spotifyTrackId ?? null,
+                spotify_track_url: pipeline.spotifyTrackId
+                  ? `https://open.spotify.com/track/${pipeline.spotifyTrackId}`
+                  : null,
                 album_art_url: null,
                 tags_json: [],
                 track_artists_json: [],

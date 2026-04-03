@@ -464,6 +464,8 @@ export type UseLyricPipelineReturn = {
     React.SetStateAction<{ done: number; total: number } | null>
   >;
   setGenerationStatus: React.Dispatch<React.SetStateAction<GenerationStatus>>;
+  spotifyTrackId?: string | null;
+  setSpotifyTrackId?: React.Dispatch<React.SetStateAction<string | null>>;
 };
 
 interface UseLyricPipelineParams {
@@ -543,6 +545,9 @@ export function useLyricPipeline({
     start: number;
     end: number;
   }> | null>(initialLyric?.words ?? null);
+  const [spotifyTrackId, setSpotifyTrackId] = useState<string | null>(
+    initialLyric?.spotify_track_id ?? null,
+  );
 
   const [renderData, setRenderData] = useState<any | null>(null);
   const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
@@ -1473,6 +1478,7 @@ export function useLyricPipeline({
     setFitUnlocked(false);
     setPipelineDanceId(null);
     setPipelineDanceUrl(null);
+    setSpotifyTrackId(null);
     claimPublishedRef.current = false;
     cinematicTriggeredRef.current = false;
     pipelineTriggeredRef.current = false;
@@ -1487,12 +1493,16 @@ export function useLyricPipeline({
         setSectionImageUrls,
         setSectionImageProgress,
         setGenerationStatus,
+        spotifyTrackId,
+        setSpotifyTrackId,
       }) as unknown as UseLyricPipelineReturn,
     [
       retryGeneration,
       setSectionImageUrls,
       setSectionImageProgress,
       setGenerationStatus,
+      spotifyTrackId,
+      setSpotifyTrackId,
     ],
   );
 
@@ -1513,6 +1523,8 @@ export function useLyricPipeline({
     setVersionMeta,
     words,
     setWords,
+    spotifyTrackId,
+    setSpotifyTrackId,
     renderData,
     setRenderData,
     beatGrid,

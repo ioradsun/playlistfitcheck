@@ -30,7 +30,7 @@ function matchesView(p: SongFitPost, view: FeedView): boolean {
   if (view === "all" || view === "billboard") return true;
   if (view === "now_streaming") return !!p.spotify_track_id;
   if (view === "in_studio") return !!p.lyric_dance_url && !!p.lyric_dance_id;
-  if (view === "in_battle") return !!p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id;
+  if (view === "in_battle") return !!p.lyric_dance_url && !p.lyric_dance_id;
   return true;
 }
 
@@ -116,7 +116,8 @@ async function scoreBillboard(
 const LYRIC_FULL_COLUMNS =
   "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
   "motion_profile_spec:physics_spec,cinematic_direction,section_images,scene_context,scene_manifest," +
-  "auto_palettes,beat_grid,palette,system_type,seed,artist_dna,album_art_url,empowerment_promise";
+  "auto_palettes,beat_grid,palette,system_type,seed,artist_dna,album_art_url,empowerment_promise," +
+  "spotify_track_id";
 
 async function fetchLyricData(
   ids: string[],

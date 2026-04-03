@@ -122,8 +122,8 @@ export function SongFitPostCard({
 
   // ── Derived ──
   const isOwnPost = user?.id === post.user_id;
-  const hasLyricDance = !!(post.lyric_dance_url && post.lyric_dance_id && !post.spotify_track_id);
-  const isBattle = hottestHooksEnabled && !!(post.lyric_dance_url && !post.lyric_dance_id && !post.spotify_track_id);
+  const hasLyricDance = !!(post.lyric_dance_url && post.lyric_dance_id);
+  const isBattle = hottestHooksEnabled && !!(post.lyric_dance_url && !post.lyric_dance_id);
   const isSpotify = !hasLyricDance && !isBattle && !!post.spotify_track_id;
   const displayName = post.profiles?.display_name || "Anonymous";
 
