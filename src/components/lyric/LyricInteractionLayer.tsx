@@ -340,19 +340,22 @@ export function FmlyBar({
         borderBottom: "1px solid rgba(255,255,255,0.025)",
       }}
     >
-      {leftMoments.map((moment, index) => {
-        const fill = Math.max(0, Math.min(1, (momentFireCounts[index] ?? 0) / maxFireCount));
-        return (
-          <Section
-            key={`left-${index}-${moment.startSec}`}
-            moment={moment}
-            fill={fill}
-            isActive={loopMomentIdx === index}
-            progress={loopMomentIdx === index ? activeProgress : 0}
-            onPress={() => onSelectMoment(moment, index)}
-          />
-        );
-      })}
+      {/* Left moments container — flex:1 guarantees equal space on each side of fire button */}
+      <div style={{ flex: 1, display: "flex", alignItems: "stretch", minWidth: 0, overflow: "hidden" }}>
+        {leftMoments.map((moment, index) => {
+          const fill = Math.max(0, Math.min(1, (momentFireCounts[index] ?? 0) / maxFireCount));
+          return (
+            <Section
+              key={`left-${index}-${moment.startSec}`}
+              moment={moment}
+              fill={fill}
+              isActive={loopMomentIdx === index}
+              progress={loopMomentIdx === index ? activeProgress : 0}
+              onPress={() => onSelectMoment(moment, index)}
+            />
+          );
+        })}
+      </div>
 
       <InlineFireButton
         onFireTap={onFireTap}
@@ -361,20 +364,23 @@ export function FmlyBar({
         player={player}
       />
 
-      {rightMoments.map((moment, rightIndex) => {
-        const index = leftCount + rightIndex;
-        const fill = Math.max(0, Math.min(1, (momentFireCounts[index] ?? 0) / maxFireCount));
-        return (
-          <Section
-            key={`right-${index}-${moment.startSec}`}
-            moment={moment}
-            fill={fill}
-            isActive={loopMomentIdx === index}
-            progress={loopMomentIdx === index ? activeProgress : 0}
-            onPress={() => onSelectMoment(moment, index)}
-          />
-        );
-      })}
+      {/* Right moments container — flex:1 mirrors left side */}
+      <div style={{ flex: 1, display: "flex", alignItems: "stretch", minWidth: 0, overflow: "hidden" }}>
+        {rightMoments.map((moment, rightIndex) => {
+          const index = leftCount + rightIndex;
+          const fill = Math.max(0, Math.min(1, (momentFireCounts[index] ?? 0) / maxFireCount));
+          return (
+            <Section
+              key={`right-${index}-${moment.startSec}`}
+              moment={moment}
+              fill={fill}
+              isActive={loopMomentIdx === index}
+              progress={loopMomentIdx === index ? activeProgress : 0}
+              onPress={() => onSelectMoment(moment, index)}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
