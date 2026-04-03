@@ -9,6 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { consumeShareableDancePrefetch, readCachedDanceData } from "@/lib/prefetch";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
@@ -21,6 +22,7 @@ import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
+import { deriveMomentFireCounts } from "@/lib/momentUtils";
 
 function deriveSectionColors(cd: any | null | undefined): Record<number, string> {
   const colors: Record<number, string> = {};
@@ -489,6 +491,17 @@ export default function ShareableLyricDance() {
               }
             }}
             source="shareable"
+            moments={moments}
+            momentFireCounts={deriveMomentFireCounts(reactionData, moments)}
+            onSeekToMoment={(idx) => {
+              const m = moments[idx];
+              if (m) player?.seek(m.startSec);
+            }}
+            onShareClip={(momentIdx, caption) => {
+              void momentIdx;
+              void navigator.clipboard.writeText(caption);
+              toast.success("Caption copied — clip export coming soon");
+            }}
           />
 
 
