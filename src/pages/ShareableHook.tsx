@@ -105,11 +105,6 @@ export default function ShareableHook() {
     ?? hook?.artist_slug?.replace(/-/g, " ")
     ?? "";
 
-  const danceUrl = useMemo(() => {
-    if (!danceData) return "#";
-    return `/lyric-dance/${danceData.artist_slug}/${danceData.song_slug}`;
-  }, [danceData]);
-
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
@@ -213,7 +208,6 @@ export default function ShareableHook() {
       <div className="max-w-4xl mx-auto py-6 px-4" style={{ height: "80vh" }}>
         <LyricDanceEmbed
           lyricDanceId={danceData.id}
-          lyricDanceUrl={danceUrl}
           songTitle={danceData.song_name}
           artistName={danceData.artist_name}
           prefetchedData={danceData}

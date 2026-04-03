@@ -14,17 +14,14 @@ import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
 interface LyricDanceEmbedProps {
   lyricDanceId: string;
-  lyricDanceUrl: string;
   songTitle: string;
   artistName?: string;
   prefetchedData?: LyricDanceData | null;
   cardState?: CardState;
-  onPlay?: () => void;
   regionStart?: number;
   regionEnd?: number;
   postId?: string;
   spotifyTrackId?: string | null;
-  autoPlay?: boolean;
   forceMuted?: boolean;
   avatarUrl?: string | null;
   preload?: boolean;
@@ -37,7 +34,6 @@ export interface LyricDanceEmbedHandle {
 
 export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed({
   lyricDanceId,
-  lyricDanceUrl,
   songTitle,
   artistName,
   prefetchedData,
@@ -46,7 +42,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   regionEnd,
   postId,
   spotifyTrackId,
-  autoPlay = false,
   forceMuted = false,
   avatarUrl,
   preload = false,
@@ -90,7 +85,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     lyricDanceId,
     prefetchedData: prefetchedDataWithRegion,
     postId,
-    autoPlay,
     usePool: isFeedEmbed,
     evicted,
   });
@@ -102,10 +96,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     },
   }), [player]);
 
-  const [, setFireStrengthByLine] = useState<Record<number, number>>({});
-  const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
   const [closingVisible, setClosingVisible] = useState(false);
-  const [, setClosingAnswered] = useState(false);
   const [clipStart, setClipStart] = useState(0);
   const [clipEnd, setClipEnd] = useState(0);
   const [clipCaption, setClipCaption] = useState("");
@@ -199,7 +190,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   const dismissClosingAndReplay = useCallback(() => {
     setClosingVisible(false);
-    setClosingAnswered(false);
     if (player) player.audio.loop = false;
     handleReplay();
   }, [handleReplay, player]);
@@ -207,7 +197,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const dismissClosingAndSeek = useCallback((timeSec: number) => {
     if (closingVisible) {
       setClosingVisible(false);
-      setClosingAnswered(false);
     }
     player?.seek(timeSec);
     player?.play();
@@ -226,19 +215,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     return () => { cancelled = true; };
   }, [player, (data ?? prefetchedData as any)?.id]);
 
-  const currentMoment = useMemo(() => moments.find((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec) ?? null, [moments, currentTimeSec]);
-
-  const markFired = useCallback(() => {
-    if (currentMoment?.index == null) return;
-    setFiredMoments((prev) => new Set([...prev, currentMoment.index]));
-  }, [currentMoment?.index]);
-
   useEffect(() => {
     return () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); };
   }, []);
-
-  void lyricDanceUrl;
-  void firedMoments;
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
@@ -271,7 +250,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           visible={closingVisible}
           empowermentPromise={empowermentPromise}
           danceId={((data ?? prefetchedData) as any)?.id ?? ""}
-          onAnswer={() => setClosingAnswered(true)}
+          onAnswer={() => {}}
           onReplay={dismissClosingAndReplay}
           source="feed"
           moments={moments}
@@ -329,8 +308,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               if (!id || !activeLine) return;
               player?.fireFire(0);
               emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "feed");
-              setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1 }));
-              markFired();
             }}
             onFireHoldStart={() => {
               if (holdFireIntervalRef.current) return;
@@ -345,9 +322,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               if (!id || !activeLine) return;
               player?.fireFire(holdMs);
               emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
-              const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
-              setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
-              markFired();
             }}
             onSeekTo={(sec) => dismissClosingAndSeek(sec)}
           />

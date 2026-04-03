@@ -204,23 +204,14 @@ export function useLyricDancePlayer(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataReady, data?.id, usePool, postId, evicted, retryTick]);
 
-  // ── Section images hot-patch ──────────────────────────────────────────
+  // ── Hot-patch player when data changes ────────────────────────────────
   useEffect(() => {
-    if (!playerRef.current || !data?.section_images?.length) return;
-    playerRef.current.updateSectionImages(data.section_images);
-  }, [data?.section_images]);
-
-  // ── Scene context hot-patch ───────────────────────────────────────────
-  useEffect(() => {
-    if (!playerRef.current || !data?.scene_context) return;
-    playerRef.current.updateSceneContext(data.scene_context);
-  }, [data?.scene_context]);
-
-  // ── Cinematic direction hot-patch (phrases, sections, heroWords) ──────
-  useEffect(() => {
-    if (!playerRef.current || !data?.cinematic_direction) return;
-    playerRef.current.updateCinematicDirection(data.cinematic_direction as any);
-  }, [data?.cinematic_direction]);
+    const p = playerRef.current;
+    if (!p) return;
+    if (data?.section_images?.length) p.updateSectionImages(data.section_images);
+    if (data?.scene_context) p.updateSceneContext(data.scene_context);
+    if (data?.cinematic_direction) p.updateCinematicDirection(data.cinematic_direction as any);
+  }, [data?.section_images, data?.scene_context, data?.cinematic_direction]);
 
   return { player, playerReady, data, setData, playerRef };
 }
