@@ -116,6 +116,14 @@ export function useLyricDanceCore({
           });
         }
         setLoading(false);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.warn("[LyricDanceCore] Failed to fetch shareable lyric dance", {
+          lyricDanceId,
+          error,
+        });
+        setLoading(false);
       });
     return () => {
       cancelled = true;
