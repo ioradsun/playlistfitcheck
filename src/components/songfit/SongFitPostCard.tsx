@@ -265,8 +265,8 @@ export function SongFitPostCard({
           <div className="absolute top-0 left-0 right-0 h-24 z-[5] bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
         )}
 
-        {/* ── Header (standard mode only) ── */}
-        <div className={cn("relative flex items-center justify-between px-3 py-2.5", reelsMode && "hidden")}>
+        {/* ── Header (standard mode only, hidden for lyric dance — embed owns it) ── */}
+        <div className={cn("relative flex items-center justify-between px-3 py-2.5", (reelsMode || hasLyricDance) && "hidden")}>
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <ProfileHoverCard userId={post.user_id}>
               <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={handleProfileClick}>
