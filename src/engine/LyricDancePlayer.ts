@@ -2234,29 +2234,31 @@ export class LyricDancePlayer {
     }
   }
 
-  play(): void {
+  play(withAudio = true): void {
     if (this.destroyed) return;
-    this.primeAudio();
     this.playing = true;
 
+    if (!withAudio) {
+      // Visual-only: start RAF + wall clock, no audio.
+      // Used by warm feed cards that animate without sound.
+      if (!this._wallClockOrigin) this._wallClockOrigin = performance.now();
+      if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
+      this.rafHandle = requestAnimationFrame(this.tick);
+      return;
+    }
+
+    // Full play: audio + visuals
+    this.primeAudio();
+
     // ═══ AUDIO GATE: don't start audio before scene is compiled ═══
-    // Without compiled scene, the viewer sees black while hearing music.
-    // Defer audio until fullModeEnabled, then start automatically.
     if (!this.fullModeEnabled) {
       this._audioDeferredUntilReady = true;
-      // Always call prepareFullMode — it's idempotent.
-      // If a bake is already in flight (warm path started it),
-      // prepareFullMode awaits the existing promise then calls
-      // enableFullVisualMode(). Without this, play() during an
-      // in-flight bake skips enableFullVisualMode entirely →
-      // permanent black canvas.
       void this.prepareFullMode();
       if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
       this.rafHandle = requestAnimationFrame(this.tick);
       return;
     }
 
-    // Scene is ready — start audio immediately
     this._startAudioPlayback();
     this.startHealthMonitor();
 
