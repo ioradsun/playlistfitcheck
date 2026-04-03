@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Moment } from "@/lib/buildMoments";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
 
-const FMLY_GREEN = "#00FF78";
 const BAR_HEIGHT = 48;
 
 interface FmlyBarProps {
@@ -15,151 +14,38 @@ interface FmlyBarProps {
   onSeekTo: (sec: number) => void;
 }
 
-type Ember = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  size: number;
-};
-
-function GlowEmbers({ width, height, fill }: { width: number; height: number; fill: number }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || width < 1 || height < 1) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    canvas.width = Math.max(1, Math.floor(width * dpr));
-    canvas.height = Math.max(1, Math.floor(height * dpr));
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const embers: Ember[] = [];
-    let frame = 0;
-    let rafId = 0;
-
-    const spawnEvery = fill > 0.7 ? 8 : fill > 0.4 ? 14 : fill > 0.15 ? 24 : 40;
-
-    const tick = () => {
-      frame += 1;
-
-      ctx.clearRect(0, 0, width, height);
-
-      const pulse = 0.85 + Math.sin(frame * 0.015) * 0.15;
-      const glowAlpha = fill * 0.15 * pulse;
-      if (glowAlpha > 0.001) {
-        const gx = width / 2;
-        const gy = height * 0.7;
-        const radius = Math.max(width, height) * 0.95;
-        const gradient = ctx.createRadialGradient(gx, gy, 0, gx, gy, radius);
-        gradient.addColorStop(0, `rgba(0,255,120,${glowAlpha})`);
-        gradient.addColorStop(1, "rgba(0,255,120,0)");
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-      }
-
-      if (frame % spawnEvery === 0 && embers.length < 20) {
-        embers.push({
-          x: width * (0.2 + Math.random() * 0.6),
-          y: height - 2,
-          vx: (Math.random() - 0.5) * 0.08,
-          vy: -(0.15 + Math.random() * (0.2 + fill * 0.4)),
-          life: 1,
-          maxLife: 1,
-          size: 1 + Math.random() * 1.4,
-        });
-      }
-
-      const decay = 0.004 + (1 - fill) * 0.002;
-      for (let i = embers.length - 1; i >= 0; i -= 1) {
-        const e = embers[i];
-        e.x += e.vx;
-        e.y += e.vy;
-        e.life -= decay;
-        if (e.life <= 0 || e.y < -4) {
-          embers.splice(i, 1);
-          continue;
-        }
-
-        const lifeRatio = Math.max(0, e.life / e.maxLife);
-        const haloRadius = e.size * (2 + lifeRatio * 2);
-        const haloGradient = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, haloRadius);
-        haloGradient.addColorStop(0, `rgba(0,255,120,${0.35 * lifeRatio})`);
-        haloGradient.addColorStop(1, "rgba(0,255,120,0)");
-        ctx.fillStyle = haloGradient;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, haloRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = `rgba(90,255,165,${0.75 * lifeRatio})`;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, Math.max(0.7, e.size * 0.5), 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      rafId = window.requestAnimationFrame(tick);
-    };
-
-    rafId = window.requestAnimationFrame(tick);
-    return () => {
-      if (rafId) window.cancelAnimationFrame(rafId);
-    };
-  }, [width, height, fill]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: "absolute",
-        inset: 0,
-        pointerEvents: "none",
-      }}
-    />
-  );
-}
-
+// ── Thermal section — pure divs, CSS gradient + shimmer ─────────────────
 function Section({
   moment,
   fill,
   isActive,
   progress,
+  isFlash,
+  isHottest,
+  proximity,
   onPress,
 }: {
   moment: Moment;
   fill: number;
   isActive: boolean;
   progress: number;
+  isFlash: boolean;
+  isHottest: boolean;
+  proximity: number;
   onPress: () => void;
 }) {
-  const hostRef = useRef<HTMLButtonElement | null>(null);
-  const [size, setSize] = useState({ width: 0, height: BAR_HEIGHT });
-
-  useEffect(() => {
-    const node = hostRef.current;
-    if (!node) return;
-
-    const update = () => {
-      const rect = node.getBoundingClientRect();
-      setSize({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
-    };
-    update();
-
-    const observer = new ResizeObserver(update);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
+  const h = Math.max(0, Math.min(1, fill));
+  const fillPct = 8 + h * 85;
+  const s = 85 + h * 15;
+  const bright = 15 + h * 48 + (isFlash ? 15 : 0);
+  const mid = 10 + h * 28;
+  const dim = 5 + h * 14;
+  const alpha = 0.25 + h * 0.5 + (isFlash ? 0.3 : 0);
+  const progL = 35 + h * 35;
+  const progGlow = 0.2 + h * 0.35;
 
   return (
     <button
-      ref={hostRef}
       type="button"
       onClick={onPress}
       style={{
@@ -167,7 +53,7 @@ function Section({
         height: BAR_HEIGHT,
         background: "#030305",
         border: "none",
-        borderRight: "1px solid rgba(255,255,255,0.025)",
+        borderRight: "1px solid rgba(255,255,255,0.012)",
         position: "relative",
         overflow: "hidden",
         padding: 0,
@@ -175,16 +61,44 @@ function Section({
         cursor: "pointer",
       }}
     >
-      <GlowEmbers width={size.width} height={size.height} fill={fill} />
-      {isActive && (
+      {/* Thermal fill — rises from bottom, height = fire count */}
+      <div
+        className={`thermal-fill${isFlash ? " thermal-flash" : ""}`}
+        style={{
+          "--t1": `hsla(25,${s}%,${bright}%,${alpha})`,
+          "--t2": `hsla(22,${s}%,${mid}%,${alpha * 0.7})`,
+          "--t3": `hsla(20,${s - 10}%,${dim}%,${alpha * 0.35})`,
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: `${fillPct}%`,
+        } as React.CSSProperties}
+      />
+
+      {/* Progress line — rides the top of the fill */}
+      {isActive && progress > 0 && (
         <div
           style={{
             position: "absolute",
+            bottom: `${fillPct}%`,
             left: 0,
-            bottom: 0,
-            height: 1,
+            height: 2,
             width: `${Math.max(0, Math.min(1, progress)) * 100}%`,
-            background: FMLY_GREEN,
+            background: `hsl(25,${s}%,${progL}%)`,
+            boxShadow: `0 0 ${3 + h * 5}px rgba(255,${Math.round(140 + h * 40)},30,${progGlow}), 0 0 ${1 + h * 2}px rgba(255,180,60,${progGlow * 0.5})`,
+          }}
+        />
+      )}
+
+      {/* Anticipation glow for hottest section */}
+      {isHottest && proximity > 0 && !isActive && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: `radial-gradient(ellipse at 50% 100%, rgba(255,155,35,${proximity * 0.1}), transparent 65%)`,
+            transition: "opacity 0.8s",
           }}
         />
       )}
@@ -192,24 +106,29 @@ function Section({
   );
 }
 
+// ── Fire button — slow breath, proximity warmth ─────────────────────────
 function InlineFireButton({
   onFireTap,
   onFireHoldStart,
   onFireHoldEnd,
   player,
+  breathScale,
+  proximity,
+  isFlash,
 }: {
   onFireTap: () => void;
   onFireHoldStart: () => void;
   onFireHoldEnd: (holdMs: number) => void;
   player: any;
+  breathScale: number;
+  proximity: number;
+  isFlash: boolean;
 }) {
   const holdStartRef = useRef<number | null>(null);
   const holdTickRef = useRef<number | null>(null);
-  const [isActive, setIsActive] = useState(false);
 
   const handleDown = () => {
     holdStartRef.current = performance.now();
-    setIsActive(true);
     player?.fireMoment?.();
     onFireHoldStart();
     holdTickRef.current = window.setInterval(() => {
@@ -226,10 +145,7 @@ function InlineFireButton({
 
     const startedAt = holdStartRef.current;
     holdStartRef.current = null;
-    if (startedAt == null) {
-      setIsActive(false);
-      return;
-    }
+    if (startedAt == null) return;
 
     const holdMs = performance.now() - startedAt;
     if (holdMs < 180) {
@@ -237,8 +153,6 @@ function InlineFireButton({
     } else {
       onFireHoldEnd(holdMs);
     }
-
-    window.setTimeout(() => setIsActive(false), 240);
   };
 
   useEffect(() => {
@@ -246,6 +160,10 @@ function InlineFireButton({
       if (holdTickRef.current) window.clearInterval(holdTickRef.current);
     };
   }, []);
+
+  const glow = 0.02 + proximity * 0.2 + (isFlash ? 0.25 : 0);
+  const bAlpha = 0.05 + proximity * 0.3 + (isFlash ? 0.25 : 0);
+  const bG = Math.round(140 + proximity * 55);
 
   return (
     <button
@@ -258,23 +176,36 @@ function InlineFireButton({
         height: BAR_HEIGHT,
         flexShrink: 0,
         background: "#030305",
-        border: `1px solid ${isActive ? FMLY_GREEN : "rgba(0,255,120,0.08)"}`,
-        boxShadow: isActive ? "0 0 18px rgba(0,255,120,0.28)" : "none",
+        border: `1.5px solid rgba(255,${bG},40,${bAlpha})`,
+        borderRadius: 0,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: 0,
         margin: 0,
+        transform: `scale(${breathScale})`,
+        boxShadow: `0 0 ${glow * 28}px rgba(255,145,35,${glow * 0.28})`,
+        transition: "box-shadow 0.4s ease, border-color 0.4s ease",
+        willChange: "transform",
       }}
     >
-      <svg viewBox="0 0 24 24" width={22} height={22} fill={isActive ? FMLY_GREEN : "none"} stroke={isActive ? FMLY_GREEN : "rgba(0,255,120,0.2)"} strokeWidth={1.5}>
+      <svg
+        viewBox="0 0 24 24"
+        width={22}
+        height={22}
+        fill={proximity > 0.5 ? `hsl(25,95%,${30 + proximity * 16}%)` : "none"}
+        stroke={`hsl(25,90%,${18 + proximity * 20}%)`}
+        strokeWidth={1.5}
+        style={{ transition: "fill 1s ease, stroke 0.8s ease" }}
+      >
         <path d="M12 23c-3.6 0-7-2.4-7-7 0-3.1 2.1-5.7 4-7.6.3-.3.8-.1.8.3v2c0 .2.2.4.4.3 2.1-1.1 4.8-3.5 4.8-7 0-.3.4-.5.6-.3C18.2 6 20 10 20 13.5c0 5.3-3.6 9.5-8 9.5z" />
       </svg>
     </button>
   );
 }
 
+// ── Thermal Bar ─────────────────────────────────────────────────────────
 export function FmlyBar({
   moments,
   reactionData,
@@ -284,15 +215,13 @@ export function FmlyBar({
   onFireHoldEnd,
   onSeekTo,
 }: FmlyBarProps) {
-  const safeMoments = moments;
-  const safeReactionData = reactionData;
-
   const [loopMomentIdx, setLoopMomentIdx] = useState(0);
   const [playheadSec, setPlayheadSec] = useState(0);
+  const [flashIdx, setFlashIdx] = useState(-1);
 
+  // Track playhead
   useEffect(() => {
     if (!player?.audio) return;
-
     let raf = 0;
     const tick = () => {
       setPlayheadSec(player.audio.currentTime ?? 0);
@@ -302,25 +231,49 @@ export function FmlyBar({
     return () => window.cancelAnimationFrame(raf);
   }, [player]);
 
+  // Auto-select moment when loopMomentIdx is stale
   useEffect(() => {
-    if (!safeMoments.length) return;
-    const idx = safeMoments.findIndex((m) => playheadSec >= m.startSec && playheadSec < m.endSec);
-    if (idx >= 0 && (loopMomentIdx < 0 || loopMomentIdx >= safeMoments.length)) {
+    if (!moments.length) return;
+    const idx = moments.findIndex((m) => playheadSec >= m.startSec && playheadSec < m.endSec);
+    if (idx >= 0 && (loopMomentIdx < 0 || loopMomentIdx >= moments.length)) {
       setLoopMomentIdx(idx);
     }
-  }, [safeMoments, playheadSec, loopMomentIdx]);
+  }, [moments, playheadSec, loopMomentIdx]);
 
-  const momentFireCounts = useMemo(() => deriveMomentFireCounts(safeReactionData, safeMoments), [safeReactionData, safeMoments]);
+  const momentFireCounts = useMemo(
+    () => deriveMomentFireCounts(reactionData, moments),
+    [reactionData, moments],
+  );
   const maxFireCount = Math.max(1, ...Object.values(momentFireCounts));
 
-  const activeMoment = safeMoments[loopMomentIdx] ?? null;
+  // Find hottest moment
+  const hottestIdx = useMemo(() => {
+    let best = 0;
+    for (let i = 1; i < moments.length; i++) {
+      if ((momentFireCounts[i] ?? 0) > (momentFireCounts[best] ?? 0)) best = i;
+    }
+    return best;
+  }, [moments, momentFireCounts]);
+
+  const activeMoment = moments[loopMomentIdx] ?? null;
   const activeProgress = activeMoment
     ? Math.max(0, Math.min(1, (playheadSec - activeMoment.startSec) / Math.max(0.0001, activeMoment.endSec - activeMoment.startSec)))
     : 0;
 
-  const leftCount = Math.floor(safeMoments.length / 2);
-  const leftMoments = safeMoments.slice(0, leftCount);
-  const rightMoments = safeMoments.slice(leftCount);
+  // Proximity to hottest (0-1, ramps up over 4 seconds before it)
+  const currentIdx = moments.findIndex((m) => playheadSec >= m.startSec && playheadSec < m.endSec);
+  const timeToHottest = moments[hottestIdx] ? moments[hottestIdx].startSec - playheadSec : Infinity;
+  const proximity = timeToHottest > 0 && timeToHottest < 4
+    ? 1 - timeToHottest / 4
+    : currentIdx === hottestIdx ? 1 : 0;
+
+  // Breathing button — slow sine, ~3 second cycle
+  const breath = Math.sin(playheadSec * 0.33 * Math.PI * 2);
+  const breathScale = 1 + breath * 0.012 + proximity * breath * 0.016;
+
+  const leftCount = Math.floor(moments.length / 2);
+  const leftMoments = moments.slice(0, leftCount);
+  const rightMoments = moments.slice(leftCount);
 
   const onSelectMoment = (moment: Moment, index: number) => {
     setLoopMomentIdx(index);
@@ -328,62 +281,107 @@ export function FmlyBar({
     player?.setRegion?.(moment.startSec, moment.endSec);
   };
 
+  // Flash on fire
+  const handleFireTap = () => {
+    if (currentIdx >= 0) {
+      setFlashIdx(currentIdx);
+      setTimeout(() => setFlashIdx(-1), 400);
+    }
+    onFireTap();
+  };
+
+  const handleFireHoldEnd = (holdMs: number) => {
+    if (currentIdx >= 0) {
+      setFlashIdx(currentIdx);
+      setTimeout(() => setFlashIdx(-1), 400);
+    }
+    onFireHoldEnd(holdMs);
+  };
+
   return (
-    <div
-      style={{
-        width: "100%",
-        height: BAR_HEIGHT,
-        background: "#030305",
-        display: "flex",
-        alignItems: "stretch",
-        borderTop: "1px solid rgba(255,255,255,0.025)",
-        borderBottom: "1px solid rgba(255,255,255,0.025)",
-      }}
-    >
-      {/* Left moments container — flex:1 guarantees equal space on each side of fire button */}
-      <div style={{ flex: 1, display: "flex", alignItems: "stretch", minWidth: 0, overflow: "hidden" }}>
-        {leftMoments.map((moment, index) => {
-          const fill = Math.max(0, Math.min(1, (momentFireCounts[index] ?? 0) / maxFireCount));
-          return (
-            <Section
-              key={`left-${index}-${moment.startSec}`}
-              moment={moment}
-              fill={fill}
-              isActive={loopMomentIdx === index}
-              progress={loopMomentIdx === index ? activeProgress : 0}
-              onPress={() => onSelectMoment(moment, index)}
-            />
-          );
-        })}
-      </div>
+    <>
+      <style>{`
+        .thermal-fill {
+          background: linear-gradient(160deg, var(--t1) 0%, var(--t2) 50%, var(--t3) 100%);
+          background-size: 200% 200%;
+          animation: thermal-shimmer 6s ease-in-out infinite;
+          transition: height 0.5s ease, opacity 0.3s ease;
+        }
+        .thermal-flash {
+          transition: height 0.1s, opacity 0.1s !important;
+        }
+        @keyframes thermal-shimmer {
+          0%   { background-position: 0% 100%; }
+          50%  { background-position: 100% 80%; }
+          100% { background-position: 0% 100%; }
+        }
+      `}</style>
 
-      <InlineFireButton
-        onFireTap={onFireTap}
-        onFireHoldStart={onFireHoldStart}
-        onFireHoldEnd={onFireHoldEnd}
-        player={player}
-      />
+      <div
+        style={{
+          width: "100%",
+          height: BAR_HEIGHT,
+          background: "#030305",
+          display: "flex",
+          alignItems: "stretch",
+          borderTop: "1px solid rgba(255,255,255,0.018)",
+          borderBottom: "1px solid rgba(255,255,255,0.018)",
+        }}
+      >
+        {/* Left sections */}
+        <div style={{ flex: 1, display: "flex", alignItems: "stretch", minWidth: 0, overflow: "hidden" }}>
+          {leftMoments.map((moment, index) => {
+            const fill = Math.max(0, Math.min(1, (momentFireCounts[index] ?? 0) / maxFireCount));
+            return (
+              <Section
+                key={`l-${index}-${moment.startSec}`}
+                moment={moment}
+                fill={fill}
+                isActive={loopMomentIdx === index}
+                progress={loopMomentIdx === index ? activeProgress : 0}
+                isFlash={flashIdx === index}
+                isHottest={index === hottestIdx}
+                proximity={index === hottestIdx ? proximity : 0}
+                onPress={() => onSelectMoment(moment, index)}
+              />
+            );
+          })}
+        </div>
 
-      {/* Right moments container — flex:1 mirrors left side */}
-      <div style={{ flex: 1, display: "flex", alignItems: "stretch", minWidth: 0, overflow: "hidden" }}>
-        {rightMoments.map((moment, rightIndex) => {
-          const index = leftCount + rightIndex;
-          const fill = Math.max(0, Math.min(1, (momentFireCounts[index] ?? 0) / maxFireCount));
-          return (
-            <Section
-              key={`right-${index}-${moment.startSec}`}
-              moment={moment}
-              fill={fill}
-              isActive={loopMomentIdx === index}
-              progress={loopMomentIdx === index ? activeProgress : 0}
-              onPress={() => onSelectMoment(moment, index)}
-            />
-          );
-        })}
+        {/* Fire button — always breathing */}
+        <InlineFireButton
+          onFireTap={handleFireTap}
+          onFireHoldStart={onFireHoldStart}
+          onFireHoldEnd={handleFireHoldEnd}
+          player={player}
+          breathScale={breathScale}
+          proximity={proximity}
+          isFlash={flashIdx >= 0}
+        />
+
+        {/* Right sections */}
+        <div style={{ flex: 1, display: "flex", alignItems: "stretch", minWidth: 0, overflow: "hidden" }}>
+          {rightMoments.map((moment, rightIndex) => {
+            const index = leftCount + rightIndex;
+            const fill = Math.max(0, Math.min(1, (momentFireCounts[index] ?? 0) / maxFireCount));
+            return (
+              <Section
+                key={`r-${index}-${moment.startSec}`}
+                moment={moment}
+                fill={fill}
+                isActive={loopMomentIdx === index}
+                progress={loopMomentIdx === index ? activeProgress : 0}
+                isFlash={flashIdx === index}
+                isHottest={index === hottestIdx}
+                proximity={index === hottestIdx ? proximity : 0}
+                onPress={() => onSelectMoment(moment, index)}
+              />
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
-
 
 export { FmlyBar as LyricInteractionLayer };
