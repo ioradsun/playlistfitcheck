@@ -3,8 +3,8 @@
  * ShareableLyricDance — Public page for a full-song lyric dance.
  * Route: /:artistSlug/:songSlug/lyric-dance
  *
- * Page-level concerns: data fetch, SEO, claim banner, empowerment generation.
- * Player concerns: delegated entirely to LyricDanceEmbed.
+ * Page concerns: data fetch by slug, SEO, claim banner, empowerment.
+ * Player: delegated entirely to LyricDanceEmbed (the ONE player).
  */
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
@@ -86,14 +86,10 @@ export default function ShareableLyricDance() {
         } as LyricDanceData);
         setLoading(false);
 
-        // Load profile lazily
         if (row.user_id) {
           const loadProfile = () => {
-            supabase
-              .from("profiles")
-              .select("display_name, avatar_url, is_verified")
-              .eq("id", row.user_id)
-              .maybeSingle()
+            supabase.from("profiles").select("display_name, avatar_url, is_verified")
+              .eq("id", row.user_id).maybeSingle()
               .then(({ data: p }) => { if (p) setProfile(p as ProfileInfo); });
           };
           if ("requestIdleCallback" in window) requestIdleCallback(loadProfile);
@@ -112,13 +108,10 @@ export default function ShareableLyricDance() {
 
     let attempts = 0;
     const timer = setInterval(async () => {
-      attempts += 1;
-      if (attempts > 12) { clearInterval(timer); return; }
+      if (++attempts > 12) { clearInterval(timer); return; }
       const { data: fresh } = await supabase
-        .from("shareable_lyric_dances" as any)
-        .select("section_images")
-        .eq("id", data.id)
-        .maybeSingle();
+        .from("shareable_lyric_dances" as any).select("section_images")
+        .eq("id", data.id).maybeSingle();
       const f = fresh as any;
       if (f?.section_images?.some?.(Boolean)) {
         setData((prev) => prev ? { ...prev, section_images: f.section_images } : prev);
@@ -128,18 +121,15 @@ export default function ShareableLyricDance() {
     return () => clearInterval(timer);
   }, [data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Empowerment promise generation (marketing pages) ───────────────────
+  // ── Empowerment promise (marketing pages) ──────────────────────────────
   useEffect(() => {
     if (!isMarketingView || !data?.id) return;
     if (localEmpowerment ?? (data as any)?.empowerment_promise) return;
     if (empowermentGenStarted.current) return;
     const lines = Array.isArray(data?.lyrics) ? data.lyrics as any[] : [];
     if (!lines.length) return;
-    const lyricsText = lines
-      .filter((l: any) => l?.tag !== "adlib")
-      .map((l: any) => String(l?.text ?? "").trim())
-      .filter(Boolean)
-      .join("\n");
+    const lyricsText = lines.filter((l: any) => l?.tag !== "adlib")
+      .map((l: any) => String(l?.text ?? "").trim()).filter(Boolean).join("\n");
     if (!lyricsText) return;
     const cd = data?.cinematic_direction as any;
     empowermentGenStarted.current = true;
@@ -150,14 +140,13 @@ export default function ShareableLyricDance() {
     }, 30_000).then(async ({ data: gen, error }) => {
       if (error || !gen) return;
       setLocalEmpowerment(gen);
-      await supabase.from("shareable_lyric_dances" as any).update({ empowerment_promise: gen }).eq("id", data.id);
+      await supabase.from("shareable_lyric_dances" as any)
+        .update({ empowerment_promise: gen }).eq("id", data.id);
     }).catch(() => {});
   }, [isMarketingView, data, localEmpowerment]);
 
-  // ── Badge visibility ───────────────────────────────────────────────────
+  // ── Badge + Lovable hide ───────────────────────────────────────────────
   useEffect(() => { const t = setTimeout(() => setBadgeVisible(true), 1000); return () => clearTimeout(t); }, []);
-
-  // ── Hide Lovable badge ─────────────────────────────────────────────────
   useEffect(() => {
     const style = document.createElement("style");
     style.id = "hide-lovable-badge-ld";
@@ -171,7 +160,8 @@ export default function ShareableLyricDance() {
     return (
       <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 z-50">
         <p className="text-white/30 text-lg font-mono">Lyric Dance not found.</p>
-        <button onClick={() => navigate("/")} className="text-white/20 text-sm hover:text-white/40 transition-colors focus:outline-none">
+        <button onClick={() => navigate("/")}
+          className="text-white/20 text-sm hover:text-white/40 transition-colors focus:outline-none">
           tools.fm
         </button>
       </div>
@@ -182,22 +172,21 @@ export default function ShareableLyricDance() {
   const coverSongName = data?.song_name ?? "";
   const coverArtist = profile?.display_name ?? data?.artist_name ?? "";
   const coverAvatarUrl = profile?.avatar_url ?? null;
+  const palette = useMemo(() => {
+    const cd = data?.cinematic_direction;
+    if (cd?.sections && Array.isArray(cd.sections))
+      return cd.sections.map((s: any) => s.dominantColor ?? "#6B7A8E");
+    return ["#ffffff"];
+  }, [data]);
   const ogImage = data?.section_images?.find((u: string | null) => !!u)
-    ?? (data as any)?.album_art_url
-    ?? "https://tools.fm/og/homepage.png";
+    ?? (data as any)?.album_art_url ?? "https://tools.fm/og/homepage.png";
   const ogTitle = isMarketingView
     ? `${coverArtist} — watch "${coverSongName.toUpperCase()}" come alive`
     : coverSongName ? `"${coverSongName.toUpperCase()}" — ${coverArtist}` : "Lyric Dance — tools.fm";
   const ogDescription = isMarketingView
     ? "Your song. One click. AI lyric video. Claim your free artist page on tools.fm"
     : "Interactive lyric video on tools.fm · Run it back or skip";
-  const palette = useMemo(() => {
-    const cd = data?.cinematic_direction;
-    if (cd?.sections && Array.isArray(cd.sections)) return cd.sections.map((s: any) => s.dominantColor ?? "#6B7A8E");
-    return ["#ffffff", "#ffffff", "#ffffff"];
-  }, [data]);
 
-  // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
       <SeoHead
@@ -211,8 +200,7 @@ export default function ShareableLyricDance() {
           artistSlug={artistSlug}
           accent={palette?.[1] || palette?.[0] || data?.palette?.[1] || "#a855f7"}
           coverArtUrl={(data as any)?.album_art_url ?? data?.section_images?.[0] ?? null}
-          songName={data?.song_name}
-          artistName={data?.artist_name}
+          songName={data?.song_name} artistName={data?.artist_name}
         />
       )}
 
@@ -231,7 +219,6 @@ export default function ShareableLyricDance() {
         )}
       </AnimatePresence>
 
-      {/* ═══ THE ONE PLAYER ═══ */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {data && (
           <LyricDanceEmbed
