@@ -173,17 +173,25 @@ function FeedList({
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [preloadId, setPreloadId] = useState<string | null>(null);
   const centerSetRef = useRef(new Set<string>());
+  const activateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const store = useCardLifecycleStore();
 
   // Track which cards are in the center zone. The most recent entrant wins.
   const onCenterEnter = useCallback((postId: string) => {
     centerSetRef.current.add(postId);
     setPreloadId(postId);
-    // In reels mode, auto-activate the centered card (Instagram behavior)
-    if (reelsMode && store) {
-      store.setState(postId, "active");
+    // Auto-activate the centered card in ALL modes.
+    // 100ms debounce prevents play/pause thrash during fast scroll.
+    if (store) {
+      if (activateTimerRef.current) clearTimeout(activateTimerRef.current);
+      activateTimerRef.current = setTimeout(() => {
+        activateTimerRef.current = null;
+        if (centerSetRef.current.has(postId)) {
+          store.setState(postId, "active");
+        }
+      }, 100);
     }
-  }, [reelsMode, store]);
+  }, [store]);
 
   const onCenterLeave = useCallback((postId: string) => {
     centerSetRef.current.delete(postId);
@@ -195,11 +203,20 @@ function FeedList({
       // Pick whichever is still in center
       return Array.from(remaining).pop()!;
     });
-    // In reels mode, deactivate the leaving card immediately
-    if (reelsMode && store) {
+    // Deactivate in ALL modes when card leaves center.
+    if (store) {
       store.setState(postId, "warm");
     }
-  }, [reelsMode, store]);
+  }, [store]);
+
+  useEffect(() => {
+    return () => {
+      if (activateTimerRef.current) {
+        clearTimeout(activateTimerRef.current);
+        activateTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Infinite scroll sentinel
   useEffect(() => {

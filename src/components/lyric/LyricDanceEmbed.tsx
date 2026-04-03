@@ -42,7 +42,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   artistName,
   prefetchedData,
   cardState,
-  onPlay,
   regionStart,
   regionEnd,
   postId,
@@ -72,11 +71,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       if (warmTimerRef.current) { clearTimeout(warmTimerRef.current); warmTimerRef.current = null; }
       if (!evicted) setEvicted(true);
     } else {
-      if (warmTimerRef.current || !evicted) return;
-      warmTimerRef.current = setTimeout(() => {
-        warmTimerRef.current = null;
-        setEvicted(false);
-      }, 200);
+      if (!evicted) return;
+      setEvicted(false);
     }
 
     return () => {
@@ -113,7 +109,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     prefetchedData: prefetchedDataWithRegion,
     postId,
     autoPlay,
-    onPlay,
     usePool: isFeedEmbed,
     evicted,
   });
@@ -153,6 +148,20 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player.setMuted(true);
     }
   }, [player, playerReady, cardState, isFeedEmbed, muted]);
+
+  // Imperative audio solo: pause this player as soon as another card activates.
+  useEffect(() => {
+    if (!player || !postId || !isFeedEmbed) return;
+    const handler = (e: Event) => {
+      const activeId = (e as CustomEvent).detail?.activeCardId;
+      if (activeId && activeId !== postId) {
+        player.pause();
+        player.setMuted(true);
+      }
+    };
+    window.addEventListener("crowdfit:audio-solo", handler);
+    return () => window.removeEventListener("crowdfit:audio-solo", handler);
+  }, [player, postId, isFeedEmbed]);
 
   useEffect(() => {
     if (!player || !playerReady || !forceMuted) return;

@@ -176,7 +176,8 @@ export function useLyricDancePlayer(
       }
       if (!destroyed) {
         p.audio.muted = true;
-        p.play();
+        // Do NOT auto-play on init. Feed activation controls when playback starts,
+        // ensuring only one card runs RAF/audio at a time.
         setPlayerReady(true);
         onReadyRef.current?.(p);
       }
