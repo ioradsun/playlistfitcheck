@@ -17,22 +17,16 @@ interface LyricDanceEmbedProps {
   lyricDanceUrl: string;
   songTitle: string;
   artistName?: string;
-  coverImageUrl?: string | null;
   prefetchedData?: LyricDanceData | null;
   cardState?: CardState;
   onPlay?: () => void;
   regionStart?: number;
   regionEnd?: number;
-  showExpandButton?: boolean;
-  hideReactButton?: boolean;
   postId?: string;
   spotifyTrackId?: string | null;
   autoPlay?: boolean;
   forceMuted?: boolean;
-  onOpenReactions?: () => void;
   avatarUrl?: string | null;
-  isVerified?: boolean;
-  onProfileClick?: () => void;
   preload?: boolean;
 }
 

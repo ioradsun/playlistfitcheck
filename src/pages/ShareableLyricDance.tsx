@@ -1,38 +1,23 @@
-/* cache-bust: 2026-03-04-V4 */
+/* cache-bust: 2026-04-03-V5 */
 /**
  * ShareableLyricDance — Public page for a full-song lyric dance.
  * Route: /:artistSlug/:songSlug/lyric-dance
+ *
+ * Page-level concerns: data fetch, SEO, claim banner, empowerment generation.
+ * Player concerns: delegated entirely to LyricDanceEmbed.
  */
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { VolumeX } from "lucide-react";
 import { consumeShareableDancePrefetch, readCachedDanceData } from "@/lib/prefetch";
-import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
-import { ClosingScreen } from "@/components/lyric/ClosingScreen";
-import { ClipComposer } from "@/components/lyric/ClipComposer";
 import ClaimBanner from "@/components/claim/ClaimBanner";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { SeoHead } from "@/components/SeoHead";
-import { emitFire, fetchFireData } from "@/lib/fire";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
-import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
-import { PlayerHeader } from "@/components/lyric/PlayerHeader";
-import { deriveMomentFireCounts } from "@/lib/momentUtils";
-
-function deriveSectionColors(cd: any | null | undefined): Record<number, string> {
-  const colors: Record<number, string> = {};
-  const sections = cd?.sections;
-  if (!Array.isArray(sections)) return colors;
-  for (const s of sections) {
-    if (typeof s.sectionIndex === "number" && typeof s.dominantColor === "string") {
-      colors[s.sectionIndex] = s.dominantColor;
-    }
-  }
-  return colors;
-}
+import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
+import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 
 const ALL_COLUMNS =
   "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name," +
@@ -41,12 +26,6 @@ const ALL_COLUMNS =
   "lyrics,words,motion_profile_spec:physics_spec,cinematic_direction," +
   "scene_context,scene_manifest,system_type,seed,artist_dna,spotify_track_id";
 
-function formatTime(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
 interface ProfileInfo {
   display_name: string | null;
   avatar_url: string | null;
@@ -54,34 +33,22 @@ interface ProfileInfo {
 }
 
 export default function ShareableLyricDance() {
-  const { artistSlug, songSlug } = useParams<{
-    artistSlug: string;
-    songSlug: string;
-  }>();
+  const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const isMarketingView = searchParams.get("from") === "claim";
 
-  const [data, setDataRaw] = useState<LyricDanceData | null>(null);
+  const [data, setData] = useState<LyricDanceData | null>(null);
   const [localEmpowerment, setLocalEmpowerment] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [badgeVisible, setBadgeVisible] = useState(false);
-  const [fireStrengthByLine, setFireStrengthByLine] = useState<Record<number, number>>({});
-  const [closingVisible, setClosingVisible] = useState(false);
-  const [closingAnswered, setClosingAnswered] = useState(false);
-  const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
-  const [totalFireCount, setTotalFireCount] = useState(0);
-  const [clipStart, setClipStart] = useState(0);
-  const [clipEnd, setClipEnd] = useState(0);
-  const [clipCaption, setClipCaption] = useState("");
-  const [showClipComposer, setShowClipComposer] = useState(false);
-  const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const empowermentGenStarted = useRef(false);
   const isMobile = useIsMobile();
 
+  // ── Data fetch ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!artistSlug || !songSlug) return;
     setLoading(true);
@@ -89,13 +56,14 @@ export default function ShareableLyricDance() {
     const prefetched = consumeShareableDancePrefetch();
     if (prefetched) {
       prefetched.data.then(({ data: row, error }: any) => {
-        if (error || !row) {
-          setNotFound(true);
-          setLoading(false);
-          return;
-        }
+        if (error || !row) { setNotFound(true); setLoading(false); return; }
         setNotFound(false);
-        setDataRaw(row as any as LyricDanceData);
+        setData({
+          ...row,
+          cinematic_direction: row.cinematic_direction
+            ? normalizeCinematicDirection(row.cinematic_direction)
+            : row.cinematic_direction,
+        } as LyricDanceData);
         setLoading(false);
       });
       return;
@@ -108,324 +76,152 @@ export default function ShareableLyricDance() {
       .eq("song_slug", songSlug)
       .maybeSingle()
       .then(({ data: row, error }: any) => {
-        if (error || !row) {
-          setNotFound(true);
-          setLoading(false);
-          return;
-        }
-
+        if (error || !row) { setNotFound(true); setLoading(false); return; }
         setNotFound(false);
-        setDataRaw(row as any as LyricDanceData);
+        setData({
+          ...row,
+          cinematic_direction: row.cinematic_direction
+            ? normalizeCinematicDirection(row.cinematic_direction)
+            : row.cinematic_direction,
+        } as LyricDanceData);
         setLoading(false);
 
-        const userId = (row as any).user_id;
-        if (userId) {
+        // Load profile lazily
+        if (row.user_id) {
           const loadProfile = () => {
             supabase
               .from("profiles")
               .select("display_name, avatar_url, is_verified")
-              .eq("id", userId)
+              .eq("id", row.user_id)
               .maybeSingle()
-              .then(({ data: pData }) => {
-                if (pData) setProfile(pData as ProfileInfo);
-              });
+              .then(({ data: p }) => { if (p) setProfile(p as ProfileInfo); });
           };
-
-          if ("requestIdleCallback" in window) {
-            requestIdleCallback(loadProfile);
-          } else {
-            setTimeout(loadProfile, 1000);
-          }
+          if ("requestIdleCallback" in window) requestIdleCallback(loadProfile);
+          else setTimeout(loadProfile, 1000);
         }
       });
   }, [artistSlug, songSlug]);
 
-  // Poll for section images if missing on initial load (claim pipeline generates async)
+  // ── Poll for section images (claim pipeline generates async) ───────────
   useEffect(() => {
     if (!data) return;
-    const images = (data as any).section_images;
+    const images = data.section_images;
     if (Array.isArray(images) && images.some(Boolean)) return;
-
-    const cached = artistSlug && songSlug
-      ? readCachedDanceData(artistSlug, songSlug)
-      : null;
+    const cached = artistSlug && songSlug ? readCachedDanceData(artistSlug, songSlug) : null;
     if (cached && (!Array.isArray(images) || !images.length)) return;
 
     let attempts = 0;
-    const maxAttempts = 12;
     const timer = setInterval(async () => {
       attempts += 1;
-      if (attempts > maxAttempts) {
-        clearInterval(timer);
-        return;
-      }
+      if (attempts > 12) { clearInterval(timer); return; }
       const { data: fresh } = await supabase
         .from("shareable_lyric_dances" as any)
         .select("section_images")
-        .eq("id", (data as any).id)
+        .eq("id", data.id)
         .maybeSingle();
       const f = fresh as any;
-      if (f && Array.isArray(f.section_images) && f.section_images.some(Boolean)) {
-        setDataRaw((prev: LyricDanceData | null) => (
-          prev
-            ? { ...prev, section_images: f.section_images }
-            : prev
-        ));
+      if (f?.section_images?.some?.(Boolean)) {
+        setData((prev) => prev ? { ...prev, section_images: f.section_images } : prev);
         clearInterval(timer);
       }
     }, 5000);
-
     return () => clearInterval(timer);
   }, [data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const core = useLyricDanceCore({
-    lyricDanceId: data?.id ?? "",
-    prefetchedData: data,
-    postId: data?.post_id ?? data?.id ?? "",
-    autoPlay: true,
-  });
-
-  const {
-    canvasRef,
-    textCanvasRef,
-    containerRef,
-    player,
-    playerReady,
-    fetchedData,
-    setFetchedData,
-    muted,
-    currentTimeSec,
-    reactionData,
-    durationSec,
-    lyricSections,
-    audioSections,
-    moments,
-    activeLine,
-    palette,
-    toggleMute,
-    handleReplay,
-    handlePauseForInput,
-    handleResumeAfterInput,
-    commentRefreshKey,
-  } = core;
-
-  const renderData = fetchedData ?? data;
-
+  // ── Empowerment promise generation (marketing pages) ───────────────────
   useEffect(() => {
-    if (!isMarketingView) return;
-    if (!renderData?.id) return;
-    if (localEmpowerment ?? (renderData as any)?.empowerment_promise) return;
+    if (!isMarketingView || !data?.id) return;
+    if (localEmpowerment ?? (data as any)?.empowerment_promise) return;
     if (empowermentGenStarted.current) return;
-
-    const lines = Array.isArray((renderData as any)?.lyrics)
-      ? ((renderData as any).lyrics as any[])
-      : [];
+    const lines = Array.isArray(data?.lyrics) ? data.lyrics as any[] : [];
     if (!lines.length) return;
-
     const lyricsText = lines
-      .filter((line: any) => line?.tag !== "adlib")
-      .map((line: any) => String(line?.text ?? "").trim())
+      .filter((l: any) => l?.tag !== "adlib")
+      .map((l: any) => String(l?.text ?? "").trim())
       .filter(Boolean)
       .join("\n");
-
     if (!lyricsText) return;
-
-    const cinematicDirection = (renderData as any)?.cinematic_direction ?? null;
+    const cd = data?.cinematic_direction as any;
     empowermentGenStarted.current = true;
+    invokeWithTimeout("empowerment-promise", {
+      songTitle: data.song_name || "Untitled", lyricsText,
+      emotionalArc: cd?.emotionalArc ?? null, sceneTone: cd?.sceneTone ?? null,
+      chorusText: cd?.chorusText ?? null, meaning: null,
+    }, 30_000).then(async ({ data: gen, error }) => {
+      if (error || !gen) return;
+      setLocalEmpowerment(gen);
+      await supabase.from("shareable_lyric_dances" as any).update({ empowerment_promise: gen }).eq("id", data.id);
+    }).catch(() => {});
+  }, [isMarketingView, data, localEmpowerment]);
 
-    invokeWithTimeout(
-      "empowerment-promise",
-      {
-        songTitle: renderData?.song_name || "Untitled",
-        lyricsText,
-        emotionalArc: cinematicDirection?.emotionalArc ?? null,
-        sceneTone: cinematicDirection?.sceneTone ?? null,
-        chorusText: cinematicDirection?.chorusText ?? null,
-        meaning: null,
-      },
-      30_000,
-    )
-      .then(async ({ data: generated, error }) => {
-        if (error || !generated) return;
-        setLocalEmpowerment(generated);
-        await supabase
-          .from("shareable_lyric_dances" as any)
-          .update({ empowerment_promise: generated })
-          .eq("id", renderData.id);
-      })
-      .catch(() => {});
-  }, [isMarketingView, renderData, localEmpowerment]);
+  // ── Badge visibility ───────────────────────────────────────────────────
+  useEffect(() => { const t = setTimeout(() => setBadgeVisible(true), 1000); return () => clearTimeout(t); }, []);
 
-
-  // ── Fetch historical fire data ─────────────────────────────────────
-  useEffect(() => {
-    const id = renderData?.id;
-    if (!player || !id) return;
-    let cancelled = false;
-    fetchFireData(id).then((fires) => {
-      if (cancelled || !fires.length) return;
-      player.setHistoricalFires(fires);
-      setTotalFireCount(fires.length);
-      if (fires.length > 0) {
-        const latest = fires.reduce((a, b) =>
-          (a.created_at ?? "") > (b.created_at ?? "") ? a : b,
-        );
-        // lastFiredAt tracked internally
-      }
-    });
-    return () => { cancelled = true; };
-  }, [player, renderData?.id]);
-
-
-  useEffect(() => {
-    const t = setTimeout(() => setBadgeVisible(true), 1000);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    if (!durationSec || !player) return;
-    if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
-      setClosingVisible(true);
-      if (player) {
-        player.audio.loop = false;
-        player.pause();
-      }
-    }
-  }, [currentTimeSec, durationSec, closingVisible, player]);
-
+  // ── Hide Lovable badge ─────────────────────────────────────────────────
   useEffect(() => {
     const style = document.createElement("style");
     style.id = "hide-lovable-badge-ld";
     style.textContent = `[data-lovable-badge], .lovable-badge, iframe[src*="lovable"] { display: none !important; }`;
     document.head.appendChild(style);
-    return () => {
-      style.remove();
-    };
+    return () => { style.remove(); };
   }, []);
 
+  // ── Not found ──────────────────────────────────────────────────────────
   if (notFound) {
     return (
       <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-4 z-50">
-        <p className="text-white/30 text-lg font-mono">
-          Lyric Dance not found.
-        </p>
-        <button
-          onClick={() => navigate("/")}
-          className="text-white/20 text-sm hover:text-white/40 transition-colors focus:outline-none"
-        >
+        <p className="text-white/30 text-lg font-mono">Lyric Dance not found.</p>
+        <button onClick={() => navigate("/")} className="text-white/20 text-sm hover:text-white/40 transition-colors focus:outline-none">
           tools.fm
         </button>
       </div>
     );
   }
 
-  const empowermentPromise = localEmpowerment ?? (renderData as any)?.empowerment_promise ?? null;
-  const coverSongName = renderData?.song_name ?? "";
-  const coverArtist = profile?.display_name ?? renderData?.artist_name ?? "";
+  // ── Derived ────────────────────────────────────────────────────────────
+  const coverSongName = data?.song_name ?? "";
+  const coverArtist = profile?.display_name ?? data?.artist_name ?? "";
   const coverAvatarUrl = profile?.avatar_url ?? null;
-  const ogImage = renderData?.section_images?.find((u: string | null) => !!u)
-    ?? (renderData as any)?.album_art_url
+  const ogImage = data?.section_images?.find((u: string | null) => !!u)
+    ?? (data as any)?.album_art_url
     ?? "https://tools.fm/og/homepage.png";
   const ogTitle = isMarketingView
     ? `${coverArtist} — watch "${coverSongName.toUpperCase()}" come alive`
-    : coverSongName
-      ? `"${coverSongName.toUpperCase()}" — ${coverArtist}`
-      : "Lyric Dance — tools.fm";
+    : coverSongName ? `"${coverSongName.toUpperCase()}" — ${coverArtist}` : "Lyric Dance — tools.fm";
   const ogDescription = isMarketingView
     ? "Your song. One click. AI lyric video. Claim your free artist page on tools.fm"
     : "Interactive lyric video on tools.fm · Run it back or skip";
-  const activeSectionIndex = useMemo(() => {
-    if (!audioSections.length) return 0;
-    const idx = audioSections.findIndex(
-      (s) => currentTimeSec >= s.startSec && currentTimeSec < s.endSec,
-    );
-    return idx >= 0 ? idx : 0;
-  }, [currentTimeSec, audioSections]);
+  const palette = useMemo(() => {
+    const cd = data?.cinematic_direction;
+    if (cd?.sections && Array.isArray(cd.sections)) return cd.sections.map((s: any) => s.dominantColor ?? "#6B7A8E");
+    return ["#ffffff", "#ffffff", "#ffffff"];
+  }, [data]);
 
-  
-
-  const barAccent = useMemo(() => {
-    const autoPalettes = (renderData as any)?.auto_palettes;
-    if (Array.isArray(autoPalettes) && autoPalettes[activeSectionIndex]) {
-      const p = autoPalettes[activeSectionIndex] as string[];
-      return p[3] ?? p[1] ?? p[0] ?? "rgba(255,140,50,1)";
-    }
-    return palette[1] ?? palette[0] ?? "rgba(255,140,50,1)";
-  }, [renderData, activeSectionIndex, palette]);
-
-  const currentMoment = useMemo(() => {
-    const m = moments.find(
-      (mo) => currentTimeSec >= mo.startSec && currentTimeSec < mo.endSec,
-    );
-    if (!m) return null;
-    // Join all lines in this moment into one continuous string for the ticker
-    const fullText = m.lines.map((l) => l.text).join("  ·  ");
-    return {
-      index: m.index,
-      total: moments.length,
-      label: m.label,
-      text: fullText,
-      startSec: m.startSec,
-      endSec: m.endSec,
-    };
-  }, [moments, currentTimeSec]);
-
-  const hasFired = firedMoments.has(currentMoment?.index ?? -1);
-  const markFired = useCallback(() => {
-    if (currentMoment?.index == null) return;
-    setFiredMoments((prev) => new Set([...prev, currentMoment.index]));
-  }, [currentMoment?.index]);
-
-  useEffect(() => {
-    return () => {
-      if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current);
-    };
-  }, []);
-
+  // ── Render ─────────────────────────────────────────────────────────────
   return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col"
-      style={{ background: "#0a0a0a" }}
-    >
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
       <SeoHead
-        title={ogTitle}
-        description={ogDescription}
+        title={ogTitle} description={ogDescription}
         canonical={`https://tools.fm${location.pathname}${location.search}`}
-        ogTitle={ogTitle}
-        ogDescription={ogDescription}
-        ogImage={ogImage}
+        ogTitle={ogTitle} ogDescription={ogDescription} ogImage={ogImage}
       />
+
       {isMarketingView && (
         <ClaimBanner
           artistSlug={artistSlug}
-          accent={
-            palette?.[1] ||
-            palette?.[0] ||
-            renderData?.palette?.[1] ||
-            "#a855f7"
-          }
-          coverArtUrl={
-            (renderData as any)?.album_art_url ??
-            renderData?.section_images?.[0] ??
-            null
-          }
-          songName={renderData?.song_name}
-          artistName={renderData?.artist_name}
+          accent={palette?.[1] || palette?.[0] || data?.palette?.[1] || "#a855f7"}
+          coverArtUrl={(data as any)?.album_art_url ?? data?.section_images?.[0] ?? null}
+          songName={data?.song_name}
+          artistName={data?.artist_name}
         />
       )}
 
       <AnimatePresence>
-        {badgeVisible && !isMarketingView && !isMobile && renderData && (
+        {badgeVisible && !isMarketingView && !isMobile && data && (
           <motion.button
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.4 }}
-            onClick={() =>
-              navigate(
-                `/?from=lyric-dance&song=${encodeURIComponent(renderData.song_name)}`,
-              )
-            }
+            onClick={() => navigate(`/?from=lyric-dance&song=${encodeURIComponent(data.song_name)}`)}
             className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/[0.06] hover:border-white/15 hover:bg-black/80 transition-all group focus:outline-none"
           >
             <span className="text-[9px] font-mono text-white/30 group-hover:text-white/60 tracking-wider transition-colors">
@@ -435,132 +231,24 @@ export default function ShareableLyricDance() {
         )}
       </AnimatePresence>
 
-      <PlayerHeader
-        avatarUrl={coverAvatarUrl}
-        artistName={coverArtist ?? undefined}
-        songTitle={coverSongName || "Untitled"}
-        spotifyTrackId={(renderData as any)?.spotify_track_id ?? null}
-      />
-
-      <div className="flex flex-1 overflow-hidden min-h-0 relative">
-        <div
-          ref={containerRef}
-          className="relative flex-1 min-w-0 cursor-pointer overflow-hidden"
-          onClick={() => { toggleMute(); }}
-        >
-          <canvas
-            id="bg-canvas"
-            ref={canvasRef}
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ zIndex: 1 }}
+      {/* ═══ THE ONE PLAYER ═══ */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {data && (
+          <LyricDanceEmbed
+            lyricDanceId={data.id}
+            lyricDanceUrl={`/${data.artist_slug}/${data.song_slug}/lyric-dance`}
+            songTitle={coverSongName || "Untitled"}
+            artistName={coverArtist || undefined}
+            prefetchedData={data}
+            autoPlay
+            spotifyTrackId={(data as any)?.spotify_track_id ?? null}
+            avatarUrl={coverAvatarUrl}
+            postId={data.post_id ?? data.id}
           />
-          <canvas
-            id="text-canvas"
-            ref={textCanvasRef}
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ zIndex: 2 }}
-          />
-
-          <ClosingScreen
-            visible={closingVisible}
-            empowermentPromise={empowermentPromise}
-            danceId={renderData?.id ?? ""}
-            onAnswer={() => setClosingAnswered(true)}
-            onReplay={() => {
-              setClosingVisible(false);
-              setClosingAnswered(false);
-              if (player) {
-                player.audio.loop = false;
-                player.seek(0);
-                player.play();
-              }
-            }}
-            moments={moments}
-            momentFireCounts={deriveMomentFireCounts(reactionData, moments)}
-            onSeekToMoment={(idx) => {
-              const m = moments[idx];
-              if (m && player) {
-                player.seek(m.startSec);
-                player.setRegion(m.startSec, m.endSec);
-              }
-            }}
-            onShareClip={(momentIdx, caption) => {
-              const m = moments[momentIdx];
-              if (!m) return;
-              setClipStart(m.startSec);
-              setClipEnd(m.endSec);
-              setClipCaption(caption);
-              setShowClipComposer(true);
-            }}
-          />
-
-          {showClipComposer && (
-            <div className="absolute inset-x-3 bottom-3 z-[540]" onClick={(e) => e.stopPropagation()}>
-              <ClipComposer
-                visible={showClipComposer}
-                player={player}
-                durationSec={durationSec}
-                fires={(reactionData ?? []) as any}
-                lines={lyricSections.allLines.map((l) => ({
-                  lineIndex: l.lineIndex,
-                  text: l.text,
-                  startSec: l.startSec,
-                  endSec: l.endSec ?? (l.startSec + 5),
-                }))}
-                initialStart={clipStart}
-                initialEnd={clipEnd}
-                initialCaption={clipCaption}
-                songTitle={renderData?.song_name ?? "Untitled"}
-                onClose={() => {
-                  setShowClipComposer(false);
-                  player?.setRegion(undefined, undefined);
-                }}
-              />
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
-      <div
-        className="w-full flex-shrink-0"
-        style={{
-          background: "#0a0a0a",
-          ...(isMobile ? { paddingBottom: "env(safe-area-inset-bottom, 0px)" } : {}),
-        }}
-      >
-        <div className="w-full max-w-2xl mx-auto">
-          <LyricInteractionLayer
-            moments={moments}
-            reactionData={reactionData}
-            player={player}
-            onFireTap={() => {
-              const id = renderData?.id;
-              if (!id || !activeLine) return;
-              player?.fireFire(0);
-              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "shareable");
-              setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + 1 }));
-              setTotalFireCount((c) => c + 1);
-              markFired();
-            }}
-            onFireHoldStart={() => {
-              if (holdFireIntervalRef.current) return;
-              holdFireIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
-            }}
-            onFireHoldEnd={(holdMs) => {
-              if (holdFireIntervalRef.current) { clearInterval(holdFireIntervalRef.current); holdFireIntervalRef.current = null; }
-              const id = renderData?.id;
-              if (!id || !activeLine) return;
-              player?.fireFire(holdMs);
-              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "shareable");
-              const weight = holdMs < 300 ? 1 : holdMs < 1000 ? 2 : holdMs < 3000 ? 4 : 8;
-              setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
-              setTotalFireCount((c) => c + 1);
-              markFired();
-            }}
-            onSeekTo={(sec) => player?.seek(sec)}
-          />
-        </div>
-      </div>
+      {isMobile && <div style={{ height: "env(safe-area-inset-bottom, 0px)" }} />}
     </div>
   );
 }

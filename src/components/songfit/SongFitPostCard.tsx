@@ -326,13 +326,8 @@ export function SongFitPostCard({
                 onPlay={activate}
                 postId={post.id}
                 spotifyTrackId={post.spotify_track_id}
-                coverImageUrl={post.album_art_url}
-                hideReactButton
-                onOpenReactions={handleOpenPanel}
                 prefetchedData={lyricDanceData ?? null}
                 avatarUrl={post.profiles?.avatar_url}
-                isVerified={(post.profiles as any)?.is_verified}
-                onProfileClick={handleProfileClick}
                 preload={preload}
               />
             </div>
