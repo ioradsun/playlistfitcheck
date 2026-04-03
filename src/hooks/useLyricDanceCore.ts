@@ -58,7 +58,6 @@ interface UseLyricDanceCoreOptions {
   prefetchedData?: LyricDanceData | null;
   postId?: string;
   autoPlay?: boolean;
-  onPlay?: () => void;
   usePool?: boolean;
   evicted?: boolean;
 }
@@ -68,7 +67,6 @@ export function useLyricDanceCore({
   prefetchedData,
   postId: _postId,
   autoPlay = false,
-  onPlay,
   usePool = false,
   evicted = false,
 }: UseLyricDanceCoreOptions) {
