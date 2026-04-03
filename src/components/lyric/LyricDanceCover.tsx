@@ -144,10 +144,10 @@ export function LyricDanceCover({
                 letterSpacing: "0.12em",
                 fontFamily: "monospace",
                 textTransform: "uppercase",
-                color: waiting ? "transparent" : "rgba(255,255,255,0.7)",
-                border: `1.5px solid ${waiting ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.15)"}`,
+                color: waiting ? "transparent" : "rgba(255,255,255,0.85)",
+                border: `1.5px solid ${waiting ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.20)"}`,
                 borderRadius: 28,
-                background: "rgba(255,255,255,0.06)",
+                background: waiting ? "rgba(255,255,255,0.02)" : "transparent",
               }}
               className="transition-all duration-700"
             >
