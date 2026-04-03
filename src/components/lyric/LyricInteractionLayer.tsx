@@ -275,7 +275,7 @@ function InlineFireButton({
   );
 }
 
-export function LyricInteractionLayer({
+export function FmlyBar({
   moments,
   reactionData,
   player,
@@ -378,3 +378,6 @@ export function LyricInteractionLayer({
     </div>
   );
 }
+
+
+export { FmlyBar as LyricInteractionLayer };

@@ -75,7 +75,6 @@ export function useLyricDanceCore({
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
   const [loading, setLoading] = useState(!prefetchedData);
   const [muted, setMuted] = useState(true);
-  const [showCover, setShowCover] = useState(true);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
 
@@ -229,8 +228,8 @@ export function useLyricDanceCore({
 
   useEffect(() => {
     if (!player) return;
-    player.setEmojiStreamEnabled(!showCover);
-  }, [player, showCover]);
+    player.setEmojiStreamEnabled(true);
+  }, [player]);
 
   useEffect(() => {
     if (!player) return;
@@ -357,19 +356,6 @@ export function useLyricDanceCore({
     player?.play();
   }, [player]);
 
-  const handleListenNow = useCallback((e?: ReactMouseEvent) => {
-    e?.stopPropagation();
-    setShowCover(false);
-    onPlay?.();
-    if (player) {
-      // Always start from the beginning when releasing cover
-      player.seek(0);
-      player.setMuted(false);
-      player.play();
-    }
-    setMuted(false);
-  }, [player, onPlay]);
-
   const handleCommentFromBar = useCallback(async (noteText: string, momentIndex?: number | null) => {
     const text = noteText.trim();
     if (!text) return;
@@ -396,8 +382,6 @@ export function useLyricDanceCore({
     () => computeTopReaction(reactionData, data?.lyrics ?? []),
     [reactionData, data?.lyrics],
   );
-
-  const isWaiting = loading || !fetchedData;
 
   const [progress, setProgress] = useState(0);
   useEffect(() => {
@@ -442,7 +426,6 @@ export function useLyricDanceCore({
       hasFetchedData: !!fetchedData,
       hasCinematicDirection: !!fetchedData?.cinematic_direction,
       playerReady,
-      isWaiting: loading || !fetchedData,
     });
   }, [lyricDanceId, loading, fetchedData, playerReady]);
 
@@ -459,8 +442,6 @@ export function useLyricDanceCore({
     loading,
     muted,
     setMuted,
-    showCover,
-    setShowCover,
     currentTimeSec,
     progress,
     reactionData,
@@ -472,12 +453,10 @@ export function useLyricDanceCore({
     palette,
     toggleMute,
     handleReplay,
-    handleListenNow,
     handlePauseForInput,
     handleResumeAfterInput,
     handleCommentFromBar,
     topReaction,
-    isWaiting,
     commentRefreshKey,
     setCommentRefreshKey,
   };

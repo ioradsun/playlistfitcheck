@@ -1,29 +1,14 @@
-/**
- * LyricDanceEmbed — Feed player (inline, reels, battle).
- * All shared player logic lives in useLyricDanceCore.
- *
- * Lifecycle (cardState + preload):
- *   cold              → evict player after 300ms debounce
- *   warm + no preload → evicted (React cover only, zero GPU cost)
- *   warm + preload    → player behind cover, scene pre-bakes
- *                       Reels: plays muted (RAF running, scene visually alive)
- *                       Standard: paused (no RAF, scene compiles on CPU only)
- *   active            → unmuted, playing
- */
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Volume2, VolumeX } from "lucide-react";
+import { VolumeX } from "lucide-react";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
-import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
-import { ReelsGestureLayer } from "./ReelsGestureLayer";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
-import { CanvasTopPills } from "@/components/lyric/CanvasTopPills";
+import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
-import { isAudioUnlocked, onAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
+import { isAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
@@ -40,7 +25,6 @@ interface LyricDanceEmbedProps {
   regionEnd?: number;
   showExpandButton?: boolean;
   hideReactButton?: boolean;
-  reelsMode?: boolean;
   postId?: string;
   spotifyTrackId?: string | null;
   autoPlay?: boolean;
@@ -49,8 +33,6 @@ interface LyricDanceEmbedProps {
   avatarUrl?: string | null;
   isVerified?: boolean;
   onProfileClick?: () => void;
-  /** When true, this card is at viewport center — create the player behind the cover
-   *  so the scene is pre-baked when the user taps Listen Now. */
   preload?: boolean;
 }
 
@@ -64,36 +46,23 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   lyricDanceUrl,
   songTitle,
   artistName,
-  coverImageUrl,
   prefetchedData,
   cardState,
   onPlay,
   regionStart,
   regionEnd,
-  showExpandButton = true,
-  hideReactButton = false,
-  reelsMode = false,
   postId,
   spotifyTrackId,
   autoPlay = false,
   forceMuted = false,
-  onOpenReactions,
   avatarUrl,
-  isVerified,
-  onProfileClick,
   preload = false,
 }, ref) {
   const isFeedEmbed = cardState !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
   const empowermentPromise = (prefetchedData as any)?.empowerment_promise ?? null;
 
-  // ── Eviction: controls whether a player exists ─────────────────────
-  // Warm/active cards keep a player; cold cards evict after a short debounce.
-  // The canvas pool itself caps total concurrent players.
-  //
-  // Non-feed embeds (shareable, FitTab) never evict.
   const [evicted, setEvicted] = useState(true);
-  const [reelsPaused, setReelsPaused] = useState(false);
   const warmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -103,26 +72,17 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
 
     if (cardState === "active") {
-      // User tapped play → create immediately, no debounce
       if (warmTimerRef.current) { clearTimeout(warmTimerRef.current); warmTimerRef.current = null; }
       if (evicted) setEvicted(false);
     } else if (cardState === "cold") {
-      // Offscreen → destroy immediately, free pool slot for the next card
       if (warmTimerRef.current) { clearTimeout(warmTimerRef.current); warmTimerRef.current = null; }
       if (!evicted) setEvicted(true);
     } else {
-      if (reelsMode) {
-        // Reels: create immediately — snap scroll = only 1-2 warm cards at once
-        if (evicted) setEvicted(false);
-      } else {
-        // Standard: debounce so fast-scroll cards don't create players
-        if (warmTimerRef.current) return;
-        if (!evicted) return;
-        warmTimerRef.current = setTimeout(() => {
-          warmTimerRef.current = null;
-          setEvicted(false);
-        }, 200);
-      }
+      if (warmTimerRef.current || !evicted) return;
+      warmTimerRef.current = setTimeout(() => {
+        warmTimerRef.current = null;
+        setEvicted(false);
+      }, 200);
     }
 
     return () => {
@@ -131,9 +91,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         warmTimerRef.current = null;
       }
     };
-  }, [cardState, isFeedEmbed, isBattleMode, evicted, reelsMode]);
+  }, [cardState, isFeedEmbed, isBattleMode, evicted]);
 
-  // Patch region onto prefetchedData for battle mode
   const prefetchedDataWithRegion = useMemo(() => {
     if (!isBattleMode || !prefetchedData) return prefetchedData;
     return { ...prefetchedData, region_start: regionStart, region_end: regionEnd };
@@ -148,18 +107,13 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     data,
     muted,
     setMuted,
-    showCover,
-    setShowCover,
     currentTimeSec,
     reactionData,
     durationSec,
     lyricSections,
     audioSections,
     activeLine,
-    toggleMute,
     handleReplay,
-    handleListenNow,
-    isWaiting,
   } = useLyricDanceCore({
     lyricDanceId,
     prefetchedData: prefetchedDataWithRegion,
@@ -177,21 +131,17 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     },
   }), [player]);
 
-  const [forceDemoted, setForceDemoted] = useState(false);
   const [, setFireStrengthByLine] = useState<Record<number, number>>({});
   const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
   const [closingVisible, setClosingVisible] = useState(false);
   const [, setClosingAnswered] = useState(false);
-  const [totalFireCount, setTotalFireCount] = useState(0);
   const [clipStart, setClipStart] = useState(0);
   const [clipEnd, setClipEnd] = useState(0);
   const [clipCaption, setClipCaption] = useState("");
   const [showClipComposer, setShowClipComposer] = useState(false);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const userActivatedRef = useRef(false);
-  /** True once this card has been played at least once. Survives warm transitions. Only resets on cold. */
-  const hasPlayedRef = useRef(false);
-  // ── Full-mode upgrade: when player is ready and card is warm/active ──
+  const [showMuteIndicator, setShowMuteIndicator] = useState(false);
+
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
     if (cardState === "warm" || cardState === "active") {
@@ -199,165 +149,59 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
   }, [player, playerReady, isFeedEmbed, cardState]);
 
-  // ── Reels: prime audio during warm phase ─────────────────────────
-  // Start downloading audio bytes while the user is still on the previous card.
-  // By the time this card activates, audio.readyState is likely >= HAVE_FUTURE_DATA.
-  useEffect(() => {
-    if (!reelsMode || !isFeedEmbed || !player || !playerReady) return;
-    if (cardState === "warm" || cardState === "active") {
-      player.primeAudio();
-    }
-  }, [reelsMode, isFeedEmbed, player, playerReady, cardState]);
-
-  // ── Media deactivate listener ──────────────────────────────────────
-  useEffect(() => {
-    if (!isFeedEmbed || !postId) return;
-    const handler = (e: Event) => {
-      const ce = e as CustomEvent<{ cardId?: string }>;
-      if (ce.detail?.cardId !== postId) return;
-      userActivatedRef.current = false;
-      setForceDemoted(true);
-    };
-    window.addEventListener("crowdfit:media-deactivate", handler);
-    return () => window.removeEventListener("crowdfit:media-deactivate", handler);
-  }, [isFeedEmbed, postId]);
-
-  useEffect(() => {
-    if (cardState === "active") setForceDemoted(false);
-  }, [cardState]);
-
-  // ── Reset cover + deactivate when card leaves active ───────────────
-  useEffect(() => {
-    if (!isFeedEmbed || isBattleMode) return;
-    if (cardState === "cold") {
-      setShowCover(true);
-      userActivatedRef.current = false;
-      hasPlayedRef.current = false;
-      if (postId) {
-        window.dispatchEvent(new CustomEvent("crowdfit:media-deactivate", {
-          detail: { cardId: postId },
-        }));
-      }
-    } else if (reelsMode && cardState === "warm") {
-      // Reels: only restore cover if card was never played.
-      // If user already heard this card, skip the cover on re-entry
-      // so swiping back gives instant resume (Instagram behavior).
-      if (!hasPlayedRef.current) {
-        setShowCover(true);
-      }
-      userActivatedRef.current = false;
-    }
-  }, [cardState, isFeedEmbed, isBattleMode, lyricDanceId, postId, setShowCover, reelsMode]);
-
-  // ── Audio / mute driven purely by cardState ────────────────────────
   useEffect(() => {
     if (!player || !playerReady) return;
-    if (isBattleMode) {
-      if (cardState === "active") {
-        player.setCoverMode(false);
-        player.play();
-        player.setMuted(forceMuted);
-        player.scheduleFullModeUpgrade();
-        setMuted(forceMuted);
-      } else {
-        player.setCoverMode(false);
-        player.stopRendering?.();
-        player.setMuted(true);
-        setMuted(true);
-      }
-      return;
-    }
-    // ── Reels mode ──
-    if (reelsMode && isFeedEmbed) {
-      if (cardState === "active" && !reelsPaused) {
-        player.setCoverMode(false);
-        player.play();
-        // Unmute only if user has provided a gesture (cover tap or previous card)
-        if (isAudioUnlocked()) {
-          player.setMuted(false);
-          setMuted(false);
-          hasPlayedRef.current = true;
-        } else {
-          // No gesture yet — play muted, cover is still showing for gesture
-          player.setMuted(true);
-          setMuted(true);
-        }
-      } else {
-        player.setMuted(true);
-        setMuted(true);
-        // Always pause when not active — prevents audio drift and silent
-        // lyric advancement on warm cards. audio.load() (from primeAudio)
-        // continues buffering even when paused.
-        player.pause();
-      }
-      return;
-    }
-    if (!isFeedEmbed) return;
-    const coverUp = showCover;
-    const isUserEngaged = cardState === "active" || userActivatedRef.current;
-    const shouldUnmuted = !coverUp && isUserEngaged && cardState !== "cold" && !forceDemoted;
-    const shouldMuted = !coverUp && !isUserEngaged;
-    if (shouldUnmuted) {
-      player.setCoverMode(false);
+    if (cardState === "active" || !isFeedEmbed) {
       player.play();
-      player.setMuted(false);
+      player.setMuted(!isAudioUnlocked() ? true : muted);
+    } else {
+      player.pause();
+      player.setMuted(true);
+    }
+  }, [player, playerReady, cardState, isFeedEmbed, muted]);
+
+  useEffect(() => {
+    if (!player || !playerReady || !forceMuted) return;
+    player.setMuted(true);
+    setMuted(true);
+  }, [player, playerReady, forceMuted, setMuted]);
+
+  useEffect(() => {
+    if (muted) {
+      setShowMuteIndicator(true);
+      const timeout = setTimeout(() => setShowMuteIndicator(false), 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [muted]);
+
+  const handleCanvasTap = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    unlockAudio();
+    if (muted) {
+      player?.setMuted(false);
       setMuted(false);
-    } else if (shouldMuted) {
-      // Cover is down, user hasn't engaged — play muted so scene renders
-      player.setCoverMode(false);
-      player.play();
-      player.setMuted(true);
+      setShowMuteIndicator(false);
+    } else {
+      player?.setMuted(true);
       setMuted(true);
-    } else if (coverUp) {
-      // Play muted behind cover — canvas is the preview.
-      // Engine throttles to half frame rate in cover mode.
-      player.setCoverMode(true);
-      player.play();
-      player.setMuted(true);
-      setMuted(true);
+      setShowMuteIndicator(true);
     }
-  }, [player, playerReady, cardState, forceMuted, forceDemoted, isFeedEmbed, isBattleMode, showCover, setMuted, reelsMode, reelsPaused]);
-
-  // ── Reels: auto-dismiss cover when audio is already unlocked ──
-  // First card: cover stays (user must tap to unlock audio)
-  // Card 2+: audio already unlocked → dismiss cover immediately → auto-play
-  useEffect(() => {
-    if (!reelsMode || !isFeedEmbed) return;
-    if (cardState === "active" && showCover && (isAudioUnlocked() || hasPlayedRef.current)) {
-      setShowCover(false);
-    }
-  }, [reelsMode, isFeedEmbed, cardState, showCover, setShowCover]);
-
-  // Listen for global audio unlock (user tapped cover on another card)
-  // → dismiss this card's cover if it's active
-  useEffect(() => {
-    if (!reelsMode || !isFeedEmbed || cardState !== "active" || !showCover) return;
-    return onAudioUnlocked(() => {
-      setShowCover(false);
-    });
-  }, [reelsMode, isFeedEmbed, cardState, showCover, setShowCover]);
+  }, [muted, player, setMuted]);
 
   useEffect(() => {
     if (!player || !playerReady) return;
     player.setTextVerticalBias(0);
   }, [player, playerReady]);
 
-  // ── Closing screen ─────────────────────────────────────────────────
   useEffect(() => {
     if (!durationSec || !player) return;
-    // Don't trigger while cover is up — audio is playing behind scrim, not "ended"
-    if (showCover) return;
-    // Show closing screen ~2.2s after song ends (after shatter animation)
     if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
       setClosingVisible(true);
-      // Stop the audio — no looping back to start.
-      // The closing screen is the end state until user seeks or replays.
       player.audio.loop = false;
       player.pause();
     }
-  }, [currentTimeSec, durationSec, closingVisible, player, showCover]);
+  }, [currentTimeSec, durationSec, closingVisible, player]);
 
-  // ── Dismiss closing screen on replay or seek ───────────────────────
   const dismissClosingAndReplay = useCallback(() => {
     setClosingVisible(false);
     setClosingAnswered(false);
@@ -376,7 +220,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     setMuted(false);
   }, [closingVisible, player, setMuted]);
 
-  // ── Fire data ──────────────────────────────────────────────────────
   useEffect(() => {
     const id = (data ?? prefetchedData as any)?.id;
     if (!player || !id) return;
@@ -384,114 +227,48 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     fetchFireData(id).then((fires) => {
       if (cancelled) return;
       player.setHistoricalFires(fires);
-      setTotalFireCount(fires.length);
-      if (fires.length > 0) {
-        const latest = fires.reduce((a, b) =>
-          (a.created_at ?? "") > (b.created_at ?? "") ? a : b,
-        );
-      }
     });
     return () => { cancelled = true; };
   }, [player, (data ?? prefetchedData as any)?.id]);
-
-  const activeSectionIndex = useMemo(() => {
-    if (!audioSections.length) return 0;
-    const idx = audioSections.findIndex(
-      (s) => currentTimeSec >= s.startSec && currentTimeSec < s.endSec,
-    );
-    return idx >= 0 ? idx : 0;
-  }, [currentTimeSec, audioSections]);
 
   const moments = useMemo<Moment[]>(() => {
     const phrases = (data as any)?.cinematic_direction?.phrases ?? [];
     const phraseInputs = phrases.map((p: any) => {
       const isMs = p.start > 500;
-      return {
-        start: isMs ? p.start / 1000 : p.start,
-        end: isMs ? p.end / 1000 : p.end,
-        text: p.text ?? "",
-      };
+      return { start: isMs ? p.start / 1000 : p.start, end: isMs ? p.end / 1000 : p.end, text: p.text ?? "" };
     });
     return buildMoments(phraseInputs, audioSections, lyricSections.allLines, durationSec);
-  }, [data, prefetchedData, audioSections, lyricSections.allLines, durationSec]);
+  }, [data, audioSections, lyricSections.allLines, durationSec]);
 
-  const currentMoment = useMemo(() => {
-    const m = moments.find(
-      (moment) => currentTimeSec >= moment.startSec && currentTimeSec < moment.endSec,
-    );
-    if (!m) return null;
-    // Join all lines in this moment into one continuous string for the ticker
-    const fullText = m.lines.map((l) => l.text).join("  ·  ");
-    return {
-      index: m.index,
-      total: moments.length,
-      label: m.label,
-      text: fullText,
-      startSec: m.startSec,
-      endSec: m.endSec,
-    };
-  }, [moments, currentTimeSec]);
-
+  const currentMoment = useMemo(() => moments.find((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec) ?? null, [moments, currentTimeSec]);
 
   const markFired = useCallback(() => {
     if (currentMoment?.index == null) return;
     setFiredMoments((prev) => new Set([...prev, currentMoment.index]));
   }, [currentMoment?.index]);
 
-  const effectiveShowCover = showCover;
-  void artistName;
-  void coverImageUrl;
-  void preload;
-
   useEffect(() => {
     return () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); };
   }, []);
 
-  // ── Reels gesture callbacks (active AFTER cover dismisses) ──
-  const handleReelsSeekBack = useCallback(() => {
-    if (!player) return;
-    const t = Math.max(0, player.audio.currentTime - 5);
-    dismissClosingAndSeek(t);
-  }, [player, dismissClosingAndSeek]);
-
-  const handleReelsSeekForward = useCallback(() => {
-    if (!player) return;
-    const t = Math.min(player.audio.duration || 999, player.audio.currentTime + 5);
-    dismissClosingAndSeek(t);
-  }, [player, dismissClosingAndSeek]);
-
-  const handleReelsTogglePlayPause = useCallback(() => {
-    if (!player) return;
-    // If closing screen is up, center tap = replay
-    if (closingVisible) {
-      dismissClosingAndReplay();
-      return;
-    }
-    if (reelsPaused) {
-      setReelsPaused(false);
-      player.play();
-      player.setMuted(false);
-      setMuted(false);
-    } else {
-      setReelsPaused(true);
-      player.pause();
-    }
-  }, [player, reelsPaused, setMuted, closingVisible, dismissClosingAndReplay]);
-
-  // Reset pause when card deactivates
-  useEffect(() => {
-    if (!reelsMode || !isFeedEmbed) return;
-    if (cardState !== "active") setReelsPaused(false);
-  }, [reelsMode, isFeedEmbed, cardState]);
+  void lyricDanceUrl;
+  void preload;
+  void firedMoments;
 
   return (
-    <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a", position: "relative" }}>
+    <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
+      <PlayerHeader
+        avatarUrl={avatarUrl}
+        artistName={artistName}
+        songTitle={songTitle}
+        spotifyTrackId={spotifyTrackId}
+      />
+
       <div
         ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
-        onClick={reelsMode ? undefined : (e) => { if (!effectiveShowCover && !isWaiting) toggleMute(e); }}
+        onClick={handleCanvasTap}
       >
-        {/* Static canvases — only for non-pooled (shareable/FitTab) */}
         {!isFeedEmbed && (
           <>
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }} />
@@ -499,56 +276,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           </>
         )}
 
-        <CanvasTopPills
-          spotifyTrackId={spotifyTrackId ?? null}
-          leftSlot={(
-            !effectiveShowCover && playerReady && !reelsMode
-              ? (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleMute(e);
-                  }}
-                  aria-label={muted ? "Unmute" : "Mute"}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: "50%",
-                    background: "rgba(0,0,0,0.35)",
-                    border: "none",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {muted
-                    ? <VolumeX size={12} style={{ color: "rgba(255,255,255,0.4)" }} />
-                    : <Volume2 size={12} style={{ color: "rgba(255,255,255,0.4)" }} />}
-                </button>
-                )
-              : null
-          )}
-        />
-
-        {/* Reels: gesture layer for seek/pause (only when cover is dismissed) */}
-        {reelsMode && isFeedEmbed && !effectiveShowCover && !isWaiting && (
-          <ReelsGestureLayer
-            onSeekBack={handleReelsSeekBack}
-            onSeekForward={handleReelsSeekForward}
-            onTogglePlayPause={handleReelsTogglePlayPause}
-          >
-            {reelsPaused && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="bg-black/40 backdrop-blur-sm rounded-full p-4">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="white" opacity="0.6">
-                    <rect x="6" y="4" width="4" height="16" rx="1" />
-                    <rect x="14" y="4" width="4" height="16" rx="1" />
-                  </svg>
-                </div>
-              </div>
-            )}
-          </ReelsGestureLayer>
+        {muted && (
+          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.5)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", opacity: showMuteIndicator ? 0.8 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 40 }}>
+            <VolumeX size={20} color="white" />
+          </div>
         )}
 
         <ClosingScreen
@@ -584,12 +315,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               player={player}
               durationSec={durationSec}
               fires={(reactionData ?? []) as any}
-              lines={lyricSections.allLines.map((l) => ({
-                lineIndex: l.lineIndex,
-                text: l.text,
-                startSec: l.startSec,
-                endSec: l.endSec ?? (l.startSec + 5),
-              }))}
+              lines={lyricSections.allLines.map((l) => ({ lineIndex: l.lineIndex, text: l.text, startSec: l.startSec, endSec: l.endSec ?? (l.startSec + 5) }))}
               initialStart={clipStart}
               initialEnd={clipEnd}
               initialCaption={clipCaption}
@@ -600,54 +326,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               }}
             />
           </div>
-        )}
-
-        {!isBattleMode && (
-          <AnimatePresence>
-            {reelsMode && isAudioUnlocked() ? (
-              /* Reels + audio unlocked: show spinner while loading, no cover */
-              !playerReady && isFeedEmbed && (
-                <motion.div
-                  key="reels-loader"
-                  initial={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute inset-0 flex items-center justify-center"
-                  style={{ zIndex: 30, background: "#0a0a0a" }}
-                >
-                  <div
-                    className="w-5 h-5 border-2 border-white/10 border-t-white/40 rounded-full animate-spin"
-                  />
-                </motion.div>
-              )
-            ) : (
-              (effectiveShowCover || isWaiting) && (
-                <motion.div
-                  key="standard-cover"
-                  initial={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                  className="absolute inset-0"
-                  style={{ zIndex: 30 }}
-                >
-                  <LyricDanceCover
-                    songName={songTitle}
-                    artistName={artistName}
-                    avatarUrl={avatarUrl}
-                    waiting={isWaiting}
-                    hideBackground={playerReady}
-                    duration={durationSec > 0 ? formatTime(durationSec) : undefined}
-                    onExpand={showExpandButton ? () => window.open(lyricDanceUrl, "_blank") : undefined}
-                    onListen={(e) => {
-                      userActivatedRef.current = true;
-                      unlockAudio(); // User gesture context → unlock browser audio policy
-                      handleListenNow(e);
-                    }}
-                  />
-                </motion.div>
-              )
-            )}
-          </AnimatePresence>
         )}
       </div>
 
@@ -686,7 +364,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               setFireStrengthByLine((prev) => ({ ...prev, [activeLine.lineIndex]: (prev[activeLine.lineIndex] ?? 0) + weight }));
               markFired();
             }}
-            onSeekTo={(sec) => player?.seek(sec)}
+            onSeekTo={(sec) => dismissClosingAndSeek(sec)}
           />
         </div>
       )}

@@ -8,11 +8,10 @@ import { useParams, useNavigate, useSearchParams, useLocation } from "react-rout
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Volume2, VolumeX, RotateCcw } from "lucide-react";
+import { VolumeX } from "lucide-react";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { consumeShareableDancePrefetch, readCachedDanceData } from "@/lib/prefetch";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
-import { LyricDanceCover } from "@/components/lyric/LyricDanceCover";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import ClaimBanner from "@/components/claim/ClaimBanner";
@@ -22,8 +21,8 @@ import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
+import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
-import { CanvasTopPills } from "@/components/lyric/CanvasTopPills";
 
 function deriveSectionColors(cd: any | null | undefined): Record<number, string> {
   const colors: Record<number, string> = {};
@@ -197,7 +196,6 @@ export default function ShareableLyricDance() {
     fetchedData,
     setFetchedData,
     muted,
-    showCover,
     currentTimeSec,
     reactionData,
     durationSec,
@@ -207,19 +205,12 @@ export default function ShareableLyricDance() {
     palette,
     toggleMute,
     handleReplay,
-    handleListenNow,
     handlePauseForInput,
     handleResumeAfterInput,
-    isWaiting,
     commentRefreshKey,
   } = core;
 
   const renderData = fetchedData ?? data;
-
-  useEffect(() => {
-    if (!isMarketingView || !playerReady) return;
-    handleListenNow();
-  }, [isMarketingView, playerReady, handleListenNow]);
 
   useEffect(() => {
     if (!isMarketingView) return;
@@ -266,10 +257,6 @@ export default function ShareableLyricDance() {
       .catch(() => {});
   }, [isMarketingView, renderData, localEmpowerment]);
 
-  useEffect(() => {
-    if (!player) return;
-    player.setCoverMode(showCover);
-  }, [player, showCover]);
 
   // ── Fetch historical fire data ─────────────────────────────────────
   useEffect(() => {
@@ -298,7 +285,6 @@ export default function ShareableLyricDance() {
 
   useEffect(() => {
     if (!durationSec || !player) return;
-    if (showCover) return; // Don't trigger while cover is up
     if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
       setClosingVisible(true);
       if (player) {
@@ -306,7 +292,7 @@ export default function ShareableLyricDance() {
         player.pause();
       }
     }
-  }, [currentTimeSec, durationSec, closingVisible, player, showCover]);
+  }, [currentTimeSec, durationSec, closingVisible, player]);
 
   useEffect(() => {
     const style = document.createElement("style");
@@ -466,13 +452,18 @@ export default function ShareableLyricDance() {
         )}
       </AnimatePresence>
 
+      <PlayerHeader
+        avatarUrl={coverAvatarUrl}
+        artistName={coverArtist ?? undefined}
+        songTitle={coverSongName || "Untitled"}
+        spotifyTrackId={(renderData as any)?.spotify_track_id ?? null}
+      />
+
       <div className="flex flex-1 overflow-hidden min-h-0 relative">
         <div
           ref={containerRef}
           className="relative flex-1 min-w-0 cursor-pointer overflow-hidden"
-          onClick={() => {
-            if (!showCover) toggleMute();
-          }}
+          onClick={() => { toggleMute(); }}
         >
           <canvas
             id="bg-canvas"
@@ -485,53 +476,6 @@ export default function ShareableLyricDance() {
             ref={textCanvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none"
             style={{ zIndex: 2 }}
-          />
-          <CanvasTopPills
-            spotifyTrackId={(renderData as any)?.spotify_track_id ?? null}
-            leftSlot={(
-              !showCover && playerReady && !isMarketingView
-                ? (
-                  <>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleMute(); }}
-                      aria-label={muted ? "Unmute" : "Mute"}
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        background: "rgba(0,0,0,0.35)",
-                        border: "none",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {muted
-                        ? <VolumeX size={12} style={{ color: "rgba(255,255,255,0.4)" }} />
-                        : <Volume2 size={12} style={{ color: "rgba(255,255,255,0.4)" }} />}
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleReplay(); }}
-                      aria-label="Replay"
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        background: "rgba(0,0,0,0.35)",
-                        border: "none",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <RotateCcw size={12} style={{ color: "rgba(255,255,255,0.4)" }} />
-                    </button>
-                  </>
-                  )
-                : null
-            )}
           />
 
           <ClosingScreen
@@ -593,31 +537,6 @@ export default function ShareableLyricDance() {
           )}
 
 
-          <AnimatePresence>
-            {(showCover || isWaiting) && (
-              <motion.div
-                initial={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.3, ease: "easeOut" }}
-                className="absolute inset-0"
-                style={{ zIndex: 30 }}
-              >
-                <LyricDanceCover
-                  songName={coverSongName}
-                  artistName={coverArtist}
-                  avatarUrl={coverAvatarUrl}
-                  claimArtistName={renderData?.artist_name ?? ""}
-                  claimSongName={renderData?.song_name ?? ""}
-                  isMarketingCover={isMarketingView}
-                  waiting={false}
-                  hideBackground={playerReady}
-                  duration={durationSec > 0 ? formatTime(durationSec) : undefined}
-                  onExpand={undefined}
-                  onListen={handleListenNow}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           {(
             <div
