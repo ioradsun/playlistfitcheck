@@ -241,37 +241,53 @@ export function useLyricDanceCore({
     if (!player) return;
     const audio = player.audio;
     let rafId = 0;
+
     const tick = () => {
-      const t = audio.currentTime;
+      // Read time from engine — it handles wall-clock fallback internally
+      const t = player.getCurrentTime?.() ?? audio.currentTime;
       if (Math.abs(t - currentTimeSecRef.current) > 0.1) {
         currentTimeSecRef.current = t;
         setCurrentTimeSec(t);
       }
-      if (!audio.paused && !document.hidden) rafId = requestAnimationFrame(tick);
+      // Run while player is playing (not just audio) and tab is visible
+      if (player.playing && !document.hidden) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        rafId = 0;
+      }
     };
-    const onAudioPlay = () => {
-      if (!rafId) rafId = requestAnimationFrame(tick);
+
+    // Start/stop based on player.playing changes
+    const checkPlaying = () => {
+      if (player.playing && !rafId && !document.hidden) {
+        rafId = requestAnimationFrame(tick);
+      }
     };
-    const onPause = () => {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-    };
+
     const onVis = () => {
       if (document.hidden) {
         cancelAnimationFrame(rafId);
         rafId = 0;
-      } else if (!audio.paused) {
-        onAudioPlay();
+      } else {
+        checkPlaying();
       }
     };
-    audio.addEventListener("play", onAudioPlay);
-    audio.addEventListener("pause", onPause);
+
+    // Listen for audio events (play may start after autoplay resolves)
+    audio.addEventListener("play", checkPlaying);
+    audio.addEventListener("pause", checkPlaying);
     document.addEventListener("visibilitychange", onVis);
-    if (!audio.paused) onAudioPlay();
+
+    // Also poll — player.playing can change without audio events (wall-clock mode)
+    const interval = setInterval(checkPlaying, 200);
+
+    checkPlaying();
+
     return () => {
       cancelAnimationFrame(rafId);
-      audio.removeEventListener("play", onAudioPlay);
-      audio.removeEventListener("pause", onPause);
+      clearInterval(interval);
+      audio.removeEventListener("play", checkPlaying);
+      audio.removeEventListener("pause", checkPlaying);
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [player]);

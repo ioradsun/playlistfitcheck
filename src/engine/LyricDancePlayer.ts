@@ -1574,6 +1574,7 @@ export class LyricDancePlayer {
   private _beatCursor = 0;
   private _lastBeatIndex = -1;
   private _smoothedTime = 0;
+  private _wallClockOrigin: number | null = null;
   private _frameDt = 1.0;          // normalized dt (1.0 = 60fps), set by tick()
   private _lastRawTime = 0;
   private _timeInitialized = false;
@@ -2195,6 +2196,10 @@ export class LyricDancePlayer {
   // ────────────────────────────────────────────────────────────
 
   private _startAudioPlayback(): void {
+    // Guarantee muted autoplay succeeds — caller will unmute via setMuted() after
+    const wasMuted = this.audio.muted;
+    if (!wasMuted) this.audio.muted = true;
+
     const playStart = this.data.region_start ?? this.songStartSec;
     if (this.audio.currentTime <= 0 || (this.data.region_start != null && this.audio.currentTime < playStart)) {
       if (this.audio.readyState >= 2) {
@@ -2210,6 +2215,13 @@ export class LyricDancePlayer {
       }
     }
     this.audio.play().catch(() => {});
+    // Restore mute state — the embed's mute effect handles the real value
+    if (!wasMuted) {
+      // Defer unmute to next microtask so play() promise resolves first
+      Promise.resolve().then(() => {
+        if (!this.destroyed) this.audio.muted = wasMuted;
+      });
+    }
   }
 
   play(): void {
@@ -2244,6 +2256,7 @@ export class LyricDancePlayer {
 
   pause(): void {
     this.playing = false;
+    this._wallClockOrigin = null;
     if (this.rafHandle) {
       cancelAnimationFrame(this.rafHandle);
       this.rafHandle = 0;
@@ -2276,6 +2289,7 @@ export class LyricDancePlayer {
 
   seek(timeSec: number): void {
     this._audioDeferredUntilReady = false;
+    this._wallClockOrigin = null;
     this.audio.currentTime = timeSec;
     const t = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (t - this.songStartSec) * 1000);
@@ -2298,6 +2312,16 @@ export class LyricDancePlayer {
     this._historicalFires.forEach(f => {
       f.spawned = f.time_sec < this.audio.currentTime;
     });
+  }
+
+  /** Returns the current effective playback time, using wall-clock fallback if audio is blocked. */
+  getCurrentTime(): number {
+    if (this.audio.paused && this.playing && this._wallClockOrigin != null) {
+      const wallElapsed = (performance.now() - this._wallClockOrigin) / 1000;
+      const startAt = this.data.region_start ?? this.songStartSec;
+      return startAt + wallElapsed;
+    }
+    return this.audio.currentTime;
   }
 
   // ═══ WebCodecs export API ═══
@@ -3002,12 +3026,33 @@ export class LyricDancePlayer {
         }
       }
 
-      // In region mode, use region_start as visual time while audio is still loading/seeking.
-      // Without this, evaluateFrame(0) finds no lyrics (they're at e.g. t=30) → black canvas.
-      const effectiveAudioTime = (
-        this.data.region_start != null &&
-        this.audio.currentTime < this.data.region_start - 0.5
-      ) ? this.data.region_start : this.audio.currentTime;
+      // ═══ WALL-CLOCK FALLBACK ═══
+      // If audio is paused (autoplay blocked, muted on iOS, etc.) but
+      // the player is supposed to be playing, use performance.now() to
+      // advance time so canvas animations and progress bar still run.
+      // When audio starts playing, snap back to audio.currentTime.
+      let effectiveAudioTime: number;
+      if (this.audio.paused && this.playing) {
+        if (this._wallClockOrigin == null) {
+          this._wallClockOrigin = performance.now();
+        }
+        const wallElapsed = (performance.now() - this._wallClockOrigin) / 1000;
+        const startAt = this.data.region_start ?? this.songStartSec;
+        effectiveAudioTime = startAt + wallElapsed;
+        // Loop at song end
+        const endAt = this.data.region_end ?? this.songEndSec;
+        if (effectiveAudioTime > endAt) {
+          this._wallClockOrigin = performance.now();
+          effectiveAudioTime = startAt;
+        }
+      } else {
+        // Audio is playing — use real time, reset wall clock
+        this._wallClockOrigin = null;
+        effectiveAudioTime = (
+          this.data.region_start != null &&
+          this.audio.currentTime < this.data.region_start - 0.5
+        ) ? this.data.region_start : this.audio.currentTime;
+      }
 
       const smoothedTime = this.smoothAudioTime(effectiveAudioTime);
 
