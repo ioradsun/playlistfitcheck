@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
-import { getSessionId } from "@/lib/sessionId";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
-import type { CanonicalAudioSection } from "@/types/audioSections";
 
 const EMOJI_SYMBOLS: Record<string, string> = {
   fire: "🔥",
@@ -57,7 +54,6 @@ interface UseLyricDanceCoreOptions {
   lyricDanceId: string;
   prefetchedData?: LyricDanceData | null;
   postId?: string;
-  autoPlay?: boolean;
   usePool?: boolean;
   evicted?: boolean;
 }
@@ -66,21 +62,17 @@ export function useLyricDanceCore({
   lyricDanceId,
   prefetchedData,
   postId: _postId,
-  autoPlay = false,
   usePool = false,
   evicted = false,
 }: UseLyricDanceCoreOptions) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
-  const [loading, setLoading] = useState(!prefetchedData);
   const [muted, setMuted] = useState(true);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
-  const [commentRefreshKey, setCommentRefreshKey] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentTimeSecRef = useRef(0);
-  const activeLineRef = useRef<{ text: string; lineIndex: number; sectionLabel: string | null } | null>(null);
 
   useEffect(() => {
     if (prefetchedData) {
@@ -90,12 +82,10 @@ export function useLyricDanceCore({
           ? normalizeCinematicDirection(prefetchedData.cinematic_direction)
           : prefetchedData.cinematic_direction,
       });
-      setLoading(false);
       return;
     }
     if (!lyricDanceId) return;
     let cancelled = false;
-    setLoading(true);
     (supabase
       .from("shareable_lyric_dances" as any)
       .select(LYRIC_DANCE_COLUMNS)
@@ -112,7 +102,6 @@ export function useLyricDanceCore({
               : r.cinematic_direction,
           });
         }
-        setLoading(false);
       })
       .catch((error: any) => {
         if (cancelled) return;
@@ -120,35 +109,19 @@ export function useLyricDanceCore({
           lyricDanceId,
           error,
         });
-        setLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, [lyricDanceId, prefetchedData]);
 
-  useEffect(() => {
-    // Safety valve: if loading takes >15 seconds, stop waiting
-    if (!loading) return;
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn("[LyricDanceCore] Data fetch timeout — releasing cover");
-        setLoading(false);
-      }
-    }, 15000);
-    return () => clearTimeout(timeout);
-  }, [loading]);
-
-  const { player, playerReady, data, playerRef } = useLyricDancePlayer(
+  const { player, playerReady, data } = useLyricDancePlayer(
     fetchedData,
     canvasRef,
     textCanvasRef,
     containerRef,
     { bootMode: "minimal", eagerUpgrade: true, usePool, postId: _postId ?? lyricDanceId, evicted },
   );
-
-  void autoPlay;
-
   const durationSec = useMemo(() => {
     const lines = data?.lyrics ?? [];
     if (!lines.length) return 0;
@@ -179,7 +152,7 @@ export function useLyricDanceCore({
     };
   }, [lyricSections, currentTimeSec]);
 
-  const audioSections = useMemo<CanonicalAudioSection[]>(() => {
+  const audioSections = useMemo(() => {
     const sections = lyricSections.sections;
     return sections.map((s, i) => ({
       sectionIndex: i,
@@ -188,14 +161,6 @@ export function useLyricDanceCore({
       role: s.role,
     }));
   }, [lyricSections.sections]);
-
-  const palette = useMemo(() => {
-    const cd = data?.cinematic_direction;
-    if (cd?.sections && Array.isArray(cd.sections)) {
-      return cd.sections.map((s: any) => s.dominantColor ?? "#6B7A8E");
-    }
-    return ["#ffffff", "#ffffff", "#ffffff"];
-  }, [data]);
 
   const moments = useMemo<Moment[]>(() => {
     const phrases = (data as any)?.cinematic_direction?.phrases ?? [];
@@ -213,12 +178,8 @@ export function useLyricDanceCore({
   useEffect(() => {
     if (!player) return;
     player.setReactionData(reactionData);
-  }, [player, reactionData]);
-
-  useEffect(() => {
-    if (!player) return;
     player.setMoments(moments);
-  }, [player, moments]);
+  }, [player, reactionData, moments]);
 
   useEffect(() => {
     if (!data?.id || evicted) return;
@@ -282,7 +243,7 @@ export function useLyricDanceCore({
     let rafId = 0;
     const tick = () => {
       const t = audio.currentTime;
-      if (Math.abs(t - currentTimeSecRef.current) > 0.05) {
+      if (Math.abs(t - currentTimeSecRef.current) > 0.1) {
         currentTimeSecRef.current = t;
         setCurrentTimeSec(t);
       }
@@ -315,16 +276,7 @@ export function useLyricDanceCore({
     };
   }, [player]);
 
-  const toggleMute = useCallback((e?: ReactMouseEvent) => {
-    e?.stopPropagation();
-    if (!player) return;
-    const next = !muted;
-    player.setMuted(next);
-    setMuted(next);
-  }, [muted, player]);
-
-  const handleReplay = useCallback((e?: ReactMouseEvent) => {
-    e?.stopPropagation();
+  const handleReplay = useCallback(() => {
     if (!player) return;
     player.setMuted(false);
     player.seek(0);
@@ -332,81 +284,21 @@ export function useLyricDanceCore({
     setMuted(false);
   }, [player]);
 
-  const handlePauseForInput = useCallback(() => {
-    player?.pause();
-  }, [player]);
-
-  const handleResumeAfterInput = useCallback(() => {
-    player?.play();
-  }, [player]);
-
-  const handleCommentFromBar = useCallback(async (noteText: string, momentIndex?: number | null) => {
-    const text = noteText.trim();
-    if (!text) return;
-    const danceId = fetchedData?.id;
-    if (!danceId) return;
-    try {
-      await supabase.from("lyric_dance_comments" as any).insert({
-        dance_id: danceId,
-        text,
-        session_id: getSessionId(),
-        line_index: activeLineRef.current?.lineIndex ?? null,
-        moment_index: momentIndex ?? null,
-        parent_comment_id: null,
-      });
-    } catch {
-      // silent
-    }
-    setCommentRefreshKey((k) => k + 1);
-  }, [fetchedData?.id]);
-
-  activeLineRef.current = activeLine;
-
-  const topReaction = useMemo(
-    () => computeTopReaction(reactionData, data?.lyrics ?? []),
-    [reactionData, data?.lyrics],
-  );
-
-  const progress = useMemo(() => {
-    const lines = data?.lyrics ?? [];
-    if (!lines.length || !durationSec) return 0;
-    const songStart = Math.max(0, (lines[0] as any).start - 0.5);
-    const songEnd = (lines[lines.length - 1] as any).end + 1;
-    const dur = songEnd - songStart;
-    if (dur <= 0) return 0;
-    return Math.max(0, Math.min(1, (currentTimeSec - songStart) / dur));
-  }, [currentTimeSec, data?.lyrics, durationSec]);
-
   return {
     canvasRef,
     textCanvasRef,
     containerRef,
     player,
     playerReady,
-    playerRef,
     data,
-    fetchedData,
-    setFetchedData,
-    loading,
     muted,
     setMuted,
     currentTimeSec,
-    progress,
     reactionData,
-    setReactionData,
     durationSec,
     lyricSections,
-    audioSections,
     moments,
     activeLine,
-    palette,
-    toggleMute,
     handleReplay,
-    handlePauseForInput,
-    handleResumeAfterInput,
-    handleCommentFromBar,
-    topReaction,
-    commentRefreshKey,
-    setCommentRefreshKey,
   };
 }

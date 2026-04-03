@@ -319,11 +319,9 @@ export function SongFitPostCard({
             <div className="relative" style={reelsMode ? { height: "100%" } : { height: 320 }}>
               <LyricDanceEmbed
                 lyricDanceId={post.lyric_dance_id!}
-                lyricDanceUrl={post.lyric_dance_url!}
                 songTitle={post.track_title}
                 artistName={displayName}
                 cardState={cardState}
-                onPlay={activate}
                 postId={post.id}
                 spotifyTrackId={post.spotify_track_id}
                 prefetchedData={lyricDanceData ?? null}
