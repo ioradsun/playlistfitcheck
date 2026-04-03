@@ -7,29 +7,111 @@ interface LyricInteractionLayerProps {
   moments?: Moment[];
   currentTimeSec?: number;
   durationSec?: number;
-  palette?: string[];
-  accent?: string;
   reactionData?: Record<string, { line: Record<number, number>; total: number }>;
   player?: any;
-  isLive?: boolean;
-  hasFired?: boolean;
-  totalFireCount?: number;
-  songEnded?: boolean;
-  refreshKey?: number;
-  sectionColors?: Record<number, string>;
   onFireTap?: () => void;
   onFireHoldStart?: () => void;
   onFireHoldEnd?: (holdMs: number) => void;
   onSeekTo?: (sec: number) => void;
-  onPause?: () => void;
-  onResume?: () => void;
-  source?: "feed" | "shareable" | "embed";
 }
 
 function formatTime(sec: number): string {
   const m = Math.floor(Math.max(0, sec) / 60);
   const s = Math.floor(Math.max(0, sec) % 60);
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function MomentPill({
+  moment,
+  state,
+  fireCount,
+  maxFireCount,
+  momentProgress,
+  onClick,
+}: {
+  moment: Moment;
+  state: "past" | "active" | "future";
+  fireCount: number;
+  maxFireCount: number;
+  momentProgress: number;
+  onClick: () => void;
+}) {
+  const flex = Math.max(1, moment.endSec - moment.startSec);
+
+  if (state === "future") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          flex,
+          height: 5,
+          background: "rgba(255,140,20,0.06)",
+          borderRadius: 3,
+          border: "none",
+          cursor: "pointer",
+          padding: 0,
+        }}
+      />
+    );
+  }
+
+  if (state === "active") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          flex,
+          height: 5,
+          borderRadius: 3,
+          position: "relative",
+          background: "rgba(255,140,20,0.12)",
+          overflow: "hidden",
+          border: "none",
+          cursor: "pointer",
+          padding: 0,
+          transition: "background 0.3s ease",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${momentProgress * 100}%`,
+            background: "rgb(255,160,30)",
+            borderRadius: 3,
+          }}
+        />
+      </button>
+    );
+  }
+
+  const heat = maxFireCount > 0 ? fireCount / maxFireCount : 0;
+  const r = Math.round(100 + heat * 140);
+  const g = Math.round(50 + heat * 100);
+  const b = Math.round(10 + heat * 10);
+  const opacity = 0.15 + heat * 0.7;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        flex,
+        height: 5,
+        background: `rgb(${r},${g},${b})`,
+        opacity,
+        borderRadius: 3,
+        border: "none",
+        cursor: "pointer",
+        padding: 0,
+        transition: "opacity 0.5s ease, background 0.5s ease",
+      }}
+    />
+  );
 }
 
 function FireButton({
@@ -45,129 +127,118 @@ function FireButton({
 }) {
   const holdStartRef = useRef<number | null>(null);
   const holdTickRef = useRef<number | null>(null);
-  const [fireFlash, setFireFlash] = useState(false);
-  const [fireHolding, setFireHolding] = useState(false);
-  const [fireShrink, setFireShrink] = useState(false);
-  const [sparks, setSparks] = useState<Array<{ id: number; xOffset: number; durationMs: number }>>([]);
-  const sparkIdRef = useRef(0);
+  const [mode, setMode] = useState<"rest" | "active">("rest");
 
-  const spawnFireSparks = (count = 5) => {
-    for (let i = 0; i < count; i += 1) {
-      const id = sparkIdRef.current++;
-      const durationMs = 500;
-      const xOffset = (Math.random() - 0.5) * 16;
-      setSparks((prev) => [...prev, { id, xOffset, durationMs }]);
-      window.setTimeout(() => {
-        setSparks((prev) => prev.filter((spark) => spark.id !== id));
-      }, durationMs);
-    }
-  };
+  const ignite = () => setMode("active");
+  const emberOut = () => setMode("rest");
 
-  const handleFireStart = () => {
+  const handleDown = () => {
+    if (holdTickRef.current != null) return;
     holdStartRef.current = performance.now();
-    setFireHolding(true);
-    setFireFlash(false);
-    spawnFireSparks(5);
-    player?.startContinuousFire?.();
+    ignite();
+    player?.fireMoment?.();
     onFireHoldStart?.();
     holdTickRef.current = window.setInterval(() => {
-      spawnFireSparks(2);
-    }, 100);
+      player?.fireMoment?.();
+    }, 150);
   };
 
-  const handleFireEnd = () => {
+  const handleUp = () => {
     if (holdTickRef.current != null) {
       window.clearInterval(holdTickRef.current);
       holdTickRef.current = null;
     }
     player?.stopContinuousFire?.();
-    setFireHolding(false);
     const start = holdStartRef.current;
     holdStartRef.current = null;
-    if (start == null) return;
-    const holdMs = Math.max(0, performance.now() - start);
-    if (holdMs < 180) {
-      spawnFireSparks(6);
-      player?.fireMoment?.();
-      setFireFlash(true);
-      setFireShrink(true);
-      window.setTimeout(() => setFireShrink(false), 100);
-      window.setTimeout(() => setFireFlash(false), 300);
-      onFireTap?.();
+    if (start == null) {
+      emberOut();
       return;
     }
-    onFireHoldEnd?.(holdMs);
+    const holdMs = performance.now() - start;
+    if (holdMs < 180) {
+      onFireTap?.();
+    } else {
+      onFireHoldEnd?.(holdMs);
+    }
+    window.setTimeout(emberOut, 300);
   };
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (holdTickRef.current != null) {
         window.clearInterval(holdTickRef.current);
       }
-    };
-  }, []);
+    },
+    [],
+  );
 
   return (
-    <div style={{ position: "relative", width: 50, height: 50 }}>
-      {sparks.map((spark) => (
-        <span
-          key={spark.id}
-          style={{
-            position: "absolute",
-            left: "50%",
-            bottom: "50%",
-            width: 3,
-            height: 3,
-            borderRadius: "50%",
-            background: "#FFD700",
-            opacity: 1,
-            pointerEvents: "none",
-            transform: `translate(${spark.xOffset}px, 0px)`,
-            animation: `spark-to-canvas ${spark.durationMs}ms ease-out forwards`,
-          }}
-        />
-      ))}
-      <button
-        type="button"
-        onPointerDown={handleFireStart}
-        onPointerUp={handleFireEnd}
-        onPointerLeave={handleFireEnd}
-        onTouchEnd={handleFireEnd}
-        aria-label="Fire"
+    <button
+      type="button"
+      onPointerDown={handleDown}
+      onPointerUp={handleUp}
+      onPointerLeave={handleUp}
+      onPointerCancel={handleUp}
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: "50%",
+        background: "rgba(10,10,15,0.92)",
+        border: "none",
+        cursor: "pointer",
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width={22}
+        height={22}
+        fill="none"
+        stroke="rgba(255,160,40,0.4)"
+        strokeWidth={1.5}
         style={{
-          width: 50,
-          height: 50,
-          borderRadius: "50%",
-          border: "1px solid rgba(255,255,255,0.08)",
-          background: "transparent",
-          color: "rgba(255,220,140,0.85)",
-          display: "grid",
-          placeItems: "center",
-          transition: "transform 100ms ease, opacity 200ms ease",
-          transform: fireShrink ? "scale(0.92)" : "scale(1)",
+          position: "absolute",
+          opacity: mode === "rest" ? 1 : 0,
+          transition: "opacity 0.15s ease",
         }}
       >
-        <svg viewBox="0 0 24 24" width="22" height="22" fill={fireFlash || fireHolding ? "rgba(255,215,0,0.9)" : "none"} stroke={fireFlash || fireHolding ? "rgba(255,215,0,0.9)" : "rgba(255,255,255,0.3)"} strokeWidth="1.5" style={{ opacity: fireHolding ? 0.6 : 1, transition: "fill 200ms ease, stroke 300ms ease, opacity 200ms ease" }}>
-          <path d="M12 23c-3.6 0-7-2.4-7-7 0-3.1 2.1-5.7 4-7.6.3-.3.8-.1.8.3v2c0 .2.2.4.4.3 2.1-1.1 4.8-3.5 4.8-7 0-.3.4-.5.6-.3C18.2 6 20 10 20 13.5c0 5.3-3.6 9.5-8 9.5z" />
-        </svg>
-      </button>
-    </div>
+        <path d="M12 23c-3.6 0-7-2.4-7-7 0-3.1 2.1-5.7 4-7.6.3-.3.8-.1.8.3v2c0 .2.2.4.4.3 2.1-1.1 4.8-3.5 4.8-7 0-.3.4-.5.6-.3C18.2 6 20 10 20 13.5c0 5.3-3.6 9.5-8 9.5z" />
+      </svg>
+
+      <span
+        style={{
+          fontSize: 22,
+          position: "absolute",
+          opacity: mode === "active" ? 1 : 0,
+          transform: mode === "active" ? "scale(1.25)" : "scale(0.6)",
+          transition:
+            mode === "active"
+              ? "transform 0.12s ease-out, opacity 0.1s ease"
+              : "transform 0.5s ease-out, opacity 0.4s ease",
+          pointerEvents: "none",
+        }}
+      >
+        🔥
+      </span>
+    </button>
   );
 }
 
 export function LyricInteractionLayer({
-  variant,
   moments,
   currentTimeSec = 0,
   durationSec = 0,
   reactionData = {},
+  player,
   onFireTap,
   onFireHoldStart,
   onFireHoldEnd,
   onSeekTo,
-  player,
 }: LyricInteractionLayerProps) {
-  const isFullscreen = variant === "fullscreen";
   const safeMoments = moments ?? [];
 
   const currentMomentIdx = useMemo(() => {
@@ -177,115 +248,162 @@ export function LyricInteractionLayer({
     return 0;
   }, [safeMoments, currentTimeSec]);
 
-  const totalFires = useMemo(
-    () => Object.values(reactionData).reduce((sum, data) => sum + data.total, 0),
-    [reactionData],
-  );
+  const currentMoment = safeMoments[currentMomentIdx];
+  const momentProgress = currentMoment
+    ? Math.max(
+        0,
+        Math.min(
+          1,
+          (currentTimeSec - currentMoment.startSec) /
+            Math.max(0.1, currentMoment.endSec - currentMoment.startSec),
+        ),
+      )
+    : 0;
 
-  const canPrev = currentMomentIdx > 0;
-  const canNext = currentMomentIdx < safeMoments.length - 1;
+  const momentFireCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (let i = 0; i < safeMoments.length; i += 1) {
+      let total = 0;
+      for (const emojiData of Object.values(reactionData)) {
+        for (const line of safeMoments[i].lines) {
+          total += emojiData.line[line.lineIndex] ?? 0;
+        }
+      }
+      counts[i] = total;
+    }
+    return counts;
+  }, [safeMoments, reactionData]);
+
+  const maxFireCount = Math.max(1, ...Object.values(momentFireCounts));
+
+  if (safeMoments.length === 0) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          background: "#0a0a0f",
+          position: "relative",
+          padding: "14px 12px 10px",
+          height: 64,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 12,
+            right: 12,
+            top: "50%",
+            transform: "translateY(-50%)",
+            height: 5,
+            borderRadius: 3,
+            background: "rgba(255,140,20,0.06)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%,-50%)",
+            zIndex: 2,
+          }}
+        >
+          <FireButton
+            onFireTap={onFireTap}
+            onFireHoldStart={onFireHoldStart}
+            onFireHoldEnd={onFireHoldEnd}
+            player={player}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       style={{
         width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        background: "#0a0a0a",
-        paddingBottom: isFullscreen ? "env(safe-area-inset-bottom, 0px)" : "6px",
-        paddingTop: 4,
+        background: "#0a0a0f",
+        position: "relative",
+        padding: "14px 12px 10px",
+        height: 64,
       }}
     >
-      <style>{`
-        @keyframes spark-to-canvas {
-          0% { transform: translateY(0) scale(1); opacity: 1; }
-          70% { transform: translateY(-60px) scale(0.6); opacity: 0.8; }
-          100% { transform: translateY(-80px) scale(0.2); opacity: 0; }
-        }
-      `}</style>
       <div
         style={{
+          position: "absolute",
+          left: 12,
+          right: 12,
+          top: "50%",
+          transform: "translateY(-50%)",
           display: "flex",
-          justifyContent: "space-between",
-          width: "100%",
-          padding: "0 16px 4px",
-          fontSize: 9,
-          color: "rgba(255,255,255,0.22)",
+          gap: 2,
+          alignItems: "center",
         }}
       >
-        <span style={{ fontFamily: "monospace" }}>{formatTime(currentTimeSec)}</span>
-        <span>
-          moment {Math.min(safeMoments.length, currentMomentIdx + 1)} of {safeMoments.length}
-          {totalFires > 0 && (
-            <span style={{ color: "rgba(255,215,0,0.4)", marginLeft: 8 }}>{totalFires} fires</span>
-          )}
-        </span>
-        <span style={{ fontFamily: "monospace" }}>{formatTime(durationSec)}</span>
+        {safeMoments.map((moment, index) => {
+          const state =
+            index < currentMomentIdx
+              ? "past"
+              : index === currentMomentIdx
+                ? "active"
+                : "future";
+
+          return (
+            <MomentPill
+              key={`${moment.startSec}-${moment.endSec}-${index}`}
+              moment={moment}
+              state={state}
+              fireCount={momentFireCounts[index] ?? 0}
+              maxFireCount={maxFireCount}
+              momentProgress={state === "active" ? momentProgress : 0}
+              onClick={() => onSeekTo?.(moment.startSec)}
+            />
+          );
+        })}
       </div>
 
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 20,
-          padding: "6px 0",
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          zIndex: 2,
         }}
       >
-        <button
-          type="button"
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.06)",
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            opacity: canPrev ? 1 : 0.3,
-          }}
-          disabled={!canPrev}
-          onClick={() => {
-            const m = safeMoments[currentMomentIdx - 1];
-            if (m) onSeekTo?.(m.startSec);
-          }}
-        >
-          <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 20, lineHeight: 1 }}>‹</span>
-        </button>
-
         <FireButton
           onFireTap={onFireTap}
           onFireHoldStart={onFireHoldStart}
           onFireHoldEnd={onFireHoldEnd}
           player={player}
         />
-
-        <button
-          type="button"
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.06)",
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            opacity: canNext ? 1 : 0.3,
-          }}
-          disabled={!canNext}
-          onClick={() => {
-            const m = safeMoments[currentMomentIdx + 1];
-            if (m) onSeekTo?.(m.startSec);
-          }}
-        >
-          <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 20, lineHeight: 1 }}>›</span>
-        </button>
       </div>
+
+      <span
+        style={{
+          position: "absolute",
+          left: 14,
+          bottom: 2,
+          fontSize: 9,
+          color: "rgba(255,255,255,0.12)",
+          fontFamily: "monospace",
+        }}
+      >
+        {formatTime(currentTimeSec)}
+      </span>
+      <span
+        style={{
+          position: "absolute",
+          right: 14,
+          bottom: 2,
+          fontSize: 9,
+          color: "rgba(255,255,255,0.12)",
+          fontFamily: "monospace",
+        }}
+      >
+        {formatTime(durationSec)}
+      </span>
     </div>
   );
 }
