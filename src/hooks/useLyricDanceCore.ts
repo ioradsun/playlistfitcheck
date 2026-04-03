@@ -147,16 +147,7 @@ export function useLyricDanceCore({
     { bootMode: "minimal", eagerUpgrade: true, usePool, postId: _postId ?? lyricDanceId, evicted },
   );
 
-  useEffect(() => {
-    if (!playerReady || !player) return;
-    player.setMuted(true);
-  }, [playerReady, player]);
-
-  useEffect(() => {
-    if (!autoPlay || !player || !playerReady) return;
-    player.setMuted(true);
-    player.play();
-  }, [autoPlay, player, playerReady]);
+  void autoPlay;
 
   const durationSec = useMemo(() => {
     const lines = data?.lyrics ?? [];
@@ -223,11 +214,6 @@ export function useLyricDanceCore({
     if (!player) return;
     player.setReactionData(reactionData);
   }, [player, reactionData]);
-
-  useEffect(() => {
-    if (!player) return;
-    player.setEmojiStreamEnabled(true);
-  }, [player]);
 
   useEffect(() => {
     if (!player) return;
@@ -381,51 +367,15 @@ export function useLyricDanceCore({
     [reactionData, data?.lyrics],
   );
 
-  const [progress, setProgress] = useState(0);
-  useEffect(() => {
-    if (!player || !playerReady || !data?.lyrics) return;
-    const audio = player.audio;
-    const lines = data.lyrics;
+  const progress = useMemo(() => {
+    const lines = data?.lyrics ?? [];
+    if (!lines.length || !durationSec) return 0;
     const songStart = Math.max(0, (lines[0] as any).start - 0.5);
     const songEnd = (lines[lines.length - 1] as any).end + 1;
     const dur = songEnd - songStart;
-    let rafId = 0;
-    let lastP = 0;
-    const tick = () => {
-      const p = Math.max(0, Math.min(1, (audio.currentTime - songStart) / dur));
-      if (Math.abs(p - lastP) > 0.005) {
-        lastP = p;
-        setProgress(p);
-      }
-      if (!audio.paused) rafId = requestAnimationFrame(tick);
-    };
-    const onAudioPlay = () => {
-      if (!rafId) rafId = requestAnimationFrame(tick);
-    };
-    const onPause = () => {
-      cancelAnimationFrame(rafId);
-      rafId = 0;
-    };
-    audio.addEventListener("play", onAudioPlay);
-    audio.addEventListener("pause", onPause);
-    if (!audio.paused) onAudioPlay();
-    return () => {
-      cancelAnimationFrame(rafId);
-      audio.removeEventListener("play", onAudioPlay);
-      audio.removeEventListener("pause", onPause);
-    };
-  }, [player, playerReady, data?.lyrics]);
-
-  // DEBUG: trace player lifecycle
-  useEffect(() => {
-    console.log("[LyricDanceCore] state", {
-      lyricDanceId,
-      loading,
-      hasFetchedData: !!fetchedData,
-      hasCinematicDirection: !!fetchedData?.cinematic_direction,
-      playerReady,
-    });
-  }, [lyricDanceId, loading, fetchedData, playerReady]);
+    if (dur <= 0) return 0;
+    return Math.max(0, Math.min(1, (currentTimeSec - songStart) / dur));
+  }, [currentTimeSec, data?.lyrics, durationSec]);
 
   return {
     canvasRef,

@@ -1881,6 +1881,7 @@ export class LyricDancePlayer {
   async init(): Promise<void> {
     this.perfDebugEnabled = Boolean((window as Window & { __LYRIC_DANCE_DEBUG_PERF?: boolean }).__LYRIC_DANCE_DEBUG_PERF);
     this.beatVisEnabled = false;
+    this.emojiStreamEnabled = true;
     this.wickBarEnabled = false;
     this._firstPaintMarked = false;
     this._fontLayoutReflowPending = false;

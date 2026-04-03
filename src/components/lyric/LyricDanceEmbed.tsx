@@ -56,32 +56,14 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const empowermentPromise = (prefetchedData as any)?.empowerment_promise ?? null;
 
   const [evicted, setEvicted] = useState(true);
-  const warmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isFeedEmbed || isBattleMode) {
       setEvicted(false);
       return;
     }
-
-    if (cardState === "active") {
-      if (warmTimerRef.current) { clearTimeout(warmTimerRef.current); warmTimerRef.current = null; }
-      if (evicted) setEvicted(false);
-    } else if (cardState === "cold") {
-      if (warmTimerRef.current) { clearTimeout(warmTimerRef.current); warmTimerRef.current = null; }
-      if (!evicted) setEvicted(true);
-    } else {
-      if (!evicted) return;
-      setEvicted(false);
-    }
-
-    return () => {
-      if (warmTimerRef.current) {
-        clearTimeout(warmTimerRef.current);
-        warmTimerRef.current = null;
-      }
-    };
-  }, [cardState, isFeedEmbed, isBattleMode, evicted]);
+    setEvicted(cardState === "cold");
+  }, [cardState, isFeedEmbed, isBattleMode]);
 
   const prefetchedDataWithRegion = useMemo(() => {
     if (!isBattleMode || !prefetchedData) return prefetchedData;
@@ -142,9 +124,16 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (!player || !playerReady) return;
     if (cardState === "active" || !isFeedEmbed) {
       player.play();
-      player.setMuted(!isAudioUnlocked() ? true : muted);
     } else {
       player.pause();
+    }
+  }, [player, playerReady, cardState, isFeedEmbed]);
+
+  useEffect(() => {
+    if (!player || !playerReady) return;
+    if (cardState === "active" || !isFeedEmbed) {
+      player.setMuted(!isAudioUnlocked() ? true : muted);
+    } else {
       player.setMuted(true);
     }
   }, [player, playerReady, cardState, isFeedEmbed, muted]);
@@ -190,11 +179,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       setShowMuteIndicator(true);
     }
   }, [muted, player, setMuted]);
-
-  useEffect(() => {
-    if (!player || !playerReady) return;
-    player.setTextVerticalBias(0);
-  }, [player, playerReady]);
 
   useEffect(() => {
     if (!durationSec || !player) return;
