@@ -1426,7 +1426,7 @@ const Index = () => {
           className={cn(
             "flex items-center gap-3 h-12 px-3 z-40 transition-all duration-200",
             reelsMode
-              ? "absolute top-0 left-0 right-0 bg-gradient-to-b from-black/60 via-black/20 to-transparent border-b-0"
+              ? "hidden"
               : "sticky top-0 border-b border-border bg-background/80 backdrop-blur-md",
           )}
         >
