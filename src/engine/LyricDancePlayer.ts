@@ -1882,7 +1882,7 @@ export class LyricDancePlayer {
   // Compatibility with existing React shell
   async init(): Promise<void> {
     this.perfDebugEnabled = Boolean((window as Window & { __LYRIC_DANCE_DEBUG_PERF?: boolean }).__LYRIC_DANCE_DEBUG_PERF);
-    this.wickBarEnabled = true;
+    this.wickBarEnabled = false;
     this._firstPaintMarked = false;
     this._fontLayoutReflowPending = false;
     performance.clearMarks("engine:start");
@@ -4954,9 +4954,6 @@ export class LyricDancePlayer {
         })),
         duration,
       );
-      if (this.wickBarEnabled && !this._wickSeekOverlay) {
-        this._mountWickSeekOverlay();
-      }
 
       this.chapterSims = chapters.map(() => ({}));
 
