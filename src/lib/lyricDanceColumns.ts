@@ -8,5 +8,4 @@
 export const LYRIC_DANCE_COLUMNS =
   "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
   "motion_profile_spec:physics_spec,cinematic_direction,section_images,scene_context,scene_manifest," +
-  "auto_palettes,beat_grid,palette,system_type,seed,artist_dna,album_art_url,empowerment_promise," +
-  "spotify_track_id";
+  "auto_palettes,beat_grid,palette,system_type,seed,artist_dna,album_art_url,empowerment_promise";
