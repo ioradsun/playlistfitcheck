@@ -328,7 +328,6 @@ export function SongFitPostCard({
                 spotifyTrackId={post.spotify_track_id}
                 coverImageUrl={post.album_art_url}
                 hideReactButton
-                reelsMode={reelsMode}
                 onOpenReactions={handleOpenPanel}
                 prefetchedData={lyricDanceData ?? null}
                 avatarUrl={post.profiles?.avatar_url}
@@ -347,7 +346,6 @@ export function SongFitPostCard({
                 onPlay={activate}
                 onDeactivate={deactivate}
                 initialVotedSide={(post as any).voted_side ?? null}
-                reelsMode={reelsMode}
                 avatarUrl={post.profiles?.avatar_url}
                 displayName={displayName}
                 isVerified={(post.profiles as any)?.is_verified}
@@ -360,7 +358,6 @@ export function SongFitPostCard({
               style={reelsMode ? undefined : { background: "#0a0a0a", height: 320 }}
             >
               <LazySpotifyEmbed
-                reelsMode={reelsMode}
                 trackId={post.spotify_track_id}
                 trackTitle={post.track_title}
                 trackUrl={post.spotify_track_url}
@@ -379,7 +376,6 @@ export function SongFitPostCard({
                 onClose={handleClosePanel}
                 cardState={cardState}
                 trackTitle={post.track_title}
-                reelsMode={reelsMode}
                 variant={reelsMode ? "reels" : "embedded"}
                 caption={!reelsMode && !editing ? localCaption : undefined}
                 palette={spotifyPalette}
