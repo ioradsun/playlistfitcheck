@@ -6,6 +6,7 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
+import { isGlobalMuted } from "@/lib/globalMute";
 
 const EMOJI_SYMBOLS: Record<string, string> = {
   fire: "🔥",
@@ -66,7 +67,7 @@ export function useLyricDanceCore({
   evicted = false,
 }: UseLyricDanceCoreOptions) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(() => isGlobalMuted());
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);

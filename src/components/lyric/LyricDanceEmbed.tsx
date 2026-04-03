@@ -8,6 +8,7 @@ import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
+import { setGlobalMuted, isGlobalMuted } from "@/lib/globalMute";
 import { isAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -131,11 +132,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   useEffect(() => {
     if (!player || !playerReady) return;
     if (cardState === "active" || !isFeedEmbed) {
-      player.setMuted(!isAudioUnlocked() ? true : muted);
+      // Use global mute state — not just local. If user unmuted any card,
+      // this card should also be unmuted when it activates.
+      const shouldMute = !isAudioUnlocked() || isGlobalMuted();
+      player.setMuted(shouldMute);
+      setMuted(shouldMute);
     } else {
       player.setMuted(true);
     }
-  }, [player, playerReady, cardState, isFeedEmbed, muted]);
+  }, [player, playerReady, cardState, isFeedEmbed, setMuted]);
 
   // Imperative audio solo: pause this player as soon as another card activates.
   useEffect(() => {
@@ -150,6 +155,19 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     window.addEventListener("crowdfit:audio-solo", handler);
     return () => window.removeEventListener("crowdfit:audio-solo", handler);
   }, [player, postId, isFeedEmbed]);
+
+  // ── Global mute sync: when another card toggles mute, this card follows ──
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const next = (e as CustomEvent).detail?.muted;
+      if (typeof next === "boolean") {
+        setMuted(next);
+        if (player) player.setMuted(next);
+      }
+    };
+    window.addEventListener("crowdfit:mute-change", handler);
+    return () => window.removeEventListener("crowdfit:mute-change", handler);
+  }, [player, setMuted]);
 
   useEffect(() => {
     if (!player || !playerReady || !forceMuted) return;
@@ -168,16 +186,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const handleCanvasTap = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     unlockAudio();
-    if (muted) {
-      player?.setMuted(false);
-      player?.play(); // user gesture → restart audio if it was blocked
-      setMuted(false);
-      setShowMuteIndicator(false);
-    } else {
-      player?.setMuted(true);
-      setMuted(true);
-      setShowMuteIndicator(true);
-    }
+    const next = !muted;
+    player?.setMuted(next);
+    if (!next) player?.play(); // user gesture → restart if blocked
+    setMuted(next);
+    setGlobalMuted(next); // ← one toggle for all cards
+    setShowMuteIndicator(next);
   }, [muted, player, setMuted]);
 
   useEffect(() => {
