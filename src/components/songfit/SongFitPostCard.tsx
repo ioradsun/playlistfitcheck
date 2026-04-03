@@ -325,6 +325,7 @@ export function SongFitPostCard({
                 cardState={cardState}
                 onPlay={activate}
                 postId={post.id}
+                spotifyTrackId={post.spotify_track_id}
                 coverImageUrl={post.album_art_url}
                 hideReactButton
                 reelsMode={reelsMode}
@@ -364,6 +365,7 @@ export function SongFitPostCard({
                 trackTitle={post.track_title}
                 trackUrl={post.spotify_track_url}
                 postId={post.id}
+                spotifyTrackId={post.spotify_track_id}
                 albumArtUrl={post.album_art_url}
                 artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
                 genre={((post.tags_json as any[]) || [])[0] || null}
@@ -371,6 +373,7 @@ export function SongFitPostCard({
               />
               <PostCommentPanel
                 postId={post.id}
+                spotifyTrackId={post.spotify_track_id}
                 isOpen={panelOpen}
                 onOpen={handleOpenPanel}
                 onClose={handleClosePanel}

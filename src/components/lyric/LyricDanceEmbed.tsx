@@ -60,6 +60,7 @@ interface LyricDanceEmbedProps {
   hideReactButton?: boolean;
   reelsMode?: boolean;
   postId?: string;
+  spotifyTrackId?: string | null;
   autoPlay?: boolean;
   forceMuted?: boolean;
   onOpenReactions?: () => void;
@@ -91,6 +92,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   hideReactButton = false,
   reelsMode = false,
   postId,
+  spotifyTrackId,
   autoPlay = false,
   forceMuted = false,
   onOpenReactions,
@@ -529,7 +531,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         )}
 
         <CanvasTopPills
-          spotifyTrackId={(data ?? prefetchedData as any)?.spotify_track_id ?? null}
+          spotifyTrackId={spotifyTrackId ?? null}
           leftSlot={(
             !effectiveShowCover && playerReady && !reelsMode
               ? (
