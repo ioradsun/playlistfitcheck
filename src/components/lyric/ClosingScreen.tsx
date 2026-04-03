@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { emitClosingPick } from "@/lib/fire";
+import type { Moment } from "@/lib/buildMoments";
 
 interface ClosingScreenProps {
   visible: boolean;
@@ -12,7 +13,11 @@ interface ClosingScreenProps {
   danceId: string;
   onReplay: () => void;
   onAnswer?: () => void;
+  onShareClip?: (momentIndex: number, caption: string) => void;
   source?: "feed" | "shareable" | "embed";
+  moments?: Moment[];
+  momentFireCounts?: Record<number, number>;
+  onSeekToMoment?: (momentIndex: number) => void;
 }
 
 const FALLBACK_FEELINGS = [
@@ -23,34 +28,48 @@ const FALLBACK_FEELINGS = [
   "something I can't name yet",
 ];
 
-const GAP = "clamp(4px, 2.5cqh, 14px)";
-
-export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, onAnswer, source }: ClosingScreenProps) {
+export function ClosingScreen({
+  visible,
+  empowermentPromise,
+  danceId,
+  onReplay,
+  onAnswer,
+  onShareClip,
+  source,
+  moments,
+  momentFireCounts,
+  onSeekToMoment,
+}: ClosingScreenProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const [freeText, setFreeText] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [confirmText, setConfirmText] = useState("");
-  const [isWide, setIsWide] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  const options = useMemo(
+    () => (empowermentPromise?.hooks.length ? empowermentPromise.hooks.slice(0, 4) : FALLBACK_FEELINGS),
+    [empowermentPromise],
+  );
+
+  const hottestMomentIdx = useMemo(() => {
+    if (!momentFireCounts || !moments?.length) return 0;
+    let maxFires = 0;
+    let maxIdx = 0;
+    for (let i = 0; i < moments.length; i += 1) {
+      const fires = momentFireCounts[i] ?? 0;
+      if (fires > maxFires) {
+        maxFires = fires;
+        maxIdx = i;
+      }
+    }
+    return maxIdx;
+  }, [moments, momentFireCounts]);
+
   useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-
-    const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      setIsWide(width > height || width > 380);
-    });
-
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const options = useMemo(() => (
-    empowermentPromise?.hooks.length
-      ? empowermentPromise.hooks.slice(0, 4)
-      : FALLBACK_FEELINGS
-  ), [empowermentPromise]);
+    if (visible && moments?.length) {
+      onSeekToMoment?.(hottestMomentIdx);
+    }
+  }, [visible, moments, hottestMomentIdx, onSeekToMoment]);
 
   const handleSubmit = async (hookIndex: number | null, text: string) => {
     if (submitted) return;
@@ -58,6 +77,8 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
     await emitClosingPick(danceId, hookIndex, text || null, source);
     if (hookIndex !== null) {
       setConfirmText(options[hookIndex]);
+    } else {
+      setConfirmText(text.trim());
     }
   };
 
@@ -68,165 +89,252 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
         position: "absolute",
         inset: 0,
         zIndex: 200,
-        containerType: "size",
+        display: "flex",
+        flexDirection: "column",
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? "auto" : "none",
-        transition: "opacity 0.25s ease, pointer-events 0.25s ease",
+        transition: "opacity 0.3s ease",
       }}
     >
       <div
         style={{
-          height: "100%",
-          width: "100%",
+          flex: 1,
+          position: "relative",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: "clamp(10px, 4cqh, 28px) 24px",
-          flexDirection: "column",
-          overflowY: "auto",
         }}
       >
         <div
           style={{
-            fontSize: 9,
-            fontFamily: "monospace",
-            color: "rgba(255,255,255,0.22)",
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: GAP,
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            pointerEvents: "none",
           }}
-        >
-          <span>{empowermentPromise?.fromState ?? "before"}</span>
-          <span style={{ opacity: 0.4 }}>→</span>
-          <span style={{ color: "#a855f7", opacity: 0.7 }}>{empowermentPromise?.toState ?? "after"}</span>
-        </div>
+        />
 
-        <p
-          style={{
-            fontSize: "clamp(11px, 2.8cqh, 15px)",
-            fontWeight: 500,
-            color: "rgba(255,255,255,0.82)",
-            textAlign: "center",
-            lineHeight: 1.4,
-            fontFamily: "monospace",
-            maxWidth: 260,
-            margin: 0,
-            marginBottom: GAP,
-          }}
-        >
-          which fits best?
-        </p>
-
-        {!submitted ? (
-          <>
+        {!submitted && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 44,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "rgba(0,0,0,0.4)",
+              borderRadius: 20,
+              padding: "4px 12px",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              zIndex: 1,
+            }}
+          >
             <div
               style={{
-                width: "100%",
-                maxWidth: 300,
-                display: "grid",
-                gridTemplateColumns: isWide ? "1fr 1fr" : "1fr",
-                gap: "clamp(3px, 1.2cqh, 6px)",
-                marginBottom: GAP,
+                width: 5,
+                height: 5,
+                borderRadius: "50%",
+                background: "rgba(255,160,30,0.8)",
+              }}
+            />
+            <span
+              style={{
+                fontSize: 10,
+                color: "rgba(255,255,255,0.45)",
+                letterSpacing: "0.03em",
               }}
             >
-              {options.map((opt, i) => {
-                const isOptOut = false;
+              hottest moment
+            </span>
+          </div>
+        )}
+
+        {moments && moments.length > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 12,
+              right: 12,
+              height: 36,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", gap: 2, alignItems: "center", width: "100%" }}>
+              {moments.map((moment, index) => {
+                const fires = momentFireCounts?.[index] ?? 0;
+                const maxFires = Math.max(1, ...Object.values(momentFireCounts ?? {}));
+                const heat = fires / maxFires;
+                const isHottest = index === hottestMomentIdx;
+                const flex = Math.max(1, moment.endSec - moment.startSec);
+
+                const r = Math.round(100 + heat * 140);
+                const g = Math.round(50 + heat * 100);
+                const b = Math.round(10 + heat * 10);
+                const opacity = 0.15 + heat * 0.7;
+
                 return (
+                  <button
+                    key={`${moment.startSec}-${moment.endSec}-${index}`}
+                    type="button"
+                    onClick={() => onSeekToMoment?.(index)}
+                    style={{
+                      flex,
+                      height: 4,
+                      background: `rgb(${r},${g},${b})`,
+                      opacity,
+                      borderRadius: 3,
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 0,
+                      outline: isHottest ? "1.5px solid rgba(255,180,40,0.45)" : "none",
+                      outlineOffset: isHottest ? 1.5 : 0,
+                      transition: "opacity 0.3s ease",
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          background: "#0a0a0f",
+          padding: "14px 20px 20px",
+          flexShrink: 0,
+        }}
+      >
+        {!submitted ? (
+          <>
+            <p
+              style={{
+                fontSize: 12,
+                color: "rgba(255,255,255,0.32)",
+                textAlign: "center",
+                margin: "0 0 12px",
+              }}
+            >
+              this song made me feel
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 7,
+                justifyContent: "center",
+                marginBottom: 14,
+              }}
+            >
+              {options.map((opt, i) => (
                 <button
                   key={i}
+                  type="button"
                   onClick={() => {
                     setPicked(i);
                     onAnswer?.();
                     handleSubmit(i, freeText);
                   }}
                   style={{
-                    width: "100%",
-                    padding: "clamp(5px, 1.8cqh, 10px) 14px",
-                    borderRadius: 10,
-                    background: picked === i ? "rgba(168,85,247,0.15)" : "rgba(255,255,255,0.04)",
-                    border: `0.5px solid ${isOptOut ? "rgba(255,255,255,0.06)" : picked === i ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)"}`,
-                    fontSize: "clamp(9px, 2cqh, 11px)",
+                    background: picked === i ? "rgba(255,140,20,0.18)" : "rgba(255,140,20,0.05)",
+                    border: `1px solid ${picked === i ? "rgba(255,140,20,0.40)" : "rgba(255,140,20,0.10)"}`,
+                    borderRadius: 20,
+                    padding: "8px 16px",
+                    color: picked === i ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.45)",
+                    fontSize: 12,
                     fontFamily: "monospace",
-                    color: picked === i
-                      ? "rgba(255,255,255,0.9)"
-                      : isOptOut ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.5)",
-                    opacity: isOptOut ? 0.8 : 1,
                     cursor: "pointer",
-                    textAlign: "left",
-                    lineHeight: 1.45,
-                    transition: "all 0.15s",
-                    gridColumn: isOptOut ? "1 / -1" : undefined,
+                    transition: "all 0.2s ease",
                   }}
                 >
                   {opt}
                 </button>
-                );
-              })}
+              ))}
             </div>
 
-            <div style={{ width: "100%", maxWidth: 300, marginBottom: GAP }}>
-              <input
-                type="text"
-                value={freeText}
-                onChange={(e) => setFreeText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && freeText.trim()) {
-                    onAnswer?.();
-                    handleSubmit(null, freeText);
-                  }
+            <input
+              type="text"
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && freeText.trim()) {
+                  onAnswer?.();
+                  handleSubmit(null, freeText);
+                }
+              }}
+              placeholder="or say it your way..."
+              style={{
+                width: "100%",
+                padding: "9px 12px",
+                background: "rgba(255,255,255,0.03)",
+                border: "0.5px solid rgba(255,255,255,0.08)",
+                borderRadius: 10,
+                fontSize: 12,
+                fontFamily: "monospace",
+                color: "rgba(255,255,255,0.6)",
+                outline: "none",
+                caretColor: "rgba(255,160,40,0.6)",
+                marginBottom: 12,
+                boxSizing: "border-box",
+              }}
+            />
+
+            {freeText.trim().length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  onAnswer?.();
+                  handleSubmit(null, freeText);
                 }}
-                placeholder="or say it in your own words..."
                 style={{
-                  width: "100%",
-                  padding: "clamp(5px, 1.8cqh, 10px) 12px",
-                  background: "rgba(255,255,255,0.04)",
-                  border: "0.5px solid rgba(255,255,255,0.1)",
-                  borderRadius: 10,
-                  fontSize: "clamp(9px, 2cqh, 11px)",
+                  fontSize: 10,
                   fontFamily: "monospace",
-                  color: "rgba(255,255,255,0.7)",
-                  outline: "none",
-                  caretColor: "#a855f7",
+                  color: "rgba(255,160,40,0.6)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  letterSpacing: "0.1em",
+                  marginBottom: 12,
                 }}
-              />
-              {freeText.trim().length > 0 && (
-                <button
-                  onClick={() => {
-                    onAnswer?.();
-                    handleSubmit(null, freeText);
-                  }}
-                  style={{
-                    marginTop: "clamp(3px, 1.2cqh, 6px)",
-                    fontSize: 9,
-                    fontFamily: "monospace",
-                    color: "rgba(168,85,247,0.7)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  submit →
-                </button>
-              )}
-            </div>
+              >
+                submit →
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onReplay}
+              style={{
+                width: "100%",
+                padding: 10,
+                background: "rgba(255,255,255,0.03)",
+                border: "0.5px solid rgba(255,255,255,0.08)",
+                borderRadius: 10,
+                fontSize: 12,
+                fontFamily: "monospace",
+                color: "rgba(255,255,255,0.25)",
+                cursor: "pointer",
+                textAlign: "center",
+              }}
+            >
+              replay
+            </button>
           </>
         ) : (
-          <div style={{ textAlign: "center", marginBottom: GAP }}>
+          <>
             {confirmText && (
               <p
                 style={{
-                  fontSize: "clamp(12px, 3cqh, 16px)",
-                  fontWeight: 500,
-                  color: "rgba(255,255,255,0.88)",
+                  fontSize: 14,
+                  color: "rgba(255,170,50,0.6)",
+                  fontStyle: "italic",
                   fontFamily: "monospace",
-                  margin: "0 auto",
-                  marginBottom: "clamp(4px, 1.5cqh, 12px)",
-                  lineHeight: 1.4,
-                  maxWidth: 260,
+                  textAlign: "center",
+                  margin: "0 0 4px",
                 }}
               >
                 "{confirmText}"
@@ -236,31 +344,58 @@ export function ClosingScreen({ visible, empowermentPromise, danceId, onReplay, 
               style={{
                 fontSize: 10,
                 fontFamily: "monospace",
-                color: "rgba(168,85,247,0.5)",
-                margin: 0,
-                marginTop: "clamp(4px, 1.5cqh, 10px)",
+                color: "rgba(255,255,255,0.18)",
+                textAlign: "center",
+                margin: "0 0 14px",
               }}
             >
               felt that.
             </p>
-          </div>
-        )}
 
-        <button
-          onClick={onReplay}
-          style={{
-            fontSize: 9,
-            fontFamily: "monospace",
-            color: "rgba(255,255,255,0.18)",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-          }}
-        >
-          ↩ replay
-        </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const caption = confirmText || freeText || "";
+                  onShareClip?.(hottestMomentIdx, caption);
+                }}
+                style={{
+                  flex: 1,
+                  background: "rgba(255,140,20,0.12)",
+                  border: "1px solid rgba(255,140,20,0.25)",
+                  borderRadius: 10,
+                  padding: 10,
+                  color: "rgba(255,170,50,0.8)",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  fontFamily: "monospace",
+                  cursor: "pointer",
+                  textAlign: "center",
+                }}
+              >
+                share clip
+              </button>
+              <button
+                type="button"
+                onClick={onReplay}
+                style={{
+                  flex: 1,
+                  background: "rgba(255,255,255,0.03)",
+                  border: "0.5px solid rgba(255,255,255,0.08)",
+                  borderRadius: 10,
+                  padding: 10,
+                  color: "rgba(255,255,255,0.25)",
+                  fontSize: 12,
+                  fontFamily: "monospace",
+                  cursor: "pointer",
+                  textAlign: "center",
+                }}
+              >
+                replay
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
