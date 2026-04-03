@@ -170,6 +170,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     unlockAudio();
     if (muted) {
       player?.setMuted(false);
+      player?.play(); // user gesture → restart audio if it was blocked
       setMuted(false);
       setShowMuteIndicator(false);
     } else {
