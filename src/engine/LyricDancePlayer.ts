@@ -1790,7 +1790,7 @@ export class LyricDancePlayer {
     // Disable native loop for region-based players — tick() handles region looping manually
     this.audio.loop = !(data.region_start != null && data.region_end != null);
     this.audio.muted = true;
-    this.audio.preload = "auto";
+    this.audio.preload = "none";
     this.bootMode = options?.bootMode ?? "minimal";
     // Single engine per battle card — no forced quality reduction needed.
     this._handleVisibilityChange = this._handleVisibilityChangeImpl.bind(this);
@@ -1968,11 +1968,15 @@ export class LyricDancePlayer {
       return;
     }
 
-    this._pendingUpgradeTimeout = window.setTimeout(() => {
+    const schedule = typeof window.requestIdleCallback === "function"
+      ? (cb: () => void) => window.requestIdleCallback(cb, { timeout: 200 })
+      : (cb: () => void) => window.setTimeout(cb, 50);
+
+    this._pendingUpgradeTimeout = schedule(() => {
       this._pendingUpgradeTimeout = null;
       if (this.destroyed || this.fullModeEnabled) return;
       void this.prepareFullMode();
-    }, 100);
+    });
   }
 
   private async prepareFullMode(): Promise<void> {
@@ -2772,7 +2776,11 @@ export class LyricDancePlayer {
 
     // Cancel pending deferred work
     if (this._pendingUpgradeTimeout != null) {
-      window.clearTimeout(this._pendingUpgradeTimeout);
+      if (typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(this._pendingUpgradeTimeout);
+      } else {
+        window.clearTimeout(this._pendingUpgradeTimeout);
+      }
       this._pendingUpgradeTimeout = null;
     }
     if (this._pendingCanPlayHandler) {

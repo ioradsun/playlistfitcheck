@@ -221,7 +221,7 @@ export function useLyricDanceCore({
   }, [player, moments]);
 
   useEffect(() => {
-    if (!data?.id) return;
+    if (!data?.id || evicted) return;
     // Subscribe first to avoid missing events during initial fetch
     const channel = supabase
       .channel(`reactions-core-${data.id}`)
@@ -274,7 +274,7 @@ export function useLyricDanceCore({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [data?.id, setReactionData]);
+  }, [data?.id, evicted, setReactionData]);
 
   useEffect(() => {
     if (!player) return;
