@@ -170,11 +170,29 @@ export class BeatConductor {
   private _cursor = 0;
 
   constructor(beatGrid: BeatGrid, songDuration: number) {
-    const rawBeats = (beatGrid.beats ?? []).filter(b => Number.isFinite(b)).sort((a, b) => a - b);
+    let rawBeats = (beatGrid.beats ?? []).filter(b => Number.isFinite(b)).sort((a, b) => a - b);
+    const bpm = Math.max(30, beatGrid.bpm ?? DEFAULT_BPM);
+    const period = 60 / bpm;
+
+    // ═══ SYNTHETIC BEATS: generate from BPM when beat timestamps are missing ═══
+    // Many DB records have bpm but empty beats[]. Without timestamps the
+    // BeatConductor returns energy=0 every frame → no background pulse,
+    // no particle reactivity, no camera movement. Generate evenly-spaced
+    // beats so the visual system always has a heartbeat.
+    if (rawBeats.length === 0 && songDuration > 0 && period > 0) {
+      const synthetic: number[] = [];
+      for (let t = 0; t < songDuration; t += period) {
+        synthetic.push(t);
+      }
+      rawBeats = synthetic;
+    }
+
     this.beats = new Float64Array(rawBeats);
-    this.bpm = Math.max(30, beatGrid.bpm ?? DEFAULT_BPM);
-    this.period = 60 / this.bpm;
-    this.confidence = beatGrid.confidence ?? 0.5;
+    this.bpm = bpm;
+    this.period = period;
+    this.confidence = rawBeats.length === (beatGrid.beats ?? []).length
+      ? (beatGrid.confidence ?? 0.5)
+      : 0.3; // lower confidence for synthetic beats
     this.songDuration = songDuration;
 
     // V2: Store hit events

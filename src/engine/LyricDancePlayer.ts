@@ -2205,11 +2205,13 @@ export class LyricDancePlayer {
     // Defer audio until fullModeEnabled, then start automatically.
     if (!this.fullModeEnabled) {
       this._audioDeferredUntilReady = true;
-      // Immediate upgrade — no 100ms delay for play() calls.
-      // Cards are already visible when play() fires (active state).
-      if (!this._bakePromise) {
-        void this.prepareFullMode();
-      }
+      // Always call prepareFullMode — it's idempotent.
+      // If a bake is already in flight (warm path started it),
+      // prepareFullMode awaits the existing promise then calls
+      // enableFullVisualMode(). Without this, play() during an
+      // in-flight bake skips enableFullVisualMode entirely →
+      // permanent black canvas.
+      void this.prepareFullMode();
       if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
       this.rafHandle = requestAnimationFrame(this.tick);
       return;
