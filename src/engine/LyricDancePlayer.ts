@@ -1764,6 +1764,7 @@ export class LyricDancePlayer {
   private _pendingCanPlayHandler: (() => void) | null = null;
   /** Audio is waiting for scene compilation to finish before playing */
   private _audioDeferredUntilReady = false;
+  private _playPromise: Promise<void> | null = null;
   private options?: { bootMode?: "minimal" | "full"; preloadedImages?: HTMLImageElement[] };
 
   constructor(
@@ -1935,13 +1936,22 @@ export class LyricDancePlayer {
     this.startPlaybackClock();
   }
 
+  /** Serialized audio start — prevents AbortError from overlapping calls. */
+  private _safePlay(): void {
+    if (this._playPromise) return;
+    const startPlayback = this.audio["play"].bind(this.audio);
+    this._playPromise = startPlayback()
+      .catch(() => {})
+      .finally(() => { this._playPromise = null; });
+  }
+
   private startPlaybackClock(): void {
     if (this.destroyed) return;
     this.perfMarks.tClockStart = this.perfMarks.tClockStart ?? performance.now();
     this.primeAudio();
     // Full boot: scene is already compiled by prepareFullMode()
     if (this.fullModeEnabled) {
-      this.audio.play().catch(() => {});
+      this._safePlay();
     } else {
       this._audioDeferredUntilReady = true;
     }
@@ -2214,7 +2224,7 @@ export class LyricDancePlayer {
         this.audio.addEventListener("canplay", onReady);
       }
     }
-    this.audio.play().catch(() => {});
+    this._safePlay();
     // Restore mute state — the embed's mute effect handles the real value
     if (!wasMuted) {
       // Defer unmute to next microtask so play() promise resolves first
@@ -2263,6 +2273,7 @@ export class LyricDancePlayer {
     }
     this.stopHealthMonitor();
     this.audio.pause();
+    this._playPromise = null;
   }
 
   /** Stop the visual render loop without pausing audio. Used by battle mode
@@ -2611,7 +2622,6 @@ export class LyricDancePlayer {
 
   setMuted(muted: boolean): void {
     this.audio.muted = muted;
-    if (!muted) this.audio.play().catch(() => {});
   }
 
   /** Set vertical text bias in canvas pixels — shifts text up to account for bottom overlays (playbar, battle bar). */
@@ -2814,6 +2824,7 @@ export class LyricDancePlayer {
     this._audioDeferredUntilReady = false;
 
     this.audio.pause();
+    this._playPromise = null;
     this.audio.src = "";
     this._timeInitialized = false;
     document.removeEventListener("visibilitychange", this._handleVisibilityChange);
