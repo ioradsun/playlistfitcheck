@@ -102,7 +102,7 @@ export function useLyricDanceCore({
       .from("shareable_lyric_dances" as any)
       .select(LYRIC_DANCE_COLUMNS)
       .eq("id", lyricDanceId)
-      .maybeSingle() as Promise<any>)
+      .maybeSingle() as unknown as Promise<any>)
       .then(({ data: row }: any) => {
         if (cancelled) return;
         if (row) {

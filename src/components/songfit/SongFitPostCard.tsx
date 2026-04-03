@@ -369,7 +369,6 @@ export function SongFitPostCard({
               />
               <PostCommentPanel
                 postId={post.id}
-                spotifyTrackId={post.spotify_track_id}
                 isOpen={panelOpen}
                 onOpen={handleOpenPanel}
                 onClose={handleClosePanel}
