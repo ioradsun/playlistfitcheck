@@ -98,12 +98,12 @@ export function useLyricDanceCore({
     if (!lyricDanceId) return;
     let cancelled = false;
     setLoading(true);
-    supabase
+    (supabase
       .from("shareable_lyric_dances" as any)
       .select(LYRIC_DANCE_COLUMNS)
       .eq("id", lyricDanceId)
-      .maybeSingle()
-      .then(({ data: row }) => {
+      .maybeSingle() as unknown as Promise<any>)
+      .then(({ data: row }: any) => {
         if (cancelled) return;
         if (row) {
           const r = row as any;
@@ -116,7 +116,7 @@ export function useLyricDanceCore({
         }
         setLoading(false);
       })
-      .catch((error) => {
+      .catch((error: any) => {
         if (cancelled) return;
         console.warn("[LyricDanceCore] Failed to fetch shareable lyric dance", {
           lyricDanceId,
