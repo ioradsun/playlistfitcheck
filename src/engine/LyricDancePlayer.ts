@@ -38,7 +38,6 @@ import { CameraRig, type SubjectFocus } from "@/engine/CameraRig";
 import { FinaleEffect } from "@/engine/FinaleEffect";
 import { ExitEffect } from '@/engine/ExitEffect';
 import { HeroSmokeEffect } from '@/engine/HeroSmokeEffect';
-import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage, getPreloadedImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
 import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
@@ -2864,7 +2863,6 @@ export class LyricDancePlayer {
     this._zeroCanvas(this.textCanvas);
     this._zeroCanvas(this.canvas);
     this._zeroCanvas(this.bgCanvas);
-    revokeAnalyzerWorker();          // free blob URL (safe to call multiple times)
     this.ctx = null as any;
     this.canvas = null as any;
     this.bgCanvas = null as any;
@@ -5001,7 +4999,7 @@ export class LyricDancePlayer {
       }
       if (!this._globalWickBar) {
         this._globalWickBar = new DynamiteWickBar(accentColor, this._effectiveDpr);
-        const analysisRef = (this.conductor as any)?._analysis as import('@/engine/audioAnalyzer').AudioAnalysis | null;
+        const analysisRef = (this.conductor as any)?._analysis ?? null;
         if (analysisRef?.beatEnergies) {
           this._globalWickBar.setWaveformPreview(analysisRef.beatEnergies);
         } else {

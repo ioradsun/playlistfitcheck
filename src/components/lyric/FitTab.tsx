@@ -29,7 +29,6 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
 import { HookWaveformPicker } from "./HookWaveformPicker";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
-import { FitExportModal } from "./FitExportModal";
 
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -138,7 +137,6 @@ export function FitTab({
   );
   const [prefetchedDanceData, setPrefetchedDanceData] =
     useState<LyricDanceData | null>(null);
-  const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxScene, setLightboxScene] = useState<{ imageUrl: string; description: string; timestamp: string; visualMood?: string; index: number } | null>(null);
   const [clipComposerVisible, setClipComposerVisible] = useState(false);
   const [clipComposerStart, setClipComposerStart] = useState(0);
@@ -1415,7 +1413,6 @@ export function FitTab({
                 Watch
               </a>
               <button
-                onClick={() => setShowExportModal(true)}
                 className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
                 title="Download"
               >
@@ -1515,13 +1512,6 @@ export function FitTab({
               )}
             </div>
 
-              <FitExportModal
-                isOpen={showExportModal}
-                onClose={() => setShowExportModal(false)}
-                getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
-                songTitle={lyricData.title || "Untitled"}
-                artistName=""
-              />
             </div>
           ) : hasRealAudio ? (
             <div className="glass-card rounded-xl p-3">
