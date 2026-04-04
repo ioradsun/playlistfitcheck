@@ -34,7 +34,6 @@ export function FmlyBar({
   const [pressing, setPressing] = useState(false);
   const [renderTick, setRenderTick] = useState(0);
   const [hydrated, setHydrated] = useState(false);
-  const [browsedIdx, setBrowsedIdx] = useState<number | null>(null);
 
   const holdStartRef = useRef<number | null>(null);
   const holdTickRef = useRef<number | null>(null);
@@ -69,17 +68,6 @@ export function FmlyBar({
     () => moments.findIndex((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec),
     [moments, currentTimeSec],
   );
-
-  const userTopIdx = useMemo(() => {
-    if (!closingActive) return null;
-    const fires = userFiresRef.current;
-    let bestIdx = -1;
-    let bestMs = 0;
-    for (const [idx, ms] of Object.entries(fires)) {
-      if (ms > bestMs) { bestMs = ms; bestIdx = Number(idx); }
-    }
-    return bestIdx >= 0 ? bestIdx : null;
-  }, [closingActive, renderTick]);
 
   // ── Hydrate user fires from DB on mount ─────────────────────────────────
   useEffect(() => {
@@ -244,21 +232,21 @@ export function FmlyBar({
     if (holdMs < 180) handleFireTap(); else handleFireHoldEnd(holdMs);
   };
 
-  const onSelectMoment = (moment: Moment, index: number) => {
-    setBrowsedIdx(index);
-    onSeekTo(moment.startSec);
-    player?.setRegion?.(moment.startSec, moment.endSec);
-  };
-
   return (
     <>
       <style>{`
         @keyframes fire-pulse {
-          0%, 100% { opacity: 0.5; filter: drop-shadow(0 0 3px rgba(255,140,40,0.0)); }
-          50% { opacity: 0.9; filter: drop-shadow(0 0 6px rgba(255,140,40,0.3)); }
+          0%, 100% {
+            fill: rgba(255,140,40,0.55);
+            filter: drop-shadow(0 0 3px rgba(255,140,40,0.2));
+          }
+          50% {
+            fill: rgba(255,165,50,0.92);
+            filter: drop-shadow(0 0 8px rgba(255,140,40,0.55));
+          }
         }
         .fire-icon-pulse {
-          animation: fire-pulse 2.5s ease-in-out infinite;
+          animation: fire-pulse 2.2s ease-in-out infinite;
         }
       `}</style>
 
@@ -273,7 +261,7 @@ export function FmlyBar({
         }}
       >
         {/* Moments container */}
-        <div data-browsed-idx={browsedIdx ?? -1} style={{ flex: 1, display: "flex", position: "relative", minWidth: 0 }}>
+        <div style={{ flex: 1, display: "flex", position: "relative", minWidth: 0 }}>
           {/* Ember canvas — overlaid on moments, pointer-events: none */}
           <canvas
             ref={emberCanvasRef}
@@ -308,34 +296,40 @@ export function FmlyBar({
             />
           )}
 
-          {/* Moment segments — transparent buttons for click/seek */}
-          {moments.map((moment, index) => {
-            const isLast = index === moments.length - 1;
-            const segmentOpacity = closingActive
-              ? userTopIdx == null ? 1 : userTopIdx === index ? 1 : 0.5
-              : 1;
-
+          {/* Moment divider lines — visual only */}
+          {moments.slice(0, -1).map((moment) => {
+            const xPct = (moment.endSec / Math.max(0.0001, totalDuration)) * 100;
             return (
-              <button
-                key={`${moment.startSec}-${moment.endSec}`}
-                type="button"
-                onClick={() => onSelectMoment(moment, index)}
+              <div
+                key={`${moment.startSec}-${moment.endSec}-divider`}
                 style={{
-                  flex: Math.max(1, moment.endSec - moment.startSec),
-                  height: "100%",
-                  background: "transparent",
-                  border: "none",
-                  borderRight: isLast ? "none" : "1px solid rgba(255,255,255,0.06)",
-                  cursor: "pointer",
-                  position: "relative",
-                  overflow: "hidden",
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: `${xPct}%`,
+                  width: "1px",
+                  background: "rgba(255,255,255,0.06)",
+                  pointerEvents: "none",
                   zIndex: 1,
-                  opacity: segmentOpacity,
-                  transition: "opacity 0.5s ease",
                 }}
               />
             );
           })}
+
+          {/* Full-bar scrub overlay */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 1,
+              cursor: "pointer",
+            }}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              onSeekTo(pct * totalDuration);
+            }}
+          />
         </div>
 
         {/* Fire button — right edge */}
@@ -360,11 +354,13 @@ export function FmlyBar({
         >
           <svg
             viewBox="0 0 24 24" width={20} height={20}
-            fill={pressing ? "rgba(255,140,40,0.7)" : "rgba(255,140,40,0.15)"}
             stroke={pressing ? "rgba(255,160,50,0.9)" : "rgba(255,140,40,0.5)"}
             strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
             className={closingActive ? "" : "fire-icon-pulse"}
-            style={{ transition: "fill 0.15s ease, stroke 0.15s ease" }}
+            style={{
+              fill: pressing ? "rgba(255,160,50,1)" : undefined,
+              transition: "fill 0.15s ease, stroke 0.15s ease",
+            }}
           >
             <path d="M12 2c0 0-5.5 5-5.5 10.5a5.5 5.5 0 0 0 11 0C17.5 9 15 6.5 15 6.5c0 0 .5 3-1.5 4.5C13.5 8 12 2 12 2z" />
           </svg>
