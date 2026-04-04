@@ -328,8 +328,8 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         </>
       ) : (
         <>
-          <div className="flex items-center border-b border-border/40">
-            <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-center border-b border-border/40">
+            <div className="flex items-center">
               <BillboardToggle
                 view={feed.feedView}
                 onViewChange={feed.setFeedView}
@@ -337,14 +337,15 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                 onModeChange={feed.setBillboardMode}
                 isLoggedIn={!!user}
               />
+              <div className="w-px h-4 bg-border/60" />
+              <button
+                onClick={() => navigate("/LyricFit")}
+                className="px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Add your song"
+              >
+                <Plus size={16} />
+              </button>
             </div>
-            <button
-              onClick={() => navigate("/LyricFit")}
-              className="shrink-0 mx-2 p-1"
-              aria-label="Add your song"
-            >
-              <Plus size={18} className="text-foreground/60" />
-            </button>
           </div>
         </>
       )}
