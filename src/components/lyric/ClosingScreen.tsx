@@ -81,7 +81,7 @@ export function ClosingScreen({
     const measureLayout = () => {
       if (!containerRef.current) return;
       const h = containerRef.current.getBoundingClientRect().height;
-      setUseSlider(h < 400);
+      setUseSlider(h < 480);
     };
 
     measureLayout();
@@ -166,7 +166,7 @@ export function ClosingScreen({
           transition: "opacity 0.3s ease",
         }}
       >
-        <div style={{ flex: 1, minHeight: 80, position: "relative" }}>
+        <div style={{ flex: 1, minHeight: 80, position: "relative", overflow: "hidden" }}>
           <div
             style={{
               position: "absolute",
@@ -180,6 +180,7 @@ export function ClosingScreen({
         <div
           style={{
             flexShrink: 0,
+            maxHeight: "60%",
             background: "#0a0a0f",
             padding: "12px 16px calc(12px + env(safe-area-inset-bottom, 0px))",
             overflowY: "auto",
