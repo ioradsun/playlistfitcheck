@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,7 +10,7 @@ import {
   type EmojiKey,
 } from "@/components/shared/panel/panelConstants";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
-import type { CardState } from "./useCardLifecycle";
+import { audioController } from "@/lib/audioController";
 
 interface Comment {
   id: string;
@@ -27,7 +27,6 @@ interface Props {
   isOpen: boolean;
   onOpen?: () => void;
   onClose: () => void;
-  cardState?: CardState;
   trackTitle?: string;
   reelsMode?: boolean;
   variant?: "embedded" | "reels";
@@ -88,7 +87,6 @@ export function PostCommentPanel({
   isOpen,
   onOpen,
   onClose,
-  cardState,
   trackTitle,
   reelsMode = false,
   variant = "embedded",
@@ -97,6 +95,12 @@ export function PostCommentPanel({
 }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
+  const { effectivePrimaryId } = useSyncExternalStore(
+    audioController.subscribe,
+    audioController.getSnapshot,
+    audioController.getSnapshot,
+  );
+  const isLive = effectivePrimaryId === postId;
 
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -375,7 +379,7 @@ export function PostCommentPanel({
             }
           }}
           accent={accent}
-          isLive={cardState === "active"}
+          isLive={isLive}
           totalFireCount={totalFireCount}
         />
       </div>

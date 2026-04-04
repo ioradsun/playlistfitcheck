@@ -52,7 +52,6 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent } from "@/lib/engagementTracking";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
-import { useCardState } from "./useCardLifecycle";
 import { PostCommentPanel } from "./PostCommentPanel";
 import {
   DropdownMenu,
@@ -80,6 +79,7 @@ interface Props {
     signal_velocity?: number;
   };
   lyricDanceData?: LyricDanceData | null;
+  visible?: boolean;
   reelsMode?: boolean;
   isFirst?: boolean;
   /** When true, this card is at viewport center — pre-warm the player behind cover. */
@@ -93,6 +93,7 @@ export function SongFitPostCard({
   isBillboard,
   signalData,
   lyricDanceData,
+  visible,
   reelsMode = false,
   isFirst = false,
   preload = false,
@@ -102,9 +103,6 @@ export function SongFitPostCard({
   const navigate = useNavigate();
   const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
   const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
-
-  // ── Card lifecycle ──
-  const { state: cardState, activate, deactivate } = useCardState(post.id);
 
   // ── Local UI state ──
   const [liked, setLiked] = useState(post.user_has_liked ?? false);
@@ -321,7 +319,7 @@ export function SongFitPostCard({
                 lyricDanceId={post.lyric_dance_id!}
                 songTitle={post.track_title}
                 artistName={displayName}
-                cardState={cardState}
+                visible={visible}
                 postId={post.id}
                 spotifyTrackId={post.spotify_track_id}
                 prefetchedData={lyricDanceData ?? null}
@@ -333,11 +331,10 @@ export function SongFitPostCard({
             <div className="relative overflow-hidden" style={reelsMode ? { height: "100%" } : { height: 320 }}>
               <BattleEmbed
                 battleUrl={post.lyric_dance_url!}
+                postId={post.id}
                 songTitle={post.track_title}
                 showSplitCover={true}
-                cardState={cardState}
-                onPlay={activate}
-                onDeactivate={deactivate}
+                visible={visible}
                 initialVotedSide={(post as any).voted_side ?? null}
                 avatarUrl={post.profiles?.avatar_url}
                 displayName={displayName}
@@ -358,14 +355,12 @@ export function SongFitPostCard({
                 albumArtUrl={post.album_art_url}
                 artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
                 genre={((post.tags_json as any[]) || [])[0] || null}
-                onPlay={activate}
               />
               <PostCommentPanel
                 postId={post.id}
                 isOpen={panelOpen}
                 onOpen={handleOpenPanel}
                 onClose={handleClosePanel}
-                cardState={cardState}
                 trackTitle={post.track_title}
                 variant={reelsMode ? "reels" : "embedded"}
                 caption={!reelsMode && !editing ? localCaption : undefined}

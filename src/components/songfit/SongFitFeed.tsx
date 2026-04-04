@@ -5,7 +5,7 @@
  * Supports reels mode (full-screen snap scroll) and standard mode.
  * PostCommentPanel is the sole comment UX (inline in card).
  */
-import { memo, useState, useEffect, useCallback, useRef } from "react";
+import { memo, useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
 import { Loader2, Plus, User, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -13,10 +13,7 @@ import { useFeedPosts } from "./useFeedPosts";
 import { SongFitPostCard } from "./SongFitPostCard";
 import { SongFitInlineComposer } from "./SongFitInlineComposer";
 import { BillboardToggle } from "./BillboardToggle";
-import {
-  CardLifecycleProvider,
-  useCardLifecycleStore,
-} from "./useCardLifecycle";
+import { audioController } from "@/lib/audioController";
 import { logImpression } from "@/lib/engagementTracking";
 import { cn } from "@/lib/utils";
 import { useVoteGate } from "@/hooks/useVoteGate";
@@ -73,6 +70,7 @@ const ObservedCard = memo(function ObservedCard({
   preload,
   onCenterEnter,
   onCenterLeave,
+  cardRefsMap,
 }: {
   post: any;
   rank?: number;
@@ -85,26 +83,34 @@ const ObservedCard = memo(function ObservedCard({
   preload?: boolean;
   onCenterEnter: (postId: string) => void;
   onCenterLeave: (postId: string) => void;
+  cardRefsMap: MutableRefObject<Map<string, HTMLDivElement>>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const store = useCardLifecycleStore();
+  const [visible, setVisible] = useState(false);
   const loggedRef = useRef(false);
 
-  // Wide observer: cold/warm
+  // Register DOM ref for geometric center scoring
   useEffect(() => {
     const el = ref.current;
-    if (!el || !store) return;
+    if (el) cardRefsMap.current.set(post.id, el);
+    return () => {
+      cardRefsMap.current.delete(post.id);
+    };
+  }, [post.id, cardRefsMap]);
+
+  // Wide observer: visibility
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
+        setVisible(entry.isIntersecting);
         if (entry.isIntersecting) {
-          store.setState(post.id, "warm");
           if (!loggedRef.current) {
             loggedRef.current = true;
             logImpression(post.id);
           }
-        } else {
-          store.setState(post.id, "cold");
         }
       },
       { rootMargin: reelsMode ? "50% 0px" : "200px 0px" },
@@ -112,7 +118,7 @@ const ObservedCard = memo(function ObservedCard({
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [post.id, store, reelsMode]);
+  }, [post.id, reelsMode]);
 
   // Tight observer: center detection — only the middle 30% of viewport
   useEffect(() => {
@@ -140,6 +146,7 @@ const ObservedCard = memo(function ObservedCard({
         isBillboard={isBillboard}
         signalData={signalData}
         lyricDanceData={lyricDanceData}
+        visible={visible}
         reelsMode={reelsMode}
         isFirst={isFirst}
         preload={preload}
@@ -172,33 +179,43 @@ function FeedList({
 }) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [preloadId, setPreloadId] = useState<string | null>(null);
-  const centerSetRef = useRef(new Set<string>());
-  const activateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const deactivateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const store = useCardLifecycleStore();
+  const centerSetRef = useRef<Set<string>>(new Set());
+  const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cardRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Track which cards are in the center zone. The most recent entrant wins.
+  const pickBestCandidate = useCallback((): string | null => {
+    const set = centerSetRef.current;
+    if (set.size === 0) return null;
+    if (set.size === 1) return set.values().next().value!;
+    const vpCenter = window.innerHeight / 2;
+    let bestId: string | null = null;
+    let bestDist = Infinity;
+    for (const id of set) {
+      const el = cardRefsMap.current.get(id);
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      const dist = Math.abs(rect.top + rect.height / 2 - vpCenter);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestId = id;
+      }
+    }
+    return bestId;
+  }, []);
+
+  const scheduleSettle = useCallback(() => {
+    if (settleRef.current) clearTimeout(settleRef.current);
+    settleRef.current = setTimeout(() => {
+      settleRef.current = null;
+      audioController.setAutoPrimary(pickBestCandidate());
+    }, 120);
+  }, [pickBestCandidate]);
+
   const onCenterEnter = useCallback((postId: string) => {
     centerSetRef.current.add(postId);
     setPreloadId(postId);
-
-    // Cancel any pending deactivation — a new card is taking over
-    if (deactivateTimerRef.current) {
-      clearTimeout(deactivateTimerRef.current);
-      deactivateTimerRef.current = null;
-    }
-
-    // Debounced activation — the store automatically deactivates the previous card
-    if (store) {
-      if (activateTimerRef.current) clearTimeout(activateTimerRef.current);
-      activateTimerRef.current = setTimeout(() => {
-        activateTimerRef.current = null;
-        if (centerSetRef.current.has(postId)) {
-          store.setState(postId, "active");
-        }
-      }, 100);
-    }
-  }, [store]);
+    scheduleSettle();
+  }, [scheduleSettle]);
 
   const onCenterLeave = useCallback((postId: string) => {
     centerSetRef.current.delete(postId);
@@ -209,31 +226,13 @@ function FeedList({
       if (remaining.size === 0) return null;
       return Array.from(remaining).pop()!;
     });
-
-    // Do NOT deactivate immediately — the store handles it when the next card activates.
-    // Only deactivate if NO card enters center within 150ms (scrolled to a gap).
-    if (store) {
-      if (deactivateTimerRef.current) clearTimeout(deactivateTimerRef.current);
-      deactivateTimerRef.current = setTimeout(() => {
-        deactivateTimerRef.current = null;
-        // Only deactivate if no card is in center and this card is still active
-        if (centerSetRef.current.size === 0 && store.getState(postId) === "active") {
-          store.setState(postId, "warm");
-        }
-      }, 150);
-    }
-  }, [store]);
+    scheduleSettle();
+  }, [scheduleSettle]);
 
   useEffect(() => {
     return () => {
-      if (activateTimerRef.current) {
-        clearTimeout(activateTimerRef.current);
-        activateTimerRef.current = null;
-      }
-      if (deactivateTimerRef.current) {
-        clearTimeout(deactivateTimerRef.current);
-        deactivateTimerRef.current = null;
-      }
+      if (settleRef.current) clearTimeout(settleRef.current);
+      audioController.setAutoPrimary(null);
     };
   }, []);
 
@@ -267,6 +266,7 @@ function FeedList({
           reelsMode={reelsMode}
           isFirst={idx === 0}
           preload={post.id === preloadId}
+          cardRefsMap={cardRefsMap}
           onCenterEnter={onCenterEnter}
           onCenterLeave={onCenterLeave}
         />
@@ -402,19 +402,17 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           ref={() => { hasFadedIn.current = true; }}
         >
           <style>{"@keyframes fadeIn{from{opacity:0}to{opacity:1}}"}</style>
-          <CardLifecycleProvider>
-            <FeedList
-              posts={feed.posts}
-              feedView={feed.feedView}
-              signalMap={feed.signalMap}
-              loadingMore={feed.loadingMore}
-              hasMore={feed.hasMore}
-              loadMore={feed.loadMore}
-              onRefresh={feed.refresh}
-              lyricDataMap={feed.lyricDataMap}
-              reelsMode={reelsMode}
-            />
-          </CardLifecycleProvider>
+          <FeedList
+            posts={feed.posts}
+            feedView={feed.feedView}
+            signalMap={feed.signalMap}
+            loadingMore={feed.loadingMore}
+            hasMore={feed.hasMore}
+            loadMore={feed.loadMore}
+            onRefresh={feed.refresh}
+            lyricDataMap={feed.lyricDataMap}
+            reelsMode={reelsMode}
+          />
         </div>
       )}
 
