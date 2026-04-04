@@ -42,8 +42,10 @@ export function FmlyBar({
   const embersRef = useRef<Array<{
     x: number; y: number; vy: number; vx: number;
     life: number; size: number; opacity: number;
-    r: number; g: number; b: number; segIdx: number;
+    r: number; g: number; b: number;
+    segIdx: number; x0: number; x1: number;
   }>>([]);
+  const pendingFireSpawnsRef = useRef<Array<{ count: number; intensity: number }>>([]);
   const animRef = useRef<number>(0);
 
   const momentFireCounts = useMemo(
@@ -143,7 +145,28 @@ export function FmlyBar({
           life: 0.6 + Math.random() * 0.4,
           size: 1.2 + Math.random() * 1.8,
           opacity: 0.4 + intensity * 0.4,
-          r, g, b, segIdx,
+          r, g, b, segIdx, x0: seg.x0, x1: seg.x1,
+        });
+      }
+    };
+
+    const spawnFireEmbers = (count: number, intensity: number) => {
+      const rect = canvas.parentElement?.getBoundingClientRect();
+      if (!rect) return;
+      const x0 = rect.width - BAR_HEIGHT;
+      const x1 = rect.width;
+      for (let i = 0; i < count; i++) {
+        if (embers.length >= 24) break;
+        embers.push({
+          x: x0 + Math.random() * (x1 - x0),
+          y: rect.height - 2,
+          vy: -(0.4 + Math.random() * 0.5),
+          vx: (Math.random() - 0.5) * 0.1,
+          life: 0.5 + Math.random() * 0.4,
+          size: 1.0 + intensity * 1.5,
+          opacity: 0.5 + intensity * 0.4,
+          r: 255, g: 140, b: 40,
+          segIdx: -1, x0, x1,
         });
       }
     };
@@ -172,6 +195,14 @@ export function FmlyBar({
         }
       }
 
+      while (pendingFireSpawnsRef.current.length > 0) {
+        const req = pendingFireSpawnsRef.current.shift()!;
+        spawnFireEmbers(req.count, req.intensity);
+      }
+      if (frame % 180 === 0) {
+        spawnFireEmbers(1 + Math.floor(Math.random() * 2), 0.25);
+      }
+
       // Update and draw particles
       for (let i = embers.length - 1; i >= 0; i--) {
         const e = embers[i];
@@ -185,6 +216,9 @@ export function FmlyBar({
         const rad = e.size * (0.8 + flicker * 0.4);
 
         ctx.save();
+        ctx.beginPath();
+        ctx.rect(e.x0, -10, e.x1 - e.x0, rect.height + 10);
+        ctx.clip();
         const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, rad * 2.5);
         grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
         grad.addColorStop(0.3, `rgba(${e.r},${e.g},${e.b},${alpha * 0.85})`);
@@ -211,10 +245,16 @@ export function FmlyBar({
   };
 
   const handleFireTap = () => { addUserFire(currentMomentIdx, 150); onFireTap(); };
-  const handleFireHoldEnd = (holdMs: number) => { addUserFire(currentMomentIdx, holdMs); onFireHoldEnd(holdMs); };
+  const handleFireHoldEnd = (holdMs: number) => {
+    addUserFire(currentMomentIdx, holdMs);
+    const intensity = Math.min(1.0, holdMs / 2000);
+    pendingFireSpawnsRef.current.push({ count: Math.floor(4 + intensity * 8), intensity });
+    onFireHoldEnd(holdMs);
+  };
 
   const handleDown = () => {
     setPressing(true);
+    pendingFireSpawnsRef.current.push({ count: 5, intensity: 0.6 });
     holdStartRef.current = performance.now();
     player?.fireMoment?.();
     onFireHoldStart();
