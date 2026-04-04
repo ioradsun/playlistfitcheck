@@ -274,22 +274,6 @@ export function FmlyBar({
 
   return (
     <>
-      <style>{`
-        @keyframes fire-pulse {
-          0%, 100% {
-            fill: rgba(255,140,40,0.55);
-            filter: drop-shadow(0 0 3px rgba(255,140,40,0.2));
-          }
-          50% {
-            fill: rgba(255,165,50,0.92);
-            filter: drop-shadow(0 0 8px rgba(255,140,40,0.55));
-          }
-        }
-        .fire-icon-pulse {
-          animation: fire-pulse 2.2s ease-in-out infinite;
-        }
-      `}</style>
-
       <div
         style={{
           width: "100%",
@@ -398,18 +382,17 @@ export function FmlyBar({
             touchAction: "none",
           }}
         >
-          <svg
-            viewBox="0 0 24 24" width={20} height={20}
-            stroke={pressing ? "rgba(255,160,50,0.9)" : "rgba(255,140,40,0.5)"}
-            strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
-            className={closingActive ? "" : "fire-icon-pulse"}
+          <span
             style={{
-              fill: pressing ? "rgba(255,160,50,1)" : undefined,
-              transition: "fill 0.15s ease, stroke 0.15s ease",
+              fontSize: 13,
+              opacity: pressing ? 0.9 : 0.3,
+              transition: "opacity 0.15s ease",
+              userSelect: "none",
+              pointerEvents: "none",
             }}
           >
-            <path d="M12 2c0 0-5.5 5-5.5 10.5a5.5 5.5 0 0 0 11 0C17.5 9 15 6.5 15 6.5c0 0 .5 3-1.5 4.5C13.5 8 12 2 12 2z" />
-          </svg>
+            🔥
+          </span>
         </button>
       </div>
     </>
