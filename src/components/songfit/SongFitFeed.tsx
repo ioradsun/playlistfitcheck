@@ -328,18 +328,20 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         </>
       ) : (
         <>
-          <div className="flex items-center">
-            <BillboardToggle
-              view={feed.feedView}
-              onViewChange={feed.setFeedView}
-              billboardMode={feed.billboardMode}
-              onModeChange={feed.setBillboardMode}
-              isLoggedIn={!!user}
-            />
+          <div className="flex items-center border-b border-border/40">
+            <div className="flex-1 min-w-0">
+              <BillboardToggle
+                view={feed.feedView}
+                onViewChange={feed.setFeedView}
+                billboardMode={feed.billboardMode}
+                onModeChange={feed.setBillboardMode}
+                isLoggedIn={!!user}
+              />
+            </div>
             <button
               onClick={() => navigate("/LyricFit")}
-              className="ml-auto mr-1 h-8 w-8 shrink-0 rounded-full flex items-center justify-center bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.10)] transition-colors"
-              aria-label="Create lyric fit"
+              className="shrink-0 mx-2 h-8 w-8 rounded-full flex items-center justify-center bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.10)] transition-colors"
+              aria-label="Add your song"
             >
               <Plus size={15} className="text-white/50" />
             </button>

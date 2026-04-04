@@ -15,13 +15,6 @@ const billboardModes: { key: BillboardMode; label: string }[] = [
   { key: "all_time", label: "All-Time" },
 ];
 
-const recentSubViews: { key: FeedView; label: string; desc: string }[] = [
-  { key: "all", label: "All", desc: "All live submissions" },
-  { key: "now_streaming", label: "Now Streaming", desc: "Spotify posts" },
-  { key: "in_studio", label: "In Studio", desc: "Lyric dances" },
-  { key: "in_battle", label: "In Battle", desc: "Battle submissions" },
-];
-
 interface Props {
   view: FeedView;
   onViewChange: (v: FeedView) => void;
@@ -36,85 +29,38 @@ export function BillboardToggle({
   onViewChange,
   billboardMode,
   onModeChange,
-  isLoggedIn,
+  isLoggedIn: _isLoggedIn,
   compact = false,
 }: Props) {
-  const [recentDropdownOpen, setRecentDropdownOpen] = useState(false);
   const [billboardDropdownOpen, setBillboardDropdownOpen] = useState(false);
 
-  const isRecentActive =
-    view === "all" ||
-    view === "now_streaming" ||
-    view === "in_studio" ||
-    view === "in_battle";
+  const isRecentActive = view === "all";
   const isBillboardActive = view === "billboard";
-  const showRecentChevron = isLoggedIn && isRecentActive;
 
   return (
-    <div className={compact ? "" : "border-b border-border/40"}>
-      <div className={cn("flex", compact && "whitespace-nowrap gap-2")}>
+    <div className={compact ? "" : undefined}>
+      <div className={cn("flex", !compact && "w-full", compact && "whitespace-nowrap gap-2")}>
         {/* Recent tab */}
         <div className="flex-1 flex items-center justify-center">
-          <DropdownMenu
-            open={recentDropdownOpen}
-            onOpenChange={(o) => {
-              if (o && (!isRecentActive || !isLoggedIn)) return;
-              setRecentDropdownOpen(o);
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewChange("all");
             }}
+            className={cn(
+              "flex items-center gap-0.5 transition-all duration-150",
+              compact ? "py-1.5 text-xs px-2" : "py-2.5 text-sm",
+              isRecentActive
+                ? compact
+                  ? "font-medium text-white"
+                  : "font-medium text-foreground"
+                : compact
+                  ? "font-normal text-white/50"
+                  : "font-normal text-muted-foreground",
+            )}
           >
-            <DropdownMenuTrigger asChild>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!isRecentActive) {
-                    onViewChange("all");
-                  } else if (isLoggedIn) {
-                    setRecentDropdownOpen((prev) => !prev);
-                  }
-                }}
-                className={cn(
-                  "flex items-center gap-0.5 transition-all duration-150",
-                  compact ? "py-1.5 text-xs px-2" : "py-2.5 text-sm",
-                  isRecentActive
-                    ? compact
-                      ? "font-medium text-white"
-                      : "font-medium text-foreground"
-                    : compact
-                      ? "font-normal text-white/50"
-                      : "font-normal text-muted-foreground",
-                )}
-              >
-                {recentSubViews.find((s) => s.key === view)?.label ?? "All"}
-                <ChevronDown
-                  size={12}
-                  className={cn(
-                    "transition-all duration-150",
-                    showRecentChevron ? "opacity-60" : "opacity-0 w-0",
-                  )}
-                />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="center"
-              className="w-40 bg-popover z-50"
-            >
-              {recentSubViews.map(({ key, label }) => (
-                <DropdownMenuItem
-                  key={key}
-                  onClick={() => {
-                    onViewChange(key);
-                    setRecentDropdownOpen(false);
-                  }}
-                  className={cn(
-                    "text-sm",
-                    view === key && "text-foreground font-medium",
-                  )}
-                >
-                  {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            All
+          </button>
         </div>
 
         {/* FMLY Top 40 tab */}
@@ -137,7 +83,7 @@ export function BillboardToggle({
                   }
                 }}
                 className={cn(
-                  "flex items-center gap-0.5 transition-all duration-150",
+                  "flex items-center gap-0.5 transition-all duration-150 whitespace-nowrap",
                   compact ? "py-1.5 text-xs px-2" : "py-2.5 text-sm",
                   isBillboardActive
                     ? compact
