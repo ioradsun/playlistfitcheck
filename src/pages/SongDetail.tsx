@@ -1496,7 +1496,6 @@ const SongDetail = () => {
               <LyricDanceEmbed
                 ref={playerRef}
                 lyricDanceId={danceId!}
-                lyricDanceUrl={post.lyric_dance_url!}
                 songTitle={post.track_title}
                 artistName=""
                 prefetchedData={danceData}
