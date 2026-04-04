@@ -7,6 +7,7 @@ import {
   loadSpotifyIframeApi,
   type SpotifyEmbedController,
 } from "@/lib/spotifyIframeApi";
+import { audioController } from "@/lib/audioController";
 
 let _activeController: SpotifyEmbedController | null = null;
 
@@ -124,7 +125,7 @@ function LazySpotifyEmbedInner({
                     }
                   }
                   _activeController = controller;
-                  // Notify card system (fires crowdfit:audio-solo → pauses LyricDance players)
+                  // Notify card-level playback flow.
                   onPlay?.();
                 }
               },
@@ -149,24 +150,16 @@ function LazySpotifyEmbedInner({
   // ── SoundCloud: simple iframe, loads on mount ─────────────────────────
   // (Rendered inline in JSX — no effect needed. Unmount = gone.)
 
-  // ── Audio solo: pause when another card plays ─────────────────────────
+  // ── Pause when this card is no longer primary ─────────────────────────
   useEffect(() => {
-    if (!postId) return;
-    const handler = (e: Event) => {
-      const ce = e as CustomEvent<{ activeCardId?: string }>;
-      if (ce.detail?.activeCardId === postId) return;
-
-      if (isSpotify && controllerRef.current) {
-        try {
-          controllerRef.current.pause();
-        } catch {
-          /* ignore */
-        }
+    if (!postId || !isSpotify) return;
+    return audioController.subscribe(() => {
+      const { effectivePrimaryId } = audioController.getSnapshot();
+      if (effectivePrimaryId !== postId && isPlayingRef.current) {
+        _activeController?.pause();
         isPlayingRef.current = false;
       }
-    };
-    window.addEventListener("crowdfit:audio-solo", handler);
-    return () => window.removeEventListener("crowdfit:audio-solo", handler);
+    });
   }, [postId, isSpotify]);
 
   // Engagement tracking

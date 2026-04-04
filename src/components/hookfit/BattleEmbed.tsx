@@ -10,7 +10,7 @@
  * or pass battleUrl and the component fetches battleId internally.
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, memo, useSyncExternalStore } from "react";
 import {
   Maximize2,
   Volume2,
@@ -31,7 +31,7 @@ import {
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { getSessionId } from "@/lib/sessionId";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
-import type { CardState } from "@/components/songfit/useCardLifecycle";
+import { audioController } from "@/lib/audioController";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { useVoteGate } from "@/hooks/useVoteGate";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -50,9 +50,9 @@ interface BattleEmbedProps {
   showExpandButton?: boolean;
 
   // Feed lifecycle — omit for fullscreen/shareable usage
-  cardState?: CardState;
+  visible?: boolean;
   onPlay?: () => void;
-  onDeactivate?: () => void;
+  postId?: string;
 
   // Pre-existing vote state (from feed post data)
   initialVotedSide?: "a" | "b" | null;
@@ -71,9 +71,9 @@ function BattleEmbedInner({
   songTitle,
   showSplitCover = false,
   showExpandButton = true,
-  cardState,
+  visible,
   onPlay,
-  onDeactivate,
+  postId,
   initialVotedSide,
   reelsMode,
   avatarUrl,
@@ -81,10 +81,15 @@ function BattleEmbedInner({
   isVerified,
   onProfileClick,
 }: BattleEmbedProps) {
-  const isFeedEmbed = cardState !== undefined;
-  const onDeactivateRef = useRef(onDeactivate);
+  const isFeedEmbed = visible !== undefined;
+  const { effectivePrimaryId } = useSyncExternalStore(
+    audioController.subscribe,
+    audioController.getSnapshot,
+    audioController.getSnapshot,
+  );
+  const isPrimary = effectivePrimaryId === postId;
+  const wasPrimaryRef = useRef(false);
   const { addCredit } = useVoteGate();
-  onDeactivateRef.current = onDeactivate;
 
   // ── Resolved IDs ───────────────────────────────────────────
   const [resolvedBattleId, setResolvedBattleId] = useState<string | null>(
@@ -161,48 +166,18 @@ function BattleEmbedInner({
   const containerRef = useRef<HTMLDivElement>(null);
   const inlineBattleRef = useRef<InlineBattleHandle>(null);
 
-  // Reset to cover when feed card transitions FROM active TO non-active.
-  // Only fires on transition — not continuously while warm/cold.
-  // Without this guard, setPanelOpen(false) runs every render and prevents
-  // the 🔥 reaction panel from opening on warm cards.
-  const prevCardStateRef = useRef(cardState);
   useEffect(() => {
-    const prev = prevCardStateRef.current;
-    prevCardStateRef.current = cardState;
-
-    // Only reset when transitioning away from active
-    if (!isFeedEmbed || cardState === "active" || prev !== "active") return;
-
-    setBattleState("cover");
-    setReplayingSide(null);
-    setPanelOpen(false);
-    setMuted(true);
-    if (cardState === "cold") {
-      setEngineReady(false);
+    if (wasPrimaryRef.current && !isPrimary && isFeedEmbed) {
+      setBattleState("cover");
+      setReplayingSide(null);
+      setPanelOpen(false);
+      setMuted(true);
+      if (!visible) {
+        setEngineReady(false);
+      }
     }
-  }, [isFeedEmbed, cardState]);
-
-  // ── Viewport detection: deactivate when scrolled out of view ──
-  // Matches In Studio behavior via IntersectionObserver.
-  // Without this, a battle card can play audio while off-screen.
-  useEffect(() => {
-    if (!isFeedEmbed) return;
-    const el = containerRef.current;
-    if (!el) return;
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-        if (!entry.isIntersecting) {
-          onDeactivateRef.current?.();
-        }
-      },
-      { threshold: 0 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [isFeedEmbed]);
+    wasPrimaryRef.current = isPrimary;
+  }, [isPrimary, isFeedEmbed, visible]);
 
   // ── Consolidated data fetch — ONE effect replaces 3 separate waterfalls ──
   // Fetches: hooks (full), dance data (full), auth+vote — in parallel where possible.
@@ -430,7 +405,7 @@ function BattleEmbedInner({
   }, [battleState]);
 
   const activePlaying: "a" | "b" | null = useMemo(() => {
-    if (isFeedEmbed && cardState !== "active") return null;
+    if (isFeedEmbed && !isPrimary) return null;
     switch (battleState) {
       case "cover":
         return null;
@@ -443,7 +418,7 @@ function BattleEmbedInner({
       case "results":
         return replayingSide ?? votedSide ?? "a";
     }
-  }, [isFeedEmbed, cardState, battleState, replayingSide, votedSide]);
+  }, [isFeedEmbed, isPrimary, battleState, replayingSide, votedSide]);
 
   const panelActiveLine = useMemo(() => {
     const lines = resultsTab === "a" ? hookALines : hookBLines;
@@ -631,7 +606,7 @@ function BattleEmbedInner({
                 setEngineReady(true);
                 setPanelPlayer(inlineBattleRef.current?.getPlayer() ?? null);
               }}
-              cardState={isFeedEmbed ? cardState : "active"}
+              cardState={isFeedEmbed ? (visible ? "active" : "cold") : "active"}
               prefetchedHookA={battleHookA}
               prefetchedHookB={battleHookB}
               prefetchedDanceData={battleDanceData}

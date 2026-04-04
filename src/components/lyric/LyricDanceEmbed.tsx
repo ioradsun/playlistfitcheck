@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, useSyncExternalStore } from "react";
 import { VolumeX } from "lucide-react";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
@@ -8,9 +8,9 @@ import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
-import { setGlobalMuted, isGlobalMuted } from "@/lib/globalMute";
+import { audioController } from "@/lib/audioController";
+import { isGlobalMuted } from "@/lib/globalMute";
 import { isAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
-import type { CardState } from "@/components/songfit/useCardLifecycle";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
 interface LyricDanceEmbedProps {
@@ -18,12 +18,11 @@ interface LyricDanceEmbedProps {
   songTitle: string;
   artistName?: string;
   prefetchedData?: LyricDanceData | null;
-  cardState?: CardState;
+  visible?: boolean;
   regionStart?: number;
   regionEnd?: number;
   postId?: string;
   spotifyTrackId?: string | null;
-  forceMuted?: boolean;
   avatarUrl?: string | null;
   preload?: boolean;
 }
@@ -38,16 +37,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   songTitle,
   artistName,
   prefetchedData,
-  cardState,
+  visible,
   regionStart,
   regionEnd,
   postId,
   spotifyTrackId,
-  forceMuted = false,
   avatarUrl,
   preload = false,
 }, ref) {
-  const isFeedEmbed = cardState !== undefined;
+  const isFeedEmbed = visible !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
   const empowermentPromise = (prefetchedData as any)?.empowerment_promise ?? null;
 
@@ -58,8 +56,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       setEvicted(false);
       return;
     }
-    setEvicted(cardState === "cold");
-  }, [cardState, isFeedEmbed, isBattleMode]);
+    setEvicted(!visible);
+  }, [visible, isFeedEmbed, isBattleMode]);
 
   const prefetchedDataWithRegion = useMemo(() => {
     if (!isBattleMode || !prefetchedData) return prefetchedData;
@@ -90,6 +88,14 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     evicted,
   });
 
+  const audioState = useSyncExternalStore(
+    audioController.subscribe,
+    audioController.getSnapshot,
+    audioController.getSnapshot,
+  );
+  const isPrimary = isFeedEmbed && audioState.effectivePrimaryId === postId;
+  const feedMuted = isFeedEmbed ? audioState.muted : muted;
+
   useImperativeHandle(ref, () => ({
     getPlayer: () => player ?? null,
     reloadTranscript: (lines: any[], words?: any[]) => {
@@ -107,84 +113,38 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
-    if (cardState === "warm" || cardState === "active") {
+    if (visible) {
       player.scheduleFullModeUpgrade();
     }
-  }, [player, playerReady, isFeedEmbed, cardState]);
+  }, [player, playerReady, isFeedEmbed, visible]);
 
   // Preload audio when warm (adjacent to active) — don't wait for play().
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
-    if (cardState === "warm" && preload) {
+    if (visible && preload) {
       player.primeAudio();
     }
-  }, [player, playerReady, isFeedEmbed, cardState, preload]);
+  }, [player, playerReady, isFeedEmbed, visible, preload]);
 
+  // Visibility → animation (the ONLY play/pause logic in the embed)
   useEffect(() => {
     if (!player || !playerReady) return;
-    if (cardState === "cold" && isFeedEmbed) {
+    if (evicted) {
       player.pause();
-    } else if (cardState === "active" || !isFeedEmbed) {
-      player.play(true); // active: RAF + audio
     } else {
-      player.play(false); // warm: RAF only, wall clock drives animation
+      player.play(false);
     }
-  }, [player, playerReady, cardState, isFeedEmbed]);
+  }, [player, playerReady, evicted]);
 
+  // Register with audio controller while visible
   useEffect(() => {
-    if (!player || !playerReady) return;
-    if (cardState === "active" || !isFeedEmbed) {
-      // Use global mute state — not just local. If user unmuted any card,
-      // this card should also be unmuted when it activates.
-      const shouldMute = !isAudioUnlocked() || isGlobalMuted();
-      player.setMuted(shouldMute);
-      setMuted(shouldMute);
-    } else {
-      player.setMuted(true);
-    }
-  }, [player, playerReady, cardState, isFeedEmbed, setMuted]);
-
-  // Imperative audio solo: pause this player as soon as another card activates.
-  useEffect(() => {
-    if (!player || !postId || !isFeedEmbed) return;
-    const handler = (e: Event) => {
-      const activeId = (e as CustomEvent).detail?.activeCardId;
-      if (activeId && activeId !== postId) {
-        // Only stop audio — don't pause visual animation on warm cards.
-        // Warm cards run play(false) with no audio, so just mute.
-        // If this card had audio playing, stop it.
-        if (!player.audio.paused) {
-          player.audio.pause();
-        }
-        player.setMuted(true);
-      }
+    if (!player || !playerReady || !postId || !isFeedEmbed || !visible) return;
+    audioController.register(postId, player);
+    return () => {
+      audioController.clearExplicitIf(postId);
+      audioController.unregister(postId);
     };
-    window.addEventListener("crowdfit:audio-solo", handler);
-    return () => window.removeEventListener("crowdfit:audio-solo", handler);
-  }, [player, postId, isFeedEmbed]);
-
-  // ── Global mute sync: when another card toggles mute, this card follows ──
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const next = (e as CustomEvent).detail?.muted;
-      if (typeof next === "boolean") {
-        setMuted(next); // update local state for UI (mute indicator)
-        // Only change audio mute on the active card.
-        // Warm cards stay muted — they have no audio.
-        if (player && (cardState === "active" || !isFeedEmbed)) {
-          player.setMuted(next);
-        }
-      }
-    };
-    window.addEventListener("crowdfit:mute-change", handler);
-    return () => window.removeEventListener("crowdfit:mute-change", handler);
-  }, [player, setMuted, cardState, isFeedEmbed]);
-
-  useEffect(() => {
-    if (!player || !playerReady || !forceMuted) return;
-    player.setMuted(true);
-    setMuted(true);
-  }, [player, playerReady, forceMuted, setMuted]);
+  }, [player, playerReady, postId, isFeedEmbed, visible]);
 
   useEffect(() => {
     if (muted) {
@@ -197,13 +157,22 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const handleCanvasTap = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     unlockAudio();
-    const next = !muted;
-    player?.setMuted(next);
-    if (!next) player?.play(); // user gesture → restart if blocked
-    setMuted(next);
-    setGlobalMuted(next); // ← one toggle for all cards
-    setShowMuteIndicator(next);
-  }, [muted, player, setMuted]);
+
+    if (!isFeedEmbed) {
+      const next = !muted;
+      player?.setMuted(next);
+      if (!next) player?.play(true);
+      setMuted(next);
+      return;
+    }
+
+    if (isPrimary) {
+      audioController.toggleMute();
+    } else {
+      audioController.setExplicitPrimary(postId!);
+      if (isGlobalMuted()) audioController.toggleMute();
+    }
+  }, [muted, player, postId, isFeedEmbed, isPrimary, setMuted]);
 
   useEffect(() => {
     if (!durationSec || !player) return;
@@ -221,16 +190,19 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   }, [handleReplay, player]);
 
   const dismissClosingAndSeek = useCallback((timeSec: number) => {
-    if (closingVisible) {
-      setClosingVisible(false);
-    }
+    if (closingVisible) setClosingVisible(false);
     unlockAudio();
     player?.seek(timeSec);
-    player?.play();
-    player?.setMuted(false);
-    setMuted(false);
-    setGlobalMuted(false);
-  }, [closingVisible, player, setMuted]);
+
+    if (isFeedEmbed && postId) {
+      audioController.setExplicitPrimary(postId);
+      if (isGlobalMuted()) audioController.toggleMute();
+    } else {
+      player?.play(true);
+      player?.setMuted(false);
+      setMuted(false);
+    }
+  }, [closingVisible, player, postId, isFeedEmbed, setMuted]);
 
   useEffect(() => {
     const id = (data ?? prefetchedData as any)?.id;
@@ -269,7 +241,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           </>
         )}
 
-        {muted && (
+        {((isFeedEmbed && isPrimary && feedMuted) || (!isFeedEmbed && muted)) && (
           <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.5)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", opacity: showMuteIndicator ? 0.8 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 40 }}>
             <VolumeX size={20} color="white" />
           </div>
