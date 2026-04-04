@@ -52,6 +52,7 @@ import type { UseLyricPipelineReturn } from "@/hooks/useLyricPipeline";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { extractPeaks } from "@/lib/audioUtils";
+import { persistQueue } from "@/lib/persistQueue";
 
 interface Props {
   pipeline: UseLyricPipelineReturn;
@@ -75,6 +76,163 @@ interface Props {
   sectionImageError?: string | null;
   onTitleChange?: (newTitle: string) => void;
   subView?: "fit" | "data";
+}
+
+function SpotifyLinkField({
+  spotifyTrackId,
+  setSpotifyTrackId,
+  savedId,
+}: {
+  spotifyTrackId: string | null;
+  setSpotifyTrackId: (id: string | null) => void;
+  savedId: string | null;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<
+    Array<{
+      id: string;
+      name: string;
+      artists: string;
+      image: string | null;
+      url: string;
+    }>
+  >([]);
+  const [searching, setSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (spotifyTrackId && !query) {
+      setQuery(`https://open.spotify.com/track/${spotifyTrackId}`);
+    }
+  }, [spotifyTrackId, query]);
+
+  const search = useCallback(
+    async (q: string) => {
+      if (!q.trim() || q.length < 2) {
+        setResults([]);
+        return;
+      }
+      const urlMatch = q.match(/track\/([a-zA-Z0-9]+)/);
+      if (urlMatch) {
+        setSpotifyTrackId(urlMatch[1]);
+        setResults([]);
+        if (savedId) {
+          persistQueue.enqueue({
+            table: "saved_lyrics",
+            id: savedId,
+            payload: { spotify_track_id: urlMatch[1], spotify_track_url: q },
+          });
+        }
+        return;
+      }
+      setSearching(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("spotify-search", {
+          body: { query: q.trim(), type: "track" },
+        });
+        if (!error && data?.results) setResults(data.results.slice(0, 5));
+      } catch {
+        // noop
+      } finally {
+        setSearching(false);
+      }
+    },
+    [savedId, setSpotifyTrackId],
+  );
+
+  const onChange = (val: string) => {
+    setQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => void search(val), 400);
+  };
+
+  const onSelect = (track: {
+    id: string;
+    name: string;
+    artists: string;
+    image: string | null;
+    url: string;
+  }) => {
+    setSpotifyTrackId(track.id);
+    setQuery(`${track.name} — ${track.artists}`);
+    setResults([]);
+    if (savedId) {
+      persistQueue.enqueue({
+        table: "saved_lyrics",
+        id: savedId,
+        payload: { spotify_track_id: track.id, spotify_track_url: track.url },
+      });
+    }
+  };
+
+  const onClear = () => {
+    setSpotifyTrackId(null);
+    setQuery("");
+    setResults([]);
+    if (savedId) {
+      persistQueue.enqueue({
+        table: "saved_lyrics",
+        id: savedId,
+        payload: { spotify_track_id: null, spotify_track_url: null },
+      });
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  return (
+    <div style={{ padding: "8px 16px", position: "relative" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+        <svg viewBox="0 0 24 24" width={11} height={11} fill="rgba(30,215,96,0.6)">
+          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02z" />
+        </svg>
+        <span style={{ fontSize: 10, fontFamily: "monospace", color: "rgba(255,255,255,0.25)", letterSpacing: "0.05em" }}>
+          Spotify Song Link
+        </span>
+        {spotifyTrackId && (
+          <button onClick={onClear} style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
+        )}
+      </div>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Paste Spotify link or search..."
+        style={{
+          width: "100%", padding: "7px 10px", background: "rgba(255,255,255,0.03)",
+          border: spotifyTrackId ? "0.5px solid rgba(30,215,96,0.2)" : "0.5px solid rgba(255,255,255,0.07)",
+          borderRadius: 8, fontSize: 12, fontFamily: "monospace",
+          color: "rgba(255,255,255,0.6)", outline: "none", boxSizing: "border-box" as const,
+        }}
+      />
+      {searching && <div style={{ fontSize: 10, marginTop: 3, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }}>Searching…</div>}
+      {results.length > 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 16, right: 16, zIndex: 50,
+          background: "#1a1a1f", border: "0.5px solid rgba(255,255,255,0.08)",
+          borderRadius: 8, marginTop: 2, overflow: "hidden",
+        }}>
+          {results.map((track) => (
+            <button key={track.id} onClick={() => onSelect(track)} style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 8,
+              padding: "8px 10px", background: "transparent", border: "none",
+              borderBottom: "0.5px solid rgba(255,255,255,0.04)", cursor: "pointer",
+            }}>
+              {track.image && <img src={track.image} style={{ width: 28, height: 28, borderRadius: 3, objectFit: "cover", flexShrink: 0 }} />}
+              <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.name}</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.artists}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function FitTab({
@@ -1514,6 +1672,13 @@ export function FitTab({
                 </div>
               )}
             </div>
+            {pipeline.savedId ? (
+              <SpotifyLinkField
+                spotifyTrackId={pipeline.spotifyTrackId}
+                setSpotifyTrackId={pipeline.setSpotifyTrackId}
+                savedId={pipeline.savedId}
+              />
+            ) : null}
 
               <FitExportModal
                 isOpen={showExportModal}
