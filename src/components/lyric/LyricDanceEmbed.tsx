@@ -233,6 +233,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
   }, [closingVisible, player, postId, isFeedEmbed, setMuted, findMomentIndexBySec]);
 
+  const seekOnly = useCallback((timeSec: number) => {
+    setActiveMomentIdx(findMomentIndexBySec(timeSec));
+    player?.seek(timeSec);
+  }, [findMomentIndexBySec, player]);
+
   useEffect(() => {
     const id = (data ?? prefetchedData as any)?.id;
     if (!player || !id) return;
@@ -362,7 +367,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               player?.fireFire(holdMs);
               emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
             }}
-            onSeekTo={(sec) => dismissClosingAndSeek(sec)}
+            onSeekTo={seekOnly}
           />
         </div>
       )}
