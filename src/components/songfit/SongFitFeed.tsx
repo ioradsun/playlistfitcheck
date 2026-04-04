@@ -6,18 +6,15 @@
  * PostCommentPanel is the sole comment UX (inline in card).
  */
 import { memo, useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
-import { Loader2, Plus, User, X } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { useFeedPosts } from "./useFeedPosts";
 import { SongFitPostCard } from "./SongFitPostCard";
-import { SongFitInlineComposer } from "./SongFitInlineComposer";
 import { BillboardToggle } from "./BillboardToggle";
 import { audioController } from "@/lib/audioController";
 import { logImpression } from "@/lib/engagementTracking";
 import { cn } from "@/lib/utils";
-import { useVoteGate } from "@/hooks/useVoteGate";
-import { PanelShell } from "@/components/shared/panel/PanelShell";
 
 // ── Skeleton ────────────────────────────────────────────────────────────────
 function FeedSkeleton({ reelsMode }: { reelsMode: boolean }) {
@@ -292,24 +289,9 @@ interface SongFitFeedProps {
 export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { canCreate, credits, required } = useVoteGate();
-  const [showFloatingAnchor, setShowFloatingAnchor] = useState(false);
-  const [reelsComposerOpen, setReelsComposerOpen] = useState(false);
   const hasFadedIn = useRef(false);
 
   const feed = useFeedPosts();
-
-  // Floating anchor on scroll (standard mode only)
-  useEffect(() => {
-    if (!canCreate || reelsMode) { setShowFloatingAnchor(false); return; }
-    const handleScroll = () => {
-      const el = document.getElementById("songfit-scroll-container");
-      if (el) setShowFloatingAnchor(el.scrollTop > 300);
-    };
-    document.addEventListener("scroll", handleScroll, true);
-    handleScroll();
-    return () => document.removeEventListener("scroll", handleScroll, true);
-  }, [canCreate, reelsMode]);
 
   const handleLoadNewDrops = useCallback(() => {
     feed.consumeNewDrops();
@@ -346,35 +328,22 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         </>
       ) : (
         <>
-          {/* ── Standard mode: composer + tabs ── */}
-          {user ? (
-            <div className="animate-fade-in">
-              <SongFitInlineComposer onPostCreated={feed.refresh} />
-            </div>
-          ) : (
-            <div
-              className="border-b border-border/40 cursor-pointer"
-              onClick={() => navigate("/auth?mode=signup", { state: { returnTab: "songfit" } })}
+          <div className="flex items-center">
+            <BillboardToggle
+              view={feed.feedView}
+              onViewChange={feed.setFeedView}
+              billboardMode={feed.billboardMode}
+              onModeChange={feed.setBillboardMode}
+              isLoggedIn={!!user}
+            />
+            <button
+              onClick={() => navigate("/LyricFit")}
+              className="ml-auto mr-1 h-8 w-8 shrink-0 rounded-full flex items-center justify-center bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.10)] transition-colors"
+              aria-label="Create lyric fit"
             >
-              <div className="flex gap-3 px-4 pt-3 pb-3">
-                <div className="h-10 w-10 rounded-full bg-muted border border-border shrink-0 mt-1 flex items-center justify-center">
-                  <User size={16} className="text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0 flex items-center">
-                  <span className="text-base text-muted-foreground/60">
-                    Drop your song and get signals
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-          <BillboardToggle
-            view={feed.feedView}
-            onViewChange={feed.setFeedView}
-            billboardMode={feed.billboardMode}
-            onModeChange={feed.setBillboardMode}
-            isLoggedIn={!!user}
-          />
+              <Plus size={15} className="text-white/50" />
+            </button>
+          </div>
         </>
       )}
 
@@ -421,61 +390,18 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       {reelsMode && (
         <>
           <button
-            onClick={() => canCreate && setReelsComposerOpen(true)}
+            onClick={() => navigate("/LyricFit")}
             className="fixed top-3 right-3 z-[60] flex items-center justify-center rounded-full transition-all"
             style={{
               width: 40,
               height: 40,
-              background: canCreate ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
+              background: "rgba(255,255,255,0.12)",
               backdropFilter: "blur(8px)",
             }}
           >
-            {canCreate ? (
-              <Plus size={18} className="text-white/80" />
-            ) : (
-              <div className="flex gap-0.5">
-                {Array.from({ length: required }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: i < credits ? "#22c55e" : "rgba(255,255,255,0.2)" }}
-                  />
-                ))}
-              </div>
-            )}
+            <Plus size={18} className="text-white/80" />
           </button>
-
-          <div className="fixed inset-x-0 bottom-0 z-[70]">
-            <div className="relative">
-              <PanelShell isOpen={reelsComposerOpen} variant="embedded" maxHeight="60%">
-                <div className="px-4 pt-3 pb-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-mono tracking-wide uppercase text-white/40">Post your song</span>
-                    <button onClick={() => setReelsComposerOpen(false)} className="p-1 text-white/30 hover:text-white/60">
-                      <X size={14} />
-                    </button>
-                  </div>
-                  <SongFitInlineComposer
-                    onPostCreated={() => { setReelsComposerOpen(false); feed.refresh(); }}
-                    onNavigateLyricDance={() => setReelsComposerOpen(false)}
-                  />
-                </div>
-              </PanelShell>
-            </div>
-          </div>
         </>
-      )}
-
-      {/* ── Standard: floating anchor ── */}
-      {showFloatingAnchor && !reelsMode && (
-        <button
-          onClick={() => {
-            document.getElementById("songfit-scroll-container")?.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-          className="sticky bottom-6 left-1/2 -translate-x-1/2 z-[500] border border-border/50 bg-background text-foreground/70 hover:text-foreground hover:border-border text-[11px] font-mono tracking-wide px-5 py-2 rounded-full shadow-sm transition-all duration-200"
-        >
-          + Drop Your Song
-        </button>
       )}
     </div>
   );
