@@ -41,7 +41,7 @@ export function BillboardToggle({
     <div className={compact ? "" : undefined}>
       <div className={cn("flex", !compact && "w-full", compact && "whitespace-nowrap gap-2")}>
         {/* Recent tab */}
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center justify-center">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -63,8 +63,11 @@ export function BillboardToggle({
           </button>
         </div>
 
+        {/* Separator */}
+        <div className={cn("w-px self-stretch", compact ? "bg-white/20 my-2" : "bg-border/60 my-2")} />
+
         {/* FMLY Top 40 tab */}
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center justify-center">
           <DropdownMenu
             open={billboardDropdownOpen}
             onOpenChange={(o) => {
