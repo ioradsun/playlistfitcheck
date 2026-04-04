@@ -1493,7 +1493,6 @@ export function FitTab({
                 <LyricDanceEmbed
                   ref={dancePlayerRef}
                   lyricDanceId={publishedDanceId}
-                  lyricDanceUrl={publishedUrl}
                   songTitle={lyricData.title || "Untitled"}
                   artistName=""
                   prefetchedData={prefetchedDanceData}

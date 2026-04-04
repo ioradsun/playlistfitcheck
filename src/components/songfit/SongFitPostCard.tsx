@@ -68,6 +68,7 @@ interface Props {
   lyricDanceData?: LyricDanceData | null;
   visible?: boolean;
   reelsMode?: boolean;
+  isFirst?: boolean;
   /** When true, this card is at viewport center — pre-warm the player behind cover. */
   preload?: boolean;
 }

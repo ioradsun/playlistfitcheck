@@ -223,11 +223,9 @@ export default function ShareableLyricDance() {
         {data && (
           <LyricDanceEmbed
             lyricDanceId={data.id}
-            lyricDanceUrl={`/${data.artist_slug}/${data.song_slug}/lyric-dance`}
             songTitle={coverSongName || "Untitled"}
             artistName={coverArtist || undefined}
             prefetchedData={data}
-            autoPlay
             spotifyTrackId={(data as any)?.spotify_track_id ?? null}
             avatarUrl={coverAvatarUrl}
             postId={data.post_id ?? data.id}

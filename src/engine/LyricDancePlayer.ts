@@ -1710,7 +1710,7 @@ export class LyricDancePlayer {
   private currentTimeMs = 0;
   private songStartSec = 0;
   private songEndSec = 0;
-  private playing = false;
+  playing = false;
   private destroyed = false;
   private audioContext: AudioContext | null = null;
   private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
