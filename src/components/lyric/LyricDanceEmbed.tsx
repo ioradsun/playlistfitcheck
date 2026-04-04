@@ -195,7 +195,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
       setClosingVisible(true);
       player.audio.loop = false;
-      player.pause();
     }
   }, [currentTimeSec, durationSec, closingVisible, player]);
 
