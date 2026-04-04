@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImper
 import { VolumeX } from "lucide-react";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
+import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 
@@ -110,6 +111,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   }), [player]);
 
   const [closingVisible, setClosingVisible] = useState(false);
+  const [clipStart, setClipStart] = useState(0);
+  const [clipEnd, setClipEnd] = useState(0);
+  const [clipCaption, setClipCaption] = useState("");
+  const [showClipComposer, setShowClipComposer] = useState(false);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [activeMomentIdx, setActiveMomentIdx] = useState(0);
@@ -308,6 +313,25 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           }}
         />
 
+        {showClipComposer && (
+          <div className="absolute inset-x-3 bottom-3 z-[540]" onClick={(e) => e.stopPropagation()}>
+            <ClipComposer
+              visible={showClipComposer}
+              player={player}
+              durationSec={durationSec}
+              fires={(reactionData ?? []) as any}
+              lines={lyricSections.allLines.map((l) => ({ lineIndex: l.lineIndex, text: l.text, startSec: l.startSec, endSec: l.endSec ?? (l.startSec + 5) }))}
+              initialStart={clipStart}
+              initialEnd={clipEnd}
+              initialCaption={clipCaption}
+              songTitle={songTitle}
+              onClose={() => {
+                setShowClipComposer(false);
+                player?.setRegion(undefined, undefined);
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {!isBattleMode && (
