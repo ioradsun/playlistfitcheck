@@ -1,4 +1,7 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { FmlyBadge } from "@/components/FmlyBadge";
+import { User } from "lucide-react";
 
 interface PlayerHeaderProps {
   avatarUrl?: string | null;
@@ -6,9 +9,21 @@ interface PlayerHeaderProps {
   songTitle: string;
   spotifyTrackId?: string | null;
   showMenuButton?: boolean;
+  isVerified?: boolean;
+  userId?: string | null;
+  onProfileClick?: () => void;
 }
 
-export function PlayerHeader({ avatarUrl, artistName, songTitle, spotifyTrackId, showMenuButton = false }: PlayerHeaderProps) {
+export function PlayerHeader({
+  avatarUrl,
+  artistName,
+  songTitle,
+  spotifyTrackId,
+  showMenuButton = false,
+  isVerified,
+  userId,
+  onProfileClick,
+}: PlayerHeaderProps) {
   return (
     <div
       style={{
@@ -19,7 +34,6 @@ export function PlayerHeader({ avatarUrl, artistName, songTitle, spotifyTrackId,
         justifyContent: "space-between",
         padding: "0 10px",
         borderBottom: "1px solid rgba(255,255,255,0.04)",
-        fontFamily: "monospace",
         flexShrink: 0,
       }}
     >
@@ -36,28 +50,34 @@ export function PlayerHeader({ avatarUrl, artistName, songTitle, spotifyTrackId,
             </svg>
           </SidebarTrigger>
         )}
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "50%",
-            overflow: "hidden",
-            border: "1px solid rgba(255,255,255,0.06)",
-            background: "rgba(255,255,255,0.08)",
-            flexShrink: 0,
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onProfileClick?.();
           }}
+          className="h-7 w-7 shrink-0 rounded-full overflow-hidden border border-white/[0.06] bg-white/10 flex items-center justify-center"
         >
           {avatarUrl ? (
-            <img src={avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          ) : null}
-        </div>
-
-        <div style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {artistName && (
-            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{artistName}</span>
+            <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <User size={12} className="text-white/40" />
           )}
-          {artistName && <span style={{ margin: "0 4px", color: "rgba(255,255,255,0.5)" }}>·</span>}
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.85)" }}>{songTitle}</span>
+        </button>
+
+        <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+          {artistName && (
+            <span className="text-[10px] font-mono font-medium uppercase tracking-[0.14em] text-white/70 shrink-0 truncate">
+              {artistName}
+            </span>
+          )}
+          {isVerified && <VerifiedBadge size={11} />}
+          {userId && <FmlyBadge userId={userId} compact />}
+          {artistName && songTitle && <span className="text-[10px] font-mono text-white/35 shrink-0">·</span>}
+          <span className="text-[10px] font-mono font-medium uppercase tracking-[0.14em] text-white/70 truncate">
+            {songTitle}
+          </span>
         </div>
       </div>
 
@@ -67,31 +87,12 @@ export function PlayerHeader({ avatarUrl, artistName, songTitle, spotifyTrackId,
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          style={{
-            background: "rgba(0,0,0,0.35)",
-            borderRadius: 14,
-            padding: "4px 10px 4px 7px",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            textDecoration: "none",
-            flexShrink: 0,
-          }}
+          style={{ flexShrink: 0, color: "rgba(255,255,255,0.5)" }}
+          aria-label="Open in Spotify"
         >
-          <svg viewBox="0 0 24 24" width="12" height="12" style={{ flexShrink: 0 }}>
-            <path
-              fill="rgba(30,215,96,0.8)"
-              d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521
-              17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122
-              -.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42
-              .18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159
-              -2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6
-              9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2z"
-            />
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.5 17.34a.75.75 0 0 1-1.03.24c-2.81-1.72-6.34-2.11-10.5-1.15a.75.75 0 1 1-.34-1.46c4.54-1.04 8.43-.61 11.63 1.35a.75.75 0 0 1 .24 1.02zm1.47-3.26a.94.94 0 0 1-1.29.31c-3.22-1.98-8.12-2.55-11.93-1.37a.94.94 0 0 1-.56-1.8c4.17-1.3 9.53-.66 13.48 1.74.44.27.58.84.3 1.12zm.13-3.4C15.56 8.6 9.73 8.42 6.36 9.43a1.13 1.13 0 0 1-.66-2.16c3.87-1.18 10.31-.95 14.55 1.59a1.13 1.13 0 1 1-1.16 1.82z" />
           </svg>
-          <span style={{ fontSize: 9, color: "rgba(30,215,96,0.7)", fontWeight: 500, letterSpacing: "0.04em" }}>
-            LISTEN
-          </span>
         </a>
       )}
     </div>

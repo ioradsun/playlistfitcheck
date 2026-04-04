@@ -35,6 +35,7 @@ import { audioController } from "@/lib/audioController";
 import { ReactionPanel } from "@/components/lyric/ReactionPanel";
 import { useVoteGate } from "@/hooks/useVoteGate";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { FmlyBadge } from "@/components/FmlyBadge";
 import type { LyricDanceData, LyricDancePlayer } from "@/engine/LyricDancePlayer";
 
 type BattleState = "cover" | "round-1" | "round-2" | "vote" | "results";
@@ -62,6 +63,7 @@ interface BattleEmbedProps {
   avatarUrl?: string | null;
   displayName?: string;
   isVerified?: boolean;
+  userId?: string | null;
   onProfileClick?: () => void;
 }
 
@@ -79,6 +81,7 @@ function BattleEmbedInner({
   avatarUrl,
   displayName,
   isVerified,
+  userId,
   onProfileClick,
 }: BattleEmbedProps) {
   const isFeedEmbed = visible !== undefined;
@@ -795,13 +798,13 @@ function BattleEmbedInner({
           {reelsMode && displayName && battleState === "cover" && !panelOpen && (
             <div className="flex items-center gap-2 px-3 pt-2 pb-1">
               <div
-                className="relative shrink-0 cursor-pointer"
+                className="shrink-0 cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
                   onProfileClick?.();
                 }}
               >
-                <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
+                <div className="h-7 w-7 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
                   {avatarUrl ? (
                     <img
                       src={avatarUrl}
@@ -812,15 +815,14 @@ function BattleEmbedInner({
                     <User size={13} className="text-white/40" />
                   )}
                 </div>
-                {isVerified && (
-                  <span className="absolute -bottom-0.5 -right-0.5">
-                    <VerifiedBadge size={11} />
-                  </span>
-                )}
               </div>
-              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 min-w-0 truncate max-w-[60vw]">
-                {`FMLY Feud · ${displayName}`}
-              </span>
+              <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+                <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-white/70 shrink-0">{displayName}</span>
+                {isVerified && <VerifiedBadge size={11} />}
+                {userId && <FmlyBadge userId={userId} compact />}
+                <span className="text-[10px] font-mono text-white/35 shrink-0">·</span>
+                <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-white/70 truncate">{songTitle}</span>
+              </div>
             </div>
           )}
 

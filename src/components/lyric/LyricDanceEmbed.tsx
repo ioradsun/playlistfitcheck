@@ -24,6 +24,9 @@ interface LyricDanceEmbedProps {
   postId?: string;
   spotifyTrackId?: string | null;
   avatarUrl?: string | null;
+  isVerified?: boolean;
+  userId?: string | null;
+  onProfileClick?: () => void;
   preload?: boolean;
 }
 
@@ -43,6 +46,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   postId,
   spotifyTrackId,
   avatarUrl,
+  isVerified,
+  userId,
+  onProfileClick,
   preload = false,
 }, ref) {
   const isFeedEmbed = visible !== undefined;
@@ -236,6 +242,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         songTitle={songTitle}
         spotifyTrackId={spotifyTrackId}
         showMenuButton={isFeedEmbed}
+        isVerified={isVerified}
+        userId={userId}
+        onProfileClick={onProfileClick}
       />
 
       <div

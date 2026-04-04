@@ -1,22 +1,18 @@
 /**
  * SongFitPostCard — a single card in the CrowdFit feed.
  *
- * Three media types:
+ * Two media types:
  *   1. In Studio     — LyricDanceEmbed (has lyric_dance_id)
  *   2. In Battle     — BattleEmbed     (has lyric_dance_url, no lyric_dance_id)
- *   3. Now Streaming — LazySpotifyEmbed (has spotify_track_id)
  *
- * Supports reels mode (full-height, snap, bottom overlay) and standard mode.
- * PostCommentPanel is the sole comment UX (inline in Spotify cards).
+ * Supports reels mode (full-height, snap) and standard mode.
  * LyricDance and Battle embeds own their own reaction/battle panels.
  */
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState } from "react";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { cn } from "@/lib/utils";
-import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import {
   MessageCircle,
-  User,
   MoreHorizontal,
   UserPlus,
   UserMinus,
@@ -30,11 +26,10 @@ import {
   Share2,
   Clock,
   Flame,
-  ChevronDown,
 } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
-import { LazySpotifyEmbed } from "./LazySpotifyEmbed";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
+import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import { BattleEmbed } from "@/components/hookfit/BattleEmbed";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -47,12 +42,9 @@ import {
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import type { SongFitPost } from "./types";
-import { ProfileHoverCard } from "./ProfileHoverCard";
-import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useNavigate } from "react-router-dom";
 import { logEngagementEvent } from "@/lib/engagementTracking";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
-import { PostCommentPanel } from "./PostCommentPanel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,11 +53,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const CAPTION_MAX = 300;
-
-// Module-level palette cache — keyed by album_art_url.
-// Survives component unmount/remount. Shared across all cards with same URL.
-// Only used as fallback for old posts that don't have palette in DB yet.
-const _paletteCache = new Map<string, string[]>();
 
 interface Props {
   post: SongFitPost;
@@ -81,7 +68,6 @@ interface Props {
   lyricDanceData?: LyricDanceData | null;
   visible?: boolean;
   reelsMode?: boolean;
-  isFirst?: boolean;
   /** When true, this card is at viewport center — pre-warm the player behind cover. */
   preload?: boolean;
 }
@@ -95,7 +81,6 @@ export function SongFitPostCard({
   lyricDanceData,
   visible,
   reelsMode = false,
-  isFirst = false,
   preload = false,
 }: Props) {
   const { user } = useAuth();
@@ -116,53 +101,14 @@ export function SongFitPostCard({
   const [localCaption, setLocalCaption] = useState(post.caption || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(post.user_has_saved ?? false);
-  const [panelOpen, setPanelOpen] = useState(false);
 
   // ── Derived ──
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDance = !!(post.lyric_dance_url && post.lyric_dance_id);
   const isBattle = hottestHooksEnabled && !!(post.lyric_dance_url && !post.lyric_dance_id);
-  const isSpotify = !hasLyricDance && !isBattle && !!post.spotify_track_id;
+  const isSpotifyOnly = !hasLyricDance && !isBattle && !!post.spotify_track_id && !post.lyric_dance_url;
   const displayName = post.profiles?.display_name || "Anonymous";
-
-  // Spotify palette
-  const [spotifyPalette, setSpotifyPalette] = useState<string[] | undefined>();
-  useEffect(() => {
-    if (!isSpotify || !post.album_art_url) return;
-    // Check DB palette first (set by persist-palette migration)
-    if (post.palette && Array.isArray(post.palette) && post.palette.length > 0) {
-      setSpotifyPalette(post.palette as string[]);
-      return;
-    }
-    // Fallback for old posts without stored palette
-    // Check module cache first
-    const cached = _paletteCache.get(post.album_art_url);
-    if (cached) {
-      setSpotifyPalette(cached);
-      return;
-    }
-    let cancelled = false;
-    computeAutoPalettesFromUrls([post.album_art_url])
-      .then((palettes) => {
-        if (cancelled) return;
-        if (palettes[0]?.length) {
-          _paletteCache.set(post.album_art_url!, palettes[0]);
-          setSpotifyPalette(palettes[0]);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [isSpotify, post.album_art_url, post.palette]);
-
-  // Card type label
-  const typeLabel = useMemo(() => {
-    if (isBattle) return `FMLY Feud · ${displayName}`;
-    if (hasLyricDance) return `In Studio · ${displayName}`;
-    if (isSpotify) return `Now Streaming · ${displayName}`;
-    return displayName;
-  }, [isBattle, hasLyricDance, isSpotify, displayName]);
+  if (isSpotifyOnly) return null;
 
   // ── Actions ──
   const handleProfileClick = () => {
@@ -243,9 +189,6 @@ export function SongFitPostCard({
     catch { toast.error("Failed to copy link"); }
   };
 
-  const handleOpenPanel = useCallback(() => setPanelOpen(true), []);
-  const handleClosePanel = useCallback(() => setPanelOpen(false), []);
-
   // ── Render ──
   return (
     <div
@@ -264,51 +207,39 @@ export function SongFitPostCard({
         )}
 
         {/* ── Header (standard mode only, hidden for lyric dance — embed owns it) ── */}
-        <div className={cn("relative flex items-center justify-between px-3 py-2.5", (reelsMode || hasLyricDance) && "hidden")}>
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <ProfileHoverCard userId={post.user_id}>
-              <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={handleProfileClick}>
-                <div className="relative shrink-0">
-                  <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/[0.06]">
-                    {post.profiles?.avatar_url ? (
-                      <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <User size={13} className="text-white/40" />
-                    )}
-                  </div>
-                  {(post.profiles as any)?.is_verified && (
-                    <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={11} /></span>
-                  )}
-                </div>
-              </div>
-            </ProfileHoverCard>
-            <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-green-400 rounded px-1.5 py-0.5 min-w-0 truncate max-w-[60vw]">
-              {typeLabel}
-            </span>
+        <div className={cn("relative", (reelsMode || hasLyricDance) && "hidden")}>
+          <PlayerHeader
+            avatarUrl={post.profiles?.avatar_url}
+            artistName={displayName}
+            songTitle={post.track_title}
+            isVerified={(post.profiles as any)?.is_verified}
+            userId={post.user_id}
+            onProfileClick={handleProfileClick}
+          />
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 z-10">
+            <DropdownMenu onOpenChange={(open) => { if (open) checkFollow(); }}>
+              <DropdownMenuTrigger asChild>
+                <button className="p-1.5 rounded-full hover:bg-white/[0.04] text-white/15 hover:text-white/40 transition-colors shrink-0 focus:outline-none">
+                  <MoreHorizontal size={16} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={handleProfileClick}><ExternalLink size={14} className="mr-2" /> Artist Profile</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate(`/song/${post.id}`)}><Trophy size={14} className="mr-2" /> Song Record</DropdownMenuItem>
+                {!isOwnPost && user && (
+                  <DropdownMenuItem onClick={toggleFollow}>
+                    {isFollowing ? (<><UserMinus size={14} className="mr-2" /> Unfollow</>) : (<><UserPlus size={14} className="mr-2" /> Follow</>)}
+                  </DropdownMenuItem>
+                )}
+                {isOwnPost && (
+                  <>
+                    <DropdownMenuItem onClick={() => { setEditCaption(localCaption); setEditing(true); }}><Pencil size={14} className="mr-2" /> Edit Caption</DropdownMenuItem>
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDeletePost}><Trash2 size={14} className="mr-2" /> Delete Post</DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-
-          <DropdownMenu onOpenChange={(open) => { if (open) checkFollow(); }}>
-            <DropdownMenuTrigger asChild>
-              <button className="p-1.5 rounded-full hover:bg-white/[0.04] text-white/15 hover:text-white/40 transition-colors shrink-0 focus:outline-none">
-                <MoreHorizontal size={16} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={handleProfileClick}><ExternalLink size={14} className="mr-2" /> Artist Profile</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate(`/song/${post.id}`)}><Trophy size={14} className="mr-2" /> Song Record</DropdownMenuItem>
-              {!isOwnPost && user && (
-                <DropdownMenuItem onClick={toggleFollow}>
-                  {isFollowing ? (<><UserMinus size={14} className="mr-2" /> Unfollow</>) : (<><UserPlus size={14} className="mr-2" /> Follow</>)}
-                </DropdownMenuItem>
-              )}
-              {isOwnPost && (
-                <>
-                  <DropdownMenuItem onClick={() => { setEditCaption(localCaption); setEditing(true); }}><Pencil size={14} className="mr-2" /> Edit Caption</DropdownMenuItem>
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDeletePost}><Trash2 size={14} className="mr-2" /> Delete Post</DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
 
         {/* ── Media ── */}
@@ -324,6 +255,9 @@ export function SongFitPostCard({
                 spotifyTrackId={post.spotify_track_id}
                 prefetchedData={lyricDanceData ?? null}
                 avatarUrl={post.profiles?.avatar_url}
+                isVerified={(post.profiles as any)?.is_verified}
+                userId={post.user_id}
+                onProfileClick={handleProfileClick}
                 preload={preload}
               />
             </div>
@@ -339,88 +273,17 @@ export function SongFitPostCard({
                 avatarUrl={post.profiles?.avatar_url}
                 displayName={displayName}
                 isVerified={(post.profiles as any)?.is_verified}
+                userId={post.user_id}
                 onProfileClick={handleProfileClick}
               />
             </div>
           ) : (
-            <div
-              className={cn("relative overflow-hidden", reelsMode ? "h-full flex flex-col items-center justify-center" : "")}
-              style={reelsMode ? undefined : { background: "#0a0a0a", height: 320 }}
-            >
-              <LazySpotifyEmbed
-                trackId={post.spotify_track_id}
-                trackTitle={post.track_title}
-                trackUrl={post.spotify_track_url}
-                postId={post.id}
-                albumArtUrl={post.album_art_url}
-                artistName={(post.track_artists_json as any[])?.map((a: any) => a.name).join(", ")}
-                genre={((post.tags_json as any[]) || [])[0] || null}
-              />
-              <PostCommentPanel
-                postId={post.id}
-                isOpen={panelOpen}
-                onOpen={handleOpenPanel}
-                onClose={handleClosePanel}
-                trackTitle={post.track_title}
-                variant={reelsMode ? "reels" : "embedded"}
-                caption={!reelsMode && !editing ? localCaption : undefined}
-                palette={spotifyPalette}
-              />
-            </div>
+            null
           )}
         </div>
-
-        {/* ── Reels bottom overlay (for Spotify cards) ── */}
-        {reelsMode && !hasLyricDance && !isBattle ? (
-          <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
-            <div className="flex-1" />
-            <div className="pointer-events-auto bg-gradient-to-t from-[#0a0a0a]/90 via-[#0a0a0a]/50 to-transparent pt-20 px-4 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="relative shrink-0 cursor-pointer" onClick={handleProfileClick}>
-                  <div className="h-11 w-11 rounded-full bg-white/10 flex items-center justify-center overflow-hidden ring-1 ring-white/10">
-                    {post.profiles?.avatar_url ? (
-                      <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <User size={14} className="text-white/40" />
-                    )}
-                  </div>
-                  {(post.profiles as any)?.is_verified && (
-                    <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={11} /></span>
-                  )}
-                </div>
-                <span className="text-[12px] font-mono uppercase tracking-[0.12em] text-green-400 rounded px-1.5 py-0.5 min-w-0 truncate max-w-[60vw]">
-                  {typeLabel}
-                </span>
-              </div>
-
-              {localCaption?.trim() && !editing && (
-                <p className="text-[14px] leading-snug text-white/50 mt-1">
-                  {localCaption.length <= 80 ? localCaption : (
-                    <>
-                      {captionExpanded ? localCaption : localCaption.slice(0, 80).trimEnd()}
-                      {!captionExpanded && (
-                        <>
-                          <span className="text-white/20">… </span>
-                          <button onClick={() => setCaptionExpanded(true)} className="text-white/30 hover:text-white/50 text-[14px]">more</button>
-                        </>
-                      )}
-                    </>
-                  )}
-                </p>
-              )}
-
-              {isFirst && (
-                <div className="flex flex-col items-center gap-1 mt-4 animate-bounce">
-                  <ChevronDown size={14} className="text-white/20 rotate-180" />
-                  <span className="text-[9px] text-white/15 font-mono">swipe</span>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <>
+        <>
             {/* ── Standard: caption ── */}
-            {!isSpotify && !reelsMode && (
+            {!reelsMode && (
               <>
                 {editing ? (
                   <div className="relative px-3 pt-2 pb-1 space-y-2">
@@ -458,7 +321,7 @@ export function SongFitPostCard({
             )}
 
             {/* ── Action row (non-embed posts only, standard mode) ── */}
-            {!hasLyricDance && !isBattle && !isSpotify && !reelsMode && (
+            {!hasLyricDance && !isBattle && !reelsMode && (
               <div className="relative flex items-center justify-between px-1 py-1">
                 <div className="flex items-center">
                   <ActionBtn icon={<MessageCircle size={17} />} count={post.comments_count} onClick={() => { if (user) logEngagementEvent(post.id, user.id, "comment"); }} />
@@ -508,7 +371,6 @@ export function SongFitPostCard({
               </div>
             )}
           </>
-        )}
 
         <div className="h-px" />
       </div>
