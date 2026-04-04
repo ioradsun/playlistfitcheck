@@ -337,6 +337,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             reactionData={reactionData}
             player={player}
             currentTimeSec={currentTimeSec}
+            closingActive={closingVisible}
+            danceId={((data ?? prefetchedData) as any)?.id}
             onFireTap={() => {
               if (holdFireIntervalRef.current) {
                 clearInterval(holdFireIntervalRef.current);

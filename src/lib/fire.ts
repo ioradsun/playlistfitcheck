@@ -82,3 +82,21 @@ export async function fetchFireStrength(danceId: string): Promise<Array<{
     .order('fire_strength', { ascending: false });
   return (data as any[]) ?? [];
 }
+
+
+export async function fetchSessionFires(
+  danceId: string,
+  sessionId: string,
+): Promise<Array<{ line_index: number; hold_ms: number }>> {
+  try {
+    const { data, error } = await supabase
+      .from('lyric_dance_fires' as any)
+      .select('line_index, hold_ms')
+      .eq('dance_id', danceId)
+      .eq('session_id', sessionId);
+    if (error) return [];
+    return (data as any[]) ?? [];
+  } catch {
+    return [];
+  }
+}
