@@ -87,7 +87,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     lyricSections,
     moments,
     activeLine,
-    handleReplay,
   } = useLyricDanceCore({
     lyricDanceId,
     prefetchedData: prefetchedDataWithRegion,
@@ -118,6 +117,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [showClipComposer, setShowClipComposer] = useState(false);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
+  const [activeMomentIdx, setActiveMomentIdx] = useState(0);
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
@@ -199,15 +199,28 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
   }, [currentTimeSec, durationSec, closingVisible, player]);
 
-  const dismissClosingAndReplay = useCallback(() => {
-    setClosingVisible(false);
-    if (player) player.audio.loop = false;
-    handleReplay();
-  }, [handleReplay, player]);
+  const findMomentIndexBySec = useCallback((timeSec: number) => {
+    if (!moments.length) return 0;
+    const idx = moments.findIndex((m) => timeSec >= m.startSec && timeSec <= m.endSec);
+    if (idx !== -1) return idx;
+
+    let closestIdx = 0;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    moments.forEach((moment, index) => {
+      const distance = Math.min(Math.abs(timeSec - moment.startSec), Math.abs(timeSec - moment.endSec));
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIdx = index;
+      }
+    });
+
+    return closestIdx;
+  }, [moments]);
 
   const dismissClosingAndSeek = useCallback((timeSec: number) => {
     if (closingVisible) setClosingVisible(false);
     unlockAudio();
+    setActiveMomentIdx(findMomentIndexBySec(timeSec));
     player?.seek(timeSec);
 
     if (isFeedEmbed && postId) {
@@ -219,7 +232,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player?.setMuted(false);
       setMuted(false);
     }
-  }, [closingVisible, player, postId, isFeedEmbed, setMuted]);
+  }, [closingVisible, player, postId, isFeedEmbed, setMuted, findMomentIndexBySec]);
 
   useEffect(() => {
     const id = (data ?? prefetchedData as any)?.id;
@@ -272,25 +285,27 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           visible={closingVisible}
           empowermentPromise={empowermentPromise}
           danceId={((data ?? prefetchedData) as any)?.id ?? ""}
-          onAnswer={() => {}}
-          onReplay={dismissClosingAndReplay}
           source="feed"
           moments={moments}
           momentFireCounts={deriveMomentFireCounts(reactionData, moments)}
+          activeMomentIdx={activeMomentIdx}
           onSeekToMoment={(idx) => {
             const m = moments[idx];
             if (m && player) {
+              setActiveMomentIdx(idx);
               player.seek(m.startSec);
               player.setRegion(m.startSec, m.endSec);
             }
           }}
-          onShareClip={(momentIdx, caption) => {
-            const m = moments[momentIdx];
-            if (!m) return;
-            setClipStart(m.startSec);
-            setClipEnd(m.endSec);
-            setClipCaption(caption);
-            setShowClipComposer(true);
+          onLoopMoment={(idx) => {
+            const m = moments[idx];
+            if (m && player) {
+              setClosingVisible(false);
+              setActiveMomentIdx(idx);
+              player.seek(m.startSec);
+              player.setRegion(m.startSec, m.endSec);
+              player.play();
+            }
           }}
         />
 

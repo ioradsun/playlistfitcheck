@@ -11,46 +11,47 @@ interface ClosingScreenProps {
     hooks: string[];
   } | null;
   danceId: string;
-  onReplay: () => void;
-  onAnswer?: () => void;
-  onShareClip?: (momentIndex: number, caption: string) => void;
+  onLoopMoment?: (momentIndex: number) => void;
   source?: "feed" | "shareable" | "embed";
   moments?: Moment[];
   momentFireCounts?: Record<number, number>;
   onSeekToMoment?: (momentIndex: number) => void;
+  /** Currently active moment index — updated by parent when user browses via the moment strip */
+  activeMomentIdx?: number;
 }
 
 const FALLBACK_FEELINGS = [
-  "relief",
-  "power",
-  "seen",
-  "pain that needed to come out",
-  "something I can't name yet",
+  "something I needed to hear",
+  "seen in a way I can't explain",
+  "ready to move different",
 ];
 
 export function ClosingScreen({
   visible,
   empowermentPromise,
   danceId,
-  onReplay,
-  onAnswer,
-  onShareClip,
+  onLoopMoment,
   source,
   moments,
   momentFireCounts,
   onSeekToMoment,
+  activeMomentIdx,
 }: ClosingScreenProps) {
   const [picked, setPicked] = useState<number | null>(null);
   const [freeText, setFreeText] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [confirmText, setConfirmText] = useState("");
-  const [selectedMomentIdx, setSelectedMomentIdx] = useState<number | null>(null);
-  const [activeCaption, setActiveCaption] = useState("");
-  const rootRef = useRef<HTMLDivElement>(null);
+  const [browsedMomentIdx, setBrowsedMomentIdx] = useState<number>(0);
+  const [hoveredIdx, setHoveredIdx] = useState<number | "free" | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const options = useMemo(
-    () => (empowermentPromise?.hooks.length ? empowermentPromise.hooks.slice(0, 4) : FALLBACK_FEELINGS),
+    () => (empowermentPromise?.hooks.length ? empowermentPromise.hooks.slice(0, 3) : FALLBACK_FEELINGS),
     [empowermentPromise],
+  );
+
+  const hasFires = useMemo(
+    () => Object.values(momentFireCounts ?? {}).some((count) => count > 0),
+    [momentFireCounts],
   );
 
   const hottestMomentIdx = useMemo(() => {
@@ -67,46 +68,56 @@ export function ClosingScreen({
     return maxIdx;
   }, [moments, momentFireCounts]);
 
-  const displayMomentIdx = selectedMomentIdx ?? hottestMomentIdx;
+  useEffect(() => {
+    if (!visible) return;
+    setPicked(null);
+    setFreeText("");
+    setSubmitted(false);
+    setBrowsedMomentIdx(activeMomentIdx ?? 0);
+
+    if (hasFires && moments?.length) {
+      onSeekToMoment?.(hottestMomentIdx);
+    }
+  }, [visible, hasFires, hottestMomentIdx, moments, onSeekToMoment, activeMomentIdx]);
 
   useEffect(() => {
-    if (visible && moments?.length) {
-      onSeekToMoment?.(hottestMomentIdx);
-      setSelectedMomentIdx(null);
-      setActiveCaption("");
-      setPicked(null);
-      setFreeText("");
-      setSubmitted(false);
-      setConfirmText("");
+    if (!visible) return;
+    if (typeof activeMomentIdx === "number") {
+      setBrowsedMomentIdx(activeMomentIdx);
     }
-  }, [visible, moments, hottestMomentIdx, onSeekToMoment]);
+  }, [activeMomentIdx, visible]);
 
   const handleSubmit = async (hookIndex: number | null, text: string) => {
     if (submitted) return;
     setSubmitted(true);
     await emitClosingPick(danceId, hookIndex, text || null, source);
-    if (hookIndex !== null) {
-      setConfirmText(options[hookIndex]);
-    } else {
-      setConfirmText(text.trim());
-    }
   };
 
-  const submitSelection = async () => {
+  const handleMomentLoop = async () => {
     const trimmed = freeText.trim();
-    if (picked !== null) {
-      await handleSubmit(picked, trimmed);
+    if (!submitted) {
+      if (picked !== null) {
+        await handleSubmit(picked, "");
+      } else if (trimmed) {
+        await handleSubmit(null, trimmed);
+      }
+    }
+
+    if (hasFires) {
+      onLoopMoment?.(hottestMomentIdx);
       return;
     }
-    if (trimmed) {
-      await handleSubmit(null, trimmed);
-    }
+
+    onLoopMoment?.(browsedMomentIdx ?? 0);
   };
 
+  const isFreeTextSelected = picked === null && freeText.trim().length > 0;
+
   return (
-    <div
-      ref={rootRef}
-      style={{
+    <>
+      <style>{`.closing-free-input::placeholder { color: rgba(255,255,255,0.18); }`}</style>
+      <div
+        style={{
         position: "absolute",
         inset: 0,
         zIndex: 200,
@@ -117,387 +128,144 @@ export function ClosingScreen({
         transition: "opacity 0.3s ease",
       }}
     >
-      <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         <div
           style={{
             position: "absolute",
             inset: 0,
-            background: "rgba(0,0,0,0.25)",
+            background: "rgba(0,0,0,0.5)",
             pointerEvents: "none",
           }}
         />
-
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 3,
-            background: "rgba(255,255,255,0.95)",
-            padding: "12px 20px",
-            textAlign: "center",
-            transition: "all 0.2s ease",
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              fontSize: 14,
-              fontWeight: 600,
-              color: "#0a0a0a",
-              lineHeight: 1.3,
-              fontFamily: "system-ui, -apple-system, sans-serif",
-            }}
-          >
-            {activeCaption
-              ? `this song made me feel ${activeCaption}`
-              : "this song made me feel ____"}
-          </p>
-        </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: 2,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0 16px 8px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: "50%",
-                  background: "rgba(255,255,255,0.12)",
-                }}
-              />
-              <div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 500 }} />
-                <div style={{ fontSize: 8, color: "rgba(255,255,255,0.2)" }} />
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div
-                style={{
-                  background: "rgba(30,215,96,0.12)",
-                  border: "1px solid rgba(30,215,96,0.2)",
-                  borderRadius: 14,
-                  padding: "3px 8px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <span style={{ fontSize: 8, color: "rgba(30,215,96,0.6)" }}>LISTEN</span>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                <span style={{ fontSize: 10, opacity: 0.5 }}>🔥</span>
-                <span
-                  style={{
-                    fontSize: 9,
-                    color: "rgba(255,255,255,0.2)",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {Object.values(momentFireCounts ?? {}).reduce((s, c) => s + c, 0)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {moments && moments.length > 0 && (
-            <div style={{ padding: "0 12px 8px", display: "flex", gap: 2, alignItems: "center" }}>
-              {moments.map((moment, index) => {
-                const fires = momentFireCounts?.[index] ?? 0;
-                const maxFires = Math.max(1, ...Object.values(momentFireCounts ?? {}));
-                const heat = maxFires > 0 ? fires / maxFires : 0;
-                const isSelected = index === displayMomentIdx;
-                const flex = Math.max(1, moment.endSec - moment.startSec);
-
-                const r = Math.round(160 + heat * 80);
-                const g = Math.round(90 + heat * 60);
-                const b = 20;
-                const opacity = 0.15 + heat * 0.7;
-
-                return (
-                  <button
-                    key={`${moment.startSec}-${moment.endSec}-${index}`}
-                    type="button"
-                    onClick={() => {
-                      setSelectedMomentIdx(index);
-                      onSeekToMoment?.(index);
-                    }}
-                    style={{
-                      flex,
-                      height: 4,
-                      background: `rgb(${r},${g},${b})`,
-                      opacity,
-                      borderRadius: 3,
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      outline: isSelected ? "1.5px solid rgba(255,180,40,0.50)" : "none",
-                      outlineOffset: isSelected ? 2 : 0,
-                      transition: "opacity 0.3s ease",
-                    }}
-                  />
-                );
-              })}
-            </div>
-          )}
-
-          <div
-            style={{
-              padding: "0 16px 6px",
-              fontSize: 7,
-              color: "rgba(255,255,255,0.10)",
-              fontFamily: "monospace",
-              letterSpacing: "0.05em",
-            }}
-          >
-            Fit by toolsFM
-          </div>
-        </div>
       </div>
 
       <div
         style={{
-          background: "#0a0a0f",
-          padding: "14px 20px 20px",
           flexShrink: 0,
+          background: "#0a0a0f",
+          padding: "14px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
+          overflowY: "auto",
+          maxHeight: "55vh",
         }}
       >
-        {!submitted ? (
-          <>
-            <p
-              style={{
-                fontSize: 12,
-                color: "rgba(255,255,255,0.32)",
-                textAlign: "center",
-                margin: "0 0 12px",
-              }}
-            >
-              this song made me feel
-            </p>
+        <p
+          style={{
+            margin: "0 0 10px",
+            fontSize: 11,
+            fontFamily: "monospace",
+            color: "rgba(255,255,255,0.25)",
+            textAlign: "center",
+            textTransform: "lowercase",
+          }}
+        >
+          which one hits?
+        </p>
 
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 7,
-                justifyContent: "center",
-                marginBottom: 14,
-              }}
-            >
-              {options.map((opt, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => {
-                    setPicked(i);
-                    setActiveCaption(opt);
-                    setFreeText("");
-                  }}
-                  style={{
-                    background: picked === i ? "rgba(255,140,20,0.18)" : "rgba(255,140,20,0.05)",
-                    border: `1px solid ${picked === i ? "rgba(255,140,20,0.40)" : "rgba(255,140,20,0.10)"}`,
-                    borderRadius: 20,
-                    padding: "8px 16px",
-                    color: picked === i ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.45)",
-                    fontSize: 12,
-                    fontFamily: "monospace",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {options.map((opt, i) => {
+            const selected = picked === i;
+            const hovered = hoveredIdx === i;
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setPicked(i)}
+                onMouseEnter={() => setHoveredIdx(i)}
+                onMouseLeave={() => setHoveredIdx((prev) => (prev === i ? null : prev))}
+                style={{
+                  width: "100%",
+                  background: selected
+                    ? "rgba(255,140,20,0.08)"
+                    : hovered
+                      ? "rgba(255,255,255,0.05)"
+                      : "rgba(255,255,255,0.03)",
+                  border: `1px solid ${selected ? "rgba(255,140,20,0.25)" : hovered ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)"}`,
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  fontSize: 11,
+                  fontFamily: "monospace",
+                  color: selected ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.45)",
+                  lineHeight: 1.45,
+                  textAlign: "center",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                {opt}
+              </button>
+            );
+          })}
 
+          <button
+            type="button"
+            onClick={() => inputRef.current?.focus()}
+            onMouseEnter={() => setHoveredIdx("free")}
+            onMouseLeave={() => setHoveredIdx((prev) => (prev === "free" ? null : prev))}
+            style={{
+              width: "100%",
+              background: isFreeTextSelected
+                ? "rgba(255,140,20,0.08)"
+                : hoveredIdx === "free"
+                  ? "rgba(255,255,255,0.05)"
+                  : "rgba(255,255,255,0.03)",
+              border: `1px solid ${isFreeTextSelected ? "rgba(255,140,20,0.25)" : hoveredIdx === "free" ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)"}`,
+              borderRadius: 10,
+              padding: "10px 14px",
+              transition: "all 0.2s ease",
+              cursor: "pointer",
+            }}
+          >
             <input
+              className="closing-free-input"
+              ref={inputRef}
               type="text"
               value={freeText}
               onChange={(e) => {
-                const nextValue = e.target.value;
-                setFreeText(nextValue);
-                if (nextValue.trim()) {
-                  setActiveCaption(nextValue);
+                const next = e.target.value;
+                setFreeText(next);
+                if (next.trim()) {
                   setPicked(null);
-                } else if (picked !== null) {
-                  setActiveCaption(options[picked] ?? "");
-                } else {
-                  setActiveCaption("");
                 }
               }}
-              placeholder="or say it your way..."
+              placeholder="say it your way..."
               style={{
-                width: "100%",
-                padding: "9px 12px",
-                background: "rgba(255,255,255,0.03)",
-                border: "0.5px solid rgba(255,255,255,0.08)",
-                borderRadius: 10,
-                fontSize: 12,
-                fontFamily: "monospace",
-                color: "rgba(255,255,255,0.6)",
+                background: "transparent",
+                border: "none",
                 outline: "none",
+                width: "100%",
+                textAlign: "center",
+                fontSize: 11,
+                fontFamily: "monospace",
+                color: "rgba(255,255,255,0.85)",
                 caretColor: "rgba(255,160,40,0.6)",
-                marginBottom: 12,
-                boxSizing: "border-box",
               }}
             />
+          </button>
+        </div>
 
-            <div style={{ display: "flex", gap: 8 }}>
-              {activeCaption ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      onAnswer?.();
-                      await submitSelection();
-                      onShareClip?.(displayMomentIdx, activeCaption.trim());
-                    }}
-                    style={{
-                      flex: 1,
-                      background: "rgba(255,140,20,0.12)",
-                      border: "1px solid rgba(255,140,20,0.25)",
-                      borderRadius: 10,
-                      padding: 10,
-                      color: "rgba(255,170,50,0.8)",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      fontFamily: "monospace",
-                      cursor: "pointer",
-                      textAlign: "center",
-                    }}
-                  >
-                    share clip
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      onAnswer?.();
-                      await submitSelection();
-                      onReplay();
-                    }}
-                    style={{
-                      flex: 1,
-                      background: "rgba(255,255,255,0.03)",
-                      border: "0.5px solid rgba(255,255,255,0.08)",
-                      borderRadius: 10,
-                      padding: 10,
-                      color: "rgba(255,255,255,0.25)",
-                      fontSize: 12,
-                      fontFamily: "monospace",
-                      cursor: "pointer",
-                      textAlign: "center",
-                    }}
-                  >
-                    replay
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onReplay}
-                  style={{
-                    flex: 1,
-                    background: "rgba(255,255,255,0.03)",
-                    border: "0.5px solid rgba(255,255,255,0.08)",
-                    borderRadius: 10,
-                    padding: 10,
-                    color: "rgba(255,255,255,0.25)",
-                    fontSize: 12,
-                    fontFamily: "monospace",
-                    cursor: "pointer",
-                    textAlign: "center",
-                  }}
-                >
-                  replay
-                </button>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <p
-              style={{
-                fontSize: 14,
-                color: "rgba(255,170,50,0.6)",
-                fontStyle: "italic",
-                fontFamily: "monospace",
-                textAlign: "center",
-                margin: "0 0 4px",
-              }}
-            >
-              "{confirmText || freeText}"
-            </p>
-            <p
-              style={{
-                fontSize: 10,
-                fontFamily: "monospace",
-                color: "rgba(255,255,255,0.18)",
-                textAlign: "center",
-                margin: "0 0 14px",
-              }}
-            >
-              felt that.
-            </p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => onShareClip?.(displayMomentIdx, activeCaption.trim())}
-                style={{
-                  flex: 1,
-                  background: "rgba(255,140,20,0.12)",
-                  border: "1px solid rgba(255,140,20,0.25)",
-                  borderRadius: 10,
-                  padding: 10,
-                  color: "rgba(255,170,50,0.8)",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  fontFamily: "monospace",
-                  cursor: "pointer",
-                  textAlign: "center",
-                }}
-              >
-                share clip
-              </button>
-              <button
-                type="button"
-                onClick={onReplay}
-                style={{
-                  flex: 1,
-                  background: "rgba(255,255,255,0.03)",
-                  border: "0.5px solid rgba(255,255,255,0.08)",
-                  borderRadius: 10,
-                  padding: 10,
-                  color: "rgba(255,255,255,0.25)",
-                  fontSize: 12,
-                  fontFamily: "monospace",
-                  cursor: "pointer",
-                  textAlign: "center",
-                }}
-              >
-                replay
-              </button>
-            </div>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={handleMomentLoop}
+          style={{
+            marginTop: 12,
+            width: "100%",
+            background: "rgba(255,140,20,0.10)",
+            border: "1px solid rgba(255,140,20,0.20)",
+            borderRadius: 10,
+            padding: 12,
+            fontSize: 12,
+            fontWeight: 500,
+            fontFamily: "monospace",
+            color: "rgba(255,170,50,0.7)",
+            textAlign: "center",
+            cursor: "pointer",
+            textTransform: "lowercase",
+          }}
+        >
+          {hasFires ? "your 🔥 moment" : "pick your 🔥 moment"}
+        </button>
       </div>
     </div>
+    </>
   );
 }
