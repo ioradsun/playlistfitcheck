@@ -340,11 +340,10 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
             </div>
             <button
               onClick={() => navigate("/LyricFit")}
-              className="shrink-0 mx-2 h-8 w-8 rounded-full flex items-center justify-center transition-opacity hover:opacity-80"
-              style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.10)" }}
+              className="shrink-0 mx-2 h-8 w-8 rounded-full flex items-center justify-center transition-opacity hover:opacity-80 bg-muted border border-border"
               aria-label="Add your song"
             >
-              <Plus size={15} className="text-white/80" />
+              <Plus size={15} className="text-muted-foreground" />
             </button>
           </div>
         </>
