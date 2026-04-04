@@ -87,7 +87,7 @@ export function BillboardToggle({
                 }}
                 className={cn(
                   "flex items-center gap-0.5 transition-all duration-150 whitespace-nowrap",
-                  compact ? "py-1.5 text-xs px-2" : "py-2.5 text-sm",
+                  compact ? "py-1.5 text-xs px-2" : "py-2.5 text-sm px-4",
                   isBillboardActive
                     ? compact
                       ? "font-medium text-white"
