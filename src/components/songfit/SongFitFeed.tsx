@@ -219,6 +219,7 @@ function FeedList({
 
   const onCenterLeave = useCallback((postId: string) => {
     centerSetRef.current.delete(postId);
+    audioController.clearExplicitIf(postId);
     // If the leaving card was the preload target, pick the last remaining
     setPreloadId((prev) => {
       if (prev !== postId) return prev;
