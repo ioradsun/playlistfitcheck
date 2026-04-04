@@ -62,6 +62,7 @@ interface BattleEmbedProps {
   reelsMode?: boolean;
   avatarUrl?: string | null;
   displayName?: string;
+  spotifyArtistId?: string | null;
   isVerified?: boolean;
   userId?: string | null;
   onProfileClick?: () => void;
@@ -80,10 +81,12 @@ function BattleEmbedInner({
   reelsMode,
   avatarUrl,
   displayName,
+  spotifyArtistId,
   isVerified,
   userId,
   onProfileClick,
 }: BattleEmbedProps) {
+  void spotifyArtistId; // TODO: add profile pill to reels header
   const isFeedEmbed = visible !== undefined;
   const { effectivePrimaryId } = useSyncExternalStore(
     audioController.subscribe,

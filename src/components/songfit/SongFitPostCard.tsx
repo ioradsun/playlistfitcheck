@@ -213,6 +213,7 @@ export function SongFitPostCard({
             avatarUrl={post.profiles?.avatar_url}
             artistName={displayName}
             songTitle={post.track_title}
+            spotifyArtistId={(post.profiles as any)?.spotify_artist_id}
             isVerified={(post.profiles as any)?.is_verified}
             userId={post.user_id}
             onProfileClick={handleProfileClick}
@@ -254,6 +255,7 @@ export function SongFitPostCard({
                 visible={visible}
                 postId={post.id}
                 spotifyTrackId={post.spotify_track_id}
+                spotifyArtistId={(post.profiles as any)?.spotify_artist_id}
                 prefetchedData={lyricDanceData ?? null}
                 avatarUrl={post.profiles?.avatar_url}
                 isVerified={(post.profiles as any)?.is_verified}
@@ -273,6 +275,7 @@ export function SongFitPostCard({
                 initialVotedSide={(post as any).voted_side ?? null}
                 avatarUrl={post.profiles?.avatar_url}
                 displayName={displayName}
+                spotifyArtistId={(post.profiles as any)?.spotify_artist_id}
                 isVerified={(post.profiles as any)?.is_verified}
                 userId={post.user_id}
                 onProfileClick={handleProfileClick}
