@@ -295,6 +295,9 @@ export function FmlyBar({
           width: "100%",
           height: BAR_HEIGHT,
           background: "#0a0a0f",
+          userSelect: "none",
+          WebkitUserSelect: "none",
+          touchAction: "none",
           display: "flex",
           alignItems: "stretch",
           borderTop: "1px solid rgba(255,255,255,0.04)",
@@ -390,6 +393,9 @@ export function FmlyBar({
             padding: 0,
             opacity: closingActive ? 0.5 : undefined,
             transition: "background 0.3s ease",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            touchAction: "none",
           }}
         >
           <svg
