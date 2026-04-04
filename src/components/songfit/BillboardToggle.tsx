@@ -39,7 +39,7 @@ export function BillboardToggle({
 
   return (
     <div className={compact ? "" : undefined}>
-      <div className={cn("flex", !compact && "w-full", compact && "whitespace-nowrap gap-2")}>
+      <div className={cn("flex items-center", !compact && "w-full", compact && "whitespace-nowrap gap-2")}>
         {/* Recent tab */}
         <div className="flex items-center justify-center">
           <button
