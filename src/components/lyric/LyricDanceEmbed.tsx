@@ -23,6 +23,7 @@ interface LyricDanceEmbedProps {
   regionEnd?: number;
   postId?: string;
   spotifyTrackId?: string | null;
+  spotifyArtistId?: string | null;
   avatarUrl?: string | null;
   isVerified?: boolean;
   userId?: string | null;
@@ -45,6 +46,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   regionEnd,
   postId,
   spotifyTrackId,
+  spotifyArtistId,
   avatarUrl,
   isVerified,
   userId,
@@ -241,6 +243,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         artistName={artistName}
         songTitle={songTitle}
         spotifyTrackId={spotifyTrackId}
+        spotifyArtistId={spotifyArtistId}
         showMenuButton={isFeedEmbed}
         isVerified={isVerified}
         userId={userId}
