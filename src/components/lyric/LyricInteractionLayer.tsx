@@ -284,8 +284,8 @@ export function FmlyBar({
           <div
             style={{
               position: "absolute", top: 0, left: 0, bottom: 0,
-              width: closingActive ? "0%" : `${progressPct}%`,
-              opacity: closingActive ? 0 : 1,
+              width: `${progressPct}%`,
+              opacity: 1,
               background: "rgba(255,255,255,0.06)",
               pointerEvents: "none",
               transition: "width 150ms linear, opacity 200ms linear",
@@ -293,7 +293,7 @@ export function FmlyBar({
             }}
           />
           {/* Playhead line */}
-          {!closingActive && progressPct > 0 && (
+          {progressPct > 0 && (
             <div
               style={{
                 position: "absolute", top: 0, bottom: 0,
@@ -312,7 +312,7 @@ export function FmlyBar({
           {moments.map((moment, index) => {
             const isLast = index === moments.length - 1;
             const segmentOpacity = closingActive
-              ? userTopIdx == null ? 0.15 : userTopIdx === index ? 1 : 0.15
+              ? userTopIdx == null ? 1 : userTopIdx === index ? 1 : 0.5
               : 1;
 
             return (
@@ -354,7 +354,7 @@ export function FmlyBar({
             cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
             padding: 0,
-            opacity: closingActive ? 0.2 : undefined,
+            opacity: closingActive ? 0.5 : undefined,
             transition: "background 0.3s ease",
           }}
         >
