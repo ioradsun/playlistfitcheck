@@ -140,6 +140,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   useEffect(() => {
     if (!player || !playerReady || !postId || !isFeedEmbed || !visible) return;
     audioController.register(postId, player);
+
+    if (isAudioUnlocked()) {
+      player.audio.muted = true;
+      player.audio.play().catch(() => {});
+    }
+
     return () => {
       audioController.clearExplicitIf(postId);
       audioController.unregister(postId);
@@ -165,6 +171,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       setMuted(next);
       return;
     }
+
+    audioController.primeAll();
 
     if (isPrimary) {
       audioController.toggleMute();
@@ -195,6 +203,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     player?.seek(timeSec);
 
     if (isFeedEmbed && postId) {
+      audioController.primeAll();
       audioController.setExplicitPrimary(postId);
       if (isGlobalMuted()) audioController.toggleMute();
     } else {

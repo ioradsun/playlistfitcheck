@@ -23,7 +23,6 @@ class AudioController {
   }
 
   unregister(postId: string): void {
-    // Stop audio BEFORE removing from registry
     if (this._effectivePrimaryId === postId) {
       const player = this._registry.get(postId);
       if (player) {
@@ -31,6 +30,11 @@ class AudioController {
         player.setMuted(true);
       }
       this._effectivePrimaryId = null;
+    } else {
+      const player = this._registry.get(postId);
+      if (player && !player.audio.paused) {
+        player.audio.pause();
+      }
     }
     this._registry.delete(postId);
     if (this._explicitPrimaryId === postId) this._explicitPrimaryId = null;
@@ -56,6 +60,21 @@ class AudioController {
     }
   }
 
+  /**
+   * Play ALL registered audio elements muted.
+   * MUST be called from a user gesture handler (tap/click).
+   * After this, switching primary only needs mute/unmute — no play() calls.
+   * This is required for iOS which blocks audio.play() outside gesture context.
+   */
+  primeAll(): void {
+    for (const [, player] of this._registry) {
+      if (player.audio.paused) {
+        player.audio.muted = true;
+        player.audio.play().catch(() => {});
+      }
+    }
+  }
+
   toggleMute(): void {
     const next = !isGlobalMuted();
     setGlobalMuted(next);
@@ -75,21 +94,25 @@ class AudioController {
 
   private _reconcile(): void {
     const nextId = this._resolveEffective();
+
     if (nextId !== this._effectivePrimaryId) {
       if (this._effectivePrimaryId) {
         const old = this._registry.get(this._effectivePrimaryId);
         if (old) {
-          if (!old.audio.paused) old.audio.pause();
           old.setMuted(true);
-          old.play(false);
         }
       }
+
       this._effectivePrimaryId = nextId;
+
       if (nextId) {
         const p = this._registry.get(nextId);
         if (p) {
-          p.play(true);
-          p.setMuted(!isAudioUnlocked() || isGlobalMuted());
+          const shouldMute = !isAudioUnlocked() || isGlobalMuted();
+          if (p.audio.paused) {
+            p.play(true);
+          }
+          p.setMuted(shouldMute);
         }
       }
     } else if (nextId) {
