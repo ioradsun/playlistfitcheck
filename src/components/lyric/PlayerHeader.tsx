@@ -1,6 +1,6 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
-import { FmlyBadge } from "@/components/FmlyBadge";
+import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { User } from "lucide-react";
 
 interface PlayerHeaderProps {
@@ -12,6 +12,55 @@ interface PlayerHeaderProps {
   isVerified?: boolean;
   userId?: string | null;
   onProfileClick?: () => void;
+}
+
+function AvatarWithBadges({
+  avatarUrl,
+  isVerified,
+  userId,
+  onProfileClick,
+}: {
+  avatarUrl?: string | null;
+  isVerified?: boolean;
+  userId?: string | null;
+  onProfileClick?: () => void;
+}) {
+  const { number, isBlazer, loading } = useFmlyNumber(userId);
+  const serial = isBlazer && !loading ? String(number).padStart(4, "0") : null;
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onProfileClick?.();
+      }}
+      className="relative shrink-0"
+    >
+      {/* Avatar circle */}
+      <div className="h-7 w-7 rounded-full overflow-hidden border border-white/[0.06] bg-white/10 flex items-center justify-center">
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <User size={12} className="text-white/40" />
+        )}
+      </div>
+
+      {/* Verified check — bottom-right of avatar */}
+      {isVerified && (
+        <span className="absolute -bottom-0.5 -right-0.5 pointer-events-none">
+          <VerifiedBadge size={11} />
+        </span>
+      )}
+
+      {/* FMLY number — below avatar */}
+      {serial && (
+        <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[7px] font-mono leading-none text-white/60 whitespace-nowrap pointer-events-none">
+          {serial}
+        </span>
+      )}
+    </button>
+  );
 }
 
 export function PlayerHeader({
@@ -51,20 +100,12 @@ export function PlayerHeader({
           </SidebarTrigger>
         )}
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onProfileClick?.();
-          }}
-          className="h-7 w-7 shrink-0 rounded-full overflow-hidden border border-white/[0.06] bg-white/10 flex items-center justify-center"
-        >
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <User size={12} className="text-white/40" />
-          )}
-        </button>
+        <AvatarWithBadges
+          avatarUrl={avatarUrl}
+          isVerified={isVerified}
+          userId={userId}
+          onProfileClick={onProfileClick}
+        />
 
         <div className="flex items-center gap-1 min-w-0 overflow-hidden">
           {artistName && (
@@ -72,8 +113,6 @@ export function PlayerHeader({
               {artistName}
             </span>
           )}
-          {isVerified && <VerifiedBadge size={11} />}
-          {userId && <FmlyBadge userId={userId} compact />}
           {artistName && songTitle && <span className="text-[10px] font-mono text-white/35 shrink-0">·</span>}
           <span className="text-[10px] font-mono font-medium uppercase tracking-[0.14em] text-white/70 truncate">
             {songTitle}
