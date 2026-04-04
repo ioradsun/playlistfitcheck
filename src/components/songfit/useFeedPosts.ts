@@ -223,8 +223,7 @@ export function useFeedPosts(): FeedState {
   const fetchPosts = useCallback(async () => {
     console.log("[useFeedPosts] fetchPosts called, feedView:", feedView);
     if (feedView === "billboard") {
-      setLoading(true);
-      setSignalMap({});
+      if (posts.length === 0) setLoading(true);
       const result = await scoreBillboard(billboardMode);
       setPosts(result.posts);
       setSignalMap(result.signalMap);
@@ -235,7 +234,6 @@ export function useFeedPosts(): FeedState {
     }
 
     // Non-billboard path
-    setSignalMap({});
     if (posts.length === 0) setLoading(true);
 
     const prefetched = consumeFeedPrefetch();
