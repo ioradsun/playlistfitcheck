@@ -33,6 +33,7 @@ function useClickOutside(
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("touchstart", handler);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 }
 
