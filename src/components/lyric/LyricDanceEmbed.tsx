@@ -5,6 +5,10 @@ import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
+import type { CardMode } from "@/components/lyric/PlayerHeader";
+import { PostCommentPanel } from "@/components/songfit/PostCommentPanel";
+import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
+import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 
 import { emitFire, fetchFireData } from "@/lib/fire";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
@@ -118,6 +122,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [activeMomentIdx, setActiveMomentIdx] = useState(0);
+  const [cardMode, setCardMode] = useState<CardMode>("dance");
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
@@ -265,76 +270,124 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         isVerified={isVerified}
         userId={userId}
         onProfileClick={onProfileClick}
+        cardMode={cardMode}
+        onModeChange={setCardMode}
       />
 
+      {/* ── Fixed-height content slot ── */}
       <div
         ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
-        onClick={handleCanvasTap}
+        style={{ background: "#0a0a0a" }}
+        onClick={cardMode === "dance" ? handleCanvasTap : undefined}
       >
-        {!isFeedEmbed && (
+        {/* Dance mode — canvas + overlays, unchanged from today */}
+        {cardMode === "dance" && (
           <>
-            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }} />
-            <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }} />
+            {!isFeedEmbed && (
+              <>
+                <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }} />
+                <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }} />
+              </>
+            )}
+
+            {((isFeedEmbed && isPrimary && feedMuted) || (!isFeedEmbed && muted)) && (
+              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.5)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", opacity: showMuteIndicator ? 0.8 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 40 }}>
+                <VolumeX size={20} color="white" />
+              </div>
+            )}
+
+            <ClosingScreen
+              visible={closingVisible}
+              empowermentPromise={empowermentPromise}
+              danceId={((data ?? prefetchedData) as any)?.id ?? ""}
+              source="feed"
+              moments={moments}
+              momentFireCounts={deriveMomentFireCounts(reactionData, moments)}
+              activeMomentIdx={activeMomentIdx}
+              onSeekToMoment={(idx) => {
+                const m = moments[idx];
+                if (m && player) {
+                  setActiveMomentIdx(idx);
+                  player.seek(m.startSec);
+                  player.setRegion(m.startSec, m.endSec);
+                }
+              }}
+              onLoopMoment={(idx) => {
+                const m = moments[idx];
+                if (m && player) {
+                  setClosingVisible(false);
+                  setActiveMomentIdx(idx);
+                  player.seek(m.startSec);
+                  player.setRegion(m.startSec, m.endSec);
+                  player.play();
+                }
+              }}
+            />
+
+            {showClipComposer && (
+              <div className="absolute inset-x-3 bottom-3 z-[540]" onClick={(e) => e.stopPropagation()}>
+                <ClipComposer
+                  visible={showClipComposer}
+                  player={player}
+                  durationSec={durationSec}
+                  fires={(reactionData ?? []) as any}
+                  lines={lyricSections.allLines.map((l) => ({ lineIndex: l.lineIndex, text: l.text, startSec: l.startSec, endSec: l.endSec ?? (l.startSec + 5) }))}
+                  initialStart={clipStart}
+                  initialEnd={clipEnd}
+                  initialCaption={clipCaption}
+                  songTitle={songTitle}
+                  onClose={() => {
+                    setShowClipComposer(false);
+                    player?.setRegion(undefined, undefined);
+                  }}
+                />
+              </div>
+            )}
           </>
         )}
 
-        {((isFeedEmbed && isPrimary && feedMuted) || (!isFeedEmbed && muted)) && (
-          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.5)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", opacity: showMuteIndicator ? 0.8 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 40 }}>
-            <VolumeX size={20} color="white" />
+        {/* Lyric/comment mode */}
+        {cardMode === "lyric" && postId && (
+          <div className="absolute inset-0 overflow-y-auto">
+            <PostCommentPanel
+              postId={postId}
+              isOpen={true}
+              onClose={() => setCardMode("dance")}
+              variant="embedded"
+              palette={(data as any)?.palette ?? []}
+            />
           </div>
         )}
 
-        <ClosingScreen
-          visible={closingVisible}
-          empowermentPromise={empowermentPromise}
-          danceId={((data ?? prefetchedData) as any)?.id ?? ""}
-          source="feed"
-          moments={moments}
-          momentFireCounts={deriveMomentFireCounts(reactionData, moments)}
-          activeMomentIdx={activeMomentIdx}
-          onSeekToMoment={(idx) => {
-            const m = moments[idx];
-            if (m && player) {
-              setActiveMomentIdx(idx);
-              player.seek(m.startSec);
-              player.setRegion(m.startSec, m.endSec);
-            }
-          }}
-          onLoopMoment={(idx) => {
-            const m = moments[idx];
-            if (m && player) {
-              setClosingVisible(false);
-              setActiveMomentIdx(idx);
-              player.seek(m.startSec);
-              player.setRegion(m.startSec, m.endSec);
-              player.play();
-            }
-          }}
-        />
+        {/* Empowerment mode */}
+        {cardMode === "empowerment" && (
+          <div className="absolute inset-0 overflow-y-auto">
+            <EmpowermentModePanel
+              danceId={((data ?? prefetchedData) as any)?.id ?? ""}
+              empowermentPromise={(data ?? (prefetchedData as any))?.empowerment_promise ?? null}
+            />
+          </div>
+        )}
 
-        {showClipComposer && (
-          <div className="absolute inset-x-3 bottom-3 z-[540]" onClick={(e) => e.stopPropagation()}>
-            <ClipComposer
-              visible={showClipComposer}
-              player={player}
+        {/* Results mode */}
+        {cardMode === "results" && (
+          <div className="absolute inset-0 overflow-y-auto">
+            <CardResultsPanel
+              moments={moments}
+              reactionData={reactionData}
               durationSec={durationSec}
-              fires={(reactionData ?? []) as any}
-              lines={lyricSections.allLines.map((l) => ({ lineIndex: l.lineIndex, text: l.text, startSec: l.startSec, endSec: l.endSec ?? (l.startSec + 5) }))}
-              initialStart={clipStart}
-              initialEnd={clipEnd}
-              initialCaption={clipCaption}
-              songTitle={songTitle}
-              onClose={() => {
-                setShowClipComposer(false);
-                player?.setRegion(undefined, undefined);
-              }}
+              spotifyTrackId={spotifyTrackId ?? null}
+              spotifyArtistId={spotifyArtistId ?? null}
+              postId={postId ?? null}
+              lyricDanceUrl={(data as any)?.lyric_dance_url ?? (prefetchedData as any)?.lyric_dance_url ?? null}
             />
           </div>
         )}
       </div>
 
-      {!isBattleMode && (
+      {/* LyricInteractionLayer — dance mode only, outside the canvas slot */}
+      {!isBattleMode && cardMode === "dance" && (
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
           <LyricInteractionLayer
             moments={moments}

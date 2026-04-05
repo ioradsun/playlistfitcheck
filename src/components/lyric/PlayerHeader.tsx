@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect, type RefObject } from "react";
+import { useState, useRef, useEffect, type ReactNode, type RefObject } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Mail } from "lucide-react";
+import { User, Mail, Waves, AlignLeft, Zap, BarChart2 } from "lucide-react";
 import { toast } from "sonner";
+
+export type CardMode = "dance" | "lyric" | "empowerment" | "results";
 
 interface PlayerHeaderProps {
   avatarUrl?: string | null;
@@ -16,6 +18,8 @@ interface PlayerHeaderProps {
   isVerified?: boolean;
   userId?: string | null;
   onProfileClick?: () => void;
+  cardMode: CardMode;
+  onModeChange: (mode: CardMode) => void;
 }
 
 interface AvatarWithBadgesProps {
@@ -86,10 +90,22 @@ export function PlayerHeader({
   isVerified,
   userId,
   onProfileClick,
+  cardMode,
+  onModeChange,
 }: PlayerHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [modeOpen, setModeOpen] = useState(false);
   const pillRef = useRef<HTMLDivElement>(null);
   const avatarRef = useRef<HTMLButtonElement>(null);
+  const modeTriggerRef = useRef<HTMLButtonElement>(null);
+  const modePillRef = useRef<HTMLDivElement>(null);
+
+  const MODE_ICONS: Record<CardMode, ReactNode> = {
+    dance: <Waves size={14} />,
+    lyric: <AlignLeft size={14} />,
+    empowerment: <Zap size={14} />,
+    results: <BarChart2 size={14} />,
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -107,6 +123,21 @@ export function PlayerHeader({
       document.removeEventListener("touchstart", handler);
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!modeOpen) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (modePillRef.current?.contains(t) || modeTriggerRef.current?.contains(t)) return;
+      setModeOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [modeOpen]);
 
   return (
     <div
@@ -255,22 +286,117 @@ export function PlayerHeader({
           opacity: menuOpen ? 0 : 1,
           transition: "opacity 150ms ease",
           pointerEvents: menuOpen ? "none" : "auto",
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
         }}
       >
-        {spotifyTrackId && (
-          <a
-            href={`https://open.spotify.com/track/${spotifyTrackId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            style={{ flexShrink: 0, color: "rgba(255,255,255,0.5)" }}
-            aria-label="Open in Spotify"
-          >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-              <path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.5 17.34a.75.75 0 0 1-1.03.24c-2.81-1.72-6.34-2.11-10.5-1.15a.75.75 0 1 1-.34-1.46c4.54-1.04 8.43-.61 11.63 1.35a.75.75 0 0 1 .24 1.02zm1.47-3.26a.94.94 0 0 1-1.29.31c-3.22-1.98-8.12-2.55-11.93-1.37a.94.94 0 0 1-.56-1.8c4.17-1.3 9.53-.66 13.48 1.74.44.27.58.84.3 1.12zm.13-3.4C15.56 8.6 9.73 8.42 6.36 9.43a1.13 1.13 0 0 1-.66-2.16c3.87-1.18 10.31-.95 14.55 1.59a1.13 1.13 0 1 1-1.16 1.82z" />
-            </svg>
-          </a>
-        )}
+        <AnimatePresence>
+          {modeOpen && (
+            <motion.div
+              ref={modePillRef}
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: "auto", opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute",
+                right: 28,
+                top: "50%",
+                transform: "translateY(-50%)",
+                height: 28,
+                borderRadius: 14,
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                backdropFilter: "blur(12px)",
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                padding: "0 4px",
+                overflow: "hidden",
+                zIndex: 20,
+              }}
+            >
+              {(["empowerment", "lyric", "dance", "results"] as CardMode[]).map((mode, i) => {
+                const isActive = cardMode === mode;
+                return (
+                  <motion.button
+                    key={mode}
+                    type="button"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: i * 0.04 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onModeChange(mode);
+                    }}
+                    style={{
+                      position: "relative",
+                      width: 28,
+                      height: 28,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: isActive ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.25)",
+                      transition: "color 150ms ease",
+                      padding: 0,
+                    }}
+                    aria-label={mode}
+                  >
+                    {MODE_ICONS[mode]}
+                    {isActive && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          bottom: 3,
+                          left: "50%",
+                          transform: "translateX(-50%)",
+                          width: 3,
+                          height: 3,
+                          borderRadius: "50%",
+                          background: "rgba(255,255,255,0.9)",
+                          pointerEvents: "none",
+                        }}
+                      />
+                    )}
+                  </motion.button>
+                );
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <button
+          ref={modeTriggerRef}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setModeOpen((prev) => !prev);
+          }}
+          style={{
+            width: 24,
+            height: 24,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: modeOpen ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)",
+            transition: "color 150ms ease",
+            flexShrink: 0,
+            padding: 0,
+          }}
+          aria-label="Switch card mode"
+        >
+          {MODE_ICONS[cardMode]}
+        </button>
       </div>
     </div>
   );
