@@ -174,5 +174,6 @@ export function useDmThread(partnerUserId: string | null) {
     sendMessage,
     markRead,
     updatePresence,
+    reload: load,
   };
 }

@@ -199,8 +199,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
+    const currentTime = player?.audio?.currentTime ?? 0;
     const progressPct = durationSec > 0
-      ? (currentTimeSec / durationSec) * 100
+      ? (currentTime / durationSec) * 100
       : 0;
     maxProgressRef.current = Math.max(maxProgressRef.current, progressPct);
     upsertPlay(danceId, {
@@ -210,7 +211,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       playCount: playCountRef.current,
       userId: userId ?? null,
     });
-  }, [danceId, durationSec, currentTimeSec, userId]);
+  }, [danceId, durationSec, player, userId]);
 
   useEffect(() => {
     if (!visible || !danceId || !isFeedEmbed) return;
