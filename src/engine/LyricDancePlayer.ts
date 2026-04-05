@@ -2354,7 +2354,9 @@ export class LyricDancePlayer {
     this._exportSavedDpr = this.dpr;
     this._exportSavedVerticalBias = this._textVerticalBias;
     this.dpr = 1;
-    this._textVerticalBias = 0; // no bottom overlays in export — center text properly
+    this._textVerticalBias = this.wickBarEnabled
+      ? this._exportSavedVerticalBias
+      : 0;
 
     // Use resize() instead of setResolution() — triggers scene recompile
     // when aspect ratio or size changes significantly. This ensures font sizing,
@@ -3573,7 +3575,7 @@ export class LyricDancePlayer {
       if (this.wickBarEnabled && this._globalWickBar) {
         const bs = this._lastBeatState;
         const songDuration = Math.max(0.01, this.songEndSec - this.songStartSec);
-        const songProgress = Math.max(0, Math.min(1, (this.audio.currentTime - this.songStartSec) / songDuration));
+        const songProgress = Math.max(0, Math.min(1, this.currentTimeMs / 1000 / songDuration));
         this._globalWickBar.update(
           bs?.energy ?? 0, bs?.pulse ?? 0, bs?.hitStrength ?? 0, bs?.phase ?? 0, bs?.beatIndex ?? 0,
           songProgress, bs?.hitType ?? 'none', bs?.brightness ?? 0.5, bs?.isDownbeat ?? false,
@@ -5134,7 +5136,7 @@ export class LyricDancePlayer {
       if (this.wickBarEnabled && this._globalWickBar) {
         const bs = this._lastBeatState;
         const songDuration = Math.max(0.01, this.songEndSec - this.songStartSec);
-        const songProgress = Math.max(0, Math.min(1, (this.audio.currentTime - this.songStartSec) / songDuration));
+        const songProgress = Math.max(0, Math.min(1, this.currentTimeMs / 1000 / songDuration));
         this._globalWickBar.update(
           bs?.energy ?? 0,
           bs?.pulse ?? 0,
