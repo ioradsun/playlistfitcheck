@@ -7,6 +7,7 @@ export async function emitFire(
   timeSec: number,
   holdMs: number,
   source?: "feed" | "shareable" | "embed",
+  userId?: string | null,
 ): Promise<void> {
   supabase.from('lyric_dance_fires' as any).insert({
     dance_id: danceId,
@@ -15,6 +16,7 @@ export async function emitFire(
     time_sec: timeSec,
     hold_ms: holdMs,
     ...(source ? { source } : {}),
+    ...(userId ? { user_id: userId } : {}),
   }).then();
 }
 
