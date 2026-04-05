@@ -3,6 +3,7 @@ import { Send } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useDmThread } from "@/hooks/useDmThread";
 import { DmActivityEvent } from "@/components/signals/DmActivityEvent";
+import { PartnerAvatar } from "@/components/signals/PartnerAvatar";
 import type { DmThreadSummary } from "@/hooks/useDmThreadList";
 
 interface Props {
@@ -50,31 +51,11 @@ export function DmThreadView({ partner }: Props) {
           flexShrink: 0,
         }}
       >
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "50%",
-            overflow: "hidden",
-            background: "rgba(255,255,255,0.08)",
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {partner.partner_avatar ? (
-            <img
-              src={partner.partner_avatar}
-              alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          ) : (
-            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
-              {(partner.partner_name?.[0] ?? "?").toUpperCase()}
-            </span>
-          )}
-        </div>
+        <PartnerAvatar
+          name={partner.partner_name}
+          avatarUrl={partner.partner_avatar}
+          size={32}
+        />
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

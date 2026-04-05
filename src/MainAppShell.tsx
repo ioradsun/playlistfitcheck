@@ -9,6 +9,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { SiteCopyProvider } from "@/hooks/useSiteCopy";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { VoteGateProvider } from "@/hooks/useVoteGate";
+import { DmProvider } from "@/hooks/useDmContext";
 import { Navigate, Routes, Route } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AdminPageImport } from "@/lib/routePrefetch";
@@ -43,64 +44,66 @@ export default function MainAppShell() {
       <SiteCopyProvider>
         <Toaster />
         <Sonner />
-        <SidebarProvider defaultOpen={true}>
-          <VoteGateProvider>
-            <ErrorBoundary>
-              <Routes>
-                <Route path="/" element={<Navigate to="/CrowdFit" replace />} />
-                <Route path="/CrowdFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/SongFit" element={<Navigate to="/CrowdFit" replace />} />
-                <Route path="/ProFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/ProFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/PlaylistFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/PlaylistFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/MixFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/MixFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/LyricFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/LyricFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/HitFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/HitFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/DreamFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/VibeFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/VibeFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/crowdfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
-                <Route path="/lyricfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
-                <Route path="/mixfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
-                <Route path="/hitfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
-                <Route path="/playlistfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
-                <Route path="/dreamfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
-                <Route path="/answers/:slug" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
-                <Route path="/blog/:slug" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
-                <Route path="/about" element={<Suspense fallback={null}><PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout></Suspense>} />
-                <Route
-                  path="/admin"
-                  element={
+        <DmProvider>
+          <SidebarProvider defaultOpen={true}>
+            <VoteGateProvider>
+              <ErrorBoundary>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/CrowdFit" replace />} />
+                  <Route path="/CrowdFit" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/SongFit" element={<Navigate to="/CrowdFit" replace />} />
+                  <Route path="/ProFit" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/ProFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/PlaylistFit" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/PlaylistFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/MixFit" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/MixFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/LyricFit" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/LyricFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/HitFit" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/HitFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/DreamFit" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/VibeFit" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/VibeFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/crowdfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/lyricfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/mixfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/hitfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/playlistfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/dreamfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/answers/:slug" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/blog/:slug" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/about" element={<Suspense fallback={null}><PageLayout title="toolsFM story" subtitle="What we built and why."><About /></PageLayout></Suspense>} />
+                  <Route
+                    path="/admin"
+                    element={
+                      <Suspense fallback={null}>
+                        <Admin />
+                      </Suspense>
+                    }
+                  />
+                  <Route path="/auth" element={<Suspense fallback={null}><PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout></Suspense>} />
+                  <Route path="/terms" element={<Suspense fallback={null}><PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout></Suspense>} />
+                  <Route path="/Signals" element={
                     <Suspense fallback={null}>
-                      <Admin />
+                      <PageLayout title="Signals" subtitle="Your music connections">
+                        <SignalsPanel />
+                      </PageLayout>
                     </Suspense>
-                  }
-                />
-                <Route path="/auth" element={<Suspense fallback={null}><PageLayout title="Join the FMly" subtitle="Come for the tools. Stay for the FMLY."><Auth /></PageLayout></Suspense>} />
-                <Route path="/terms" element={<Suspense fallback={null}><PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout></Suspense>} />
-                <Route path="/Signals" element={
-                  <Suspense fallback={null}>
-                    <PageLayout title="Signals" subtitle="Your music connections">
-                      <SignalsPanel />
-                    </PageLayout>
-                  </Suspense>
-                } />
-                <Route path="/profile" element={<Suspense fallback={null}><PageLayout title="Profile"><Profile /></PageLayout></Suspense>} />
-                <Route path="/dashboard" element={<Suspense fallback={null}><ArtistDashboard /></Suspense>} />
-                <Route path="/reset-password" element={<Suspense fallback={null}><PageLayout title="Reset Password"><ResetPassword /></PageLayout></Suspense>} />
-                <Route path="/u/:userId" element={<Suspense fallback={null}><PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout></Suspense>} />
-                <Route path="/song/:postId" element={<Suspense fallback={null}><PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout></Suspense>} />
-                <Route path="/artist/:username" element={<Suspense fallback={null}><ArtistStage /></Suspense>} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<Suspense fallback={null}><PageLayout><NotFound /></PageLayout></Suspense>} />
-              </Routes>
-            </ErrorBoundary>
-          </VoteGateProvider>
-        </SidebarProvider>
+                  } />
+                  <Route path="/profile" element={<Suspense fallback={null}><PageLayout title="Profile"><Profile /></PageLayout></Suspense>} />
+                  <Route path="/dashboard" element={<Suspense fallback={null}><ArtistDashboard /></Suspense>} />
+                  <Route path="/reset-password" element={<Suspense fallback={null}><PageLayout title="Reset Password"><ResetPassword /></PageLayout></Suspense>} />
+                  <Route path="/u/:userId" element={<Suspense fallback={null}><PageLayout title="Artist Profile" subtitle="Fit for the spotlight"><PublicProfile /></PageLayout></Suspense>} />
+                  <Route path="/song/:postId" element={<Suspense fallback={null}><PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout></Suspense>} />
+                  <Route path="/artist/:username" element={<Suspense fallback={null}><ArtistStage /></Suspense>} />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<Suspense fallback={null}><PageLayout><NotFound /></PageLayout></Suspense>} />
+                </Routes>
+              </ErrorBoundary>
+            </VoteGateProvider>
+          </SidebarProvider>
+        </DmProvider>
         <Suspense fallback={<div aria-hidden className="pointer-events-none fixed bottom-0 right-0 h-12 w-12 opacity-0" />}>
           <FitWidget />
         </Suspense>

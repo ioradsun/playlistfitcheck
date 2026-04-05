@@ -5,41 +5,42 @@ interface Props {
   event: ActivityEvent;
 }
 
+function buildLabel(event: ActivityEvent, isIncoming: boolean): string | null {
+  switch (event.kind) {
+    case "fire": {
+      const lineLabel = event.line_index != null
+        ? `line ${event.line_index + 1}`
+        : "a moment";
+      const countLabel = (event.fire_count ?? 1) > 1
+        ? ` × ${event.fire_count}`
+        : "";
+      return `🔥 fired ${lineLabel}${event.song_name ? ` in ${event.song_name}` : ""}${countLabel}`;
+    }
+    case "play": {
+      const depth = event.max_progress_pct != null
+        ? `${event.max_progress_pct}%`
+        : null;
+      const audio = event.was_muted === false ? "with audio" : "muted";
+      const times = (event.play_count ?? 1) > 1 ? ` × ${event.play_count}` : "";
+      return `👁  played${event.song_name ? ` ${event.song_name}` : ""}${depth ? ` · ${depth}` : ""} · ${audio}${times}`;
+    }
+    case "lyric_comment":
+      return `💬 on line ${(event.line_index ?? 0) + 1}${event.song_name ? ` in ${event.song_name}` : ""}: "${event.text}"`;
+    case "post_comment":
+      return `💬 commented${event.song_name ? ` on ${event.song_name}` : ""}: "${event.text}"`;
+    case "save":
+      return `📌 saved${event.song_name ? ` ${event.song_name}` : ""}`;
+    case "follow":
+      return isIncoming ? "👤 followed you" : "👤 you followed";
+    default:
+      return null;
+  }
+}
+
 export function DmActivityEvent({ event }: Props) {
   const isIncoming = event.direction === "incoming";
   const time = formatDistanceToNow(new Date(event.created_at), { addSuffix: true });
-
-  const label = (() => {
-    switch (event.kind) {
-      case "fire": {
-        const lineLabel = event.line_index != null
-          ? `line ${event.line_index + 1}`
-          : "a moment";
-        const countLabel = (event.fire_count ?? 1) > 1
-          ? ` × ${event.fire_count}`
-          : "";
-        return `🔥 fired ${lineLabel}${event.song_name ? ` in ${event.song_name}` : ""}${countLabel}`;
-      }
-      case "play": {
-        const depth = event.max_progress_pct != null
-          ? `${event.max_progress_pct}%`
-          : null;
-        const audio = event.was_muted === false ? "with audio" : "muted";
-        const times = (event.play_count ?? 1) > 1 ? ` × ${event.play_count}` : "";
-        return `👁  played${event.song_name ? ` ${event.song_name}` : ""}${depth ? ` · ${depth}` : ""} · ${audio}${times}`;
-      }
-      case "lyric_comment":
-        return `💬 on line ${(event.line_index ?? 0) + 1}${event.song_name ? ` in ${event.song_name}` : ""}: "${event.text}"`;
-      case "post_comment":
-        return `💬 commented${event.song_name ? ` on ${event.song_name}` : ""}: "${event.text}"`;
-      case "save":
-        return `📌 saved${event.song_name ? ` ${event.song_name}` : ""}`;
-      case "follow":
-        return isIncoming ? "👤 followed you" : "👤 you followed";
-      default:
-        return null;
-    }
-  })();
+  const label = buildLabel(event, isIncoming);
 
   if (!label) return null;
 

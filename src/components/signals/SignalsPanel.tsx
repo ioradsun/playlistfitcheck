@@ -3,11 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import { DmThreadList } from "@/components/signals/DmThreadList";
 import { DmThreadView } from "@/components/signals/DmThreadView";
 import { useAuth } from "@/hooks/useAuth";
-import { useDmThreadList } from "@/hooks/useDmThreadList";
+import { useDmContext } from "@/hooks/useDmContext";
 
 export function SignalsPanel() {
   const { user } = useAuth();
-  const { threads, loading } = useDmThreadList();
+  const { threads, loading } = useDmContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const activePartnerId = searchParams.get("partner");
 
@@ -15,14 +15,6 @@ export function SignalsPanel() {
     (t) => t.partner_id === activePartnerId,
   ) ?? null;
   const pendingThread = activePartnerId && !activeThread && loading;
-
-  const selectThread = (thread: { partner_id: string }) => {
-    setSearchParams({ partner: thread.partner_id });
-  };
-
-  const clearThread = () => {
-    setSearchParams({});
-  };
 
   if (!user) {
     return (
@@ -69,7 +61,7 @@ export function SignalsPanel() {
           threads={threads}
           loading={loading}
           activePartnerId={activePartnerId}
-          onSelect={selectThread}
+          onSelect={(t) => setSearchParams({ partner: t.partner_id })}
         />
       </div>
 
@@ -91,7 +83,7 @@ export function SignalsPanel() {
             }}
           >
             <button
-              onClick={clearThread}
+              onClick={() => setSearchParams({})}
               style={{
                 display: "flex",
                 alignItems: "center",
