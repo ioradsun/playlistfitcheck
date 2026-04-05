@@ -10,6 +10,7 @@ import { SiteCopyProvider } from "@/hooks/useSiteCopy";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { VoteGateProvider } from "@/hooks/useVoteGate";
 import { DmProvider } from "@/hooks/useDmContext";
+import { DmCompose } from "@/components/signals/DmCompose";
 import { Navigate, Routes, Route } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AdminPageImport } from "@/lib/routePrefetch";
@@ -103,6 +104,7 @@ export default function MainAppShell() {
               </ErrorBoundary>
             </VoteGateProvider>
           </SidebarProvider>
+          <DmCompose />
         </DmProvider>
         <Suspense fallback={<div aria-hidden className="pointer-events-none fixed bottom-0 right-0 h-12 w-12 opacity-0" />}>
           <FitWidget />
