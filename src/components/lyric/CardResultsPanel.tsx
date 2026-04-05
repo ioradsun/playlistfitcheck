@@ -9,7 +9,6 @@ interface Props {
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
   durationSec: number;
   spotifyTrackId: string | null;
-  spotifyArtistId: string | null;
   postId: string | null;
   lyricDanceUrl: string | null;
 }
@@ -19,7 +18,6 @@ export function CardResultsPanel({
   reactionData,
   durationSec,
   spotifyTrackId,
-  spotifyArtistId,
   postId,
   lyricDanceUrl,
 }: Props) {
@@ -43,9 +41,8 @@ export function CardResultsPanel({
   const maxFire = Math.max(1, ...Object.values(momentFireCounts));
   const totalFires = Object.values(reactionData).reduce((s, v) => s + (v.total ?? 0), 0);
   const hottestIdx = moments.length > 0
-    ? momentFireCounts
-      ? Object.entries(momentFireCounts).reduce((best, [k, v]) => (v > (momentFireCounts[Number(best)] ?? 0) ? k : best), "0")
-      : "0"
+    ? moments.reduce((bestIdx, _, i) =>
+      (momentFireCounts[i] ?? 0) > (momentFireCounts[bestIdx] ?? 0) ? i : bestIdx, 0)
     : null;
 
   const Label = ({ children }: { children: string }) => (
@@ -68,13 +65,15 @@ export function CardResultsPanel({
   return (
     <div
       style={{
-        height: "100%",
+        position: "absolute",
+        inset: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
         background: "#0a0a0a",
         padding: 14,
         display: "flex",
         flexDirection: "column",
         gap: 12,
-        overflowY: "auto",
         fontFamily: "monospace",
       }}
     >
@@ -166,9 +165,9 @@ export function CardResultsPanel({
             </span>
             <span style={{ fontSize: 11, color: "rgba(255,255,255,0.2)" }}>🔥</span>
           </div>
-          {hottestIdx !== null && moments[Number(hottestIdx)] && (
+          {hottestIdx !== null && moments[hottestIdx] && (
             <p style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 3 }}>
-              hottest · {moments[Number(hottestIdx)]?.label ?? `moment ${Number(hottestIdx) + 1}`}
+              hottest · {moments[hottestIdx]?.label ?? `moment ${hottestIdx + 1}`}
             </p>
           )}
         </div>

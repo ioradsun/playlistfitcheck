@@ -254,6 +254,7 @@ export function SongFitPostCard({
                 artistName={displayName}
                 visible={visible}
                 postId={post.id}
+                lyricDanceUrl={post.lyric_dance_url ?? null}
                 spotifyTrackId={post.spotify_track_id}
                 spotifyArtistId={(post.profiles as any)?.spotify_artist_id}
                 prefetchedData={lyricDanceData ?? null}

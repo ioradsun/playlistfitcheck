@@ -8,11 +8,38 @@ import { toast } from "sonner";
 
 export type CardMode = "dance" | "lyric" | "empowerment" | "results";
 
+const MODE_ICONS: Record<CardMode, ReactNode> = {
+  dance: <Waves size={14} />,
+  lyric: <AlignLeft size={14} />,
+  empowerment: <Zap size={14} />,
+  results: <BarChart2 size={14} />,
+};
+
+function useClickOutside(
+  refs: RefObject<Element | null>[],
+  onOutside: () => void,
+  active: boolean,
+) {
+  useEffect(() => {
+    if (!active) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (refs.some((r) => r.current?.contains(t))) return;
+      onOutside();
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [active]);
+}
+
 interface PlayerHeaderProps {
   avatarUrl?: string | null;
   artistName?: string;
   songTitle: string;
-  spotifyTrackId?: string | null;
   spotifyArtistId?: string | null;
   showMenuButton?: boolean;
   isVerified?: boolean;
@@ -84,7 +111,6 @@ export function PlayerHeader({
   avatarUrl,
   artistName,
   songTitle,
-  spotifyTrackId,
   spotifyArtistId,
   showMenuButton = false,
   isVerified,
@@ -100,44 +126,8 @@ export function PlayerHeader({
   const modeTriggerRef = useRef<HTMLButtonElement>(null);
   const modePillRef = useRef<HTMLDivElement>(null);
 
-  const MODE_ICONS: Record<CardMode, ReactNode> = {
-    dance: <Waves size={14} />,
-    lyric: <AlignLeft size={14} />,
-    empowerment: <Zap size={14} />,
-    results: <BarChart2 size={14} />,
-  };
-
-  useEffect(() => {
-    if (!menuOpen) return;
-
-    const handler = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as Node;
-      if (pillRef.current?.contains(target) || avatarRef.current?.contains(target)) return;
-      setMenuOpen(false);
-    };
-
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("touchstart", handler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("touchstart", handler);
-    };
-  }, [menuOpen]);
-
-  useEffect(() => {
-    if (!modeOpen) return;
-    const handler = (e: MouseEvent | TouchEvent) => {
-      const t = e.target as Node;
-      if (modePillRef.current?.contains(t) || modeTriggerRef.current?.contains(t)) return;
-      setModeOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("touchstart", handler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("touchstart", handler);
-    };
-  }, [modeOpen]);
+  useClickOutside([pillRef, avatarRef], () => setMenuOpen(false), menuOpen);
+  useClickOutside([modePillRef, modeTriggerRef], () => setModeOpen(false), modeOpen);
 
   return (
     <div

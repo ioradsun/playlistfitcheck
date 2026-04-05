@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageCircle, Send, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
@@ -29,14 +29,15 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const activeLineRef = useRef<HTMLDivElement>(null);
+  const prevActiveLineIndexRef = useRef<number | null>(null);
 
   const getLineFireCount = (lineIndex: number): number =>
     Object.values(reactionData).reduce((sum, v) => sum + (v.line[lineIndex] ?? 0), 0);
 
-  const activeLineIndex: number | null = (() => {
+  const activeLineIndex = useMemo(() => {
     const match = allLines.find((line) => currentTimeSec >= line.startSec && currentTimeSec < (line.endSec ?? (line.startSec + 5)));
     return match?.lineIndex ?? null;
-  })();
+  }, [allLines, currentTimeSec]);
 
   useEffect(() => {
     if (!danceId) return;
@@ -53,20 +54,15 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
   }, [danceId]);
 
   useEffect(() => {
+    if (activeLineIndex === null) return;
+    if (activeLineIndex === prevActiveLineIndexRef.current) return;
+    prevActiveLineIndexRef.current = activeLineIndex;
     if (!activeLineRef.current) return;
     activeLineRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [activeLineIndex]);
 
   const handleLineTap = (lineIndex: number, timeSec: number) => {
     onFireLine(lineIndex, timeSec);
-    if (openLineIndex === lineIndex) {
-      setOpenLineIndex(null);
-      setInputText("");
-      return;
-    }
-    setOpenLineIndex(lineIndex);
-    setInputText("");
-    setTimeout(() => inputRef.current?.focus(), 80);
   };
 
   const handleSubmit = async () => {
