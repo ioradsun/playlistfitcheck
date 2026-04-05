@@ -7,16 +7,13 @@ import type { DmThreadSummary } from "@/hooks/useDmThreadList";
 
 interface Props {
   partner: DmThreadSummary;
-  myId: string;
 }
 
-export function DmThreadView({ partner, myId }: Props) {
-  void myId;
+export function DmThreadView({ partner }: Props) {
   const { events, loading, sending, sendMessage, markRead, updatePresence } =
     useDmThread(partner.partner_id);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -247,7 +244,6 @@ export function DmThreadView({ partner, myId }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <input
-          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {

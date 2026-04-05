@@ -14,6 +14,7 @@ export function SignalsPanel() {
   const activeThread = threads.find(
     (t) => t.partner_id === activePartnerId,
   ) ?? null;
+  const pendingThread = activePartnerId && !activeThread && loading;
 
   const selectThread = (thread: { partner_id: string }) => {
     setSearchParams({ partner: thread.partner_id });
@@ -57,11 +58,10 @@ export function SignalsPanel() {
       }}
     >
       <div
-        className="md:flex"
+        className={activePartnerId ? "hidden md:flex" : "flex"}
         style={{
           width: 280,
           flexShrink: 0,
-          display: activePartnerId ? "none" : "flex",
           flexDirection: "column",
         }}
       >
@@ -110,7 +110,26 @@ export function SignalsPanel() {
             </button>
           </div>
 
-          <DmThreadView partner={activeThread} myId={user.id} />
+          <DmThreadView partner={activeThread} />
+        </div>
+      ) : pendingThread ? (
+        <div
+          className="flex"
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 11,
+              color: "rgba(255,255,255,0.2)",
+              fontFamily: "monospace",
+            }}
+          >
+            Loading…
+          </p>
         </div>
       ) : (
         <div
