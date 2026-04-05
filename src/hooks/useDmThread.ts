@@ -132,11 +132,32 @@ export function useDmThread(partnerUserId: string | null) {
       const tid = (thread as { id: string }).id;
       setThreadId(tid);
 
-      await supabase.from("dm_messages" as any).insert({
-        thread_id: tid,
-        sender_id: user.id,
-        content: content.trim(),
-      });
+      const text = content.trim();
+      const { data: inserted } = await supabase
+        .from("dm_messages" as any)
+        .insert({
+          thread_id: tid,
+          sender_id: user.id,
+          content: text,
+        })
+        .select("id, created_at")
+        .single();
+
+      if (inserted) {
+        const optimistic: ActivityEvent = {
+          id: (inserted as any).id,
+          kind: "message",
+          direction: "outgoing",
+          created_at: (inserted as any).created_at,
+          text,
+          sender_id: user.id,
+          is_read: false,
+        };
+        setEvents((prev) => {
+          if (prev.some((e) => e.id === optimistic.id)) return prev;
+          return [...prev, optimistic];
+        });
+      }
     } finally {
       setSending(false);
     }

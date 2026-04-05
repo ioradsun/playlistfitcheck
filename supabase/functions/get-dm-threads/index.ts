@@ -41,54 +41,70 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const myId = user.id;
 
-    const { data: threads } = await supabase
-      .from("dm_threads")
-      .select("id, user_a_id, user_b_id, last_activity_at")
-      .or(`user_a_id.eq.${myId},user_b_id.eq.${myId}`)
-      .order("last_activity_at", { ascending: false })
-      .limit(50);
+    const thirtyDaysAgo = new Date(
+      Date.now() - 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    const [{ data: threads }, { data: recentFirers }] = await Promise.all([
+      supabase
+        .from("dm_threads")
+        .select("id, user_a_id, user_b_id, last_activity_at")
+        .or(`user_a_id.eq.${myId},user_b_id.eq.${myId}`)
+        .order("last_activity_at", { ascending: false })
+        .limit(50),
+      supabase
+        .from("lyric_dance_fires")
+        .select(`
+        user_id, created_at,
+        shareable_lyric_dances!inner(user_id)
+      `)
+        .eq("shareable_lyric_dances.user_id", myId)
+        .not("user_id", "is", null)
+        .neq("user_id", myId)
+        .gte("created_at", thirtyDaysAgo)
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ]);
 
     const partnerIds = (threads ?? []).map((t) =>
       t.user_a_id === myId ? t.user_b_id : t.user_a_id,
     );
 
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, display_name, avatar_url, trailblazer_number")
-      .in("id", partnerIds);
-
     const threadIds = (threads ?? []).map((t) => t.id);
-    const { data: unreadCounts } = threadIds.length > 0
-      ? await supabase
-          .from("dm_messages")
-          .select("thread_id")
-          .in("thread_id", threadIds)
-          .eq("is_read", false)
-          .neq("sender_id", myId)
-      : { data: [] };
+    const [{ data: profiles }, { data: unreadCounts }, ...latestMessageResults] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url, trailblazer_number")
+          .in("id", partnerIds.length > 0 ? partnerIds : ["_none_"]),
+        threadIds.length > 0
+          ? supabase
+              .from("dm_messages")
+              .select("thread_id")
+              .in("thread_id", threadIds)
+              .eq("is_read", false)
+              .neq("sender_id", myId)
+          : Promise.resolve({ data: [] }),
+        ...threadIds.map((tid) =>
+          supabase
+            .from("dm_messages")
+            .select("thread_id, content, created_at, sender_id")
+            .eq("thread_id", tid)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        ),
+      ]);
 
     const unreadByThread: Record<string, number> = {};
     for (const row of unreadCounts ?? []) {
       unreadByThread[row.thread_id] = (unreadByThread[row.thread_id] ?? 0) + 1;
     }
 
-    const threadIdsWithMessages = threadIds;
-    const latestMessageResults = threadIdsWithMessages.length > 0
-      ? await Promise.all(
-          threadIdsWithMessages.map((tid) =>
-            supabase
-              .from("dm_messages")
-              .select("thread_id, content, created_at, sender_id")
-              .eq("thread_id", tid)
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle()
-          ),
-        )
-      : [];
     const latestByThread: Record<string, any> = {};
-    for (const { data } of latestMessageResults) {
-      if (data) latestByThread[data.thread_id] = data;
+    for (const result of latestMessageResults) {
+      const msg = (result as any).data;
+      if (msg) latestByThread[msg.thread_id] = msg;
     }
 
     const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
@@ -111,21 +127,7 @@ serve(async (req) => {
       };
     });
 
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const existingPartnerIds = new Set(partnerIds);
-
-    const { data: recentFirers } = await supabase
-      .from("lyric_dance_fires")
-      .select(`
-        user_id, created_at,
-        shareable_lyric_dances!inner(user_id)
-      `)
-      .eq("shareable_lyric_dances.user_id", myId)
-      .not("user_id", "is", null)
-      .neq("user_id", myId)
-      .gte("created_at", thirtyDaysAgo)
-      .order("created_at", { ascending: false })
-      .limit(100);
 
     const activityOnlyUsers = new Map<string, string>();
     for (const row of recentFirers ?? []) {
