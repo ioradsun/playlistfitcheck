@@ -84,7 +84,7 @@ export default function MainAppShell() {
                 <Route path="/terms" element={<Suspense fallback={null}><PageLayout title="Let's agree" subtitle="Play nice, make music, have fun"><Terms /></PageLayout></Suspense>} />
                 <Route path="/Signals" element={
                   <Suspense fallback={null}>
-                    <PageLayout title="Signals" subtitle="What your music is doing right now">
+                    <PageLayout title="Signals" subtitle="Your music connections">
                       <SignalsPanel />
                     </PageLayout>
                   </Suspense>
