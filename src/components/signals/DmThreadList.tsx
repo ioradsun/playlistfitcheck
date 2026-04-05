@@ -75,6 +75,10 @@ export function DmThreadList({
       {threads.map((thread) => {
         const isActive = thread.partner_id === activePartnerId;
         const hasUnread = thread.unread_count > 0;
+        const timeAgo = formatDistanceToNow(
+          new Date(thread.last_activity_at),
+          { addSuffix: false },
+        );
 
         return (
           <button
@@ -191,10 +195,7 @@ export function DmThreadList({
               >
                 {thread.last_message_preview
                   ? `${thread.last_message_is_mine ? "you: " : ""}${thread.last_message_preview}`
-                  : formatDistanceToNow(
-                      new Date(thread.last_activity_at),
-                      { addSuffix: true },
-                    )}
+                  : `${timeAgo} ago`}
               </p>
             </div>
 
@@ -208,10 +209,7 @@ export function DmThreadList({
                 paddingTop: 2,
               }}
             >
-              {formatDistanceToNow(
-                new Date(thread.last_activity_at),
-                { addSuffix: false },
-              )}
+              {timeAgo}
             </span>
           </button>
         );
