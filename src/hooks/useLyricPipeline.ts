@@ -497,8 +497,6 @@ export function useLyricPipeline({
   claimMeta = null,
   onClaimPublished,
 }: UseLyricPipelineParams) {
-  const hottestHooksEnabled = siteCopy?.features?.hookfit_hottest_hooks !== false;
-
   const artistNameRef = useRef<string>("artist");
   const artistNameReadyRef = useRef<Promise<void> | null>(null);
 
@@ -997,7 +995,6 @@ export function useLyricPipeline({
 
   const hookDetectionRunRef = useRef(false);
   const startHookDetection = useCallback(async () => {
-    if (!hottestHooksEnabled) return;
     if (hookDetectionRunRef.current) return;
     if (!words?.length || !lines?.length) return;
     if (renderData?.hook) return;
@@ -1061,7 +1058,6 @@ export function useLyricPipeline({
     beatGrid,
     audioDurationSec,
     renderData?.hook,
-    hottestHooksEnabled,
   ]);
 
   const startCinematicDirection = useCallback(

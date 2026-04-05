@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
-const DEFAULT_TOOL_ORDER = ["songfit", "hookfit", "hitfit", "vibefit", "profit", "playlist", "mix", "lyric", "dreamfit"];
+const DEFAULT_TOOL_ORDER = ["songfit", "hitfit", "vibefit", "profit", "playlist", "mix", "lyric", "dreamfit"];
 
 const TABS = ["Origin Story", "The Tools"] as const;
 

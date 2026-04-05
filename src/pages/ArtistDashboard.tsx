@@ -170,7 +170,7 @@ async function fetchListenerIntelligence(
 
 interface SongSignal {
   post: PostRow;
-  type: "in_studio" | "now_streaming" | "battle";
+  type: "in_studio" | "now_streaming";
   totalFires: number;
   uniqueListeners: number;
   firesPerListener: number;
@@ -194,7 +194,6 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
 
   const inStudioPosts = posts.filter((p: any) => p.lyric_dance_id);
   const nowStreamingPosts = posts.filter((p: any) => p.spotify_track_id && !p.lyric_dance_id);
-  const battlePosts = posts.filter((p: any) => p.lyric_dance_url && !p.lyric_dance_id && !p.spotify_track_id);
 
   const danceIds = inStudioPosts.map((p: any) => p.lyric_dance_id).filter(Boolean);
   let firesByDance: Record<string, { totalFires: number; uniqueListeners: number }> = {};
@@ -277,33 +276,6 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
     }
   }
 
-  const battleUrls = battlePosts.map((p: any) => p.lyric_dance_url).filter(Boolean);
-  let votesByPost: Record<string, number> = {};
-
-  if (battleUrls.length > 0) {
-    for (const post of battlePosts as PostRow[]) {
-      if (!post.lyric_dance_url) continue;
-      const segments = post.lyric_dance_url.replace(/^\//, "").split("/").filter(Boolean);
-      if (segments.length < 3) continue;
-      const [artistSlug, songSlug, hookSlug] = segments;
-
-      const { data: hookRow } = await supabase
-        .from("shareable_hooks" as any)
-        .select("battle_id")
-        .eq("artist_slug", artistSlug)
-        .eq("song_slug", songSlug)
-        .eq("hook_slug", hookSlug)
-        .maybeSingle();
-
-      if ((hookRow as any)?.battle_id) {
-        const { count } = await supabase
-          .from("lyric_dance_angle_votes" as any)
-          .select("id", { count: "exact", head: true })
-          .eq("dance_id", (hookRow as any).battle_id);
-        votesByPost[post.id] = count ?? 0;
-      }
-    }
-  }
 
   const signals: SongSignal[] = [];
 
@@ -338,24 +310,9 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
     });
   }
 
-  for (const post of battlePosts as PostRow[]) {
-    const votes = votesByPost[post.id] ?? 0;
-    signals.push({
-      post,
-      type: "battle",
-      totalFires: votes,
-      uniqueListeners: 0,
-      firesPerListener: 0,
-      topLine: null,
-      spotifyClicks: 0,
-      saves: 0,
-      commentCount: post.comments_count,
-    });
-  }
-
   signals.sort((a, b) => {
-    const scoreA = a.type === "in_studio" || a.type === "battle" ? a.totalFires * 10 : a.spotifyClicks + a.saves * 3 + a.commentCount;
-    const scoreB = b.type === "in_studio" || b.type === "battle" ? b.totalFires * 10 : b.spotifyClicks + b.saves * 3 + b.commentCount;
+    const scoreA = a.type === "in_studio" ? a.totalFires * 10 : a.spotifyClicks + a.saves * 3 + a.commentCount;
+    const scoreB = b.type === "in_studio" ? b.totalFires * 10 : b.spotifyClicks + b.saves * 3 + b.commentCount;
     return scoreB - scoreA;
   });
 
@@ -365,8 +322,8 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
 function SongCard({ signal, onClick }: { signal: SongSignal; onClick: () => void }) {
   const { post, type, totalFires, uniqueListeners, firesPerListener, topLine, spotifyClicks, saves, commentCount } = signal;
 
-  const typeLabel = type === "in_studio" ? "In Studio" : type === "now_streaming" ? "Now Streaming" : "FMLY Feud";
-  const typeColor = type === "in_studio" ? "text-orange-400" : type === "now_streaming" ? "text-green-400" : "text-purple-400";
+  const typeLabel = type === "in_studio" ? "In Studio" : "Now Streaming";
+  const typeColor = type === "in_studio" ? "text-orange-400" : "text-green-400";
 
   const holdLabel = topLine
     ? topLine.avgHoldMs < 300
@@ -418,42 +375,6 @@ function SongCard({ signal, onClick }: { signal: SongSignal; onClick: () => void
               {commentCount > 0 && <span className="text-[10px] font-mono text-muted-foreground">{commentCount} comments</span>}
             </div>
           )}
-          {type === "battle" && totalFires > 0 && (
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="text-[10px] font-mono text-purple-400/80">⚔️ {totalFires} votes</span>
-              {commentCount > 0 && <span className="text-[10px] font-mono text-muted-foreground">{commentCount} comments</span>}
-            </div>
-          )}
-
-          {topLine && (
-            <div className="space-y-0.5">
-              <p className="text-[10px] text-foreground/60 truncate italic">"{topLine.text}"</p>
-              <p className="text-[9px] font-mono text-muted-foreground/40">
-                {topLine.fireCount}× {holdLabel}
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center shrink-0 text-muted-foreground/30">
-          <ExternalLink size={14} />
-        </div>
-      </div>
-
-      {type === "in_studio" && totalFires > 0 && (
-        <div className="h-1 bg-muted/20">
-          <div
-            className="h-full rounded-r"
-            style={{
-              width: `${Math.min(100, Math.round((firesPerListener / 5) * 100))}%`,
-              background: "linear-gradient(90deg, rgba(255,120,30,0.4) 0%, rgba(255,120,30,0.7) 100%)",
-            }}
-          />
-        </div>
-      )}
-    </button>
-  );
-}
 
 export default function ArtistDashboard() {
   const { user, profile } = useAuth();

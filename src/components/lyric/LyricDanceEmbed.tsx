@@ -22,8 +22,6 @@ interface LyricDanceEmbedProps {
   artistName?: string;
   prefetchedData?: LyricDanceData | null;
   visible?: boolean;
-  regionStart?: number;
-  regionEnd?: number;
   postId?: string;
   lyricDanceUrl?: string | null;
   spotifyTrackId?: string | null;
@@ -46,8 +44,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   artistName,
   prefetchedData,
   visible,
-  regionStart,
-  regionEnd,
   postId,
   lyricDanceUrl = null,
   spotifyTrackId,
@@ -59,22 +55,16 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   preload = false,
 }, ref) {
   const isFeedEmbed = visible !== undefined;
-  const isBattleMode = regionStart != null && regionEnd != null;
-
   const [evicted, setEvicted] = useState(true);
 
   useEffect(() => {
-    if (!isFeedEmbed || isBattleMode) {
+    if (!isFeedEmbed) {
       setEvicted(false);
       return;
     }
     setEvicted(!visible);
-  }, [visible, isFeedEmbed, isBattleMode]);
+  }, [visible, isFeedEmbed]);
 
-  const prefetchedDataWithRegion = useMemo(() => {
-    if (!isBattleMode || !prefetchedData) return prefetchedData;
-    return { ...prefetchedData, region_start: regionStart, region_end: regionEnd };
-  }, [prefetchedData, isBattleMode, regionStart, regionEnd]);
 
   const {
     canvasRef,
@@ -93,7 +83,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     activeLine,
   } = useLyricDanceCore({
     lyricDanceId,
-    prefetchedData: prefetchedDataWithRegion,
+    prefetchedData,
     postId,
     usePool: isFeedEmbed,
     evicted,
@@ -349,7 +339,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       </div>
 
       {/* LyricInteractionLayer — dance mode only, outside the canvas slot */}
-      {!isBattleMode && (
+      {(
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
           <LyricInteractionLayer
             moments={moments}

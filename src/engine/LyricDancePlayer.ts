@@ -135,9 +135,9 @@ export interface LyricDanceData {
   cover_image_url?: string | null;
   top_reaction?: { emoji: string; count: number; line_text: string } | null;
   preview_ready?: boolean;
-  /** Optional: constrain playback to start at this time (seconds). Used by hook battles. */
+  /** Optional: constrain playback to start at this time (seconds). */
   region_start?: number;
-  /** Optional: constrain playback to end at this time (seconds). Used by hook battles. */
+  /** Optional: constrain playback to end at this time (seconds). */
   region_end?: number;
 }
 
@@ -1686,7 +1686,7 @@ export class LyricDancePlayer {
   // ═══ PERF: sort-skip when visible set is unchanged
   private _lastSortHash = 0;
 
-  /** Pixel offset to shift text UP — compensates for bottom overlay (playbar, battle bar) */
+  /** Pixel offset to shift text UP — compensates for bottom overlay (playbar) */
   private _textVerticalBias = 0;
 
   // Comment comets
@@ -1794,7 +1794,7 @@ export class LyricDancePlayer {
     this.audio.muted = true;
     this.audio.preload = "none";
     this.bootMode = options?.bootMode ?? "minimal";
-    // Single engine per battle card — no forced quality reduction needed.
+
     this._handleVisibilityChange = this._handleVisibilityChangeImpl.bind(this);
     document.addEventListener("visibilitychange", this._handleVisibilityChange);
 
@@ -2278,8 +2278,8 @@ export class LyricDancePlayer {
     this._playPromise = null;
   }
 
-  /** Stop the visual render loop without pausing audio. Used by battle mode
-   *  to keep the inactive side's audio buffering while saving CPU on rendering. */
+  /** Stop the visual render loop without pausing audio.
+   *  Keeps inactive surfaces buffering while saving CPU on rendering. */
   stopRendering(): void {
     this.playing = false;
     if (this.rafHandle) {
@@ -2540,7 +2540,7 @@ export class LyricDancePlayer {
 
   /**
    * Swap the render target to a different canvas pair.
-   * Used by battle mode to render one engine to two canvases alternately.
+   * Render one engine to two canvases alternately when needed.
    * Preserves all compiled state — only the output surface changes.
    */
   setRenderTarget(bgCanvas: HTMLCanvasElement, textCanvas: HTMLCanvasElement, container?: HTMLDivElement): void {
@@ -2626,7 +2626,7 @@ export class LyricDancePlayer {
     this.audio.muted = muted;
   }
 
-  /** Set vertical text bias in canvas pixels — shifts text up to account for bottom overlays (playbar, battle bar). */
+  /** Set vertical text bias in canvas pixels — shifts text up to account for bottom overlays (playbar). */
   setTextVerticalBias(px: number): void {
     this._textVerticalBias = px;
   }

@@ -198,7 +198,6 @@ interface ShareablePrefetchResult {
 }
 
 let shareableDancePrefetch: ShareablePrefetchResult | null = null;
-let shareableHookPrefetch: Promise<{ data: any; error: any }> | null = null;
 
 if (_segments.length === 3 && _segments[2] === "lyric-dance") {
   const [artistSlug, songSlug] = _segments;
@@ -243,21 +242,6 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
   }
 
   shareableDancePrefetch = { data: dataPromise, audioPreloaded: true };
-} else if (
-  _segments.length === 3 &&
-  _segments[2] !== "lyric-dance" &&
-  _segments[2] !== "claim-page"
-) {
-  const [artistSlug, songSlug, hookSlug] = _segments;
-  shareableHookPrefetch = Promise.resolve(supabase
-    .from("shareable_hooks" as any)
-    .select(
-      "id,battle_id,hook_start,hook_end,hook_slug,hook_phrase,artist_slug,song_slug,artist_name,song_name,audio_url,palette,vote_count,battle_position,hook_label,user_id"
-    )
-    .eq("artist_slug", artistSlug)
-    .eq("song_slug", songSlug)
-    .eq("hook_slug", hookSlug)
-    .maybeSingle());
 }
 
 export function consumeShareableDancePrefetch() {
@@ -267,11 +251,6 @@ export function consumeShareableDancePrefetch() {
 }
 
 
-export function consumeShareableHookPrefetch() {
-  const p = shareableHookPrefetch;
-  shareableHookPrefetch = null;
-  return p;
-}
 
 /** True when the current page is a lightweight embed/shareable route. */
 export const isEmbedRoute = _isEmbedRoute;

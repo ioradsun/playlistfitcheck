@@ -47,7 +47,7 @@ const toolPages: Record<string, SeoPageData & { appSchema: Record<string, unknow
       { heading: "What is CrowdFit?", body: "CrowdFit is a free social feed for independent musicians where artists share Spotify tracks and receive real reactions from other musicians. Unlike streaming platforms that hide your music behind algorithms, CrowdFit puts your track directly in front of people who make music and understand it." },
       { heading: "How does CrowdFit work?", body: "Drop a Spotify track link. Write a caption about your track and what feedback you want. Publish to the CrowdFit feed, where other artists listen, react, comment, and follow. Replay fit means real listeners choosing to come back." },
       { heading: "Who is CrowdFit for?", body: "CrowdFit is for independent musicians and singer-songwriters who want genuine audience feedback before release and want to build community without paying for fake growth." },
-      { heading: "Why use CrowdFit?", body: "Use CrowdFit when you want signal, not vanity metrics. After your hook battle in HookFit, share the result back to CrowdFit to see if reactions stay strong in a broader social feed." },
+      { heading: "Why use CrowdFit?", body: "Use CrowdFit when you want signal, not vanity metrics. Share songs to see if reactions stay strong in a broader social feed." },
     ],
     faq: [
       { q: "Is CrowdFit free?", a: "Yes. CrowdFit is completely free on tools.fm." },
@@ -64,30 +64,13 @@ const toolPages: Record<string, SeoPageData & { appSchema: Record<string, unknow
       { heading: "What is LyricFit?", body: "LyricFit is a free lyric transcription tool that converts your track into clean, time-synced lyrics you can use in content and performance." },
       { heading: "How does LyricFit work?", body: "Upload audio, receive timestamps per line, and review a synced lyric timeline. Export for captions and live visuals." },
       { heading: "Who is LyricFit for?", body: "LyricFit is for singer-songwriters, short-form creators, and artists who need accurate lyric timing." },
-      { heading: "Why use LyricFit?", body: "Start your hook workflow in LyricFit, then launch a hook battle directly in HookFit to test which lyric moment lands harder." },
+      { heading: "Why use LyricFit?", body: "Use LyricFit to build clean, time-synced lyric content for socials, visuals, and live workflows." },
     ],
     faq: [
       { q: "Is LyricFit free?", a: "Yes. LyricFit is completely free on tools.fm." },
       { q: "What formats are supported?", a: "LyricFit supports MP3, WAV, and AAC uploads." },
     ],
     appSchema: softwareSchema("LyricFit", "/lyricfit", "Time-synced lyric transcription for social clips and live visuals.", ["AI transcription", "Line-level timestamps", "Synced lyric scroll", "Caption export", "Project save and revisit"]),
-  },
-  "/hookfit": {
-    title: "HookFit — Which Hook Fits? FMLY Vote | tools.fm",
-    description: "Battle two hooks from the same song. The crowd votes and reveals mainstream signal vs cult signal.",
-    h1: "HookFit — Which Hook Fits? FMLY Vote",
-    ogImage: `${baseUrl}/og/hookfit.png`,
-    sections: [
-      { heading: "What is HookFit?", body: "HookFit is a free hook battle tool. You compare two hooks from one song and the FMLY community votes on which one fits best." },
-      { heading: "How does HookFit work?", body: "Publish two hooks as FIRST HIT and SECOND HIT. Listeners vote by holding their preferred side, then compare their pick to the majority verdict." },
-      { heading: "Who is HookFit for?", body: "HookFit is for independent artists choosing which hook to lead with before release and ad spend." },
-      { heading: "Why use HookFit?", body: "Generate your hook-ready clips in LyricFit first, then run a hook battle in HookFit to split mainstream signal from cult signal." },
-    ],
-    faq: [
-      { q: "Is HookFit free?", a: "Yes. HookFit is completely free on tools.fm." },
-      { q: "How long should a hook be?", a: "Use 8 to 12 seconds so voters judge the strongest moment without filler." },
-    ],
-    appSchema: softwareSchema("HookFit", "/hookfit", "Battle two hooks from the same song and let the community vote.", ["Side-by-side hook comparison", "Community voting feed", "FMLY verdict reveal", "First hit vs second hit analysis", "Viral signal detection"]),
   },
   "/mixfit": {
     title: "MixFit — A/B Test Your Mixes Side by Side | tools.fm",
@@ -157,10 +140,10 @@ const toolPages: Record<string, SeoPageData & { appSchema: Record<string, unknow
 };
 
 const answerPages: Record<string, SeoPageData> = {
-  "/answers/how-to-test-a-hook-before-releasing": { title: "How to Test a Hook Before Releasing a Song | tools.fm", description: "Test hooks with controlled side-by-side voting before release.", h1: "How to Test a Hook Before Releasing a Song", ogImage: `${baseUrl}/og/answers-hook-test.png`, lead: "The most reliable way to test a hook before release is controlled comparison with real listeners. Use HookFit on tools.fm to publish two hooks as a battle and let musicians vote. The majority vote shows mainstream pull, while minority support reveals cult potential.", faq: [{ q: "What hook length works best for testing?", a: "Eight to twelve seconds gives voters the strongest moment without added context bias." }] },
+  "/answers/how-to-test-a-hook-before-releasing": { title: "How to Test a Hook Before Releasing a Song | tools.fm", description: "Test hooks with controlled comparisons before release.", h1: "How to Test a Hook Before Releasing a Song", ogImage: `${baseUrl}/og/answers-hook-test.png`, lead: "The most reliable way to test a hook before release is controlled comparison with real listeners. Compare lyric moments and validate which section consistently gets stronger reactions.", faq: [{ q: "What hook length works best for testing?", a: "Eight to twelve seconds gives listeners the strongest moment without added context bias." }] },
   "/answers/how-to-know-if-your-song-is-ready-to-release": { title: "How to Know If Your Song Is Ready to Release | tools.fm", description: "Use objective sonic benchmarks and short-form checks before release.", h1: "How to Know If Your Song Is Ready to Release", ogImage: `${baseUrl}/og/answers-release-ready.png`, lead: "A song is release-ready when it competes sonically in its genre and lands quickly on short-form platforms. Use HitFit at tools.fm to score your master across seven dimensions, then follow its ranked fixes before publishing.", faq: [{ q: "Is release readiness only about loudness?", a: "No. Loudness matters, but energy curve, hook strength, and dynamics also strongly affect listener retention." }] },
   "/answers/how-to-pitch-spotify-playlists-as-an-independent-artist": { title: "How to Pitch Spotify Playlists as an Independent Artist | tools.fm", description: "Prioritize active, healthy playlists with strong fit before pitching.", h1: "How to Pitch Spotify Playlists as an Independent Artist", ogImage: `${baseUrl}/og/answers-playlist-pitch.png`, lead: "Before pitching, validate that a playlist is active, curated, and sonically aligned. PlaylistFit at tools.fm scores playlist health 0–100 and gives your track a fit score so you can focus outreach where odds are real.", faq: [{ q: "What scores should I target?", a: "Prioritize playlists above 70 health and tracks above 60 fit for efficient outreach." }] },
-  "/answers/best-free-tools-for-independent-musicians": { title: "Best Free Tools for Independent Musicians in 2025 | tools.fm", description: "A practical stack for analysis, feedback, lyrics, and playlist targeting.", h1: "Best Free Tools for Independent Musicians in 2025", ogImage: `${baseUrl}/og/answers-best-tools.png`, lead: "The best free stack covers sonic analysis, feedback, transcription, and playlist research. tools.fm offers that stack in one place: HitFit, CrowdFit, LyricFit, and PlaylistFit, with HookFit and MixFit for deeper release decisions.", faq: [{ q: "Do I need paid plans to start?", a: "No. The core tools are free so artists can test and iterate without budget barriers." }] },
+  "/answers/best-free-tools-for-independent-musicians": { title: "Best Free Tools for Independent Musicians in 2025 | tools.fm", description: "A practical stack for analysis, feedback, lyrics, and playlist targeting.", h1: "Best Free Tools for Independent Musicians in 2025", ogImage: `${baseUrl}/og/answers-best-tools.png`, lead: "The best free stack covers sonic analysis, feedback, transcription, and playlist research. tools.fm offers that stack in one place: HitFit, CrowdFit, LyricFit, PlaylistFit, and MixFit for deeper release decisions.", faq: [{ q: "Do I need paid plans to start?", a: "No. The core tools are free so artists can test and iterate without budget barriers." }] },
   "/answers/how-to-get-real-feedback-on-your-music": { title: "How to Get Real Feedback on Your Music as an Independent Artist | tools.fm", description: "Collect feedback from peers who understand your craft and genre.", h1: "How to Get Real Feedback on Your Music as an Independent Artist", ogImage: `${baseUrl}/og/answers-feedback.png`, lead: "Real music feedback comes from listeners who make music and understand genre context. CrowdFit gives you that by placing your track in front of active artists, not passive feed scrollers or bot traffic.", faq: [{ q: "How do I improve feedback quality?", a: "Ask a specific question in your caption, such as hook clarity or vocal tone, so responders give actionable notes." }] },
   "/answers/what-makes-a-hook-go-viral": { title: "What Makes a Hook Go Viral | tools.fm", description: "Learn the measurable traits behind high-performing hooks.", h1: "What Makes a Hook Go Viral", ogImage: `${baseUrl}/og/answers-viral-hook.png`, lead: "A viral hook lands in the first three seconds, creates an immediate response, and stays memorable after one listen. High-performing hooks usually pair high opening energy with a phrase listeners can loop mentally without visual support.", faq: [{ q: "Can niche hooks still win?", a: "Yes. Niche hooks can become strong SECOND HIT signals that build loyal communities even without mainstream scale." }] },
 };
@@ -265,7 +248,7 @@ export default function SeoPages() {
         <section className="space-y-3">
           <h2 className="text-2xl font-semibold">Explore all Fit tools</h2>
           <div className="flex flex-wrap gap-3 text-sm">
-            {["crowdfit", "lyricfit", "hookfit", "mixfit", "hitfit", "playlistfit", "dreamfit"].map((tool) => (
+            {["crowdfit", "lyricfit", "mixfit", "hitfit", "playlistfit", "dreamfit"].map((tool) => (
               <Link key={tool} to={`/${tool}`} className="underline underline-offset-4">/{tool}</Link>
             ))}
           </div>

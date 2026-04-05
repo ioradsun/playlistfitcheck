@@ -4,7 +4,7 @@
  * Responsibilities:
  *  - Initial fetch (with optional prefetch consumption)
  *  - Cursor-based infinite scroll (loadMore)
- *  - Feed view filtering (all / now_streaming / in_studio / in_battle)
+ *  - Feed view filtering (all / now_streaming / in_studio)
  *  - Billboard scoring (client-side, from reviews/comments/follows/saves)
  *  - Lyric dance data hydration (full columns with cached reuse)
  *  - Realtime new-post counter
@@ -30,7 +30,6 @@ function matchesView(p: SongFitPost, view: FeedView): boolean {
   if (view === "all" || view === "billboard") return true;
   if (view === "now_streaming") return !!p.spotify_track_id;
   if (view === "in_studio") return !!p.lyric_dance_url && !!p.lyric_dance_id;
-  if (view === "in_battle") return !!p.lyric_dance_url && !p.lyric_dance_id;
   return true;
 }
 

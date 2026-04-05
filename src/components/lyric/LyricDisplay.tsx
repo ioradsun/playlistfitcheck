@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Zap,
@@ -9,7 +9,6 @@ import {
   Repeat2,
   MoreHorizontal,
   RotateCcw,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +34,6 @@ import {
   type SocialPreset,
 } from "./LyricFormatControls";
 import { FmlyFriendlyPanel } from "./FmlyFriendlyPanel";
-import { PublishHookButton } from "./PublishHookButton";
 // PublishLyricDanceButton removed — publishing handled by FitTab
 import {
   applyProfanityFilter,
@@ -43,7 +41,6 @@ import {
   type ProfanityReport,
 } from "@/lib/profanityFilter";
 import { ensureFontReady } from "@/lib/fontReadinessCache";
-import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type {
   ArtistDNA,
@@ -304,8 +301,6 @@ export function LyricDisplay({
   const { user, roles } = useAuth();
   const siteCopy = useSiteCopy();
   const features = (siteCopy as any)?.features;
-  const hookfitEnabled = features?.tools_enabled?.hookfit !== false;
-  const hottestHooksEnabled = features?.hookfit_hottest_hooks !== false;
   const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
   const { decodeFile, play, stop, playingId, getPlayheadPosition } =
     useAudioEngine();
@@ -397,8 +392,6 @@ export function LyricDisplay({
   const [artistFingerprint, setArtistFingerprint] = useState<ArtistDNA | null>(
     null,
   );
-  const [battlePopupUrl, setBattlePopupUrl] = useState<string | null>(null);
-
 
   // Load fingerprint + display name from profile
   const [profileDisplayName, setProfileDisplayName] = useState<string>("—");
@@ -1423,30 +1416,6 @@ export function LyricDisplay({
              </div>
            )}
 
-           {/* Publish Hook Battle / Hook Page — below both hooks */}
-           {hottestHooksEnabled && (renderData?.hook || renderData?.secondHook) && renderData?.motionProfileSpec && beatGrid && (
-             <PublishHookButton
-               hook={renderData.hook}
-               secondHook={renderData.secondHook || null}
-               hookLabel={renderData.hookLabel}
-               secondHookLabel={renderData.secondHookLabel}
-               motionProfileSpec={renderData.motionProfileSpec as PhysicsSpec}
-               lines={data.lines}
-               beatGrid={{
-                 bpm: beatGrid.bpm,
-                 beats: beatGrid.beats,
-                 confidence: beatGrid.confidence,
-               }}
-               audioFile={audioFile}
-               songTitle={data.title}
-               system={renderData.motionProfileSpec.system}
-               palette={
-                 renderData.motionProfileSpec.palette || ["#ffffff", "#a855f7", "#ec4899"]
-               }
-               fingerprint={artistFingerprint}
-               onViewBattle={(url) => setBattlePopupUrl(url)}
-             />
-           )}
          </div>
        </div>
 
@@ -1455,34 +1424,6 @@ export function LyricDisplay({
          </div>
 
        <SignUpToSaveBanner />
-
-
-
-
-      {/* Battle Page Popup Overlay */}
-      <AnimatePresence>
-        {battlePopupUrl && (
-          <motion.div
-            className="fixed inset-0 z-[100] bg-black"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <iframe
-              src={battlePopupUrl}
-              className="absolute inset-0 w-full h-full border-0"
-              allow="autoplay"
-            />
-            <button
-              onClick={() => setBattlePopupUrl(null)}
-              className="absolute top-4 right-4 z-10 text-white/60 hover:text-white transition-colors"
-            >
-              <X size={24} />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }
