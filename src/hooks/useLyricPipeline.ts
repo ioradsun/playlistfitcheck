@@ -466,6 +466,7 @@ export type UseLyricPipelineReturn = {
   setGenerationStatus: React.Dispatch<React.SetStateAction<GenerationStatus>>;
   spotifyTrackId?: string | null;
   setSpotifyTrackId?: React.Dispatch<React.SetStateAction<string | null>>;
+  savedId?: string | null;
 };
 
 interface UseLyricPipelineParams {

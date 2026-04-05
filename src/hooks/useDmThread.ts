@@ -126,7 +126,7 @@ export function useDmThread(partnerUserId: string | null) {
 
       if (threadError || !thread) return;
 
-      const tid = (thread as { id: string }).id;
+      const tid = (thread as any as { id: string }).id;
       setThreadId(tid);
 
       const text = content.trim();
