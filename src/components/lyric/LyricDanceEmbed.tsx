@@ -313,7 +313,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             onFireLine={(lineIndex, timeSec) => {
               if (!danceId) return;
               player?.fireFire(0);
-              emitFire(danceId, lineIndex, timeSec, 0, "feed");
+              emitFire(danceId, lineIndex, timeSec, 0, "feed", userId ?? null);
             }}
           />
         )}
@@ -355,7 +355,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               }
               if (!danceId || !activeLine) return;
               player?.fireFire(0);
-              emitFire(danceId, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "feed");
+              emitFire(danceId, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "feed", userId ?? null);
             }}
             onFireHoldStart={() => {
               if (holdFireIntervalRef.current) return;
@@ -368,7 +368,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               }
               if (!danceId || !activeLine) return;
               player?.fireFire(holdMs);
-              emitFire(danceId, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
+              emitFire(danceId, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed", userId ?? null);
             }}
             onSeekTo={seekOnly}
           />
