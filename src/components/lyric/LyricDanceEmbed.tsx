@@ -9,7 +9,7 @@ import { LyricModePanel } from "@/components/lyric/LyricModePanel";
 import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
 import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 
-import { emitFire, fetchFireData } from "@/lib/fire";
+import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { audioController } from "@/lib/audioController";
 import { isGlobalMuted } from "@/lib/globalMute";
@@ -111,6 +111,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [activeMomentIdx, setActiveMomentIdx] = useState(0);
   const [cardMode, setCardMode] = useState<CardMode>("dance");
+  const playStartRef = useRef<number | null>(null);
+  const totalDurationRef = useRef<number>(0);
+  const everUnmutedRef = useRef<boolean>(false);
+  const maxProgressRef = useRef<number>(0);
+  const playCountRef = useRef<number>(0);
+  const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
@@ -190,6 +196,56 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       player.audio.loop = false;
     }
   }, [currentTimeSec, durationSec, closingVisible, player]);
+
+  const flushPlay = useCallback(() => {
+    if (!danceId || !durationSec) return;
+    const progressPct = durationSec > 0
+      ? (currentTimeSec / durationSec) * 100
+      : 0;
+    maxProgressRef.current = Math.max(maxProgressRef.current, progressPct);
+    upsertPlay(danceId, {
+      progressPct: maxProgressRef.current,
+      wasMuted: !everUnmutedRef.current,
+      durationSec: totalDurationRef.current,
+      playCount: playCountRef.current,
+      userId: userId ?? null,
+    });
+  }, [danceId, durationSec, currentTimeSec, userId]);
+
+  useEffect(() => {
+    if (!visible || !danceId || !isFeedEmbed) return;
+
+    playCountRef.current += 1;
+    playStartRef.current = Date.now();
+
+    flushIntervalRef.current = setInterval(() => {
+      if (playStartRef.current !== null) {
+        totalDurationRef.current += (Date.now() - playStartRef.current) / 1000;
+        playStartRef.current = Date.now();
+      }
+      flushPlay();
+    }, 10_000);
+
+    return () => {
+      if (playStartRef.current !== null) {
+        totalDurationRef.current += (Date.now() - playStartRef.current) / 1000;
+        playStartRef.current = null;
+      }
+      if (flushIntervalRef.current) {
+        clearInterval(flushIntervalRef.current);
+        flushIntervalRef.current = null;
+      }
+      flushPlay();
+    };
+  }, [visible, danceId, isFeedEmbed, flushPlay]);
+
+  const prevFeedMutedRef = useRef<boolean>(true);
+  useEffect(() => {
+    if (prevFeedMutedRef.current && !feedMuted) {
+      everUnmutedRef.current = true;
+    }
+    prevFeedMutedRef.current = feedMuted;
+  }, [feedMuted]);
 
   const seekOnly = useCallback((timeSec: number) => {
     if (!moments.length) {

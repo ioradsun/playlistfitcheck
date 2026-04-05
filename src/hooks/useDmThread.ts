@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 export type ActivityEventKind =
   | "fire"
+  | "play"
   | "lyric_comment"
   | "post_comment"
   | "save"
@@ -20,6 +21,10 @@ export interface ActivityEvent {
   time_sec?: number;
   hold_ms?: number;
   fire_count?: number;
+  max_progress_pct?: number;
+  play_count?: number;
+  duration_sec?: number;
+  was_muted?: boolean;
   text?: string;
   sender_id?: string;
   is_read?: boolean;
