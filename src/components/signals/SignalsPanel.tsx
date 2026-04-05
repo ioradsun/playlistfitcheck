@@ -106,8 +106,8 @@ export function SignalsPanel() {
         </div>
       ) : pendingThread ? (
         <div
-          className="flex"
           style={{
+            display: "flex",
             flex: 1,
             alignItems: "center",
             justifyContent: "center",

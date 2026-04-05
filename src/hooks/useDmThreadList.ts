@@ -14,10 +14,6 @@ export interface DmThreadSummary {
   last_message_is_mine: boolean;
 }
 
-interface DmThreadListResponse {
-  threads?: DmThreadSummary[];
-}
-
 export function useDmThreadList() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<DmThreadSummary[]>([]);
@@ -30,8 +26,7 @@ export function useDmThreadList() {
     try {
       const { data, error } = await supabase.functions.invoke("get-dm-threads");
       if (!error && data) {
-        const payload = data as DmThreadListResponse;
-        setThreads(payload.threads ?? []);
+        setThreads((data as { threads?: DmThreadSummary[] }).threads ?? []);
       }
     } finally {
       setLoading(false);
