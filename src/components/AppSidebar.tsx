@@ -3,7 +3,7 @@ import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSiteCopySelector } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
-import { useDmThreadList } from "@/hooks/useDmThreadList";
+import { useDmContext } from "@/hooks/useDmContext";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -100,8 +100,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   const location = useLocation();
   const { state: sidebarState, setOpenMobile, isMobile } = useSidebar();
   const { toggleSidebar } = useSidebar();
-  const { threads } = useDmThreadList();
-  const unreadCount = threads.reduce((sum, thread) => sum + thread.unread_count, 0);
+  const { unreadCount } = useDmContext();
   const { number: pioneerNumber, isBlazer } = useFmlyNumber(user?.id);
   const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";

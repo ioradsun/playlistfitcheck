@@ -1,4 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
+import { PartnerAvatar } from "@/components/signals/PartnerAvatar";
 import type { DmThreadSummary } from "@/hooks/useDmThreadList";
 
 interface Props {
@@ -43,7 +44,7 @@ export function DmThreadList({
         </p>
       </div>
 
-      {loading && (
+      {loading && threads.length === 0 && (
         <p
           style={{
             padding: 20,
@@ -101,30 +102,11 @@ export function DmThreadList({
             }}
           >
             <div style={{ position: "relative", flexShrink: 0 }}>
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  overflow: "hidden",
-                  background: "rgba(255,255,255,0.08)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {thread.partner_avatar ? (
-                  <img
-                    src={thread.partner_avatar}
-                    alt=""
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                ) : (
-                  <span style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>
-                    {(thread.partner_name?.[0] ?? "?").toUpperCase()}
-                  </span>
-                )}
-              </div>
+              <PartnerAvatar
+                name={thread.partner_name}
+                avatarUrl={thread.partner_avatar}
+                size={36}
+              />
               {hasUnread && (
                 <span
                   style={{
