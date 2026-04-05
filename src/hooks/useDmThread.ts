@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -41,7 +41,6 @@ export function useDmThread(partnerUserId: string | null) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const load = useCallback(async () => {
     if (!user || !partnerUserId) return;
@@ -86,29 +85,27 @@ export function useDmThread(partnerUserId: string | null) {
             created_at: string;
             is_read: boolean;
           };
-          setEvents((prev) => [
-            ...prev,
-            {
-              id: msg.id,
-              kind: "message",
-              direction: msg.sender_id === user?.id ? "outgoing" : "incoming",
-              created_at: msg.created_at,
-              text: msg.content,
-              sender_id: msg.sender_id,
-              is_read: msg.is_read,
-            },
-          ]);
+          setEvents((prev) => {
+            if (prev.some((e) => e.id === msg.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: msg.id,
+                kind: "message",
+                direction: msg.sender_id === user?.id ? "outgoing" : "incoming",
+                created_at: msg.created_at,
+                text: msg.content,
+                sender_id: msg.sender_id,
+                is_read: msg.is_read,
+              },
+            ];
+          });
         },
       )
       .subscribe();
 
-    channelRef.current = channel;
-
     return () => {
-      if (channelRef.current) {
-        void supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      void supabase.removeChannel(channel);
     };
   }, [threadId, user?.id]);
 
