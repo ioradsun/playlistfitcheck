@@ -13,7 +13,6 @@ const DEFAULT_COPY: SiteCopy = {
     lyric: { label: "LyricFit", pill: "Where your lyrics fit timing.", heading: "Get Perfectly Timed Lyrics For Every Drop", cta: "Sync Lyrics" },
     hitfit: { label: "HitFit", pill: "See if your song fits the Top 10.", heading: "Compare Your Track to Your Target Sound", cta: "Analyze" },
     dreamfit: { label: "DreamFit", pill: "Let's build the next Fit together." },
-    hookfit: { label: "HookFit", pill: "Get the hook that fits social." },
   },
   about: {
     origin_intro: "",
@@ -93,8 +92,6 @@ export interface SiteCopy {
     tools_order?: string[];
     
     lyric_video?: boolean;
-    hookfit_enabled?: boolean;
-    hookfit_hottest_hooks?: boolean;
     fmly_hook?: boolean;
   };
   signals: {

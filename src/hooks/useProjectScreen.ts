@@ -20,7 +20,6 @@ import { useMemo } from "react";
 
 export type Tool =
   | "songfit"
-  | "hookfit"
   | "lyric"
   | "mix"
   | "hitfit"
@@ -41,7 +40,6 @@ export interface ProjectScreen {
 
 export const PATH_TO_TOOL: Record<string, Tool> = {
   "/CrowdFit":    "songfit",
-  "/HookFit":     "hookfit",
   "/SongFit":     "songfit",   // legacy redirect support
   "/ProFit":      "profit",
   "/PlaylistFit": "playlist",

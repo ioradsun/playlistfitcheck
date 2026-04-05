@@ -7,19 +7,16 @@ export const LyricFitTabImport = () => import("@/components/lyric/LyricFitTab");
 export const HitFitTabImport = () => import("@/components/hitfit/HitFitTab");
 export const ProFitTabImport = () => import("@/components/profit/ProFitTab");
 export const SongFitTabImport = () => import("@/components/songfit/SongFitTab");
-export const HookFitTabImport = () => import("@/components/hookfit/HookFitTab");
 export const DreamFitTabImport = () => import("@/components/dreamfit/DreamFitTab");
 export const VibeFitTabImport = () => import("@/components/vibefit/VibeFitTab");
 export const AppSidebarImport = () => import("@/components/AppSidebar");
 
 export const AdminPageImport = () => import("@/pages/Admin");
-export const ShareableHookImport = () => import("@/pages/ShareableHook");
 export const ShareableLyricDanceImport = () => import("@/pages/ShareableLyricDance");
 
 const ROUTE_CHUNK_PREFETCH: Record<string, () => Promise<unknown>> = {
   "/CrowdFit": SongFitTabImport,
   "/SongFit": SongFitTabImport,
-  "/HookFit": HookFitTabImport,
   "/HitFit": HitFitTabImport,
   "/VibeFit": VibeFitTabImport,
   "/ProFit": ProFitTabImport,

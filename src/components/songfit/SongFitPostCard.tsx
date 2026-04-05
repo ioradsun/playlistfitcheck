@@ -3,10 +3,8 @@
  *
  * Two media types:
  *   1. In Studio     — LyricDanceEmbed (has lyric_dance_id)
- *   2. In Battle     — BattleEmbed     (has lyric_dance_url, no lyric_dance_id)
  *
  * Supports reels mode (full-height, snap) and standard mode.
- * LyricDance and Battle embeds own their own reaction/battle panels.
  */
 import { useState } from "react";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -30,7 +28,6 @@ import {
 import { TipButton } from "@/components/crypto/TipButton";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
-import { BattleEmbed } from "@/components/hookfit/BattleEmbed";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { supabase } from "@/integrations/supabase/client";
@@ -88,7 +85,6 @@ export function SongFitPostCard({
   const siteCopy = useSiteCopy();
   const navigate = useNavigate();
   const cryptoEnabled = siteCopy.features?.crypto_tipping ?? false;
-  const hottestHooksEnabled = siteCopy.features?.hookfit_hottest_hooks !== false;
 
   // ── Local UI state ──
   const [liked, setLiked] = useState(post.user_has_liked ?? false);
@@ -106,8 +102,7 @@ export function SongFitPostCard({
   // ── Derived ──
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDance = !!(post.lyric_dance_url && post.lyric_dance_id);
-  const isBattle = hottestHooksEnabled && !!(post.lyric_dance_url && !post.lyric_dance_id);
-  const isSpotifyOnly = !hasLyricDance && !isBattle && !!post.spotify_track_id && !post.lyric_dance_url;
+  const isSpotifyOnly = !hasLyricDance && !!post.spotify_track_id && !post.lyric_dance_url;
   const displayName = post.profiles?.display_name || "Anonymous";
   if (isSpotifyOnly) return null;
 
@@ -265,23 +260,6 @@ export function SongFitPostCard({
                 preload={preload}
               />
             </div>
-          ) : isBattle ? (
-            <div className="relative overflow-hidden" style={reelsMode ? { height: "100%" } : { height: 320 }}>
-              <BattleEmbed
-                battleUrl={post.lyric_dance_url!}
-                postId={post.id}
-                songTitle={post.track_title}
-                showSplitCover={true}
-                visible={visible}
-                initialVotedSide={(post as any).voted_side ?? null}
-                avatarUrl={post.profiles?.avatar_url}
-                displayName={displayName}
-                spotifyArtistId={(post.profiles as any)?.spotify_artist_id}
-                isVerified={(post.profiles as any)?.is_verified}
-                userId={post.user_id}
-                onProfileClick={handleProfileClick}
-              />
-            </div>
           ) : (
             null
           )}
@@ -326,7 +304,7 @@ export function SongFitPostCard({
             )}
 
             {/* ── Action row (non-embed posts only, standard mode) ── */}
-            {!hasLyricDance && !isBattle && !reelsMode && (
+            {!hasLyricDance && !reelsMode && (
               <div className="relative flex items-center justify-between px-1 py-1">
                 <div className="flex items-center">
                   <ActionBtn icon={<MessageCircle size={17} />} count={post.comments_count} onClick={() => { if (user) logEngagementEvent(post.id, user.id, "comment"); }} />

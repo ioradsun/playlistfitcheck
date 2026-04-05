@@ -36,7 +36,6 @@ import {
   AppSidebarImport,
   DreamFitTabImport,
   HitFitTabImport,
-  HookFitTabImport,
   LyricFitTabImport,
   MixFitCheckImport,
   ProFitTabImport,
@@ -73,9 +72,6 @@ const SongFitTab = lazy(() =>
         /* @vite-ignore */ `../components/songfit/SongFitTab.tsx?t=${Date.now()}`
       ) as ReturnType<typeof SongFitTabImport>,
   ).then((module) => ({ default: module.SongFitTab })),
-);
-const HookFitTab = lazy(() =>
-  HookFitTabImport().then((module) => ({ default: module.HookFitTab })),
 );
 const DreamFitTab = lazy(() =>
   DreamFitTabImport().then((module) => ({ default: module.DreamFitTab })),
@@ -130,7 +126,6 @@ const SidebarShell = () => (
 // PATH_TO_TAB is kept for URL → tab syncing in useEffect
 const PATH_TO_TAB: Record<string, string> = {
   "/CrowdFit": "songfit",
-  "/HookFit": "hookfit",
   "/SongFit": "songfit",
   "/ProFit": "profit",
   "/PlaylistFit": "playlist",
@@ -152,7 +147,6 @@ const Index = () => {
   const TAB_SUBTITLES: Record<string, string> = Object.fromEntries(
     Object.entries(siteCopy.tools).map(([k, v]) => [k, v.pill]),
   );
-  const hookfitEnabled = siteCopy.features?.tools_enabled?.hookfit !== false;
   const isMobile = useIsMobile();
   const location = useLocation();
   const navigate = useNavigate();
@@ -172,10 +166,7 @@ const Index = () => {
   const basePath = location.pathname.replace(/\/[0-9a-f-]{36}$/, "");
   const rawTabFromPath =
     PATH_TO_TAB[basePath] || PATH_TO_TAB[location.pathname] || "songfit";
-  const tabFromPath =
-    !hookfitEnabled && rawTabFromPath === "hookfit"
-      ? "songfit"
-      : rawTabFromPath;
+  const tabFromPath = rawTabFromPath;
   const [activeTab, setActiveTabState] = useState(tabFromPath);
   const reelsMode = isMobile && activeTab === "songfit";
   const [reelsScrolled, setReelsScrolled] = useState(false);
@@ -187,15 +178,9 @@ const Index = () => {
   useEffect(() => {
     const bp = location.pathname.replace(/\/[0-9a-f-]{36}$/, "");
     const tRaw = PATH_TO_TAB[bp] || PATH_TO_TAB[location.pathname];
-    const t = !hookfitEnabled && tRaw === "hookfit" ? "songfit" : tRaw;
+    const t = tRaw;
     if (t && t !== activeTab) setActiveTabState(t);
-    if (
-      !hookfitEnabled &&
-      (bp === "/HookFit" || location.pathname === "/HookFit")
-    ) {
-      navigate("/CrowdFit", { replace: true });
-    }
-  }, [location.pathname, hookfitEnabled, activeTab, navigate]);
+  }, [location.pathname, activeTab]);
 
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
 
@@ -462,7 +447,7 @@ const Index = () => {
           data = r.data;
           error = r.error;
         } else {
-          // Tabs without project DB (songfit, hookfit, dreamfit) — nothing to fetch
+          // Tabs without project DB (songfit, dreamfit) — nothing to fetch
           setIsFetchingProject(false);
           return;
         }
@@ -971,7 +956,6 @@ const Index = () => {
 
       const pathMap: Record<string, string> = {
         songfit: "/CrowdFit",
-        hookfit: "/HookFit",
         profit: "/ProFit",
         playlist: "/PlaylistFit",
         mix: "/MixFit",
@@ -1233,15 +1217,6 @@ const Index = () => {
           >
             <Suspense fallback={<PageSkeleton tool="songfit" mode="new" />}>
               <SongFitTab reelsMode={reelsMode} />
-            </Suspense>
-          </div>
-        );
-      case "hookfit":
-        if (!hookfitEnabled) return <PageSkeleton tool="songfit" mode="new" />;
-        return (
-          <div className="flex-1 px-4 py-6">
-            <Suspense fallback={<PageSkeleton tool="hookfit" mode="new" />}>
-              <HookFitTab />
             </Suspense>
           </div>
         );

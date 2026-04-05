@@ -3,17 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { lazy, Suspense } from "react";
-import { ShareableHookImport, ShareableLyricDanceImport } from "@/lib/routePrefetch";
+import { ShareableLyricDanceImport } from "@/lib/routePrefetch";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-// ── Route detection — skip heavy imports on embed routes ──
-const _segs = typeof window !== "undefined"
-  ? window.location.pathname.replace(/^\//, "").split("/").filter(Boolean)
-  : [];
-const _isEmbed = _segs.length === 3;
-
 // ── Embed-only lazy pages ──
-const ShareableHook = lazy(ShareableHookImport);
 const ShareableLyricDance = lazy(ShareableLyricDanceImport);
 const ClaimCreatePage = lazy(() => import("./pages/ClaimCreatePage"));
 const ArtistClaimPage = lazy(() => import("./pages/ArtistClaimPage"));
@@ -33,15 +26,9 @@ const importWithRetry = (importer: () => Promise<any>, retries = 1): Promise<any
     return new Promise(() => {}); // never resolves; page is reloading
   });
 
-const MainAppShell = _isEmbed
-  ? null
-  : lazy(() => importWithRetry(() => import("./MainAppShell")));
+const MainAppShell = lazy(() => importWithRetry(() => import("./MainAppShell")));
 
 const queryClient = new QueryClient();
-
-const HookEmbedFallback = () => (
-  <div className="fixed inset-0 bg-[#0a0a0a] z-50" />
-);
 
 const LyricDanceFallback = () => (
   <div className="fixed inset-0 z-50 flex flex-col items-center justify-end" style={{ background: "#0a0a0a" }}>
@@ -66,18 +53,12 @@ const App = () => {
                 } />
                 <Route path="/create" element={<Suspense fallback={null}><ClaimCreatePage /></Suspense>} />
                 <Route path="/artist/:username/claim-page" element={<Suspense fallback={null}><ArtistClaimPage /></Suspense>} />
-                {/* ── Hook embed: lightweight path ── */}
-                <Route path="/:artistSlug/:songSlug/:hookSlug" element={
-                  <Suspense fallback={<HookEmbedFallback />}><ShareableHook /></Suspense>
-                } />
 
                 {/* ── Main app: full provider tree (lazy-loaded shell) ── */}
                 <Route path="/*" element={
-                  MainAppShell ? (
-                    <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#090a10" }} />}>
-                      <MainAppShell />
-                    </Suspense>
-                  ) : null
+                  <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#090a10" }} />}>
+                    <MainAppShell />
+                  </Suspense>
                 } />
               </Routes>
             </BrowserRouter>

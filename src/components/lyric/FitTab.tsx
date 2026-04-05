@@ -27,7 +27,6 @@ import { getAudioStoragePath } from "@/lib/audioStoragePath";
 import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
-import { HookWaveformPicker } from "./HookWaveformPicker";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { FitExportModal } from "./FitExportModal";
 
@@ -308,8 +307,6 @@ export function FitTab({
       null,
     );
   const siteCopy = useSiteCopy();
-  const hottestHooksEnabled =
-    siteCopy.features?.hookfit_hottest_hooks !== false;
 
   const refetchDanceData = useCallback(() => {
     if (!publishedDanceId) {
@@ -351,11 +348,6 @@ export function FitTab({
   const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
   const [crowdfitToggling, setCrowdfitToggling] = useState(false);
 
-  // ── Battle publish state ──────────────────────────────────────────────
-  const [battlePublishing, setBattlePublishing] = useState(false);
-  const [battlePublishedUrl, setBattlePublishedUrl] = useState<string | null>(
-    null,
-  );
   const [fireStrength, setFireStrength] = useState<
     Array<{
       line_index: number;
@@ -434,28 +426,14 @@ export function FitTab({
       .eq("song_slug", songSlug)
       .maybeSingle();
 
-    const battleP = supabase
-      .from("shareable_hooks" as any)
-      .select("artist_slug, song_slug, hook_slug, battle_id")
-      .eq("user_id", user.id)
-      .eq("song_slug", songSlug)
-      .eq("battle_position", 1)
-      .maybeSingle();
 
-    Promise.all([danceP, battleP]).then(([danceResult, battleResult]) => {
+    danceP.then((danceResult) => {
       const dance = danceResult.data as any;
       if (dance) {
         setPublishedUrl(`/${dance.artist_slug}/${dance.song_slug}/lyric-dance`);
         setPublishedDanceId(dance.id);
         const pubLines = Array.isArray(dance.lyrics) ? dance.lyrics : [];
         setPublishedLyricsHash(computeLyricsHash(pubLines));
-      }
-
-      const battle = battleResult.data as any;
-      if (battle?.battle_id && battle.hook_slug) {
-        setBattlePublishedUrl(
-          `/${battle.artist_slug}/${battle.song_slug}/${battle.hook_slug}`,
-        );
       }
     });
   }, [user, lyricData, computeLyricsHash]);
@@ -963,290 +941,6 @@ export function FitTab({
     sectionImageUrls,
     profile,
   ]);
-
-  // ── Battle publish handler ──────────────────────────────────────────
-  const handleStartBattle = useCallback(
-    async (
-      overrideHooks?: [SavedCustomHook | null, SavedCustomHook | null],
-    ) => {
-      if (!user || battlePublishing || !canCreate) return;
-      const hooks = overrideHooks ?? customHooks;
-      const activeHook0 = hooks[0] ?? renderData?.hook;
-      const activeHook1 = hooks[1] ?? renderData?.secondHook;
-      if (!activeHook0 || !activeHook1 || !audioFile || !lyricData) return;
-      setBattlePublishing(true);
-
-      const slowWarningId2 = setTimeout(() => {
-        toast("Still uploading — large files take longer…");
-      }, 30_000);
-
-      try {
-        const displayName = profile?.display_name || "artist";
-        const artistSlug = slugify(displayName);
-        const songSlug = slugify(lyricData.title || "untitled");
-
-        const deriveHookSlug = (h: any): string => {
-          const hookLines = lyricData.lines.filter(
-            (l) => l.start < h.end && l.end > h.start,
-          );
-          const lastLine = hookLines[hookLines.length - 1];
-          const hookPhrase = lastLine?.text || h.previewText || "hook";
-          return slugify(hookPhrase);
-        };
-
-        const hookSlug = deriveHookSlug(activeHook0);
-
-        if (!artistSlug || !songSlug || !hookSlug) {
-          toast.error("Couldn't generate a valid URL — check song/artist name");
-          setBattlePublishing(false);
-          return;
-        }
-
-        // Look up ANY existing battle for this user + song (not by hookSlug).
-        // This ensures we reuse the same battle_id when hooks change on republish.
-        const { data: existingHooks }: any = await supabase
-          .from("shareable_hooks" as any)
-          .select("id, audio_url, battle_id, hook_slug")
-          .eq("user_id", user.id)
-          .eq("artist_slug", artistSlug)
-          .eq("song_slug", songSlug)
-          .order("battle_position", { ascending: true });
-
-        const existingBattleId = existingHooks?.[0]?.battle_id ?? null;
-        const existingAudioUrl = existingHooks?.[0]?.audio_url ?? null;
-
-        let audioUrl: string;
-        if (existingAudioUrl) {
-          audioUrl = existingAudioUrl;
-        } else {
-          const fileExt = audioFile.name.split(".").pop() || "webm";
-          const storagePath = `${user.id}/${artistSlug}/${songSlug}/${hookSlug}.${fileExt}`;
-          const { error: uploadError } = await supabase.storage
-            .from("audio-clips")
-            .upload(storagePath, audioFile, { upsert: true });
-          if (uploadError) throw uploadError;
-
-          const { data: urlData } = supabase.storage
-            .from("audio-clips")
-            .getPublicUrl(storagePath);
-          audioUrl = urlData.publicUrl;
-        }
-
-        // Reuse existing battle_id — one battle per user+song
-        const battleId = existingBattleId || crypto.randomUUID();
-
-        // Delete old hooks for this battle if they exist (clean slate for new hooks)
-        if (existingHooks && existingHooks.length > 0) {
-          const oldSlugs = existingHooks
-            .map((h: any) => h.hook_slug)
-            .filter(Boolean);
-          const newSlugs = [
-            hookSlug,
-            deriveHookSlug(activeHook1) || `${hookSlug}-2`,
-          ];
-          // Only delete hooks whose slugs differ from the new ones (upsert handles same-slug updates)
-          const orphanedSlugs = oldSlugs.filter(
-            (s: string) => !newSlugs.includes(s),
-          );
-          if (orphanedSlugs.length > 0) {
-            await supabase
-              .from("shareable_hooks" as any)
-              .delete()
-              .eq("user_id", user.id)
-              .eq("artist_slug", artistSlug)
-              .eq("song_slug", songSlug)
-              .in("hook_slug", orphanedSlugs);
-          }
-        }
-        const pSpec = renderData?.motionProfileSpec || {};
-        const bg = beatGrid
-          ? {
-              bpm: beatGrid.bpm,
-              beats: beatGrid.beats,
-              confidence: beatGrid.confidence,
-            }
-          : {};
-        const palette = pSpec.palette || ["#ffffff", "#a855f7", "#ec4899"];
-        const system = pSpec.system || "fracture";
-
-        // Helper to build hook payload — all values explicitly non-undefined
-        const buildHookPayload = (
-          h: any,
-          slug: string,
-          position: number,
-          label: string | null,
-        ) => {
-          const hookLines = lyricData.lines.filter(
-            (l) => l.start < h.end && l.end > h.start,
-          );
-          const lastLine = hookLines[hookLines.length - 1];
-          const hookPhrase = lastLine?.text || h.previewText || "hook";
-          return {
-            user_id: user.id,
-            artist_slug: artistSlug,
-            song_slug: songSlug,
-            hook_slug: slug,
-            artist_name: displayName,
-            song_name: lyricData.title || "Untitled",
-            hook_phrase: hookPhrase,
-            artist_dna: null,
-            motion_profile_spec: pSpec,
-            beat_grid: bg,
-            hook_start: h.start,
-            hook_end: h.end,
-            lyrics: hookLines,
-            audio_url: audioUrl,
-            system_type: system,
-            palette,
-            signature_line: null,
-            battle_id: battleId,
-            battle_position: position,
-            hook_label: label,
-          };
-        };
-
-        const secondHookSlug = deriveHookSlug(activeHook1);
-        const [r1, r2] = await Promise.all([
-          supabase
-            .from("shareable_hooks" as any)
-            .upsert(
-              buildHookPayload(
-                activeHook0,
-                hookSlug,
-                1,
-                renderData.hookLabel || null,
-              ),
-              { onConflict: "artist_slug,song_slug,hook_slug" },
-            ),
-          supabase
-            .from("shareable_hooks" as any)
-            .upsert(
-              buildHookPayload(
-                activeHook1,
-                secondHookSlug || `${hookSlug}-2`,
-                2,
-                renderData.secondHookLabel || null,
-              ),
-              { onConflict: "artist_slug,song_slug,hook_slug" },
-            ),
-        ]);
-        if (r1.error) throw r1.error;
-        if (r2.error) throw r2.error;
-
-        // Upsert hookfit_posts
-        const { data: primaryHook } = await supabase
-          .from("shareable_hooks" as any)
-          .select("id")
-          .eq("artist_slug", artistSlug)
-          .eq("song_slug", songSlug)
-          .eq("hook_slug", hookSlug)
-          .maybeSingle();
-
-        if (primaryHook) {
-          await supabase.from("hookfit_posts" as any).upsert(
-            {
-              user_id: user.id,
-              battle_id: battleId,
-              hook_id: (primaryHook as any).id,
-              status: "live",
-            },
-            { onConflict: "battle_id" },
-          );
-        }
-
-        const battleUrl = `/${artistSlug}/${songSlug}/${hookSlug}`;
-        setBattlePublishedUrl(battleUrl);
-        spendCredits();
-
-        // Auto-post to CrowdFit — update existing or create new
-        (async () => {
-          try {
-            // Find existing post by battle URL pattern (any hook slug for this user+song)
-            const { data: existingPost }: any = await supabase
-              .from("songfit_posts" as any)
-              .select("id, lyric_dance_url")
-              .eq("user_id", user.id)
-              .like("lyric_dance_url", `/${artistSlug}/${songSlug}/%`)
-              .is("lyric_dance_id", null)
-              .maybeSingle();
-
-            if (existingPost) {
-              // Update existing post's URL to point to new hooks
-              if (existingPost.lyric_dance_url !== battleUrl) {
-                await supabase
-                  .from("songfit_posts" as any)
-                  .update({ lyric_dance_url: battleUrl })
-                  .eq("id", existingPost.id);
-              }
-            } else {
-              const expiresAt = new Date();
-              expiresAt.setDate(expiresAt.getDate() + 21);
-              await supabase.from("songfit_posts" as any).insert({
-                user_id: user.id,
-                track_title: lyricData.title || "Untitled",
-                caption: "",
-                lyric_dance_url: battleUrl,
-                lyric_dance_id: null,
-                spotify_track_id: pipeline.spotifyTrackId ?? null,
-                spotify_track_url: pipeline.spotifyTrackId
-                  ? `https://open.spotify.com/track/${pipeline.spotifyTrackId}`
-                  : null,
-                album_art_url: null,
-                tags_json: [],
-                track_artists_json: [],
-                status: "live",
-                submitted_at: new Date().toISOString(),
-                expires_at: expiresAt.toISOString(),
-                palette: derivePaletteFromDirection(cinematicDirection) as any,
-              });
-            }
-            window.dispatchEvent(new Event("songfit:dance-published"));
-          } catch (e: any) {
-            console.warn(
-              "[FitTab] CrowdFit battle auto-post failed:",
-              e?.message,
-            );
-          }
-        })();
-
-        window.dispatchEvent(new Event("hookfit:battle-published"));
-        toast.success("Hook Battle published to CrowdFit!");
-      } catch (e: any) {
-        console.error("Battle publish error:", e);
-        toast.error(e.message || "Failed to publish battle");
-      } finally {
-        clearTimeout(slowWarningId2);
-        setBattlePublishing(false);
-      }
-    },
-    [
-      user,
-      battlePublishing,
-      canCreate,
-      customHooks,
-      renderData,
-      audioFile,
-      lyricData,
-      beatGrid,
-      spendCredits,
-      profile,
-    ],
-  );
-
-  const handleRemoveBattle = useCallback(async () => {
-    if (!battlePublishedUrl || !user) return;
-    try {
-      await supabase
-        .from("songfit_posts" as any)
-        .delete()
-        .eq("user_id", user.id)
-        .eq("lyric_dance_url", battlePublishedUrl);
-      setBattlePublishedUrl(null);
-      toast.success("Removed from CrowdFit");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to remove battle");
-    }
-  }, [battlePublishedUrl, user]);
 
   const [fontReady, setFontReady] = useState(false);
   const [imageWaitExpired, setImageWaitExpired] = useState(false);
@@ -2093,142 +1787,6 @@ export function FitTab({
 
         {subView === "fit" && (
           <>
-        {/* ── FMLY Feud Setup ── */}
-        {hottestHooksEnabled && (
-          <>
-            <div className="glass-card rounded-xl p-4 border border-border/30 space-y-3">
-              <div className="flex items-center gap-1.5">
-                <Zap size={11} className="text-primary" />
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
-                  Let the FMLY decide the hottest hook
-                </span>
-              </div>
-
-              {battlePublishedUrl ? (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => window.open(battlePublishedUrl, "_blank")}
-                    className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-green-400 border-green-400/40 hover:border-green-400/70"
-                  >
-                    <Circle
-                      size={7}
-                      className="fill-green-400 text-green-400"
-                    />{" "}
-                    Live
-                  </button>
-                  <button
-                    onClick={handleRemoveBattle}
-                    className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground/50 border-border/30 hover:text-foreground hover:border-border/60"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => {
-                    setFeudTab(0);
-                    setFeudSetupOpen(true);
-                  }}
-                  disabled={!hottestHooksEnabled || !canCreate}
-                  className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors border rounded-lg py-2 text-foreground hover:text-primary border-border/40 hover:border-primary/40 disabled:opacity-40"
-                >
-                  <Zap size={10} /> Set Up Your Feud
-                </button>
-              )}
-            </div>
-
-            {/* ── Feud Setup Modal ── */}
-            <Dialog
-              open={feudSetupOpen}
-              onOpenChange={(open) => {
-                if (!open) {
-                  setFeudSetupOpen(false);
-                }
-              }}
-            >
-              <DialogContent className="max-w-lg w-full p-0 overflow-hidden bg-background border border-border/40">
-                {/* Header */}
-                <div className="px-5 pt-5 pb-3 border-b border-border/30">
-                  <p className="text-[11px] font-mono uppercase tracking-[0.15em] text-muted-foreground">
-                    Set Up Your Feud
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                    Pick two hooks — the FMLY votes on the hottest one
-                  </p>
-                </div>
-
-                <div className="flex border-b border-border/30">
-                  {(["Left Hook", "Right Hook"] as const).map((label, idx) => {
-                    const isSet = !!(
-                      customHooks[idx] ??
-                      (idx === 0 ? renderData?.hook : renderData?.secondHook)
-                    );
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => setFeudTab(idx as 0 | 1)}
-                        className={`flex-1 px-4 py-3 text-[11px] font-mono uppercase tracking-[0.12em] transition-colors flex items-center justify-center gap-1.5 ${
-                          feudTab === idx
-                            ? "text-primary border-b-2 border-primary"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {label}
-                        {isSet && feudTab !== idx && (
-                          <span className="text-[8px] text-primary/60">✓</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="px-5 py-5" style={{ minHeight: 200 }}>
-                  {([0, 1] as const).map((idx) => {
-                    if (feudTab !== idx) return null;
-                    const aiHook =
-                      idx === 0 ? renderData?.hook : renderData?.secondHook;
-                    return (
-                      <HookWaveformPicker
-                        key={idx}
-                        waveform={waveform || parentWaveform || null}
-                        lines={lyricData.lines}
-                        audioRef={hookAudioRef}
-                        loopRegionRef={hookLoopRegionRef}
-                        aiHint={aiHook ?? null}
-                        initialHook={customHooks[idx] ?? aiHook ?? null}
-                        isLast={idx === 1}
-                        onSave={async (hook) => {
-                          const saved: SavedCustomHook = {
-                            ...hook,
-                            color: "#a855f7",
-                          };
-                          const next: [
-                            SavedCustomHook | null,
-                            SavedCustomHook | null,
-                          ] = [...customHooks] as any;
-                          next[idx] = saved;
-                          setCustomHooks(next);
-                          if (idx === 0) {
-                            setFeudTab(1);
-                          } else {
-                            // Pass next directly — React state may not have flushed yet
-                            const hook0 = next[0] ?? renderData?.hook;
-                            const hook1 = next[1];
-                            if (hook0 && hook1) {
-                              await handleStartBattle(next);
-                            }
-                            setFeudSetupOpen(false);
-                          }
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              </DialogContent>
-            </Dialog>
-          </>
-        )}
-
         {/* Single-column report */}
         <div className="space-y-3">
           {!allReady && (

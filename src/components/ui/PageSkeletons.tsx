@@ -486,7 +486,6 @@ const Padded =
 
 const skeletonRegistry: Record<string, SkeletonEntry> = {
   songfit:  Padded(CrowdFitSkeleton),
-  hookfit:  Padded(CrowdFitSkeleton),
   lyric:    LyricFitSkeleton,          // manages its own padding internally
   hitfit:   Padded(HitFitSkeleton),
   mix:      MixFitSkeleton,

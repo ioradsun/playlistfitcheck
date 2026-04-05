@@ -7,7 +7,6 @@ import { Reorder, useDragControls } from "framer-motion";
 
 const ALL_TOOLS = [
   { key: "songfit",  label: "CrowdFit" },
-  { key: "hookfit",  label: "HookFit" },
   { key: "hitfit",   label: "HitFit" },
   { key: "vibefit",  label: "VibeFit" },
   { key: "profit",   label: "ProFit" },
@@ -31,7 +30,6 @@ interface FeaturesState {
   
   lyric_transcription_model: TranscriptionModel;
   lyric_video: boolean;
-  hookfit_hottest_hooks: boolean;
   export_video: boolean;
   fmly_hook: boolean;
 }
@@ -45,7 +43,6 @@ const DEFAULT_FEATURES: FeaturesState = {
   
   lyric_transcription_model: "scribe",
   lyric_video: false,
-  hookfit_hottest_hooks: true,
   export_video: false,
   fmly_hook: false,
 };
@@ -172,7 +169,6 @@ export function ToolsEditor() {
           
           lyric_transcription_model: "scribe",
           lyric_video: f.lyric_video ?? false,
-          hookfit_hottest_hooks: f.hookfit_hottest_hooks ?? true,
           export_video: f.export_video ?? false,
           fmly_hook: f.fmly_hook ?? false,
         });
@@ -418,39 +414,6 @@ export function ToolsEditor() {
           />
         </div>
       </div>
-
-      {/* ── HookFit ── */}
-      <div className="glass-card rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <Zap size={14} className="text-primary" />
-          <span className="text-sm font-mono font-medium">HookFit</span>
-        </div>
-        <div className="px-4 py-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">Hottest Hooks in LyricFit</p>
-            <p className="text-xs text-muted-foreground mt-0.5">AI detects hooks during analysis · powers Hook Dance + HookFit battles</p>
-          </div>
-          <Switch
-            checked={features.hookfit_hottest_hooks}
-            onCheckedChange={async (enabled) => {
-              const prev = features.hookfit_hottest_hooks;
-              setFeatures(f => ({ ...f, hookfit_hottest_hooks: enabled }));
-              setSavingKey("hookfit_hottest_hooks");
-              try {
-                await patchFeatures({ hookfit_hottest_hooks: enabled });
-                toast.success(enabled ? "Hottest Hooks enabled" : "Hottest Hooks disabled");
-              } catch {
-                setFeatures(f => ({ ...f, hookfit_hottest_hooks: prev }));
-                toast.error("Failed to update");
-              } finally {
-                setSavingKey(null);
-              }
-            }}
-            disabled={savingKey === "hookfit_hottest_hooks"}
-          />
-        </div>
-      </div>
-
 
       {/* ── FMLY Hook ── */}
       <div className="glass-card rounded-xl overflow-hidden">

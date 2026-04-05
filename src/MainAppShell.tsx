@@ -49,7 +49,6 @@ export default function MainAppShell() {
               <Routes>
                 <Route path="/" element={<Navigate to="/CrowdFit" replace />} />
                 <Route path="/CrowdFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                <Route path="/HookFit" element={<Suspense fallback={null}><Index /></Suspense>} />
                 <Route path="/SongFit" element={<Navigate to="/CrowdFit" replace />} />
                 <Route path="/ProFit" element={<Suspense fallback={null}><Index /></Suspense>} />
                 <Route path="/ProFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
@@ -66,7 +65,6 @@ export default function MainAppShell() {
                 <Route path="/VibeFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
                 <Route path="/crowdfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
                 <Route path="/lyricfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
-                <Route path="/hookfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
                 <Route path="/mixfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
                 <Route path="/hitfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
                 <Route path="/playlistfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />

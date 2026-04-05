@@ -61,4 +61,4 @@ export interface CycleHistory {
 }
 
 export type BillboardMode = 'this_week' | 'last_week' | 'all_time';
-export type FeedView = 'all' | 'now_streaming' | 'in_studio' | 'in_battle' | 'billboard';
+export type FeedView = 'all' | 'now_streaming' | 'in_studio' | 'billboard';
