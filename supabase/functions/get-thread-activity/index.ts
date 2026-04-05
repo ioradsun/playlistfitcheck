@@ -106,6 +106,28 @@ serve(async (req) => {
       .order("created_at", { ascending: true })
       .limit(100);
 
+    const { data: playsOnMe } = await supabase
+      .from("lyric_dance_plays")
+      .select(`
+        session_id, was_muted, max_progress_pct, play_count,
+        duration_sec, updated_at,
+        shareable_lyric_dances!inner(id, song_name, user_id)
+      `)
+      .eq("user_id", partnerId)
+      .eq("shareable_lyric_dances.user_id", myId)
+      .order("updated_at", { ascending: true });
+
+    const { data: myPlays } = await supabase
+      .from("lyric_dance_plays")
+      .select(`
+        session_id, was_muted, max_progress_pct, play_count,
+        duration_sec, updated_at,
+        shareable_lyric_dances!inner(id, song_name, user_id)
+      `)
+      .eq("user_id", myId)
+      .eq("shareable_lyric_dances.user_id", partnerId)
+      .order("updated_at", { ascending: true });
+
     const { data: savesOnMe } = await supabase
       .from("songfit_saves")
       .select(`
@@ -142,7 +164,7 @@ serve(async (req) => {
 
     type ActivityEvent = {
       id: string;
-      kind: "fire" | "lyric_comment" | "post_comment" | "save" | "follow" | "message";
+      kind: "fire" | "play" | "lyric_comment" | "post_comment" | "save" | "follow" | "message";
       direction: "incoming" | "outgoing";
       created_at: string;
       song_name?: string;
@@ -150,6 +172,10 @@ serve(async (req) => {
       time_sec?: number;
       hold_ms?: number;
       fire_count?: number;
+      max_progress_pct?: number;
+      play_count?: number;
+      duration_sec?: number;
+      was_muted?: boolean;
       text?: string;
       sender_id?: string;
       is_read?: boolean;
@@ -190,6 +216,34 @@ serve(async (req) => {
 
     events.push(...collapseFiresIntoGroups(firesOnMe ?? [], "incoming"));
     events.push(...collapseFiresIntoGroups(myFires ?? [], "outgoing"));
+
+    for (const row of playsOnMe ?? []) {
+      events.push({
+        id: `play-${row.session_id}`,
+        kind: "play",
+        direction: "incoming",
+        created_at: row.updated_at,
+        song_name: row.shareable_lyric_dances?.song_name,
+        max_progress_pct: row.max_progress_pct,
+        play_count: row.play_count,
+        duration_sec: row.duration_sec,
+        was_muted: row.was_muted,
+      });
+    }
+
+    for (const row of myPlays ?? []) {
+      events.push({
+        id: `play-${row.session_id}`,
+        kind: "play",
+        direction: "outgoing",
+        created_at: row.updated_at,
+        song_name: row.shareable_lyric_dances?.song_name,
+        max_progress_pct: row.max_progress_pct,
+        play_count: row.play_count,
+        duration_sec: row.duration_sec,
+        was_muted: row.was_muted,
+      });
+    }
 
     for (const row of lyricCommentsOnMe ?? []) {
       events.push({

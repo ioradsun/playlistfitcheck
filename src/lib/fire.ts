@@ -52,6 +52,35 @@ export async function emitClosingPick(
     .then();
 }
 
+export async function upsertPlay(
+  danceId: string,
+  opts: {
+    progressPct: number;
+    wasMuted: boolean;
+    durationSec: number;
+    playCount?: number;
+    userId?: string | null;
+  },
+): Promise<void> {
+  const sessionId = getSessionId();
+  supabase
+    .from('lyric_dance_plays' as any)
+    .upsert(
+      {
+        dance_id: danceId,
+        session_id: sessionId,
+        user_id: opts.userId ?? null,
+        was_muted: opts.wasMuted,
+        max_progress_pct: Math.round(Math.max(0, Math.min(100, opts.progressPct))),
+        play_count: opts.playCount ?? 1,
+        duration_sec: Math.round(opts.durationSec),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'dance_id,session_id' },
+    )
+    .then();
+}
+
 export async function fetchFireData(danceId: string): Promise<Array<{
   line_index: number;
   time_sec: number;
