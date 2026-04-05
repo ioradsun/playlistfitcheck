@@ -120,10 +120,8 @@ export function FitWidget() {
 
   if (reelsHidden) return null;
 
-  // Don't render if growth flow is disabled, on artist stage pages, or on shareable hook pages
-  const pathParts = location.pathname.split("/").filter(Boolean);
-  const isShareableHookPage = pathParts.length === 3 && !["LyricFit", "admin", "profile", "about", "terms", "auth"].includes(pathParts[0]);
-  if (!siteCopy.features.growth_flow || location.pathname.startsWith("/artist/") || isShareableHookPage) return null;
+  // Don't render if growth flow is disabled or on artist stage pages
+  if (!siteCopy.features.growth_flow || location.pathname.startsWith("/artist/")) return null;
 
   return (
     <TooltipProvider>
