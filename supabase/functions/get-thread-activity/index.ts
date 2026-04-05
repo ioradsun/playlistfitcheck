@@ -6,6 +6,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface ActivityEvent {
+  id: string;
+  kind: "fire" | "play" | "lyric_comment" | "post_comment" | "save" | "follow" | "message";
+  direction: "incoming" | "outgoing";
+  created_at: string;
+  song_name?: string;
+  line_index?: number;
+  time_sec?: number;
+  hold_ms?: number;
+  fire_count?: number;
+  max_progress_pct?: number;
+  play_count?: number;
+  duration_sec?: number;
+  was_muted?: boolean;
+  text?: string;
+  sender_id?: string;
+  is_read?: boolean;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -34,116 +53,120 @@ serve(async (req) => {
     const myId = user.id;
     const partnerId = partner_user_id;
 
-    const { data: firesOnMe } = await supabase
-      .from("lyric_dance_fires")
-      .select(`
-        id, line_index, time_sec, hold_ms, created_at,
-        shareable_lyric_dances!inner(
-          id, song_name, artist_name, user_id
-        )
-      `)
-      .eq("user_id", partnerId)
-      .eq("shareable_lyric_dances.user_id", myId)
-      .order("created_at", { ascending: true })
-      .limit(200);
-
-    const { data: myFires } = await supabase
-      .from("lyric_dance_fires")
-      .select(`
-        id, line_index, time_sec, hold_ms, created_at,
-        shareable_lyric_dances!inner(
-          id, song_name, artist_name, user_id
-        )
-      `)
-      .eq("user_id", myId)
-      .eq("shareable_lyric_dances.user_id", partnerId)
-      .order("created_at", { ascending: true })
-      .limit(200);
-
-    const { data: lyricCommentsOnMe } = await supabase
-      .from("lyric_dance_comments")
-      .select(`
-        id, text, line_index, submitted_at,
-        shareable_lyric_dances!inner(id, song_name, user_id)
-      `)
-      .eq("user_id", partnerId)
-      .eq("shareable_lyric_dances.user_id", myId)
-      .is("parent_comment_id", null)
-      .order("submitted_at", { ascending: true })
-      .limit(200);
-
-    const { data: myLyricComments } = await supabase
-      .from("lyric_dance_comments")
-      .select(`
-        id, text, line_index, submitted_at,
-        shareable_lyric_dances!inner(id, song_name, user_id)
-      `)
-      .eq("user_id", myId)
-      .eq("shareable_lyric_dances.user_id", partnerId)
-      .is("parent_comment_id", null)
-      .order("submitted_at", { ascending: true })
-      .limit(200);
-
-    const { data: postCommentsOnMe } = await supabase
-      .from("songfit_comments")
-      .select(`
-        id, content, created_at,
-        songfit_posts!inner(id, track_title, user_id)
-      `)
-      .eq("user_id", partnerId)
-      .eq("songfit_posts.user_id", myId)
-      .order("created_at", { ascending: true })
-      .limit(100);
-
-    const { data: myPostComments } = await supabase
-      .from("songfit_comments")
-      .select(`
-        id, content, created_at,
-        songfit_posts!inner(id, track_title, user_id)
-      `)
-      .eq("user_id", myId)
-      .eq("songfit_posts.user_id", partnerId)
-      .order("created_at", { ascending: true })
-      .limit(100);
-
-    const { data: playsOnMe } = await supabase
-      .from("lyric_dance_plays")
-      .select(`
-        session_id, was_muted, max_progress_pct, play_count,
-        duration_sec, updated_at,
-        shareable_lyric_dances!inner(id, song_name, user_id)
-      `)
-      .eq("user_id", partnerId)
-      .eq("shareable_lyric_dances.user_id", myId)
-      .order("updated_at", { ascending: true });
-
-    const { data: myPlays } = await supabase
-      .from("lyric_dance_plays")
-      .select(`
-        session_id, was_muted, max_progress_pct, play_count,
-        duration_sec, updated_at,
-        shareable_lyric_dances!inner(id, song_name, user_id)
-      `)
-      .eq("user_id", myId)
-      .eq("shareable_lyric_dances.user_id", partnerId)
-      .order("updated_at", { ascending: true });
-
-    const { data: savesOnMe } = await supabase
-      .from("songfit_saves")
-      .select(`
-        id, created_at,
-        songfit_posts!inner(id, track_title, user_id)
-      `)
-      .eq("user_id", partnerId)
-      .eq("songfit_posts.user_id", myId)
-      .order("created_at", { ascending: true })
-      .limit(100);
-
-    const { data: follows } = await supabase
-      .from("songfit_follows")
-      .select("id, created_at, follower_user_id, followed_user_id")
-      .or(`and(follower_user_id.eq.${myId},followed_user_id.eq.${partnerId}),and(follower_user_id.eq.${partnerId},followed_user_id.eq.${myId})`)
-      .order("created_at", { ascending: true });
+    const [
+      { data: firesOnMe },
+      { data: myFires },
+      { data: lyricCommentsOnMe },
+      { data: myLyricComments },
+      { data: postCommentsOnMe },
+      { data: myPostComments },
+      { data: playsOnMe },
+      { data: myPlays },
+      { data: savesOnMe },
+      { data: follows },
+    ] = await Promise.all([
+      supabase
+        .from("lyric_dance_fires")
+        .select(`
+          id, line_index, time_sec, hold_ms, created_at,
+          shareable_lyric_dances!inner(
+            id, song_name, artist_name, user_id
+          )
+        `)
+        .eq("user_id", partnerId)
+        .eq("shareable_lyric_dances.user_id", myId)
+        .order("created_at", { ascending: true })
+        .limit(200),
+      supabase
+        .from("lyric_dance_fires")
+        .select(`
+          id, line_index, time_sec, hold_ms, created_at,
+          shareable_lyric_dances!inner(
+            id, song_name, artist_name, user_id
+          )
+        `)
+        .eq("user_id", myId)
+        .eq("shareable_lyric_dances.user_id", partnerId)
+        .order("created_at", { ascending: true })
+        .limit(200),
+      supabase
+        .from("lyric_dance_comments")
+        .select(`
+          id, text, line_index, submitted_at,
+          shareable_lyric_dances!inner(id, song_name, user_id)
+        `)
+        .eq("user_id", partnerId)
+        .eq("shareable_lyric_dances.user_id", myId)
+        .is("parent_comment_id", null)
+        .order("submitted_at", { ascending: true })
+        .limit(200),
+      supabase
+        .from("lyric_dance_comments")
+        .select(`
+          id, text, line_index, submitted_at,
+          shareable_lyric_dances!inner(id, song_name, user_id)
+        `)
+        .eq("user_id", myId)
+        .eq("shareable_lyric_dances.user_id", partnerId)
+        .is("parent_comment_id", null)
+        .order("submitted_at", { ascending: true })
+        .limit(200),
+      supabase
+        .from("songfit_comments")
+        .select(`
+          id, content, created_at,
+          songfit_posts!inner(id, track_title, user_id)
+        `)
+        .eq("user_id", partnerId)
+        .eq("songfit_posts.user_id", myId)
+        .order("created_at", { ascending: true })
+        .limit(100),
+      supabase
+        .from("songfit_comments")
+        .select(`
+          id, content, created_at,
+          songfit_posts!inner(id, track_title, user_id)
+        `)
+        .eq("user_id", myId)
+        .eq("songfit_posts.user_id", partnerId)
+        .order("created_at", { ascending: true })
+        .limit(100),
+      supabase
+        .from("lyric_dance_plays")
+        .select(`
+          session_id, was_muted, max_progress_pct, play_count,
+          duration_sec, updated_at,
+          shareable_lyric_dances!inner(id, song_name, user_id)
+        `)
+        .eq("user_id", partnerId)
+        .eq("shareable_lyric_dances.user_id", myId)
+        .order("updated_at", { ascending: true }),
+      supabase
+        .from("lyric_dance_plays")
+        .select(`
+          session_id, was_muted, max_progress_pct, play_count,
+          duration_sec, updated_at,
+          shareable_lyric_dances!inner(id, song_name, user_id)
+        `)
+        .eq("user_id", myId)
+        .eq("shareable_lyric_dances.user_id", partnerId)
+        .order("updated_at", { ascending: true }),
+      supabase
+        .from("songfit_saves")
+        .select(`
+          id, created_at,
+          songfit_posts!inner(id, track_title, user_id)
+        `)
+        .eq("user_id", partnerId)
+        .eq("songfit_posts.user_id", myId)
+        .order("created_at", { ascending: true })
+        .limit(100),
+      supabase
+        .from("songfit_follows")
+        .select("id, created_at, follower_user_id, followed_user_id")
+        .or(`and(follower_user_id.eq.${myId},followed_user_id.eq.${partnerId}),and(follower_user_id.eq.${partnerId},followed_user_id.eq.${myId})`)
+        .order("created_at", { ascending: true }),
+    ]);
 
     const [ua, ub] = [myId, partnerId].sort();
     const { data: thread } = await supabase
@@ -161,25 +184,6 @@ serve(async (req) => {
           .order("created_at", { ascending: true })
           .limit(500)
       : { data: [] };
-
-    type ActivityEvent = {
-      id: string;
-      kind: "fire" | "play" | "lyric_comment" | "post_comment" | "save" | "follow" | "message";
-      direction: "incoming" | "outgoing";
-      created_at: string;
-      song_name?: string;
-      line_index?: number;
-      time_sec?: number;
-      hold_ms?: number;
-      fire_count?: number;
-      max_progress_pct?: number;
-      play_count?: number;
-      duration_sec?: number;
-      was_muted?: boolean;
-      text?: string;
-      sender_id?: string;
-      is_read?: boolean;
-    };
 
     const events: ActivityEvent[] = [];
 
