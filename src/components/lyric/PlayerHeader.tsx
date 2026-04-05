@@ -5,6 +5,7 @@ import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Mail, Waves, AlignLeft, Zap, BarChart2 } from "lucide-react";
 import { toast } from "sonner";
+import { useDmContext } from "@/hooks/useDmContext";
 
 export type CardMode = "dance" | "lyric" | "empowerment" | "results";
 
@@ -122,6 +123,7 @@ export function PlayerHeader({
 }: PlayerHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
+  const { openCompose } = useDmContext();
   const pillRef = useRef<HTMLDivElement>(null);
   const avatarRef = useRef<HTMLButtonElement>(null);
   const modeTriggerRef = useRef<HTMLButtonElement>(null);
@@ -239,7 +241,11 @@ export function PlayerHeader({
                 transition={{ delay: spotifyArtistId ? 0.15 : 0.1 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  toast("DMs coming soon");
+                  if (userId) {
+                    openCompose(userId);
+                  } else {
+                    toast("DMs coming soon");
+                  }
                   setTimeout(() => setMenuOpen(false), 200);
                 }}
                 className="text-white/50 hover:text-white/80 transition-colors"

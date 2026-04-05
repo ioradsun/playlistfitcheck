@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { useDmThreadList } from "@/hooks/useDmThreadList";
 import type { DmThreadSummary } from "@/hooks/useDmThreadList";
 
@@ -7,6 +7,9 @@ interface DmContextValue {
   loading: boolean;
   unreadCount: number;
   reload: () => void;
+  composePartnerId: string | null;
+  openCompose: (partnerId: string) => void;
+  closeCompose: () => void;
 }
 
 const DmContext = createContext<DmContextValue>({
@@ -14,17 +17,31 @@ const DmContext = createContext<DmContextValue>({
   loading: false,
   unreadCount: 0,
   reload: () => {},
+  composePartnerId: null,
+  openCompose: () => {},
+  closeCompose: () => {},
 });
 
 export function DmProvider({ children }: { children: ReactNode }) {
   const { threads, loading, reload } = useDmThreadList();
+  const [composePartnerId, setComposePartnerId] = useState<string | null>(null);
   const unreadCount = threads.reduce(
     (sum, t) => sum + t.unread_count,
     0,
   );
 
   return (
-    <DmContext.Provider value={{ threads, loading, unreadCount, reload }}>
+    <DmContext.Provider
+      value={{
+        threads,
+        loading,
+        unreadCount,
+        reload,
+        composePartnerId,
+        openCompose: setComposePartnerId,
+        closeCompose: () => setComposePartnerId(null),
+      }}
+    >
       {children}
     </DmContext.Provider>
   );
