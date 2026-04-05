@@ -229,6 +229,7 @@ export default function ShareableLyricDance() {
             spotifyTrackId={(data as any)?.spotify_track_id ?? null}
             avatarUrl={coverAvatarUrl}
             postId={data.post_id ?? data.id}
+            lyricDanceUrl={artistSlug && songSlug ? `/${artistSlug}/${songSlug}/lyric-dance` : null}
           />
         )}
       </div>

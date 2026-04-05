@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImper
 import { VolumeX } from "lucide-react";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { ClosingScreen } from "@/components/lyric/ClosingScreen";
-import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import type { CardMode } from "@/components/lyric/PlayerHeader";
@@ -26,6 +25,7 @@ interface LyricDanceEmbedProps {
   regionStart?: number;
   regionEnd?: number;
   postId?: string;
+  lyricDanceUrl?: string | null;
   spotifyTrackId?: string | null;
   spotifyArtistId?: string | null;
   avatarUrl?: string | null;
@@ -49,6 +49,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   regionStart,
   regionEnd,
   postId,
+  lyricDanceUrl = null,
   spotifyTrackId,
   spotifyArtistId,
   avatarUrl,
@@ -59,7 +60,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 }, ref) {
   const isFeedEmbed = visible !== undefined;
   const isBattleMode = regionStart != null && regionEnd != null;
-  const empowermentPromise = (prefetchedData as any)?.empowerment_promise ?? null;
 
   const [evicted, setEvicted] = useState(true);
 
@@ -115,10 +115,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   }), [player]);
 
   const [closingVisible, setClosingVisible] = useState(false);
-  const [clipStart, setClipStart] = useState(0);
-  const [clipEnd, setClipEnd] = useState(0);
-  const [clipCaption, setClipCaption] = useState("");
-  const [showClipComposer, setShowClipComposer] = useState(false);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [activeMomentIdx, setActiveMomentIdx] = useState(0);
@@ -221,23 +217,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     return closestIdx;
   }, [moments]);
 
-  const dismissClosingAndSeek = useCallback((timeSec: number) => {
-    if (closingVisible) setClosingVisible(false);
-    unlockAudio();
-    setActiveMomentIdx(findMomentIndexBySec(timeSec));
-    player?.seek(timeSec);
-
-    if (isFeedEmbed && postId) {
-      audioController.primeAll();
-      audioController.setExplicitPrimary(postId);
-      if (isGlobalMuted()) audioController.toggleMute();
-    } else {
-      player?.play(true);
-      player?.setMuted(false);
-      setMuted(false);
-    }
-  }, [closingVisible, player, postId, isFeedEmbed, setMuted, findMomentIndexBySec]);
-
   const seekOnly = useCallback((timeSec: number) => {
     setActiveMomentIdx(findMomentIndexBySec(timeSec));
     player?.seek(timeSec);
@@ -264,7 +243,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         avatarUrl={avatarUrl}
         artistName={artistName}
         songTitle={songTitle}
-        spotifyTrackId={spotifyTrackId}
         spotifyArtistId={spotifyArtistId}
         showMenuButton={isFeedEmbed}
         isVerified={isVerified}
@@ -299,7 +277,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
             <ClosingScreen
               visible={closingVisible}
-              empowermentPromise={empowermentPromise}
+              empowermentPromise={(data ?? prefetchedData as any)?.empowerment_promise ?? null}
               danceId={((data ?? prefetchedData) as any)?.id ?? ""}
               source="feed"
               moments={moments}
@@ -325,25 +303,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               }}
             />
 
-            {showClipComposer && (
-              <div className="absolute inset-x-3 bottom-3 z-[540]" onClick={(e) => e.stopPropagation()}>
-                <ClipComposer
-                  visible={showClipComposer}
-                  player={player}
-                  durationSec={durationSec}
-                  fires={(reactionData ?? []) as any}
-                  lines={lyricSections.allLines.map((l) => ({ lineIndex: l.lineIndex, text: l.text, startSec: l.startSec, endSec: l.endSec ?? (l.startSec + 5) }))}
-                  initialStart={clipStart}
-                  initialEnd={clipEnd}
-                  initialCaption={clipCaption}
-                  songTitle={songTitle}
-                  onClose={() => {
-                    setShowClipComposer(false);
-                    player?.setRegion(undefined, undefined);
-                  }}
-                />
-              </div>
-            )}
           </>
         )}
 
@@ -366,27 +325,22 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
         {/* Empowerment mode */}
         {cardMode === "empowerment" && (
-          <div className="absolute inset-0 overflow-y-auto">
-            <EmpowermentModePanel
-              danceId={((data ?? prefetchedData) as any)?.id ?? ""}
-              empowermentPromise={(data ?? (prefetchedData as any))?.empowerment_promise ?? null}
-            />
-          </div>
+          <EmpowermentModePanel
+            danceId={((data ?? prefetchedData) as any)?.id ?? ""}
+            empowermentPromise={(data ?? (prefetchedData as any))?.empowerment_promise ?? null}
+          />
         )}
 
         {/* Results mode */}
         {cardMode === "results" && (
-          <div className="absolute inset-0 overflow-y-auto">
-            <CardResultsPanel
-              moments={moments}
-              reactionData={reactionData}
-              durationSec={durationSec}
-              spotifyTrackId={spotifyTrackId ?? null}
-              spotifyArtistId={spotifyArtistId ?? null}
-              postId={postId ?? null}
-              lyricDanceUrl={(data as any)?.lyric_dance_url ?? (prefetchedData as any)?.lyric_dance_url ?? null}
-            />
-          </div>
+          <CardResultsPanel
+            moments={moments}
+            reactionData={reactionData}
+            durationSec={durationSec}
+            spotifyTrackId={spotifyTrackId ?? null}
+            postId={postId ?? null}
+            lyricDanceUrl={lyricDanceUrl ?? null}
+          />
         )}
       </div>
 

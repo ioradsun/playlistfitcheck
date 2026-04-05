@@ -42,7 +42,7 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
         });
         setHookVoteCounts(counts);
       });
-  }, [danceId]);
+  }, [danceId, empowermentPromise]);
 
   const castVote = async (hookIndex: number) => {
     if (voted.has(hookIndex) || !danceId) return;
@@ -67,8 +67,8 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
 
   if (!empowermentPromise) {
     return (
-      <div style={{ height: "100%", background: "#0a0a0a", padding: 16, fontFamily: "monospace" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+      <div style={{ position: "absolute", inset: 0, background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace" }}>
+        <div>
           <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }}>
             No empowerment promise yet
           </p>
@@ -81,7 +81,7 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
   const winnerIndex = totalVotes >= 3 ? hookVoteCounts.indexOf(Math.max(...hookVoteCounts)) : -1;
 
   return (
-    <div style={{ height: "100%", background: "#0a0a0a", padding: 16, fontFamily: "monospace" }}>
+    <div style={{ position: "absolute", inset: 0, overflowY: "auto", overflowX: "hidden", background: "#0a0a0a", padding: 16, fontFamily: "monospace" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
         <span
           style={{
