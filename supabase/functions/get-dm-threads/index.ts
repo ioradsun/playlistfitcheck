@@ -73,10 +73,12 @@ serve(async (req) => {
     const threadIds = (threads ?? []).map((t) => t.id);
     const [{ data: profiles }, { data: unreadCounts }, ...latestMessageResults] =
       await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, display_name, avatar_url, trailblazer_number")
-          .in("id", partnerIds.length > 0 ? partnerIds : ["_none_"]),
+        partnerIds.length > 0
+          ? supabase
+              .from("profiles")
+              .select("id, display_name, avatar_url, trailblazer_number")
+              .in("id", partnerIds)
+          : Promise.resolve({ data: [] as any[] }),
         threadIds.length > 0
           ? supabase
               .from("dm_messages")
