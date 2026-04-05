@@ -15,7 +15,7 @@ export function DmThreadView({ partner }: Props) {
     useDmThread(partner.partner_id);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const partnerFirstName = partner.partner_name.split(" ")[0] ?? partner.partner_name;
+  const partnerFirstName = partner.partner_name.split(" ")[0];
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
