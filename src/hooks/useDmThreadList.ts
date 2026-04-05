@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
 export interface DmThreadSummary {
-  thread_id: string;
+  thread_id: string | null;
   partner_id: string;
   partner_name: string;
   partner_avatar: string | null;
@@ -43,13 +43,28 @@ export function useDmThreadList() {
   }, [load]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || threads.length === 0) return;
+
+    const threadIds = threads
+      .filter((t) => t.thread_id !== null)
+      .map((t) => t.thread_id as string);
+
+    if (threadIds.length === 0) return;
+
+    const filter = threadIds.length === 1
+      ? `thread_id=eq.${threadIds[0]}`
+      : `thread_id=in.(${threadIds.join(",")})`;
 
     const channel = supabase
-      .channel("dm_thread_list")
+      .channel(`dm_list_${user.id}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "dm_messages" },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "dm_messages",
+          filter,
+        },
         () => {
           void load();
         },
@@ -59,7 +74,7 @@ export function useDmThreadList() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [load, user]);
+  }, [user, threads, load]);
 
   return { threads, loading, reload: load };
 }
