@@ -6,7 +6,7 @@ import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import type { CardMode } from "@/components/lyric/PlayerHeader";
-import { PostCommentPanel } from "@/components/songfit/PostCommentPanel";
+import { LyricModePanel } from "@/components/lyric/LyricModePanel";
 import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
 import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 
@@ -347,17 +347,21 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           </>
         )}
 
-        {/* Lyric/comment mode */}
-        {cardMode === "lyric" && postId && (
-          <div className="absolute inset-0 overflow-y-auto">
-            <PostCommentPanel
-              postId={postId}
-              isOpen={true}
-              onClose={() => setCardMode("dance")}
-              variant="embedded"
-              palette={(data as any)?.palette ?? []}
-            />
-          </div>
+        {/* Lyric mode */}
+        {cardMode === "lyric" && (
+          <LyricModePanel
+            danceId={((data ?? prefetchedData) as any)?.id ?? ""}
+            sections={lyricSections.sections}
+            allLines={lyricSections.allLines}
+            reactionData={reactionData}
+            currentTimeSec={currentTimeSec}
+            onFireLine={(lineIndex, timeSec) => {
+              const id = ((data ?? prefetchedData) as any)?.id;
+              if (!id) return;
+              player?.fireFire(0);
+              emitFire(id, lineIndex, timeSec, 0, "feed");
+            }}
+          />
         )}
 
         {/* Empowerment mode */}
