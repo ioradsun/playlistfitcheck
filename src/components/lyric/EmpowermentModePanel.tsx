@@ -68,11 +68,9 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
   if (!empowermentPromise) {
     return (
       <div style={{ position: "absolute", inset: 0, background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace" }}>
-        <div>
-          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }}>
-            No empowerment promise yet
-          </p>
-        </div>
+        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)" }}>
+          No empowerment promise yet
+        </p>
       </div>
     );
   }

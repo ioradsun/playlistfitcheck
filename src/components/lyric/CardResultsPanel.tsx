@@ -7,7 +7,6 @@ import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 interface Props {
   moments: Moment[];
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
-  durationSec: number;
   spotifyTrackId: string | null;
   postId: string | null;
   lyricDanceUrl: string | null;
@@ -16,7 +15,6 @@ interface Props {
 export function CardResultsPanel({
   moments,
   reactionData,
-  durationSec,
   spotifyTrackId,
   postId,
   lyricDanceUrl,

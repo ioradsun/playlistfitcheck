@@ -31,11 +31,18 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
   const activeLineRef = useRef<HTMLDivElement>(null);
   const prevActiveLineIndexRef = useRef<number | null>(null);
 
-  const getLineFireCount = (lineIndex: number): number =>
-    Object.values(reactionData).reduce((sum, v) => sum + (v.line[lineIndex] ?? 0), 0);
+  const lineFireCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const v of Object.values(reactionData)) {
+      for (const [idx, cnt] of Object.entries(v.line)) {
+        counts[Number(idx)] = (counts[Number(idx)] ?? 0) + cnt;
+      }
+    }
+    return counts;
+  }, [reactionData]);
 
   const activeLineIndex = useMemo(() => {
-    const match = allLines.find((line) => currentTimeSec >= line.startSec && currentTimeSec < (line.endSec ?? (line.startSec + 5)));
+    const match = allLines.find((line) => currentTimeSec >= line.startSec && currentTimeSec < line.endSec);
     return match?.lineIndex ?? null;
   }, [allLines, currentTimeSec]);
 
@@ -108,7 +115,7 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
 
           {section.lines.map((line) => {
             const isActive = line.lineIndex === activeLineIndex;
-            const fireCount = getLineFireCount(line.lineIndex);
+            const fireCount = lineFireCounts[line.lineIndex] ?? 0;
             const lineComments = comments.filter((comment) => comment.line_index === line.lineIndex);
             const isCommentOpen = openLineIndex === line.lineIndex;
 

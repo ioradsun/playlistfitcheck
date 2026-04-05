@@ -99,6 +99,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     evicted,
   });
 
+  const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
+
   const audioState = useSyncExternalStore(
     audioController.subscribe,
     audioController.getSnapshot,
@@ -223,15 +225,14 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   }, [findMomentIndexBySec, player]);
 
   useEffect(() => {
-    const id = (data ?? prefetchedData as any)?.id;
-    if (!player || !id) return;
+    if (!player || !danceId) return;
     let cancelled = false;
-    fetchFireData(id).then((fires) => {
+    fetchFireData(danceId).then((fires) => {
       if (cancelled) return;
       player.setHistoricalFires(fires);
     });
     return () => { cancelled = true; };
-  }, [player, (data ?? prefetchedData as any)?.id]);
+  }, [player, danceId]);
 
   useEffect(() => {
     return () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); };
@@ -278,7 +279,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             <ClosingScreen
               visible={closingVisible}
               empowermentPromise={(data ?? prefetchedData as any)?.empowerment_promise ?? null}
-              danceId={((data ?? prefetchedData) as any)?.id ?? ""}
+              danceId={danceId}
               source="feed"
               moments={moments}
               momentFireCounts={deriveMomentFireCounts(reactionData, moments)}
@@ -309,16 +310,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         {/* Lyric mode */}
         {cardMode === "lyric" && (
           <LyricModePanel
-            danceId={((data ?? prefetchedData) as any)?.id ?? ""}
+            danceId={danceId}
             sections={lyricSections.sections}
             allLines={lyricSections.allLines}
             reactionData={reactionData}
             currentTimeSec={currentTimeSec}
             onFireLine={(lineIndex, timeSec) => {
-              const id = ((data ?? prefetchedData) as any)?.id;
-              if (!id) return;
+              if (!danceId) return;
               player?.fireFire(0);
-              emitFire(id, lineIndex, timeSec, 0, "feed");
+              emitFire(danceId, lineIndex, timeSec, 0, "feed");
             }}
           />
         )}
@@ -326,7 +326,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         {/* Empowerment mode */}
         {cardMode === "empowerment" && (
           <EmpowermentModePanel
-            danceId={((data ?? prefetchedData) as any)?.id ?? ""}
+            danceId={danceId}
             empowermentPromise={(data ?? (prefetchedData as any))?.empowerment_promise ?? null}
           />
         )}
@@ -336,7 +336,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           <CardResultsPanel
             moments={moments}
             reactionData={reactionData}
-            durationSec={durationSec}
             spotifyTrackId={spotifyTrackId ?? null}
             postId={postId ?? null}
             lyricDanceUrl={lyricDanceUrl ?? null}
@@ -353,16 +352,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             player={player}
             currentTimeSec={currentTimeSec}
             closingActive={closingVisible}
-            danceId={((data ?? prefetchedData) as any)?.id}
+            danceId={danceId}
             onFireTap={() => {
               if (holdFireIntervalRef.current) {
                 clearInterval(holdFireIntervalRef.current);
                 holdFireIntervalRef.current = null;
               }
-              const id = (data ?? prefetchedData as any)?.id;
-              if (!id || !activeLine) return;
+              if (!danceId || !activeLine) return;
               player?.fireFire(0);
-              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "feed");
+              emitFire(danceId, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "feed");
             }}
             onFireHoldStart={() => {
               if (holdFireIntervalRef.current) return;
@@ -373,10 +371,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 clearInterval(holdFireIntervalRef.current);
                 holdFireIntervalRef.current = null;
               }
-              const id = (data ?? (prefetchedData as any))?.id;
-              if (!id || !activeLine) return;
+              if (!danceId || !activeLine) return;
               player?.fireFire(holdMs);
-              emitFire(id, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
+              emitFire(danceId, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed");
             }}
             onSeekTo={seekOnly}
           />
