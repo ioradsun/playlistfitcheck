@@ -42,6 +42,7 @@ export function DmThreadView({ partner }: Props) {
       }}
     >
       <div
+        className="md:hidden"
         style={{
           display: "flex",
           alignItems: "center",
