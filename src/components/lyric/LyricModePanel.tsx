@@ -41,6 +41,16 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
     return counts;
   }, [reactionData]);
 
+  const commentsByLine = useMemo(() => {
+    const map: Record<number, Comment[]> = {};
+    for (const c of comments) {
+      const idx = c.line_index ?? -1;
+      if (!map[idx]) map[idx] = [];
+      map[idx].push(c);
+    }
+    return map;
+  }, [comments]);
+
   const activeLineIndex = useMemo(() => {
     const match = allLines.find((line) => currentTimeSec >= line.startSec && currentTimeSec < line.endSec);
     return match?.lineIndex ?? null;
@@ -67,10 +77,6 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
     if (!activeLineRef.current) return;
     activeLineRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [activeLineIndex]);
-
-  const handleLineTap = (lineIndex: number, timeSec: number) => {
-    onFireLine(lineIndex, timeSec);
-  };
 
   const handleSubmit = async () => {
     const text = inputText.trim();
@@ -116,13 +122,13 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
           {section.lines.map((line) => {
             const isActive = line.lineIndex === activeLineIndex;
             const fireCount = lineFireCounts[line.lineIndex] ?? 0;
-            const lineComments = comments.filter((comment) => comment.line_index === line.lineIndex);
+            const lineComments = commentsByLine[line.lineIndex] ?? [];
             const isCommentOpen = openLineIndex === line.lineIndex;
 
             return (
               <div key={line.lineIndex} ref={isActive ? activeLineRef : undefined}>
                 <div
-                  onClick={() => handleLineTap(line.lineIndex, line.startSec)}
+                  onClick={() => onFireLine(line.lineIndex, line.startSec)}
                   style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", cursor: "pointer", transition: "background 150ms ease", background: isActive ? "rgba(255,255,255,0.04)" : "transparent" }}
                 >
                   <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45, color: isActive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)", transition: "color 200ms ease", letterSpacing: "-0.01em" }}>

@@ -201,28 +201,33 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
   }, [currentTimeSec, durationSec, closingVisible, player]);
 
-  const findMomentIndexBySec = useCallback((timeSec: number) => {
-    if (!moments.length) return 0;
-    const idx = moments.findIndex((m) => timeSec >= m.startSec && timeSec <= m.endSec);
-    if (idx !== -1) return idx;
-
-    let closestIdx = 0;
-    let closestDistance = Number.POSITIVE_INFINITY;
-    moments.forEach((moment, index) => {
-      const distance = Math.min(Math.abs(timeSec - moment.startSec), Math.abs(timeSec - moment.endSec));
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestIdx = index;
-      }
-    });
-
-    return closestIdx;
-  }, [moments]);
-
   const seekOnly = useCallback((timeSec: number) => {
-    setActiveMomentIdx(findMomentIndexBySec(timeSec));
+    if (!moments.length) {
+      setActiveMomentIdx(0);
+      player?.seek(timeSec);
+      return;
+    }
+
+    let idx = moments.findIndex(
+      (m) => timeSec >= m.startSec && timeSec <= m.endSec,
+    );
+
+    if (idx === -1) {
+      let closest = 0;
+      let minDist = Infinity;
+      moments.forEach((m, i) => {
+        const d = Math.min(
+          Math.abs(timeSec - m.startSec),
+          Math.abs(timeSec - m.endSec),
+        );
+        if (d < minDist) { minDist = d; closest = i; }
+      });
+      idx = closest;
+    }
+
+    setActiveMomentIdx(idx);
     player?.seek(timeSec);
-  }, [findMomentIndexBySec, player]);
+  }, [moments, player]);
 
   useEffect(() => {
     if (!player || !danceId) return;
@@ -278,7 +283,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
             <ClosingScreen
               visible={closingVisible}
-              empowermentPromise={(data ?? prefetchedData as any)?.empowerment_promise ?? null}
+              empowermentPromise={((data ?? prefetchedData) as any)?.empowerment_promise ?? null}
               danceId={danceId}
               source="feed"
               moments={moments}
@@ -327,7 +332,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         {cardMode === "empowerment" && (
           <EmpowermentModePanel
             danceId={danceId}
-            empowermentPromise={(data ?? (prefetchedData as any))?.empowerment_promise ?? null}
+            empowermentPromise={((data ?? prefetchedData) as any)?.empowerment_promise ?? null}
           />
         )}
 

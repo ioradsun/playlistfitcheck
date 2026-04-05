@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Copy, Check, ExternalLink } from "lucide-react";
 import type { Moment } from "@/lib/buildMoments";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
@@ -11,6 +11,25 @@ interface Props {
   postId: string | null;
   lyricDanceUrl: string | null;
 }
+
+function Label({ children }: { children: string }) {
+  return (
+    <p style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+      {children}
+    </p>
+  );
+}
+
+const ROW_STYLE = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  height: 36,
+  background: "rgba(255,255,255,0.03)",
+  border: "1px solid rgba(255,255,255,0.06)",
+  borderRadius: 10,
+  padding: "0 10px",
+} as const;
 
 export function CardResultsPanel({
   moments,
@@ -35,30 +54,23 @@ export function CardResultsPanel({
     setTimeout(() => setCopied(false), 1200);
   };
 
-  const momentFireCounts = deriveMomentFireCounts(reactionData, moments);
-  const maxFire = Math.max(1, ...Object.values(momentFireCounts));
-  const totalFires = Object.values(reactionData).reduce((s, v) => s + (v.total ?? 0), 0);
-  const hottestIdx = moments.length > 0
-    ? moments.reduce((bestIdx, _, i) =>
-      (momentFireCounts[i] ?? 0) > (momentFireCounts[bestIdx] ?? 0) ? i : bestIdx, 0)
-    : null;
-
-  const Label = ({ children }: { children: string }) => (
-    <p style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
-      {children}
-    </p>
-  );
-
-  const rowStyle = {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    height: 36,
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: 10,
-    padding: "0 10px",
-  } as const;
+  const { momentFireCounts, maxFire, totalFires, hottestIdx } = useMemo(() => {
+    const momentFireCounts = deriveMomentFireCounts(reactionData, moments);
+    const maxFire = Math.max(1, ...Object.values(momentFireCounts));
+    const totalFires = Object.values(reactionData).reduce(
+      (s, v) => s + (v.total ?? 0), 0,
+    );
+    const hottestIdx = moments.length > 0
+      ? moments.reduce(
+        (bestIdx, _, i) =>
+          (momentFireCounts[i] ?? 0) > (momentFireCounts[bestIdx] ?? 0)
+            ? i
+            : bestIdx,
+        0,
+      )
+      : null;
+    return { momentFireCounts, maxFire, totalFires, hottestIdx };
+  }, [moments, reactionData]);
 
   return (
     <div
@@ -78,7 +90,7 @@ export function CardResultsPanel({
       {shareUrl && (
         <div>
           <Label>share</Label>
-          <div style={rowStyle}>
+          <div style={ROW_STYLE}>
             <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", flexShrink: 0 }}>tools.fm</span>
             <span style={{ fontSize: 10, color: "rgba(255,255,255,0.18)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {shareUrl}
@@ -110,7 +122,7 @@ export function CardResultsPanel({
             href={`https://open.spotify.com/track/${spotifyTrackId}`}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ ...rowStyle, textDecoration: "none", cursor: "pointer" }}
+            style={{ ...ROW_STYLE, textDecoration: "none", cursor: "pointer" }}
           >
             <svg viewBox="0 0 24 24" width="13" height="13" fill="rgba(255,255,255,0.3)">
               <path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.5 17.34a.75.75 0 0 1-1.03.24c-2.81-1.72-6.34-2.11-10.5-1.15a.75.75 0 1 1-.34-1.46c4.54-1.04 8.43-.61 11.63 1.35a.75.75 0 0 1 .24 1.02zm1.47-3.26a.94.94 0 0 1-1.29.31c-3.22-1.98-8.12-2.55-11.93-1.37a.94.94 0 0 1-.56-1.8c4.17-1.3 9.53-.66 13.48 1.74.44.27.58.84.3 1.12zm.13-3.4C15.56 8.6 9.73 8.42 6.36 9.43a1.13 1.13 0 0 1-.66-2.16c3.87-1.18 10.31-.95 14.55 1.59a1.13 1.13 0 1 1-1.16 1.82z" />
