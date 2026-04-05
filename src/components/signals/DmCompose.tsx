@@ -14,38 +14,51 @@ interface ProfileResult {
   trailblazer_number: number | null;
 }
 
-function ComposePanel({
-  partnerId,
-  onClose,
-  minimized,
-  onToggleMinimize,
-}: {
-  partnerId: string;
-  onClose: () => void;
-  minimized: boolean;
-  onToggleMinimize: () => void;
-}) {
-  const { events, loading, sending, sendMessage } = useDmThread(partnerId);
+const iconBtnStyle: CSSProperties = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  color: "rgba(255,255,255,0.3)",
+  display: "flex",
+  alignItems: "center",
+  padding: 3,
+  borderRadius: 4,
+};
+
+export function DmCompose() {
+  const { composePartnerId, closeCompose, openCompose } = useDmContext();
+  const [minimized, setMinimized] = useState(false);
+  const { events, loading, sending, sendMessage } = useDmThread(composePartnerId ?? "");
   const [input, setInput] = useState("");
   const [partnerProfile, setPartnerProfile] = useState<ProfileResult | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ProfileResult[]>([]);
   const [editingPartner, setEditingPartner] = useState(false);
-  const { openCompose } = useDmContext();
   const searchRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (composePartnerId) {
+      setMinimized(false);
+      setInput("");
+      setEditingPartner(false);
+      setSearchQuery("");
+      setSearchResults([]);
+    }
+  }, [composePartnerId]);
+
+  useEffect(() => {
+    if (!composePartnerId) return;
     void supabase
       .from("profiles")
       .select("id, display_name, avatar_url, trailblazer_number")
-      .eq("id", partnerId)
+      .eq("id", composePartnerId)
       .single()
       .then(({ data }) => {
         if (data) setPartnerProfile(data as ProfileResult);
       });
-  }, [partnerId]);
+  }, [composePartnerId]);
 
   useEffect(() => {
     if (!minimized) {
@@ -56,7 +69,8 @@ function ComposePanel({
   useEffect(() => {
     if (!editingPartner) return;
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    if (!searchQuery.trim()) {
+    const q = searchQuery.trim();
+    if (!q) {
       setSearchResults([]);
       return;
     }
@@ -65,7 +79,7 @@ function ComposePanel({
       const { data } = await supabase
         .from("profiles")
         .select("id, display_name, avatar_url, trailblazer_number")
-        .ilike("display_name", `%${searchQuery.trim()}%`)
+        .ilike("display_name", `%${q}%`)
         .limit(8);
       setSearchResults((data as ProfileResult[]) ?? []);
     }, 220);
@@ -83,10 +97,12 @@ function ComposePanel({
   };
 
   const partnerFirstName =
-    (partnerProfile?.display_name ?? "them").split(" ")[0] ?? "them";
+    (partnerProfile?.display_name ?? "them").split(" ")[0];
   const fmlyBadge = partnerProfile?.trailblazer_number != null
     ? String(partnerProfile.trailblazer_number).padStart(4, "0")
     : null;
+
+  if (!composePartnerId) return null;
 
   return (
     <div
@@ -119,7 +135,7 @@ function ComposePanel({
           cursor: "pointer",
           flexShrink: 0,
         }}
-        onClick={onToggleMinimize}
+        onClick={() => setMinimized((m) => !m)}
       >
         {editingPartner ? (
           <input
@@ -212,7 +228,7 @@ function ComposePanel({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onToggleMinimize();
+              setMinimized((m) => !m);
             }}
             style={iconBtnStyle}
             aria-label={minimized ? "Expand" : "Minimize"}
@@ -222,7 +238,7 @@ function ComposePanel({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onClose();
+              closeCompose();
             }}
             style={iconBtnStyle}
             aria-label="Close"
@@ -472,36 +488,5 @@ function ComposePanel({
         </>
       )}
     </div>
-  );
-}
-
-const iconBtnStyle: CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  color: "rgba(255,255,255,0.3)",
-  display: "flex",
-  alignItems: "center",
-  padding: 3,
-  borderRadius: 4,
-};
-
-export function DmCompose() {
-  const { composePartnerId, closeCompose } = useDmContext();
-  const [minimized, setMinimized] = useState(false);
-
-  useEffect(() => {
-    if (composePartnerId) setMinimized(false);
-  }, [composePartnerId]);
-
-  if (!composePartnerId) return null;
-
-  return (
-    <ComposePanel
-      partnerId={composePartnerId}
-      onClose={closeCompose}
-      minimized={minimized}
-      onToggleMinimize={() => setMinimized((m) => !m)}
-    />
   );
 }

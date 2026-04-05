@@ -4,7 +4,6 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Mail, Waves, AlignLeft, Zap, BarChart2 } from "lucide-react";
-import { toast } from "sonner";
 import { useDmContext } from "@/hooks/useDmContext";
 
 export type CardMode = "dance" | "lyric" | "empowerment" | "results";
@@ -241,16 +240,12 @@ export function PlayerHeader({
                 transition={{ delay: spotifyArtistId ? 0.15 : 0.1 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (userId) {
-                    openCompose(userId);
-                  } else {
-                    toast("DMs coming soon");
-                  }
+                  if (userId) openCompose(userId);
                   setTimeout(() => setMenuOpen(false), 200);
                 }}
                 className="text-white/50 hover:text-white/80 transition-colors"
                 style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "none", border: "none", cursor: "pointer" }}
-                aria-label="DM coming soon"
+                aria-label="Send message"
               >
                 <Mail size={14} />
               </motion.button>
