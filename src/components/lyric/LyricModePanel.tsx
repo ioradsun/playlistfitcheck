@@ -60,13 +60,13 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
     if (!danceId) return;
     supabase
       .from("lyric_dance_comments" as any)
-      .select("id, text, line_index, submitted_at")
+      .select("id, text, line_index, submitted_at" as any)
       .eq("dance_id", danceId)
       .is("parent_comment_id", null)
       .order("submitted_at", { ascending: true })
       .limit(300)
       .then(({ data }) => {
-        if (data) setComments(data as Comment[]);
+        if (data) setComments((data as any[]) as Comment[]);
       });
   }, [danceId]);
 
@@ -102,11 +102,11 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
         session_id: getSessionId(),
         user_id: user?.id ?? null,
       })
-      .select("id, text, line_index, submitted_at")
+      .select("id, text, line_index, submitted_at" as any)
       .single();
 
     if (!error && data) {
-      setComments((prev) => prev.map((comment) => (comment.id === optimistic.id ? (data as Comment) : comment)));
+      setComments((prev) => prev.map((comment) => (comment.id === optimistic.id ? (data as any as Comment) : comment)));
     }
     setSubmitting(false);
   };

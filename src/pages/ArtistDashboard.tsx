@@ -375,6 +375,11 @@ function SongCard({ signal, onClick }: { signal: SongSignal; onClick: () => void
               {commentCount > 0 && <span className="text-[10px] font-mono text-muted-foreground">{commentCount} comments</span>}
             </div>
           )}
+        </div>
+      </div>
+    </button>
+  );
+}
 
 export default function ArtistDashboard() {
   const { user, profile } = useAuth();
