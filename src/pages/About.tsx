@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
-const DEFAULT_TOOL_ORDER = ["songfit", "lyric", "hitfit", "mix", "profit", "playlist", "vibefit", "dreamfit"];
+const DEFAULT_TOOL_ORDER = ["songfit", "dreamfit", "lyric", "hitfit", "mix", "profit", "playlist", "vibefit"];
 
 /** Map tool slug → product name for matching about.products entries */
 const SLUG_TO_PRODUCT: Record<string, string> = {
