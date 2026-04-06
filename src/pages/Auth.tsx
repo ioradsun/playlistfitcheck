@@ -149,32 +149,6 @@ const Auth = () => {
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm flex flex-col items-center gap-5">
-        <AnimatePresence>
-          {mode === "signup" && !checkEmail && nextNumber && !blazerLoading && (
-            <motion.div
-              key="fmly-pill"
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-              className="text-center space-y-1"
-            >
-              <div
-                className="inline-flex items-center gap-2 bg-primary/[0.07]
-                              border border-primary/20 rounded-full px-4 py-2"
-              >
-                <span className="font-mono text-sm font-semibold text-primary tracking-tight">
-                  {String(nextNumber).padStart(4, "0")}
-                </span>
-                <span className="text-xs text-muted-foreground">your FMLY number</span>
-              </div>
-              <p className="text-[11px] text-muted-foreground/50">
-                {spotsRemaining.toLocaleString()} spots left · locked in when you sign up
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {claimSlug && !checkEmail && (
           <div className="w-full p-3 rounded-xl bg-primary/10 border border-primary/20 text-center">
             <p className="text-sm font-medium text-foreground">Claiming your artist page</p>
@@ -336,7 +310,11 @@ const Auth = () => {
                         {loading ? (
                           <Loader2 size={16} className="animate-spin" />
                         ) : mode === "signup" ? (
-                          "Claim your number"
+                          nextNumber && !blazerLoading ? (
+                            `Claim ${String(nextNumber).padStart(4, "0")} FMLY Badge`
+                          ) : (
+                            "Claim your FMLY Badge"
+                          )
                         ) : mode === "login" ? (
                           "Log in"
                         ) : (
@@ -368,13 +346,16 @@ const Auth = () => {
                       <motion.p
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="text-[11px] text-muted-foreground/50"
+                        className="text-[11px] text-muted-foreground/40 tracking-wide"
                       >
-                        By signing up you agree to our{" "}
-                        <Link to="/terms" className="text-primary/70 hover:underline">
+                        {spotsRemaining > 0 ? `${spotsRemaining.toLocaleString()} left · ` : ""}
+                        yours for life ·{" "}
+                        <Link
+                          to="/terms"
+                          className="text-primary/50 hover:text-primary/80 underline-offset-2 hover:underline"
+                        >
                           terms
                         </Link>
-                        .
                       </motion.p>
                     )}
                   </div>
