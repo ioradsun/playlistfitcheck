@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MessageCircle, Send, X } from "lucide-react";
+import { MessageCircle, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
 import { useAuth } from "@/hooks/useAuth";
-import type { LyricSection, LyricSectionLine } from "@/hooks/useLyricSections";
+import type { Moment } from "@/lib/buildMoments";
 
 interface Props {
   danceId: string;
-  sections: LyricSection[];
-  allLines: LyricSectionLine[];
+  moments: Moment[];
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
   currentTimeSec: number;
   onFireLine: (lineIndex: number, timeSec: number) => void;
+  onPlayLine: (startSec: number, endSec: number) => void;
 }
 
 interface Comment {
@@ -21,15 +21,31 @@ interface Comment {
   submitted_at: string;
 }
 
-export function LyricModePanel({ danceId, sections, allLines, reactionData, currentTimeSec, onFireLine }: Props) {
+type MomentLine = Moment["lines"][number];
+
+export function LyricModePanel({
+  danceId,
+  moments,
+  reactionData,
+  currentTimeSec,
+  onFireLine,
+  onPlayLine,
+}: Props) {
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
-  const [openLineIndex, setOpenLineIndex] = useState<number | null>(null);
+  const [activeLine, setActiveLine] = useState<number | null>(null);
+  const [commentOpen, setCommentOpen] = useState<number | null>(null);
   const [inputText, setInputText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const activeLineRef = useRef<HTMLDivElement>(null);
-  const prevActiveLineIndexRef = useRef<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const allLines = useMemo(() => moments.flatMap((moment) => moment.lines), [moments]);
+
+  const playingLineIndex = useMemo(() => {
+    const match = allLines.find((line) => currentTimeSec >= line.startSec && currentTimeSec < line.endSec);
+    return match?.lineIndex ?? null;
+  }, [allLines, currentTimeSec]);
 
   const lineFireCounts = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -51,11 +67,6 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
     return map;
   }, [comments]);
 
-  const activeLineIndex = useMemo(() => {
-    const match = allLines.find((line) => currentTimeSec >= line.startSec && currentTimeSec < line.endSec);
-    return match?.lineIndex ?? null;
-  }, [allLines, currentTimeSec]);
-
   useEffect(() => {
     if (!danceId) return;
     supabase
@@ -70,14 +81,6 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
       });
   }, [danceId]);
 
-  useEffect(() => {
-    if (activeLineIndex === null) return;
-    if (activeLineIndex === prevActiveLineIndexRef.current) return;
-    prevActiveLineIndexRef.current = activeLineIndex;
-    if (!activeLineRef.current) return;
-    activeLineRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [activeLineIndex]);
-
   const handleSubmit = async () => {
     const text = inputText.trim();
     if (!text || submitting || !danceId) return;
@@ -86,18 +89,18 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
     const optimistic: Comment = {
       id: `temp-${Date.now()}`,
       text,
-      line_index: openLineIndex,
+      line_index: commentOpen,
       submitted_at: new Date().toISOString(),
     };
     setComments((prev) => [...prev, optimistic]);
     setInputText("");
-    setOpenLineIndex(null);
+    setCommentOpen(null);
 
     const { data, error } = await supabase
       .from("lyric_dance_comments" as any)
       .insert({
         dance_id: danceId,
-        line_index: openLineIndex,
+        line_index: commentOpen,
         text,
         session_id: getSessionId(),
         user_id: user?.id ?? null,
@@ -106,65 +109,225 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
       .single();
 
     if (!error && data) {
-      setComments((prev) => prev.map((comment) => (comment.id === optimistic.id ? (data as any as Comment) : comment)));
+      setComments((prev) => prev.map((comment) => (comment.id === optimistic.id ? ((data as any) as Comment) : comment)));
     }
     setSubmitting(false);
   };
 
+  function fmtTime(sec: number): string {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
+  const handleLineTap = (line: MomentLine) => {
+    if (activeLine === line.lineIndex) {
+      setActiveLine(null);
+      setCommentOpen(null);
+      setInputText("");
+      return;
+    }
+
+    setActiveLine(line.lineIndex);
+    setCommentOpen(null);
+    setInputText("");
+    onPlayLine(line.startSec, line.endSec);
+  };
+
   return (
-    <div style={{ position: "absolute", inset: 0, overflowY: "auto", overflowX: "hidden", background: "#0a0a0a", padding: "12px 0 24px" }}>
-      {sections.map((section) => (
-        <div key={section.sectionIndex}>
-          <div style={{ padding: "6px 14px 4px", fontSize: 9, color: "rgba(255,255,255,0.18)", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-            {section.label}
+    <div
+      ref={scrollRef}
+      style={{
+        position: "absolute",
+        inset: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
+        background: "#0a0a0a",
+        padding: "8px 0 32px",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      {moments.map((moment) => (
+        <div key={moment.index}>
+          <div
+            style={{
+              padding: "14px 16px 6px",
+              display: "flex",
+              alignItems: "baseline",
+              gap: 8,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                fontFamily: "monospace",
+                fontWeight: 600,
+                color: "rgba(255,255,255,0.5)",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              Moment {moment.index + 1}
+            </span>
+            <span
+              style={{
+                fontSize: 9,
+                fontFamily: "monospace",
+                color: "rgba(255,255,255,0.2)",
+              }}
+            >
+              {fmtTime(moment.startSec)}
+            </span>
           </div>
 
-          {section.lines.map((line) => {
-            const isActive = line.lineIndex === activeLineIndex;
+          {moment.lines.map((line) => {
+            const isPlaying = line.lineIndex === playingLineIndex;
+            const isExpanded = activeLine === line.lineIndex;
             const fireCount = lineFireCounts[line.lineIndex] ?? 0;
             const lineComments = commentsByLine[line.lineIndex] ?? [];
-            const isCommentOpen = openLineIndex === line.lineIndex;
+            const isCommentOpen = commentOpen === line.lineIndex;
 
             return (
-              <div key={line.lineIndex} ref={isActive ? activeLineRef : undefined}>
+              <div key={line.lineIndex}>
                 <div
-                  onClick={() => onFireLine(line.lineIndex, line.startSec)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", cursor: "pointer", transition: "background 150ms ease", background: isActive ? "rgba(255,255,255,0.04)" : "transparent" }}
+                  onClick={() => handleLineTap(line)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "9px 16px",
+                    cursor: "pointer",
+                    background: isPlaying
+                      ? "rgba(255,255,255,0.04)"
+                      : isExpanded
+                        ? "rgba(255,255,255,0.03)"
+                        : "transparent",
+                    transition: "background 150ms ease",
+                    minHeight: 44,
+                  }}
                 >
-                  <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45, color: isActive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)", transition: "color 200ms ease", letterSpacing: "-0.01em" }}>
+                  <span
+                    style={{
+                      flex: 1,
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      color: isPlaying
+                        ? "rgba(255,255,255,0.9)"
+                        : isExpanded
+                          ? "rgba(255,255,255,0.75)"
+                          : "rgba(255,255,255,0.45)",
+                      letterSpacing: "-0.01em",
+                      transition: "color 200ms ease",
+                    }}
+                  >
                     {line.text}
                   </span>
 
                   {fireCount > 0 && (
-                    <span style={{ fontSize: 9, fontFamily: "monospace", color: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                    <span
+                      style={{
+                        fontSize: 9,
+                        fontFamily: "monospace",
+                        color: "rgba(255,255,255,0.2)",
+                        marginLeft: 10,
+                        flexShrink: 0,
+                      }}
+                    >
                       🔥{fireCount}
                     </span>
                   )}
-
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      if (openLineIndex === line.lineIndex) {
-                        setOpenLineIndex(null);
-                        setInputText("");
-                      } else {
-                        setOpenLineIndex(line.lineIndex);
-                        setInputText("");
-                        setTimeout(() => inputRef.current?.focus(), 80);
-                      }
-                    }}
-                    style={{ background: "none", border: "none", color: lineComments.length > 0 ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.18)", cursor: "pointer", padding: 2, display: "flex", alignItems: "center", gap: 2, flexShrink: 0, fontSize: 9, fontFamily: "monospace" }}
-                    aria-label="Open comment"
-                  >
-                    <MessageCircle size={9} />
-                    {lineComments.length > 0 ? lineComments.length : ""}
-                  </button>
                 </div>
 
-                {lineComments.length > 0 && (
-                  <div style={{ padding: "0 14px 4px 26px" }}>
+                {isExpanded && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "0 16px 10px 20px",
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onFireLine(line.lineIndex, line.startSec);
+                      }}
+                      style={{
+                        background: "none",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: 8,
+                        padding: "5px 10px",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        color: "rgba(255,255,255,0.5)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        transition: "border-color 150ms, color 150ms",
+                        fontFamily: "monospace",
+                      }}
+                      onMouseEnter={(event) => {
+                        event.currentTarget.style.borderColor = "rgba(255,140,40,0.4)";
+                        event.currentTarget.style.color = "rgba(255,140,40,0.8)";
+                      }}
+                      onMouseLeave={(event) => {
+                        event.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+                        event.currentTarget.style.color = "rgba(255,255,255,0.5)";
+                      }}
+                    >
+                      🔥
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (isCommentOpen) {
+                          setCommentOpen(null);
+                          setInputText("");
+                        } else {
+                          setCommentOpen(line.lineIndex);
+                          setInputText("");
+                          setTimeout(() => inputRef.current?.focus(), 60);
+                        }
+                      }}
+                      style={{
+                        background: "none",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: 8,
+                        padding: "5px 10px",
+                        cursor: "pointer",
+                        fontSize: 11,
+                        color: lineComments.length > 0 ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.3)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontFamily: "monospace",
+                        transition: "border-color 150ms, color 150ms",
+                      }}
+                    >
+                      <MessageCircle size={11} />
+                      {lineComments.length > 0 && <span>{lineComments.length}</span>}
+                    </button>
+                  </div>
+                )}
+
+                {isExpanded && lineComments.length > 0 && (
+                  <div style={{ padding: "0 16px 8px 28px" }} onClick={(event) => event.stopPropagation()}>
                     {lineComments.map((comment) => (
-                      <div key={comment.id} style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", lineHeight: 1.5, padding: "2px 0", borderLeft: "1px solid rgba(255,255,255,0.06)", paddingLeft: 8, marginBottom: 2 }}>
+                      <div
+                        key={comment.id}
+                        style={{
+                          fontSize: 11,
+                          color: "rgba(255,255,255,0.35)",
+                          lineHeight: 1.5,
+                          padding: "2px 0 2px 8px",
+                          borderLeft: "1px solid rgba(255,255,255,0.06)",
+                          marginBottom: 3,
+                        }}
+                      >
                         {comment.text}
                       </div>
                     ))}
@@ -172,7 +335,15 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
                 )}
 
                 {isCommentOpen && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 14px 8px 26px" }} onClick={(event) => event.stopPropagation()}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "0 16px 12px 28px",
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     <input
                       ref={inputRef}
                       value={inputText}
@@ -180,32 +351,44 @@ export function LyricModePanel({ danceId, sections, allLines, reactionData, curr
                       onKeyDown={(event) => {
                         if (event.key === "Enter" && !event.shiftKey) {
                           event.preventDefault();
-                          handleSubmit();
+                          void handleSubmit();
                         }
                         if (event.key === "Escape") {
-                          setOpenLineIndex(null);
+                          setCommentOpen(null);
                           setInputText("");
                         }
                       }}
                       placeholder="comment on this line…"
                       maxLength={280}
-                      style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "rgba(255,255,255,0.7)", outline: "none", fontFamily: "inherit" }}
+                      style={{
+                        flex: 1,
+                        background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 8,
+                        padding: "7px 10px",
+                        fontSize: 12,
+                        color: "rgba(255,255,255,0.7)",
+                        outline: "none",
+                        fontFamily: "inherit",
+                      }}
                     />
                     <button
-                      onClick={handleSubmit}
+                      type="button"
+                      onClick={() => void handleSubmit()}
                       disabled={!inputText.trim() || submitting}
-                      style={{ background: "none", border: "none", cursor: inputText.trim() ? "pointer" : "default", color: inputText.trim() ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.15)", padding: 4, display: "flex", alignItems: "center", transition: "color 150ms", flexShrink: 0 }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: inputText.trim() ? "pointer" : "default",
+                        color: inputText.trim() ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.15)",
+                        padding: 4,
+                        display: "flex",
+                        alignItems: "center",
+                        transition: "color 150ms",
+                        flexShrink: 0,
+                      }}
                     >
                       <Send size={13} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setOpenLineIndex(null);
-                        setInputText("");
-                      }}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.2)", padding: 4, display: "flex", alignItems: "center", flexShrink: 0 }}
-                    >
-                      <X size={13} />
                     </button>
                   </div>
                 )}
