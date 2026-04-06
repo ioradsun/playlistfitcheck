@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:pipeline-guards": "bash scripts/check-render-pipeline-guards.sh",
-    "perf:collision-harness": "node scripts/collision-perf-harness.mjs"
+    "perf:collision-harness": "node scripts/collision-perf-harness.mjs",
+    "reset:copy": "node scripts/reset-site-copy.mjs"
   },
   "dependencies": {
     "@capacitor/cli": "^8.2.0",
