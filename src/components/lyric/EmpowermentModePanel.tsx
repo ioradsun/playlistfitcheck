@@ -15,7 +15,7 @@ interface Props {
 
 export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
   const [hookVoteCounts, setHookVoteCounts] = useState<number[]>([]);
-  const [voted, setVoted] = useState<Set<number>>(new Set());
+  const [voted, setVoted] = useState<number | null>(null);
 
   useEffect(() => {
     if (!danceId) return;
@@ -23,7 +23,10 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
     const stored = sessionStorage.getItem(`empower_voted_${danceId}`);
     if (stored) {
       try {
-        setVoted(new Set(JSON.parse(stored)));
+        const parsed = JSON.parse(stored);
+        // stored as single number or legacy array — handle both
+        const val = Array.isArray(parsed) ? parsed[0] : parsed;
+        if (typeof val === "number") setVoted(val);
       } catch {
         // ignore malformed session storage
       }
@@ -44,16 +47,15 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
   }, [danceId, empowermentPromise]);
 
   const castVote = async (hookIndex: number) => {
-    if (voted.has(hookIndex) || !danceId) return;
+    if (voted !== null || !danceId) return;
 
     setHookVoteCounts((prev) => {
       const next = [...prev];
       next[hookIndex] = (next[hookIndex] ?? 0) + 1;
       return next;
     });
-    const nextVoted = new Set(voted).add(hookIndex);
-    setVoted(nextVoted);
-    sessionStorage.setItem(`empower_voted_${danceId}`, JSON.stringify([...nextVoted]));
+    setVoted(hookIndex);
+    sessionStorage.setItem(`empower_voted_${danceId}`, JSON.stringify(hookIndex));
 
     await supabase
       .from("lyric_dance_angle_votes" as any)
@@ -91,7 +93,7 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
   }
 
   const totalVotes = hookVoteCounts.reduce((a, b) => a + b, 0);
-  const hasVoted = voted.size > 0;
+  const hasVoted = voted !== null;
   const topThree = empowermentPromise.hooks.slice(0, 3);
 
   return (
@@ -123,7 +125,7 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {topThree.map((hook, i) => {
-          const isVoted = voted.has(i);
+          const isVoted = voted === i;
           const votes = hookVoteCounts[i] ?? 0;
           const pct = totalVotes > 0
             ? Math.round((votes / totalVotes) * 100)
@@ -134,7 +136,7 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
               key={i}
               type="button"
               onClick={() => castVote(i)}
-              disabled={isVoted}
+              disabled={hasVoted}
               style={{
                 width: "100%",
                 display: "flex",
