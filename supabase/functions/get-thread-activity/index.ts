@@ -222,12 +222,13 @@ serve(async (req) => {
     events.push(...collapseFiresIntoGroups(myFires ?? [], "outgoing"));
 
     for (const row of playsOnMe ?? []) {
+      const dance = row.shareable_lyric_dances as any;
       events.push({
         id: `play-${row.session_id}`,
         kind: "play",
         direction: "incoming",
         created_at: row.updated_at,
-        song_name: row.shareable_lyric_dances?.song_name,
+        song_name: dance?.song_name,
         max_progress_pct: row.max_progress_pct,
         play_count: row.play_count,
         duration_sec: row.duration_sec,
@@ -236,12 +237,13 @@ serve(async (req) => {
     }
 
     for (const row of myPlays ?? []) {
+      const dance = row.shareable_lyric_dances as any;
       events.push({
         id: `play-${row.session_id}`,
         kind: "play",
         direction: "outgoing",
         created_at: row.updated_at,
-        song_name: row.shareable_lyric_dances?.song_name,
+        song_name: dance?.song_name,
         max_progress_pct: row.max_progress_pct,
         play_count: row.play_count,
         duration_sec: row.duration_sec,
@@ -250,58 +252,63 @@ serve(async (req) => {
     }
 
     for (const row of lyricCommentsOnMe ?? []) {
+      const dance = row.shareable_lyric_dances as any;
       events.push({
         id: row.id,
         kind: "lyric_comment",
         direction: "incoming",
         created_at: row.submitted_at,
-        song_name: row.shareable_lyric_dances?.song_name,
+        song_name: dance?.song_name,
         line_index: row.line_index,
         text: row.text,
       });
     }
 
     for (const row of myLyricComments ?? []) {
+      const dance = row.shareable_lyric_dances as any;
       events.push({
         id: row.id,
         kind: "lyric_comment",
         direction: "outgoing",
         created_at: row.submitted_at,
-        song_name: row.shareable_lyric_dances?.song_name,
+        song_name: dance?.song_name,
         line_index: row.line_index,
         text: row.text,
       });
     }
 
     for (const row of postCommentsOnMe ?? []) {
+      const post = row.songfit_posts as any;
       events.push({
         id: row.id,
         kind: "post_comment",
         direction: "incoming",
         created_at: row.created_at,
-        song_name: row.songfit_posts?.track_title,
+        song_name: post?.track_title,
         text: row.content,
       });
     }
 
     for (const row of myPostComments ?? []) {
+      const post = row.songfit_posts as any;
       events.push({
         id: row.id,
         kind: "post_comment",
         direction: "outgoing",
         created_at: row.created_at,
-        song_name: row.songfit_posts?.track_title,
+        song_name: post?.track_title,
         text: row.content,
       });
     }
 
     for (const row of savesOnMe ?? []) {
+      const post = row.songfit_posts as any;
       events.push({
         id: row.id,
         kind: "save",
         direction: "incoming",
         created_at: row.created_at,
-        song_name: row.songfit_posts?.track_title,
+        song_name: post?.track_title,
       });
     }
 
