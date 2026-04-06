@@ -10,7 +10,6 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
-import { motion, AnimatePresence } from "framer-motion";
 import { consumeShareableDancePrefetch, readCachedDanceData } from "@/lib/prefetch";
 import ClaimBanner from "@/components/claim/ClaimBanner";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -44,7 +43,6 @@ export default function ShareableLyricDance() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
-  const [badgeVisible, setBadgeVisible] = useState(false);
   const empowermentGenStarted = useRef(false);
   const isMobile = useIsMobile();
 
@@ -145,8 +143,7 @@ export default function ShareableLyricDance() {
     }).catch(() => {});
   }, [isMarketingView, data, localEmpowerment]);
 
-  // ── Badge + Lovable hide ───────────────────────────────────────────────
-  useEffect(() => { const t = setTimeout(() => setBadgeVisible(true), 1000); return () => clearTimeout(t); }, []);
+  // ── Lovable hide ───────────────────────────────────────────────────────
   useEffect(() => {
     const style = document.createElement("style");
     style.id = "hide-lovable-badge-ld";
@@ -203,21 +200,6 @@ export default function ShareableLyricDance() {
           songName={data?.song_name} artistName={data?.artist_name}
         />
       )}
-
-      <AnimatePresence>
-        {badgeVisible && !isMarketingView && !isMobile && data && (
-          <motion.button
-            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-            onClick={() => navigate(`/?from=lyric-dance&song=${encodeURIComponent(data.song_name)}`)}
-            className="fixed bottom-4 right-4 z-[60] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-white/[0.06] hover:border-white/15 hover:bg-black/80 transition-all group focus:outline-none"
-          >
-            <span className="text-[9px] font-mono text-white/30 group-hover:text-white/60 tracking-wider transition-colors">
-              Fit by toolsFM
-            </span>
-          </motion.button>
-        )}
-      </AnimatePresence>
 
       <div className="flex-1 min-h-0 overflow-hidden">
         {data && (

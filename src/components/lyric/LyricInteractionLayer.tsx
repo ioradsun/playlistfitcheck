@@ -4,7 +4,7 @@ import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { getSessionId } from "@/lib/sessionId";
 import { fetchSessionFires } from "@/lib/fire";
 
-const BAR_HEIGHT = 40;
+const BAR_HEIGHT = 56;
 
 interface FmlyBarProps {
   moments: Moment[];
@@ -153,7 +153,7 @@ export function FmlyBar({
     const spawnFireEmbers = (count: number, intensity: number) => {
       const rect = canvas.parentElement?.getBoundingClientRect();
       if (!rect) return;
-      const x0 = rect.width - BAR_HEIGHT;
+      const x0 = rect.width - 64;
       const x1 = rect.width;
       for (let i = 0; i < count; i++) {
         if (embers.length >= 24) break;
@@ -277,18 +277,27 @@ export function FmlyBar({
       <div
         style={{
           width: "100%",
-          height: BAR_HEIGHT,
           background: "#0a0a0f",
-          userSelect: "none",
-          WebkitUserSelect: "none",
-          touchAction: "none",
-          display: "flex",
-          alignItems: "stretch",
           borderTop: "1px solid rgba(255,255,255,0.04)",
+          display: "flex",
+          justifyContent: "center",
         }}
       >
-        {/* Moments container */}
-        <div style={{ flex: 1, display: "flex", position: "relative", minWidth: 0 }}>
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 480,
+            height: BAR_HEIGHT,
+            display: "flex",
+            alignItems: "stretch",
+            position: "relative",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            touchAction: "none",
+          }}
+        >
+          {/* Moments container */}
+          <div style={{ flex: 1, display: "flex", position: "relative", minWidth: 0 }}>
           {/* Ember canvas — overlaid on moments, pointer-events: none */}
           <canvas
             ref={emberCanvasRef}
@@ -357,43 +366,44 @@ export function FmlyBar({
               onSeekTo(pct * totalDuration);
             }}
           />
-        </div>
+          </div>
 
-        {/* Fire button — right edge */}
-        <button
-          type="button"
-          onPointerDown={handleDown}
-          onPointerUp={handleUp}
-          onPointerLeave={handleUp}
-          style={{
-            width: BAR_HEIGHT, height: BAR_HEIGHT, flexShrink: 0,
-            background: pressing
-              ? "radial-gradient(circle at 50% 50%, rgba(255,140,40,0.15) 0%, transparent 70%)"
-              : "radial-gradient(circle at 50% 50%, rgba(255,140,40,0.06) 0%, transparent 70%)",
-            border: "none",
-            borderLeft: "1px solid rgba(255,255,255,0.06)",
-            cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 0,
-            opacity: closingActive ? 0.5 : undefined,
-            transition: "background 0.3s ease",
-            userSelect: "none",
-            WebkitUserSelect: "none",
-            touchAction: "none",
-          }}
-        >
-          <span
+          {/* Fire button — right edge */}
+          <button
+            type="button"
+            onPointerDown={handleDown}
+            onPointerUp={handleUp}
+            onPointerLeave={handleUp}
             style={{
-              fontSize: 13,
-              opacity: pressing ? 0.9 : 0.3,
-              transition: "opacity 0.15s ease",
+              width: 64, height: BAR_HEIGHT, flexShrink: 0,
+              background: pressing
+                ? "radial-gradient(circle at 50% 50%, rgba(255,140,40,0.15) 0%, transparent 70%)"
+                : "radial-gradient(circle at 50% 50%, rgba(255,140,40,0.06) 0%, transparent 70%)",
+              border: "none",
+              borderLeft: "1px solid rgba(255,255,255,0.06)",
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: 0,
+              opacity: closingActive ? 0.5 : undefined,
+              transition: "background 0.3s ease",
               userSelect: "none",
-              pointerEvents: "none",
+              WebkitUserSelect: "none",
+              touchAction: "none",
             }}
           >
-            🔥
-          </span>
-        </button>
+            <span
+              style={{
+                fontSize: 22,
+                opacity: pressing ? 1 : 0.5,
+                transition: "opacity 0.15s ease",
+                userSelect: "none",
+                pointerEvents: "none",
+              }}
+            >
+              🔥
+            </span>
+          </button>
+        </div>
       </div>
     </>
   );
