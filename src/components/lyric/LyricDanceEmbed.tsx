@@ -133,6 +133,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const maxProgressRef = useRef<number>(0);
   const playCountRef = useRef<number>(0);
   const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const panelPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
@@ -223,6 +224,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   useEffect(() => {
     if (!player) return;
     if (cardMode !== "dance") {
+      if (cardMode !== "lyric" && panelPlayTimerRef.current) {
+        clearTimeout(panelPlayTimerRef.current);
+        panelPlayTimerRef.current = null;
+      }
       player.setMuted(true);
       return;
     }
@@ -429,6 +434,14 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               player.setRegion(startSec, endSec);
               player.setMuted(false);
               player.play();
+              // Clear any previous one-shot timer
+              if (panelPlayTimerRef.current) clearTimeout(panelPlayTimerRef.current);
+              // Mute after one play-through
+              const durationMs = (endSec - startSec) * 1000 + 150;
+              panelPlayTimerRef.current = setTimeout(() => {
+                player.setMuted(true);
+                panelPlayTimerRef.current = null;
+              }, durationMs);
             }}
           />
         )}
