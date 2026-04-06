@@ -1282,7 +1282,10 @@ const SongDetail = () => {
                 ref={playerRef}
                 lyricDanceId={danceId!}
                 songTitle={post.track_title}
-                artistName=""
+                artistName={(post as any).artist_name || post.track_title || ""}
+                avatarUrl={post.profiles?.avatar_url ?? null}
+                isVerified={post.profiles?.is_verified ?? false}
+                userId={post.user_id ?? null}
                 prefetchedData={danceData}
               />
             </div>
