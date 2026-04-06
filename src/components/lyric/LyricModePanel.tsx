@@ -10,6 +10,7 @@ interface Props {
   moments: Moment[];
   reactionData: Record<string, { line: Record<number, number>; total: number }>;
   currentTimeSec: number;
+  words: Array<{ word: string; start: number; end: number }>;
   onFireMoment: (lineIndex: number, timeSec: number, holdMs: number) => void;
   onPlayLine: (startSec: number, endSec: number) => void;
 }
@@ -26,6 +27,7 @@ export function LyricModePanel({
   moments,
   reactionData,
   currentTimeSec,
+  words,
   onFireMoment,
   onPlayLine,
 }: Props) {
@@ -91,6 +93,70 @@ export function LyricModePanel({
     const moment = moments.find((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec);
     return moment?.index ?? null;
   }, [moments, currentTimeSec]);
+
+  const displayRowsByMoment = useMemo(() => {
+    type DisplayRow = {
+      text: string;
+      startSec: number;
+      endSec: number;
+      wordRanges: Array<{ word: string; start: number; end: number }>;
+    };
+
+    const byMoment = new Map<number, DisplayRow[]>();
+    const sentenceEndPattern = /[.!?]\s*$/;
+
+    for (const moment of moments) {
+      const rows: Array<Omit<DisplayRow, "wordRanges">> = [];
+      let currentText = "";
+      let currentStartSec: number | null = null;
+      let currentEndSec: number | null = null;
+
+      for (const line of moment.lines) {
+        const lineText = line.text.trim();
+        if (!lineText) continue;
+
+        if (currentText.length === 0) {
+          currentText = lineText;
+          currentStartSec = line.startSec;
+          currentEndSec = line.endSec;
+        } else {
+          currentText = `${currentText} ${lineText}`;
+          currentEndSec = line.endSec;
+        }
+
+        if (currentText.length > 45 || sentenceEndPattern.test(lineText)) {
+          rows.push({
+            text: currentText,
+            startSec: currentStartSec ?? line.startSec,
+            endSec: currentEndSec ?? line.endSec,
+          });
+          currentText = "";
+          currentStartSec = null;
+          currentEndSec = null;
+        }
+      }
+
+      if (currentText.length > 0 && currentStartSec != null && currentEndSec != null) {
+        rows.push({
+          text: currentText,
+          startSec: currentStartSec,
+          endSec: currentEndSec,
+        });
+      }
+
+      byMoment.set(
+        moment.index,
+        rows.map((row) => ({
+          ...row,
+          wordRanges: words.filter(
+            (word) => word.start >= row.startSec - 0.05 && word.start < row.endSec + 0.05,
+          ),
+        })),
+      );
+    }
+
+    return byMoment;
+  }, [moments, words]);
 
   const handleFireDown = useCallback((momentIndex: number) => {
     if (holdTickRef.current) {
@@ -304,9 +370,9 @@ export function LyricModePanel({
                 cursor: "pointer",
               }}
             >
-              {moment.lines.map((line) => (
+              {(displayRowsByMoment.get(moment.index) ?? []).map((row, rowIdx) => (
                 <p
-                  key={line.lineIndex}
+                  key={`${moment.index}-${rowIdx}-${row.startSec}`}
                   style={{
                     margin: "0 0 2px",
                     fontSize: 14,
@@ -316,7 +382,24 @@ export function LyricModePanel({
                     transition: "color 200ms ease",
                   }}
                 >
-                  {line.text}
+                  {row.wordRanges.length > 0
+                    ? row.wordRanges.map((word) => {
+                      const isActive =
+                          currentTimeSec >= word.start - 0.05 && currentTimeSec < word.end + 0.05;
+                      return (
+                        <span
+                          key={word.start}
+                          style={{
+                            color: isActive ? "rgba(255,255,255,1)" : undefined,
+                            transition: "color 120ms",
+                          }}
+                        >
+                          {word.word}
+                          {" "}
+                        </span>
+                      );
+                    })
+                    : row.text}
                 </p>
               ))}
             </div>
