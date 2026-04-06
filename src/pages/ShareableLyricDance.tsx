@@ -210,6 +210,8 @@ export default function ShareableLyricDance() {
             prefetchedData={data}
             spotifyTrackId={(data as any)?.spotify_track_id ?? null}
             avatarUrl={coverAvatarUrl}
+            isVerified={profile?.is_verified ?? false}
+            userId={(data as any)?.user_id ?? null}
             postId={data.post_id ?? data.id}
             lyricDanceUrl={artistSlug && songSlug ? `/${artistSlug}/${songSlug}/lyric-dance` : null}
           />

@@ -310,9 +310,11 @@ export function FmlyBar({
             if (intensity <= 0) return null;
             const leftPct = (moment.startSec / Math.max(0.0001, totalDuration)) * 100;
             const widthPct = ((moment.endSec - moment.startSec) / Math.max(0.0001, totalDuration)) * 100;
-            const background = idx === hottestIdx
+            const background = idx === hottestIdx && count > 0
               ? `rgba(74, 222, 128, ${intensity * 0.12})`
-              : `rgba(255, 150, 40, ${intensity * 0.08})`;
+              : count > 0
+                ? `rgba(255, 255, 255, ${intensity * 0.04})`
+                : "transparent";
             return (
               <div
                 key={`${moment.startSec}-${moment.endSec}-heat`}
@@ -330,18 +332,6 @@ export function FmlyBar({
             );
           })}
 
-          {/* Progress fill */}
-          <div
-            style={{
-              position: "absolute", top: 0, left: 0, bottom: 0,
-              width: `${progressPct}%`,
-              opacity: 1,
-              background: "rgba(255,255,255,0.06)",
-              pointerEvents: "none",
-              transition: "width 150ms linear, opacity 200ms linear",
-              zIndex: 0,
-            }}
-          />
           {/* Playhead line */}
           {progressPct > 0 && (
             <div

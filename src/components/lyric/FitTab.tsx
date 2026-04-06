@@ -310,12 +310,6 @@ export function FitTab({
     );
   const siteCopy = useSiteCopy();
 
-  useEffect(() => {
-    if (filmMode === "beat" && dancePlayerRef.current) {
-      dancePlayerRef.current.wickBarEnabled = true;
-    }
-  }, [filmMode, publishedDanceId, prefetchedDanceData]);
-
   const refetchDanceData = useCallback(() => {
     if (!publishedDanceId) {
       setPrefetchedDanceData(null);
@@ -1354,7 +1348,10 @@ export function FitTab({
                   ref={dancePlayerRef}
                   lyricDanceId={publishedDanceId}
                   songTitle={lyricData.title || "Untitled"}
-                  artistName=""
+                  artistName={profile?.display_name || ""}
+                  avatarUrl={profile?.avatar_url ?? null}
+                  isVerified={profile?.is_verified ?? false}
+                  userId={user?.id ?? null}
                   prefetchedData={prefetchedDanceData}
                 />
               ) : (
