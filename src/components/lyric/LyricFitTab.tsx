@@ -174,24 +174,14 @@ export function LyricFitTab({
                 key={m}
                 type="button"
                 onClick={() => handleFilmModeChange(m)}
-                style={{
-                  borderRadius: 9999,
-                  padding: "6px 20px",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  border: "1px solid",
-                  cursor: "pointer",
-                  transition: "all 150ms",
-                  borderColor: filmMode === m
-                    ? "var(--primary)"
-                    : "rgba(255,255,255,0.15)",
-                  background: filmMode === m
-                    ? "var(--primary)"
-                    : "transparent",
-                  color: filmMode === m
-                    ? "var(--primary-foreground)"
-                    : "rgba(255,255,255,0.5)",
-                }}
+                className={[
+                  "rounded-full px-5 py-1.5 text-sm font-medium border",
+                  "transition-all duration-150 cursor-pointer",
+                  filmMode === m
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-transparent text-muted-foreground border-border",
+                  "hover:text-foreground hover:border-foreground/30",
+                ].join(" ")}
               >
                 {m}
               </button>
