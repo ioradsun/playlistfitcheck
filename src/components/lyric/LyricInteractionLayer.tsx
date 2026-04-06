@@ -4,7 +4,7 @@ import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { getSessionId } from "@/lib/sessionId";
 import { fetchSessionFires } from "@/lib/fire";
 
-const BAR_HEIGHT = 48;
+const BAR_HEIGHT = 20;
 
 interface FmlyBarProps {
   moments: Moment[];
@@ -287,7 +287,6 @@ export function FmlyBar({
         <div
           style={{
             width: "100%",
-            maxWidth: 480,
             height: BAR_HEIGHT,
             position: "relative",
             userSelect: "none",
@@ -372,7 +371,10 @@ export function FmlyBar({
           <div
             style={{
               position: "absolute",
-              inset: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              top: -12,
               zIndex: 1,
               cursor: "pointer",
               touchAction: "none",
@@ -404,8 +406,8 @@ export function FmlyBar({
             style={{
               position: "absolute",
               left: "50%",
-              top: "50%",
-              transform: "translate(-50%, -50%)",
+              bottom: "100%",
+              transform: "translate(-50%, 50%)",
               zIndex: 5,
               width: 48,
               height: 48,
