@@ -389,16 +389,11 @@ export function useFeedPosts(): FeedState {
     searchDebounceRef.current = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const term = `%${q}%`;
         const { data } = await supabase
           .from("songfit_posts")
           .select(POST_SELECT)
           .eq("status", "live")
-          .or(
-            `track_title.ilike.${term},` +
-            `caption.ilike.${term},` +
-            `track_artists_json::text.ilike.${term}`,
-          )
+          .or(`track_title.ilike."%${q}%",caption.ilike."%${q}%"`)
           .order("created_at", { ascending: false })
           .limit(40);
 
