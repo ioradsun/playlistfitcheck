@@ -330,9 +330,8 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     <div className={reelsMode ? "w-full" : "w-full max-w-[470px] mx-auto"}>
       {reelsMode ? (
         <>
-          <div className="fixed top-3 left-0 right-0 z-[60] flex flex-col items-center pointer-events-none">
-            <div className="flex items-center justify-center px-3 py-2">
-              <div className="flex w-full items-center justify-center gap-2">
+           <div className="fixed top-3 left-0 right-0 z-[60] flex justify-center pointer-events-none">
+             <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-background/80 backdrop-blur-md px-1">
                 {!searchUiVisible && (
                   <>
                     <BillboardToggle
@@ -423,26 +422,27 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                     </AnimatePresence>
                   </>
                 )}
-              </div>
-            </div>
-
-            {hasSearchQuery && (
-              <div className="px-3 pb-2 text-center font-mono text-[10px] tracking-[0.08em] text-muted-foreground">
-                {feed.searchLoading
-                  ? `Searching "${feed.searchTerm.trim()}"...`
-                  : `${feed.searchResults.length} result${feed.searchResults.length !== 1 ? "s" : ""} for "${feed.searchTerm.trim()}"`}
-              </div>
-            )}
-
-            {feed.pendingNewCount > 0 && !feed.loading && (
-              <button
-                onClick={handleLoadNewDrops}
-                className="w-full border-t border-border/30 py-2 text-center text-[11px] font-mono tracking-[0.1em] text-primary transition-colors hover:text-primary/80"
-              >
-                {feed.pendingNewCount} New Drop{feed.pendingNewCount !== 1 ? "s" : ""}
-              </button>
-            )}
-          </div>
+             </div>
+           </div>
+           {hasSearchQuery && (
+             <div className="fixed top-14 left-0 right-0 z-[59] flex justify-center pointer-events-none">
+               <div className="pointer-events-auto rounded-full bg-background/80 backdrop-blur-md px-3 py-1 font-mono text-[10px] tracking-[0.08em] text-muted-foreground">
+                 {feed.searchLoading
+                   ? `Searching "${feed.searchTerm.trim()}"...`
+                   : `${feed.searchResults.length} result${feed.searchResults.length !== 1 ? "s" : ""} for "${feed.searchTerm.trim()}"`}
+               </div>
+             </div>
+           )}
+           {feed.pendingNewCount > 0 && !feed.loading && (
+             <div className="fixed top-14 left-0 right-0 z-[58] flex justify-center pointer-events-none">
+               <button
+                 onClick={handleLoadNewDrops}
+                 className="pointer-events-auto rounded-full bg-background/80 backdrop-blur-md px-4 py-1.5 text-[10px] font-mono tracking-[0.12em] text-primary transition-colors hover:text-primary/80"
+               >
+                 {feed.pendingNewCount} New Drop{feed.pendingNewCount !== 1 ? "s" : ""}
+               </button>
+             </div>
+           )}
         </>
       ) : (
         <div className="border-b border-border/40">
