@@ -410,8 +410,8 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
 
               <div
                 className={cn(
-                  "flex items-center overflow-hidden rounded-full border border-border/60 bg-card/70 transition-all duration-200",
-                  searchUiVisible ? "w-[220px] px-2" : "w-10 px-0.5",
+                  "flex items-center overflow-hidden rounded-full transition-all duration-200",
+                  searchUiVisible ? "w-[220px] border border-border/60 bg-card/70 px-2" : "w-10 px-0.5",
                 )}
               >
                 <button
