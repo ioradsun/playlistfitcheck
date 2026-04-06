@@ -12,9 +12,17 @@ interface Props {
   loadingMsg?: string;
   sceneInput?: React.ReactNode;
   uploadLabel?: string;
+  filmMode?: "song" | "beat";
 }
 
-export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput, uploadLabel }: Props) {
+export function LyricUploader({
+  onTranscribe,
+  loading,
+  loadingMsg,
+  sceneInput,
+  uploadLabel,
+  filmMode = "song",
+}: Props) {
   const siteCopy = useSiteCopy();
   const [files, setFiles] = useState<File[]>([]);
   const [referenceLyrics, setReferenceLyrics] = useState("");
@@ -48,19 +56,21 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput, u
         />
 
         {/* Lyrics — no label, contextual helper */}
-        <div className="space-y-1.5">
-          {hasLyrics && (
-            <span className="text-xs text-muted-foreground/60 block">Lyrics (optional)</span>
-          )}
-          <Textarea
-            value={referenceLyrics}
-            onChange={(e) => setReferenceLyrics(e.target.value)}
-            placeholder="Adding lyrics improves timing and accuracy."
-            className="min-h-[80px] resize-y text-sm bg-background border border-border rounded-lg px-3 py-2.5 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
-            disabled={loading}
-            aria-label="Paste your song lyrics"
-          />
-        </div>
+        {filmMode === "song" && (
+          <div className="space-y-1.5">
+            {hasLyrics && (
+              <span className="text-xs text-muted-foreground/60 block">Lyrics (optional)</span>
+            )}
+            <Textarea
+              value={referenceLyrics}
+              onChange={(e) => setReferenceLyrics(e.target.value)}
+              placeholder="Adding lyrics improves timing and accuracy."
+              className="min-h-[80px] resize-y text-sm bg-background border border-border rounded-lg px-3 py-2.5 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+              disabled={loading}
+              aria-label="Paste your song lyrics"
+            />
+          </div>
+        )}
 
         {/* Scene — no label */}
         {sceneInput}

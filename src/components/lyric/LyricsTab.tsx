@@ -558,6 +558,7 @@ export function LyricsTab({
         loadingMsg="Syncing..."
         sceneInput={sceneInput}
         uploadLabel={filmMode === "beat" ? "Upload Your Beat" : undefined}
+        filmMode={filmMode}
       />
     </div>
   );
