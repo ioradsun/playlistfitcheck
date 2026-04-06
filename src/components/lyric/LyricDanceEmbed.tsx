@@ -77,7 +77,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     currentTimeSec,
     reactionData,
     durationSec,
-    lyricSections,
     moments,
     activeLine,
   } = useLyricDanceCore({
@@ -351,14 +350,19 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         {cardMode === "lyric" && (
           <LyricModePanel
             danceId={danceId}
-            sections={lyricSections.sections}
-            allLines={lyricSections.allLines}
+            moments={moments}
             reactionData={reactionData}
             currentTimeSec={currentTimeSec}
             onFireLine={(lineIndex, timeSec) => {
               if (!danceId) return;
               player?.fireFire(0);
               emitFire(danceId, lineIndex, timeSec, 0, "feed", userId ?? null);
+            }}
+            onPlayLine={(startSec, endSec) => {
+              if (!player) return;
+              player.seek(startSec);
+              player.setRegion(startSec, endSec);
+              player.play();
             }}
           />
         )}
