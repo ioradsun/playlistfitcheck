@@ -344,6 +344,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         artistName={artistName}
         songTitle={songTitle}
         spotifyArtistId={spotifyArtistId}
+        lyricDanceUrl={lyricDanceUrl}
         showMenuButton={isFeedEmbed}
         isVerified={isVerified}
         userId={userId}
