@@ -353,10 +353,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             moments={moments}
             reactionData={reactionData}
             currentTimeSec={currentTimeSec}
-            onFireLine={(lineIndex, timeSec) => {
+            onFireMoment={(lineIndex, timeSec, holdMs) => {
               if (!danceId) return;
-              player?.fireFire(0);
-              emitFire(danceId, lineIndex, timeSec, 0, "feed", userId ?? null);
+              player?.fireFire(holdMs);
+              emitFire(danceId, lineIndex, timeSec, holdMs, "feed", userId ?? null);
             }}
             onPlayLine={(startSec, endSec) => {
               if (!player) return;
