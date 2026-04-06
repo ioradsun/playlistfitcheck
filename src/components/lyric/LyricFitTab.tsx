@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import {
@@ -17,6 +18,7 @@ import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
 
 export type { FitReadiness, PipelineStages, PipelineStageStatus, GenerationStatus };
+export type FilmMode = "song" | "beat";
 
 interface Props {
   initialLyric?: any;
@@ -58,6 +60,10 @@ export function LyricFitTab({
 
   const [activeTab, setActiveTab] = React.useState<LyricFitView>("lyrics");
   const [sceneDescription, setSceneDescription] = React.useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [filmMode, setFilmMode] = React.useState<FilmMode>(
+    searchParams.get("mode") === "beat" ? "beat" : "song",
+  );
 
   const p = useLyricPipeline({
     initialLyric,
@@ -69,7 +75,16 @@ export function LyricFitTab({
     onSavedId,
     claimMeta: claimMeta ?? null,
     onClaimPublished,
+    filmMode,
   });
+
+  const handleFilmModeChange = React.useCallback((m: FilmMode) => {
+    setFilmMode(m);
+    setSearchParams(m === "beat" ? { mode: "beat" } : {}, { replace: true });
+    if (!p.audioFile) {
+      p.resetProject();
+    }
+  }, [setSearchParams, p.audioFile, p.resetProject]);
 
   const handleViewChange = useCallback((nextView: LyricFitView) => {
     if (
@@ -94,6 +109,13 @@ export function LyricFitTab({
     }
   }, [claimMeta, p.lyricData, p.audioFile, activeTab]);
 
+  useEffect(() => {
+    if (filmMode !== "beat") return;
+    if (p.fitReadiness === "ready" && p.audioFile && activeTab === "lyrics") {
+      setActiveTab("fit");
+    }
+  }, [filmMode, p.fitReadiness, p.audioFile, activeTab]);
+
   const sceneInputNode = !p.lyricData ? (
     <div className="space-y-1.5">
       <div className="relative">
@@ -101,7 +123,9 @@ export function LyricFitTab({
           type="text"
           value={sceneDescription}
           onChange={(e) => setSceneDescription(e.target.value)}
-          placeholder="Where are you when this song plays? ex: driving at night. on a rooftop. in a crowded club."
+          placeholder={filmMode === "beat"
+            ? "What's the vibe? Where does this beat live? ex: late night studio. club energy. sunday morning."
+            : "Where are you when this song plays? ex: driving at night. on a rooftop. in a crowded club."}
           className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder:text-muted-foreground/50 placeholder:italic focus:outline-none focus:ring-1 focus:ring-primary/50"
           maxLength={200}
           aria-label="Scene description"
@@ -114,6 +138,7 @@ export function LyricFitTab({
     <div className="flex flex-col flex-1">
       {p.lyricData && (
         <LyricFitToggle
+          filmMode={filmMode}
           view={activeTab}
           onViewChange={handleViewChange}
           fitDisabled={p.fitDisabled}
@@ -134,6 +159,45 @@ export function LyricFitTab({
           minHeight: 0,
         }}
       >
+        {!p.audioFile && !p.lyricData && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+              padding: "16px 16px 0",
+            }}
+          >
+            {(["song", "beat"] as FilmMode[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => handleFilmModeChange(m)}
+                style={{
+                  borderRadius: 9999,
+                  padding: "6px 20px",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  border: "1px solid",
+                  cursor: "pointer",
+                  transition: "all 150ms",
+                  borderColor: filmMode === m
+                    ? "var(--primary)"
+                    : "rgba(255,255,255,0.15)",
+                  background: filmMode === m
+                    ? "var(--primary)"
+                    : "transparent",
+                  color: filmMode === m
+                    ? "var(--primary-foreground)"
+                    : "rgba(255,255,255,0.5)",
+                }}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
         <LyricsTab
           lyricData={p.lyricData}
           setLyricData={p.setLyricData}
@@ -160,13 +224,17 @@ export function LyricFitTab({
           onAudioSubmitted={p.handleAudioSubmitted}
           onUploadStarted={(payload) => {
             setActiveTab("lyrics");
-            p.setPipelineStages((prev) => ({ ...prev, transcript: "running" }));
+            p.setPipelineStages((prev) => ({
+              ...prev,
+              transcript: filmMode === "beat" ? "done" : "running",
+            }));
             onUploadStartedProp?.(payload);
           }}
           onTitleChange={p.handleTitleChange}
           spotifyTrackId={p.spotifyTrackId}
           setSpotifyTrackId={p.setSpotifyTrackId}
           autoSubmitFile={autoSubmitFile}
+          filmMode={filmMode}
         />
       </div>
 
@@ -201,6 +269,7 @@ export function LyricFitTab({
             sectionImageError={p.sectionImageError}
             onTitleChange={p.handleTitleChange}
             subView={activeTab === "data" ? "data" : "fit"}
+            filmMode={filmMode}
           />
         </div>
       )}

@@ -8,8 +8,8 @@
 import { memo, useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useNavigate } from "react-router-dom";
 import { useFeedPosts } from "./useFeedPosts";
+import { PlusMenu } from "./PlusMenu";
 import { SongFitPostCard } from "./SongFitPostCard";
 import { BillboardToggle } from "./BillboardToggle";
 import { audioController } from "@/lib/audioController";
@@ -287,9 +287,9 @@ interface SongFitFeedProps {
 }
 
 export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const hasFadedIn = useRef(false);
+  const [plusOpen, setPlusOpen] = useState(false);
 
   const feed = useFeedPosts();
 
@@ -338,13 +338,20 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                 isLoggedIn={!!user}
               />
               <div className="w-px h-4 bg-border/60" />
-              <button
-                onClick={() => navigate("/LyricFit")}
-                className="px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Add your song"
-              >
-                <Plus size={16} />
-              </button>
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => setPlusOpen((v) => !v)}
+                  className="px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Add music"
+                >
+                  <Plus size={16} />
+                </button>
+                <PlusMenu
+                  open={plusOpen}
+                  onClose={() => setPlusOpen(false)}
+                  anchor="header"
+                />
+              </div>
             </div>
           </div>
         </>
@@ -391,9 +398,9 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
 
       {/* ── Reels: floating composer ── */}
       {reelsMode && (
-        <>
+        <div style={{ position: "relative" }}>
           <button
-            onClick={() => navigate("/LyricFit")}
+            onClick={() => setPlusOpen((v) => !v)}
             className="fixed top-3 right-3 z-[60] flex items-center justify-center rounded-full transition-all"
             style={{
               width: 40,
@@ -404,7 +411,12 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           >
             <Plus size={18} className="text-white/80" />
           </button>
-        </>
+          <PlusMenu
+            open={plusOpen}
+            onClose={() => setPlusOpen(false)}
+            anchor="floating"
+          />
+        </div>
       )}
     </div>
   );

@@ -20,6 +20,7 @@ import type { ReactNode } from "react";
 import { AuthNudge } from "@/components/ui/AuthNudge";
 import { persistQueue } from "@/lib/persistQueue";
 import { buildPhrases } from "@/lib/phraseEngine";
+import type { FilmMode } from "./LyricFitTab";
 
 const MAX_RAW_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 const MAX_TRANSCRIBE_ATTEMPTS = 2;
@@ -133,6 +134,7 @@ interface Props {
   setSpotifyTrackId: (id: string | null) => void;
   /** When set, auto-submits this file for transcription on mount. Used by claim pages. */
   autoSubmitFile?: File | null;
+  filmMode?: FilmMode;
 }
 
 export function LyricsTab({
@@ -163,6 +165,7 @@ export function LyricsTab({
   onTitleChange,
   setSpotifyTrackId,
   autoSubmitFile = null,
+  filmMode = "song",
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [debugData, setDebugData] = useState<any | null>(null);
@@ -231,6 +234,20 @@ export function LyricsTab({
         sessionAudio.set("lyric", "__unsaved__", file, { ttlMs: 5 * 60 * 1000 });
       }
       onUploadStarted?.({ file, projectId, title: draftTitle });
+
+      if (filmMode === "beat") {
+        setLyricData({ title: draftTitle, lines: [] });
+        setLines([]);
+        setAudioFile(file);
+        setHasRealAudio(true);
+        setSavedId(projectId);
+        if (projectId) {
+          sessionAudio.set("lyric", projectId, file, { ttlMs: 20 * 60 * 1000 });
+        }
+        onAudioSubmitted?.(file);
+        setLoading(false);
+        return;
+      }
 
       // Start beat grid analysis in parallel with transcription
       onAudioSubmitted?.(file);
@@ -433,7 +450,7 @@ export function LyricsTab({
         setLoading(false);
       }
     },
-    [quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted, setSpotifyTrackId],
+    [quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted, setSpotifyTrackId, filmMode],
   );
 
   // ── Auto-submit for claim pages ──────────────────────────────────────
@@ -540,6 +557,7 @@ export function LyricsTab({
         loading={loading}
         loadingMsg="Syncing..."
         sceneInput={sceneInput}
+        uploadLabel={filmMode === "beat" ? "Upload Your Beat" : undefined}
       />
     </div>
   );
