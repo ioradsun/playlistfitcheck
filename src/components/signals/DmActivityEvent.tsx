@@ -49,39 +49,16 @@ export function DmActivityEvent({ event, partnerFirstName }: Props) {
   if (!label) return null;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: isIncoming ? "flex-start" : "flex-end",
-        padding: "2px 14px",
-      }}
-    >
+    <div className={`flex px-3.5 py-0.5 ${isIncoming ? "justify-start" : "justify-end"}`}>
       <div
-        style={{
-          maxWidth: "80%",
-          fontSize: 11,
-          color: "rgba(255,255,255,0.35)",
-          fontFamily: "monospace",
-          lineHeight: 1.5,
-          padding: "4px 8px",
-          borderRadius: 6,
-          background: isIncoming
-            ? "rgba(255,255,255,0.03)"
-            : "rgba(255,255,255,0.06)",
-          border: isIncoming
-            ? "1px solid rgba(255,255,255,0.05)"
-            : "1px solid rgba(255,255,255,0.09)",
-        }}
+        className={`max-w-[80%] text-[11px] text-muted-foreground font-mono leading-relaxed px-2 py-1 rounded-md border ${
+          isIncoming
+            ? "bg-muted/30 border-border/60"
+            : "bg-muted/50 border-border"
+        }`}
       >
         <span>{label}</span>
-        <span
-          style={{
-            display: "block",
-            fontSize: 9,
-            color: "rgba(255,255,255,0.18)",
-            marginTop: 2,
-          }}
-        >
+        <span className="block text-[9px] text-muted-foreground/40 mt-0.5">
           {time}
         </span>
       </div>

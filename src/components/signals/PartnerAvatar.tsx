@@ -7,30 +7,19 @@ interface Props {
 export function PartnerAvatar({ name, avatarUrl, size = 36 }: Props) {
   return (
     <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        overflow: "hidden",
-        background: "rgba(255,255,255,0.08)",
-        flexShrink: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+      className="rounded-full overflow-hidden bg-muted shrink-0 flex items-center justify-center"
+      style={{ width: size, height: size }}
     >
       {avatarUrl ? (
         <img
           src={avatarUrl}
           alt=""
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          className="w-full h-full object-cover"
         />
       ) : (
         <span
-          style={{
-            fontSize: Math.round(size * 0.36),
-            color: "rgba(255,255,255,0.4)",
-          }}
+          className="text-muted-foreground/60"
+          style={{ fontSize: Math.round(size * 0.36) }}
         >
           {(name?.[0] ?? "?").toUpperCase()}
         </span>
