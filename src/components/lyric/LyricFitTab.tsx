@@ -124,8 +124,8 @@ export function LyricFitTab({
           value={sceneDescription}
           onChange={(e) => setSceneDescription(e.target.value)}
           placeholder={filmMode === "beat"
-            ? "What's the vibe? Where does this beat live? ex: late night studio. club energy. sunday morning."
-            : "Where are you when this song plays? ex: driving at night. on a rooftop. in a crowded club."}
+            ? "What energy does this beat carry? Dark and heavy. Euphoric. 3am in the studio."
+            : "Where does this song live? Late night drive. Club at 1am. Crying in the shower."}
           className="w-full bg-background border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder:text-muted-foreground/50 placeholder:italic focus:outline-none focus:ring-1 focus:ring-primary/50"
           maxLength={200}
           aria-label="Scene description"
@@ -159,35 +159,6 @@ export function LyricFitTab({
           minHeight: 0,
         }}
       >
-        {!p.audioFile && !p.lyricData && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 12,
-              padding: "16px 16px 0",
-            }}
-          >
-            {(["song", "beat"] as FilmMode[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => handleFilmModeChange(m)}
-                className={[
-                  "rounded-full px-5 py-1.5 text-sm font-medium border",
-                  "transition-all duration-150 cursor-pointer",
-                  filmMode === m
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-transparent text-muted-foreground border-border",
-                  "hover:text-foreground hover:border-foreground/30",
-                ].join(" ")}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-        )}
         <LyricsTab
           lyricData={p.lyricData}
           setLyricData={p.setLyricData}
@@ -225,6 +196,7 @@ export function LyricFitTab({
           setSpotifyTrackId={p.setSpotifyTrackId}
           autoSubmitFile={autoSubmitFile}
           filmMode={filmMode}
+          onFilmModeChange={handleFilmModeChange}
         />
       </div>
 
