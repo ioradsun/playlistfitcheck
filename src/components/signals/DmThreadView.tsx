@@ -34,58 +34,21 @@ export function DmThreadView({ partner }: Props) {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        background: "#0a0a0a",
-      }}
-    >
-      <div
-        className="md:hidden"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "12px 16px",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-          flexShrink: 0,
-        }}
-      >
+    <div className="flex flex-col h-full bg-background">
+      {/* Mobile header */}
+      <div className="md:hidden flex items-center gap-2.5 px-4 py-3 border-b border-border shrink-0">
         <PartnerAvatar
           name={partner.partner_name}
           avatarUrl={partner.partner_avatar}
           size={32}
         />
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span
-              style={{
-                fontSize: 13,
-                color: "rgba(255,255,255,0.85)",
-                fontWeight: 500,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                display: "block",
-              }}
-            >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[13px] text-foreground/85 font-medium overflow-hidden text-ellipsis whitespace-nowrap block">
               {partner.partner_name}
             </span>
             {partner.fmly_number && (
-              <span
-                style={{
-                  fontSize: 9,
-                  fontFamily: "monospace",
-                  color: "rgba(255,255,255,0.4)",
-                  border: "0.5px solid rgba(255,255,255,0.15)",
-                  borderRadius: 3,
-                  padding: "1px 4px",
-                  letterSpacing: "0.05em",
-                }}
-              >
+              <span className="text-[9px] font-mono text-muted-foreground/60 border border-border rounded px-1 tracking-wide">
                 {partner.fmly_number}
               </span>
             )}
@@ -93,63 +56,20 @@ export function DmThreadView({ partner }: Props) {
         </div>
       </div>
 
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "12px 0",
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-        }}
-      >
+      {/* Messages area */}
+      <div className="flex-1 overflow-y-auto py-3 flex flex-col gap-1">
         {loading && (
-          <p
-            style={{
-              textAlign: "center",
-              fontSize: 11,
-              color: "rgba(255,255,255,0.2)",
-              fontFamily: "monospace",
-              padding: 24,
-              margin: 0,
-            }}
-          >
+          <p className="text-center text-[11px] text-muted-foreground/40 font-mono p-6 m-0">
             Loading…
           </p>
         )}
 
         {!loading && events.length === 0 && (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              padding: 40,
-            }}
-          >
-            <p
-              style={{
-                fontSize: 13,
-                color: "rgba(255,255,255,0.25)",
-                textAlign: "center",
-                lineHeight: 1.5,
-                margin: 0,
-              }}
-            >
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 p-10">
+            <p className="text-[13px] text-muted-foreground/50 text-center leading-relaxed m-0">
               Your shared music history will appear here.
             </p>
-            <p
-              style={{
-                fontSize: 11,
-                color: "rgba(255,255,255,0.15)",
-                fontFamily: "monospace",
-                textAlign: "center",
-                margin: 0,
-              }}
-            >
+            <p className="text-[11px] text-muted-foreground/30 font-mono text-center m-0">
               Be the first to say something.
             </p>
           </div>
@@ -161,69 +81,46 @@ export function DmThreadView({ partner }: Props) {
             return (
               <div
                 key={event.id}
-                style={{
-                  display: "flex",
-                  justifyContent: isMe ? "flex-end" : "flex-start",
-                  padding: "2px 14px",
-                }}
+                className={`flex px-3.5 py-0.5 ${isMe ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  style={{
-                    maxWidth: "72%",
-                    background: isMe
-                      ? "rgba(255,255,255,0.10)"
-                      : "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: isMe
-                      ? "12px 12px 2px 12px"
-                      : "12px 12px 12px 2px",
-                    padding: "8px 12px",
-                  }}
+                  className={`max-w-[72%] border border-border px-3 py-2 ${
+                    isMe
+                      ? "bg-primary/10 rounded-xl rounded-br-sm"
+                      : "bg-muted/50 rounded-xl rounded-bl-sm"
+                  }`}
                 >
-                  <p
-                    style={{
-                      fontSize: 13,
-                      color: "rgba(255,255,255,0.85)",
-                      lineHeight: 1.45,
-                      margin: 0,
-                      wordBreak: "break-word",
-                    }}
-                  >
+                  <p className="text-[13px] text-foreground/85 leading-[1.45] m-0 break-words">
                     {event.text}
                   </p>
                   <p
-                    style={{
-                      fontSize: 9,
-                      color: "rgba(255,255,255,0.2)",
-                      fontFamily: "monospace",
-                      margin: "4px 0 0",
-                      textAlign: isMe ? "right" : "left",
-                    }}
+                    className={`text-[9px] text-muted-foreground/40 font-mono mt-1 mb-0 ${
+                      isMe ? "text-right" : "text-left"
+                    }`}
                   >
-                    {formatDistanceToNow(
-                      new Date(event.created_at),
-                      { addSuffix: true },
-                    )}
+                    {formatDistanceToNow(new Date(event.created_at), {
+                      addSuffix: true,
+                    })}
                   </p>
                 </div>
               </div>
             );
           }
-          return <DmActivityEvent key={event.id} event={event} partnerFirstName={partnerFirstName} />;
+          return (
+            <DmActivityEvent
+              key={event.id}
+              event={event}
+              partnerFirstName={partnerFirstName}
+            />
+          );
         })}
 
         <div ref={bottomRef} />
       </div>
 
+      {/* Input bar */}
       <div
-        style={{
-          padding: "10px 14px",
-          borderTop: "1px solid rgba(255,255,255,0.06)",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          flexShrink: 0,
-        }}
+        className="px-3.5 py-2.5 border-t border-border flex items-center gap-2 shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -237,34 +134,16 @@ export function DmThreadView({ partner }: Props) {
           }}
           placeholder="say something…"
           maxLength={2000}
-          style={{
-            flex: 1,
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 10,
-            padding: "8px 12px",
-            fontSize: 13,
-            color: "rgba(255,255,255,0.8)",
-            outline: "none",
-            fontFamily: "inherit",
-          }}
+          className="flex-1 bg-muted/50 border border-border rounded-[10px] px-3 py-2 text-[13px] text-foreground/80 outline-none font-[inherit] placeholder:text-muted-foreground/40"
         />
         <button
           onClick={() => void handleSend()}
           disabled={!input.trim() || sending}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: input.trim() && !sending ? "pointer" : "default",
-            color: input.trim() && !sending
-              ? "rgba(255,255,255,0.55)"
-              : "rgba(255,255,255,0.15)",
-            display: "flex",
-            alignItems: "center",
-            padding: 4,
-            transition: "color 150ms",
-            flexShrink: 0,
-          }}
+          className={`bg-transparent border-none flex items-center p-1 transition-colors shrink-0 ${
+            input.trim() && !sending
+              ? "cursor-pointer text-primary"
+              : "cursor-default text-muted-foreground/30"
+          }`}
         >
           <Send size={15} />
         </button>

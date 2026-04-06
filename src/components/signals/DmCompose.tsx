@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronUp, Minus, Send, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useDmContext } from "@/hooks/useDmContext";
@@ -13,17 +13,6 @@ interface ProfileResult {
   avatar_url: string | null;
   trailblazer_number: number | null;
 }
-
-const iconBtnStyle: CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  color: "rgba(255,255,255,0.3)",
-  display: "flex",
-  alignItems: "center",
-  padding: 3,
-  borderRadius: 4,
-};
 
 export function DmCompose() {
   const { composePartnerId, closeCompose, openCompose } = useDmContext();
@@ -106,35 +95,14 @@ export function DmCompose() {
 
   return (
     <div
-      style={{
-        position: "fixed",
-        bottom: 16,
-        right: 16,
-        width: 320,
-        background: "#111",
-        border: "1px solid rgba(255,255,255,0.10)",
-        borderRadius: 12,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        transition: "height 200ms ease",
-      }}
+      className="fixed bottom-4 right-4 w-80 bg-card border border-border rounded-xl shadow-lg z-[9999] flex flex-col overflow-hidden transition-[height] duration-200"
       onClick={(e) => e.stopPropagation()}
     >
+      {/* Header */}
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "10px 12px",
-          borderBottom: minimized
-            ? "none"
-            : "1px solid rgba(255,255,255,0.06)",
-          cursor: "pointer",
-          flexShrink: 0,
-        }}
+        className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer shrink-0 ${
+          minimized ? "" : "border-b border-border"
+        }`}
         onClick={() => setMinimized((m) => !m)}
       >
         {editingPartner ? (
@@ -152,17 +120,7 @@ export function DmCompose() {
             }}
             placeholder="Search by name…"
             autoFocus
-            style={{
-              flex: 1,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 6,
-              padding: "4px 8px",
-              fontSize: 12,
-              color: "rgba(255,255,255,0.8)",
-              outline: "none",
-              fontFamily: "inherit",
-            }}
+            className="flex-1 bg-muted/50 border border-border rounded-md px-2 py-1 text-xs text-foreground/80 outline-none font-[inherit] placeholder:text-muted-foreground/40"
           />
         ) : (
           <>
@@ -178,45 +136,13 @@ export function DmCompose() {
                 setSearchQuery("");
                 setTimeout(() => searchRef.current?.focus(), 50);
               }}
-              style={{
-                flex: 1,
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                textAlign: "left",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: 0,
-                minWidth: 0,
-              }}
+              className="flex-1 bg-transparent border-none cursor-pointer text-left flex items-center gap-1.5 p-0 min-w-0"
             >
-              <span
-                style={{
-                  fontSize: 12,
-                  color: "rgba(255,255,255,0.85)",
-                  fontWeight: 500,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  flex: 1,
-                  minWidth: 0,
-                }}
-              >
+              <span className="text-xs text-foreground/85 font-medium overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0">
                 {partnerProfile?.display_name ?? "…"}
               </span>
               {fmlyBadge && (
-                <span
-                  style={{
-                    fontSize: 8,
-                    fontFamily: "monospace",
-                    color: "rgba(255,255,255,0.35)",
-                    border: "0.5px solid rgba(255,255,255,0.12)",
-                    borderRadius: 2,
-                    padding: "0 3px",
-                    flexShrink: 0,
-                  }}
-                >
+                <span className="text-[8px] font-mono text-muted-foreground/50 border border-border rounded-sm px-1 shrink-0">
                   {fmlyBadge}
                 </span>
               )}
@@ -224,13 +150,13 @@ export function DmCompose() {
           </>
         )}
 
-        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+        <div className="flex gap-1 shrink-0">
           <button
             onClick={(e) => {
               e.stopPropagation();
               setMinimized((m) => !m);
             }}
-            style={iconBtnStyle}
+            className="bg-transparent border-none cursor-pointer text-muted-foreground/50 flex items-center p-0.5 rounded"
             aria-label={minimized ? "Expand" : "Minimize"}
           >
             {minimized ? <ChevronUp size={13} /> : <Minus size={13} />}
@@ -240,7 +166,7 @@ export function DmCompose() {
               e.stopPropagation();
               closeCompose();
             }}
-            style={iconBtnStyle}
+            className="bg-transparent border-none cursor-pointer text-muted-foreground/50 flex items-center p-0.5 rounded"
             aria-label="Close"
           >
             <X size={13} />
@@ -248,20 +174,10 @@ export function DmCompose() {
         </div>
       </div>
 
+      {/* Search dropdown */}
       {editingPartner && searchResults.length > 0 && (
         <div
-          style={{
-            position: "absolute",
-            top: 46,
-            left: 0,
-            right: 0,
-            background: "#1a1a1a",
-            border: "1px solid rgba(255,255,255,0.10)",
-            borderRadius: "0 0 8px 8px",
-            zIndex: 10000,
-            maxHeight: 240,
-            overflowY: "auto",
-          }}
+          className="absolute top-[46px] left-0 right-0 bg-popover border border-border rounded-b-lg z-[10000] max-h-60 overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {searchResults.map((p) => (
@@ -273,45 +189,18 @@ export function DmCompose() {
                 setSearchQuery("");
                 setSearchResults([]);
               }}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 12px",
-                background: "none",
-                border: "none",
-                borderBottom: "1px solid rgba(255,255,255,0.04)",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
+              className="w-full flex items-center gap-2 px-3 py-2 bg-transparent border-none border-b border-border/40 cursor-pointer text-left hover:bg-accent/20"
             >
               <PartnerAvatar
                 name={p.display_name ?? "?"}
                 avatarUrl={p.avatar_url}
                 size={24}
               />
-              <span
-                style={{
-                  fontSize: 12,
-                  color: "rgba(255,255,255,0.75)",
-                  flex: 1,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
+              <span className="text-xs text-foreground/75 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                 {p.display_name ?? "Unknown"}
               </span>
               {p.trailblazer_number != null && (
-                <span
-                  style={{
-                    fontSize: 8,
-                    fontFamily: "monospace",
-                    color: "rgba(255,255,255,0.3)",
-                    flexShrink: 0,
-                  }}
-                >
+                <span className="text-[8px] font-mono text-muted-foreground/50 shrink-0">
                   {String(p.trailblazer_number).padStart(4, "0")}
                 </span>
               )}
@@ -320,48 +209,21 @@ export function DmCompose() {
         </div>
       )}
 
+      {/* Body */}
       {!minimized && (
         <>
-          <div
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              maxHeight: 220,
-              padding: "8px 0",
-              display: "flex",
-              flexDirection: "column",
-              gap: 3,
-            }}
-          >
+          <div className="flex-1 overflow-y-auto max-h-[220px] py-2 flex flex-col gap-0.5">
             {loading && (
-              <p
-                style={{
-                  textAlign: "center",
-                  fontSize: 10,
-                  color: "rgba(255,255,255,0.2)",
-                  fontFamily: "monospace",
-                  padding: 16,
-                  margin: 0,
-                }}
-              >
+              <p className="text-center text-[10px] text-muted-foreground/40 font-mono p-4 m-0">
                 Loading history…
               </p>
             )}
 
             {!loading && events.length === 0 && (
-              <p
-                style={{
-                  textAlign: "center",
-                  fontSize: 11,
-                  color: "rgba(255,255,255,0.2)",
-                  padding: 20,
-                  margin: 0,
-                  lineHeight: 1.5,
-                }}
-              >
+              <p className="text-center text-[11px] text-muted-foreground/40 p-5 m-0 leading-relaxed">
                 No shared history yet.
                 <br />
-                <span style={{ fontFamily: "monospace", fontSize: 10 }}>
+                <span className="font-mono text-[10px]">
                   be the first to say something.
                 </span>
               </p>
@@ -373,44 +235,22 @@ export function DmCompose() {
                 return (
                   <div
                     key={event.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: isMe ? "flex-end" : "flex-start",
-                      padding: "1px 10px",
-                    }}
+                    className={`flex px-2.5 py-px ${isMe ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      style={{
-                        maxWidth: "80%",
-                        background: isMe
-                          ? "rgba(255,255,255,0.10)"
-                          : "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: isMe
-                          ? "10px 10px 2px 10px"
-                          : "10px 10px 10px 2px",
-                        padding: "6px 10px",
-                      }}
+                      className={`max-w-[80%] border border-border px-2.5 py-1.5 ${
+                        isMe
+                          ? "bg-primary/10 rounded-[10px] rounded-br-sm"
+                          : "bg-muted/50 rounded-[10px] rounded-bl-sm"
+                      }`}
                     >
-                      <p
-                        style={{
-                          fontSize: 12,
-                          color: "rgba(255,255,255,0.8)",
-                          lineHeight: 1.4,
-                          margin: 0,
-                          wordBreak: "break-word",
-                        }}
-                      >
+                      <p className="text-xs text-foreground/80 leading-snug m-0 break-words">
                         {event.text}
                       </p>
                       <p
-                        style={{
-                          fontSize: 8,
-                          color: "rgba(255,255,255,0.2)",
-                          fontFamily: "monospace",
-                          margin: "3px 0 0",
-                          textAlign: isMe ? "right" : "left",
-                        }}
+                        className={`text-[8px] text-muted-foreground/40 font-mono mt-0.5 mb-0 ${
+                          isMe ? "text-right" : "text-left"
+                        }`}
                       >
                         {formatDistanceToNow(new Date(event.created_at), {
                           addSuffix: true,
@@ -433,15 +273,8 @@ export function DmCompose() {
             <div ref={bottomRef} />
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 10px",
-              borderTop: "1px solid rgba(255,255,255,0.06)",
-            }}
-          >
+          {/* Compose input */}
+          <div className="flex items-center gap-1.5 px-2.5 py-2 border-t border-border">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -453,34 +286,16 @@ export function DmCompose() {
               }}
               placeholder={`message ${partnerFirstName}…`}
               maxLength={2000}
-              style={{
-                flex: 1,
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 8,
-                padding: "6px 10px",
-                fontSize: 12,
-                color: "rgba(255,255,255,0.8)",
-                outline: "none",
-                fontFamily: "inherit",
-              }}
+              className="flex-1 bg-muted/50 border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground/80 outline-none font-[inherit] placeholder:text-muted-foreground/40"
             />
             <button
               onClick={() => void handleSend()}
               disabled={!input.trim() || sending}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: input.trim() && !sending ? "pointer" : "default",
-                color: input.trim() && !sending
-                  ? "rgba(255,255,255,0.55)"
-                  : "rgba(255,255,255,0.15)",
-                display: "flex",
-                alignItems: "center",
-                padding: 3,
-                transition: "color 150ms",
-                flexShrink: 0,
-              }}
+              className={`bg-transparent border-none flex items-center p-0.5 transition-colors shrink-0 ${
+                input.trim() && !sending
+                  ? "cursor-pointer text-primary"
+                  : "cursor-default text-muted-foreground/30"
+              }`}
             >
               <Send size={14} />
             </button>
