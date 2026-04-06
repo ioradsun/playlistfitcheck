@@ -1,5 +1,7 @@
 import { formatDistanceToNow } from "date-fns";
+import { SquarePen } from "lucide-react";
 import { PartnerAvatar } from "@/components/signals/PartnerAvatar";
+import { useDmContext } from "@/hooks/useDmContext";
 import type { DmThreadSummary } from "@/hooks/useDmThreadList";
 
 interface Props {
@@ -15,12 +17,21 @@ export function DmThreadList({
   activePartnerId,
   onSelect,
 }: Props) {
+  const { openCompose } = useDmContext();
+
   return (
     <div className="h-full overflow-y-auto border-r border-border bg-background">
-      <div className="px-3.5 pt-3.5 pb-2 border-b border-border/60">
+      <div className="px-3.5 pt-3.5 pb-2 border-b border-border/60 flex items-center justify-between">
         <p className="text-[9px] font-mono text-muted-foreground/50 uppercase tracking-widest m-0">
           connections
         </p>
+        <button
+          onClick={() => openCompose("new")}
+          className="bg-transparent border-none cursor-pointer text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors p-0 flex items-center"
+          aria-label="New message"
+        >
+          <SquarePen size={14} />
+        </button>
       </div>
 
       {loading && threads.length === 0 && (
