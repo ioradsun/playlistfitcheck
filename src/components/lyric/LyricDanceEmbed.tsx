@@ -383,8 +383,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         )}
       </div>
 
-      {/* LyricInteractionLayer — dance mode only, outside the canvas slot */}
-      {(
+      {/* LyricInteractionLayer — dance mode only */}
+      {cardMode === "dance" && (
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
           <LyricInteractionLayer
             moments={moments}
