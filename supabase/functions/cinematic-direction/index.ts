@@ -96,6 +96,35 @@ DOMINANT COLOR RULES:
 5. One section per audio section provided. Match section count exactly.
 `;
 
+const INSTRUMENTAL_SCENE_DIRECTION_PROMPT = `
+You are a visual world director for instrumental music.
+Return JSON only. No markdown. No commentary.
+
+OUTPUT SCHEMA: (identical to SCENE_DIRECTION_PROMPT schema)
+
+CONTEXT:
+You are given an instrumental track — there are no lyrics.
+Build the visual world from the track's energy, BPM, and
+section structure alone. Use ARTIST DIRECTION as the anchor
+world if provided.
+
+RULES:
+1. If ARTIST DIRECTION is provided, it defines the visual world.
+   Build every section inside that world.
+2. If no ARTIST DIRECTION, use the section energy and BPM to
+   infer the world:
+   - High energy (>0.7) + fast BPM (>120): aggressive, anthemic,
+     raw, euphoric
+   - Mid energy (0.4-0.7): hypnotic, dreamy, intimate, nostalgic
+   - Low energy (<0.4): melancholy, ethereal, haunted, vulnerable
+3. Each section should feel like a chapter of the same film.
+4. Beat-heavy sections (high avgEnergy) get warmer, more saturated
+   colors. Sparse sections get cooler, more muted tones.
+5. dominantColor rules same as below.
+` + SCENE_DIRECTION_PROMPT.slice(
+  SCENE_DIRECTION_PROMPT.indexOf("DOMINANT COLOR RULES"),
+);
+
 interface LyricLine {
   text: string;
   start?: number;
@@ -127,6 +156,7 @@ interface RequestBody {
   words?: Array<{ word: string; start: number; end: number }>;
   mode?: "scene";
   sceneDirection?: Record<string, any>;
+  instrumental?: boolean;
 }
 
 const ENUMS = {
@@ -671,6 +701,7 @@ serve(async (req) => {
     const customPrompts = await loadCustomPrompts();
 
     const title = String(body.title ?? "").trim();
+    const isInstrumental = !!body.instrumental;
     const artist = String(body.artist ?? "").trim();
     const bpm =
       typeof body.bpm === "number"
@@ -686,9 +717,9 @@ serve(async (req) => {
             .filter((l) => l.text)
         : [];
 
-    if (!title || !artist || lines.length === 0) {
+    if (!title || !artist || (!isInstrumental && lines.length === 0)) {
       return new Response(
-        JSON.stringify({ error: "title, artist, and lines required" }),
+        JSON.stringify({ error: "title and artist required" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -711,12 +742,16 @@ serve(async (req) => {
         sectionList ? `\nAudio sections:\n${sectionList}` : "",
       ].filter(Boolean).join("\n");
 
+      const systemPrompt = isInstrumental
+        ? INSTRUMENTAL_SCENE_DIRECTION_PROMPT
+        : customPrompts.scenePrompt;
+
       const sceneResult = await callScene(
         apiKey,
         sceneUserMessage,
         body.audioSections?.length ?? 0,
         body,
-        customPrompts.scenePrompt,
+        systemPrompt,
         customPrompts.sceneModel,
       );
 
@@ -724,8 +759,12 @@ serve(async (req) => {
         cinematicDirection: sceneResult,
         _meta: {
           model: customPrompts.sceneModel,
-          scenePromptSource: customPrompts.scenePrompt === SCENE_DIRECTION_PROMPT ? "default" : "admin",
-          scenePromptLength: customPrompts.scenePrompt.length,
+          scenePromptSource: systemPrompt === SCENE_DIRECTION_PROMPT
+            ? "default"
+            : systemPrompt === INSTRUMENTAL_SCENE_DIRECTION_PROMPT
+              ? "instrumental"
+              : "admin",
+          scenePromptLength: systemPrompt.length,
         },
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -75,6 +75,7 @@ interface Props {
   sectionImageError?: string | null;
   onTitleChange?: (newTitle: string) => void;
   subView?: "fit" | "data";
+  filmMode?: "song" | "beat";
 }
 
 function SpotifyLinkField({
@@ -256,6 +257,7 @@ export function FitTab({
   sectionImageError = null,
   onTitleChange,
   subView = "fit",
+  filmMode = "song",
 }: Props) {
   const { user, profile } = useAuth();
   const { canCreate, credits, required, spendCredits } = useVoteGate();
@@ -307,6 +309,12 @@ export function FitTab({
       null,
     );
   const siteCopy = useSiteCopy();
+
+  useEffect(() => {
+    if (filmMode === "beat" && dancePlayerRef.current) {
+      dancePlayerRef.current.wickBarEnabled = true;
+    }
+  }, [filmMode, publishedDanceId, prefetchedDanceData]);
 
   const refetchDanceData = useCallback(() => {
     if (!publishedDanceId) {
@@ -1428,7 +1436,7 @@ export function FitTab({
             )}
 
             {/* ── Fire Heatmap Waveform ── */}
-            {rawFires.length > 0 && (waveform || parentWaveform) && allLines.length > 0 && (() => {
+            {filmMode !== "beat" && rawFires.length > 0 && (waveform || parentWaveform) && allLines.length > 0 && (() => {
               const wf = waveform || parentWaveform!;
               const dur = wf.duration || 1;
               const bucketCount = wf.peaks.length;
@@ -1507,6 +1515,64 @@ export function FitTab({
                       Hottest moment at {Math.floor(peakTimeSec / 60)}:{String(Math.floor(peakTimeSec % 60)).padStart(2, "0")} — "{peakLine.text.slice(0, 50)}{peakLine.text.length > 50 ? "…" : ""}"
                     </p>
                   )}
+                </div>
+              );
+            })()}
+
+            {filmMode === "beat" && rawFires.length > 0 && beatGrid && (() => {
+              const beats = beatGrid.beats;
+              const beatsPerSection = 16;
+              const sectionCount = Math.max(1, Math.ceil(beats.length / beatsPerSection));
+              const sectionFires = Array.from({ length: sectionCount }, (_, i) => {
+                const startSec = beats[i * beatsPerSection] ?? 0;
+                const endBeat = Math.min((i + 1) * beatsPerSection, beats.length) - 1;
+                const endSec = beats[endBeat] ?? ((waveform || parentWaveform)?.duration ?? 60);
+                const count = rawFires.filter(
+                  (f) => (f.time_sec ?? 0) >= startSec && (f.time_sec ?? 0) < endSec,
+                ).length;
+                return { i, startSec, endSec, count };
+              });
+
+              const maxSectionFires = Math.max(1, ...sectionFires.map((s) => s.count));
+              const topSection = sectionFires.reduce((a, b) => (b.count > a.count ? b : a), sectionFires[0]);
+              const fmtTime = (sec: number) => {
+                const m = Math.floor(sec / 60);
+                const s = Math.floor(sec % 60);
+                return `${m}:${s.toString().padStart(2, "0")}`;
+              };
+
+              return (
+                <div className="glass-card rounded-xl p-4 space-y-3">
+                  <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
+                    fire moments by timestamp
+                  </p>
+                  <div className="space-y-2">
+                    {sectionFires.map((section) => {
+                      const width = (section.count / maxSectionFires) * 100;
+                      const isTop = topSection?.i === section.i;
+                      return (
+                        <div key={section.i} className="space-y-1">
+                          <div className="flex items-center justify-between text-[10px] font-mono">
+                            <span className={isTop ? "text-primary" : "text-muted-foreground"}>
+                              {fmtTime(section.startSec)}
+                            </span>
+                            <span className={isTop ? "text-primary" : "text-muted-foreground/70"}>
+                              {section.count} fires
+                            </span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-muted/30 overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${width}%`,
+                                background: isTop ? "var(--primary)" : "rgba(255,120,30,0.45)",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })()}

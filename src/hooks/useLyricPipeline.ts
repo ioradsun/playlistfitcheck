@@ -14,6 +14,7 @@ import { extractPeaks } from "@/lib/audioUtils";
 import { buildPhrases } from "@/lib/phraseEngine";
 import type { LyricData, LyricLine } from "@/components/lyric/LyricDisplay";
 import type { WaveformData } from "@/hooks/useAudioEngine";
+import type { FilmMode } from "@/components/lyric/LyricFitTab";
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
 export type PipelineStageStatus = "pending" | "running" | "done";
@@ -487,6 +488,7 @@ interface UseLyricPipelineParams {
     spotifyTrackId: string;
   } | null;
   onClaimPublished?: (danceUrl: string) => void;
+  filmMode?: FilmMode;
 }
 
 export function useLyricPipeline({
@@ -497,6 +499,7 @@ export function useLyricPipeline({
   onNewProject,
   claimMeta = null,
   onClaimPublished,
+  filmMode = "song",
 }: UseLyricPipelineParams) {
   const artistNameRef = useRef<string>("artist");
   const artistNameReadyRef = useRef<Promise<void> | null>(null);
@@ -623,8 +626,8 @@ export function useLyricPipeline({
   }, [audioBuffer, timestampedLines]);
 
   useEffect(() => {
-    setTranscriptionDone(timestampedLines.length > 0);
-  }, [timestampedLines]);
+    setTranscriptionDone(filmMode === "beat" ? true : timestampedLines.length > 0);
+  }, [filmMode, timestampedLines]);
 
   useEffect(() => {
     return () => {
@@ -1351,6 +1354,7 @@ export function useLyricPipeline({
         setGenerationStatus((prev) => ({
           ...prev,
           cinematicDirection: "done",
+          sectionImages: "done",
         }));
         setPipelineStages((prev) => ({ ...prev, cinematic: "done" }));
         setFitProgress((prev) => Math.max(prev, 85));
@@ -1420,6 +1424,121 @@ export function useLyricPipeline({
   } = scheduler;
   generationStatusRef.current = generationStatus;
 
+  const startInstrumentalCinematic = useCallback(
+    async (force = false) => {
+      if (
+        !force &&
+        (generationStatusRef.current.cinematicDirection === "running" ||
+          generationStatusRef.current.cinematicDirection === "done")
+      ) return;
+      if (!beatGrid) return;
+
+      setGenerationStatus((prev) => ({
+        ...prev,
+        cinematicDirection: "running",
+        sectionImages: "idle",
+      }));
+      setPipelineStages((prev) => ({ ...prev, cinematic: "running" }));
+
+      try {
+        const beats = beatGrid.beats;
+        const beatsPerSection = 16;
+        const sectionCount = Math.max(1, Math.ceil(beats.length / beatsPerSection));
+        const audioSections = Array.from({ length: sectionCount }, (_, i) => {
+          const startBeat = i * beatsPerSection;
+          const endBeat = Math.min((i + 1) * beatsPerSection, beats.length) - 1;
+          const startSec = beats[startBeat] ?? 0;
+          const endSec = beats[endBeat] ?? (audioDurationSec ?? 60);
+          const energySlice = beatGrid.beatEnergies?.slice(startBeat, endBeat + 1) ?? [];
+          const avgEnergy = energySlice.length > 0
+            ? energySlice.reduce((a, b) => a + b, 0) / energySlice.length
+            : 0.5;
+          return {
+            index: i,
+            startSec,
+            endSec,
+            role: i === 0 ? "intro" : i === sectionCount - 1 ? "outro" : "main",
+            avgEnergy,
+            beatDensity: beatsPerSection / Math.max(0.1, endSec - startSec),
+            lyrics: [],
+          };
+        });
+
+        const body = {
+          title: lyricData?.title ?? "Untitled Beat",
+          artist: artistNameRef.current,
+          bpm: beatGrid.bpm,
+          lines: [],
+          lyrics: "",
+          instrumental: true,
+          audioSections,
+          beatGrid: {
+            bpm: beatGrid.bpm,
+            beats: beatGrid.beats,
+            confidence: beatGrid.confidence,
+          },
+          artist_direction: sceneDescription?.trim() || undefined,
+          lyricId: savedIdRef.current || undefined,
+        };
+
+        const { data: sceneResult } = await invokeWithTimeout(
+          "cinematic-direction",
+          { ...body, mode: "scene" },
+          120_000,
+        );
+        if (!sceneResult?.cinematicDirection) {
+          throw new Error("Scene direction returned no data");
+        }
+
+        const enrichedScene = {
+          ...sceneResult.cinematicDirection,
+          beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence },
+          phrases: [],
+          _artistDirection: sceneDescription?.trim() || undefined,
+          _instrumental: true,
+          _meta: { scene: sceneResult._meta || null },
+        };
+
+        setCinematicDirection(enrichedScene);
+        cinematicDirectionRef.current = enrichedScene;
+
+        const updatedRenderData = {
+          ...(renderData || {}),
+          cinematicDirection: enrichedScene,
+          cinematic_direction: enrichedScene,
+          description: enrichedScene.description,
+        };
+        setRenderData(updatedRenderData);
+        if (savedIdRef.current) {
+          persistQueue.enqueue({
+            table: "saved_lyrics",
+            id: savedIdRef.current,
+            payload: { render_data: updatedRenderData },
+          });
+        }
+
+        setGenerationStatus((prev) => ({
+          ...prev,
+          cinematicDirection: "done",
+          sectionImages: "done",
+        }));
+        setPipelineStages((prev) => ({ ...prev, cinematic: "done" }));
+      } catch (err) {
+        console.error("[pipeline] instrumental cinematic failed:", err);
+        setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "error" }));
+      }
+    },
+    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages],
+  );
+
+  useEffect(() => {
+    if (filmMode !== "beat") return;
+    if (!beatGridDone) return;
+    if (cinematicTriggeredRef.current) return;
+    cinematicTriggeredRef.current = true;
+    void startInstrumentalCinematic();
+  }, [filmMode, beatGridDone, startInstrumentalCinematic, cinematicTriggeredRef]);
+
   const startBeatAnalysis = useCallback(
     async (targetAudioFile: File) => {
       if (!targetAudioFile || targetAudioFile.size === 0) return;
@@ -1445,13 +1564,18 @@ export function useLyricPipeline({
 
   const handleAudioSubmitted = useCallback(
     (file: File) => {
-      setPipelineStages((prev) => ({ ...prev, transcript: "running" }));
+      if (filmMode === "beat") {
+        setPipelineStages((prev) => ({ ...prev, transcript: "done" }));
+        setTranscriptionDone(true);
+      } else {
+        setPipelineStages((prev) => ({ ...prev, transcript: "running" }));
+      }
       startBeatAnalysis(file);
     },
-    [startBeatAnalysis, setPipelineStages],
+    [filmMode, startBeatAnalysis, setPipelineStages, setTranscriptionDone],
   );
 
-  const fitDisabled = !transcriptionDone;
+  const fitDisabled = filmMode === "beat" ? false : !transcriptionDone;
 
   const resetProject = useCallback(() => {
     setRenderData(null);

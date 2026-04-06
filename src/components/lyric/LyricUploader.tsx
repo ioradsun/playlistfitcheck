@@ -11,9 +11,10 @@ interface Props {
   loading: boolean;
   loadingMsg?: string;
   sceneInput?: React.ReactNode;
+  uploadLabel?: string;
 }
 
-export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }: Props) {
+export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput, uploadLabel }: Props) {
   const siteCopy = useSiteCopy();
   const [files, setFiles] = useState<File[]>([]);
   const [referenceLyrics, setReferenceLyrics] = useState("");
@@ -39,7 +40,7 @@ export function LyricUploader({ onTranscribe, loading, loadingMsg, sceneInput }:
       <div className="glass-card rounded-xl p-4 space-y-4 text-left">
         {/* Upload — no label */}
         <AudioUploadZone
-          label="Upload"
+          label={uploadLabel || "Upload"}
           files={files}
           onChange={setFiles}
           maxFiles={1}

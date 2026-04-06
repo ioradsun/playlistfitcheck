@@ -17,6 +17,7 @@ interface Props {
   pipelineStages?: PipelineStages;
   showDebug?: boolean;
   hasData?: boolean;
+  filmMode?: "song" | "beat";
 }
 
 const STAGE_LABELS: Record<keyof PipelineStages, string> = {
@@ -55,11 +56,13 @@ const FitButton = forwardRef<HTMLButtonElement, { isLocked: boolean; isRunning: 
 );
 FitButton.displayName = "FitButton";
 
-export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = false, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages, showDebug, hasData = false }: Props) {
+export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = false, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages, showDebug, hasData = false, filmMode = "song" }: Props) {
   const isLocked = fitDisabled || (!fitUnlocked && fitReadiness !== "ready");
   const isRunning = fitReadiness === "running";
   const isError = fitReadiness === "error";
   const isReady = fitReadiness === "ready";
+  const visibleStageKeys = (Object.keys(STAGE_LABELS) as (keyof PipelineStages)[])
+    .filter((k) => !(filmMode === "beat" && k === "transcript"));
 
   const handleClick = () => { if (!isLocked) onViewChange("fit"); };
   const showHover = isLocked && !isError && pipelineStages && fitReadiness !== "not_started";
@@ -77,7 +80,7 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
                 : "font-normal text-muted-foreground"
             )}
           >
-            Lyrics
+            {filmMode === "beat" ? "Upload" : "Lyrics"}
           </button>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center relative">
@@ -88,8 +91,8 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
                   <FitButton isLocked={isLocked} isRunning={isRunning} isError={isError} isReady={isReady} view={view} onClick={handleClick} />
                 </TooltipTrigger>
                 <TooltipContent side="bottom" align="center" className="w-52 p-3 space-y-1.5">
-                  <p className="text-xs font-medium text-popover-foreground mb-1">Building your Fit…</p>
-                  {(Object.keys(STAGE_LABELS) as (keyof PipelineStages)[]).map((key) => (
+                  <p className="text-xs font-medium text-popover-foreground mb-1">{filmMode === "beat" ? "Building your Fire…" : "Building your Fit…"}</p>
+                  {visibleStageKeys.map((key) => (
                     <div key={key} className="flex items-center gap-2 text-xs text-muted-foreground">
                       <StageIcon status={pipelineStages![key]} />
                       <span className={cn(pipelineStages![key] === "done" && "text-popover-foreground")}>
