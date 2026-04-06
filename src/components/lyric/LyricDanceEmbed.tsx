@@ -452,6 +452,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
           <EmpowermentModePanel
             danceId={danceId}
             empowermentPromise={((data ?? prefetchedData) as any)?.empowerment_promise ?? null}
+            onViewLyrics={() => setCardMode("lyric")}
           />
         )}
 

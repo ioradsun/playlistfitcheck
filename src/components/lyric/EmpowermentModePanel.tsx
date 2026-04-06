@@ -4,6 +4,7 @@ import { getSessionId } from "@/lib/sessionId";
 
 interface Props {
   danceId: string;
+  onViewLyrics?: () => void;
   empowermentPromise: {
     emotionalJob: string;
     fromState: string;
@@ -13,7 +14,7 @@ interface Props {
   } | null;
 }
 
-export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
+export function EmpowermentModePanel({ danceId, onViewLyrics, empowermentPromise }: Props) {
   const [hookVoteCounts, setHookVoteCounts] = useState<number[]>([]);
   const [voted, setVoted] = useState<number | null>(null);
 
@@ -201,6 +202,30 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
             );
           })}
         </div>
+
+        {hasVoted && onViewLyrics && (
+          <button
+            type="button"
+            onClick={onViewLyrics}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 10,
+              fontFamily: "monospace",
+              color: "rgba(255,255,255,0.25)",
+              letterSpacing: "0.08em",
+              textAlign: "center",
+              marginTop: 20,
+              padding: "8px 0",
+              transition: "color 150ms ease",
+            }}
+            onPointerEnter={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.5)"; }}
+            onPointerLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.25)"; }}
+          >
+            dive into lyrics →
+          </button>
+        )}
       </div>
     </div>
   );
