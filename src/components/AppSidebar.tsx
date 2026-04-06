@@ -56,15 +56,18 @@ interface ToolItem {
   path: string;
 }
 
-const TOOLS: ToolItem[] = [
-  { value: "songfit", label: "CrowdFit", path: "/CrowdFit" },
-  { value: "hitfit", label: "HitFit", path: "/HitFit" },
-  { value: "vibefit", label: "VibeFit", path: "/VibeFit" },
-  { value: "profit", label: "ProFit", path: "/ProFit" },
-  { value: "playlist", label: "PlaylistFit", path: "/PlaylistFit" },
-  { value: "mix", label: "MixFit", path: "/MixFit" },
-  { value: "lyric", label: "LyricFit", path: "/LyricFit" },
-  { value: "dreamfit", label: "DreamFit", path: "/DreamFit" },
+const FMLY_TOOLS: ToolItem[] = [
+  { value: "songfit", label: "FMLY", path: "/CrowdFit" },
+  { value: "dreamfit", label: "FMLY Matters", path: "/DreamFit" },
+];
+
+const TEAM_TOOLS: ToolItem[] = [
+  { value: "lyric", label: "the Director", path: "/LyricFit" },
+  { value: "hitfit", label: "the A&R", path: "/HitFit" },
+  { value: "mix", label: "the Engineer", path: "/MixFit" },
+  { value: "profit", label: "the Manager", path: "/ProFit" },
+  { value: "playlist", label: "the Plug", path: "/PlaylistFit" },
+  { value: "vibefit", label: "the Creative", path: "/VibeFit" },
 ];
 
 export interface RecentItem {
@@ -83,7 +86,7 @@ export interface AppSidebarProps {
   optimisticItem?: RecentItem | null;
 }
 
-export { TOOLS };
+export const TOOLS: ToolItem[] = [...FMLY_TOOLS, ...TEAM_TOOLS];
 
 export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onLoadProject, optimisticItem }: AppSidebarProps) {
   const sidebarCopy = useSiteCopySelector((c) => ({
@@ -107,6 +110,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
 
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
   const [trashedItems, setTrashedItems] = useState<RecentItem[]>([]);
+  const [teamExpanded, setTeamExpanded] = useState(true);
   const [trashExpanded, setTrashExpanded] = useState(false);
   const [profileExpanded, setProfileExpanded] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -438,6 +442,20 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
     acc[tool.value] = recentItems.filter(i => i.type === tool.value);
     return acc;
   }, {} as Record<string, RecentItem[]>), [recentItems]);
+  const orderedTools = useMemo(
+    () =>
+      [
+        ...((sidebarCopy.tools_order ?? []).filter((key) =>
+          TOOLS.some((tool) => tool.value === key)
+        )),
+        ...TOOLS.map((tool) => tool.value).filter(
+          (key) => !(sidebarCopy.tools_order ?? []).includes(key)
+        ),
+      ]
+        .map((key) => TOOLS.find((tool) => tool.value === key))
+        .filter((tool): tool is ToolItem => !!tool),
+    [sidebarCopy.tools_order]
+  );
 
   return (
     <Sidebar collapsible="offcanvas">
@@ -468,119 +486,261 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
           <SidebarGroupLabel className="hidden">Tools</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {([
-                ...((sidebarCopy.tools_order ?? []).filter((key) => TOOLS.some((tool) => tool.value === key))),
-                ...TOOLS.map((tool) => tool.value).filter((key) => !(sidebarCopy.tools_order ?? []).includes(key)),
-              ])
-                .map(key => TOOLS.find(t => t.value === key))
-                .filter((tool): tool is typeof TOOLS[number] => {
-                  if (!tool) return false;
+              {orderedTools
+                .filter((tool) =>
+                  FMLY_TOOLS.some((fmlyTool) => fmlyTool.value === tool.value)
+                )
+                .filter((tool) => {
                   const enabled = sidebarCopy.tools_enabled?.[tool.value];
                   return enabled === undefined || enabled === true;
-                }).map((tool) => {
-                const effectivePath = tool.path;
-                const isActive = activeTab
-                  ? activeTab === tool.value
-                  : location.pathname === effectivePath || location.pathname === tool.path || location.pathname.startsWith(tool.path + "/");
-                const recents = recentByType[tool.value] || [];
-                const hasSelectedChild = recents.some(item => location.pathname.includes(item.id));
+                })
+                .map((tool) => {
+                  const effectivePath = tool.path;
+                  const isActive = activeTab
+                    ? activeTab === tool.value
+                    : location.pathname === effectivePath ||
+                      location.pathname.startsWith(effectivePath + "/");
+                  const recents = recentByType[tool.value] || [];
+                  const hasSelectedChild = recents.some((item) =>
+                    location.pathname.includes(item.id)
+                  );
 
-                return (
-                  <SidebarMenuItem key={tool.value}>
-                    <SidebarMenuButton
-                      isActive={isActive && !hasSelectedChild}
-                      tooltip={sidebarCopy.toolLabels[tool.value] || tool.label}
-                      onMouseEnter={() => handleNavHover(effectivePath)}
-                      onClick={() => handleToolClick(tool)}
-                    >
-                      <span>{sidebarCopy.toolLabels[tool.value] || tool.label}</span>
-                    </SidebarMenuButton>
+                  return (
+                    <SidebarMenuItem key={tool.value}>
+                      <SidebarMenuButton
+                        isActive={isActive && !hasSelectedChild}
+                        tooltip={sidebarCopy.toolLabels[tool.value] || tool.label}
+                        onMouseEnter={() => handleNavHover(effectivePath)}
+                        onClick={() => handleToolClick(tool)}
+                      >
+                        <span>{sidebarCopy.toolLabels[tool.value] || tool.label}</span>
+                      </SidebarMenuButton>
 
-                    {recents.length > 0 && (
-                      <ul className="mt-1 space-y-0.5 max-h-[40vh] overflow-y-auto">
-                        {recents.map((item) => {
-                          const isItemSelected = location.pathname.includes(item.id);
-                          return (
-                          <li key={item.id} className="group/item flex items-center gap-0.5 has-[[data-state=open]]:bg-sidebar-accent rounded-md">
-                            {editingId === item.id ? (
-                              <form
-                                className="flex-1 min-w-0"
-                                onSubmit={(e) => {
-                                  e.preventDefault();
-                                  handleRenameRecent(item);
-                                }}
-                              >
-                                <input
-                                  autoFocus
-                                  className="w-full px-2 py-1 text-xs bg-sidebar-accent rounded-md border border-sidebar-border outline-none"
-                                  value={editLabel}
-                                  onChange={(e) => setEditLabel(e.target.value)}
-                                  onBlur={() => setEditingId(null)}
-                                  onKeyDown={(e) => e.key === "Escape" && setEditingId(null)}
-                                />
-                              </form>
-                            ) : (
-                              <>
-                                <button
-                                  className={`flex-1 min-w-0 text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${
-                                    isItemSelected
-                                      ? "bg-primary/15 text-primary font-semibold ring-1 ring-primary/25"
-                                      : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-                                  }`}
-                                  onMouseEnter={() => handleNavHover(`${tool.path}/${item.id}`, item.type, item.id)}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRecentClick(item);
+                      {recents.length > 0 && (
+                        <ul className="mt-1 space-y-0.5 max-h-[40vh] overflow-y-auto">
+                          {recents.map((item) => {
+                            const isItemSelected = location.pathname.includes(item.id);
+                            return (
+                            <li key={item.id} className="group/item flex items-center gap-0.5 has-[[data-state=open]]:bg-sidebar-accent rounded-md">
+                              {editingId === item.id ? (
+                                <form
+                                  className="flex-1 min-w-0"
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    handleRenameRecent(item);
                                   }}
-                                  title={item.label}
                                 >
-                                  <span className="block truncate">{item.label}</span>
-                                  <span className="text-[10px] text-muted-foreground">{item.meta}</span>
-                                </button>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      className="opacity-0 group-hover/item:opacity-100 data-[state=open]:opacity-100 shrink-0 p-0.5 rounded hover:bg-sidebar-accent transition-opacity"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <MoreVertical size={12} className="text-muted-foreground" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-32">
-                                    {item.type !== "profit" && (
+                                  <input
+                                    autoFocus
+                                    className="w-full px-2 py-1 text-xs bg-sidebar-accent rounded-md border border-sidebar-border outline-none"
+                                    value={editLabel}
+                                    onChange={(e) => setEditLabel(e.target.value)}
+                                    onBlur={() => setEditingId(null)}
+                                    onKeyDown={(e) => e.key === "Escape" && setEditingId(null)}
+                                  />
+                                </form>
+                              ) : (
+                                <>
+                                  <button
+                                    className={`flex-1 min-w-0 text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${
+                                      isItemSelected
+                                        ? "bg-primary/15 text-primary font-semibold ring-1 ring-primary/25"
+                                        : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                                    }`}
+                                    onMouseEnter={() => handleNavHover(`${tool.path}/${item.id}`, item.type, item.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRecentClick(item);
+                                    }}
+                                    title={item.label}
+                                  >
+                                    <span className="block truncate">{item.label}</span>
+                                    <span className="text-[10px] text-muted-foreground">{item.meta}</span>
+                                  </button>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button
+                                        className="opacity-0 group-hover/item:opacity-100 data-[state=open]:opacity-100 shrink-0 p-0.5 rounded hover:bg-sidebar-accent transition-opacity"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <MoreVertical size={12} className="text-muted-foreground" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-32">
+                                      {item.type !== "profit" && (
+                                        <DropdownMenuItem
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditLabel(item.label);
+                                            setEditingId(item.id);
+                                          }}
+                                        >
+                                          <Pencil size={12} className="mr-2" />
+                                          Rename
+                                        </DropdownMenuItem>
+                                      )}
                                       <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setEditLabel(item.label);
-                                          setEditingId(item.id);
+                                          handleDeleteRecent(item);
                                         }}
                                       >
-                                        <Pencil size={12} className="mr-2" />
-                                        Rename
+                                        <Trash2 size={12} className="mr-2" />
+                                        Delete
                                       </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem
-                                      className="text-destructive focus:text-destructive"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteRecent(item);
-                                      }}
-                                    >
-                                      <Trash2 size={12} className="mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </>
-                            )}
-                          </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </SidebarMenuItem>
-                );
-              })}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </>
+                              )}
+                            </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </SidebarMenuItem>
+                  );
+                })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator className="my-1" />
+
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <button
+                  type="button"
+                  onClick={() => setTeamExpanded((prev) => !prev)}
+                  className="flex items-center justify-between w-full px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-sidebar-accent"
+                >
+                  <span>Your Team</span>
+                  <ChevronDown
+                    size={12}
+                    className={`text-muted-foreground transition-transform shrink-0 ${
+                      teamExpanded ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+              </SidebarMenuItem>
+
+              {teamExpanded && orderedTools
+                .filter((tool) =>
+                  TEAM_TOOLS.some((teamTool) => teamTool.value === tool.value)
+                )
+                .filter((tool) => {
+                  const enabled = sidebarCopy.tools_enabled?.[tool.value];
+                  return enabled === undefined || enabled === true;
+                })
+                .map((tool) => {
+                  const effectivePath = tool.path;
+                  const isActive = activeTab
+                    ? activeTab === tool.value
+                    : location.pathname === effectivePath ||
+                      location.pathname.startsWith(effectivePath + "/");
+                  const recents = recentByType[tool.value] || [];
+                  const hasSelectedChild = recents.some((item) =>
+                    location.pathname.includes(item.id)
+                  );
+
+                  return (
+                    <SidebarMenuItem key={tool.value}>
+                      <SidebarMenuButton
+                        isActive={isActive && !hasSelectedChild}
+                        tooltip={sidebarCopy.toolLabels[tool.value] || tool.label}
+                        onMouseEnter={() => handleNavHover(effectivePath)}
+                        onClick={() => handleToolClick(tool)}
+                      >
+                        <span>{sidebarCopy.toolLabels[tool.value] || tool.label}</span>
+                      </SidebarMenuButton>
+
+                      {recents.length > 0 && (
+                        <ul className="mt-1 space-y-0.5 max-h-[40vh] overflow-y-auto">
+                          {recents.map((item) => {
+                            const isItemSelected = location.pathname.includes(item.id);
+                            return (
+                            <li key={item.id} className="group/item flex items-center gap-0.5 has-[[data-state=open]]:bg-sidebar-accent rounded-md">
+                              {editingId === item.id ? (
+                                <form
+                                  className="flex-1 min-w-0"
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    handleRenameRecent(item);
+                                  }}
+                                >
+                                  <input
+                                    autoFocus
+                                    className="w-full px-2 py-1 text-xs bg-sidebar-accent rounded-md border border-sidebar-border outline-none"
+                                    value={editLabel}
+                                    onChange={(e) => setEditLabel(e.target.value)}
+                                    onBlur={() => setEditingId(null)}
+                                    onKeyDown={(e) => e.key === "Escape" && setEditingId(null)}
+                                  />
+                                </form>
+                              ) : (
+                                <>
+                                  <button
+                                    className={`flex-1 min-w-0 text-left px-2 py-1 text-xs rounded-md truncate transition-colors ${
+                                      isItemSelected
+                                        ? "bg-primary/15 text-primary font-semibold ring-1 ring-primary/25"
+                                        : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                                    }`}
+                                    onMouseEnter={() => handleNavHover(`${tool.path}/${item.id}`, item.type, item.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRecentClick(item);
+                                    }}
+                                    title={item.label}
+                                  >
+                                    <span className="block truncate">{item.label}</span>
+                                    <span className="text-[10px] text-muted-foreground">{item.meta}</span>
+                                  </button>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button
+                                        className="opacity-0 group-hover/item:opacity-100 data-[state=open]:opacity-100 shrink-0 p-0.5 rounded hover:bg-sidebar-accent transition-opacity"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <MoreVertical size={12} className="text-muted-foreground" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-32">
+                                      {item.type !== "profit" && (
+                                        <DropdownMenuItem
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditLabel(item.label);
+                                            setEditingId(item.id);
+                                          }}
+                                        >
+                                          <Pencil size={12} className="mr-2" />
+                                          Rename
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteRecent(item);
+                                        }}
+                                      >
+                                        <Trash2 size={12} className="mr-2" />
+                                        Delete
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </>
+                              )}
+                            </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </SidebarMenuItem>
+                  );
+                })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

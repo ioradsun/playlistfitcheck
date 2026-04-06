@@ -6,14 +6,14 @@ import { Switch } from "@/components/ui/switch";
 import { Reorder, useDragControls } from "framer-motion";
 
 const ALL_TOOLS = [
-  { key: "songfit",  label: "CrowdFit" },
-  { key: "hitfit",   label: "HitFit" },
-  { key: "vibefit",  label: "VibeFit" },
-  { key: "profit",   label: "ProFit" },
-  { key: "playlist", label: "PlaylistFit" },
-  { key: "mix",      label: "MixFit" },
-  { key: "lyric",    label: "LyricFit" },
-  { key: "dreamfit", label: "DreamFit" },
+  { key: "songfit",  label: "FMLY" },
+  { key: "hitfit",   label: "the A&R" },
+  { key: "vibefit",  label: "the Creative" },
+  { key: "profit",   label: "the Manager" },
+  { key: "playlist", label: "the Plug" },
+  { key: "mix",      label: "the Engineer" },
+  { key: "lyric",    label: "the Director" },
+  { key: "dreamfit", label: "FMLY Matters" },
 ];
 
 const DEFAULT_ORDER = ALL_TOOLS.map(t => t.key);
