@@ -42,7 +42,7 @@ export function LyricModePanel({
   const [localFires, setLocalFires] = useState<Record<number, number>>({});
   const [playingMoment, setPlayingMoment] = useState<number | null>(null);
   const holdStartRef = useRef<number | null>(null);
-  const holdTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdTickRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function fmtTime(sec: number): string {
