@@ -1,6 +1,13 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getSessionId } from '@/lib/sessionId';
 
+let fireTableAvailable = true;
+let playTableAvailable = true;
+
+function isMissingTableError(error: { code?: string | null } | null | undefined): boolean {
+  return error?.code === 'PGRST205';
+}
+
 export async function emitFire(
   danceId: string,
   lineIndex: number,
@@ -9,7 +16,9 @@ export async function emitFire(
   source?: "feed" | "shareable" | "embed",
   userId?: string | null,
 ): Promise<void> {
-  supabase.from('lyric_dance_fires' as any).insert({
+  if (!fireTableAvailable) return;
+
+  const { error } = await supabase.from('lyric_dance_fires' as any).insert({
     dance_id: danceId,
     session_id: getSessionId(),
     line_index: lineIndex,
@@ -17,7 +26,9 @@ export async function emitFire(
     hold_ms: holdMs,
     ...(source ? { source } : {}),
     ...(userId ? { user_id: userId } : {}),
-  }).then();
+  });
+
+  if (isMissingTableError(error)) fireTableAvailable = false;
 }
 
 export async function emitExposure(
@@ -62,8 +73,10 @@ export async function upsertPlay(
     userId?: string | null;
   },
 ): Promise<void> {
+  if (!playTableAvailable) return;
+
   const sessionId = getSessionId();
-  supabase
+  const { error } = await supabase
     .from('lyric_dance_plays' as any)
     .upsert(
       {
@@ -77,8 +90,9 @@ export async function upsertPlay(
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'dance_id,session_id' },
-    )
-    .then();
+    );
+
+  if (isMissingTableError(error)) playTableAvailable = false;
 }
 
 export async function fetchFireData(danceId: string): Promise<Array<{
@@ -87,12 +101,16 @@ export async function fetchFireData(danceId: string): Promise<Array<{
   hold_ms: number;
   created_at: string;
 }>> {
+  if (!fireTableAvailable) return [];
+
   try {
     const { data, error } = await supabase
       .from('lyric_dance_fires' as any)
       .select('line_index, time_sec, hold_ms, created_at')
       .eq('dance_id', danceId)
       .order('time_sec', { ascending: true });
+
+    if (isMissingTableError(error)) fireTableAvailable = false;
     if (error) return [];
     return (data as any[]) ?? [];
   } catch {
@@ -114,17 +132,20 @@ export async function fetchFireStrength(danceId: string): Promise<Array<{
   return (data as any[]) ?? [];
 }
 
-
 export async function fetchSessionFires(
   danceId: string,
   sessionId: string,
 ): Promise<Array<{ line_index: number; hold_ms: number }>> {
+  if (!fireTableAvailable) return [];
+
   try {
     const { data, error } = await supabase
       .from('lyric_dance_fires' as any)
       .select('line_index, hold_ms')
       .eq('dance_id', danceId)
       .eq('session_id', sessionId);
+
+    if (isMissingTableError(error)) fireTableAvailable = false;
     if (error) return [];
     return (data as any[]) ?? [];
   } catch {
