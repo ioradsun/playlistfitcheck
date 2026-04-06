@@ -36,6 +36,7 @@ interface LyricDanceEmbedProps {
 export interface LyricDanceEmbedHandle {
   getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;
   reloadTranscript: (lines: any[], words?: any[]) => void;
+  wickBarEnabled: boolean;
 }
 
 export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed({
@@ -103,6 +104,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     getPlayer: () => player ?? null,
     reloadTranscript: (lines: any[], words?: any[]) => {
       player?.updateTranscript(lines, words ?? null);
+    },
+    get wickBarEnabled() {
+      return player?.wickBarEnabled ?? false;
+    },
+    set wickBarEnabled(enabled: boolean) {
+      if (player) player.wickBarEnabled = enabled;
     },
   }), [player]);
 
