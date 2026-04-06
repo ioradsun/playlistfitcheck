@@ -6,6 +6,8 @@
  * PostCommentPanel is the sole comment UX (inline in card).
  */
 import { memo, useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
+import { useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Plus, Search, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useFeedPosts } from "./useFeedPosts";
@@ -288,6 +290,7 @@ interface SongFitFeedProps {
 
 export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const hasFadedIn = useRef(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -411,7 +414,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
               <div
                 className={cn(
                   "flex items-center overflow-hidden rounded-full transition-all duration-200",
-                  searchUiVisible ? "w-[220px] border border-border/60 bg-card/70 px-2" : "w-10 px-0.5",
+                  searchUiVisible ? "w-[220px] bg-card/70 px-2" : "w-10 px-0.5",
                 )}
               >
                 <button
@@ -452,11 +455,30 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                   >
                     <Plus size={16} />
                   </button>
-                  <PlusMenu
-                    open={plusOpen}
-                    onClose={() => setPlusOpen(false)}
-                    anchor="header"
-                  />
+                  <AnimatePresence>
+                    {plusOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: "auto" }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        className="flex items-center gap-1 overflow-hidden"
+                      >
+                        <button
+                          onClick={() => { setPlusOpen(false); navigate("/LyricFit?mode=song"); }}
+                          className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-mono tracking-wide text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/50"
+                        >
+                          song
+                        </button>
+                        <button
+                          onClick={() => { setPlusOpen(false); navigate("/LyricFit?mode=beat"); }}
+                          className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-mono tracking-wide text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/50"
+                        >
+                          beat
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </>
               )}
             </div>
