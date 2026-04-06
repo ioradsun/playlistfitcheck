@@ -346,82 +346,80 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                   </>
                 )}
 
-                <div
-                  className={cn(
-                    "flex items-center overflow-hidden rounded-full transition-all duration-200",
-                    searchUiVisible ? "w-[220px] bg-card/70 px-2" : "w-10 px-0.5",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (searchUiVisible || hasSearchQuery) clearSearch();
-                      else openSearch();
-                    }}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label={searchUiVisible || hasSearchQuery ? "Close search" : "Open search"}
-                  >
-                    {searchUiVisible || hasSearchQuery ? <X size={14} /> : <Search size={14} />}
-                  </button>
-                  <input
-                    ref={searchInputRef}
-                    value={feed.searchTerm}
-                    onChange={(e) => feed.setSearchTerm(e.target.value)}
-                    onFocus={() => {
-                      setSearchFocused(true);
-                      setSearchOpen(true);
-                    }}
-                    onBlur={() => {
-                      setSearchFocused(false);
-                      if (!feed.searchTerm.trim()) setSearchOpen(false);
-                    }}
-                    placeholder="Search artists or songs"
-                    className={cn(
-                      "w-full bg-transparent py-2 pr-3 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground transition-opacity",
-                      searchUiVisible ? "opacity-100" : "pointer-events-none w-0 opacity-0",
-                    )}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") clearSearch();
-                    }}
-                  />
-                </div>
+                 {!searchUiVisible && (
+                   <div className="flex items-center">
+                     <button
+                       type="button"
+                       onClick={openSearch}
+                       className="flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                       aria-label="Open search"
+                     >
+                       <Search size={14} />
+                     </button>
+                     <button
+                       onClick={() => setPlusOpen((v) => !v)}
+                       className="flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                       aria-label="Add music"
+                     >
+                       <Plus size={16} />
+                     </button>
+                     <AnimatePresence>
+                       {plusOpen && (
+                         <motion.div
+                           initial={{ opacity: 0, width: 0 }}
+                           animate={{ opacity: 1, width: "auto" }}
+                           exit={{ opacity: 0, width: 0 }}
+                           transition={{ duration: 0.15, ease: "easeOut" }}
+                           className="flex items-center gap-1 overflow-hidden"
+                         >
+                           <button
+                             onClick={() => { setPlusOpen(false); navigate("/LyricFit?mode=song"); }}
+                             className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-mono tracking-wide text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/50"
+                           >
+                             song
+                           </button>
+                           <button
+                             onClick={() => { setPlusOpen(false); navigate("/LyricFit?mode=beat"); }}
+                             className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-mono tracking-wide text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/50"
+                           >
+                             beat
+                           </button>
+                         </motion.div>
+                       )}
+                     </AnimatePresence>
+                   </div>
+                 )}
 
-                {!searchUiVisible && (
-                  <>
-                    <div className="h-4 w-px bg-border/60" />
-                    <button
-                      onClick={() => setPlusOpen((v) => !v)}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
-                      aria-label="Add music"
-                    >
-                      <Plus size={16} />
-                    </button>
-                    <AnimatePresence>
-                      {plusOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, width: 0 }}
-                          animate={{ opacity: 1, width: "auto" }}
-                          exit={{ opacity: 0, width: 0 }}
-                          transition={{ duration: 0.15, ease: "easeOut" }}
-                          className="flex items-center gap-1 overflow-hidden"
-                        >
-                          <button
-                            onClick={() => { setPlusOpen(false); navigate("/LyricFit?mode=song"); }}
-                            className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-mono tracking-wide text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/50"
-                          >
-                            song
-                          </button>
-                          <button
-                            onClick={() => { setPlusOpen(false); navigate("/LyricFit?mode=beat"); }}
-                            className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-mono tracking-wide text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/50"
-                          >
-                            beat
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </>
-                )}
+                 {searchUiVisible && (
+                   <div className="flex items-center w-[220px] bg-card/70 px-2 rounded-full">
+                     <button
+                       type="button"
+                       onClick={clearSearch}
+                       className="flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                       aria-label="Close search"
+                     >
+                       <X size={14} />
+                     </button>
+                     <input
+                       ref={searchInputRef}
+                       value={feed.searchTerm}
+                       onChange={(e) => feed.setSearchTerm(e.target.value)}
+                       onFocus={() => {
+                         setSearchFocused(true);
+                         setSearchOpen(true);
+                       }}
+                       onBlur={() => {
+                         setSearchFocused(false);
+                         if (!feed.searchTerm.trim()) setSearchOpen(false);
+                       }}
+                       placeholder="Search artists or songs"
+                       className="w-full bg-transparent py-2 pr-3 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground"
+                       onKeyDown={(e) => {
+                         if (e.key === "Escape") clearSearch();
+                       }}
+                     />
+                   </div>
+                 )}
              </div>
            </div>
            {hasSearchQuery && (
