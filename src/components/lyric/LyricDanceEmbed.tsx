@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, useSyncExternalStore } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useSyncExternalStore } from "react";
 import { VolumeX } from "lucide-react";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
-import { ClosingScreen } from "@/components/lyric/ClosingScreen";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import type { CardMode } from "@/components/lyric/PlayerHeader";
@@ -10,7 +9,6 @@ import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
 import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
-import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { audioController } from "@/lib/audioController";
 import { isGlobalMuted } from "@/lib/globalMute";
 import { isAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
@@ -113,7 +111,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     },
   }), [player]);
 
-  const [closingVisible, setClosingVisible] = useState(false);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [activeMomentIdx, setActiveMomentIdx] = useState(0);
@@ -210,11 +207,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   useEffect(() => {
     if (!durationSec || !player) return;
-    if (currentTimeSec > durationSec + 2.2 && !closingVisible) {
-      setClosingVisible(true);
+    if (currentTimeSec > durationSec + 2.2 && cardMode === "dance") {
+      setCardMode("empowerment");
       player.audio.loop = false;
     }
-  }, [currentTimeSec, durationSec, closingVisible, player]);
+  }, [currentTimeSec, durationSec, cardMode, player]);
 
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
@@ -347,34 +344,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               </div>
             )}
 
-            <ClosingScreen
-              visible={closingVisible}
-              empowermentPromise={((data ?? prefetchedData) as any)?.empowerment_promise ?? null}
-              danceId={danceId}
-              source="feed"
-              moments={moments}
-              momentFireCounts={deriveMomentFireCounts(reactionData, moments)}
-              activeMomentIdx={activeMomentIdx}
-              onSeekToMoment={(idx) => {
-                const m = moments[idx];
-                if (m && player) {
-                  setActiveMomentIdx(idx);
-                  player.seek(m.startSec);
-                  player.setRegion(m.startSec, m.endSec);
-                }
-              }}
-              onLoopMoment={(idx) => {
-                const m = moments[idx];
-                if (m && player) {
-                  setClosingVisible(false);
-                  setActiveMomentIdx(idx);
-                  player.seek(m.startSec);
-                  player.setRegion(m.startSec, m.endSec);
-                  player.play();
-                }
-              }}
-            />
-
           </>
         )}
 
@@ -422,7 +391,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             reactionData={reactionData}
             player={player}
             currentTimeSec={currentTimeSec}
-            closingActive={closingVisible}
             danceId={danceId}
             onFireTap={() => {
               if (holdFireIntervalRef.current) {
