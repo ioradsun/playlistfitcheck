@@ -111,6 +111,18 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [activeMomentIdx, setActiveMomentIdx] = useState(0);
   const [cardMode, setCardMode] = useState<CardMode>("dance");
+
+  // Hide pool canvases when a panel mode is active so panels
+  // aren't occluded by absolute-positioned canvas elements.
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const isDance = cardMode === "dance";
+    const canvases = containerRef.current.querySelectorAll("canvas");
+    canvases.forEach((c) => {
+      c.style.visibility = isDance ? "visible" : "hidden";
+      c.style.pointerEvents = "none";
+    });
+  }, [cardMode, containerRef]);
   const playStartRef = useRef<number | null>(null);
   const totalDurationRef = useRef<number>(0);
   const everUnmutedRef = useRef<boolean>(false);
