@@ -11,8 +11,8 @@ interface Props {
   loading: boolean;
   loadingMsg?: string;
   sceneInput?: React.ReactNode;
-  uploadLabel?: string;
-  filmMode?: "song" | "beat";
+  filmMode: "song" | "beat";
+  onFilmModeChange: (m: "song" | "beat") => void;
 }
 
 export function LyricUploader({
@@ -20,8 +20,8 @@ export function LyricUploader({
   loading,
   loadingMsg,
   sceneInput,
-  uploadLabel,
-  filmMode = "song",
+  filmMode,
+  onFilmModeChange,
 }: Props) {
   const siteCopy = useSiteCopy();
   const [files, setFiles] = useState<File[]>([]);
@@ -32,48 +32,73 @@ export function LyricUploader({
       toast.error("Please select an audio file first");
       return;
     }
-    const lyrics = referenceLyrics.trim() || undefined;
-    onTranscribe(files[0], lyrics);
+    onTranscribe(files[0], referenceLyrics.trim() || undefined);
   };
 
-  const hasLyrics = referenceLyrics.length > 0;
+  const heading = filmMode === "beat"
+    ? "Give your beat a world."
+    : (siteCopy.tools.lyric?.heading || "Make your music visible.");
+
+  const cta = loading
+    ? (loadingMsg || "Building…")
+    : filmMode === "beat"
+      ? "Drop it"
+      : (siteCopy.tools.lyric?.cta || "Make it Fire");
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 text-center">
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold">{siteCopy.tools.lyric?.heading || "Get Perfectly Timed Lyrics For Every Drop"}</h2>
-        {siteCopy.tools.lyric?.subheading && <p className="text-sm text-muted-foreground">{siteCopy.tools.lyric.subheading}</p>}
-      </div>
+      {/* Heading — changes by mode */}
+      <h2 className="text-xl font-semibold">{heading}</h2>
 
-      <div className="glass-card rounded-xl p-4 space-y-4 text-left">
-        {/* Upload — no label */}
-        <AudioUploadZone
-          label={uploadLabel || "Upload"}
-          files={files}
-          onChange={setFiles}
-          maxFiles={1}
-          disabled={loading}
-        />
+      {/* Card with tabs flush to top */}
+      <div className="glass-card rounded-xl overflow-hidden text-left">
+        {/* Tab strip — top of card */}
+        <div className="flex border-b border-border">
+          {(["song", "beat"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onFilmModeChange(m)}
+              className={[
+                "flex-1 py-2.5 text-sm font-medium transition-colors duration-150",
+                filmMode === m
+                  ? "text-foreground border-b-2 border-primary -mb-px"
+                  : "text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
 
-        {/* Lyrics — no label, contextual helper */}
-        {filmMode === "song" && (
-          <div className="space-y-1.5">
-            {hasLyrics && (
-              <span className="text-xs text-muted-foreground/60 block">Lyrics (optional)</span>
-            )}
-            <Textarea
-              value={referenceLyrics}
-              onChange={(e) => setReferenceLyrics(e.target.value)}
-              placeholder="Adding lyrics improves timing and accuracy."
-              className="min-h-[80px] resize-y text-sm bg-background border border-border rounded-lg px-3 py-2.5 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
-              disabled={loading}
-              aria-label="Paste your song lyrics"
-            />
-          </div>
-        )}
+        {/* Card body */}
+        <div className="p-4 space-y-4">
+          {/* Upload zone */}
+          <AudioUploadZone
+            files={files}
+            onChange={setFiles}
+            maxFiles={1}
+            disabled={loading}
+            filmMode={filmMode}
+          />
 
-        {/* Scene — no label */}
-        {sceneInput}
+          {/* Lyrics textarea — song mode only */}
+          {filmMode === "song" && (
+            <div className="space-y-1.5">
+              <Textarea
+                value={referenceLyrics}
+                onChange={(e) => setReferenceLyrics(e.target.value)}
+                placeholder="Got lyrics? Paste them — your canvas will thank you."
+                className="min-h-[80px] resize-y text-sm bg-background border border-border rounded-lg px-3 py-2.5 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                disabled={loading}
+                aria-label="Paste your song lyrics"
+              />
+            </div>
+          )}
+
+          {/* Scene input */}
+          {sceneInput}
+        </div>
       </div>
 
       <Button
@@ -82,7 +107,7 @@ export function LyricUploader({
         size="lg"
         disabled={loading || files.length === 0}
       >
-        {loading ? (loadingMsg || "Syncing...") : (siteCopy.tools.lyric?.cta || "Sync Lyrics")}
+        {cta}
       </Button>
     </div>
   );

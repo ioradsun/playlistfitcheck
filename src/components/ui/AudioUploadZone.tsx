@@ -6,19 +6,20 @@ const ACCEPTED_EXTENSIONS = /\.(mp3|wav|m4a|ogg|flac|aac|aiff|wma)$/i;
 const MAX_SIZE = 75 * 1024 * 1024;
 
 interface AudioUploadZoneProps {
-  label: string;
+  label?: string;
   files: File[];
   onChange: (files: File[]) => void;
   maxFiles?: number;
   disabled?: boolean;
+  filmMode?: "song" | "beat";
 }
 
 export function AudioUploadZone({
-  label,
   files,
   onChange,
   maxFiles = 1,
   disabled = false,
+  filmMode = "song",
 }: AudioUploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -54,6 +55,11 @@ export function AudioUploadZone({
     if (!disabled) validateAndAdd(e.dataTransfer.files);
   };
 
+  const primaryLabel = filmMode === "beat"
+    ? "Drop your beat"
+    : (maxFiles > 1 ? "Upload your mixes" : "Drop your song");
+  const changeLabel = filmMode === "beat" ? "Change beat" : "Change song";
+
   return (
     <div className="space-y-2">
       <input
@@ -77,7 +83,7 @@ export function AudioUploadZone({
               onClick={() => { removeFile(0); inputRef.current?.click(); }}
               className="text-xs text-primary hover:text-primary/80 transition-colors"
             >
-              Change song
+              {changeLabel}
             </button>
           </div>
         ) : (
@@ -118,7 +124,7 @@ export function AudioUploadZone({
           disabled={disabled}
           aria-label="Upload your song"
         >
-          <span className="text-base font-medium text-foreground">{maxFiles > 1 ? "Upload your mixes" : "Upload your song"}</span>
+          <span className="text-base font-medium text-foreground">{primaryLabel}</span>
           <span className="text-xs text-muted-foreground">MP3, WAV, or M4A</span>
         </button>
       )}

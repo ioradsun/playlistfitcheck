@@ -135,6 +135,7 @@ interface Props {
   /** When set, auto-submits this file for transcription on mount. Used by claim pages. */
   autoSubmitFile?: File | null;
   filmMode?: FilmMode;
+  onFilmModeChange?: (m: FilmMode) => void;
 }
 
 export function LyricsTab({
@@ -166,6 +167,7 @@ export function LyricsTab({
   setSpotifyTrackId,
   autoSubmitFile = null,
   filmMode = "song",
+  onFilmModeChange,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [debugData, setDebugData] = useState<any | null>(null);
@@ -552,14 +554,14 @@ export function LyricsTab({
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto">
       {showAuthNudge ? <div className="w-full max-w-3xl mb-3"><AuthNudge onDismiss={dismissAuthNudge} /></div> : null}
-      <LyricUploader
-        onTranscribe={handleTranscribe}
-        loading={loading}
-        loadingMsg="Syncing..."
-        sceneInput={sceneInput}
-        uploadLabel={filmMode === "beat" ? "Upload Your Beat" : undefined}
-        filmMode={filmMode}
-      />
+        <LyricUploader
+          onTranscribe={handleTranscribe}
+          loading={loading}
+          loadingMsg="Syncing..."
+          sceneInput={sceneInput}
+          filmMode={filmMode}
+          onFilmModeChange={onFilmModeChange ?? (() => {})}
+        />
     </div>
   );
 }
