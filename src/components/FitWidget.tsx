@@ -17,12 +17,12 @@ import { useNavigate } from "react-router-dom";
 const TOOLS = ["hitfit", "vibefit", "profit", "playlist", "mix", "lyric"] as const;
 
 const TOOL_LABELS: Record<string, string> = {
-  hitfit: "HitFit",
-  vibefit: "VibeFit",
-  profit: "ProFit",
-  playlist: "PlaylistFit",
-  mix: "MixFit",
-  lyric: "LyricFit",
+  hitfit: "the A&R",
+  vibefit: "the Creative",
+  profit: "the Manager",
+  playlist: "the Plug",
+  mix: "the Engineer",
+  lyric: "the Director",
 };
 
 function ToolUsageBar({ tool, forceUnlimited }: { tool: string; forceUnlimited?: boolean }) {

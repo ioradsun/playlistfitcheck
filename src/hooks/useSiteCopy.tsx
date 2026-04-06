@@ -5,14 +5,14 @@ import { consumeSiteCopyPrefetch, getCachedSiteCopy } from "@/lib/prefetch";
 // Default copy (fallback if DB not loaded yet)
 const DEFAULT_COPY: SiteCopy = {
   tools: {
-    songfit: { label: "CrowdFit", pill: "See how your song fits listeners." },
-    vibefit: { label: "VibeFit", pill: "Art & captions that fit your song.", heading: "Art & Captions That Fit Your Song", cta: "Fit My Vibe" },
-    profit: { label: "ProFit", pill: "See how you can profit from your Spotify", heading: "Turn Your Spotify Data Into A Revenue Strategy", cta: "Generate My Plan" },
-    playlist: { label: "PlaylistFit", pill: "See if your song fits playlists.", heading: "Check Playlist Health And Match Your Song", cta: "Analyze Playlist" },
-    mix: { label: "MixFit", pill: "See which mix fits best.", heading: "Compare Mix Versions And Choose The Best Fit", cta: "Start Comparing" },
-    lyric: { label: "FMLY Fire", pill: "Find out if your track is fire.", heading: "Make your music visible.", cta: "Make it Fire" },
-    hitfit: { label: "HitFit", pill: "See if your song fits the Top 10.", heading: "Compare Your Track to Your Target Sound", cta: "Analyze" },
-    dreamfit: { label: "DreamFit", pill: "Let's build the next Fit together." },
+    songfit: { label: "FMLY", pill: "See how your song fits listeners." },
+    vibefit: { label: "the Creative", pill: "Art & captions that fit your song.", heading: "Art & Captions That Fit Your Song", cta: "Fit My Vibe" },
+    profit: { label: "the Manager", pill: "See how you can profit from your Spotify", heading: "Turn Your Spotify Data Into A Revenue Strategy", cta: "Generate My Plan" },
+    playlist: { label: "the Plug", pill: "See if your song fits playlists.", heading: "Check Playlist Health And Match Your Song", cta: "Analyze Playlist" },
+    mix: { label: "the Engineer", pill: "See which mix fits best.", heading: "Compare Mix Versions And Choose The Best Fit", cta: "Start Comparing" },
+    lyric: { label: "the Director", pill: "Find out if your track is fire.", heading: "Make your music visible.", cta: "Make it Fire" },
+    hitfit: { label: "the A&R", pill: "See if your song fits the Top 10.", heading: "Compare Your Track to Your Target Sound", cta: "Analyze" },
+    dreamfit: { label: "FMLY Matters", pill: "Let's build the next Fit together." },
   },
   about: {
     origin_intro: "",
@@ -23,7 +23,7 @@ const DEFAULT_COPY: SiteCopy = {
     products: [],
   },
   sidebar: {
-    brand: "toolsFM",
+    brand: "tools.fm",
     story_link: "toolsFM story",
   },
   pages: {

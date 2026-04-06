@@ -13,14 +13,14 @@ const TOOL_KEYS = ["songfit", "profit", "playlist", "mix", "lyric", "hitfit", "d
 // Mirror the DEFAULT_COPY from useSiteCopy so fields are pre-populated
 const EDITOR_DEFAULTS: SiteCopy = {
   tools: {
-    songfit: { label: "CrowdFit", pill: "See how your song fits listeners." },
-    vibefit: { label: "VibeFit", pill: "Art & captions that fit your song.", heading: "Art & Captions That Fit Your Song", cta: "Fit My Vibe" },
-    profit: { label: "ProFit", pill: "See how you can profit from your Spotify", heading: "Turn Your Spotify Data Into A Revenue Strategy", cta: "Generate My Plan" },
-    playlist: { label: "PlaylistFit", pill: "See if your song fits playlists.", heading: "Check Playlist Health And Match Your Song", cta: "Analyze Playlist" },
-    mix: { label: "MixFit", pill: "See which mix fits best.", heading: "Compare Mix Versions And Choose The Best Fit", cta: "Start Comparing" },
-    lyric: { label: "LyricFit", pill: "Where your lyrics fit timing.", heading: "Get Perfectly Timed Lyrics For Every Drop", cta: "Sync Lyrics" },
-    hitfit: { label: "HitFit", pill: "See if your song fits the Top 10.", heading: "Compare Your Track to Your Target Sound", cta: "Analyze" },
-    dreamfit: { label: "DreamFit", pill: "Let's build the next Fit together." },
+    songfit: { label: "FMLY", pill: "See how your song fits listeners." },
+    vibefit: { label: "the Creative", pill: "Art & captions that fit your song.", heading: "Art & Captions That Fit Your Song", cta: "Fit My Vibe" },
+    profit: { label: "the Manager", pill: "See how you can profit from your Spotify", heading: "Turn Your Spotify Data Into A Revenue Strategy", cta: "Generate My Plan" },
+    playlist: { label: "the Plug", pill: "See if your song fits playlists.", heading: "Check Playlist Health And Match Your Song", cta: "Analyze Playlist" },
+    mix: { label: "the Engineer", pill: "See which mix fits best.", heading: "Compare Mix Versions And Choose The Best Fit", cta: "Start Comparing" },
+    lyric: { label: "the Director", pill: "Where your lyrics fit timing.", heading: "Get Perfectly Timed Lyrics For Every Drop", cta: "Sync Lyrics" },
+    hitfit: { label: "the A&R", pill: "See if your song fits the Top 10.", heading: "Compare Your Track to Your Target Sound", cta: "Analyze" },
+    dreamfit: { label: "FMLY Matters", pill: "Let's build the next Fit together." },
   },
   about: {
     origin_intro: "",
@@ -30,7 +30,7 @@ const EDITOR_DEFAULTS: SiteCopy = {
     tools_intro: "",
     products: [],
   },
-  sidebar: { brand: "toolsFM", story_link: "toolsFM story" },
+  sidebar: { brand: "tools.fm", story_link: "toolsFM story" },
   pages: { about_title: "toolsFM story", about_subtitle: "What we built and why.", auth_title: "Join the FMly" },
   features: { crypto_tipping: false, growth_flow: false, growth_quotas: { guest: 5, limited: 10 } },
   signals: {
@@ -398,7 +398,7 @@ export function CopyEditor() {
       <motion.div className="glass-card rounded-xl overflow-hidden" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
         <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <Activity size={14} className="text-primary" />
-          <span className="text-sm font-mono font-medium">Signal Verbiage (CrowdFit &amp; DreamFit)</span>
+          <span className="text-sm font-mono font-medium">Signal Verbiage (FMLY &amp; FMLY Matters)</span>
         </div>
         <div className="divide-y divide-border">
           {/* Tier 1: Resolving */}
