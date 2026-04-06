@@ -328,11 +328,11 @@ export function ToolsEditor() {
       </div>
 
 
-      {/* ── LyricFit Pipeline Config ── */}
+      {/* ── Director Pipeline Config ── */}
       <div className="glass-card rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <Mic size={14} className="text-primary" />
-          <span className="text-sm font-mono font-medium">LyricFit Pipeline</span>
+          <span className="text-sm font-mono font-medium">Director Pipeline</span>
         </div>
 
         {/* Stage 1: Transcription */}
@@ -360,7 +360,7 @@ export function ToolsEditor() {
         <div className="px-4 py-4 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Create Lyric Video button</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Show in Hottest Hook section of LyricFit</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Show in Hottest Hook section of the Director</p>
           </div>
           <Switch
             checked={features.lyric_video}
@@ -457,7 +457,7 @@ export function ToolsEditor() {
         </div>
         <div className="px-4 py-4 flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium">$DEGEN tipping on CrowdFit</p>
+            <p className="text-sm font-medium">$DEGEN tipping on FMLY</p>
             <p className="text-xs text-muted-foreground mt-0.5">Show tip button on all posts (Base chain)</p>
           </div>
           <Switch
@@ -477,7 +477,7 @@ export function ToolsEditor() {
         <div className="px-4 py-4 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Usage quotas + invite-to-unlock</p>
-            <p className="text-xs text-muted-foreground mt-0.5">toolsFM widget with usage tracking</p>
+            <p className="text-xs text-muted-foreground mt-0.5">tools.fm widget with usage tracking</p>
           </div>
           <Switch
             checked={features.growth_flow}

@@ -13,25 +13,55 @@ const TOOL_KEYS = ["songfit", "profit", "playlist", "mix", "lyric", "hitfit", "d
 // Mirror the DEFAULT_COPY from useSiteCopy so fields are pre-populated
 const EDITOR_DEFAULTS: SiteCopy = {
   tools: {
-    songfit: { label: "FMLY", pill: "See how your song fits listeners." },
-    vibefit: { label: "the Creative", pill: "Art & captions that fit your song.", heading: "Art & Captions That Fit Your Song", cta: "Fit My Vibe" },
-    profit: { label: "the Manager", pill: "See how you can profit from your Spotify", heading: "Turn Your Spotify Data Into A Revenue Strategy", cta: "Generate My Plan" },
-    playlist: { label: "the Plug", pill: "See if your song fits playlists.", heading: "Check Playlist Health And Match Your Song", cta: "Analyze Playlist" },
-    mix: { label: "the Engineer", pill: "See which mix fits best.", heading: "Compare Mix Versions And Choose The Best Fit", cta: "Start Comparing" },
-    lyric: { label: "the Director", pill: "Where your lyrics fit timing.", heading: "Get Perfectly Timed Lyrics For Every Drop", cta: "Sync Lyrics" },
-    hitfit: { label: "the A&R", pill: "See if your song fits the Top 10.", heading: "Compare Your Track to Your Target Sound", cta: "Analyze" },
-    dreamfit: { label: "FMLY Matters", pill: "Let's build the next Fit together." },
+    songfit: { label: "FMLY", pill: "See what your FMLY is making." },
+    vibefit: {
+      label: "the Creative",
+      pill: "Build the world around your release.",
+      heading: "Your track has a look. Find it.",
+      cta: "Make the look",
+    },
+    profit: {
+      label: "the Manager",
+      pill: "Know your worth.",
+      heading: "Your streaming data. Your revenue roadmap.",
+      cta: "Talk to the Manager",
+    },
+    playlist: {
+      label: "the Plug",
+      pill: "Get in the room.",
+      heading: "Build the pitch that opens doors.",
+      cta: "Build my pitch",
+    },
+    mix: {
+      label: "the Engineer",
+      pill: "Trust your ears.",
+      heading: "Stop going back and forth. Decide.",
+      cta: "Start comparing",
+    },
+    lyric: {
+      label: "the Director",
+      pill: "Turn sound into motion.",
+      heading: "Make your music visible.",
+      cta: "Make it move",
+    },
+    hitfit: {
+      label: "the A&R",
+      pill: "Is it ready?",
+      heading: "Honest ears. No hype.",
+      cta: "Get the read",
+    },
+    dreamfit: { label: "FMLY Matters", pill: "Build with us." },
   },
   about: {
     origin_intro: "",
     origin_body: "",
-    origin_tagline: "toolsFM: experiments to find answers. let's agree to keep building.",
-    listen_label: "Listen to what started it all.",
+    origin_tagline: "tools.fm — your label. your team. your FMLY.",
+    listen_label: "What started it all.",
     tools_intro: "",
     products: [],
   },
-  sidebar: { brand: "tools.fm", story_link: "toolsFM story" },
-  pages: { about_title: "toolsFM story", about_subtitle: "What we built and why.", auth_title: "Join the FMly" },
+  sidebar: { brand: "tools.fm", story_link: "our story" },
+  pages: { about_title: "our story", about_subtitle: "What we built and why.", auth_title: "join the FMLY" },
   features: { crypto_tipping: false, growth_flow: false, growth_quotas: { guest: 5, limited: 10 } },
   signals: {
     resolving_label: "STATUS: RESOLVING... ({n}/50 SIGNALS)",
@@ -42,6 +72,7 @@ const EDITOR_DEFAULTS: SiteCopy = {
     consensus_summary: "{pct}% OF THE FMLY RESONATE WITH THIS.",
   },
 };
+
 
 function deepMergeEditor(target: any, source: any): any {
   const result = { ...target };

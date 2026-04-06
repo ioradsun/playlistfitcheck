@@ -198,7 +198,7 @@ export function FitWidget() {
                       allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                       loading="lazy"
                       className="border-0 block"
-                      title="toolsFM Playlist"
+                      title="tools.fm Playlist"
                     />
                   </div>
                 </div>
@@ -238,7 +238,7 @@ export function FitWidget() {
           </TooltipTrigger>
           <TooltipContent side="left" className="text-xs max-w-[220px] space-y-0.5">
             {tier === "unlimited" ? (
-              <p>toolsFM — Unlimited ⚡</p>
+              <p>tools.fm — Unlimited ⚡</p>
             ) : tier === "limited" ? (
               <p>Invite 1 other artist to unlock Unlimited</p>
             ) : (

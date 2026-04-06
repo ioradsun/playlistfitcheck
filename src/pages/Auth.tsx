@@ -15,7 +15,7 @@ type CreatorRole = "artist" | "beatmaker" | "tastemaker" | null;
 const ROLES: { value: NonNullable<CreatorRole>; label: string }[] = [
   { value: "artist", label: "songs" },
   { value: "beatmaker", label: "beats" },
-  { value: "tastemaker", label: "stars" },
+  { value: "tastemaker", label: "taste" },
 ];
 
 const Auth = () => {
@@ -208,7 +208,7 @@ const Auth = () => {
                 >
                   {mode === "signup" && (
                     <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">sign up if you make</p>
+                      <p className="text-sm text-muted-foreground">you're here for your</p>
                       <div className="flex items-center justify-center gap-3">
                         {ROLES.map((r) => (
                           <button
