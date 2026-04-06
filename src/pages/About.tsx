@@ -4,12 +4,33 @@ import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
 const DEFAULT_TOOL_ORDER = ["songfit", "lyric", "hitfit", "mix", "profit", "playlist", "vibefit", "dreamfit"];
 
+/** Map tool slug → product name for matching about.products entries */
+const SLUG_TO_PRODUCT: Record<string, string> = {
+  songfit: "FMLY",
+  lyric: "the Director",
+  hitfit: "the A&R",
+  mix: "the Engineer",
+  profit: "the Manager",
+  playlist: "the Plug",
+  vibefit: "the Creative",
+  dreamfit: "FMLY Matters",
+};
+
 const TABS = ["Our Story", "Your Team"] as const;
 
 export default function About() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Our Story");
   const siteCopy = useSiteCopy();
   const about = siteCopy.about;
+
+  // Build ordered, filtered list of enabled tools
+  const toolOrder = [
+    ...((siteCopy.features?.tools_order ?? []).filter((key) => DEFAULT_TOOL_ORDER.includes(key))),
+    ...DEFAULT_TOOL_ORDER.filter((key) => !(siteCopy.features?.tools_order ?? []).includes(key)),
+  ].filter((key) => {
+    const enabled = siteCopy.features?.tools_enabled?.[key];
+    return enabled === undefined || enabled === true;
+  });
 
   return (
     <div className="max-w-2xl mx-auto px-4 pt-8 pb-12 space-y-6">
@@ -86,20 +107,29 @@ export default function About() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-4"
         >
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            {about.tools_intro || "Six specialists. One FMLY. Major artists have always had the team. Now you do too."}
-          </p>
+          {about.tools_intro && (
+            <div className="space-y-2">
+              {about.tools_intro.split("\n").filter(Boolean).map((para, i) => (
+                <p key={i} className="text-sm text-muted-foreground leading-relaxed">
+                  {para}
+                </p>
+              ))}
+            </div>
+          )}
 
-          {([
-            ...((siteCopy.features?.tools_order ?? []).filter((key) => DEFAULT_TOOL_ORDER.includes(key))),
-            ...DEFAULT_TOOL_ORDER.filter((key) => !(siteCopy.features?.tools_order ?? []).includes(key)),
-          ]).filter((key) => {
-            const enabled = siteCopy.features?.tools_enabled?.[key];
-            return enabled === undefined || enabled === true;
-          }).map((key, i) => {
+          {toolOrder.map((key, i) => {
             const tool = siteCopy.tools[key] as ToolCopy;
             if (!tool) return null;
-            const product = about.products.find((p) => p.name === tool.label);
+
+            // Match product by tool label OR by slug→name mapping
+            const productName = SLUG_TO_PRODUCT[key] || tool.label;
+            const product = about.products.find(
+              (p) => p.name === tool.label || p.name === productName
+            );
+
+            const description = product?.description || null;
+            const how = product?.how || null;
+
             return (
               <motion.div
                 key={key}
@@ -110,18 +140,22 @@ export default function About() {
               >
                 <div>
                   <h2 className="text-sm font-semibold">{tool.label}</h2>
-                  <p className="font-mono text-[11px] tracking-widest text-muted-foreground">{tool.pill}</p>
+                  <p className="font-mono text-[11px] tracking-widest text-muted-foreground">
+                    {product?.tagline || tool.pill}
+                  </p>
                 </div>
-                {product?.description && (
+
+                {description && (
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    {product.description}
+                    {description}
                   </p>
                 )}
-                {product?.how && (
+
+                {how && (
                   <div className="border-t border-border/30 pt-3">
-                    <p className="text-xs font-medium text-foreground/80 mb-1">What they do</p>
+                    <p className="text-xs font-medium text-foreground/80 mb-1">How it works</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      {product.how}
+                      {how}
                     </p>
                   </div>
                 )}
