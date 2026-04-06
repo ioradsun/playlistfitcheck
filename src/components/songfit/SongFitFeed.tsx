@@ -6,6 +6,8 @@
  * PostCommentPanel is the sole comment UX (inline in card).
  */
 import { memo, useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
+import { useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Plus, Search, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useFeedPosts } from "./useFeedPosts";
@@ -288,6 +290,7 @@ interface SongFitFeedProps {
 
 export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const hasFadedIn = useRef(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
