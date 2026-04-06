@@ -3,7 +3,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Mail, Waves, AlignLeft, Zap, BarChart2 } from "lucide-react";
+import { User, Mail, Waves, AlignLeft, Zap, BarChart2, ExternalLink } from "lucide-react";
 import { useDmContext } from "@/hooks/useDmContext";
 
 export type CardMode = "dance" | "lyric" | "empowerment" | "results";
@@ -42,6 +42,7 @@ interface PlayerHeaderProps {
   artistName?: string;
   songTitle: string;
   spotifyArtistId?: string | null;
+  lyricDanceUrl?: string | null;
   showMenuButton?: boolean;
   isVerified?: boolean;
   userId?: string | null;
@@ -113,6 +114,7 @@ export function PlayerHeader({
   artistName,
   songTitle,
   spotifyArtistId,
+  lyricDanceUrl,
   showMenuButton = false,
   isVerified,
   userId,
@@ -360,6 +362,38 @@ export function PlayerHeader({
                   </motion.button>
                 );
               })}
+              {lyricDanceUrl && showMenuButton && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 4 * 0.04 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(lyricDanceUrl, "_blank");
+                  }}
+                  className="hover:text-white/80 transition-colors"
+                  style={{
+                    position: "relative",
+                    width: 28,
+                    height: 28,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "rgba(255,255,255,0.25)",
+                    transition: "color 150ms ease",
+                    padding: 0,
+                  }}
+                  aria-label="Open in new tab"
+                >
+                  <ExternalLink size={14} />
+                </motion.button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
