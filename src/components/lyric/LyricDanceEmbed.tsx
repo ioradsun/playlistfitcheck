@@ -220,6 +220,17 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
   }, [currentTimeSec, durationSec, cardMode, player]);
 
+  useEffect(() => {
+    if (!player) return;
+    if (cardMode !== "dance") {
+      player.setMuted(true);
+      return;
+    }
+    player.setMuted(true);
+    player.setRegion(undefined, undefined);
+    player.audio.loop = true;
+  }, [cardMode, player]);
+
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
     const currentTime = player?.audio?.currentTime ?? 0;
@@ -406,6 +417,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             moments={moments}
             reactionData={reactionData}
             currentTimeSec={currentTimeSec}
+            words={(data?.words as Array<{ word: string; start: number; end: number }>) ?? []}
             onFireMoment={(lineIndex, timeSec, holdMs) => {
               if (!danceId) return;
               player?.fireFire(holdMs);
@@ -413,8 +425,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             }}
             onPlayLine={(startSec, endSec) => {
               if (!player) return;
-              player.seek(startSec);
+              player.audio.currentTime = Math.max(0, startSec - 0.01);
               player.setRegion(startSec, endSec);
+              player.setMuted(false);
               player.play();
             }}
           />
