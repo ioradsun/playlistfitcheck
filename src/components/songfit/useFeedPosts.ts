@@ -168,6 +168,11 @@ async function fetchLyricData(
 export interface FeedState {
   posts: SongFitPost[];
   loading: boolean;
+  searchTerm: string;
+  setSearchTerm: (term: string) => void;
+  searchResults: SongFitPost[];
+  searchLoading: boolean;
+  isSearching: boolean;
   loadingMore: boolean;
   hasMore: boolean;
   pendingNewCount: number;
@@ -193,6 +198,9 @@ export function useFeedPosts(): FeedState {
     return cached?.length ? (cached as unknown as SongFitPost[]).map(hydrateDefaults) : [];
   });
   const [loading, setLoading] = useState(() => !getCachedFeed()?.length);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<SongFitPost[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [pendingNewCount, setPendingNewCount] = useState(0);
@@ -217,6 +225,7 @@ export function useFeedPosts(): FeedState {
   const cursorRef = useRef<string | null>(null);
   const loadingMoreRef = useRef(false);
   const newestRef = useRef<string | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── fetchPosts: initial load & refresh ────────────────────────────────
   const fetchPosts = useCallback(async () => {
@@ -367,6 +376,56 @@ export function useFeedPosts(): FeedState {
     return () => { void supabase.removeChannel(channel); };
   }, [user?.id]);
 
+  useEffect(() => {
+    const q = searchTerm.trim();
+    if (!q) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    searchDebounceRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const term = `%${q}%`;
+        const { data } = await supabase
+          .from("songfit_posts")
+          .select(POST_SELECT)
+          .eq("status", "live")
+          .or(
+            `track_title.ilike.${term},` +
+            `caption.ilike.${term},` +
+            `track_artists_json::text.ilike.${term}`,
+          )
+          .order("created_at", { ascending: false })
+          .limit(40);
+
+        const results = ((data ?? []) as unknown as SongFitPost[]).map(hydrateDefaults);
+        setSearchResults(results);
+
+        const lyricIds = results
+          .filter((p) => p.lyric_dance_id)
+          .map((p) => p.lyric_dance_id as string);
+
+        if (lyricIds.length > 0) {
+          fetchLyricData(lyricIds, lyricDataMap).then((newMap) => {
+            setLyricDataMap(newMap);
+          });
+        }
+      } catch (err) {
+        console.error("[useFeedPosts] search error:", err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchTerm, lyricDataMap]);
+
   // ── Dance-published event ─────────────────────────────────────────────
   useEffect(() => {
     const handler = () => void fetchPosts();
@@ -385,6 +444,11 @@ export function useFeedPosts(): FeedState {
   return {
     posts,
     loading,
+    searchTerm,
+    setSearchTerm,
+    searchResults,
+    searchLoading,
+    isSearching: searchTerm.trim().length > 0,
     loadingMore,
     hasMore,
     pendingNewCount,
