@@ -31,7 +31,7 @@ export function PlusMenu({ open, onClose, anchor = "header" }: Props) {
   };
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} className="relative">
       <AnimatePresence>
         {open && (
           <motion.div
@@ -39,64 +39,21 @@ export function PlusMenu({ open, onClose, anchor = "header" }: Props) {
             animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.92, x: 8 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            style={{
-              position: "absolute",
-              right: 0,
-              top: anchor === "floating" ? "calc(100% + 8px)" : "calc(100% + 4px)",
-              width: 160,
-              background: "#111",
-              border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 12,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-              zIndex: 9999,
-              overflow: "hidden",
-            }}
+            className="absolute right-0 z-[9999] w-40 overflow-hidden rounded-xl border border-border bg-popover shadow-lg"
+            style={{ top: anchor === "floating" ? "calc(100% + 8px)" : "calc(100% + 4px)" }}
           >
             <button
               onClick={() => go("song")}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "11px 14px",
-                background: "none",
-                border: "none",
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
-                cursor: "pointer",
-                textAlign: "left",
-                color: "rgba(255,255,255,0.75)",
-                fontSize: 13,
-                fontWeight: 500,
-                transition: "background 120ms",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+              className="flex w-full items-center gap-2.5 border-b border-border/40 px-3.5 py-2.5 text-left text-[13px] font-medium text-popover-foreground/75 transition-colors hover:bg-accent/50"
             >
-              <Music size={14} style={{ color: "rgba(255,255,255,0.4)", flexShrink: 0 }} />
+              <Music size={14} className="shrink-0 text-muted-foreground" />
               song
             </button>
             <button
               onClick={() => go("beat")}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "11px 14px",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                textAlign: "left",
-                color: "rgba(255,255,255,0.75)",
-                fontSize: 13,
-                fontWeight: 500,
-                transition: "background 120ms",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-medium text-popover-foreground/75 transition-colors hover:bg-accent/50"
             >
-              <Waves size={14} style={{ color: "rgba(255,255,255,0.4)", flexShrink: 0 }} />
+              <Waves size={14} className="shrink-0 text-muted-foreground" />
               beat
             </button>
           </motion.div>

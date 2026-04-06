@@ -445,20 +445,18 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
               {!searchUiVisible && (
                 <>
                   <div className="h-4 w-px bg-border/60" />
-                  <div className="relative">
-                    <button
-                      onClick={() => setPlusOpen((v) => !v)}
-                      className="px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                      aria-label="Add music"
-                    >
-                      <Plus size={16} />
-                    </button>
-                    <PlusMenu
-                      open={plusOpen}
-                      onClose={() => setPlusOpen(false)}
-                      anchor="header"
-                    />
-                  </div>
+                  <button
+                    onClick={() => setPlusOpen((v) => !v)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="Add music"
+                  >
+                    <Plus size={16} />
+                  </button>
+                  <PlusMenu
+                    open={plusOpen}
+                    onClose={() => setPlusOpen(false)}
+                    anchor="header"
+                  />
                 </>
               )}
             </div>
