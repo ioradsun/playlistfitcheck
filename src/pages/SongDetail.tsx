@@ -1277,7 +1277,7 @@ const SongDetail = () => {
         {/* Player (collapsed, expandable) */}
         {danceData && (
           <div className="glass-card rounded-xl overflow-hidden">
-            <div className="relative" style={{ height: 200 }}>
+            <div className="relative" style={{ height: 360 }}>
               <LyricDanceEmbed
                 ref={playerRef}
                 lyricDanceId={danceId!}
