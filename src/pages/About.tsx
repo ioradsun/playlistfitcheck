@@ -2,12 +2,12 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useSiteCopy, type ToolCopy } from "@/hooks/useSiteCopy";
 
-const DEFAULT_TOOL_ORDER = ["songfit", "hitfit", "vibefit", "profit", "playlist", "mix", "lyric", "dreamfit"];
+const DEFAULT_TOOL_ORDER = ["songfit", "lyric", "hitfit", "mix", "profit", "playlist", "vibefit", "dreamfit"];
 
-const TABS = ["Origin Story", "The Tools"] as const;
+const TABS = ["Our Story", "Your Team"] as const;
 
 export default function About() {
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Origin Story");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Our Story");
   const siteCopy = useSiteCopy();
   const about = siteCopy.about;
 
@@ -30,7 +30,7 @@ export default function About() {
         ))}
       </div>
 
-      {tab === "Origin Story" && (
+      {tab === "Our Story" && (
         <motion.div
           key="origin"
           initial={{ opacity: 0, y: 10 }}
@@ -50,12 +50,12 @@ export default function About() {
                   >
                     ajan
                   </a>
-                  . I make music, so I know the 3am doubt—is the mix ready, is it actually good? My dad builds tech. So we built tools to try and answer those questions. Every tool here exists because we needed it ourselves first.
+                  . I make music. My dad builds tech. Between us we've felt every version of the 3am question — is the mix right, is this actually good, will anyone care? We built tools.fm because we needed the answers ourselves. Every product here exists because we felt the problem first.
                 </>
               )}
             </p>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              {about.origin_body || "We're trying everything. Some will work. Some won't. That's how music works too. But at least we're not guessing alone. Recently we started saving your audio in LyricFit—because if your lyrics are synced, your visuals should be ready whenever you come back. No re-uploading. No lost work. Just pick up where you left off. That's the kind of thing we'd want as artists, so we built it."}
+              {about.origin_body || "Major artists have teams. A Director who builds the visual world. An A&R who tells them the truth. An Engineer who trusts the ears. A Manager who reads the numbers. A Plug who opens the doors. A Creative who makes the look. Independent artists have never had that team — until now. tools.fm is not a set of tools. It is the label you never had, built by artists who know exactly what was missing."}
             </p>
             <p className="text-sm text-primary font-semibold leading-relaxed">
               {about.origin_tagline}
@@ -79,7 +79,7 @@ export default function About() {
         </motion.div>
       )}
 
-      {tab === "The Tools" && (
+      {tab === "Your Team" && (
         <motion.div
           key="tools"
           initial={{ opacity: 0, y: 10 }}
@@ -87,7 +87,7 @@ export default function About() {
           className="space-y-4"
         >
           <p className="text-sm text-muted-foreground leading-relaxed">
-            {about.tools_intro || "Six tools. One goal: give independent artists the clarity they deserve. No gatekeeping, no vague advice. Just data, context, and a little taste."}
+            {about.tools_intro || "Six specialists. One FMLY. Major artists have always had the team. Now you do too."}
           </p>
 
           {([
@@ -119,7 +119,7 @@ export default function About() {
                 )}
                 {product?.how && (
                   <div className="border-t border-border/30 pt-3">
-                    <p className="text-xs font-medium text-foreground/80 mb-1">How it works</p>
+                    <p className="text-xs font-medium text-foreground/80 mb-1">What they do</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
                       {product.how}
                     </p>

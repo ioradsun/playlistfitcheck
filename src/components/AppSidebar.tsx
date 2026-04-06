@@ -254,7 +254,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
       hitfits.forEach((h: any) => {
         items.push({
           id: h.id,
-          label: h.filename || "HitFit Analysis",
+          label: h.filename || "A&R session",
           meta: formatDistanceToNow(new Date(h.updated_at), { addSuffix: true }),
           type: "hitfit",
           rawData: { analysis: h.analysis_json },
@@ -266,7 +266,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
       vibefits.forEach((v: any) => {
         items.push({
           id: v.id,
-          label: v.song_title || "VibeFit",
+          label: v.song_title || "Creative",
           meta: formatDistanceToNow(new Date(v.updated_at), { addSuffix: true }),
           type: "vibefit",
           rawData: v.result_json,
