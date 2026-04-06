@@ -4,7 +4,7 @@ import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { getSessionId } from "@/lib/sessionId";
 import { fetchSessionFires } from "@/lib/fire";
 
-const BAR_HEIGHT = 56;
+const BAR_HEIGHT = 48;
 
 interface FmlyBarProps {
   moments: Moment[];
@@ -47,6 +47,7 @@ export function FmlyBar({
   }>>([]);
   const pendingFireSpawnsRef = useRef<Array<{ count: number; intensity: number }>>([]);
   const animRef = useRef<number>(0);
+  const scrubbingRef = useRef(false);
 
   const momentFireCounts = useMemo(
     () => deriveMomentFireCounts(reactionData, moments),
@@ -153,8 +154,8 @@ export function FmlyBar({
     const spawnFireEmbers = (count: number, intensity: number) => {
       const rect = canvas.parentElement?.getBoundingClientRect();
       if (!rect) return;
-      const x0 = rect.width - 64;
-      const x1 = rect.width;
+      const x0 = rect.width / 2 - 24;
+      const x1 = rect.width / 2 + 24;
       for (let i = 0; i < count; i++) {
         if (embers.length >= 24) break;
         embers.push({
@@ -288,8 +289,6 @@ export function FmlyBar({
             width: "100%",
             maxWidth: 480,
             height: BAR_HEIGHT,
-            display: "flex",
-            alignItems: "stretch",
             position: "relative",
             userSelect: "none",
             WebkitUserSelect: "none",
@@ -297,12 +296,39 @@ export function FmlyBar({
           }}
         >
           {/* Moments container */}
-          <div style={{ flex: 1, display: "flex", position: "relative", minWidth: 0 }}>
+          <div style={{ position: "absolute", inset: 0, display: "flex", minWidth: 0 }}>
           {/* Ember canvas — overlaid on moments, pointer-events: none */}
           <canvas
             ref={emberCanvasRef}
             style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 3 }}
           />
+
+          {/* Segment heat backgrounds */}
+          {moments.map((moment, idx) => {
+            const count = momentFireCounts[idx] ?? 0;
+            const intensity = Math.max(0, Math.min(1, count / maxFireCount));
+            if (intensity <= 0) return null;
+            const leftPct = (moment.startSec / Math.max(0.0001, totalDuration)) * 100;
+            const widthPct = ((moment.endSec - moment.startSec) / Math.max(0.0001, totalDuration)) * 100;
+            const background = idx === hottestIdx
+              ? `rgba(74, 222, 128, ${intensity * 0.12})`
+              : `rgba(255, 150, 40, ${intensity * 0.08})`;
+            return (
+              <div
+                key={`${moment.startSec}-${moment.endSec}-heat`}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: `${leftPct}%`,
+                  width: `${widthPct}%`,
+                  background,
+                  pointerEvents: "none",
+                  zIndex: 0,
+                }}
+              />
+            );
+          })}
 
           {/* Progress fill */}
           <div
@@ -359,28 +385,45 @@ export function FmlyBar({
               inset: 0,
               zIndex: 1,
               cursor: "pointer",
+              touchAction: "none",
             }}
-            onClick={(e) => {
+            onPointerDown={(e) => {
+              scrubbingRef.current = true;
+              e.currentTarget.setPointerCapture(e.pointerId);
               const rect = e.currentTarget.getBoundingClientRect();
               const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
               onSeekTo(pct * totalDuration);
             }}
+            onPointerMove={(e) => {
+              if (!scrubbingRef.current) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              onSeekTo(pct * totalDuration);
+            }}
+            onPointerUp={() => { scrubbingRef.current = false; }}
+            onPointerCancel={() => { scrubbingRef.current = false; }}
           />
           </div>
 
-          {/* Fire button — right edge */}
+          {/* Fire button — centered overlay */}
           <button
             type="button"
             onPointerDown={handleDown}
             onPointerUp={handleUp}
             onPointerLeave={handleUp}
             style={{
-              width: 64, height: BAR_HEIGHT, flexShrink: 0,
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 5,
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
               background: pressing
                 ? "radial-gradient(circle at 50% 50%, rgba(255,140,40,0.15) 0%, transparent 70%)"
                 : "radial-gradient(circle at 50% 50%, rgba(255,140,40,0.06) 0%, transparent 70%)",
               border: "none",
-              borderLeft: "1px solid rgba(255,255,255,0.06)",
               cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: 0,
