@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
 
@@ -67,157 +66,127 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
 
   if (!empowermentPromise) {
     return (
-      <div style={{ position: "absolute", inset: 0, background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace" }}>
-        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)" }}>
-          No empowerment promise yet
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "#0a0a0a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <p
+          style={{
+            fontSize: 10,
+            color: "rgba(255,255,255,0.15)",
+            fontFamily: "monospace",
+            letterSpacing: "0.08em",
+          }}
+        >
+          coming soon
         </p>
       </div>
     );
   }
 
   const totalVotes = hookVoteCounts.reduce((a, b) => a + b, 0);
-  const winnerIndex = totalVotes >= 3 ? hookVoteCounts.indexOf(Math.max(...hookVoteCounts)) : -1;
+  const hasVoted = voted.size > 0;
+  const topThree = empowermentPromise.hooks.slice(0, 3);
 
   return (
-    <div style={{ position: "absolute", inset: 0, overflowY: "auto", overflowX: "hidden", background: "#0a0a0a", padding: 16, fontFamily: "monospace" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-        <span
-          style={{
-            fontSize: 10,
-            color: "rgba(255,255,255,0.4)",
-            background: "rgba(255,255,255,0.05)",
-            borderRadius: 999,
-            padding: "2px 8px",
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          {empowermentPromise.fromState}
-        </span>
-        <span style={{ color: "rgba(255,255,255,0.15)", fontSize: 11 }}>→</span>
-        <span
-          style={{
-            fontSize: 10,
-            color: "rgba(255,255,255,0.7)",
-            background: "rgba(255,255,255,0.08)",
-            borderRadius: 999,
-            padding: "2px 8px",
-            border: "1px solid rgba(255,255,255,0.12)",
-          }}
-        >
-          {empowermentPromise.toState}
-        </span>
-      </div>
-
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: "#0a0a0a",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        padding: "0 20px",
+        gap: 0,
+        fontFamily: "monospace",
+      }}
+    >
       <p
         style={{
-          fontSize: 14,
-          color: "rgba(255,255,255,0.8)",
-          lineHeight: 1.45,
-          margin: "10px 0 6px",
-          letterSpacing: "-0.01em",
+          fontSize: 10,
+          color: "rgba(255,255,255,0.25)",
+          letterSpacing: "0.1em",
+          textTransform: "lowercase",
+          textAlign: "center",
+          marginBottom: 16,
         }}
       >
-        {empowermentPromise.promise}
+        which one hits?
       </p>
 
-      <p
-        style={{
-          fontSize: 9,
-          color: "rgba(255,255,255,0.2)",
-          marginBottom: 10,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-        }}
-      >
-        {totalVotes > 0 ? `${totalVotes} FMLY vote${totalVotes !== 1 ? "s" : ""}` : "Be first to vote"}
-      </p>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {empowermentPromise.hooks.map((hook, i) => {
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {topThree.map((hook, i) => {
+          const isVoted = voted.has(i);
           const votes = hookVoteCounts[i] ?? 0;
-          const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
-          const isWinner = i === winnerIndex;
-          const hasVoted = voted.has(i);
+          const pct = totalVotes > 0
+            ? Math.round((votes / totalVotes) * 100)
+            : 0;
 
           return (
-            <div
+            <button
               key={i}
+              type="button"
+              onClick={() => castVote(i)}
+              disabled={isVoted}
               style={{
-                position: "relative",
-                borderRadius: 10,
-                overflow: "hidden",
-                border: "1px solid rgba(255,255,255,0.06)",
-                background: "rgba(255,255,255,0.03)",
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                background: isVoted
+                  ? "rgba(255,255,255,0.07)"
+                  : "rgba(255,255,255,0.03)",
+                border: `1px solid ${
+                  isVoted
+                    ? "rgba(255,255,255,0.15)"
+                    : "rgba(255,255,255,0.06)"
+                }`,
+                borderRadius: 12,
+                padding: "13px 16px",
+                cursor: isVoted ? "default" : "pointer",
+                transition: "all 200ms ease",
+                textAlign: "left",
               }}
             >
-              {totalVotes > 0 && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: "0 auto 0 0",
-                    width: `${pct}%`,
-                    background: isWinner ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)",
-                    transition: "width 400ms ease",
-                    pointerEvents: "none",
-                  }}
-                />
-              )}
+              <span
+                style={{
+                  fontSize: 12,
+                  color: isVoted
+                    ? "rgba(255,255,255,0.9)"
+                    : "rgba(255,255,255,0.5)",
+                  lineHeight: 1.45,
+                  flex: 1,
+                  transition: "color 200ms ease",
+                }}
+              >
+                {hook}
+              </span>
 
-              <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, padding: "9px 10px" }}>
+              {hasVoted && (
                 <span
                   style={{
-                    fontSize: 9,
-                    color: "rgba(255,255,255,0.2)",
-                    fontFamily: "monospace",
-                    minWidth: 16,
+                    fontSize: 10,
+                    color: isVoted
+                      ? "rgba(255,255,255,0.5)"
+                      : "rgba(255,255,255,0.2)",
                     flexShrink: 0,
+                    minWidth: 32,
+                    textAlign: "right",
+                    transition: "opacity 300ms ease",
                   }}
                 >
-                  {String(i + 1).padStart(2, "0")}
+                  {pct}%
                 </span>
-
-                <span style={{ fontSize: 11, color: isWinner ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.6)", flex: 1, lineHeight: 1.4 }}>
-                  {hook}
-                </span>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  {totalVotes > 0 && (
-                    <span
-                      style={{
-                        fontSize: 9,
-                        color: "rgba(255,255,255,0.2)",
-                        fontFamily: "monospace",
-                        minWidth: 28,
-                        textAlign: "right",
-                      }}
-                    >
-                      {pct}%
-                    </span>
-                  )}
-
-                  {hasVoted ? (
-                    <Check size={11} style={{ color: "rgba(255,255,255,0.35)", flexShrink: 0 }} />
-                  ) : (
-                    <button
-                      onClick={() => castVote(i)}
-                      style={{
-                        fontSize: 9,
-                        fontFamily: "monospace",
-                        color: "rgba(255,255,255,0.3)",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        borderRadius: 999,
-                        padding: "2px 7px",
-                        background: "none",
-                        cursor: "pointer",
-                        transition: "color 150ms, border-color 150ms",
-                      }}
-                    >
-                      vote
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+              )}
+            </button>
           );
         })}
       </div>
