@@ -114,6 +114,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [activeMomentIdx, setActiveMomentIdx] = useState(0);
   const [cardMode, setCardMode] = useState<CardMode>("dance");
+  const [hasUnlocked, setHasUnlocked] = useState(false);
 
   // Hide pool canvases when a panel mode is active so panels
   // aren't occluded by absolute-positioned canvas elements.
@@ -187,6 +188,13 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     unlockAudio();
 
     if (!isFeedEmbed) {
+      if (!hasUnlocked) {
+        setHasUnlocked(true);
+        player?.setMuted(false);
+        player?.play(true);
+        setMuted(false);
+        return;
+      }
       const next = !muted;
       player?.setMuted(next);
       if (!next) player?.play(true);
@@ -202,7 +210,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       audioController.setExplicitPrimary(postId!);
       if (isGlobalMuted()) audioController.toggleMute();
     }
-  }, [muted, player, postId, isFeedEmbed, isPrimary, setMuted]);
+  }, [hasUnlocked, muted, player, postId, isFeedEmbed, isPrimary, setMuted]);
 
   useEffect(() => {
     if (!durationSec || !player) return;
@@ -305,8 +313,16 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     return () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); };
   }, []);
 
+  const pulseStyle = `
+    @keyframes ld-pulse {
+      0%, 100% { opacity: 0.25; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.08); }
+    }
+  `;
+
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
+      <style>{pulseStyle}</style>
       <PlayerHeader
         avatarUrl={avatarUrl}
         artistName={artistName}
@@ -340,6 +356,43 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             {((isFeedEmbed && isPrimary && feedMuted) || (!isFeedEmbed && muted)) && (
               <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.5)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", opacity: showMuteIndicator ? 0.8 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 40 }}>
                 <VolumeX size={20} color="white" />
+              </div>
+            )}
+
+            {!isFeedEmbed && !hasUnlocked && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 50,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 12,
+                  pointerEvents: "none",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 36,
+                    opacity: 0.35,
+                    animation: "ld-pulse 2s ease-in-out infinite",
+                  }}
+                >
+                  ▶
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontFamily: "monospace",
+                    color: "rgba(255,255,255,0.2)",
+                    letterSpacing: "0.12em",
+                    textTransform: "lowercase",
+                  }}
+                >
+                  tap to play
+                </span>
               </div>
             )}
 

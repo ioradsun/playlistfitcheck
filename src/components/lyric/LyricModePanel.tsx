@@ -215,14 +215,23 @@ export function LyricModePanel({
         overflowY: "auto",
         overflowX: "hidden",
         background: "#0a0a0a",
-        padding: "8px 12px 32px",
+        padding: 0,
         WebkitOverflowScrolling: "touch",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
       }}
     >
-      {moments.map((moment) => {
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 440,
+          marginLeft: "auto",
+          marginRight: "auto",
+          padding: "8px 12px 32px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        {moments.map((moment) => {
         const fireCounts = momentFireCounts.find((f) => f.index === moment.index);
         const fireTotal = fireCounts?.total ?? 0;
         const mComments = momentComments[moment.index] ?? [];
@@ -490,7 +499,8 @@ export function LyricModePanel({
             )}
           </div>
         );
-      })}
+        })}
+      </div>
     </div>
   );
 }

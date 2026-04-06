@@ -80,42 +80,51 @@ export function CardResultsPanel({
         overflowY: "auto",
         overflowX: "hidden",
         background: "#0a0a0a",
-        padding: 14,
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        fontFamily: "monospace",
+        padding: 0,
       }}
     >
-      {shareUrl && (
-        <div>
-          <Label>share</Label>
-          <div style={ROW_STYLE}>
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", flexShrink: 0 }}>tools.fm</span>
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.18)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {shareUrl}
-            </span>
-            <button
-              onClick={handleCopy}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: copied ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.25)",
-                display: "flex",
-                alignItems: "center",
-                transition: "color 150ms",
-                padding: 4,
-                flexShrink: 0,
-              }}
-            >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-            </button>
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 440,
+          marginLeft: "auto",
+          marginRight: "auto",
+          padding: "0 14px 32px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          fontFamily: "monospace",
+        }}
+      >
+        {shareUrl && (
+          <div>
+            <Label>share</Label>
+            <div style={ROW_STYLE}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", flexShrink: 0 }}>tools.fm</span>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.18)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {shareUrl}
+              </span>
+              <button
+                onClick={handleCopy}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: copied ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.25)",
+                  display: "flex",
+                  alignItems: "center",
+                  transition: "color 150ms",
+                  padding: 4,
+                  flexShrink: 0,
+                }}
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {spotifyTrackId && (
+        {spotifyTrackId && (
         <div>
           <Label>listen</Label>
           <a
@@ -131,9 +140,9 @@ export function CardResultsPanel({
             <ExternalLink size={11} style={{ color: "rgba(255,255,255,0.2)", flexShrink: 0 }} />
           </a>
         </div>
-      )}
+        )}
 
-      {moments.length > 0 && (
+        {moments.length > 0 && (
         <div>
           <Label>fire moments</Label>
           <div style={{ display: "flex", gap: 2, height: 32, alignItems: "flex-end" }}>
@@ -164,9 +173,9 @@ export function CardResultsPanel({
             })}
           </div>
         </div>
-      )}
+        )}
 
-      {totalFires > 0 && (
+        {totalFires > 0 && (
         <div>
           <Label>crowd signal</Label>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -181,7 +190,8 @@ export function CardResultsPanel({
             </p>
           )}
         </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

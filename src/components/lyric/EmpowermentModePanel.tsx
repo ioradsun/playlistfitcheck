@@ -104,93 +104,103 @@ export function EmpowermentModePanel({ danceId, empowermentPromise }: Props) {
         background: "#0a0a0a",
         display: "flex",
         flexDirection: "column",
+        alignItems: "center",
         justifyContent: "center",
-        padding: "0 20px",
-        gap: 0,
-        fontFamily: "monospace",
+        overflowY: "auto",
       }}
     >
-      <p
+      <div
         style={{
-          fontSize: 10,
-          color: "rgba(255,255,255,0.25)",
-          letterSpacing: "0.1em",
-          textTransform: "lowercase",
-          textAlign: "center",
-          marginBottom: 16,
+          width: "100%",
+          maxWidth: 440,
+          padding: "0 20px",
+          display: "flex",
+          flexDirection: "column",
+          fontFamily: "monospace",
         }}
       >
-        which one hits?
-      </p>
+        <p
+          style={{
+            fontSize: 10,
+            color: "rgba(255,255,255,0.25)",
+            letterSpacing: "0.1em",
+            textTransform: "lowercase",
+            textAlign: "center",
+            marginBottom: 16,
+          }}
+        >
+          which one hits?
+        </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {topThree.map((hook, i) => {
-          const isVoted = voted === i;
-          const votes = hookVoteCounts[i] ?? 0;
-          const pct = totalVotes > 0
-            ? Math.round((votes / totalVotes) * 100)
-            : 0;
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {topThree.map((hook, i) => {
+            const isVoted = voted === i;
+            const votes = hookVoteCounts[i] ?? 0;
+            const pct = totalVotes > 0
+              ? Math.round((votes / totalVotes) * 100)
+              : 0;
 
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => castVote(i)}
-              disabled={hasVoted}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                background: isVoted
-                  ? "rgba(255,255,255,0.07)"
-                  : "rgba(255,255,255,0.03)",
-                border: `1px solid ${
-                  isVoted
-                    ? "rgba(255,255,255,0.15)"
-                    : "rgba(255,255,255,0.06)"
-                }`,
-                borderRadius: 12,
-                padding: "13px 16px",
-                cursor: isVoted ? "default" : "pointer",
-                transition: "all 200ms ease",
-                textAlign: "left",
-              }}
-            >
-              <span
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => castVote(i)}
+                disabled={hasVoted}
                 style={{
-                  fontSize: 12,
-                  color: isVoted
-                    ? "rgba(255,255,255,0.9)"
-                    : "rgba(255,255,255,0.5)",
-                  lineHeight: 1.45,
-                  flex: 1,
-                  transition: "color 200ms ease",
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  background: isVoted
+                    ? "rgba(255,255,255,0.07)"
+                    : "rgba(255,255,255,0.03)",
+                  border: `1px solid ${
+                    isVoted
+                      ? "rgba(255,255,255,0.15)"
+                      : "rgba(255,255,255,0.06)"
+                  }`,
+                  borderRadius: 12,
+                  padding: "13px 16px",
+                  cursor: isVoted ? "default" : "pointer",
+                  transition: "all 200ms ease",
+                  textAlign: "left",
                 }}
               >
-                {hook}
-              </span>
-
-              {hasVoted && (
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: 12,
                     color: isVoted
-                      ? "rgba(255,255,255,0.5)"
-                      : "rgba(255,255,255,0.2)",
-                    flexShrink: 0,
-                    minWidth: 32,
-                    textAlign: "right",
-                    transition: "opacity 300ms ease",
+                      ? "rgba(255,255,255,0.9)"
+                      : "rgba(255,255,255,0.5)",
+                    lineHeight: 1.45,
+                    flex: 1,
+                    transition: "color 200ms ease",
                   }}
                 >
-                  {pct}%
+                  {hook}
                 </span>
-              )}
-            </button>
-          );
-        })}
+
+                {hasVoted && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: isVoted
+                        ? "rgba(255,255,255,0.5)"
+                        : "rgba(255,255,255,0.2)",
+                      flexShrink: 0,
+                      minWidth: 32,
+                      textAlign: "right",
+                      transition: "opacity 300ms ease",
+                    }}
+                  >
+                    {pct}%
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
