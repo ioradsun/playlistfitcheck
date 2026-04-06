@@ -34,11 +34,20 @@ export function DmCompose() {
       setEditingPartner(false);
       setSearchQuery("");
       setSearchResults([]);
+
+      if (composePartnerId === "new") {
+        setEditingPartner(true);
+        setTimeout(() => searchRef.current?.focus(), 50);
+      }
     }
   }, [composePartnerId]);
 
   useEffect(() => {
-    if (!composePartnerId) return;
+    if (composePartnerId === "new") {
+      setPartnerProfile(null);
+      return;
+    }
+    if (!composePartnerId || composePartnerId === "new") return;
     void supabase
       .from("profiles")
       .select("id, display_name, avatar_url, trailblazer_number")
