@@ -188,7 +188,6 @@ export function useLyricDancePlayer(
       }
 
       await p.init();
-      p.wickBarEnabled = true;
       // Shareable pages: compile scene NOW while user reads the cover.
       // By the time they tap "Listen Now", the scene is fully baked.
       if (eagerUpgrade && bootMode === "minimal") {
