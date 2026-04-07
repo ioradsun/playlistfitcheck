@@ -61,7 +61,12 @@ OUTPUT — return ONLY valid JSON, no markdown:
 }`;
 
 function extractJson(raw: string): any {
-  const cleaned = raw.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
+  let cleaned = raw.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
+  // Fix mm:ss timestamps Gemini sometimes returns instead of decimal seconds
+  // e.g. "start_sec":1:28 → "start_sec":88.0
+  cleaned = cleaned.replace(/"start_sec"\s*:\s*(\d+):(\d{2})(?:\.\d+)?/g, (_match, m, s) => {
+    return `"start_sec":${parseInt(m) * 60 + parseInt(s)}.0`;
+  });
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
