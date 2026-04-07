@@ -3,6 +3,7 @@ import type { Moment } from "@/lib/buildMoments";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { getSessionId } from "@/lib/sessionId";
 import { fetchSessionFires } from "@/lib/fire";
+import { createFireHold } from "@/lib/fireHold";
 
 const BAR_HEIGHT = 44;
 
@@ -42,8 +43,7 @@ export function FmlyBar({
   const [toast, setToast] = useState<{ text: string; momentIndex: number } | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
 
-  const holdStartRef = useRef<number | null>(null);
-  const holdTickRef = useRef<number | null>(null);
+  const fireHoldControllerRef = useRef<ReturnType<typeof createFireHold> | null>(null);
   const userFiresRef = useRef<Record<number, number>>({});
   const emberCanvasRef = useRef<HTMLCanvasElement>(null);
   const embersRef = useRef<Array<{
@@ -127,8 +127,15 @@ export function FmlyBar({
   }, [moments, danceId, hydrated]);
 
   useEffect(() => {
-    return () => { if (holdTickRef.current) window.clearInterval(holdTickRef.current); };
-  }, []);
+    fireHoldControllerRef.current = createFireHold({
+      onScaleUpdate: setFireScale,
+      onCanvasTrigger: () => player?.fireMoment?.(),
+    });
+    return () => {
+      fireHoldControllerRef.current?.destroy();
+      fireHoldControllerRef.current = null;
+    };
+  }, [player]);
 
   // ── Canvas ember animation ──────────────────────────────────────────────
   useEffect(() => {
@@ -324,26 +331,17 @@ export function FmlyBar({
     setFireScale(1);
     pendingFireSpawnsRef.current.push({ count: 5, intensity: 0.6 });
     pendingPlayheadSpawnsRef.current.push({ count: 3, intensity: 0.5 });
-    holdStartRef.current = performance.now();
     player?.fireMoment?.();
     onFireHoldStart();
-    holdTickRef.current = window.setInterval(() => {
-      const elapsed = performance.now() - (holdStartRef.current ?? 0);
-      const intensity = Math.min(1, elapsed / 2000);
-      setFireScale(1 + intensity * 0.3);
-      player?.fireMoment?.();
-    }, 150);
+    fireHoldControllerRef.current?.start();
   };
 
   const handleUp = () => {
     setPressing(false);
-    setFireScale(1);
-    if (holdTickRef.current) { window.clearInterval(holdTickRef.current); holdTickRef.current = null; }
+    const holdData = fireHoldControllerRef.current?.stop();
     player?.stopContinuousFire?.();
-    const startedAt = holdStartRef.current;
-    holdStartRef.current = null;
-    if (startedAt == null) return;
-    const holdMs = performance.now() - startedAt;
+    if (!holdData) return;
+    const holdMs = holdData.holdMs;
     if (holdMs < 180) handleFireTap(); else handleFireHoldEnd(holdMs);
   };
 

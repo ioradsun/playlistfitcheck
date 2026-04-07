@@ -8,49 +8,7 @@ import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 import { enrichSections } from "@/engine/directionResolvers";
 import { isGlobalMuted } from "@/lib/globalMute";
-
-const EMOJI_SYMBOLS: Record<string, string> = {
-  fire: "🔥",
-  dead: "💀",
-  mind_blown: "🤯",
-  emotional: "😭",
-  respect: "🙏",
-  accurate: "🎯",
-};
-
-export function computeTopReaction(
-  fireHeat: Record<string, { line: Record<number, number>; total: number }>,
-  lyrics: any[],
-) {
-  const lineTotals = new Map<number, number>();
-  for (const d of Object.values(fireHeat)) {
-    for (const [idxStr, count] of Object.entries(d.line)) {
-      lineTotals.set(Number(idxStr), (lineTotals.get(Number(idxStr)) ?? 0) + count);
-    }
-  }
-  if (lineTotals.size === 0) return null;
-  let bestIdx = -1;
-  let bestTotal = 0;
-  for (const [idx, total] of lineTotals.entries()) {
-    if (total > bestTotal) {
-      bestTotal = total;
-      bestIdx = idx;
-    }
-  }
-  let topKey: string | null = null;
-  let topCount = 0;
-  for (const [key, d] of Object.entries(fireHeat)) {
-    const count = d.line[bestIdx] ?? 0;
-    if (count > topCount) {
-      topCount = count;
-      topKey = key;
-    }
-  }
-  const symbol = topKey ? (EMOJI_SYMBOLS[topKey] ?? "🔥") : "🔥";
-  const lineText = ((lyrics as any[])[bestIdx]?.text ?? "").slice(0, 60);
-  if (!lineText || bestTotal <= 0) return null;
-  return { symbol, count: bestTotal, lineText, lineReactionCount: bestTotal };
-}
+import { fireWeight } from "@/lib/fireHold";
 
 interface UseLyricDanceCoreOptions {
   lyricDanceId: string;
@@ -60,12 +18,6 @@ interface UseLyricDanceCoreOptions {
   evicted?: boolean;
 }
 
-const fireWeight = (holdMs: number) => {
-  if (holdMs < 300) return 1;
-  if (holdMs < 1000) return 2;
-  if (holdMs < 3000) return 4;
-  return 8;
-};
 
 export function useLyricDanceCore({
   lyricDanceId,
@@ -152,12 +104,8 @@ export function useLyricDanceCore({
   );
 
   const [fireHeat, setFireHeat] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
-  const [fireUsers, setFireUsers] = useState<Array<{
-    sectionIndex: number;
-    userId: string | null;
-    avatarUrl: string | null;
-    displayName: string | null;
-  }>>([]);
+  const [fireUserMap, setFireUserMap] = useState<Record<number, string[]>>({});
+  const [fireAnonCount, setFireAnonCount] = useState<Record<number, number>>({});
   const pendingFiresRef = useRef<Array<{ line_index: number | null; hold_ms: number | null }>>([]);
 
   const activeLine = useMemo(() => {
@@ -232,8 +180,8 @@ export function useLyricDanceCore({
       if (!mounted || !fires) return;
 
       const agg: Record<string, { line: Record<number, number>; total: number }> = { "🔥": { line: {}, total: 0 } };
-      const users: Array<{ sectionIndex: number; userId: string | null; avatarUrl: string | null; displayName: string | null }> = [];
-      const userIds = new Set<string>();
+      const userMap: Record<number, string[]> = {};
+      const anonCount: Record<number, number> = {};
 
       for (const fire of fires as any[]) {
         const idx = fire.line_index ?? 0;
@@ -241,28 +189,16 @@ export function useLyricDanceCore({
         agg["🔥"].line[idx] = (agg["🔥"].line[idx] ?? 0) + weight;
         agg["🔥"].total += weight;
         if (fire.user_id) {
-          userIds.add(fire.user_id);
-          users.push({ sectionIndex: idx, userId: fire.user_id, avatarUrl: null, displayName: null });
+          if (!userMap[idx]) userMap[idx] = [];
+          if (!userMap[idx].includes(fire.user_id)) userMap[idx].push(fire.user_id);
+        } else {
+          anonCount[idx] = (anonCount[idx] ?? 0) + 1;
         }
       }
 
       setFireHeat(agg);
-
-      if (userIds.size > 0) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, avatar_url, display_name")
-          .in("id", [...userIds]);
-        if (!mounted) return;
-        const map = new Map((profiles ?? []).map((p: any) => [p.id, p]));
-        setFireUsers(users.map((u) => ({
-          ...u,
-          avatarUrl: map.get(u.userId ?? "")?.avatar_url ?? null,
-          displayName: map.get(u.userId ?? "")?.display_name ?? null,
-        })));
-      } else {
-        setFireUsers([]);
-      }
+      setFireUserMap(userMap);
+      setFireAnonCount(anonCount);
     };
 
     void hydrate();
@@ -294,26 +230,23 @@ export function useLyricDanceCore({
           table: "lyric_dance_fires",
           filter: `dance_id=eq.${data.id}`,
         },
-        async (payload: any) => {
+        (payload: any) => {
           const { line_index, hold_ms, user_id } = payload.new;
           pendingFiresRef.current.push({ line_index, hold_ms });
 
-          if (!user_id) return;
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("id, avatar_url, display_name")
-            .eq("id", user_id)
-            .maybeSingle();
-          if (!mounted || !profile) return;
-          setFireUsers((prev) => [
-            ...prev,
-            {
-              sectionIndex: line_index ?? 0,
-              userId: user_id,
-              avatarUrl: (profile as any).avatar_url ?? null,
-              displayName: (profile as any).display_name ?? null,
-            },
-          ]);
+          if (user_id) {
+            setFireUserMap((prev) => {
+              const idx = line_index ?? 0;
+              const existing = prev[idx] ?? [];
+              if (existing.includes(user_id)) return prev;
+              return { ...prev, [idx]: [...existing, user_id] };
+            });
+          } else {
+            setFireAnonCount((prev) => {
+              const idx = line_index ?? 0;
+              return { ...prev, [idx]: (prev[idx] ?? 0) + 1 };
+            });
+          }
         },
       )
       .subscribe();
@@ -398,7 +331,8 @@ export function useLyricDanceCore({
     lyricSections,
     moments,
     activeLine,
-    fireUsers,
+    fireUserMap,
+    fireAnonCount,
     handleReplay,
   };
 }

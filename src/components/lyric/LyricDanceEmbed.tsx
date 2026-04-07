@@ -27,7 +27,6 @@ interface LyricDanceEmbedProps {
   spotifyArtistId?: string | null;
   avatarUrl?: string | null;
   isVerified?: boolean;
-  isInstrumental?: boolean;
   userId?: string | null;
   onProfileClick?: () => void;
 }
@@ -38,7 +37,7 @@ export interface LyricDanceEmbedHandle {
   wickBarEnabled: boolean;
 }
 
-type Comment = { id: string; text: string; line_index: number | null; submitted_at: string };
+type Comment = { id: string; text: string; line_index: number | null; submitted_at: string; user_id: string | null };
 
 export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed({
   lyricDanceId,
@@ -52,7 +51,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   spotifyArtistId,
   avatarUrl,
   isVerified,
-  isInstrumental,
   userId,
   onProfileClick,
 }, ref) {
@@ -73,10 +71,13 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     durationSec,
     moments,
     activeLine,
+    fireUserMap,
+    fireAnonCount,
   } = useLyricDanceCore({ lyricDanceId, prefetchedData, postId, usePool: isFeedEmbed, evicted });
 
   const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
   const [comments, setComments] = useState<Comment[]>([]);
+  const [profileMap, setProfileMap] = useState<Record<string, { avatarUrl: string | null; displayName: string | null }>>({});
 
   const audioState = useSyncExternalStore(audioController.subscribe, audioController.getSnapshot, audioController.getSnapshot);
   const isPrimary = isFeedEmbed && audioState.effectivePrimaryId === postId;
@@ -97,7 +98,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
-  const [activeMomentIdx, setActiveMomentIdx] = useState(0);
   const [cardMode, setCardMode] = useState<CardMode>("listen");
   const [hasUnlocked, setHasUnlocked] = useState(false);
 
@@ -115,7 +115,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
     supabase
       .from("lyric_dance_comments" as any)
-      .select("id, text, line_index, submitted_at")
+      .select("id, text, line_index, submitted_at, user_id")
       .eq("dance_id", danceId)
       .order("submitted_at", { ascending: true })
       .limit(300)
@@ -130,7 +130,13 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         filter: `dance_id=eq.${danceId}`,
       }, (payload: any) => {
         const c = payload.new as Comment;
-        setComments((prev) => (prev.some((x) => x.id === c.id) ? prev : [...prev, c]));
+        setComments((prev) => {
+          const withoutTemp = prev.filter((x) =>
+            !(x.id.startsWith("temp-") && x.text === c.text && x.line_index === c.line_index)
+          );
+          if (withoutTemp.some((x) => x.id === c.id)) return withoutTemp;
+          return [...withoutTemp, c];
+        });
       })
       .subscribe();
 
@@ -139,6 +145,32 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       supabase.removeChannel(channel);
     };
   }, [danceId]);
+
+  useEffect(() => {
+    const fireIds = Object.values(fireUserMap).flat();
+    const commentIds = comments.filter((c) => c.user_id).map((c) => c.user_id!);
+    const allIds = [...new Set([...fireIds, ...commentIds])];
+    if (allIds.length === 0) {
+      setProfileMap({});
+      return;
+    }
+
+    supabase
+      .from("profiles")
+      .select("id, avatar_url, display_name")
+      .in("id", allIds)
+      .then(({ data: profiles }) => {
+        if (!profiles) return;
+        const map: Record<string, { avatarUrl: string | null; displayName: string | null }> = {};
+        for (const profile of profiles as any[]) {
+          map[profile.id] = {
+            avatarUrl: profile.avatar_url ?? null,
+            displayName: profile.display_name ?? null,
+          };
+        }
+        setProfileMap(map);
+      });
+  }, [fireUserMap, comments]);
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
@@ -224,6 +256,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
   useEffect(() => {
     if (!player) return;
+    if (panelPlayTimerRef.current) {
+      clearTimeout(panelPlayTimerRef.current);
+      panelPlayTimerRef.current = null;
+    }
     const isListening = cardMode === "listen";
 
     if (containerRef.current) {
@@ -234,18 +270,17 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       });
     }
 
-    if (!isListening) {
-      player.setMuted(true);
-      if (panelPlayTimerRef.current) {
-        clearTimeout(panelPlayTimerRef.current);
-        panelPlayTimerRef.current = null;
-      }
+    if (isListening) {
+      player.setRegion(undefined, undefined);
+      player.audio.loop = true;
+      player.setMuted(false);
+      if (!player.playing) player.play(false);
       return;
     }
 
-    player.setMuted(true);
-    player.setRegion(undefined, undefined);
-    player.audio.loop = true;
+    if (!isListening) {
+      player.setMuted(true);
+    }
   }, [cardMode, player, containerRef]);
 
   const flushPlay = useCallback(() => {
@@ -294,26 +329,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [feedMuted]);
 
   const seekOnly = useCallback((timeSec: number) => {
-    if (!moments.length) {
-      setActiveMomentIdx(0);
-      player?.seek(timeSec);
-      return;
-    }
-
-    let idx = moments.findIndex((m) => timeSec >= m.startSec && timeSec <= m.endSec);
-    if (idx === -1) {
-      let closest = 0;
-      let minDist = Infinity;
-      moments.forEach((m, i) => {
-        const d = Math.min(Math.abs(timeSec - m.startSec), Math.abs(timeSec - m.endSec));
-        if (d < minDist) { minDist = d; closest = i; }
-      });
-      idx = closest;
-    }
-
-    setActiveMomentIdx(idx);
     player?.seek(timeSec);
-  }, [moments, player]);
+  }, [player]);
 
   useEffect(() => {
     if (!player || !danceId) return;
@@ -405,10 +422,13 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             moments={moments}
             fireHeat={fireHeat}
             currentTimeSec={currentTimeSec}
-            words={isInstrumental ? undefined : ((data?.words as Array<{ word: string; start: number; end: number }>) ?? [])}
+            words={((data as any)?.cinematic_direction?._instrumental ? undefined : ((data?.words as Array<{ word: string; start: number; end: number }>) ?? []))}
             isInstrumental={!!(data as any)?.cinematic_direction?._instrumental}
             comments={comments}
             onCommentAdded={(comment) => setComments((prev) => (prev.some((c) => c.id === comment.id) ? prev : [...prev, comment]))}
+            profileMap={profileMap}
+            fireUserMap={fireUserMap}
+            fireAnonCount={fireAnonCount}
             onFireMoment={(lineIndex, timeSec, holdMs) => {
               if (!danceId) return;
               player?.fireFire(holdMs);

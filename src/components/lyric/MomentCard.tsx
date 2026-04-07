@@ -16,6 +16,8 @@ interface MomentCardProps {
   firedByUser: boolean;
   pressing: boolean;
   fireScale: number;
+  fireAvatars: Array<{ url: string | null; name: string | null }>;
+  fireAnonCount: number;
   children: ReactNode;
 }
 
@@ -57,6 +59,8 @@ export function MomentCard({
   firedByUser,
   pressing,
   fireScale,
+  fireAvatars,
+  fireAnonCount,
   children,
 }: MomentCardProps) {
   const [text, setText] = useState("");
@@ -104,35 +108,76 @@ export function MomentCard({
 
       <div style={{ marginTop: 8, marginBottom: 8 }}>{children}</div>
 
-      <button
-        type="button"
-        onPointerDown={onFireDown}
-        onPointerUp={onFireUp}
-        onPointerLeave={onFireUp}
-        style={{
-          minHeight: 44,
-          width: 44,
-          borderRadius: 10,
-          border: `1px solid ${pressing ? "rgba(255,140,40,0.35)" : "rgba(255,255,255,0.08)"}`,
-          background: pressing
-            ? "radial-gradient(circle, rgba(255,140,40,0.18) 0%, transparent 70%)"
-            : "none",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          transition: "border-color 200ms ease, background 200ms ease",
-        }}
-      >
-        <Flame
-          size={16}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          type="button"
+          onPointerDown={onFireDown}
+          onPointerUp={onFireUp}
+          onPointerLeave={onFireUp}
           style={{
-            color: iconColor,
-            transform: `scale(${fireScale})`,
-            transition: pressing ? "none" : "transform 200ms ease",
+            minHeight: 44,
+            width: 44,
+            borderRadius: 10,
+            border: `1px solid ${pressing ? "rgba(255,140,40,0.35)" : "rgba(255,255,255,0.08)"}`,
+            background: pressing
+              ? "radial-gradient(circle, rgba(255,140,40,0.18) 0%, transparent 70%)"
+              : "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            transition: "border-color 200ms ease, background 200ms ease",
           }}
-        />
-      </button>
+        >
+          <Flame
+            size={16}
+            style={{
+              color: iconColor,
+              transform: `scale(${fireScale})`,
+              transition: pressing ? "none" : "transform 200ms ease",
+            }}
+          />
+        </button>
+
+        {(fireAvatars.length > 0 || fireAnonCount > 0) && (
+          <div style={{ display: "flex", alignItems: "center" }}>
+            {fireAvatars.map((avatar, i) => (
+              <div
+                key={`${avatar.url ?? "anon"}-${i}`}
+                title={avatar.name ?? undefined}
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  border: "1.5px solid #0a0a0a",
+                  marginLeft: i > 0 ? -6 : 0,
+                  overflow: "hidden",
+                  background: "rgba(255,255,255,0.08)",
+                  flexShrink: 0,
+                }}
+              >
+                {avatar.url ? (
+                  <img src={avatar.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <div style={{ width: "100%", height: "100%", background: "rgba(255,255,255,0.1)" }} />
+                )}
+              </div>
+            ))}
+            {fireAnonCount > 0 && (
+              <span
+                style={{
+                  fontSize: 9,
+                  fontFamily: "monospace",
+                  color: "rgba(255,255,255,0.25)",
+                  marginLeft: fireAvatars.length > 0 ? 4 : 0,
+                }}
+              >
+                +{fireAnonCount}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
       {latestComment && (
         <button
@@ -174,6 +219,15 @@ export function MomentCard({
             <input
               value={text}
               onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  const trimmed = text.trim();
+                  if (!trimmed) return;
+                  onSubmitComment(trimmed);
+                  setText("");
+                }
+              }}
               placeholder="say it"
               style={{
                 flex: 1,

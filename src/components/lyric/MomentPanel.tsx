@@ -5,12 +5,14 @@ import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import type { Moment } from "@/lib/buildMoments";
 import { useAuth } from "@/hooks/useAuth";
 import { MomentCard } from "@/components/lyric/MomentCard";
+import { createFireHold, fireWeight } from "@/lib/fireHold";
 
 interface Comment {
   id: string;
   text: string;
   line_index: number | null;
   submitted_at: string;
+  user_id: string | null;
 }
 
 interface MomentPanelProps {
@@ -24,6 +26,9 @@ interface MomentPanelProps {
   isInstrumental?: boolean;
   comments: Comment[];
   onCommentAdded: (comment: Comment) => void;
+  profileMap: Record<string, { avatarUrl: string | null; displayName: string | null }>;
+  fireUserMap: Record<number, string[]>;
+  fireAnonCount: Record<number, number>;
 }
 
 export function MomentPanel({
@@ -37,6 +42,9 @@ export function MomentPanel({
   isInstrumental,
   comments,
   onCommentAdded,
+  profileMap,
+  fireUserMap,
+  fireAnonCount,
 }: MomentPanelProps) {
   const { user } = useAuth();
   const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
@@ -45,8 +53,7 @@ export function MomentPanel({
   const [fireScale, setFireScale] = useState<Record<number, number>>({});
   const [localFires, setLocalFires] = useState<Record<number, number>>({});
   const [playingMoment, setPlayingMoment] = useState<number | null>(null);
-  const holdStartRef = useRef<number | null>(null);
-  const holdTickRef = useRef<number | null>(null);
+  const fireHoldControllersRef = useRef<Record<number, ReturnType<typeof createFireHold>>>({});
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const momentFireCounts = useMemo(() => deriveMomentFireCounts(fireHeat, moments), [fireHeat, moments]);
@@ -89,6 +96,33 @@ export function MomentPanel({
     return active?.index ?? null;
   }, [moments, currentTimeSec]);
 
+  const momentFireAvatars = useMemo(() => {
+    const result: Record<number, { avatars: Array<{ url: string | null; name: string | null }>; anonCount: number }> = {};
+
+    moments.forEach((moment) => {
+      const lineIndices = moment.lines.length > 0
+        ? moment.lines.map((line) => line.lineIndex)
+        : [moment.sectionIndex];
+
+      const userIds = new Set<string>();
+      let anon = 0;
+
+      for (const idx of lineIndices) {
+        for (const uid of (fireUserMap[idx] ?? [])) userIds.add(uid);
+        anon += fireAnonCount[idx] ?? 0;
+      }
+
+      const avatars = [...userIds].slice(0, 3).map((uid) => ({
+        url: profileMap[uid]?.avatarUrl ?? null,
+        name: profileMap[uid]?.displayName ?? null,
+      }));
+
+      result[moment.index] = { avatars, anonCount: anon + Math.max(0, userIds.size - 3) };
+    });
+
+    return result;
+  }, [moments, fireUserMap, fireAnonCount, profileMap]);
+
   useEffect(() => {
     if (playingMoment == null) return;
     const m = moments[playingMoment];
@@ -104,28 +138,21 @@ export function MomentPanel({
 
   const handleFireDown = useCallback((idx: number) => {
     setPressing(idx);
-    holdStartRef.current = performance.now();
-    setFireScale((prev) => ({ ...prev, [idx]: 1 }));
-    if (holdTickRef.current) window.clearInterval(holdTickRef.current);
-    holdTickRef.current = window.setInterval(() => {
-      const elapsed = performance.now() - (holdStartRef.current ?? 0);
-      const intensity = Math.min(1, elapsed / 2000);
-      setFireScale((prev) => ({ ...prev, [idx]: 1 + intensity * 0.5 }));
-    }, 50);
+    if (!fireHoldControllersRef.current[idx]) {
+      fireHoldControllersRef.current[idx] = createFireHold({
+        onScaleUpdate: (scale) => setFireScale((prev) => ({ ...prev, [idx]: scale })),
+      });
+    }
+    fireHoldControllersRef.current[idx].start();
   }, []);
 
   const handleFireUp = useCallback((idx: number) => {
     setPressing(null);
-    setFireScale((prev) => ({ ...prev, [idx]: 1 }));
-    if (holdTickRef.current) {
-      window.clearInterval(holdTickRef.current);
-      holdTickRef.current = null;
-    }
-    if (holdStartRef.current == null) return;
-    const holdMs = performance.now() - holdStartRef.current;
-    holdStartRef.current = null;
+    const holdData = fireHoldControllersRef.current[idx]?.stop();
+    if (!holdData) return;
+    const holdMs = holdData.holdMs;
     const scoreMs = holdMs < 180 ? 150 : holdMs;
-    const weight = scoreMs < 300 ? 1 : scoreMs < 1000 ? 2 : scoreMs < 3000 ? 4 : 8;
+    const weight = fireWeight(scoreMs);
     setLocalFires((prev) => ({ ...prev, [idx]: (prev[idx] ?? 0) + weight }));
     setFiredMoments((prev) => new Set([...prev, idx]));
     const moment = moments[idx];
@@ -142,10 +169,11 @@ export function MomentPanel({
       text,
       line_index: lineIndex,
       submitted_at: new Date().toISOString(),
+      user_id: user?.id ?? null,
     };
     onCommentAdded(optimistic);
 
-    const { data } = await supabase
+    await supabase
       .from("lyric_dance_comments" as any)
       .insert({
         dance_id: danceId,
@@ -154,14 +182,12 @@ export function MomentPanel({
         session_id: getSessionId(),
         user_id: user?.id ?? null,
       })
-      .select("id, text, line_index, submitted_at" as any)
+      .select("id, text, line_index, submitted_at, user_id" as any)
       .single();
-
-    if (data) onCommentAdded(data as Comment);
   }, [danceId, isInstrumental, moments, onCommentAdded, user?.id]);
 
   useEffect(() => () => {
-    if (holdTickRef.current) window.clearInterval(holdTickRef.current);
+    Object.values(fireHoldControllersRef.current).forEach((controller) => controller.destroy());
   }, []);
 
   return (
@@ -192,6 +218,8 @@ export function MomentPanel({
                 firedByUser={firedMoments.has(moment.index)}
                 pressing={pressing === moment.index}
                 fireScale={fireScale[moment.index] ?? 1}
+                fireAvatars={momentFireAvatars[moment.index]?.avatars ?? []}
+                fireAnonCount={momentFireAvatars[moment.index]?.anonCount ?? 0}
               >
                 {isInstrumental ? (
                   <EnergyBar energy={moment.energy ?? 0} />
@@ -203,18 +231,29 @@ export function MomentPanel({
               {isExpanded && mComments.length > 0 && (
                 <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6, padding: "0 6px" }}>
                   {mComments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      style={{
-                        borderLeft: "1px solid rgba(255,255,255,0.15)",
-                        paddingLeft: 8,
-                        fontSize: 11,
-                        fontFamily: "monospace",
-                        color: "rgba(255,255,255,0.4)",
-                      }}
-                    >
-                      {comment.text}
-                    </div>
+                    (() => {
+                      const profile = comment.user_id ? profileMap[comment.user_id] : null;
+                      return (
+                        <div key={comment.id} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+                          {profile?.avatarUrl ? (
+                            <img src={profile.avatarUrl} style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0 }} />
+                          ) : (
+                            <div style={{ width: 16, height: 16, borderRadius: "50%", background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
+                          )}
+                          <span
+                            style={{
+                              borderLeft: "1px solid rgba(255,255,255,0.15)",
+                              paddingLeft: 8,
+                              fontSize: 11,
+                              fontFamily: "monospace",
+                              color: "rgba(255,255,255,0.4)",
+                            }}
+                          >
+                            {comment.text}
+                          </span>
+                        </div>
+                      );
+                    })()
                   ))}
                 </div>
               )}
