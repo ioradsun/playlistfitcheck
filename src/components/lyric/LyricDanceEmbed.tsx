@@ -12,7 +12,7 @@ import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { audioController } from "@/lib/audioController";
 import { primeAudioPool } from "@/lib/audioPool";
 import { isGlobalMuted } from "@/lib/globalMute";
-import { isAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
+import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
 interface LyricDanceEmbedProps {
@@ -29,7 +29,6 @@ interface LyricDanceEmbedProps {
   isVerified?: boolean;
   userId?: string | null;
   onProfileClick?: () => void;
-  preload?: boolean;
 }
 
 export interface LyricDanceEmbedHandle {
@@ -135,23 +134,33 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       return;
     }
 
-    // Active: start animation (muted — audioController handles unmute)
-    player.play(false);
+    // Only the primary (center) card runs the heavy RAF loop.
+    // Adjacent visible cards stay paused — their compiled scene and
+    // canvas are warm, so resuming is instant when they become primary.
+    if (isFeedEmbed) {
+      if (isPrimary) {
+        player.play(false);
+      } else {
+        player.pause();
+      }
+    } else {
+      // Non-feed surfaces (shareable pages, song detail): always play
+      player.play(false);
+    }
 
     // Feed embed: register with audioController for coordinated audio
     if (!postId || !isFeedEmbed || !visible) return;
     audioController.register(postId, player);
-
-    if (isAudioUnlocked()) {
-      player.audio.muted = true;
-      player.audio.play().catch(() => {});
-    }
+    // NOTE: Removed the isAudioUnlocked() → audio.play() block that was here.
+    // It ran inside a useEffect (not a gesture context), so iOS always blocked it.
+    // primeAudioPool() + audioController._reconcile handle playback correctly
+    // within user gesture handlers elsewhere.
 
     return () => {
       audioController.clearExplicitIf(postId);
       audioController.unregister(postId);
     };
-  }, [player, playerReady, postId, isFeedEmbed, visible]);
+  }, [player, playerReady, postId, isFeedEmbed, visible, isPrimary]);
 
   // ── Audio interruption recovery (iOS phone calls, Siri, alarms) ──
   useEffect(() => {
