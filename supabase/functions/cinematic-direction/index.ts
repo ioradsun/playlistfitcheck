@@ -100,7 +100,46 @@ const INSTRUMENTAL_SCENE_DIRECTION_PROMPT = `
 You are a visual world director for instrumental music.
 Return JSON only. No markdown. No commentary.
 
-OUTPUT SCHEMA: (identical to SCENE_DIRECTION_PROMPT schema)
+OUTPUT JSON SCHEMA:
+{
+  "sceneTone": "dark|light|mixed",
+  "emotionalArc": "slow-burn|surge|collapse|dawn|eruption",
+  "description": "one-sentence world description",
+  "sections": [
+    {
+      "sectionIndex": 0,
+      "description": "one evocative sentence describing THIS section's visual moment",
+      "dominantColor": "#hex — a mid-tone tint direction (RGB 60-180), not near-black or near-white",
+      "visualMood": "one of the MOODS below — MUST VARY across sections to create a story arc",
+      "texture": "one of the TEXTURES below — MUST CHANGE at least twice across sections"
+    }
+  ]
+}
+
+MOODS (each drives camera behavior, vignette, and visual intensity):
+  intimate — close, warm, shallow depth of field, gentle drift
+  anthemic — wide, powerful, sweeping camera, open vignette
+  dreamy — soft, floaty, slow motion feel, ethereal glow
+  aggressive — sharp, punchy, fast cuts, high contrast
+  melancholy — muted, heavy, slow drift, deep vignette
+  euphoric — bright, expansive, confetti energy, wide open
+  eerie — tense, off-kilter, subtle unease, cool tones
+  vulnerable — fragile, intimate, barely moving, raw
+  triumphant — bold, rising, golden, victorious energy
+  nostalgic — warm grain, faded warmth, gentle sway
+  defiant — hard, confrontational, electric edge
+  hopeful — lifting, brightening, gentle upward drift
+  raw — stripped back, gritty, exposed, documentary feel
+  hypnotic — repetitive, pulsing, trance-like loops
+  ethereal — weightless, otherworldly, crystalline
+  haunted — ghostly, shadowed, smoke and whispers
+  celestial — vast, cosmic, starfield expanses
+  noir — high contrast, moody shadows, cinematic cool
+  rebellious — burning edges, sparks, untamed energy
+
+TEXTURES (the particle system overlaid on the scene):
+  dust, embers, smoke, rain, snow, stars, fireflies, petals,
+  ash, crystals, confetti, lightning, bubbles, moths, glare, glitch, fire
 
 CONTEXT:
 You are given an instrumental track — there are no lyrics.
@@ -108,19 +147,36 @@ Build the visual world from the track's energy, BPM, and
 section structure alone. Use ARTIST DIRECTION as the anchor
 world if provided.
 
-RULES:
-1. If ARTIST DIRECTION is provided, it defines the visual world.
-   Build every section inside that world.
-2. If no ARTIST DIRECTION, use the section energy and BPM to
-   infer the world:
-   - High energy (>0.7) + fast BPM (>120): aggressive, anthemic,
-     raw, euphoric
-   - Mid energy (0.4-0.7): hypnotic, dreamy, intimate, nostalgic
-   - Low energy (<0.4): melancholy, ethereal, haunted, vulnerable
-3. Each section should feel like a chapter of the same film.
-4. Beat-heavy sections (high avgEnergy) get warmer, more saturated
-   colors. Sparse sections get cooler, more muted tones.
-5. dominantColor rules same as below.
+STORYTELLING RULES:
+
+1. VISUAL ARC IS MANDATORY. A beat video without lyrics must tell its
+   story through visual progression. Each section is a chapter.
+   - Intro sections: intimate, vulnerable, or dreamy — establish the world quietly
+   - Building sections: shift to hypnotic, nostalgic, or hopeful — the world wakes up
+   - Peak sections: anthemic, euphoric, aggressive, or triumphant — maximum visual energy
+   - Outro sections: return to intimate or ethereal — the world settles
+
+2. TEXTURE MUST CHANGE. Using the same particle texture for every section
+   kills visual variety. Match texture to the section's energy:
+   - Low energy (<0.4): dust, fireflies, moths, snow, stars
+   - Mid energy (0.4-0.7): smoke, petals, rain, crystals, bubbles
+   - High energy (>0.7): embers, fire, confetti, lightning, glare, glitch
+
+3. If ARTIST DIRECTION is provided, it defines the WORLD (location, culture,
+   setting). The visual arc and texture variation still apply WITHIN that world.
+   A Navratri celebration can start intimate and build to euphoric.
+   A dark warehouse beat can start eerie and build to aggressive.
+
+4. dominantColor should shift across sections to reinforce the arc.
+   Warm (amber/gold) for intimate/nostalgic. Cool (teal/blue) for ethereal/noir.
+   Hot (red/orange) for aggressive/anthemic. Jewel tones for euphoric/dreamy.
+
+5. description per section should be UNIQUE and evocative — a one-sentence
+   snapshot of what the viewer SEES in that moment. Not a genre label.
+   Good: "Dust motes spiral in amber floodlight as the first circle forms"
+   Bad: "intimate cinematic landscape"
+
+6. One section per audio section provided. Match section count exactly.
 ` + SCENE_DIRECTION_PROMPT.slice(
   SCENE_DIRECTION_PROMPT.indexOf("DOMINANT COLOR RULES"),
 );
