@@ -759,37 +759,32 @@ export function FitTab({
         return;
       }
 
-      // Look for existing dance to reuse audio_url and palettes
+      // Fetch existing dance for palette reuse only (NOT audio)
       const { data: existingDance }: any = await supabase
         .from("shareable_lyric_dances" as any)
-        .select("audio_url, section_images, auto_palettes")
+        .select("section_images, auto_palettes")
         .eq("user_id", user.id)
         .eq("artist_slug", artistSlug)
         .eq("song_slug", songSlug)
         .maybeSingle();
 
-      let audioUrl: string;
-      if (existingDance?.audio_url) {
-        setPublishStatus("Using existing audio…");
-        audioUrl = existingDance.audio_url;
-      } else {
-        setPublishStatus("Uploading audio…");
-        const storagePath = savedId
-          ? getAudioStoragePath(user.id, savedId, audioFile.name)
-          : `${user.id}/${artistSlug}/${songSlug}/lyric-dance.${audioFile.name.split(".").pop() || "webm"}`;
-        const { error: uploadError } = await supabase.storage
-          .from("audio-clips")
-          .upload(storagePath, audioFile, {
-            upsert: true,
-            contentType: audioFile.type || undefined,
-          });
-        if (uploadError) throw uploadError;
+      // Always upload fresh audio with a unique path to avoid stale cache hits
+      setPublishStatus("Uploading audio…");
+      const uniqueId = savedId || crypto.randomUUID();
+      const ext = audioFile.name.split(".").pop() || "webm";
+      const storagePath = `${user.id}/${artistSlug}/${songSlug}/${uniqueId}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("audio-clips")
+        .upload(storagePath, audioFile, {
+          upsert: true,
+          contentType: audioFile.type || undefined,
+        });
+      if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage
-          .from("audio-clips")
-          .getPublicUrl(storagePath);
-        audioUrl = urlData.publicUrl;
-      }
+      const { data: urlData } = supabase.storage
+        .from("audio-clips")
+        .getPublicUrl(storagePath);
+      const audioUrl = urlData.publicUrl;
 
       setPublishStatus("Publishing…");
       const mainLines = lyricData.lines.filter((l) => l.tag !== "adlib");
