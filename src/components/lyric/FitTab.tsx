@@ -308,6 +308,11 @@ export function FitTab({
     useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(
       null,
     );
+  useEffect(() => {
+    const player = dancePlayerRef.current?.getPlayer();
+    if (!player) return;
+    player.beatVisEnabled = filmMode === "beat";
+  }, [filmMode, publishedDanceId]);
   const siteCopy = useSiteCopy();
 
   const refetchDanceData = useCallback(() => {

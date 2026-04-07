@@ -127,6 +127,8 @@ export function FitExportModal({ isOpen, onClose, getPlayer, songTitle, artistNa
     }
 
     player.pause();
+    player.wickBarEnabled = true;
+    player.beatVisEnabled = true;
     setStage("preparing");
     setProgress(0);
     startTimeRef.current = Date.now();
@@ -170,6 +172,11 @@ export function FitExportModal({ isOpen, onClose, getPlayer, songTitle, artistNa
       setStage("error");
       setErrorMsg(err.message || "Export failed. Try Chrome or Edge.");
     } finally {
+      const p = getPlayer?.();
+      if (p) {
+        p.wickBarEnabled = false;
+        p.beatVisEnabled = false;
+      }
       abortRef.current = null;
     }
   }, [getPlayer, quality, ratio, resetState, clipStart, clipEnd, captionBar]);
