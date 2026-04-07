@@ -719,7 +719,7 @@ export function LyricDisplay({
       if (currentSavedId) {
         const { error } = await supabase
           .from("saved_lyrics")
-          .update(payload)
+          .update(payload as any)
           .eq("id", currentSavedId);
         if (error) throw error;
       } else {

@@ -119,7 +119,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       .eq("dance_id", danceId)
       .order("submitted_at", { ascending: true })
       .limit(300)
-      .then(({ data: rows }) => { if (mounted && rows) setComments(rows as Comment[]); });
+      .then(({ data: rows }) => { if (mounted && rows) setComments(rows as unknown as Comment[]); });
 
     const channel = supabase
       .channel(`comments:${danceId}`)
@@ -171,6 +171,12 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         setProfileMap(map);
       });
   }, [fireUserMap, comments]);
+
+  useEffect(() => {
+    if (!player || !data) return;
+    const isInst = !!(data as any)?.cinematic_direction?._instrumental;
+    player.beatVisEnabled = isInst;
+  }, [player, data]);
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
