@@ -1486,7 +1486,15 @@ export function useLyricPipeline({
       setPipelineStages((prev) => ({ ...prev, cinematic: "running" }));
 
       try {
-        const beats = beatGrid.beats;
+        let beats = beatGrid.beats;
+        if (beats.length === 0 && beatGrid.bpm > 0) {
+          const period = 60 / beatGrid.bpm;
+          const phase = beatGrid._phase ?? 0;
+          const dur = audioDurationSec ?? 60;
+          const synthetic: number[] = [];
+          for (let t = phase; t < dur; t += period) synthetic.push(t);
+          beats = synthetic;
+        }
         const maxSections = 8;
         const beatsPerSection = Math.max(16, Math.ceil(beats.length / maxSections));
         const sectionCount = Math.max(1, Math.ceil(beats.length / beatsPerSection));

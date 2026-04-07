@@ -4540,7 +4540,9 @@ export class LyricDancePlayer {
   private buildScenePayload(): ScenePayload {
     const lines = this.data.lyrics ?? [];
     const fullStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
-    const fullEnd = lines.length ? (lines[lines.length - 1].end ?? 0) + 1 : 0;
+    const fullEnd = lines.length
+      ? (lines[lines.length - 1].end ?? 0) + 1
+      : (this.audio?.duration || 0);
     // Region override: constrain to hook window if specified
     const songStart = this.data.region_start != null ? this.data.region_start : fullStart;
     const songEnd = this.data.region_end != null ? this.data.region_end : fullEnd;
@@ -4565,7 +4567,8 @@ export class LyricDancePlayer {
 
   private toLegacyChapters(direction: CinematicDirection | null | undefined): any[] {
     if (!direction?.sections?.length) return [];
-    return enrichSections(direction.sections).map((section) => ({
+    const dur = this.audio?.duration || undefined;
+    return enrichSections(direction.sections, dur).map((section) => ({
       title: section.description ?? `Section ${section.sectionIndex}`,
       startSec: section.startSec,
       endSec: section.endSec,
