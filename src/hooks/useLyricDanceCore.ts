@@ -6,6 +6,7 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
+import { enrichSections } from "@/engine/directionResolvers";
 import { isGlobalMuted } from "@/lib/globalMute";
 
 const EMOJI_SYMBOLS: Record<string, string> = {
@@ -128,10 +129,11 @@ export function useLyricDanceCore({
     if (lines.length) {
       return (lines[lines.length - 1] as any).end ?? 0;
     }
-    // Instrumental fallback: use last beat time or audio duration
-    const beats = (data as any)?.beat_grid?.beats;
-    if (Array.isArray(beats) && beats.length > 0) {
-      return beats[beats.length - 1];
+    // Instrumental: use persisted duration, then beats, then 0
+    const bg = (data as any)?.beat_grid;
+    if (bg?._duration && bg._duration > 0) return bg._duration;
+    if (Array.isArray(bg?.beats) && bg.beats.length > 0) {
+      return bg.beats[bg.beats.length - 1];
     }
     return 0;
   }, [data?.lyrics, (data as any)?.beat_grid]);
@@ -161,14 +163,30 @@ export function useLyricDanceCore({
   }, [lyricSections, currentTimeSec]);
 
   const audioSections = useMemo(() => {
-    const sections = lyricSections.sections;
-    return sections.map((s, i) => ({
-      sectionIndex: i,
-      startSec: s.startSec,
-      endSec: s.endSec,
-      role: s.role,
-    }));
-  }, [lyricSections.sections]);
+    // Lyric mode: sections from word-level analysis
+    if (lyricSections.sections.length > 0) {
+      return lyricSections.sections.map((s, i) => ({
+        sectionIndex: i,
+        startSec: s.startSec,
+        endSec: s.endSec,
+        role: s.role,
+      }));
+    }
+    // Instrumental mode: sections from cinematic direction
+    const cd = (data as any)?.cinematic_direction;
+    const cdSections = cd?.sections;
+    if (Array.isArray(cdSections) && cdSections.length > 0) {
+      const dur = (data as any)?.beat_grid?._duration || durationSec || undefined;
+      const enriched = enrichSections(cdSections, dur);
+      return enriched.map((s, i) => ({
+        sectionIndex: s.sectionIndex ?? i,
+        startSec: s.startSec ?? (i / enriched.length) * (dur || 60),
+        endSec: s.endSec ?? ((i + 1) / enriched.length) * (dur || 60),
+        role: s.description ?? null,
+      }));
+    }
+    return [];
+  }, [lyricSections.sections, data, durationSec]);
 
   const moments = useMemo<Moment[]>(() => {
     const phrases = (data as any)?.cinematic_direction?.phrases ?? [];
