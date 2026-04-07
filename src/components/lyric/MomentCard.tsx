@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Flame } from "lucide-react";
 import type { Moment } from "@/lib/buildMoments";
+import { FireVessel } from "@/components/lyric/FireVessel";
 
 interface MomentCardProps {
   moment: Moment;
@@ -15,7 +15,9 @@ interface MomentCardProps {
   onSubmitComment: (text: string) => void;
   firedByUser: boolean;
   pressing: boolean;
-  fireScale: number;
+  fillLevel: number;
+  burstTrigger: number;
+  active?: boolean;
   fireAvatars: Array<{ url: string | null; name: string | null }>;
   fireAnonCount: number;
   children: ReactNode;
@@ -28,12 +30,6 @@ function fmtTime(sec: number): string {
 }
 
 function getHeatColors(fireTotal: number, isConsensus: boolean) {
-  const iconColor = fireTotal >= 10
-    ? "rgba(255,160,40,0.9)"
-    : fireTotal >= 1
-      ? "rgba(255,140,40,0.5)"
-      : "rgba(255,255,255,0.15)";
-
   const borderColor = isConsensus
     ? "rgba(74, 222, 128, 0.25)"
     : fireTotal >= 10
@@ -42,7 +38,7 @@ function getHeatColors(fireTotal: number, isConsensus: boolean) {
         ? "rgba(255,140,40,0.12)"
         : "rgba(255,255,255,0.05)";
 
-  return { iconColor, borderColor };
+  return { borderColor };
 }
 
 export function MomentCard({
@@ -58,13 +54,16 @@ export function MomentCard({
   onSubmitComment,
   firedByUser,
   pressing,
-  fireScale,
+  fillLevel,
+  burstTrigger,
+  active = true,
   fireAvatars,
   fireAnonCount,
   children,
 }: MomentCardProps) {
   const [text, setText] = useState("");
-  const { iconColor, borderColor } = getHeatColors(fireTotal, isConsensus);
+  const { borderColor } = getHeatColors(fireTotal, isConsensus);
+  const tier = isConsensus ? "consensus" : fireTotal >= 10 ? "hot" : fireTotal >= 1 ? "warm" : "cold";
 
   return (
     <div
@@ -119,23 +118,21 @@ export function MomentCard({
             width: 44,
             borderRadius: 10,
             border: `1px solid ${pressing ? "rgba(255,140,40,0.35)" : "rgba(255,255,255,0.08)"}`,
-            background: pressing
-              ? "radial-gradient(circle, rgba(255,140,40,0.18) 0%, transparent 70%)"
-              : "none",
+            background: "none",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             cursor: "pointer",
-            transition: "border-color 200ms ease, background 200ms ease",
+            transition: "border-color 200ms ease",
           }}
         >
-          <Flame
+          <FireVessel
             size={16}
-            style={{
-              color: iconColor,
-              transform: `scale(${fireScale})`,
-              transition: pressing ? "none" : "transform 200ms ease",
-            }}
+            tier={tier}
+            pressing={pressing}
+            fillLevel={fillLevel}
+            burstTrigger={burstTrigger}
+            active={active}
           />
         </button>
 

@@ -4,6 +4,7 @@ import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { getSessionId } from "@/lib/sessionId";
 import { fetchSessionFires } from "@/lib/fire";
 import { createFireHold } from "@/lib/fireHold";
+import { FireVessel } from "@/components/lyric/FireVessel";
 
 const BAR_HEIGHT = 44;
 
@@ -39,7 +40,8 @@ export function FmlyBar({
   const [pressing, setPressing] = useState(false);
   const [renderTick, setRenderTick] = useState(0);
   const [hydrated, setHydrated] = useState(false);
-  const [fireScale, setFireScale] = useState(1);
+  const [fillLevel, setFillLevel] = useState(0);
+  const [burstCount, setBurstCount] = useState(0);
   const [toast, setToast] = useState<{ text: string; momentIndex: number } | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
 
@@ -85,6 +87,15 @@ export function FmlyBar({
     () => moments.findIndex((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec),
     [moments, currentTimeSec],
   );
+  const currentMomentFireCount = currentMomentIdx >= 0 ? (momentFireCounts[currentMomentIdx] ?? 0) : 0;
+  const fireTier = currentMomentIdx >= 0 && currentMomentIdx === hottestIdx && currentMomentFireCount > 0
+    ? "consensus"
+    : currentMomentFireCount >= 10
+      ? "hot"
+      : currentMomentFireCount >= 1
+        ? "warm"
+        : "cold";
+
 
   useEffect(() => {
     if (scrubbingRef.current || currentMomentIdx < 0) return;
@@ -128,7 +139,7 @@ export function FmlyBar({
 
   useEffect(() => {
     fireHoldControllerRef.current = createFireHold({
-      onScaleUpdate: setFireScale,
+      onScaleUpdate: (scale) => setFillLevel(Math.max(0, Math.min(1, (scale - 1) / 0.5))),
       onCanvasTrigger: () => player?.fireMoment?.(),
     });
     return () => {
@@ -328,7 +339,7 @@ export function FmlyBar({
 
   const handleDown = () => {
     setPressing(true);
-    setFireScale(1);
+    setFillLevel(0);
     pendingFireSpawnsRef.current.push({ count: 5, intensity: 0.6 });
     pendingPlayheadSpawnsRef.current.push({ count: 3, intensity: 0.5 });
     player?.fireMoment?.();
@@ -339,6 +350,7 @@ export function FmlyBar({
   const handleUp = () => {
     setPressing(false);
     const holdData = fireHoldControllerRef.current?.stop();
+    setBurstCount((v) => v + 1);
     player?.stopContinuousFire?.();
     if (!holdData) return;
     const holdMs = holdData.holdMs;
@@ -513,9 +525,7 @@ export function FmlyBar({
               width: 48,
               height: 48,
               borderRadius: "50%",
-              background: pressing
-                ? "radial-gradient(circle at 50% 50%, rgba(255,140,40,0.15) 0%, transparent 70%)"
-                : "radial-gradient(circle at 50% 50%, rgba(255,140,40,0.06) 0%, transparent 70%)",
+              background: "none",
               border: "none",
               cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -527,18 +537,13 @@ export function FmlyBar({
               touchAction: "none",
             }}
           >
-            <span
-              style={{
-                fontSize: 24,
-                opacity: pressing ? 1 : 0.5,
-                transform: `scale(${fireScale})`,
-                transition: pressing ? "opacity 0.15s ease" : "opacity 0.15s ease, transform 0.2s ease",
-                userSelect: "none",
-                pointerEvents: "none",
-              }}
-            >
-              🔥
-            </span>
+            <FireVessel
+              size={24}
+              tier={fireTier}
+              pressing={pressing}
+              fillLevel={fillLevel}
+              burstTrigger={burstCount}
+            />
           </button>
         </div>
       </div>
