@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
-import { withInitLimit } from "@/engine/initQueue";
+import { withInitLimit, withPriorityInitLimit } from "@/engine/initQueue";
 import { acquireCanvasSlot, releaseCanvasSlot } from "@/engine/canvasPool";
 
 interface Options {
@@ -27,6 +27,8 @@ interface Options {
   postId?: string;
   /** Whether the host card has been evicted from active feed windowing. */
   evicted?: boolean;
+  /** Prioritize this init ahead of normal FIFO jobs when queue is saturated. */
+  priority?: boolean;
 }
 
 export interface UseLyricDancePlayerReturn {
@@ -53,6 +55,7 @@ export function useLyricDancePlayer(
     usePool = false,
     postId,
     evicted = false,
+    priority = !evicted,
   } = options;
 
   const [data, setData] = useState<LyricDanceData | null>(initialData);
@@ -77,6 +80,21 @@ export function useLyricDancePlayer(
     setData(null);
     initRef.current = false;
   }, [initialData]);
+
+  // ── Cache-prime audio as soon as we have the URL ──────────────────
+  useEffect(() => {
+    if (!data?.audio_url || evicted) return;
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.src = data.audio_url;
+    // Let browser download — we don't need to play or track this element.
+    // When the real player creates Audio(same_url), HTTP cache serves it.
+    return () => {
+      audio.preload = "none";
+      audio.removeAttribute("src");
+      audio.load(); // release network connection
+    };
+  }, [data?.audio_url, evicted]);
 
   // ── Init / destroy ────────────────────────────────────────────────────
   // words are optional — player falls back to line-level timing if absent.
@@ -141,7 +159,8 @@ export function useLyricDancePlayer(
     let destroyed = false;
     let ro: ResizeObserver | null = null;
 
-    withInitLimit(async () => {
+    const initFn = priority ? withPriorityInitLimit : withInitLimit;
+    initFn(async () => {
       if (destroyed) return;
       const p = new LyricDancePlayer(data!, bgCanvas!, textCanvas!, containerRef.current as HTMLDivElement, {
         bootMode,
@@ -203,7 +222,7 @@ export function useLyricDancePlayer(
       setPlayerReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataReady, data?.id, usePool, postId, evicted, retryTick]);
+  }, [dataReady, data?.id, usePool, postId, evicted, retryTick, priority]);
 
   // ── Hot-patch player when data changes ────────────────────────────────
   useEffect(() => {

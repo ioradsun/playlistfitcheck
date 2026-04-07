@@ -137,18 +137,18 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
-    if (visible) {
+    if (visible || preload) {
       player.scheduleFullModeUpgrade();
     }
-  }, [player, playerReady, isFeedEmbed, visible]);
+  }, [player, playerReady, isFeedEmbed, visible, preload]);
 
   // Preload audio when warm (adjacent to active) — don't wait for play().
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
-    if (visible && preload) {
+    if (visible) {
       player.primeAudio();
     }
-  }, [player, playerReady, isFeedEmbed, visible, preload]);
+  }, [player, playerReady, isFeedEmbed, visible]);
 
   // Visibility → animation (the ONLY play/pause logic in the embed)
   useEffect(() => {

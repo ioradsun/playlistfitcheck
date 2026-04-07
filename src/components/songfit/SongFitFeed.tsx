@@ -15,6 +15,7 @@ import { PlusMenu } from "./PlusMenu";
 import { SongFitPostCard } from "./SongFitPostCard";
 import { BillboardToggle } from "./BillboardToggle";
 import { audioController } from "@/lib/audioController";
+import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { logImpression } from "@/lib/engagementTracking";
 import { cn } from "@/lib/utils";
 
@@ -325,6 +326,23 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     feed.consumeNewDrops();
     document.getElementById("songfit-scroll-container")?.scrollTo({ top: 0, behavior: "smooth" });
   }, [feed]);
+
+  // Unlock audio on first touch anywhere in the feed
+  useEffect(() => {
+    const handler = () => {
+      unlockAudio();
+      audioController.primeAll();
+      // One-shot: remove after first fire
+      document.removeEventListener("touchstart", handler);
+      document.removeEventListener("click", handler);
+    };
+    document.addEventListener("touchstart", handler, { once: true, passive: true });
+    document.addEventListener("click", handler, { once: true });
+    return () => {
+      document.removeEventListener("touchstart", handler);
+      document.removeEventListener("click", handler);
+    };
+  }, []);
 
   return (
     <div className={reelsMode ? "w-full" : "w-full max-w-[470px] mx-auto"}>
