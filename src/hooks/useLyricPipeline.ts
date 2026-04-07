@@ -1442,7 +1442,8 @@ export function useLyricPipeline({
 
       try {
         const beats = beatGrid.beats;
-        const beatsPerSection = 16;
+        const maxSections = 8;
+        const beatsPerSection = Math.max(16, Math.ceil(beats.length / maxSections));
         const sectionCount = Math.max(1, Math.ceil(beats.length / beatsPerSection));
         const audioSections = Array.from({ length: sectionCount }, (_, i) => {
           const startBeat = i * beatsPerSection;
