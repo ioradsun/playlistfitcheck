@@ -1322,7 +1322,7 @@ export function FitTab({
                 {crowdfitToggling ? (
                   <Loader2 size={14} className="animate-spin" />
                 ) : null}
-                Post
+                {crowdfitPostId ? "Live" : "Post to FMLY"}
               </button>
               {user?.email === "sunpatel@gmail.com" && cinematicDirection && (
                 <button
