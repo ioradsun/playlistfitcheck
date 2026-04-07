@@ -3,17 +3,22 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Mail, Waves, AlignLeft, Zap, BarChart2, ExternalLink } from "lucide-react";
+import { User, Mail, Waves, AlignLeft, Zap, BarChart2, ExternalLink, AudioWaveform, Sparkles } from "lucide-react";
 import { useDmContext } from "@/hooks/useDmContext";
 
-export type CardMode = "dance" | "lyric" | "empowerment" | "results";
+export type CardMode = "dance" | "lyric" | "empowerment" | "results" | "beat" | "vibe";
 
 const MODE_ICONS: Record<CardMode, ReactNode> = {
   dance: <Waves size={14} />,
   lyric: <AlignLeft size={14} />,
   empowerment: <Zap size={14} />,
   results: <BarChart2 size={14} />,
+  beat: <AudioWaveform size={14} />,
+  vibe: <Sparkles size={14} />,
 };
+
+const SONG_MODES: CardMode[] = ["empowerment", "lyric", "dance", "results"];
+const BEAT_MODES: CardMode[] = ["beat", "vibe", "results"];
 
 function useClickOutside(
   refs: RefObject<Element | null>[],
@@ -49,6 +54,7 @@ interface PlayerHeaderProps {
   onProfileClick?: () => void;
   cardMode: CardMode;
   onModeChange: (mode: CardMode) => void;
+  isInstrumental?: boolean;
 }
 
 interface AvatarWithBadgesProps {
@@ -121,6 +127,7 @@ export function PlayerHeader({
   onProfileClick,
   cardMode,
   onModeChange,
+  isInstrumental = false,
 }: PlayerHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
@@ -312,7 +319,7 @@ export function PlayerHeader({
                 zIndex: 20,
               }}
             >
-              {(["empowerment", "lyric", "dance", "results"] as CardMode[]).map((mode, i) => {
+              {(isInstrumental ? BEAT_MODES : SONG_MODES).map((mode, i) => {
                 const isActive = cardMode === mode;
                 return (
                   <motion.button
