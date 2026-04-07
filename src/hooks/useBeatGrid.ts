@@ -32,19 +32,14 @@ const BPM_BINS = MAX_BPM - MIN_BPM + 1;
  * Operates on ~100-500 hit events, not raw audio. <1ms.
  */
 function deriveBPM(hits: HitEvent[]): { bpm: number; confidence: number } {
-  // Filter to rhythmically significant hits (kicks + strong snares)
-  const rhythmic = hits.filter(
-    (h) => h.type === "bass" || (h.type === "transient" && h.strength > 0.4),
-  );
-
-  if (rhythmic.length < 4) {
+  if (hits.length < 4) {
     return { bpm: 120, confidence: 0 };
   }
 
   // Collect inter-onset intervals
   const iois: number[] = [];
-  for (let i = 1; i < rhythmic.length; i++) {
-    const dt = rhythmic[i].time - rhythmic[i - 1].time;
+  for (let i = 1; i < hits.length; i++) {
+    const dt = hits[i].time - hits[i - 1].time;
     if (dt > 0.15 && dt < 2.0) iois.push(dt); // 30-400 BPM range
   }
 
@@ -106,7 +101,6 @@ function findPhase(hits: HitEvent[], bpm: number): number {
     const candidate = p * step;
     let score = 0;
     for (const hit of hits) {
-      if (hit.type !== "bass" && hit.strength < 0.4) continue;
       const dist = ((hit.time - candidate) % period + period) % period;
       const nearestDist = Math.min(dist, period - dist);
       if (nearestDist < 0.06) {
@@ -149,8 +143,12 @@ export function useBeatGrid(buffer: AudioBuffer | null): {
         if (cancelled) return;
 
         // Derive BPM + phase from onsets — <1ms on main thread
-        const { bpm, confidence } = deriveBPM(analysis.hits);
-        const phase = findPhase(analysis.hits, bpm);
+        // Filter once: bass + strong transients only
+        const rhythmic = analysis.hits.filter(
+          (h) => h.type === "bass" || (h.type === "transient" && h.strength > 0.4),
+        );
+        const { bpm, confidence } = deriveBPM(rhythmic);
+        const phase = findPhase(rhythmic, bpm);
 
         // Generate phase-aligned synthetic beats for energy alignment
         const period = 60 / bpm;
