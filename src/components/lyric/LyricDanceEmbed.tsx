@@ -179,8 +179,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       return;
     }
 
-    audioController.primeAll();
-
     if (isPrimary) {
       audioController.toggleMute();
     } else {

@@ -6,9 +6,7 @@
  * This keeps GPU memory and draw-call overhead constant at O(POOL_SIZE).
  */
 
-// 8 slots: gives headroom for active + warm cards so upcoming cards can
-// pre-initialize without starving visible cards during fast scroll.
-const POOL_SIZE = 8;
+const POOL_SIZE = 3;
 
 interface CanvasSlot {
   id: number;

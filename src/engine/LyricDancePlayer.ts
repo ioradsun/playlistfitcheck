@@ -1765,14 +1765,22 @@ export class LyricDancePlayer {
   /** Audio is waiting for scene compilation to finish before playing */
   private _audioDeferredUntilReady = false;
   private _playPromise: Promise<void> | null = null;
-  private options?: { bootMode?: "minimal" | "full"; preloadedImages?: HTMLImageElement[] };
+  private options?: {
+    bootMode?: "minimal" | "full";
+    preloadedImages?: HTMLImageElement[];
+    externalAudio?: HTMLAudioElement;
+  };
 
   constructor(
     data: LyricDanceData,
     bgCanvas: HTMLCanvasElement,
     textCanvas: HTMLCanvasElement,
     container: HTMLDivElement,
-    options?: { bootMode?: "minimal" | "full"; preloadedImages?: HTMLImageElement[] },
+    options?: {
+      bootMode?: "minimal" | "full";
+      preloadedImages?: HTMLImageElement[];
+      externalAudio?: HTMLAudioElement;
+    },
   ) {
     this.data = data;
     this.bgCanvas = bgCanvas;
@@ -1788,11 +1796,16 @@ export class LyricDancePlayer {
     const tctx = textCanvas.getContext("2d", { alpha: true });
     if (tctx) tctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
 
-    this.audio = new Audio(data.audio_url);
-    // Disable native loop for region-based players — tick() handles region looping manually
-    this.audio.loop = !(data.region_start != null && data.region_end != null);
-    this.audio.muted = true;
-    this.audio.preload = "none";
+    if (options?.externalAudio) {
+      this.audio = options.externalAudio;
+      this.audio.loop = !(data.region_start != null && data.region_end != null);
+    } else {
+      this.audio = new Audio(data.audio_url);
+      // Disable native loop for region-based players — tick() handles region looping manually
+      this.audio.loop = !(data.region_start != null && data.region_end != null);
+      this.audio.muted = true;
+      this.audio.preload = "none";
+    }
     this.bootMode = options?.bootMode ?? "minimal";
 
     this._handleVisibilityChange = this._handleVisibilityChangeImpl.bind(this);
@@ -2829,7 +2842,9 @@ export class LyricDancePlayer {
 
     this.audio.pause();
     this._playPromise = null;
-    this.audio.src = "";
+    if (!this.options?.externalAudio) {
+      this.audio.src = "";
+    }
     this._timeInitialized = false;
     document.removeEventListener("visibilitychange", this._handleVisibilityChange);
 

@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withInitLimit, withPriorityInitLimit } from "@/engine/initQueue";
 import { acquireCanvasSlot, releaseCanvasSlot } from "@/engine/canvasPool";
+import { acquireAudio, evictLeastImportant, releaseAudio } from "@/lib/audioPool";
 
 interface Options {
   bootMode?: "minimal" | "full";
@@ -81,21 +82,6 @@ export function useLyricDancePlayer(
     initRef.current = false;
   }, [initialData]);
 
-  // ── Cache-prime audio as soon as we have the URL ──────────────────
-  useEffect(() => {
-    if (!data?.audio_url || evicted) return;
-    const audio = new Audio();
-    audio.preload = "auto";
-    audio.src = data.audio_url;
-    // Let browser download — we don't need to play or track this element.
-    // When the real player creates Audio(same_url), HTTP cache serves it.
-    return () => {
-      audio.preload = "none";
-      audio.removeAttribute("src");
-      audio.load(); // release network connection
-    };
-  }, [data?.audio_url, evicted]);
-
   // ── Init / destroy ────────────────────────────────────────────────────
   // words are optional — player falls back to line-level timing if absent.
   // Only cinematic_direction is required (drives the entire visual system).
@@ -119,6 +105,7 @@ export function useLyricDancePlayer(
     let slot: ReturnType<typeof acquireCanvasSlot> | null = null;
     let bgCanvas: HTMLCanvasElement | null = null;
     let textCanvas: HTMLCanvasElement | null = null;
+    let pooledAudio: HTMLAudioElement | null = null;
 
     if (usePool && postId) {
       slot = acquireCanvasSlot(postId);
@@ -155,6 +142,21 @@ export function useLyricDancePlayer(
       return;
     }
 
+    if (usePool && postId && data?.audio_url) {
+      pooledAudio = acquireAudio(postId, data.audio_url);
+      if (!pooledAudio) {
+        evictLeastImportant(postId);
+        pooledAudio = acquireAudio(postId, data.audio_url);
+      }
+      if (!pooledAudio) {
+        if (slot) {
+          releaseCanvasSlot(postId);
+          slotRef.current = null;
+        }
+        return;
+      }
+    }
+
     initRef.current = true;
     let destroyed = false;
     let ro: ResizeObserver | null = null;
@@ -165,6 +167,7 @@ export function useLyricDancePlayer(
       const p = new LyricDancePlayer(data!, bgCanvas!, textCanvas!, containerRef.current as HTMLDivElement, {
         bootMode,
         preloadedImages,
+        externalAudio: pooledAudio ?? undefined,
       });
       playerRef.current = p;
       // DEBUG: expose player for console inspection
@@ -212,6 +215,9 @@ export function useLyricDancePlayer(
           if (container.contains(textCanvas!)) container.removeChild(textCanvas!);
         }
         releaseCanvasSlot(postId);
+      }
+      if (usePool && postId) {
+        releaseAudio(postId);
       }
       slotRef.current = null;
       playerRef.current?.destroy();
