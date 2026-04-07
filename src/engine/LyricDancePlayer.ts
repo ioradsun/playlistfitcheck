@@ -2258,6 +2258,10 @@ export class LyricDancePlayer {
   play(withAudio = true): void {
     if (this.destroyed) return;
     this.playing = true;
+    // Clear wall-clock fallback — real audio time will take over in tick().
+    // Prevents getCurrentTime() from returning stale wall-clock values
+    // between play(true) and the first tick.
+    this._wallClockOrigin = null;
 
     if (!withAudio) {
       // Visual-only: start RAF + wall clock, no audio.

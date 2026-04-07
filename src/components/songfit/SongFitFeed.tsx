@@ -229,11 +229,21 @@ function FeedList({
 
   const scheduleSettle = useCallback(() => {
     if (settleRef.current) clearTimeout(settleRef.current);
-    settleRef.current = setTimeout(() => {
-      settleRef.current = null;
-      audioController.setAutoPrimary(pickBestCandidate());
-    }, 120);
-  }, [pickBestCandidate]);
+    if (reelsMode) {
+      // Reels: snap scroll guarantees one card at center — no debounce needed.
+      // Use microtask for instant handoff (0ms would still yield to the event loop).
+      settleRef.current = setTimeout(() => {
+        settleRef.current = null;
+        audioController.setAutoPrimary(pickBestCandidate());
+      }, 0);
+    } else {
+      // Standard mode: debounce for free-scroll where multiple cards cross center
+      settleRef.current = setTimeout(() => {
+        settleRef.current = null;
+        audioController.setAutoPrimary(pickBestCandidate());
+      }, 120);
+    }
+  }, [pickBestCandidate, reelsMode]);
 
   const onCenterEnter = useCallback((postId: string) => {
     const idx = posts.findIndex((p) => p.id === postId);

@@ -85,6 +85,12 @@ class AudioController {
         const old = this._registry.get(this._effectivePrimaryId);
         if (old) {
           old.setMuted(true);
+          // Pause immediately to free the audio decoder slot.
+          // The React useEffect will also call pause(), but that's one render
+          // cycle away — freeing the decoder now avoids a brief 2-decoder overlap.
+          if (!old.audio.paused) {
+            old.audio.pause();
+          }
         }
       }
 
