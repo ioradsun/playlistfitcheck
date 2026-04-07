@@ -176,6 +176,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     if (!player || !data) return;
     const isInst = !!(data as any)?.cinematic_direction?._instrumental;
     player.beatVisEnabled = isInst;
+    player.renderMode = isInst ? "beat" : "lyric";
   }, [player, data]);
 
   useEffect(() => {

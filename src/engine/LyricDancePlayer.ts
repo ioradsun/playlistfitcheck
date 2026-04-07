@@ -1607,6 +1607,7 @@ export class LyricDancePlayer {
   private _globalWickBar: DynamiteWickBar | null = null;
   private _wickSeekOverlay: HTMLDivElement | null = null;
   public beatVisEnabled = false;
+  public renderMode: "lyric" | "beat" = "lyric";
   public wickBarEnabled = false;
   private chapterImages: HTMLImageElement[] = [];
   private _sectionScrimOpacity: number[] = [];
@@ -3689,7 +3690,8 @@ export class LyricDancePlayer {
         || this._bgSnapshot.height !== Math.floor(this.height * this._effectiveDpr))
       : false;
     const snapshotStale =
-      curSection !== this._bgSnapshotSection
+      this.renderMode === "beat"
+      || curSection !== this._bgSnapshotSection
       || curMomentIdx !== this._bgSnapshotMomentIdx
       || qTier !== this._bgSnapshotQTier
       || (nowMsBg - this._bgLastBakeMs > this._bgRebakeIntervalMs)
@@ -3724,9 +3726,19 @@ export class LyricDancePlayer {
           if (timeToEnd < 1.5 && timeToEnd > 0) crossfade = 1 - (timeToEnd / 1.5);
         }
       }
+      if (this.renderMode === "beat" && crossfade > 0 && nextImgIdx !== imgIdx) {
+        const nextEnergy = this._resolveCurrentMoment(
+          (nextImgIdx / Math.max(1, this.chapterImages.length)) * (this.audio?.duration ?? 1),
+        )?.energy ?? 0.5;
+        if (nextEnergy > 0.7) {
+          crossfade = crossfade > 0.05 ? 1 : 0;
+        }
+      }
       this._drawChapterImageToCtx(snapCtx, imgIdx, nextImgIdx, crossfade);
       // Grade-aware scrim — reduce scrim when mood grade already darkens the image
-      const baseScrim = this._sectionScrimOpacity[imgIdx] ?? 0;
+      const baseScrim = this.renderMode === "beat"
+        ? 0
+        : (this._sectionScrimOpacity[imgIdx] ?? 0);
       const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
       const sections = (cd?.sections as any[]) ?? [];
       const sectionMood = sections[imgIdx]?.visualMood as string | undefined;
@@ -3736,6 +3748,17 @@ export class LyricDancePlayer {
         ? Math.max(0, 1 - ((0.45 - sectionGrade.brightness) / 0.20))
         : 1.0;
       const scrimOpacity = baseScrim * gradeCompensation;
+      if (this.renderMode === "beat") {
+        const hitStrength = this._lastBeatState?.hitStrength ?? 0;
+        if (hitStrength > 0.6) {
+          const flashAlpha = Math.min(0.15, (hitStrength - 0.6) * 0.375);
+          snapCtx.save();
+          snapCtx.globalAlpha = flashAlpha;
+          snapCtx.fillStyle = '#ffffff';
+          snapCtx.fillRect(0, 0, this.width, this.height);
+          snapCtx.restore();
+        }
+      }
       if (scrimOpacity > 0.01) {
         this._drawContrastScrim(snapCtx, scrimOpacity);
       }
@@ -4904,7 +4927,23 @@ export class LyricDancePlayer {
       const chapterStart = chapterIdx * chapterDur;
       const localT = Math.max(0, Math.min(1, ((this.audio?.currentTime ?? 0) - chapterStart) / chapterDur));
       const eased = localT * localT * (3 - 2 * localT);
-      if (kb) {
+      if (this.renderMode === "beat" && kb) {
+        const beatEnergyNow = this._lastBeatState?.energy ?? 0;
+        const beatPulseNow = this._lastBeatState?.pulse ?? 0;
+        const driftT = (localT * 2) % 1;
+        const driftEased = driftT * driftT * (3 - 2 * driftT);
+        const beatAccel = 1 + beatPulseNow * beatEnergyNow * 0.3;
+        const zoom = kb.zoomStart + (kb.zoomEnd - kb.zoomStart) * driftEased * beatAccel;
+        const panX = (kb.panStartX + (kb.panEndX - kb.panStartX) * driftEased * beatAccel) * this.width;
+        const panY = (kb.panStartY + (kb.panEndY - kb.panStartY) * driftEased * beatAccel) * this.height;
+
+        this.ctx.save();
+        this.ctx.translate(this.width / 2 + panX, this.height / 2 + panY);
+        this.ctx.scale(zoom, zoom);
+        this.ctx.translate(-this.width / 2, -this.height / 2);
+        this._drawImageCoverCropped(this.ctx, drawCurrent, ox, oy, ow, oh);
+        this.ctx.restore();
+      } else if (kb) {
         const zoom = kb.zoomStart + (kb.zoomEnd - kb.zoomStart) * eased;
         const panX = (kb.panStartX + (kb.panEndX - kb.panStartX) * eased) * this.width;
         const panY = (kb.panStartY + (kb.panEndY - kb.panStartY) * eased) * this.height;
@@ -5290,7 +5329,7 @@ export class LyricDancePlayer {
     // ═══ INTENSITY ROUTER: derive motion profile from audio signal ═══
     const frameDt = Math.max(0.001, Math.min(0.1, this._frameDt * 16.67 / 1000));
     if (beatState) {
-      this._motionProfile = this._intensityRouter.update(beatState, frameDt);
+      this._motionProfile = this._intensityRouter.update(beatState, frameDt, this.renderMode);
     }
     const mp: MotionProfile = this._motionProfile ?? {
       intensity: 0,
@@ -5343,10 +5382,13 @@ export class LyricDancePlayer {
     this._textBeatNodY = 0;
 
     // Brightness flash and vignette also scale per-beat
-    const beatFlash = pulseEnvelope * beatDynamic * mp.intensity;
-    this._bgBeatBrightnessBoost += (beatFlash - this._bgBeatBrightnessBoost) * 0.5;
+    const beatFlashMult = this.renderMode === "beat" ? 1.5 : 1.0;
+    const beatFlash = pulseEnvelope * beatDynamic * mp.intensity * beatFlashMult;
+    const flashAlpha = this.renderMode === "beat" ? 0.8 : 0.5;
+    this._bgBeatBrightnessBoost += (beatFlash - this._bgBeatBrightnessBoost) * flashAlpha;
 
-    const vignetteBeat = pulseEnvelope * beatDynamic * mp.intensity * 0.20;
+    const vignettePulseScale = this.renderMode === "beat" ? 0.40 : 0.20;
+    const vignetteBeat = pulseEnvelope * beatDynamic * mp.intensity * vignettePulseScale;
     this._vignetteBeatPulse += (vignetteBeat - this._vignetteBeatPulse) * 0.35;
 
     if (beatIndex !== this._lastBeatIndex && beatIndex >= 0) {
@@ -5739,7 +5781,9 @@ export class LyricDancePlayer {
     // Low energy (quiet verse) → higher alpha → heavier vignette → intimate
     // High energy (loud chorus) → lower alpha → lighter vignette → expansive
     // Range: 0.35 (loud) to 0.75 (quiet)
-    const baseAlpha = (0.75 - this._vignetteEnergy * 0.40) * strength;
+    const vignetteRange = this.renderMode === "beat" ? 0.60 : 0.40;
+    const vignetteBase = this.renderMode === "beat" ? 0.85 : 0.75;
+    const baseAlpha = (vignetteBase - this._vignetteEnergy * vignetteRange) * strength;
     const alpha = Math.max(0, baseAlpha - this._vignetteBeatPulse);
     if (alpha < 0.02) return;
 
