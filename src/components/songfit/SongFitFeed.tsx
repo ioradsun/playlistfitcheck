@@ -5,7 +5,7 @@
  * Supports reels mode (full-screen snap scroll) and standard mode.
  * PostCommentPanel is the sole comment UX (inline in card).
  */
-import { memo, useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
+import { memo, useState, useEffect, useCallback, useMemo, useRef, type MutableRefObject } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Plus, Search, X } from "lucide-react";
@@ -19,6 +19,7 @@ import { primeAudioPool } from "@/lib/audioPool";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { logImpression } from "@/lib/engagementTracking";
 import { cn } from "@/lib/utils";
+import type { ContentFilter } from "./types";
 
 // ── Skeleton ────────────────────────────────────────────────────────────────
 function FeedSkeleton({ reelsMode }: { reelsMode: boolean }) {
@@ -396,6 +397,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const [plusOpen, setPlusOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [contentFilter, setContentFilter] = useState<ContentFilter>("all");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const feed = useFeedPosts();
@@ -404,6 +406,15 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const displayPosts = hasSearchQuery
     ? (feed.searchLoading && feed.searchResults.length === 0 ? feed.posts : feed.searchResults)
     : feed.posts;
+  const filteredPosts = useMemo(() => {
+    if (contentFilter === "all") return displayPosts;
+    return displayPosts.filter((post) => {
+      if (!post.lyric_dance_id) return contentFilter === "lyrics";
+      const danceData = feed.lyricDataMap.get(post.lyric_dance_id);
+      const isInstrumental = !!(danceData?.cinematic_direction as any)?._instrumental;
+      return contentFilter === "beats" ? isInstrumental : !isInstrumental;
+    });
+  }, [displayPosts, contentFilter, feed.lyricDataMap]);
   const displayLoading = !hasSearchQuery && feed.loading && feed.posts.length === 0;
 
   const focusSearchInput = useCallback(() => {
@@ -457,6 +468,8 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                       onViewChange={feed.setFeedView}
                       billboardMode={feed.billboardMode}
                       onModeChange={feed.setBillboardMode}
+                      contentFilter={contentFilter}
+                      onContentFilterChange={setContentFilter}
                       isLoggedIn={!!user}
                       compact
                     />
@@ -571,6 +584,8 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                     onViewChange={feed.setFeedView}
                     billboardMode={feed.billboardMode}
                     onModeChange={feed.setBillboardMode}
+                    contentFilter={contentFilter}
+                    onContentFilterChange={setContentFilter}
                     isLoggedIn={!!user}
                   />
                   <div className="h-4 w-px bg-border/60" />
@@ -672,7 +687,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       {displayLoading ? (
         (() => { console.log("[SongFitFeed] rendering skeleton, loading=true"); return null; })()
         || <FeedSkeleton reelsMode={reelsMode} />
-      ) : displayPosts.length === 0 ? (
+      ) : filteredPosts.length === 0 ? (
         (() => { console.log("[SongFitFeed] rendering empty state, posts.length=0"); return null; })()
         || <div className="space-y-3 py-16 text-center">
           <p className="text-sm text-muted-foreground">
@@ -688,7 +703,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         >
           <style>{"@keyframes fadeIn{from{opacity:0}to{opacity:1}}"}</style>
           <FeedList
-            posts={displayPosts}
+            posts={filteredPosts}
             feedView={feed.feedView}
             signalMap={feed.signalMap}
             loadingMore={hasSearchQuery ? false : feed.loadingMore}
