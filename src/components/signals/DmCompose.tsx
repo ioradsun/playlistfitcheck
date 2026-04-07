@@ -104,14 +104,13 @@ export function DmCompose() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 w-80 bg-card border border-border rounded-xl shadow-lg z-[9999] flex flex-col overflow-hidden transition-[height] duration-200"
+      className="fixed bottom-4 right-4 w-80 rounded-2xl shadow-2xl z-[9999] flex flex-col overflow-hidden transition-[height] duration-200"
+      style={{ background: "#111111" }}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
       <div
-        className={`flex items-center gap-2 px-3 py-2.5 cursor-pointer shrink-0 ${
-          minimized ? "" : "border-b border-border"
-        }`}
+        className="flex items-center gap-2 px-4 py-3 cursor-pointer shrink-0"
         onClick={() => setMinimized((m) => !m)}
       >
         {editingPartner ? (
@@ -129,7 +128,7 @@ export function DmCompose() {
             }}
             placeholder="Search by name…"
             autoFocus
-            className="flex-1 bg-muted/50 border border-border rounded-md px-2 py-1 text-xs text-foreground/80 outline-none font-[inherit] placeholder:text-muted-foreground/40"
+            className="flex-1 bg-white/5 rounded-lg px-3 py-1.5 text-xs text-foreground/80 outline-none font-[inherit] placeholder:text-muted-foreground/30 border-none"
           />
         ) : (
           <>
@@ -151,7 +150,7 @@ export function DmCompose() {
                 {partnerProfile?.display_name ?? "…"}
               </span>
               {fmlyBadge && (
-                <span className="text-[8px] font-mono text-muted-foreground/50 border border-border rounded-sm px-1 shrink-0">
+                <span className="text-[8px] font-mono text-muted-foreground/35 shrink-0">
                   {fmlyBadge}
                 </span>
               )}
@@ -186,7 +185,8 @@ export function DmCompose() {
       {/* Search dropdown */}
       {editingPartner && searchResults.length > 0 && (
         <div
-          className="absolute top-[46px] left-0 right-0 bg-popover border border-border rounded-b-lg z-[10000] max-h-60 overflow-y-auto"
+          className="absolute top-[50px] left-0 right-0 z-[10000] max-h-60 overflow-y-auto"
+          style={{ background: "#111111" }}
           onClick={(e) => e.stopPropagation()}
         >
           {searchResults.map((p) => (
@@ -198,7 +198,7 @@ export function DmCompose() {
                 setSearchQuery("");
                 setSearchResults([]);
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 bg-transparent border-none border-b border-border/40 cursor-pointer text-left hover:bg-accent/20"
+              className="w-full flex items-center gap-2 px-4 py-2.5 bg-transparent border-none cursor-pointer text-left hover:bg-white/5"
             >
               <PartnerAvatar
                 name={p.display_name ?? "?"}
@@ -247,10 +247,10 @@ export function DmCompose() {
                     className={`flex px-2.5 py-px ${isMe ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[80%] border border-border px-2.5 py-1.5 ${
+                      className={`max-w-[80%] px-2.5 py-1.5 ${
                         isMe
-                          ? "bg-primary/10 rounded-[10px] rounded-br-sm"
-                          : "bg-muted/50 rounded-[10px] rounded-bl-sm"
+                          ? "bg-white/[0.08] rounded-[10px] rounded-br-sm"
+                          : "bg-white/[0.04] rounded-[10px] rounded-bl-sm"
                       }`}
                     >
                       <p className="text-xs text-foreground/80 leading-snug m-0 break-words">
@@ -283,7 +283,7 @@ export function DmCompose() {
           </div>
 
           {/* Compose input */}
-          <div className="flex items-center gap-1.5 px-2.5 py-2 border-t border-border">
+          <div className="flex items-center gap-1.5 px-4 py-3">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -295,7 +295,7 @@ export function DmCompose() {
               }}
               placeholder={`message ${partnerFirstName}…`}
               maxLength={2000}
-              className="flex-1 bg-muted/50 border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground/80 outline-none font-[inherit] placeholder:text-muted-foreground/40"
+              className="flex-1 bg-white/5 rounded-lg px-3 py-1.5 text-xs text-foreground/80 outline-none font-[inherit] placeholder:text-muted-foreground/30 border-none"
             />
             <button
               onClick={() => void handleSend()}
