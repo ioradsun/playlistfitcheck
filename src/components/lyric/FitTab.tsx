@@ -1298,8 +1298,16 @@ export function FitTab({
                 Link
               </button>
               <button
-                onClick={handleCrowdfitToggle}
-                disabled={crowdfitToggling || (!canCreate && !crowdfitPostId)}
+                onClick={() => {
+                  const isUnlimited = !!(profile as any)?.is_unlimited;
+                  if (!isUnlimited && !canCreate && !crowdfitPostId) {
+                    const remaining = required - credits;
+                    toast.error(`Fire ${remaining} song${remaining === 1 ? "" : "s"} to unlock posting`);
+                    return;
+                  }
+                  handleCrowdfitToggle();
+                }}
+                disabled={crowdfitToggling}
                 className={`flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 ${
                   crowdfitPostId
                     ? "text-primary border-primary/40 bg-primary/5"
@@ -1308,9 +1316,7 @@ export function FitTab({
                 title={
                   crowdfitPostId
                     ? "Remove from FMLY"
-                    : !canCreate
-                      ? `Fire ${required - credits} more song${required - credits === 1 ? "" : "s"} to unlock posting`
-                      : "Post to FMLY"
+                    : "Post to FMLY"
                 }
               >
                 {crowdfitToggling ? (
