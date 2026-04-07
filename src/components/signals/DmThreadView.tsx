@@ -14,8 +14,13 @@ export function DmThreadView({ partner }: Props) {
   const { events, loading, sending, sendMessage, markRead, updatePresence } =
     useDmThread(partner.partner_id);
   const [input, setInput] = useState("");
+  const [filter, setFilter] = useState<"all" | "messages">("all");
   const bottomRef = useRef<HTMLDivElement>(null);
   const partnerFirstName = partner.partner_name.split(" ")[0];
+  const filteredEvents =
+    filter === "all"
+      ? events
+      : events.filter((e) => e.kind === "message");
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -58,13 +63,68 @@ export function DmThreadView({ partner }: Props) {
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto py-3 flex flex-col gap-1">
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 4,
+            padding: "8px 0 4px",
+            position: "sticky",
+            top: 0,
+            zIndex: 1,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setFilter("all")}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 10,
+              fontFamily: "monospace",
+              letterSpacing: "0.06em",
+              color:
+                filter === "all"
+                  ? "rgba(255,255,255,0.6)"
+                  : "rgba(255,255,255,0.2)",
+              padding: "2px 0",
+              transition: "color 150ms",
+            }}
+          >
+            all
+          </button>
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.1)" }}>
+            ·
+          </span>
+          <button
+            type="button"
+            onClick={() => setFilter("messages")}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 10,
+              fontFamily: "monospace",
+              letterSpacing: "0.06em",
+              color:
+                filter === "messages"
+                  ? "rgba(255,255,255,0.6)"
+                  : "rgba(255,255,255,0.2)",
+              padding: "2px 0",
+              transition: "color 150ms",
+            }}
+          >
+            messages
+          </button>
+        </div>
         {loading && (
           <p className="text-center text-[11px] text-muted-foreground/40 font-mono p-6 m-0">
             Loading…
           </p>
         )}
 
-        {!loading && events.length === 0 && (
+        {!loading && filteredEvents.length === 0 && (
           <div className="flex-1 flex flex-col items-center justify-center gap-2 p-10">
             <p className="text-[13px] text-muted-foreground/50 text-center leading-relaxed m-0">
               Your shared music history will appear here.
@@ -75,7 +135,7 @@ export function DmThreadView({ partner }: Props) {
           </div>
         )}
 
-        {events.map((event) => {
+        {filteredEvents.map((event) => {
           if (event.kind === "message") {
             const isMe = event.direction === "outgoing";
             return (
