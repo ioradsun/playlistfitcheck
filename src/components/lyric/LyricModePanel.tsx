@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MessageCircle, Send } from "lucide-react";
+import { Flame, MessageCircle, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
 import { useAuth } from "@/hooks/useAuth";
@@ -440,17 +440,15 @@ export function LyricModePanel({
                   touchAction: "none",
                 }}
               >
-                <span
+                <Flame
+                  size={14}
                   style={{
-                    display: "inline-block",
-                    fontSize: 13,
                     transform: `scale(${scale})`,
                     transition: isFirePressing ? "none" : "transform 200ms ease",
                     transformOrigin: "center",
+                    color: fireTotal > 0 ? "rgba(255,160,40,0.9)" : "rgba(255,255,255,0.15)",
                   }}
-                >
-                  🔥
-                </span>
+                />
 
                 {fireTotal > 0 && (
                   <span
