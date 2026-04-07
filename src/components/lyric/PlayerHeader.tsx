@@ -3,22 +3,18 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Mail, Waves, AlignLeft, Zap, BarChart2, ExternalLink, AudioWaveform, Sparkles, AudioLines } from "lucide-react";
+import { User, Mail, Waves, LayoutList, BarChart2, ExternalLink } from "lucide-react";
 import { useDmContext } from "@/hooks/useDmContext";
 
-export type CardMode = "dance" | "lyric" | "empowerment" | "results" | "beat" | "vibe";
+export type CardMode = "listen" | "moments" | "results";
 
 const MODE_ICONS: Record<CardMode, ReactNode> = {
-  dance: <Waves size={14} />,
-  lyric: <AlignLeft size={14} />,
-  empowerment: <Zap size={14} />,
+  listen: <Waves size={14} />,
+  moments: <LayoutList size={14} />,
   results: <BarChart2 size={14} />,
-  beat: <AudioWaveform size={14} />,
-  vibe: <Sparkles size={14} />,
 };
 
-const SONG_MODES: CardMode[] = ["empowerment", "lyric", "dance", "results"];
-const BEAT_MODES: CardMode[] = ["beat", "vibe", "results"];
+const MODES: CardMode[] = ["listen", "moments", "results"];
 
 function useClickOutside(
   refs: RefObject<Element | null>[],
@@ -54,7 +50,6 @@ interface PlayerHeaderProps {
   onProfileClick?: () => void;
   cardMode: CardMode;
   onModeChange: (mode: CardMode) => void;
-  isInstrumental?: boolean;
 }
 
 interface AvatarWithBadgesProps {
@@ -126,8 +121,7 @@ export function PlayerHeader({
   userId,
   onProfileClick,
   cardMode,
-  onModeChange,
-  isInstrumental = false,
+  onModeChange
 }: PlayerHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
@@ -319,11 +313,9 @@ export function PlayerHeader({
                 zIndex: 20,
               }}
             >
-              {(isInstrumental ? BEAT_MODES : SONG_MODES).map((mode, i) => {
+              {MODES.map((mode, i) => {
                 const isActive = cardMode === mode;
-                const icon = mode === "lyric" && isInstrumental
-                  ? <AudioLines size={13} />
-                  : MODE_ICONS[mode];
+                const icon = MODE_ICONS[mode];
                 return (
                   <motion.button
                     key={mode}

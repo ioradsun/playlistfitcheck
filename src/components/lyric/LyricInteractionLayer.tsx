@@ -8,7 +8,7 @@ const BAR_HEIGHT = 44;
 
 interface FmlyBarProps {
   moments: Moment[];
-  reactionData: Record<string, { line: Record<number, number>; total: number }>;
+  fireHeat: Record<string, { line: Record<number, number>; total: number }>;
   player: any;
   currentTimeSec: number;
   onFireTap: () => void;
@@ -17,11 +17,13 @@ interface FmlyBarProps {
   onSeekTo: (sec: number) => void;
   closingActive?: boolean;
   danceId?: string;
+  comments?: Array<{ text: string; line_index: number | null }> ;
+  onToastTap?: (momentIndex: number) => void;
 }
 
 export function FmlyBar({
   moments,
-  reactionData,
+  fireHeat,
   player,
   currentTimeSec,
   onFireTap,
@@ -30,10 +32,15 @@ export function FmlyBar({
   onSeekTo,
   closingActive = false,
   danceId,
+  comments = [],
+  onToastTap,
 }: FmlyBarProps) {
   const [pressing, setPressing] = useState(false);
   const [renderTick, setRenderTick] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+  const [fireScale, setFireScale] = useState(1);
+  const [toast, setToast] = useState<{ text: string; momentIndex: number } | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
 
   const holdStartRef = useRef<number | null>(null);
   const holdTickRef = useRef<number | null>(null);
@@ -50,10 +57,12 @@ export function FmlyBar({
   const animRef = useRef<number>(0);
   const scrubbingRef = useRef(false);
   const progressPctRef = useRef(0);
+  const toastMomentRef = useRef<number | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   const momentFireCounts = useMemo(
-    () => deriveMomentFireCounts(reactionData, moments),
-    [reactionData, moments],
+    () => deriveMomentFireCounts(fireHeat, moments),
+    [fireHeat, moments],
   );
   const maxFireCount = useMemo(() => Math.max(1, ...Object.values(momentFireCounts)), [momentFireCounts]);
 
@@ -76,6 +85,27 @@ export function FmlyBar({
     () => moments.findIndex((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec),
     [moments, currentTimeSec],
   );
+
+  useEffect(() => {
+    if (scrubbingRef.current || currentMomentIdx < 0) return;
+    if (toastMomentRef.current === currentMomentIdx) return;
+    const lineIndex = moments[currentMomentIdx]?.lines[0]?.lineIndex ?? moments[currentMomentIdx]?.sectionIndex;
+    if (lineIndex == null) return;
+    const bucket = comments.filter((c) => c.line_index === lineIndex);
+    if (!bucket.length) return;
+    const latest = bucket[bucket.length - 1];
+    toastMomentRef.current = currentMomentIdx;
+    setToast({ text: latest.text, momentIndex: currentMomentIdx });
+    setToastVisible(true);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastVisible(false);
+    }, 3000);
+  }, [comments, currentMomentIdx, moments]);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+  }, []);
 
   // ── Hydrate user fires from DB on mount ─────────────────────────────────
   useEffect(() => {
@@ -291,16 +321,23 @@ export function FmlyBar({
 
   const handleDown = () => {
     setPressing(true);
+    setFireScale(1);
     pendingFireSpawnsRef.current.push({ count: 5, intensity: 0.6 });
     pendingPlayheadSpawnsRef.current.push({ count: 3, intensity: 0.5 });
     holdStartRef.current = performance.now();
     player?.fireMoment?.();
     onFireHoldStart();
-    holdTickRef.current = window.setInterval(() => { player?.fireMoment?.(); }, 150);
+    holdTickRef.current = window.setInterval(() => {
+      const elapsed = performance.now() - (holdStartRef.current ?? 0);
+      const intensity = Math.min(1, elapsed / 2000);
+      setFireScale(1 + intensity * 0.3);
+      player?.fireMoment?.();
+    }, 150);
   };
 
   const handleUp = () => {
     setPressing(false);
+    setFireScale(1);
     if (holdTickRef.current) { window.clearInterval(holdTickRef.current); holdTickRef.current = null; }
     player?.stopContinuousFire?.();
     const startedAt = holdStartRef.current;
@@ -343,15 +380,17 @@ export function FmlyBar({
           {/* Segment heat backgrounds */}
           {moments.map((moment, idx) => {
             const count = momentFireCounts[idx] ?? 0;
-            const intensity = Math.max(0, Math.min(1, count / maxFireCount));
-            if (intensity <= 0) return null;
+            if (count <= 0) return null;
             const leftPct = (moment.startSec / Math.max(0.0001, totalDuration)) * 100;
             const widthPct = ((moment.endSec - moment.startSec) / Math.max(0.0001, totalDuration)) * 100;
-            const background = idx === hottestIdx && count > 0
-              ? `rgba(74, 222, 128, ${intensity * 0.12})`
-              : count > 0
-                ? `rgba(255, 255, 255, ${intensity * 0.04})`
-                : "transparent";
+            const isConsensus = idx === hottestIdx && count > 0;
+            const background = isConsensus
+              ? (count >= 10 ? "rgba(74, 222, 128, 0.14)" : "rgba(74, 222, 128, 0.07)")
+              : count >= 10
+                ? "rgba(255, 140, 40, 0.12)"
+                : count >= 1
+                  ? "rgba(255, 140, 40, 0.06)"
+                  : "transparent";
             return (
               <div
                 key={`${moment.startSec}-${moment.endSec}-heat`}
@@ -433,6 +472,34 @@ export function FmlyBar({
           />
           </div>
 
+          {toast && (
+            <button
+              type="button"
+              onClick={() => onToastTap?.(toast.momentIndex)}
+              style={{
+                position: "absolute",
+                left: "50%",
+                bottom: BAR_HEIGHT + 8,
+                transform: "translateX(-50%)",
+                border: "none",
+                background: "none",
+                fontSize: 10,
+                fontFamily: "monospace",
+                color: "rgba(255,255,255,0.25)",
+                maxWidth: "80%",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                cursor: "pointer",
+                opacity: toastVisible ? 1 : 0,
+                transition: "opacity 300ms ease",
+                zIndex: 4,
+              }}
+            >
+              {toast.text}
+            </button>
+          )}
+
           {/* Fire button — centered overlay */}
           <button
             type="button"
@@ -466,7 +533,8 @@ export function FmlyBar({
               style={{
                 fontSize: 24,
                 opacity: pressing ? 1 : 0.5,
-                transition: "opacity 0.15s ease",
+                transform: `scale(${fireScale})`,
+                transition: pressing ? "opacity 0.15s ease" : "opacity 0.15s ease, transform 0.2s ease",
                 userSelect: "none",
                 pointerEvents: "none",
               }}

@@ -6,7 +6,7 @@ import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 
 interface Props {
   moments: Moment[];
-  reactionData: Record<string, { line: Record<number, number>; total: number }>;
+  fireHeat: Record<string, { line: Record<number, number>; total: number }>;
   spotifyTrackId: string | null;
   postId: string | null;
   lyricDanceUrl: string | null;
@@ -33,7 +33,7 @@ const ROW_STYLE = {
 
 export function CardResultsPanel({
   moments,
-  reactionData,
+  fireHeat,
   spotifyTrackId,
   postId,
   lyricDanceUrl,
@@ -55,9 +55,9 @@ export function CardResultsPanel({
   };
 
   const { momentFireCounts, maxFire, totalFires, hottestIdx } = useMemo(() => {
-    const momentFireCounts = deriveMomentFireCounts(reactionData, moments);
+    const momentFireCounts = deriveMomentFireCounts(fireHeat, moments);
     const maxFire = Math.max(1, ...Object.values(momentFireCounts));
-    const totalFires = Object.values(reactionData).reduce(
+    const totalFires = Object.values(fireHeat).reduce(
       (s, v) => s + (v.total ?? 0), 0,
     );
     const hottestIdx = moments.length > 0
@@ -70,7 +70,7 @@ export function CardResultsPanel({
       )
       : null;
     return { momentFireCounts, maxFire, totalFires, hottestIdx };
-  }, [moments, reactionData]);
+  }, [moments, fireHeat]);
 
   return (
     <div
