@@ -111,10 +111,11 @@ export function LyricFitTab({
 
   useEffect(() => {
     if (filmMode !== "beat") return;
-    if (p.fitReadiness === "ready" && p.audioFile && activeTab === "lyrics") {
+    if (activeTab !== "lyrics") return;
+    if (p.audioFile || p.pipelineDanceId || p.cinematicDirection) {
       setActiveTab("fit");
     }
-  }, [filmMode, p.fitReadiness, p.audioFile, activeTab]);
+  }, [filmMode, activeTab, p.audioFile, p.pipelineDanceId, p.cinematicDirection]);
 
   const sceneInputNode = !p.lyricData ? (
     <div className="space-y-1.5">
