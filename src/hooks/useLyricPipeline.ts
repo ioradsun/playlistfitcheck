@@ -1441,6 +1441,34 @@ export function useLyricPipeline({
   } = scheduler;
   generationStatusRef.current = generationStatus;
 
+  // Beat grid error propagation — prevents infinite "running" state
+  useEffect(() => {
+    if (!beatGridError) return;
+    if (generationStatus.beatGrid === "running") {
+      setGenerationStatus((prev) => ({ ...prev, beatGrid: "error" }));
+      setPipelineStages((prev) => ({ ...prev, rhythm: "error" }));
+    }
+  }, [beatGridError, generationStatus.beatGrid, setGenerationStatus, setPipelineStages]);
+
+  // Cascade: if beat grid fails in beat mode, cinematic can't run either
+  useEffect(() => {
+    if (filmMode !== "beat") return;
+    if (generationStatus.beatGrid !== "error") return;
+    if (
+      generationStatus.cinematicDirection !== "idle" &&
+      generationStatus.cinematicDirection !== "running"
+    )
+      return;
+    setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "error" }));
+    setPipelineStages((prev) => ({ ...prev, cinematic: "error" }));
+  }, [
+    filmMode,
+    generationStatus.beatGrid,
+    generationStatus.cinematicDirection,
+    setGenerationStatus,
+    setPipelineStages,
+  ]);
+
   const startInstrumentalCinematic = useCallback(
     async (force = false) => {
       if (

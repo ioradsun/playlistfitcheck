@@ -339,8 +339,8 @@ function FeedList({
     return measuredHeightsRef.current.get(post.id) ?? 420;
   }, [reelsMode, viewportHeight, posts]);
 
-  const topSpacerHeight = Array.from({ length: windowStart }).reduce((sum, _, idx) => sum + estimateHeightAtIndex(idx), 0);
-  const bottomSpacerHeight = Array.from({ length: Math.max(0, posts.length - windowEnd - 1) }).reduce(
+  const topSpacerHeight = Array.from({ length: windowStart }).reduce<number>((sum, _, idx) => sum + estimateHeightAtIndex(idx), 0);
+  const bottomSpacerHeight = Array.from({ length: Math.max(0, posts.length - windowEnd - 1) }).reduce<number>(
     (sum, _, idx) => sum + estimateHeightAtIndex(windowEnd + 1 + idx),
     0,
   );
