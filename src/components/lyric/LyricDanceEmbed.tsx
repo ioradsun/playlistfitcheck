@@ -124,7 +124,23 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
   }, [player, playerReady, isFeedEmbed, visible]);
 
-  // ── Playback lifecycle ───────────────────────────────────────
+  // ── Effect 1: Register/unregister with audioController (stable across primary changes) ──
+  // This effect does NOT include isPrimary in its deps. It only re-runs when the
+  // card mounts/unmounts or visibility changes — never on swipe. This prevents
+  // unregister→register churn that causes a ~16ms audio pause→restart gap.
+  useEffect(() => {
+    if (!player || !playerReady || !postId || !isFeedEmbed || !visible) return;
+    audioController.register(postId, player);
+
+    return () => {
+      audioController.clearExplicitIf(postId);
+      audioController.unregister(postId);
+    };
+  }, [player, playerReady, postId, isFeedEmbed, visible]);
+
+  // ── Effect 2: Play/pause gated on isPrimary (re-runs on swipe, no register churn) ──
+  // This effect reacts to isPrimary changes but has no cleanup that tears down
+  // audio state. The audio started by audioController._reconcile is never interrupted.
   useEffect(() => {
     if (!player || !playerReady) return;
 
@@ -150,16 +166,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       // Non-feed surfaces (shareable pages, song detail): always play
       player.play(false);
     }
-
-    // Feed embed: register with audioController for coordinated audio
-    if (!postId || !isFeedEmbed || !visible) return;
-    audioController.register(postId, player);
-
-    return () => {
-      audioController.clearExplicitIf(postId);
-      audioController.unregister(postId);
-    };
-  }, [player, playerReady, postId, isFeedEmbed, visible, isPrimary]);
+  }, [player, playerReady, isFeedEmbed, isPrimary, evicted]);
 
   // ── Audio interruption recovery (iOS phone calls, Siri, alarms) ──
   useEffect(() => {
