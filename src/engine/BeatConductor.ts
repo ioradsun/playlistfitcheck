@@ -34,6 +34,8 @@ export interface BeatGrid {
   beatEnergies?: number[];
   /** V2: Full audio analysis (not serialized to DB — computed at runtime) */
   _analysis?: import('@/engine/audioAnalyzer').AudioAnalysis;
+  /** Runtime-only: phase offset in seconds for synthetic beat generation. Not serialized to DB. */
+  _phase?: number;
 }
 
 /** Real-time beat state at a specific moment. Queried every frame. */
@@ -180,7 +182,7 @@ export class BeatConductor {
     // no particle reactivity, no camera movement. Generate evenly-spaced
     // beats so the visual system always has a heartbeat.
     if (rawBeats.length === 0 && songDuration > 0 && period > 0) {
-      const phase = (beatGrid as any)._phase ?? 0;
+      const phase = beatGrid._phase ?? 0;
       const synthetic: number[] = [];
       for (let t = phase; t < songDuration; t += period) {
         synthetic.push(t);
