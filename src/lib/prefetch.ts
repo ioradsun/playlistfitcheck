@@ -18,9 +18,9 @@ const _isEmbedRoute = _segments.length === 3;
 // ── Cache helpers ────────────────────────────────────────────────────────────
 
 const CACHE_PREFIX = "tfm:";
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours — stale after this
+const CACHE_TTL_MS = 0;
 const DANCE_CACHE_PREFIX = "dance:";
-const DANCE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const DANCE_CACHE_TTL_MS = 0;
 
 interface CacheEntry<T> {
   data: T;
