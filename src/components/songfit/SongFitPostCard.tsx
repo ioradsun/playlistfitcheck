@@ -259,7 +259,6 @@ export function SongFitPostCard({
                 isVerified={(post.profiles as any)?.is_verified}
                 userId={post.user_id}
                 onProfileClick={handleProfileClick}
-                preload={preload}
               />
             </div>
           ) : (
