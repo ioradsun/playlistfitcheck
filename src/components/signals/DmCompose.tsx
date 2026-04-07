@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronUp, Minus, Send, X } from "lucide-react";
+import { Send, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useDmContext } from "@/hooks/useDmContext";
 import { useDmThread } from "@/hooks/useDmThread";
@@ -16,7 +16,6 @@ interface ProfileResult {
 
 export function DmCompose() {
   const { composePartnerId, closeCompose, openCompose } = useDmContext();
-  const [minimized, setMinimized] = useState(false);
   const { events, loading, sending, sendMessage } = useDmThread(composePartnerId ?? "");
   const [input, setInput] = useState("");
   const [partnerProfile, setPartnerProfile] = useState<ProfileResult | null>(null);
@@ -29,7 +28,6 @@ export function DmCompose() {
 
   useEffect(() => {
     if (composePartnerId) {
-      setMinimized(false);
       setInput("");
       setEditingPartner(false);
       setSearchQuery("");
@@ -59,10 +57,8 @@ export function DmCompose() {
   }, [composePartnerId]);
 
   useEffect(() => {
-    if (!minimized) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [events.length, minimized]);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [events.length]);
 
   useEffect(() => {
     if (!editingPartner) return;
@@ -109,10 +105,7 @@ export function DmCompose() {
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div
-        className="flex items-center gap-2 px-4 py-3 cursor-pointer shrink-0"
-        onClick={() => setMinimized((m) => !m)}
-      >
+      <div className="flex items-center gap-2 px-4 py-3 shrink-0">
         {editingPartner ? (
           <input
             ref={searchRef}
@@ -159,16 +152,6 @@ export function DmCompose() {
         )}
 
         <div className="flex gap-1 shrink-0">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setMinimized((m) => !m);
-            }}
-            className="bg-transparent border-none cursor-pointer text-muted-foreground/50 flex items-center p-0.5 rounded"
-            aria-label={minimized ? "Expand" : "Minimize"}
-          >
-            {minimized ? <ChevronUp size={13} /> : <Minus size={13} />}
-          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -219,7 +202,7 @@ export function DmCompose() {
       )}
 
       {/* Body */}
-      {!minimized && composePartnerId !== "new" && (
+      {composePartnerId !== "new" && (
         <>
           <div className="flex-1 overflow-y-auto max-h-[220px] py-2 flex flex-col gap-0.5">
             {loading && (
