@@ -66,7 +66,9 @@ export function FmlyBar({
     return best;
   }, [moments, momentFireCounts]);
 
-  const totalDuration = moments.length ? moments[moments.length - 1].endSec : 1;
+  const totalDuration = moments.length
+    ? moments[moments.length - 1].endSec
+    : (player?.audio?.duration || 1);
   const progressPct = Math.max(0, Math.min(100, (currentTimeSec / Math.max(0.0001, totalDuration)) * 100));
   progressPctRef.current = progressPct;
 
@@ -378,7 +380,6 @@ export function FmlyBar({
                 background: "rgba(255,255,255,0.25)",
                 boxShadow: "0 0 4px rgba(255,255,255,0.08)",
                 pointerEvents: "none",
-                transition: "left 150ms linear",
                 zIndex: 2,
               }}
             />
