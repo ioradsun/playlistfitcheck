@@ -100,7 +100,6 @@ export const SongFitPostCard = memo(function SongFitPostCard({
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDance = !!(post.lyric_dance_url && post.lyric_dance_id);
   const isSpotifyOnly = !hasLyricDance && !!post.spotify_track_id && !post.lyric_dance_url;
-  const isInstrumental = !!(lyricDanceData?.cinematic_direction as any)?._instrumental;
   const displayName = post.profiles?.display_name || "Anonymous";
   if (isSpotifyOnly) return null;
 
@@ -255,7 +254,6 @@ export const SongFitPostCard = memo(function SongFitPostCard({
                 prefetchedData={lyricDanceData ?? null}
                 avatarUrl={post.profiles?.avatar_url}
                 isVerified={(post.profiles as any)?.is_verified}
-                isInstrumental={isInstrumental}
                 userId={post.user_id}
                 onProfileClick={handleProfileClick}
               />
