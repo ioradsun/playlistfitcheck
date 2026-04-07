@@ -17,6 +17,8 @@ export interface BeatGridData {
   hits?: Array<{ time: number; strength: number; type: "transient" | "bass" | "tonal" }>;
   beatEnergies?: number[];
   _analysis?: AudioAnalysis;
+  /** Runtime-only: phase offset in seconds (first downbeat position). Not serialized to DB. */
+  _phase?: number;
 }
 
 // ── BPM Detection: IOI histogram with Gaussian genre prior ──────────────
@@ -181,13 +183,13 @@ export function useBeatGrid(buffer: AudioBuffer | null): {
         if (!cancelled) {
           setBeatGrid({
             bpm: Math.round(bpm),
-            beats: [], // BeatConductor generates synthetic beats from bpm
+            beats: [],         // BeatConductor generates synthetic beats from bpm + _phase
             confidence,
             hits: analysis.hits,
             beatEnergies,
             _analysis: analysis,
-            _phase: phase, // runtime-only: phase offset for synthetic beat generation
-          } as BeatGridData);
+            _phase: phase,
+          });
           setLoading(false);
         }
       } catch (err: any) {
