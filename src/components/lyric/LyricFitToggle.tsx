@@ -61,6 +61,7 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
   const isRunning = fitReadiness === "running";
   const isError = fitReadiness === "error";
   const isReady = fitReadiness === "ready";
+  const showLyricsTab = !(filmMode === "beat" && (fitUnlocked || fitReadiness === "ready"));
   const visibleStageKeys = (Object.keys(STAGE_LABELS) as (keyof PipelineStages)[])
     .filter((k) => !(filmMode === "beat" && k === "transcript"));
 
@@ -70,19 +71,21 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
   return (
     <div className="border-b border-border/40">
       <div className="flex max-w-2xl mx-auto">
-        <div className="flex-1 flex items-center justify-center">
-          <button
-            onClick={() => onViewChange("lyrics")}
-            className={cn(
-              "py-2.5 text-sm transition-all duration-150",
-              view === "lyrics"
-                ? "font-medium text-foreground"
-                : "font-normal text-muted-foreground"
-            )}
-          >
-            {filmMode === "beat" ? "Upload" : "Lyrics"}
-          </button>
-        </div>
+        {showLyricsTab && (
+          <div className="flex-1 flex items-center justify-center">
+            <button
+              onClick={() => onViewChange("lyrics")}
+              className={cn(
+                "py-2.5 text-sm transition-all duration-150",
+                view === "lyrics"
+                  ? "font-medium text-foreground"
+                  : "font-normal text-muted-foreground"
+              )}
+            >
+              {filmMode === "beat" ? "Upload" : "Lyrics"}
+            </button>
+          </div>
+        )}
         <div className="flex-1 flex flex-col items-center justify-center relative">
           {showHover ? (
             <TooltipProvider delayDuration={200}>

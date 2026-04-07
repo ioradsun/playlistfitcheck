@@ -61,9 +61,23 @@ export function LyricFitTab({
   const [activeTab, setActiveTab] = React.useState<LyricFitView>("lyrics");
   const [sceneDescription, setSceneDescription] = React.useState("");
   const [searchParams, setSearchParams] = useSearchParams();
-  const [filmMode, setFilmMode] = React.useState<FilmMode>(
-    searchParams.get("mode") === "beat" ? "beat" : "song",
-  );
+  const [filmMode, setFilmMode] = React.useState<FilmMode>(() => {
+    if (searchParams.get("mode") === "beat") return "beat";
+    if (initialLyric) {
+      const cd = initialLyric.cinematic_direction
+        ?? initialLyric.render_data?.cinematicDirection
+        ?? initialLyric.render_data?.cinematic_direction;
+      if (cd?._instrumental === true) return "beat";
+      if (
+        initialLyric.beat_grid &&
+        Array.isArray(initialLyric.lines) &&
+        initialLyric.lines.length === 0
+      ) {
+        return "beat";
+      }
+    }
+    return "song";
+  });
 
   const p = useLyricPipeline({
     initialLyric,
@@ -94,8 +108,14 @@ export function LyricFitTab({
       p.fitReadiness !== "not_started"
     )
       return;
+    if (
+      nextView === "lyrics" &&
+      filmMode === "beat" &&
+      (p.fitReadiness === "ready" || p.fitUnlocked)
+    )
+      return;
     setActiveTab(nextView);
-  }, [p.fitReadiness, p.fitUnlocked]);
+  }, [p.fitReadiness, p.fitUnlocked, filmMode]);
 
   const handleBackToLyrics = useCallback(
     () => handleViewChange("lyrics"),

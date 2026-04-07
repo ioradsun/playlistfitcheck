@@ -111,6 +111,21 @@ export function usePipelineScheduler({
   startCinematicDirection,
   startHookDetection,
 }: UsePipelineSchedulerParams): UsePipelineSchedulerReturn {
+  const isBeatProject = (() => {
+    if (!initialLyric) return false;
+    const rd = (initialLyric as any).render_data;
+    const cd =
+      (initialLyric as any).cinematic_direction ||
+      rd?.cinematicDirection ||
+      rd?.cinematic_direction;
+    if (cd?._instrumental === true) return true;
+    return !!(
+      (initialLyric as any).beat_grid &&
+      Array.isArray((initialLyric as any).lines) &&
+      (initialLyric as any).lines.length === 0
+    );
+  })();
+
   const [fitUnlocked, setFitUnlocked] = useState(() => {
     if (!initialLyric) return false;
     const rd = (initialLyric as any).render_data;
@@ -171,7 +186,7 @@ export function usePipelineScheduler({
     rhythm: "pending",
     sections: "pending",
     cinematic: "pending",
-    transcript: "pending",
+    transcript: isBeatProject ? "done" : "pending",
   });
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>(() => {
     if (!initialLyric) {
