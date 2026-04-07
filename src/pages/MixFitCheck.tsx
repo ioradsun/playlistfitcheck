@@ -55,7 +55,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
   const firstMix = mixes.find((m) => m.buffer);
   const firstWaveform = firstMix?.waveform || null;
   const referenceDuration = firstWaveform?.duration || 1;
-  // Beat detection disabled in MixFit — Essentia WASM is heavyweight and not needed here.
+  // Beat detection uses lightweight onset analysis — no heavyweight dependencies.
   // GlobalTimeline renders fine without beats (markers/playback still fully functional).
   const beatGrid = null;
   const beatGridLoading = false;

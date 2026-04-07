@@ -220,11 +220,23 @@ export function LyricsTab({
       const ms = () => `${(performance.now() - t0).toFixed(0)}ms`;
       setLoading(true);
 
-      const project = await handleFileSelected(file);
-      console.log("[handleTranscribe] handleFileSelected result", { projectId: project?.projectId, audioUrl: project?.audioUrl?.slice(0, 60) });
-      const projectId = project?.projectId ?? null;
-      const storageAudioUrl = project?.audioUrl ?? null;
+      let projectId: string | null = null;
+      let storageAudioUrl: string | null = null;
+      try {
+        const project = await handleFileSelected(file);
+        console.log("[handleTranscribe] handleFileSelected result", { projectId: project?.projectId, audioUrl: project?.audioUrl?.slice(0, 60) });
+        projectId = project?.projectId ?? null;
+        storageAudioUrl = project?.audioUrl ?? null;
+      } catch (e) {
+        console.error("[handleTranscribe] handleFileSelected failed", e);
+        toast.error("Failed to save project — try again");
+        setLoading(false);
+        return;
+      }
+
       const draftTitle = resolveProjectTitle(null, file.name);
+
+      // Shared state — both modes
       setLyricData({ title: draftTitle, lines: [] });
       setLines([]);
       setAudioFile(file);
@@ -237,15 +249,8 @@ export function LyricsTab({
       }
       onUploadStarted?.({ file, projectId, title: draftTitle });
 
+      // ── BEAT: no transcription ──
       if (filmMode === "beat") {
-        setLyricData({ title: draftTitle, lines: [] });
-        setLines([]);
-        setAudioFile(file);
-        setHasRealAudio(true);
-        setSavedId(projectId);
-        if (projectId) {
-          sessionAudio.set("lyric", projectId, file, { ttlMs: 20 * 60 * 1000 });
-        }
         onAudioSubmitted?.(file);
         setLoading(false);
         return;
