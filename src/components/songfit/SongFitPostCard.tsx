@@ -24,6 +24,8 @@ import {
   Share2,
   Clock,
   Flame,
+  AudioLines,
+  AlignLeft,
 } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
@@ -103,6 +105,7 @@ export function SongFitPostCard({
   const isOwnPost = user?.id === post.user_id;
   const hasLyricDance = !!(post.lyric_dance_url && post.lyric_dance_id);
   const isSpotifyOnly = !hasLyricDance && !!post.spotify_track_id && !post.lyric_dance_url;
+  const isInstrumental = !!(lyricDanceData?.cinematic_direction as any)?._instrumental;
   const displayName = post.profiles?.display_name || "Anonymous";
   if (isSpotifyOnly) return null;
 
@@ -243,6 +246,13 @@ export function SongFitPostCard({
 
         {/* ── Media ── */}
         <div className={cn("relative", reelsMode ? "absolute inset-0" : "")}>
+          <div className="absolute top-2 right-2 z-10">
+            {isInstrumental ? (
+              <AudioLines size={14} className="text-white/30" />
+            ) : (
+              <AlignLeft size={14} className="text-white/30" />
+            )}
+          </div>
           {hasLyricDance ? (
             <div className="relative" style={reelsMode ? { height: "100%" } : { height: 320 }}>
               <LyricDanceEmbed
