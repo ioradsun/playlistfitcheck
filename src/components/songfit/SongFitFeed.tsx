@@ -69,7 +69,6 @@ const ObservedCard = memo(function ObservedCard({
   lyricDanceData,
   reelsMode,
   isFirst,
-  preload,
   onCenterEnter,
   onCenterLeave,
   cardRefsMap,
@@ -83,7 +82,6 @@ const ObservedCard = memo(function ObservedCard({
   lyricDanceData?: any;
   reelsMode?: boolean;
   isFirst?: boolean;
-  preload?: boolean;
   onCenterEnter: (postId: string) => void;
   onCenterLeave: (postId: string) => void;
   cardRefsMap: MutableRefObject<Map<string, HTMLDivElement>>;
@@ -163,7 +161,6 @@ const ObservedCard = memo(function ObservedCard({
         visible={visible}
         reelsMode={reelsMode}
         isFirst={isFirst}
-        preload={preload}
       />
     </div>
   );
@@ -192,7 +189,6 @@ function FeedList({
   reelsMode: boolean;
 }) {
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const [preloadId, setPreloadId] = useState<string | null>(null);
   const centerSetRef = useRef<Set<string>>(new Set());
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -207,6 +203,8 @@ function FeedList({
   const windowStart = Math.max(0, activeIndex - WINDOW_RADIUS);
   const windowEnd = Math.min(posts.length - 1, activeIndex + WINDOW_RADIUS);
   const renderedPosts = posts.slice(windowStart, windowEnd + 1);
+  const postsRef = useRef(posts);
+  postsRef.current = posts;
 
   const pickBestCandidate = useCallback((): string | null => {
     const set = centerSetRef.current;
@@ -247,23 +245,15 @@ function FeedList({
   }, [pickBestCandidate, reelsMode]);
 
   const onCenterEnter = useCallback((postId: string) => {
-    const idx = posts.findIndex((p) => p.id === postId);
+    const idx = postsRef.current.findIndex((p) => p.id === postId);
     if (idx >= 0) setActiveIndex(idx);
     centerSetRef.current.add(postId);
-    setPreloadId(postId);
     scheduleSettle();
-  }, [posts, scheduleSettle]);
+  }, [scheduleSettle]);
 
   const onCenterLeave = useCallback((postId: string) => {
     centerSetRef.current.delete(postId);
     audioController.clearExplicitIf(postId);
-    // If the leaving card was the preload target, pick the last remaining
-    setPreloadId((prev) => {
-      if (prev !== postId) return prev;
-      const remaining = centerSetRef.current;
-      if (remaining.size === 0) return null;
-      return Array.from(remaining).pop()!;
-    });
     scheduleSettle();
   }, [scheduleSettle]);
 
@@ -335,16 +325,23 @@ function FeedList({
 
   const estimateHeightAtIndex = useCallback((idx: number): number => {
     if (reelsMode) return viewportHeight || 0;
-    const post = posts[idx];
+    const post = postsRef.current[idx];
     if (!post) return 420;
     return measuredHeightsRef.current.get(post.id) ?? 420;
-  }, [reelsMode, viewportHeight, posts]);
+  }, [reelsMode, viewportHeight]);
 
-  const topSpacerHeight = Array.from({ length: windowStart }).reduce<number>((sum, _, idx) => sum + estimateHeightAtIndex(idx), 0);
-  const bottomSpacerHeight = Array.from({ length: Math.max(0, posts.length - windowEnd - 1) }).reduce<number>(
-    (sum, _, idx) => sum + estimateHeightAtIndex(windowEnd + 1 + idx),
-    0,
-  );
+  const topSpacerHeight = useMemo(() => {
+    let sum = 0;
+    for (let i = 0; i < windowStart; i++) sum += estimateHeightAtIndex(i);
+    return sum;
+  }, [windowStart, estimateHeightAtIndex]);
+
+  const bottomSpacerHeight = useMemo(() => {
+    let sum = 0;
+    const count = postsRef.current.length;
+    for (let i = windowEnd + 1; i < count; i++) sum += estimateHeightAtIndex(i);
+    return sum;
+  }, [windowEnd, estimateHeightAtIndex]);
 
   return (
     <div className={reelsMode ? "" : "pb-24"}>
@@ -363,7 +360,6 @@ function FeedList({
           lyricDanceData={post.lyric_dance_id ? lyricDataMap.get(post.lyric_dance_id) ?? null : null}
           reelsMode={reelsMode}
           isFirst={idx === 0}
-          preload={post.id === preloadId}
           cardRefsMap={cardRefsMap}
           onCenterEnter={onCenterEnter}
           onCenterLeave={onCenterLeave}
@@ -389,6 +385,8 @@ function FeedList({
 interface SongFitFeedProps {
   reelsMode?: boolean;
 }
+
+const FADE_KEYFRAMES = "@keyframes fadeIn{from{opacity:0}to{opacity:1}}";
 
 export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const { user } = useAuth();
@@ -437,6 +435,10 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     feed.consumeNewDrops();
     document.getElementById("songfit-scroll-container")?.scrollTo({ top: 0, behavior: "smooth" });
   }, [feed]);
+
+  const fadeInRef = useCallback((el: HTMLDivElement | null) => {
+    if (el) hasFadedIn.current = true;
+  }, []);
 
   // Unlock audio on first touch anywhere in the feed
   useEffect(() => {
@@ -684,12 +686,12 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         </button>
       )}
 
+      {!hasFadedIn.current && <style>{FADE_KEYFRAMES}</style>}
+
       {displayLoading ? (
-        (() => { console.log("[SongFitFeed] rendering skeleton, loading=true"); return null; })()
-        || <FeedSkeleton reelsMode={reelsMode} />
+        <FeedSkeleton reelsMode={reelsMode} />
       ) : filteredPosts.length === 0 ? (
-        (() => { console.log("[SongFitFeed] rendering empty state, posts.length=0"); return null; })()
-        || <div className="space-y-3 py-16 text-center">
+        <div className="space-y-3 py-16 text-center">
           <p className="text-sm text-muted-foreground">
             {hasSearchQuery
               ? `No results for “${feed.searchTerm.trim()}”`
@@ -699,9 +701,8 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
       ) : (
         <div
           style={{ animation: hasFadedIn.current ? "none" : "fadeIn 0.3s ease forwards" }}
-          ref={() => { hasFadedIn.current = true; }}
+          ref={fadeInRef}
         >
-          <style>{"@keyframes fadeIn{from{opacity:0}to{opacity:1}}"}</style>
           <FeedList
             posts={filteredPosts}
             feedView={feed.feedView}

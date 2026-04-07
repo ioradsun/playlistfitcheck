@@ -6,7 +6,7 @@
  *
  * Supports reels mode (full-height, snap) and standard mode.
  */
-import { useState } from "react";
+import { useState, memo } from "react";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { cn } from "@/lib/utils";
 import {
@@ -66,11 +66,9 @@ interface Props {
   visible?: boolean;
   reelsMode?: boolean;
   isFirst?: boolean;
-  /** When true, this card is at viewport center — pre-warm the player behind cover. */
-  preload?: boolean;
 }
 
-export function SongFitPostCard({
+export const SongFitPostCard = memo(function SongFitPostCard({
   post,
   rank,
   onRefresh,
@@ -79,7 +77,6 @@ export function SongFitPostCard({
   lyricDanceData,
   visible,
   reelsMode = false,
-  preload = false,
 }: Props) {
   const { user } = useAuth();
   const siteCopy = useSiteCopy();
@@ -362,7 +359,7 @@ export function SongFitPostCard({
       </div>
     </div>
   );
-}
+});
 
 // ── Tiny action button ──────────────────────────────────────────────────────
 function ActionBtn({ icon, count, onClick }: { icon: React.ReactNode; count?: number; onClick: () => void }) {

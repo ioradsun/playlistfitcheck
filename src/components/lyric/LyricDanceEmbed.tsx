@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useSyncExternalStore } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useSyncExternalStore, memo } from "react";
 import { VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
@@ -40,7 +40,7 @@ export interface LyricDanceEmbedHandle {
 
 type Comment = { id: string; text: string; line_index: number | null; submitted_at: string };
 
-export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed({
+export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed({
   lyricDanceId,
   songTitle,
   artistName,
@@ -488,4 +488,4 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       )}
     </div>
   );
-});
+}));
