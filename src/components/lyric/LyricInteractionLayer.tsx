@@ -4,7 +4,7 @@ import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { getSessionId } from "@/lib/sessionId";
 import { fetchSessionFires } from "@/lib/fire";
 
-const BAR_HEIGHT = 20;
+const BAR_HEIGHT = 44;
 
 interface FmlyBarProps {
   moments: Moment[];
@@ -280,6 +280,7 @@ export function FmlyBar({
           width: "100%",
           background: "#0a0a0f",
           borderTop: "1px solid rgba(255,255,255,0.04)",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
           display: "flex",
           justifyContent: "center",
         }}
@@ -319,8 +320,9 @@ export function FmlyBar({
                 key={`${moment.startSec}-${moment.endSec}-heat`}
                 style={{
                   position: "absolute",
-                  top: 0,
+                  top: "auto",
                   bottom: 0,
+                  height: 6,
                   left: `${leftPct}%`,
                   width: `${widthPct}%`,
                   background,
@@ -355,8 +357,9 @@ export function FmlyBar({
                 key={`${moment.startSec}-${moment.endSec}-divider`}
                 style={{
                   position: "absolute",
-                  top: 0,
+                  top: "auto",
                   bottom: 0,
+                  height: 6,
                   left: `${xPct}%`,
                   width: "1px",
                   background: "rgba(255,255,255,0.06)",
@@ -371,10 +374,7 @@ export function FmlyBar({
           <div
             style={{
               position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: 0,
-              top: -12,
+              inset: 0,
               zIndex: 1,
               cursor: "pointer",
               touchAction: "none",
@@ -406,8 +406,8 @@ export function FmlyBar({
             style={{
               position: "absolute",
               left: "50%",
-              bottom: "100%",
-              transform: "translate(-50%, 50%)",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
               zIndex: 5,
               width: 48,
               height: 48,
@@ -428,7 +428,7 @@ export function FmlyBar({
           >
             <span
               style={{
-                fontSize: 22,
+                fontSize: 24,
                 opacity: pressing ? 1 : 0.5,
                 transition: "opacity 0.15s ease",
                 userSelect: "none",
