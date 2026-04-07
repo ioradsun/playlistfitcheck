@@ -53,3 +53,18 @@ export function evictLeastImportant(excludePostId: string): string | null {
   releaseAudio(freedPostId);
   return freedPostId;
 }
+
+/**
+ * Silently plays all pool elements within a user gesture.
+ * This "blesses" the 3 elements for iOS Safari, allowing subsequent
+ * programmatic play() calls (e.g., from setTimeout) to succeed.
+ */
+export function primeAudioPool(): void {
+  const pool = getSlots();
+  for (const slot of pool) {
+    if (slot.audio.paused) {
+      slot.audio.muted = true;
+      slot.audio.play().catch(() => {});
+    }
+  }
+}

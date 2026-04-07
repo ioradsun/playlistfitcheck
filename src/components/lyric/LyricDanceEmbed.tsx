@@ -10,6 +10,7 @@ import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { audioController } from "@/lib/audioController";
+import { primeAudioPool } from "@/lib/audioPool";
 import { isGlobalMuted } from "@/lib/globalMute";
 import { isAudioUnlocked, unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -178,6 +179,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       setMuted(next);
       return;
     }
+
+    primeAudioPool();
 
     if (isPrimary) {
       audioController.toggleMute();

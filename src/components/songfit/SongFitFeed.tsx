@@ -15,6 +15,7 @@ import { PlusMenu } from "./PlusMenu";
 import { SongFitPostCard } from "./SongFitPostCard";
 import { BillboardToggle } from "./BillboardToggle";
 import { audioController } from "@/lib/audioController";
+import { primeAudioPool } from "@/lib/audioPool";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { logImpression } from "@/lib/engagementTracking";
 import { cn } from "@/lib/utils";
@@ -420,6 +421,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   useEffect(() => {
     const handler = () => {
       unlockAudio();
+      primeAudioPool();
       // One-shot: remove after first fire
       document.removeEventListener("touchstart", handler);
       document.removeEventListener("click", handler);
