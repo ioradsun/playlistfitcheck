@@ -60,21 +60,6 @@ class AudioController {
     }
   }
 
-  /**
-   * Play ALL registered audio elements muted.
-   * MUST be called from a user gesture handler (tap/click).
-   * After this, switching primary only needs mute/unmute — no play() calls.
-   * This is required for iOS which blocks audio.play() outside gesture context.
-   */
-  primeAll(): void {
-    for (const [, player] of this._registry) {
-      if (player.audio.paused) {
-        player.audio.muted = true;
-        player.audio.play().catch(() => {});
-      }
-    }
-  }
-
   toggleMute(): void {
     const next = !isGlobalMuted();
     setGlobalMuted(next);

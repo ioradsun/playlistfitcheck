@@ -71,6 +71,7 @@ const ObservedCard = memo(function ObservedCard({
   onCenterEnter,
   onCenterLeave,
   cardRefsMap,
+  onMeasure,
 }: {
   post: any;
   rank?: number;
@@ -84,6 +85,7 @@ const ObservedCard = memo(function ObservedCard({
   onCenterEnter: (postId: string) => void;
   onCenterLeave: (postId: string) => void;
   cardRefsMap: MutableRefObject<Map<string, HTMLDivElement>>;
+  onMeasure?: (postId: string, height: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -97,6 +99,16 @@ const ObservedCard = memo(function ObservedCard({
       cardRefsMap.current.delete(post.id);
     };
   }, [post.id, cardRefsMap]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !onMeasure) return;
+    const measure = () => onMeasure(post.id, el.getBoundingClientRect().height);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [post.id, onMeasure]);
 
   // Wide observer: visibility
   useEffect(() => {
@@ -113,7 +125,7 @@ const ObservedCard = memo(function ObservedCard({
           }
         }
       },
-      { rootMargin: reelsMode ? "50% 0px" : "200px 0px" },
+      { rootMargin: reelsMode ? "10% 0px" : "200px 0px" },
     );
 
     observer.observe(el);
@@ -182,6 +194,17 @@ function FeedList({
   const centerSetRef = useRef<Set<string>>(new Set());
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(() =>
+    typeof window !== "undefined" ? window.innerHeight : 0,
+  );
+  const measuredHeightsRef = useRef<Map<string, number>>(new Map());
+  const topSpacerRef = useRef<HTMLDivElement>(null);
+  const bottomSpacerRef = useRef<HTMLDivElement>(null);
+  const WINDOW_RADIUS = 2;
+  const windowStart = Math.max(0, activeIndex - WINDOW_RADIUS);
+  const windowEnd = Math.min(posts.length - 1, activeIndex + WINDOW_RADIUS);
+  const renderedPosts = posts.slice(windowStart, windowEnd + 1);
 
   const pickBestCandidate = useCallback((): string | null => {
     const set = centerSetRef.current;
@@ -212,10 +235,12 @@ function FeedList({
   }, [pickBestCandidate]);
 
   const onCenterEnter = useCallback((postId: string) => {
+    const idx = posts.findIndex((p) => p.id === postId);
+    if (idx >= 0) setActiveIndex(idx);
     centerSetRef.current.add(postId);
     setPreloadId(postId);
     scheduleSettle();
-  }, [scheduleSettle]);
+  }, [posts, scheduleSettle]);
 
   const onCenterLeave = useCallback((postId: string) => {
     centerSetRef.current.delete(postId);
@@ -229,6 +254,49 @@ function FeedList({
     });
     scheduleSettle();
   }, [scheduleSettle]);
+
+  const onMeasure = useCallback((postId: string, height: number) => {
+    if (height > 0) measuredHeightsRef.current.set(postId, height);
+  }, []);
+
+  useEffect(() => {
+    if (!reelsMode) return;
+    const onResize = () => setViewportHeight(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [reelsMode]);
+
+  useEffect(() => {
+    if (!reelsMode || windowStart <= 0) return;
+    const el = topSpacerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setActiveIndex((idx) => Math.max(0, idx - 1));
+        }
+      },
+      { rootMargin: "-40% 0px -40% 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [reelsMode, windowStart]);
+
+  useEffect(() => {
+    if (!reelsMode || windowEnd >= posts.length - 1) return;
+    const el = bottomSpacerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setActiveIndex((idx) => Math.min(posts.length - 1, idx + 1));
+        }
+      },
+      { rootMargin: "-40% 0px -40% 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [reelsMode, windowEnd, posts.length]);
 
   useEffect(() => {
     return () => {
@@ -253,9 +321,26 @@ function FeedList({
     return () => observer.disconnect();
   }, [feedView, hasMore, loadingMore, loadMore]);
 
+  const estimateHeightAtIndex = useCallback((idx: number): number => {
+    if (reelsMode) return viewportHeight || 0;
+    const post = posts[idx];
+    if (!post) return 420;
+    return measuredHeightsRef.current.get(post.id) ?? 420;
+  }, [reelsMode, viewportHeight, posts]);
+
+  const topSpacerHeight = Array.from({ length: windowStart }).reduce((sum, _, idx) => sum + estimateHeightAtIndex(idx), 0);
+  const bottomSpacerHeight = Array.from({ length: Math.max(0, posts.length - windowEnd - 1) }).reduce(
+    (sum, _, idx) => sum + estimateHeightAtIndex(windowEnd + 1 + idx),
+    0,
+  );
+
   return (
     <div className={reelsMode ? "" : "pb-24"}>
-      {posts.map((post, idx) => (
+      {windowStart > 0 && <div ref={topSpacerRef} style={{ height: topSpacerHeight }} />}
+
+      {renderedPosts.map((post, offset) => {
+        const idx = windowStart + offset;
+        return (
         <ObservedCard
           key={post.id}
           post={post}
@@ -270,8 +355,12 @@ function FeedList({
           cardRefsMap={cardRefsMap}
           onCenterEnter={onCenterEnter}
           onCenterLeave={onCenterLeave}
+          onMeasure={onMeasure}
         />
-      ))}
+      );
+      })}
+
+      {windowEnd < posts.length - 1 && <div ref={bottomSpacerRef} style={{ height: bottomSpacerHeight }} />}
 
       {hasMore && feedView !== "billboard" && <div ref={sentinelRef} className="h-1" />}
 
@@ -331,7 +420,6 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   useEffect(() => {
     const handler = () => {
       unlockAudio();
-      audioController.primeAll();
       // One-shot: remove after first fire
       document.removeEventListener("touchstart", handler);
       document.removeEventListener("click", handler);

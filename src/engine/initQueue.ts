@@ -1,5 +1,5 @@
 let active = 0;
-const MAX_CONCURRENT = 4;
+const MAX_CONCURRENT = 2;
 const priorityWaiting: Array<() => void> = [];
 const waiting: Array<() => void> = [];
 
