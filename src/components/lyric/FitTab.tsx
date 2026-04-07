@@ -853,6 +853,7 @@ export function FitTab({
                   bpm: beatGrid.bpm,
                   beats: beatGrid.beats,
                   confidence: beatGrid.confidence,
+                  _duration: beatGrid._analysis?.duration || undefined,
                 }
               : { bpm: 0, beats: [], confidence: 0 },
             palette: derivePaletteFromDirection({

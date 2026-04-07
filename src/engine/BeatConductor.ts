@@ -28,6 +28,8 @@ export interface BeatGrid {
   bpm: number;
   beats: number[];
   confidence: number;
+  /** Track duration in seconds (persisted for instrumentals) */
+  _duration?: number;
   /** V2: Onset/hit events with strength — for punch zoom, slam, shake */
   hits?: Array<{ time: number; strength: number; type: 'transient' | 'bass' | 'tonal' }>;
   /** V2: Per-beat energy (0-1) aligned to beat positions */

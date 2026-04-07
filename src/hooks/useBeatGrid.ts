@@ -14,6 +14,8 @@ export interface BeatGridData {
   bpm: number;
   beats: number[];
   confidence: number;
+  /** Runtime or persisted: track duration in seconds */
+  _duration?: number;
   hits?: Array<{ time: number; strength: number; type: "transient" | "bass" | "tonal" }>;
   beatEnergies?: number[];
   _analysis?: AudioAnalysis;
