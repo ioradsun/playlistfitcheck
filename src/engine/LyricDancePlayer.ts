@@ -4273,7 +4273,7 @@ export class LyricDancePlayer {
         emoji: '🔥',
         spawnTime: nowSec + i * 0.08,
         lifetime: lifetimeMap[tier] + Math.random() * 0.5,
-        spawnX: this.width - 48 + xSpread,
+        spawnX: this.width / 2 + xSpread,
         spawnY: this.height - 70,
         size: sizeMap[tier] + Math.random() * 4,
         driftAmplitude: driftMap[tier] + Math.random() * 8,
