@@ -215,7 +215,7 @@ export function useLyricDanceCore({
 
   useEffect(() => {
     if (!player) return;
-    player.setReactionData(fireHeat);
+    player.setFireHeat(fireHeat);
     player.setMoments(moments);
   }, [player, fireHeat, moments]);
 

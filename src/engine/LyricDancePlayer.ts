@@ -2690,7 +2690,7 @@ export class LyricDancePlayer {
   }
 
   /** Set per-line reaction data for the emoji stream. Called by parent surfaces. */
-  setReactionData(data: Record<string, { line: Record<number, number>; total: number }>): void {
+  setFireHeat(data: Record<string, { line: Record<number, number>; total: number }>): void {
     this.emojiReactionData = data;
   }
 

@@ -210,7 +210,7 @@ export const SongFitPostCard = memo(function SongFitPostCard({
             isVerified={(post.profiles as any)?.is_verified}
             userId={post.user_id}
             onProfileClick={handleProfileClick}
-            cardMode="dance"
+            cardMode="listen"
             onModeChange={() => {}}
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 z-10">
