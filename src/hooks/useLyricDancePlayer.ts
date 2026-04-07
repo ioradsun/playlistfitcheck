@@ -99,6 +99,28 @@ export function useLyricDancePlayer(
   }, [evicted, dataReady]);
 
   useEffect(() => {
+    if (!postId) return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.postId === postId) {
+        // Context was lost — release slots and retry init
+        if (slotRef.current) {
+          releaseCanvasSlot(postId);
+          slotRef.current = null;
+        }
+        releaseAudio(postId);
+        playerRef.current = null;
+        initRef.current = false;
+        setPlayer(null);
+        setPlayerReady(false);
+        setRetryTick((t) => t + 1);
+      }
+    };
+    window.addEventListener("crowdfit:context-lost", handler);
+    return () => window.removeEventListener("crowdfit:context-lost", handler);
+  }, [postId]);
+
+  useEffect(() => {
     if (initRef.current || !dataReady) return;
     if (evicted) return;
 

@@ -153,6 +153,26 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     };
   }, [player, playerReady, postId, isFeedEmbed, visible]);
 
+  // ── Audio interruption recovery (iOS phone calls, Siri, alarms) ──
+  useEffect(() => {
+    if (!player || !isFeedEmbed || !visible) return;
+
+    const audio = player.audio;
+
+    const handleVisReturn = () => {
+      if (document.hidden) return;
+      // If we're primary and audio was interrupted, resume
+      if (isPrimary && audio.paused && player.playing) {
+        audio.play().catch(() => {});
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisReturn);
+    };
+  }, [player, isFeedEmbed, visible, isPrimary]);
+
   useEffect(() => {
     if (muted) {
       setShowMuteIndicator(true);

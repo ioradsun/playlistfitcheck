@@ -1760,6 +1760,8 @@ export class LyricDancePlayer {
   private _fontStabilized = false;
   private _fontLayoutReflowPending = false;
   private _handleVisibilityChange: () => void;
+  private _handlePageShow: (e: PageTransitionEvent) => void;
+  private _bgCacheDebounce: ReturnType<typeof setTimeout> | null = null;
   private _pendingUpgradeTimeout: number | null = null;
   private _pendingCanPlayHandler: (() => void) | null = null;
   /** Audio is waiting for scene compilation to finish before playing */
@@ -1810,8 +1812,14 @@ export class LyricDancePlayer {
 
     this._handleVisibilityChange = this._handleVisibilityChangeImpl.bind(this);
     document.addEventListener("visibilitychange", this._handleVisibilityChange);
+    this._handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        // Page restored from BFCache — re-validate context and resume
+        this._handleVisibilityChangeImpl();
+      }
+    };
+    window.addEventListener("pageshow", this._handlePageShow);
 
-    
 
     this.ambientParticleEngine = new ParticleEngine({
       particleSystem: this.resolvedState.particleConfig.system,
@@ -2171,7 +2179,7 @@ export class LyricDancePlayer {
   }
 
   private drawMinimalFirstFrame(): void {
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
 
     const isLight = this.themeOverride === 'light';
@@ -2381,7 +2389,7 @@ export class LyricDancePlayer {
       willReadFrequently: true,
       desynchronized: true,
     })!;
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
 
     // Force quality tier 0 for export — maximum visual quality, CPU doesn't matter
     this._qualityTier = 0 as 0;
@@ -2400,7 +2408,7 @@ export class LyricDancePlayer {
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
     // Set up frame context
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     this.ctx.clearRect(0, 0, this.width, this.height);
 
     const deltaMs = 16.67; // simulate at 60fps timestep — keeps spring physics identical to live playback
@@ -2496,7 +2504,7 @@ export class LyricDancePlayer {
     this.resize(this.displayWidth, this.displayHeight); // recompile scene for live viewport
     // Restore normal GPU-backed context
     this.ctx = this.canvas.getContext('2d')!;
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
   }
 
   resize(logicalW: number, logicalH: number): void {
@@ -2508,7 +2516,13 @@ export class LyricDancePlayer {
     this.height = h;
     this._applyDprToCanvas();
 
-    if (this.payload) this.buildBgCache();
+    if (this.payload) {
+      if (this._bgCacheDebounce) clearTimeout(this._bgCacheDebounce);
+      this._bgCacheDebounce = setTimeout(() => {
+        this._bgCacheDebounce = null;
+        if (!this.destroyed) this.buildBgCache();
+      }, 200);
+    }
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
     this._vignetteCanvas = null;
@@ -2550,7 +2564,13 @@ export class LyricDancePlayer {
     this._lightingOverlayKey = '';
     this._bgSnapshotSection = -999; // force rebake at new resolution
     this._bgSnapshotMomentIdx = -1;
-    if (this.payload) this.buildBgCache();
+    if (this.payload) {
+      if (this._bgCacheDebounce) clearTimeout(this._bgCacheDebounce);
+      this._bgCacheDebounce = setTimeout(() => {
+        this._bgCacheDebounce = null;
+        if (!this.destroyed) this.buildBgCache();
+      }, 200);
+    }
   }
 
   /**
@@ -2834,6 +2854,10 @@ export class LyricDancePlayer {
       }
       this._pendingUpgradeTimeout = null;
     }
+    if (this._bgCacheDebounce) {
+      clearTimeout(this._bgCacheDebounce);
+      this._bgCacheDebounce = null;
+    }
     if (this._pendingCanPlayHandler) {
       this.audio.removeEventListener("canplay", this._pendingCanPlayHandler);
       this._pendingCanPlayHandler = null;
@@ -2847,6 +2871,7 @@ export class LyricDancePlayer {
     }
     this._timeInitialized = false;
     document.removeEventListener("visibilitychange", this._handleVisibilityChange);
+    window.removeEventListener("pageshow", this._handlePageShow);
 
     if (this.audioContext) {
       void this.audioContext.close().catch(() => {});
@@ -2966,47 +2991,62 @@ export class LyricDancePlayer {
   }
 
   private _handleVisibilityChangeImpl(): void {
-    if (document.hidden) return;
-
-    // Guard: canvas may have been lost during backgrounding.
-    if (!this.ctx || !this.bgCanvas) return;
-    const testCtx = this.bgCanvas.getContext("2d");
-    if (!testCtx) {
-      this.playing = false;
+    if (document.hidden) {
+      // HIDE: stop RAF, health monitor, and audio to save battery
+      if (this.rafHandle) {
+        cancelAnimationFrame(this.rafHandle);
+        this.rafHandle = 0;
+      }
+      this.stopHealthMonitor();
+      if (!this.audio.paused) {
+        this.audio.pause();
+      }
       return;
     }
 
-    this.lastTimestamp = 0;
+    // SHOW: recover from backgrounding
+    if (!this.bgCanvas) return;
 
+    // Attempt to re-acquire context (iOS may have reclaimed it under memory pressure)
+    const testCtx = this.bgCanvas.getContext("2d", { alpha: false });
+    if (!testCtx) {
+      console.warn("[LyricDancePlayer] Canvas context lost, triggering recovery");
+      this.playing = false;
+      this.destroyed = true;
+      window.dispatchEvent(
+        new CustomEvent("crowdfit:context-lost", {
+          detail: { postId: (this.data as any).id ?? "" },
+        }),
+      );
+      return;
+    }
+    this.ctx = testCtx;
+
+    // Reset frame timing to avoid huge delta spike
+    this.lastTimestamp = 0;
     this._qFrameCount = 0;
     this._qWindowStart = 0;
-
     this.frameBudget.dtAvgMs = 16.67;
     this.frameBudget.fpsAvg = 60;
     this.frameBudget.spikeFrames = 0;
-
     this._timeInitialized = false;
 
     this.cameraRig?.reset();
     this._resetBgParallax();
     this.ambientParticleEngine?.clear();
 
+    // Reset quality tier — fresh start after background
     if (this._qualityTier > 0) {
-      const prevBucket = this._qualityTier >= 2 ? 'low' : 'full';
       this._qualityTier = 0;
       this._qUpgradeStreak = 0;
-      if (prevBucket === 'low' && this._qualityTier < 2) {
-        this._applyDprToCanvas();
-      }
+      this._applyDprToCanvas();
     }
 
-    // Restart the RAF loop — the browser kills requestAnimationFrame while the tab
-    // is hidden. playing may still be true but the loop is dead. Restart it.
-    if (this.playing && !this.rafHandle) {
-      this.lastTimestamp = 0;
+    // Resume if was playing before hide
+    if (this.playing) {
+      this.startHealthMonitor();
       this.rafHandle = requestAnimationFrame(this.tick);
     }
-
   }
 
   private tick = (timestamp: number): void => {
@@ -3037,7 +3077,7 @@ export class LyricDancePlayer {
       }
 
       // ALWAYS start frame with this exact sequence
-      this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+      this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
       this.ctx.clearRect(0, 0, this.width, this.height);
 
       const rawTime = this.audio.currentTime;
@@ -3778,7 +3818,7 @@ export class LyricDancePlayer {
       }
     }
 
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
 
     // Camera zoom is now applied via CameraRig.getSubjectTransform() at the text rendering stage
     this.ctx.textAlign = 'left';
@@ -3958,7 +3998,7 @@ export class LyricDancePlayer {
       this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
       this._heroSmoke.draw(this.ctx);
       this.ctx.restore();
-      this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+      this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
       this.ctx.textAlign = 'left';
       this.setCanvasBaseline('middle');
     }
@@ -3973,7 +4013,7 @@ export class LyricDancePlayer {
     this._lastShadowBlur = 0;
     this._lastShadowColor = 'transparent';
     this.ctx.restore();
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     this.ctx.globalAlpha = 1;
     this.ctx.textAlign = 'left';
     this.setCanvasBaseline('alphabetic');
@@ -4144,7 +4184,7 @@ export class LyricDancePlayer {
     const y = 16;
     const h = 66;
     this.ctx.save();
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     this.ctx.fillStyle = 'rgba(0,0,0,0.58)';
     this.ctx.fillRect(x, y, 300, h);
     this.ctx.fillStyle = '#9df7c4';
@@ -4187,7 +4227,7 @@ export class LyricDancePlayer {
     const radius = badgeH / 2;
 
     this.ctx.save();
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     this.ctx.font = font;
     (this.ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = "0.08em";
 
@@ -4457,7 +4497,7 @@ export class LyricDancePlayer {
     this.textCanvas.width = this.canvas.width;
     this.textCanvas.height = this.canvas.height;
 
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     this.buildBgCache();
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
