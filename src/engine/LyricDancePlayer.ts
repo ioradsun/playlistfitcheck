@@ -122,7 +122,7 @@ export interface LyricDanceData {
   lyrics: LyricLine[];
   words?: Array<{ word: string; start: number; end: number; speaker_id?: string }>;
   motion_profile_spec: PhysicsSpec;
-  beat_grid: { bpm: number; beats: number[]; confidence: number };
+  beat_grid: { bpm: number; beats: number[]; confidence: number; _duration?: number };
   palette: string[];
   system_type: string;
   artist_dna: any;
@@ -1808,6 +1808,25 @@ export class LyricDancePlayer {
       this.audio.muted = true;
       this.audio.preload = "none";
     }
+    const onMetadata = () => {
+      this.audio.removeEventListener("loadedmetadata", onMetadata);
+      // If initial bake had wrong duration, re-bake once metadata is available
+      if (this.songEndSec <= 0.2 && this.audio.duration > 1) {
+        const payload = this.buildScenePayload();
+        this.payload = payload;
+        this.songStartSec = payload.songStart;
+        this.songEndSec = payload.songEnd;
+        const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
+        const beatGridData = this.data.beat_grid ?? { bpm: 120, beats: [], confidence: 0 };
+        this.conductor = new BeatConductor(beatGridData, songDuration);
+        if (this._bakedScene?.songMotion) this.conductor.setSongIdentity(this._bakedScene.songMotion);
+        if (this._bakedScene?.sectionMods) this.conductor.setSectionMods(this._bakedScene.sectionMods);
+        if ((beatGridData as any)._analysis) {
+          this.conductor.setAnalysis((beatGridData as any)._analysis);
+        }
+      }
+    };
+    this.audio.addEventListener("loadedmetadata", onMetadata);
     this.bootMode = options?.bootMode ?? "minimal";
 
     this._handleVisibilityChange = this._handleVisibilityChangeImpl.bind(this);
@@ -4542,7 +4561,7 @@ export class LyricDancePlayer {
     const fullStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
     const fullEnd = lines.length
       ? (lines[lines.length - 1].end ?? 0) + 1
-      : (this.audio?.duration || 0);
+      : (this.data.beat_grid?._duration || this.audio?.duration || 0);
     // Region override: constrain to hook window if specified
     const songStart = this.data.region_start != null ? this.data.region_start : fullStart;
     const songEnd = this.data.region_end != null ? this.data.region_end : fullEnd;
@@ -4567,7 +4586,7 @@ export class LyricDancePlayer {
 
   private toLegacyChapters(direction: CinematicDirection | null | undefined): any[] {
     if (!direction?.sections?.length) return [];
-    const dur = this.audio?.duration || undefined;
+    const dur = this.data.beat_grid?._duration || this.audio?.duration || undefined;
     return enrichSections(direction.sections, dur).map((section) => ({
       title: section.description ?? `Section ${section.sectionIndex}`,
       startSec: section.startSec,

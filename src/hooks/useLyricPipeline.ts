@@ -1490,7 +1490,7 @@ export function useLyricPipeline({
         if (beats.length === 0 && beatGrid.bpm > 0) {
           const period = 60 / beatGrid.bpm;
           const phase = beatGrid._phase ?? 0;
-          const dur = audioDurationSec ?? 60;
+          const dur = audioDurationSec || 60;
           const synthetic: number[] = [];
           for (let t = phase; t < dur; t += period) synthetic.push(t);
           beats = synthetic;
@@ -1502,7 +1502,7 @@ export function useLyricPipeline({
           const startBeat = i * beatsPerSection;
           const endBeat = Math.min((i + 1) * beatsPerSection, beats.length) - 1;
           const startSec = beats[startBeat] ?? 0;
-          const endSec = beats[endBeat] ?? (audioDurationSec ?? 60);
+          const endSec = beats[endBeat] ?? (audioDurationSec || 60);
           const energySlice = beatGrid.beatEnergies?.slice(startBeat, endBeat + 1) ?? [];
           const avgEnergy = energySlice.length > 0
             ? energySlice.reduce((a, b) => a + b, 0) / energySlice.length
@@ -1530,6 +1530,7 @@ export function useLyricPipeline({
             bpm: beatGrid.bpm,
             beats: beatGrid.beats,
             confidence: beatGrid.confidence,
+            _duration: audioDurationSec || undefined,
           },
           artist_direction: sceneDescription?.trim() || undefined,
           lyricId: savedIdRef.current || undefined,
@@ -1603,6 +1604,7 @@ export function useLyricPipeline({
                     bpm: beatGrid.bpm,
                     beats: beatGrid.beats,
                     confidence: beatGrid.confidence,
+                    _duration: audioDurationSec || undefined,
                   },
                 } as any)
                 .eq("id", resolvedDanceId);
@@ -1642,6 +1644,7 @@ export function useLyricPipeline({
                     bpm: beatGrid.bpm,
                     beats: beatGrid.beats,
                     confidence: beatGrid.confidence,
+                    _duration: audioDurationSec || undefined,
                   },
                   palette: derivePaletteFromDirection(enrichedScene),
                   section_images: null,
@@ -1715,10 +1718,11 @@ export function useLyricPipeline({
   useEffect(() => {
     if (filmMode !== "beat") return;
     if (!beatGridDone) return;
+    if (!audioDurationSec) return;
     if (cinematicTriggeredRef.current) return;
     cinematicTriggeredRef.current = true;
     void startInstrumentalCinematic();
-  }, [filmMode, beatGridDone, startInstrumentalCinematic, cinematicTriggeredRef]);
+  }, [filmMode, beatGridDone, audioDurationSec, startInstrumentalCinematic, cinematicTriggeredRef]);
 
   const startBeatAnalysis = useCallback(
     async (targetAudioFile: File) => {
