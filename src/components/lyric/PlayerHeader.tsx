@@ -3,7 +3,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Mail, Waves, AlignLeft, Zap, BarChart2, ExternalLink, AudioWaveform, Sparkles } from "lucide-react";
+import { User, Mail, Waves, AlignLeft, Zap, BarChart2, ExternalLink, AudioWaveform, Sparkles, AudioLines } from "lucide-react";
 import { useDmContext } from "@/hooks/useDmContext";
 
 export type CardMode = "dance" | "lyric" | "empowerment" | "results" | "beat" | "vibe";
@@ -321,6 +321,9 @@ export function PlayerHeader({
             >
               {(isInstrumental ? BEAT_MODES : SONG_MODES).map((mode, i) => {
                 const isActive = cardMode === mode;
+                const icon = mode === "lyric" && isInstrumental
+                  ? <AudioLines size={13} />
+                  : MODE_ICONS[mode];
                 return (
                   <motion.button
                     key={mode}
@@ -350,7 +353,7 @@ export function PlayerHeader({
                     }}
                     aria-label={mode}
                   >
-                    {MODE_ICONS[mode]}
+                    {icon}
                     {isActive && (
                       <span
                         style={{

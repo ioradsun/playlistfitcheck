@@ -146,6 +146,12 @@ export function useLyricDanceCore({
   );
 
   const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
+  const [fireUsers, setFireUsers] = useState<Array<{
+    sectionIndex: number;
+    userId: string | null;
+    avatarUrl: string | null;
+    displayName: string | null;
+  }>>([]);
   const activeLine = useMemo(() => {
     if (!lyricSections.isReady) return null;
     const line = lyricSections.allLines.find(
@@ -264,6 +270,115 @@ export function useLyricDanceCore({
   }, [data?.id, evicted, setReactionData]);
 
   useEffect(() => {
+    if (!data?.id || evicted) return;
+
+    const fetchAndAggregate = async () => {
+      const { data: fires } = await supabase
+        .from("lyric_dance_fires" as any)
+        .select("line_index, hold_ms, user_id")
+        .eq("dance_id", data.id);
+
+      if (!fires) return;
+
+      const fireAgg: Record<number, number> = {};
+      for (const fire of fires as any[]) {
+        const idx = fire.line_index ?? 0;
+        fireAgg[idx] = (fireAgg[idx] ?? 0) + 1;
+      }
+
+      setReactionData((prev) => ({
+        ...prev,
+        "🔥": {
+          total: (fires as any[]).length,
+          line: fireAgg,
+        },
+      }));
+
+      const userIds = [...new Set(
+        (fires as any[])
+          .map((f: any) => f.user_id)
+          .filter(Boolean) as string[],
+      )];
+
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, avatar_url, display_name")
+          .in("id", userIds);
+
+        if (profiles) {
+          const profileMap = new Map(
+            (profiles as any[]).map((p) => [p.id, p]),
+          );
+          const users = (fires as any[])
+            .filter((f: any) => f.user_id && profileMap.has(f.user_id))
+            .map((f: any) => ({
+              sectionIndex: f.line_index ?? 0,
+              userId: f.user_id,
+              avatarUrl: profileMap.get(f.user_id)?.avatar_url ?? null,
+              displayName: profileMap.get(f.user_id)?.display_name ?? null,
+            }));
+          setFireUsers(users);
+        }
+      } else {
+        setFireUsers([]);
+      }
+    };
+
+    void fetchAndAggregate();
+
+    const fireChannel = supabase
+      .channel(`fires-core-${data.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "lyric_dance_fires",
+          filter: `dance_id=eq.${data.id}`,
+        },
+        async (payload: any) => {
+          const { line_index, user_id } = payload.new;
+          const idx = line_index ?? 0;
+          setReactionData((prev) => {
+            const next = { ...prev };
+            if (!next["🔥"]) next["🔥"] = { line: {}, total: 0 };
+            next["🔥"] = {
+              total: next["🔥"].total + 1,
+              line: {
+                ...next["🔥"].line,
+                [idx]: (next["🔥"].line[idx] ?? 0) + 1,
+              },
+            };
+            return next;
+          });
+
+          if (!user_id) return;
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("id, avatar_url, display_name")
+            .eq("id", user_id)
+            .maybeSingle();
+          if (!profile) return;
+          setFireUsers((prev) => [
+            ...prev,
+            {
+              sectionIndex: idx,
+              userId: user_id,
+              avatarUrl: (profile as any).avatar_url ?? null,
+              displayName: (profile as any).display_name ?? null,
+            },
+          ]);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(fireChannel);
+    };
+  }, [data?.id, evicted]);
+
+  useEffect(() => {
     if (!player) return;
     const audio = player.audio;
     let rafId = 0;
@@ -341,6 +456,7 @@ export function useLyricDanceCore({
     lyricSections,
     moments,
     activeLine,
+    fireUsers,
     handleReplay,
   };
 }
