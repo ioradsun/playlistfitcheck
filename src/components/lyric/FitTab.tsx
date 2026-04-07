@@ -312,7 +312,7 @@ export function FitTab({
     const player = dancePlayerRef.current?.getPlayer();
     if (!player) return;
     player.beatVisEnabled = filmMode === "beat";
-  }, [filmMode, publishedDanceId]);
+  }, [filmMode, publishedDanceId, prefetchedDanceData]);
   const siteCopy = useSiteCopy();
 
   const refetchDanceData = useCallback(() => {
@@ -989,12 +989,13 @@ export function FitTab({
   const playerReady = useMemo(() => {
     if (!publishedDanceId) return false;
     if (!prefetchedDanceData) return false;
+    const isInstrumental = !!(prefetchedDanceData.cinematic_direction as any)?._instrumental;
 
     if (generationStatus.beatGrid !== "done") return false;
     if (generationStatus.cinematicDirection !== "done") return false;
 
     const sections = (cinematicDirection as any)?.sections;
-    if (Array.isArray(sections) && sections.length > 0) {
+    if (Array.isArray(sections) && sections.length > 0 && !isInstrumental) {
       if (
         generationStatus.sectionImages !== "done" &&
         generationStatus.sectionImages !== "error"
@@ -1003,8 +1004,9 @@ export function FitTab({
     }
 
     if (
-      !prefetchedDanceData.words ||
-      (prefetchedDanceData.words as any[]).length === 0
+      !isInstrumental &&
+      (!prefetchedDanceData.words ||
+      (prefetchedDanceData.words as any[]).length === 0)
     )
       return false;
     if (!prefetchedDanceData.beat_grid) return false;
@@ -1019,7 +1021,7 @@ export function FitTab({
     )
       return false;
 
-    if (Array.isArray(sections) && sections.length > 0) {
+    if (Array.isArray(sections) && sections.length > 0 && !isInstrumental) {
       const snapImages = (prefetchedDanceData as any).section_images;
       if (!Array.isArray(snapImages) || !snapImages.some(Boolean))
         return false;

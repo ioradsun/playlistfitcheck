@@ -125,9 +125,16 @@ export function useLyricDanceCore({
   );
   const durationSec = useMemo(() => {
     const lines = data?.lyrics ?? [];
-    if (!lines.length) return 0;
-    return (lines[lines.length - 1] as any).end ?? 0;
-  }, [data?.lyrics]);
+    if (lines.length) {
+      return (lines[lines.length - 1] as any).end ?? 0;
+    }
+    // Instrumental fallback: use last beat time or audio duration
+    const beats = (data as any)?.beat_grid?.beats;
+    if (Array.isArray(beats) && beats.length > 0) {
+      return beats[beats.length - 1];
+    }
+    return 0;
+  }, [data?.lyrics, (data as any)?.beat_grid]);
 
   const lyricSections = useLyricSections(
     data?.words ?? null,
