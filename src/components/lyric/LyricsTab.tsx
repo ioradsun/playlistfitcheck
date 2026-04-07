@@ -518,7 +518,18 @@ export function LyricsTab({
     );
   }
 
-  // State B & C: shell exists but no lines yet → skeleton
+  // State A.5: Beat mode with audio → nothing to show here, Fit tab handles it
+  if (filmMode === "beat" && lyricData && audioFile) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-10">
+        <p className="text-[11px] font-mono text-muted-foreground/40 tracking-wide">
+          preparing beat visualization…
+        </p>
+      </div>
+    );
+  }
+
+  // State B & C: shell exists but no lines yet → skeleton (song mode only)
   if (lyricData && audioFile && filmMode !== "beat") {
     return (
       <div className="flex-1 px-4 py-6">
@@ -546,16 +557,6 @@ export function LyricsTab({
           onRetry={() => {}}
           onBack={() => {}}
         />
-      </div>
-    );
-  }
-
-  if (filmMode === "beat" && lyricData && audioFile) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-10">
-        <p className="text-[11px] font-mono text-muted-foreground/40 tracking-wide">
-          preparing beat visualization…
-        </p>
       </div>
     );
   }
