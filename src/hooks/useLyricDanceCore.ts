@@ -19,11 +19,11 @@ const EMOJI_SYMBOLS: Record<string, string> = {
 };
 
 export function computeTopReaction(
-  reactionData: Record<string, { line: Record<number, number>; total: number }>,
+  fireHeat: Record<string, { line: Record<number, number>; total: number }>,
   lyrics: any[],
 ) {
   const lineTotals = new Map<number, number>();
-  for (const d of Object.values(reactionData)) {
+  for (const d of Object.values(fireHeat)) {
     for (const [idxStr, count] of Object.entries(d.line)) {
       lineTotals.set(Number(idxStr), (lineTotals.get(Number(idxStr)) ?? 0) + count);
     }
@@ -39,7 +39,7 @@ export function computeTopReaction(
   }
   let topKey: string | null = null;
   let topCount = 0;
-  for (const [key, d] of Object.entries(reactionData)) {
+  for (const [key, d] of Object.entries(fireHeat)) {
     const count = d.line[bestIdx] ?? 0;
     if (count > topCount) {
       topCount = count;
@@ -59,6 +59,13 @@ interface UseLyricDanceCoreOptions {
   usePool?: boolean;
   evicted?: boolean;
 }
+
+const fireWeight = (holdMs: number) => {
+  if (holdMs < 300) return 1;
+  if (holdMs < 1000) return 2;
+  if (holdMs < 3000) return 4;
+  return 8;
+};
 
 export function useLyricDanceCore({
   lyricDanceId,
@@ -129,7 +136,6 @@ export function useLyricDanceCore({
     if (lines.length) {
       return (lines[lines.length - 1] as any).end ?? 0;
     }
-    // Instrumental: use persisted duration, then beats, then 0
     const bg = (data as any)?.beat_grid;
     if (bg?._duration && bg._duration > 0) return bg._duration;
     if (Array.isArray(bg?.beats) && bg.beats.length > 0) {
@@ -145,13 +151,15 @@ export function useLyricDanceCore({
     durationSec,
   );
 
-  const [reactionData, setReactionData] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
+  const [fireHeat, setFireHeat] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
   const [fireUsers, setFireUsers] = useState<Array<{
     sectionIndex: number;
     userId: string | null;
     avatarUrl: string | null;
     displayName: string | null;
   }>>([]);
+  const pendingFiresRef = useRef<Array<{ line_index: number | null; hold_ms: number | null }>>([]);
+
   const activeLine = useMemo(() => {
     if (!lyricSections.isReady) return null;
     const line = lyricSections.allLines.find(
@@ -169,7 +177,6 @@ export function useLyricDanceCore({
   }, [lyricSections, currentTimeSec]);
 
   const audioSections = useMemo(() => {
-    // Lyric mode: sections from word-level analysis
     if (lyricSections.sections.length > 0) {
       return lyricSections.sections.map((s, i) => ({
         sectionIndex: i,
@@ -178,7 +185,6 @@ export function useLyricDanceCore({
         role: s.role,
       }));
     }
-    // Instrumental mode: sections from cinematic direction
     const cd = (data as any)?.cinematic_direction;
     const cdSections = cd?.sections;
     if (Array.isArray(cdSections) && cdSections.length > 0) {
@@ -209,123 +215,74 @@ export function useLyricDanceCore({
 
   useEffect(() => {
     if (!player) return;
-    player.setReactionData(reactionData);
+    player.setReactionData(fireHeat);
     player.setMoments(moments);
-  }, [player, reactionData, moments]);
-
-  useEffect(() => {
-    if (!data?.id || evicted) return;
-    // Subscribe first to avoid missing events during initial fetch
-    const channel = supabase
-      .channel(`reactions-core-${data.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "lyric_dance_reactions",
-          filter: `dance_id=eq.${data.id}`,
-        },
-        (payload: any) => {
-          const { emoji, line_index } = payload.new;
-          setReactionData((prev) => {
-            const next = { ...prev };
-            if (!next[emoji]) next[emoji] = { line: {}, total: 0 };
-            next[emoji] = {
-              ...next[emoji],
-              total: next[emoji].total + 1,
-              line: {
-                ...next[emoji].line,
-                ...(line_index != null
-                  ? { [line_index]: (next[emoji].line[line_index] ?? 0) + 1 }
-                  : {}),
-              },
-            };
-            return next;
-          });
-        },
-      )
-      .subscribe();
-
-    // Then fetch existing reactions
-    supabase
-      .from("lyric_dance_reactions" as any)
-      .select("emoji, line_index")
-      .eq("dance_id", data.id)
-      .then(({ data: rows }) => {
-        if (!rows) return;
-        const agg: Record<string, { line: Record<number, number>; total: number }> = {};
-        for (const row of rows as any[]) {
-          const { emoji, line_index } = row;
-          if (!agg[emoji]) agg[emoji] = { line: {}, total: 0 };
-          agg[emoji].total++;
-          if (line_index != null) agg[emoji].line[line_index] = (agg[emoji].line[line_index] ?? 0) + 1;
-        }
-        setReactionData(agg);
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [data?.id, evicted, setReactionData]);
+  }, [player, fireHeat, moments]);
 
   useEffect(() => {
     if (!data?.id || evicted) return;
 
-    const fetchAndAggregate = async () => {
+    let mounted = true;
+    const hydrate = async () => {
       const { data: fires } = await supabase
         .from("lyric_dance_fires" as any)
         .select("line_index, hold_ms, user_id")
         .eq("dance_id", data.id);
 
-      if (!fires) return;
+      if (!mounted || !fires) return;
 
-      const fireAgg: Record<number, number> = {};
+      const agg: Record<string, { line: Record<number, number>; total: number }> = { "🔥": { line: {}, total: 0 } };
+      const users: Array<{ sectionIndex: number; userId: string | null; avatarUrl: string | null; displayName: string | null }> = [];
+      const userIds = new Set<string>();
+
       for (const fire of fires as any[]) {
         const idx = fire.line_index ?? 0;
-        fireAgg[idx] = (fireAgg[idx] ?? 0) + 1;
+        const weight = fireWeight(fire.hold_ms ?? 0);
+        agg["🔥"].line[idx] = (agg["🔥"].line[idx] ?? 0) + weight;
+        agg["🔥"].total += weight;
+        if (fire.user_id) {
+          userIds.add(fire.user_id);
+          users.push({ sectionIndex: idx, userId: fire.user_id, avatarUrl: null, displayName: null });
+        }
       }
 
-      setReactionData((prev) => ({
-        ...prev,
-        "🔥": {
-          total: (fires as any[]).length,
-          line: fireAgg,
-        },
-      }));
+      setFireHeat(agg);
 
-      const userIds = [...new Set(
-        (fires as any[])
-          .map((f: any) => f.user_id)
-          .filter(Boolean) as string[],
-      )];
-
-      if (userIds.length > 0) {
+      if (userIds.size > 0) {
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, avatar_url, display_name")
-          .in("id", userIds);
-
-        if (profiles) {
-          const profileMap = new Map(
-            (profiles as any[]).map((p) => [p.id, p]),
-          );
-          const users = (fires as any[])
-            .filter((f: any) => f.user_id && profileMap.has(f.user_id))
-            .map((f: any) => ({
-              sectionIndex: f.line_index ?? 0,
-              userId: f.user_id,
-              avatarUrl: profileMap.get(f.user_id)?.avatar_url ?? null,
-              displayName: profileMap.get(f.user_id)?.display_name ?? null,
-            }));
-          setFireUsers(users);
-        }
+          .in("id", [...userIds]);
+        if (!mounted) return;
+        const map = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+        setFireUsers(users.map((u) => ({
+          ...u,
+          avatarUrl: map.get(u.userId ?? "")?.avatar_url ?? null,
+          displayName: map.get(u.userId ?? "")?.display_name ?? null,
+        })));
       } else {
         setFireUsers([]);
       }
     };
 
-    void fetchAndAggregate();
+    void hydrate();
+
+    const flushInterval = window.setInterval(() => {
+      if (pendingFiresRef.current.length === 0) return;
+      const batch = pendingFiresRef.current.splice(0, pendingFiresRef.current.length);
+      setFireHeat((prev) => {
+        const next = { ...prev };
+        const fire = next["🔥"] ? { ...next["🔥"], line: { ...next["🔥"].line } } : { line: {}, total: 0 };
+        for (const row of batch) {
+          const idx = row.line_index ?? 0;
+          const weight = fireWeight(row.hold_ms ?? 0);
+          fire.line[idx] = (fire.line[idx] ?? 0) + weight;
+          fire.total += weight;
+        }
+        next["🔥"] = fire;
+        return next;
+      });
+    }, 500);
 
     const fireChannel = supabase
       .channel(`fires-core-${data.id}`)
@@ -338,20 +295,8 @@ export function useLyricDanceCore({
           filter: `dance_id=eq.${data.id}`,
         },
         async (payload: any) => {
-          const { line_index, user_id } = payload.new;
-          const idx = line_index ?? 0;
-          setReactionData((prev) => {
-            const next = { ...prev };
-            if (!next["🔥"]) next["🔥"] = { line: {}, total: 0 };
-            next["🔥"] = {
-              total: next["🔥"].total + 1,
-              line: {
-                ...next["🔥"].line,
-                [idx]: (next["🔥"].line[idx] ?? 0) + 1,
-              },
-            };
-            return next;
-          });
+          const { line_index, hold_ms, user_id } = payload.new;
+          pendingFiresRef.current.push({ line_index, hold_ms });
 
           if (!user_id) return;
           const { data: profile } = await supabase
@@ -359,11 +304,11 @@ export function useLyricDanceCore({
             .select("id, avatar_url, display_name")
             .eq("id", user_id)
             .maybeSingle();
-          if (!profile) return;
+          if (!mounted || !profile) return;
           setFireUsers((prev) => [
             ...prev,
             {
-              sectionIndex: idx,
+              sectionIndex: line_index ?? 0,
               userId: user_id,
               avatarUrl: (profile as any).avatar_url ?? null,
               displayName: (profile as any).display_name ?? null,
@@ -374,6 +319,9 @@ export function useLyricDanceCore({
       .subscribe();
 
     return () => {
+      mounted = false;
+      window.clearInterval(flushInterval);
+      pendingFiresRef.current = [];
       supabase.removeChannel(fireChannel);
     };
   }, [data?.id, evicted]);
@@ -384,13 +332,11 @@ export function useLyricDanceCore({
     let rafId = 0;
 
     const tick = () => {
-      // Read time from engine — it handles wall-clock fallback internally
       const t = player.getCurrentTime?.() ?? audio.currentTime;
       if (Math.abs(t - currentTimeSecRef.current) > 0.1) {
         currentTimeSecRef.current = t;
         setCurrentTimeSec(t);
       }
-      // Run while player is playing (not just audio) and tab is visible
       if (player.playing && !document.hidden) {
         rafId = requestAnimationFrame(tick);
       } else {
@@ -398,7 +344,6 @@ export function useLyricDanceCore({
       }
     };
 
-    // Start/stop based on player.playing changes
     const checkPlaying = () => {
       if (player.playing && !rafId && !document.hidden) {
         rafId = requestAnimationFrame(tick);
@@ -414,14 +359,11 @@ export function useLyricDanceCore({
       }
     };
 
-    // Listen for audio events (play may start after autoplay resolves)
     audio.addEventListener("play", checkPlaying);
     audio.addEventListener("pause", checkPlaying);
     document.addEventListener("visibilitychange", onVis);
 
-    // Also poll — player.playing can change without audio events (wall-clock mode)
     const interval = setInterval(checkPlaying, 200);
-
     checkPlaying();
 
     return () => {
@@ -451,7 +393,7 @@ export function useLyricDanceCore({
     muted,
     setMuted,
     currentTimeSec,
-    reactionData,
+    fireHeat,
     durationSec,
     lyricSections,
     moments,

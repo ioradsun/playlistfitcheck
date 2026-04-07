@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useSyncExternalStore } from "react";
 import { VolumeX } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import type { CardMode } from "@/components/lyric/PlayerHeader";
-import { LyricModePanel } from "@/components/lyric/LyricModePanel";
-import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
+import { MomentPanel } from "@/components/lyric/MomentPanel";
 import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
@@ -38,6 +38,8 @@ export interface LyricDanceEmbedHandle {
   wickBarEnabled: boolean;
 }
 
+type Comment = { id: string; text: string; line_index: number | null; submitted_at: string };
+
 export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed({
   lyricDanceId,
   songTitle,
@@ -57,7 +59,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const isFeedEmbed = visible !== undefined;
   const evicted = isFeedEmbed ? !visible : false;
 
-
   const {
     canvasRef,
     textCanvasRef,
@@ -68,26 +69,16 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     muted,
     setMuted,
     currentTimeSec,
-    reactionData,
+    fireHeat,
     durationSec,
     moments,
     activeLine,
-    fireUsers,
-  } = useLyricDanceCore({
-    lyricDanceId,
-    prefetchedData,
-    postId,
-    usePool: isFeedEmbed,
-    evicted,
-  });
+  } = useLyricDanceCore({ lyricDanceId, prefetchedData, postId, usePool: isFeedEmbed, evicted });
 
   const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
+  const [comments, setComments] = useState<Comment[]>([]);
 
-  const audioState = useSyncExternalStore(
-    audioController.subscribe,
-    audioController.getSnapshot,
-    audioController.getSnapshot,
-  );
+  const audioState = useSyncExternalStore(audioController.subscribe, audioController.getSnapshot, audioController.getSnapshot);
   const isPrimary = isFeedEmbed && audioState.effectivePrimaryId === postId;
   const feedMuted = isFeedEmbed ? audioState.muted : muted;
 
@@ -107,7 +98,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [activeMomentIdx, setActiveMomentIdx] = useState(0);
-  const [cardMode, setCardMode] = useState<CardMode>(isInstrumental ? "beat" : "dance");
+  const [cardMode, setCardMode] = useState<CardMode>("listen");
   const [hasUnlocked, setHasUnlocked] = useState(false);
 
   const playStartRef = useRef<number | null>(null);
@@ -118,7 +109,37 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const panelPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Player warm-up ───────────────────────────────────────────
+  useEffect(() => {
+    if (!danceId) return;
+    let mounted = true;
+
+    supabase
+      .from("lyric_dance_comments" as any)
+      .select("id, text, line_index, submitted_at")
+      .eq("dance_id", danceId)
+      .order("submitted_at", { ascending: true })
+      .limit(300)
+      .then(({ data: rows }) => { if (mounted && rows) setComments(rows as Comment[]); });
+
+    const channel = supabase
+      .channel(`comments:${danceId}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "lyric_dance_comments",
+        filter: `dance_id=eq.${danceId}`,
+      }, (payload: any) => {
+        const c = payload.new as Comment;
+        setComments((prev) => (prev.some((x) => x.id === c.id) ? prev : [...prev, c]));
+      })
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [danceId]);
+
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
     if (visible) {
@@ -127,68 +148,41 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
   }, [player, playerReady, isFeedEmbed, visible]);
 
-  // ── Effect 1: Register/unregister with audioController (stable across primary changes) ──
-  // This effect does NOT include isPrimary in its deps. It only re-runs when the
-  // card mounts/unmounts or visibility changes — never on swipe. This prevents
-  // unregister→register churn that causes a ~16ms audio pause→restart gap.
   useEffect(() => {
     if (!player || !playerReady || !postId || !isFeedEmbed || !visible) return;
     audioController.register(postId, player);
-
     return () => {
       audioController.clearExplicitIf(postId);
       audioController.unregister(postId);
     };
   }, [player, playerReady, postId, isFeedEmbed, visible]);
 
-  // ── Effect 2: Play/pause gated on isPrimary (re-runs on swipe, no register churn) ──
-  // This effect reacts to isPrimary changes but has no cleanup that tears down
-  // audio state. The audio started by audioController._reconcile is never interrupted.
   useEffect(() => {
     if (!player || !playerReady) return;
-
-    // Evicted cards: stop everything
     if (evicted) {
       player.pause();
       return;
     }
-
     if (isFeedEmbed) {
       if (isPrimary) {
-        // Primary card: start RAF. If audio is already playing (started by
-        // audioController._reconcile), play(false) would redundantly restart
-        // RAF and set a wall-clock origin that tick() immediately discards.
-        // Instead: only start RAF if not already running.
-        if (!player.playing) {
-          player.play(false);
-        }
+        if (!player.playing) player.play(false);
       } else {
         player.pause();
       }
     } else {
-      // Non-feed surfaces (shareable pages, song detail): always play
       player.play(false);
     }
   }, [player, playerReady, isFeedEmbed, isPrimary, evicted]);
 
-  // ── Audio interruption recovery (iOS phone calls, Siri, alarms) ──
   useEffect(() => {
     if (!player || !isFeedEmbed || !visible) return;
-
     const audio = player.audio;
-
     const handleVisReturn = () => {
       if (document.hidden) return;
-      // If we're primary and audio was interrupted, resume
-      if (isPrimary && audio.paused && player.playing) {
-        audio.play().catch(() => {});
-      }
+      if (isPrimary && audio.paused && player.playing) audio.play().catch(() => {});
     };
-
     document.addEventListener("visibilitychange", handleVisReturn);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisReturn);
-    };
+    return () => document.removeEventListener("visibilitychange", handleVisReturn);
   }, [player, isFeedEmbed, visible, isPrimary]);
 
   useEffect(() => {
@@ -229,38 +223,18 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   }, [hasUnlocked, muted, player, postId, isFeedEmbed, isPrimary, setMuted]);
 
   useEffect(() => {
-    if (!durationSec || !player) return;
-    if (currentTimeSec > durationSec + 2.2 && (cardMode === "dance" || cardMode === "beat")) {
-      setCardMode(cardMode === "beat" ? "vibe" : "empowerment");
-    }
-  }, [currentTimeSec, durationSec, cardMode, player]);
-
-  // ── Card mode lifecycle ──────────────────────────────────────
-  useEffect(() => {
     if (!player) return;
+    const isListening = cardMode === "listen";
 
-    const isDance = cardMode === "dance" || cardMode === "beat";
-
-    // Canvas visibility
     if (containerRef.current) {
       const canvases = containerRef.current.querySelectorAll("canvas");
       canvases.forEach((c) => {
-        c.style.visibility = isDance ? "visible" : "hidden";
+        c.style.visibility = isListening ? "visible" : "hidden";
         c.style.pointerEvents = "none";
       });
     }
 
-    // Audio lifecycle per mode
-    if (cardMode === "empowerment" || cardMode === "vibe") {
-      player.setMuted(true);
-      player.audio.loop = false;
-      if (panelPlayTimerRef.current) {
-        clearTimeout(panelPlayTimerRef.current);
-        panelPlayTimerRef.current = null;
-      }
-      return;
-    }
-    if (!isDance) {
+    if (!isListening) {
       player.setMuted(true);
       if (panelPlayTimerRef.current) {
         clearTimeout(panelPlayTimerRef.current);
@@ -268,7 +242,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       }
       return;
     }
-    // dance mode: restore
+
     player.setMuted(true);
     player.setRegion(undefined, undefined);
     player.audio.loop = true;
@@ -277,9 +251,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
     const currentTime = player?.audio?.currentTime ?? 0;
-    const progressPct = durationSec > 0
-      ? (currentTime / durationSec) * 100
-      : 0;
+    const progressPct = durationSec > 0 ? (currentTime / durationSec) * 100 : 0;
     maxProgressRef.current = Math.max(maxProgressRef.current, progressPct);
     upsertPlay(danceId, {
       progressPct: maxProgressRef.current,
@@ -292,10 +264,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   useEffect(() => {
     if (!visible || !danceId || !isFeedEmbed) return;
-
     playCountRef.current += 1;
     playStartRef.current = Date.now();
-
     flushIntervalRef.current = setInterval(() => {
       if (playStartRef.current !== null) {
         totalDurationRef.current += (Date.now() - playStartRef.current) / 1000;
@@ -319,9 +289,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   const prevFeedMutedRef = useRef<boolean>(true);
   useEffect(() => {
-    if (prevFeedMutedRef.current && !feedMuted) {
-      everUnmutedRef.current = true;
-    }
+    if (prevFeedMutedRef.current && !feedMuted) everUnmutedRef.current = true;
     prevFeedMutedRef.current = feedMuted;
   }, [feedMuted]);
 
@@ -332,18 +300,12 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       return;
     }
 
-    let idx = moments.findIndex(
-      (m) => timeSec >= m.startSec && timeSec <= m.endSec,
-    );
-
+    let idx = moments.findIndex((m) => timeSec >= m.startSec && timeSec <= m.endSec);
     if (idx === -1) {
       let closest = 0;
       let minDist = Infinity;
       moments.forEach((m, i) => {
-        const d = Math.min(
-          Math.abs(timeSec - m.startSec),
-          Math.abs(timeSec - m.endSec),
-        );
+        const d = Math.min(Math.abs(timeSec - m.startSec), Math.abs(timeSec - m.endSec));
         if (d < minDist) { minDist = d; closest = i; }
       });
       idx = closest;
@@ -363,9 +325,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     return () => { cancelled = true; };
   }, [player, danceId]);
 
-  useEffect(() => {
-    return () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); };
-  }, []);
+  useEffect(() => () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); }, []);
 
   const pulseStyle = `
     @keyframes ld-pulse {
@@ -398,18 +358,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         onProfileClick={onProfileClick}
         cardMode={cardMode}
         onModeChange={setCardMode}
-        isInstrumental={!!(data as any)?.cinematic_direction?._instrumental}
       />
 
-      {/* ── Fixed-height content slot ── */}
       <div
         ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
         style={{ background: "#0a0a0a" }}
-        onClick={(cardMode === "dance" || cardMode === "beat") ? handleCanvasTap : undefined}
+        onClick={cardMode === "listen" ? handleCanvasTap : undefined}
       >
-        {/* Dance mode — canvas + overlays, unchanged from today */}
-        {(cardMode === "dance" || cardMode === "beat") && (
+        {cardMode === "listen" && (
           <>
             {!isFeedEmbed && (
               <>
@@ -425,57 +382,33 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             )}
 
             {!isFeedEmbed && !hasUnlocked && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  zIndex: 50,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 12,
-                  pointerEvents: "none",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 36,
-                    opacity: 0.35,
-                    animation: "ld-pulse 2s ease-in-out infinite",
-                  }}
-                >
-                  ▶
-                </span>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontFamily: "monospace",
-                    color: "rgba(255,255,255,0.2)",
-                    letterSpacing: "0.12em",
-                    textTransform: "lowercase",
-                  }}
-                >
-                  tap to play
-                </span>
+              <div style={{ position: "absolute", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, pointerEvents: "none" }}>
+                <span style={{ fontSize: 36, opacity: 0.35, animation: "ld-pulse 2s ease-in-out infinite" }}>▶</span>
+                <span style={{ fontSize: 10, fontFamily: "monospace", color: "rgba(255,255,255,0.2)", letterSpacing: "0.12em", textTransform: "lowercase" }}>tap to play</span>
               </div>
             )}
 
+            {currentTimeSec > durationSec + 2.2 && (
+              <button
+                onClick={() => setCardMode("moments")}
+                style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 60, fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "8px 18px", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", cursor: "pointer" }}
+              >
+                see hottest moments →
+              </button>
+            )}
           </>
         )}
 
-        {/* Lyric mode */}
-        {cardMode === "lyric" && (
-          <LyricModePanel
+        {cardMode === "moments" && (
+          <MomentPanel
             danceId={danceId}
             moments={moments}
-            reactionData={reactionData}
+            fireHeat={fireHeat}
             currentTimeSec={currentTimeSec}
-            words={(data?.words as Array<{ word: string; start: number; end: number }>) ?? []}
-            sectionImages={(data as any)?.section_images ?? []}
-            sections={(data as any)?.cinematic_direction?.sections ?? []}
+            words={isInstrumental ? undefined : ((data?.words as Array<{ word: string; start: number; end: number }>) ?? [])}
             isInstrumental={!!(data as any)?.cinematic_direction?._instrumental}
-            fireUsers={fireUsers}
+            comments={comments}
+            onCommentAdded={(comment) => setComments((prev) => (prev.some((c) => c.id === comment.id) ? prev : [...prev, comment]))}
             onFireMoment={(lineIndex, timeSec, holdMs) => {
               if (!danceId) return;
               player?.fireFire(holdMs);
@@ -488,28 +421,19 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               player.setMuted(false);
               player.play();
               if (panelPlayTimerRef.current) clearTimeout(panelPlayTimerRef.current);
+              const durationMs = (endSec - startSec) * 1000 + 150;
               panelPlayTimerRef.current = setTimeout(() => {
-                player?.setMuted(true);
-                player?.pause();
-              }, (endSec - startSec + 0.5) * 1000);
+                player.setMuted(true);
+                panelPlayTimerRef.current = null;
+              }, durationMs);
             }}
           />
         )}
 
-        {/* Empowerment mode */}
-        {(cardMode === "empowerment" || cardMode === "vibe") && (
-          <EmpowermentModePanel
-            danceId={danceId}
-            empowermentPromise={((data ?? prefetchedData) as any)?.empowerment_promise ?? null}
-            onViewLyrics={isInstrumental ? undefined : () => setCardMode("lyric")}
-          />
-        )}
-
-        {/* Results mode */}
         {cardMode === "results" && (
           <CardResultsPanel
             moments={moments}
-            reactionData={reactionData}
+            fireHeat={fireHeat}
             spotifyTrackId={spotifyTrackId ?? null}
             postId={postId ?? null}
             lyricDanceUrl={lyricDanceUrl ?? null}
@@ -517,15 +441,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         )}
       </div>
 
-      {/* LyricInteractionLayer — dance mode only */}
-      {(cardMode === "dance" || cardMode === "beat") && (
+      {cardMode === "listen" && (
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
           <LyricInteractionLayer
             moments={moments}
-            reactionData={reactionData}
+            fireHeat={fireHeat}
             player={player}
             currentTimeSec={currentTimeSec}
             danceId={danceId}
+            comments={comments}
             onFireTap={() => {
               if (holdFireIntervalRef.current) {
                 clearInterval(holdFireIntervalRef.current);
@@ -549,6 +473,16 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               emitFire(danceId, getCurrentFireIndex(), player?.audio.currentTime ?? 0, holdMs, "feed", userId ?? null);
             }}
             onSeekTo={seekOnly}
+            onToastTap={(momentIdx) => {
+              const m = moments[momentIdx];
+              if (m && player) {
+                player.audio.currentTime = Math.max(0, m.startSec - 0.01);
+                player.setRegion(m.startSec, m.endSec);
+                player.setMuted(false);
+                player.play();
+              }
+              setCardMode("moments");
+            }}
           />
         </div>
       )}
