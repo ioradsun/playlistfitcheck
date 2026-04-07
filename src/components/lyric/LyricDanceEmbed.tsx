@@ -51,18 +51,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   isVerified,
   userId,
   onProfileClick,
-  preload = false,
 }, ref) {
   const isFeedEmbed = visible !== undefined;
-  const [evicted, setEvicted] = useState(true);
-
-  useEffect(() => {
-    if (!isFeedEmbed) {
-      setEvicted(false);
-      return;
-    }
-    setEvicted(!visible);
-  }, [visible, isFeedEmbed]);
+  const evicted = isFeedEmbed ? !visible : false;
 
 
   const {
@@ -116,17 +107,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const [cardMode, setCardMode] = useState<CardMode>("dance");
   const [hasUnlocked, setHasUnlocked] = useState(false);
 
-  // Hide pool canvases when a panel mode is active so panels
-  // aren't occluded by absolute-positioned canvas elements.
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const isDance = cardMode === "dance";
-    const canvases = containerRef.current.querySelectorAll("canvas");
-    canvases.forEach((c) => {
-      c.style.visibility = isDance ? "visible" : "hidden";
-      c.style.pointerEvents = "none";
-    });
-  }, [cardMode, containerRef]);
   const playStartRef = useRef<number | null>(null);
   const totalDurationRef = useRef<number>(0);
   const everUnmutedRef = useRef<boolean>(false);
@@ -135,34 +115,30 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const panelPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (!player || !playerReady || !isFeedEmbed) return;
-    if (visible || preload) {
-      player.scheduleFullModeUpgrade();
-    }
-  }, [player, playerReady, isFeedEmbed, visible, preload]);
-
-  // Preload audio when warm (adjacent to active) — don't wait for play().
+  // ── Player warm-up ───────────────────────────────────────────
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
     if (visible) {
+      player.scheduleFullModeUpgrade();
       player.primeAudio();
     }
   }, [player, playerReady, isFeedEmbed, visible]);
 
-  // Visibility → animation (the ONLY play/pause logic in the embed)
+  // ── Playback lifecycle ───────────────────────────────────────
   useEffect(() => {
     if (!player || !playerReady) return;
+
+    // Evicted cards: stop everything
     if (evicted) {
       player.pause();
-    } else {
-      player.play(false);
+      return;
     }
-  }, [player, playerReady, evicted]);
 
-  // Register with audio controller while visible
-  useEffect(() => {
-    if (!player || !playerReady || !postId || !isFeedEmbed || !visible) return;
+    // Active: start animation (muted — audioController handles unmute)
+    player.play(false);
+
+    // Feed embed: register with audioController for coordinated audio
+    if (!postId || !isFeedEmbed || !visible) return;
     audioController.register(postId, player);
 
     if (isAudioUnlocked()) {
@@ -217,24 +193,47 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     if (!durationSec || !player) return;
     if (currentTimeSec > durationSec + 2.2 && cardMode === "dance") {
       setCardMode("empowerment");
-      player.audio.loop = false;
     }
   }, [currentTimeSec, durationSec, cardMode, player]);
 
+  // ── Card mode lifecycle ──────────────────────────────────────
   useEffect(() => {
     if (!player) return;
-    if (cardMode !== "dance") {
-      if (cardMode !== "lyric" && panelPlayTimerRef.current) {
+
+    const isDance = cardMode === "dance";
+
+    // Canvas visibility
+    if (containerRef.current) {
+      const canvases = containerRef.current.querySelectorAll("canvas");
+      canvases.forEach((c) => {
+        c.style.visibility = isDance ? "visible" : "hidden";
+        c.style.pointerEvents = "none";
+      });
+    }
+
+    // Audio lifecycle per mode
+    if (cardMode === "empowerment") {
+      player.setMuted(true);
+      player.audio.loop = false;
+      if (panelPlayTimerRef.current) {
         clearTimeout(panelPlayTimerRef.current);
         panelPlayTimerRef.current = null;
       }
-      player.setMuted(true);
       return;
     }
+    if (!isDance) {
+      player.setMuted(true);
+      if (panelPlayTimerRef.current) {
+        clearTimeout(panelPlayTimerRef.current);
+        panelPlayTimerRef.current = null;
+      }
+      return;
+    }
+    // dance mode: restore
     player.setMuted(true);
     player.setRegion(undefined, undefined);
     player.audio.loop = true;
-  }, [cardMode, player]);
+  }, [cardMode, player, containerRef]);
 
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
