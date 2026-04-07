@@ -134,12 +134,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       return;
     }
 
-    // Only the primary (center) card runs the heavy RAF loop.
-    // Adjacent visible cards stay paused — their compiled scene and
-    // canvas are warm, so resuming is instant when they become primary.
     if (isFeedEmbed) {
       if (isPrimary) {
-        player.play(false);
+        // Primary card: start RAF. If audio is already playing (started by
+        // audioController._reconcile), play(false) would redundantly restart
+        // RAF and set a wall-clock origin that tick() immediately discards.
+        // Instead: only start RAF if not already running.
+        if (!player.playing) {
+          player.play(false);
+        }
       } else {
         player.pause();
       }
@@ -151,10 +154,6 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     // Feed embed: register with audioController for coordinated audio
     if (!postId || !isFeedEmbed || !visible) return;
     audioController.register(postId, player);
-    // NOTE: Removed the isAudioUnlocked() → audio.play() block that was here.
-    // It ran inside a useEffect (not a gesture context), so iOS always blocked it.
-    // primeAudioPool() + audioController._reconcile handle playback correctly
-    // within user gesture handlers elsewhere.
 
     return () => {
       audioController.clearExplicitIf(postId);
