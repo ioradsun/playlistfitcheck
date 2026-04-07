@@ -330,7 +330,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     <div className={reelsMode ? "w-full" : "w-full max-w-[470px] mx-auto"}>
       {reelsMode ? (
         <>
-           <div className="fixed top-3 left-0 right-0 z-[60] flex justify-center pointer-events-none">
+           <div className="fixed top-14 left-0 right-0 z-[60] flex justify-center pointer-events-none">
              <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-background/80 backdrop-blur-md px-1">
                 {!searchUiVisible && (
                   <>
