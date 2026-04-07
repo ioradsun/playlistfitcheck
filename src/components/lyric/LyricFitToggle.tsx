@@ -82,7 +82,7 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
                   : "font-normal text-muted-foreground"
               )}
             >
-              {filmMode === "beat" ? "Upload" : "Lyrics"}
+              Lyrics
             </button>
           </div>
         )}
