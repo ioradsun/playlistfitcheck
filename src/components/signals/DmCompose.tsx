@@ -219,7 +219,7 @@ export function DmCompose() {
       )}
 
       {/* Body */}
-      {!minimized && (
+      {!minimized && composePartnerId !== "new" && (
         <>
           <div className="flex-1 overflow-y-auto max-h-[220px] py-2 flex flex-col gap-0.5">
             {loading && (
