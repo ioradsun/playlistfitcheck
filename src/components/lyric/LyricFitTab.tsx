@@ -101,6 +101,7 @@ export function LyricFitTab({
   }, [setSearchParams, p.audioFile, p.resetProject]);
 
   const handleViewChange = useCallback((nextView: LyricFitView) => {
+    // Block fit/data if pipeline isn't ready
     if (
       (nextView === "fit" || nextView === "data") &&
       !p.fitUnlocked &&
@@ -108,14 +109,10 @@ export function LyricFitTab({
       p.fitReadiness !== "not_started"
     )
       return;
-    if (
-      nextView === "lyrics" &&
-      filmMode === "beat" &&
-      (p.fitReadiness === "ready" || p.fitUnlocked)
-    )
-      return;
+    // Block data if no dance published yet
+    if (nextView === "data" && !p.pipelineDanceId) return;
     setActiveTab(nextView);
-  }, [p.fitReadiness, p.fitUnlocked, filmMode]);
+  }, [p.fitReadiness, p.fitUnlocked, p.pipelineDanceId]);
 
   const handleBackToLyrics = useCallback(
     () => handleViewChange("lyrics"),
