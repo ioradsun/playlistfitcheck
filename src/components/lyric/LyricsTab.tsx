@@ -519,7 +519,7 @@ export function LyricsTab({
   }
 
   // State B & C: shell exists but no lines yet → skeleton
-  if (lyricData && audioFile) {
+  if (lyricData && audioFile && filmMode !== "beat") {
     return (
       <div className="flex-1 px-4 py-6">
         <LyricSkeleton
@@ -546,6 +546,16 @@ export function LyricsTab({
           onRetry={() => {}}
           onBack={() => {}}
         />
+      </div>
+    );
+  }
+
+  if (filmMode === "beat" && lyricData && audioFile) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-10">
+        <p className="text-[11px] font-mono text-muted-foreground/40 tracking-wide">
+          preparing beat visualization…
+        </p>
       </div>
     );
   }
