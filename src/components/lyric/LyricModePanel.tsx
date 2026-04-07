@@ -13,6 +13,15 @@ interface Props {
   words: Array<{ word: string; start: number; end: number }>;
   onFireMoment: (lineIndex: number, timeSec: number, holdMs: number) => void;
   onPlayLine: (startSec: number, endSec: number) => void;
+  sectionImages?: string[];
+  sections?: Array<{ description?: string; visualMood?: string; dominantColor?: string }>;
+  isInstrumental?: boolean;
+  fireUsers?: Array<{
+    sectionIndex: number;
+    userId: string | null;
+    avatarUrl: string | null;
+    displayName: string | null;
+  }>;
 }
 
 interface Comment {
@@ -30,6 +39,10 @@ export function LyricModePanel({
   words,
   onFireMoment,
   onPlayLine,
+  sectionImages,
+  sections,
+  isInstrumental = false,
+  fireUsers,
 }: Props) {
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
@@ -65,7 +78,9 @@ export function LyricModePanel({
     }
 
     return moments.map((moment) => {
-      const base = moment.lines.reduce((sum, line) => sum + (counts[line.lineIndex] ?? 0), 0);
+      const base = moment.lines.length > 0
+        ? moment.lines.reduce((sum, line) => sum + (counts[line.lineIndex] ?? 0), 0)
+        : (counts[moment.sectionIndex] ?? 0);
       return { index: moment.index, total: base + (localFires[moment.index] ?? 0) };
     });
   }, [reactionData, moments, localFires]);
@@ -75,6 +90,9 @@ export function LyricModePanel({
     for (const moment of moments) {
       for (const line of moment.lines) {
         lineToMoment[line.lineIndex] = moment.index;
+      }
+      if (moment.lines.length === 0) {
+        lineToMoment[moment.sectionIndex] = moment.index;
       }
     }
 
@@ -194,9 +212,6 @@ export function LyricModePanel({
 
       const moment = moments[momentIndex];
       if (!moment) return;
-      const firstLine = moment.lines[0];
-      if (!firstLine) return;
-
       const scoreMs = holdMs < 180 ? 150 : holdMs;
       const weight = scoreMs < 300 ? 1 : scoreMs < 1000 ? 2 : scoreMs < 3000 ? 4 : 8;
 
@@ -208,7 +223,8 @@ export function LyricModePanel({
       setFirePulse(momentIndex);
       setTimeout(() => setFirePulse(null), 400);
 
-      onFireMoment(firstLine.lineIndex, moment.startSec, scoreMs);
+      const fireIdx = moment.lines[0]?.lineIndex ?? moment.sectionIndex;
+      onFireMoment(fireIdx, moment.startSec, scoreMs);
     },
     [moments, onFireMoment],
   );
@@ -219,7 +235,7 @@ export function LyricModePanel({
     setSubmitting(true);
 
     const moment = moments[momentIndex];
-    const lineIndex = moment?.lines[0]?.lineIndex ?? null;
+    const lineIndex = moment?.lines[0]?.lineIndex ?? (isInstrumental ? moment.sectionIndex : null);
 
     const optimistic: Comment = {
       id: `temp-${Date.now()}`,
@@ -370,38 +386,87 @@ export function LyricModePanel({
                 cursor: "pointer",
               }}
             >
-              {(displayRowsByMoment.get(moment.index) ?? []).map((row, rowIdx) => (
-                <p
-                  key={`${moment.index}-${rowIdx}-${row.startSec}`}
-                  style={{
-                    margin: "0 0 2px",
-                    fontSize: 14,
-                    lineHeight: 1.55,
-                    color: isLive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)",
-                    letterSpacing: "-0.01em",
-                    transition: "color 200ms ease",
-                  }}
-                >
-                  {row.wordRanges.length > 0
-                    ? row.wordRanges.map((word) => {
-                      const isActive =
-                          currentTimeSec >= word.start - 0.05 && currentTimeSec < word.end + 0.05;
-                      return (
-                        <span
-                          key={word.start}
-                          style={{
-                            color: isActive ? "rgba(255,255,255,1)" : undefined,
-                            transition: "color 120ms",
-                          }}
-                        >
-                          {word.word}
-                          {" "}
-                        </span>
-                      );
-                    })
-                    : row.text}
-                </p>
-              ))}
+              {isInstrumental ? (
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  {sectionImages?.[moment.sectionIndex] && (
+                    <img
+                      src={sectionImages[moment.sectionIndex]}
+                      alt=""
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 8,
+                        objectFit: "cover",
+                        flexShrink: 0,
+                        border: isLive
+                          ? `1.5px solid ${sections?.[moment.sectionIndex]?.dominantColor ?? "rgba(255,255,255,0.15)"}`
+                          : "1px solid rgba(255,255,255,0.06)",
+                        transition: "border-color 200ms",
+                      }}
+                    />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      margin: 0,
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      color: isLive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.45)",
+                      transition: "color 200ms",
+                    }}>
+                      {sections?.[moment.sectionIndex]?.description ?? `Section ${moment.sectionIndex + 1}`}
+                    </p>
+                    {sections?.[moment.sectionIndex]?.visualMood && (
+                      <span style={{
+                        display: "inline-block",
+                        marginTop: 4,
+                        fontSize: 9,
+                        fontFamily: "monospace",
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        background: isLive ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
+                        color: isLive ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)",
+                        letterSpacing: "0.04em",
+                        transition: "all 200ms",
+                      }}>
+                        {sections[moment.sectionIndex].visualMood}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                (displayRowsByMoment.get(moment.index) ?? []).map((row, rowIdx) => (
+                  <p
+                    key={`${moment.index}-${rowIdx}-${row.startSec}`}
+                    style={{
+                      margin: "0 0 2px",
+                      fontSize: 14,
+                      lineHeight: 1.55,
+                      color: isLive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)",
+                      letterSpacing: "-0.01em",
+                      transition: "color 200ms ease",
+                    }}
+                  >
+                    {row.wordRanges.length > 0
+                      ? row.wordRanges.map((word) => {
+                        const isActive =
+                            currentTimeSec >= word.start - 0.05 && currentTimeSec < word.end + 0.05;
+                        return (
+                          <span
+                            key={word.start}
+                            style={{
+                              color: isActive ? "rgba(255,255,255,1)" : undefined,
+                              transition: "color 120ms",
+                            }}
+                          >
+                            {word.word}
+                            {" "}
+                          </span>
+                        );
+                      })
+                      : row.text}
+                  </p>
+                ))
+              )}
             </div>
 
             <div
@@ -463,6 +528,53 @@ export function LyricModePanel({
                   </span>
                 )}
               </button>
+              {(() => {
+                type FireUser = NonNullable<Props["fireUsers"]>[number];
+                const sectionUsers = (fireUsers ?? [])
+                  .filter((u) => u.sectionIndex === moment.sectionIndex && u.avatarUrl)
+                  .reduce((acc, u) => {
+                    if (!acc.some((a) => a.userId === u.userId)) acc.push(u);
+                    return acc;
+                  }, [] as FireUser[]);
+                const show = sectionUsers.slice(0, 3);
+                const overflow = sectionUsers.length - 3;
+                if (show.length === 0) return null;
+                return (
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    marginLeft: 2,
+                  }}>
+                    {show.map((u, idx) => (
+                      <img
+                        key={u.userId ?? idx}
+                        src={u.avatarUrl!}
+                        alt=""
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                          border: "1px solid #0a0a0a",
+                          marginLeft: idx === 0 ? 0 : -4,
+                          zIndex: 3 - idx,
+                          position: "relative",
+                        }}
+                      />
+                    ))}
+                    {overflow > 0 && (
+                      <span style={{
+                        fontSize: 8,
+                        fontFamily: "monospace",
+                        color: "rgba(255,255,255,0.3)",
+                        marginLeft: 3,
+                      }}>
+                        +{overflow}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
 
               <button
                 type="button"

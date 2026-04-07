@@ -72,6 +72,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     durationSec,
     moments,
     activeLine,
+    fireUsers,
   } = useLyricDanceCore({
     lyricDanceId,
     prefetchedData,
@@ -373,6 +374,15 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
   `;
 
+  const getCurrentFireIndex = useCallback(() => {
+    if (activeLine) return activeLine.lineIndex;
+    const t = player?.audio?.currentTime ?? 0;
+    for (let i = moments.length - 1; i >= 0; i -= 1) {
+      if (t >= moments[i].startSec - 0.1) return moments[i].sectionIndex;
+    }
+    return 0;
+  }, [activeLine, player, moments]);
+
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
       <style>{pulseStyle}</style>
@@ -388,7 +398,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         onProfileClick={onProfileClick}
         cardMode={cardMode}
         onModeChange={setCardMode}
-        isInstrumental={isInstrumental}
+        isInstrumental={!!(data as any)?.cinematic_direction?._instrumental}
       />
 
       {/* ── Fixed-height content slot ── */}
@@ -462,6 +472,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
             reactionData={reactionData}
             currentTimeSec={currentTimeSec}
             words={(data?.words as Array<{ word: string; start: number; end: number }>) ?? []}
+            sectionImages={(data as any)?.section_images ?? []}
+            sections={(data as any)?.cinematic_direction?.sections ?? []}
+            isInstrumental={!!(data as any)?.cinematic_direction?._instrumental}
+            fireUsers={fireUsers}
             onFireMoment={(lineIndex, timeSec, holdMs) => {
               if (!danceId) return;
               player?.fireFire(holdMs);
@@ -473,14 +487,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
               player.setRegion(startSec, endSec);
               player.setMuted(false);
               player.play();
-              // Clear any previous one-shot timer
               if (panelPlayTimerRef.current) clearTimeout(panelPlayTimerRef.current);
-              // Mute after one play-through
-              const durationMs = (endSec - startSec) * 1000 + 150;
               panelPlayTimerRef.current = setTimeout(() => {
-                player.setMuted(true);
-                panelPlayTimerRef.current = null;
-              }, durationMs);
+                player?.setMuted(true);
+                player?.pause();
+              }, (endSec - startSec + 0.5) * 1000);
             }}
           />
         )}
@@ -520,9 +531,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 clearInterval(holdFireIntervalRef.current);
                 holdFireIntervalRef.current = null;
               }
-              if (!danceId || !activeLine) return;
+              if (!danceId) return;
               player?.fireFire(0);
-              emitFire(danceId, activeLine.lineIndex, player?.audio.currentTime ?? 0, 0, "feed", userId ?? null);
+              emitFire(danceId, getCurrentFireIndex(), player?.audio.currentTime ?? 0, 0, "feed", userId ?? null);
             }}
             onFireHoldStart={() => {
               if (holdFireIntervalRef.current) return;
@@ -533,9 +544,9 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
                 clearInterval(holdFireIntervalRef.current);
                 holdFireIntervalRef.current = null;
               }
-              if (!danceId || !activeLine) return;
+              if (!danceId) return;
               player?.fireFire(holdMs);
-              emitFire(danceId, activeLine.lineIndex, player?.audio.currentTime ?? 0, holdMs, "feed", userId ?? null);
+              emitFire(danceId, getCurrentFireIndex(), player?.audio.currentTime ?? 0, holdMs, "feed", userId ?? null);
             }}
             onSeekTo={seekOnly}
           />
