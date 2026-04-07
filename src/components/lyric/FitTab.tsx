@@ -1307,18 +1307,16 @@ export function FitTab({
                 } disabled:opacity-50`}
                 title={
                   crowdfitPostId
-                    ? "Remove from CrowdFit"
-                    : "Publish to CrowdFit"
+                    ? "Remove from FMLY"
+                    : !canCreate
+                      ? `Fire ${required - credits} more song${required - credits === 1 ? "" : "s"} to unlock posting`
+                      : "Post to FMLY"
                 }
               >
                 {crowdfitToggling ? (
                   <Loader2 size={14} className="animate-spin" />
                 ) : null}
-                {crowdfitPostId
-                  ? "Live"
-                  : !canCreate
-                    ? `${credits}/${required}`
-                    : "Post"}
+                Post
               </button>
               {user?.email === "sunpatel@gmail.com" && cinematicDirection && (
                 <button
