@@ -262,7 +262,7 @@ serve(async (req) => {
     }
 
     // Attempt 1
-    let { rawContent, finishReason } = await callHookDetection(HOOK_PROMPT, userMessage, 1024);
+    let { rawContent, finishReason } = await callHookDetection(HOOK_PROMPT, userMessage, 2048);
     let parsed = extractJson(rawContent);
 
     // Retry if empty/truncated
@@ -272,7 +272,7 @@ serve(async (req) => {
 
       const retryPrompt = `You are a hook detection AI. Find the two best 10-second hook segments in this song. Return ONLY this JSON: {"hooks":[{"start_sec":NUMBER,"confidence":NUMBER,"label":"STRING","justification":"STRING"},{"start_sec":NUMBER,"confidence":NUMBER,"label":"STRING","justification":"STRING"}]}`;
 
-      const retry = await callHookDetection(retryPrompt, userMessage, 1024);
+      const retry = await callHookDetection(retryPrompt, userMessage, 2048);
       parsed = extractJson(retry.rawContent);
 
       if (!parsed?.hooks || !Array.isArray(parsed.hooks) || parsed.hooks.length === 0) {
