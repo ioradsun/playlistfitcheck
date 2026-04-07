@@ -1415,33 +1415,43 @@ export function FitTab({
 
         {subView === "data" && (
           <div className="space-y-5 pb-8">
-
-            {/* ── Headline ── */}
-            {totalFires > 0 && (
-              <div className="space-y-1.5 px-1">
-                <div className="flex items-baseline gap-3">
-                  <span style={{ fontSize: 28 }}>🔥</span>
-                  <span className="text-[28px] font-mono font-medium text-foreground">{totalFires}</span>
-                  <span className="text-[11px] font-mono text-muted-foreground">fires</span>
-                  {uniqueListeners > 0 && (
-                    <>
-                      <span className="text-muted-foreground/30">·</span>
-                      <span className="text-[11px] font-mono text-muted-foreground">{uniqueListeners} listener{uniqueListeners !== 1 ? "s" : ""}</span>
-                    </>
-                  )}
-                </div>
-                {uniqueListeners > 1 && (
-                  <p className="text-[12px] text-muted-foreground/60 leading-relaxed">
-                    {totalFires / uniqueListeners >= 3
-                      ? `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — people are reacting to multiple moments.`
-                      : totalFires / uniqueListeners >= 1.5
-                        ? `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — your song has more than one moment that hits.`
-                        : `${(totalFires / uniqueListeners).toFixed(1)} fires per listener. More shares will reveal which lines connect deepest.`
-                    }
-                  </p>
-                )}
+            {!publishedDanceId && (
+              <div className="flex flex-col items-center gap-3 py-12">
+                <span style={{ fontSize: 32 }}>🔥</span>
+                <p className="text-[12px] text-muted-foreground text-center leading-relaxed max-w-[260px]">
+                  Publish your {filmMode === "beat" ? "beat" : "song"} to start collecting signal.
+                </p>
               </div>
             )}
+
+            {publishedDanceId && (
+              <>
+                {/* ── Headline ── */}
+                {totalFires > 0 && (
+                  <div className="space-y-1.5 px-1">
+                    <div className="flex items-baseline gap-3">
+                      <span style={{ fontSize: 28 }}>🔥</span>
+                      <span className="text-[28px] font-mono font-medium text-foreground">{totalFires}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground">fires</span>
+                      {uniqueListeners > 0 && (
+                        <>
+                          <span className="text-muted-foreground/30">·</span>
+                          <span className="text-[11px] font-mono text-muted-foreground">{uniqueListeners} listener{uniqueListeners !== 1 ? "s" : ""}</span>
+                        </>
+                      )}
+                    </div>
+                    {uniqueListeners > 1 && (
+                      <p className="text-[12px] text-muted-foreground/60 leading-relaxed">
+                        {totalFires / uniqueListeners >= 3
+                          ? `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — people are reacting to multiple moments.`
+                          : totalFires / uniqueListeners >= 1.5
+                            ? `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — your song has more than one moment that hits.`
+                            : `${(totalFires / uniqueListeners).toFixed(1)} fires per listener. More shares will reveal which lines connect deepest.`
+                        }
+                      </p>
+                    )}
+                  </div>
+                )}
 
             {/* ── Fire Heatmap Waveform ── */}
             {filmMode !== "beat" && rawFires.length > 0 && (waveform || parentWaveform) && allLines.length > 0 && (() => {
@@ -1842,18 +1852,20 @@ export function FitTab({
             )}
 
             {/* ── Empty state ── */}
-            {totalFires === 0 && resultsLoaded && (
-              <div className="flex flex-col items-center gap-3 py-12">
-                <span style={{ fontSize: 32 }}>🔥</span>
-                <p className="text-[12px] text-muted-foreground text-center leading-relaxed max-w-[260px]">
-                  Share your song to start collecting signal. Every fire shows up here — mapped to the exact lyric and moment in the song.
-                </p>
-              </div>
-            )}
-            {totalFires === 0 && !resultsLoaded && (
-              <div className="flex justify-center py-12">
-                <Loader2 size={18} className="animate-spin text-muted-foreground/30" />
-              </div>
+                {totalFires === 0 && resultsLoaded && (
+                  <div className="flex flex-col items-center gap-3 py-12">
+                    <span style={{ fontSize: 32 }}>🔥</span>
+                    <p className="text-[12px] text-muted-foreground text-center leading-relaxed max-w-[260px]">
+                      Share your song to start collecting signal. Every fire shows up here — mapped to the exact lyric and moment in the song.
+                    </p>
+                  </div>
+                )}
+                {totalFires === 0 && !resultsLoaded && (
+                  <div className="flex justify-center py-12">
+                    <Loader2 size={18} className="animate-spin text-muted-foreground/30" />
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

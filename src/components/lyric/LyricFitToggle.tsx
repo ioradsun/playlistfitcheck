@@ -61,7 +61,7 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
   const isRunning = fitReadiness === "running";
   const isError = fitReadiness === "error";
   const isReady = fitReadiness === "ready";
-  const showLyricsTab = !(filmMode === "beat" && (fitUnlocked || fitReadiness === "ready"));
+  const showLyricsTab = filmMode !== "beat";
   const visibleStageKeys = (Object.keys(STAGE_LABELS) as (keyof PipelineStages)[])
     .filter((k) => !(filmMode === "beat" && k === "transcript"));
 
@@ -120,21 +120,24 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = 
             </span>
           )}
         </div>
-        {hasData && (
-          <div className="flex-1 flex items-center justify-center">
-            <button
-              onClick={() => onViewChange("data")}
-              className={cn(
-                "py-2.5 text-sm transition-all duration-150",
-                view === "data"
-                  ? "font-medium text-foreground"
-                  : "font-normal text-muted-foreground"
-              )}
-            >
-              Data
-            </button>
-          </div>
-        )}
+        <div className="flex-1 flex items-center justify-center">
+          <button
+            onClick={() => {
+              if (hasData) onViewChange("data");
+            }}
+            className={cn(
+              "py-2.5 text-sm transition-all duration-150",
+              !hasData && "opacity-30 cursor-default",
+              hasData && view === "data"
+                ? "font-medium text-foreground"
+                : hasData
+                  ? "font-normal text-muted-foreground"
+                  : "",
+            )}
+          >
+            Data
+          </button>
+        </div>
         {showDebug && (
           <div className="flex-1 flex items-center justify-center">
             <button
