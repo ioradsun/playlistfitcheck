@@ -276,17 +276,15 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       });
     }
 
-    if (isListening) {
-      player.setRegion(undefined, undefined);
-      player.audio.loop = true;
-      player.setMuted(false);
-      if (!player.playing) player.play(false);
+    if (!isListening) {
+      player.setMuted(true);
+      player.audio.loop = false;
       return;
     }
 
-    if (!isListening) {
-      player.setMuted(true);
-    }
+    player.setMuted(true);
+    player.setRegion(undefined, undefined);
+    player.audio.loop = true;
   }, [cardMode, player, containerRef]);
 
   const flushPlay = useCallback(() => {
