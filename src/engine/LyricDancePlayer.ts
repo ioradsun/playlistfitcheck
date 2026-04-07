@@ -3399,6 +3399,19 @@ export class LyricDancePlayer {
         return LyricDancePlayer.PALETTE_COLORS[chapterPalette];
       }
     }
+    if (chIdx >= 0) {
+      const dominantColor = chapters[chIdx]?.dominantColor as string | undefined;
+      if (dominantColor && /^#[0-9a-fA-F]{6}$/.test(dominantColor)) {
+        const r = parseInt(dominantColor.slice(1, 3), 16);
+        const g = parseInt(dominantColor.slice(3, 5), 16);
+        const b = parseInt(dominantColor.slice(5, 7), 16);
+        const toHex = (value: number) => Math.max(0, Math.min(255, value)).toString(16).padStart(2, '0');
+        const dark = `#${toHex(Math.round(r * 0.12))}${toHex(Math.round(g * 0.12))}${toHex(Math.round(b * 0.12))}`;
+        const light = `#${toHex(Math.min(255, r + Math.round((255 - r) * 0.35)))}${toHex(Math.min(255, g + Math.round((255 - g) * 0.35)))}${toHex(Math.min(255, b + Math.round((255 - b) * 0.35)))}`;
+        const dim = `#${toHex(Math.round(r * 0.5))}${toHex(Math.round(g * 0.5))}${toHex(Math.round(b * 0.5))}`;
+        return [dark, dominantColor, '#F0ECE2', light, dim];
+      }
+    }
     const bakedDefault = (this.data as any)?.resolvedPaletteDefault;
     if (bakedDefault && Array.isArray(bakedDefault) && bakedDefault.length >= 5) return bakedDefault;
     const paletteName = cd?.palette as string | undefined;
@@ -3529,7 +3542,6 @@ export class LyricDancePlayer {
       this.activeSectionTexture = texture;
       // Guarantee visible atmosphere in every section
       if (this.ambientParticleEngine) {
-        this.ambientParticleEngine.setSystem(texture);
         this.ambientParticleEngine.setDensityMultiplier(Math.max(0.5, this._activeEffects.particleDensity));
         this.ambientParticleEngine.setSpeedMultiplier(Math.max(0.2, this._activeEffects.particleSpeed));
       }
