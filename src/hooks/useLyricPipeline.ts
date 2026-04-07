@@ -1520,15 +1520,142 @@ export function useLyricPipeline({
         setGenerationStatus((prev) => ({
           ...prev,
           cinematicDirection: "done",
-          sectionImages: "done",
         }));
         setPipelineStages((prev) => ({ ...prev, cinematic: "done" }));
+
+        // Create dance row and generate images (mirrors song pipeline)
+        if (user && audioFile) {
+          try {
+            const { slugify } = await import("@/lib/slugify");
+            const songSlugVal = slugify(lyricData?.title || "untitled");
+            const artistSlugVal = slugify(artistNameRef.current || "artist");
+
+            let resolvedDanceId: string | null = null;
+
+            const { data: existing }: any = await supabase
+              .from("shareable_lyric_dances" as any)
+              .select("id")
+              .eq("user_id", user.id)
+              .eq("song_slug", songSlugVal)
+              .maybeSingle();
+
+            if (existing?.id) {
+              resolvedDanceId = existing.id;
+              await supabase
+                .from("shareable_lyric_dances" as any)
+                .update({
+                  cinematic_direction: enrichedScene,
+                  beat_grid: {
+                    bpm: beatGrid.bpm,
+                    beats: beatGrid.beats,
+                    confidence: beatGrid.confidence,
+                  },
+                } as any)
+                .eq("id", resolvedDanceId);
+            } else {
+              const audioFileName = audioFile.name || "audio.webm";
+              const storagePath = savedIdRef.current
+                ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(
+                    user.id,
+                    savedIdRef.current,
+                    audioFileName,
+                  )
+                : `${user.id}/${artistSlugVal}/${songSlugVal}/lyric-dance.${audioFileName.split(".").pop() || "webm"}`;
+
+              await supabase.storage
+                .from("audio-clips")
+                .upload(storagePath, audioFile, {
+                  upsert: true,
+                  contentType: audioFile.type || undefined,
+                });
+
+              const { data: urlData } = supabase.storage
+                .from("audio-clips")
+                .getPublicUrl(storagePath);
+
+              await supabase.from("shareable_lyric_dances" as any).upsert(
+                {
+                  user_id: user.id,
+                  artist_slug: artistSlugVal,
+                  song_slug: songSlugVal,
+                  artist_name: artistNameRef.current || "artist",
+                  song_name: lyricData?.title || "Untitled",
+                  audio_url: urlData.publicUrl,
+                  lyrics: [],
+                  cinematic_direction: enrichedScene,
+                  words: null,
+                  beat_grid: {
+                    bpm: beatGrid.bpm,
+                    beats: beatGrid.beats,
+                    confidence: beatGrid.confidence,
+                  },
+                  palette: derivePaletteFromDirection(enrichedScene),
+                  section_images: null,
+                } as any,
+                { onConflict: "artist_slug,song_slug" },
+              );
+
+              const { data: newRow }: any = await supabase
+                .from("shareable_lyric_dances" as any)
+                .select("id")
+                .eq("artist_slug", artistSlugVal)
+                .eq("song_slug", songSlugVal)
+                .maybeSingle();
+              resolvedDanceId = newRow?.id ?? null;
+            }
+
+            if (resolvedDanceId) {
+              setPipelineDanceId(resolvedDanceId);
+              setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
+
+              // Generate section images
+              const dirSections = enrichedScene?.sections;
+              if (Array.isArray(dirSections) && dirSections.length > 0) {
+                setGenerationStatus((prev) => ({ ...prev, sectionImages: "running" }));
+                setSectionImageProgress({ done: 0, total: dirSections.length });
+
+                const { data: result, error } = await invokeWithTimeout(
+                  "generate-section-images",
+                  {
+                    lyric_dance_id: resolvedDanceId,
+                    saved_lyric_id: savedIdRef.current ?? undefined,
+                    force: true,
+                  },
+                  90_000,
+                );
+                if (error) throw error;
+
+                const urls: (string | null)[] = result?.urls || result?.section_images || [];
+                const allComplete = result?.success === true || urls.every(Boolean);
+                setSectionImageUrls(urls);
+                setSectionImageProgress({
+                  done: urls.filter(Boolean).length,
+                  total: dirSections.length,
+                });
+                setGenerationStatus((prev) => ({
+                  ...prev,
+                  sectionImages: allComplete ? "done" : "error",
+                }));
+              } else {
+                setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
+              }
+            } else {
+              setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
+            }
+          } catch (imgErr: any) {
+            console.error("[pipeline] beat mode dance/image creation failed:", imgErr);
+            setGenerationStatus((prev) => ({ ...prev, sectionImages: "error" }));
+          }
+        } else {
+          // No user or audio — mark done without images
+          setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
+        }
       } catch (err) {
         console.error("[pipeline] instrumental cinematic failed:", err);
         setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "error" }));
       }
     },
-    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages],
+    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages, user, audioFile, setPipelineDanceId, setPipelineDanceUrl, setSectionImageUrls, setSectionImageProgress],
   );
 
   useEffect(() => {
