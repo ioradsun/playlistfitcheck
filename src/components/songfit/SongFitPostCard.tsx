@@ -24,8 +24,6 @@ import {
   Share2,
   Clock,
   Flame,
-  AudioLines,
-  AlignLeft,
 } from "lucide-react";
 import { TipButton } from "@/components/crypto/TipButton";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
@@ -246,13 +244,6 @@ export function SongFitPostCard({
 
         {/* ── Media ── */}
         <div className={cn("relative", reelsMode ? "absolute inset-0" : "")}>
-          <div className="absolute top-2 right-2 z-10">
-            {isInstrumental ? (
-              <AudioLines size={14} className="text-white/30" />
-            ) : (
-              <AlignLeft size={14} className="text-white/30" />
-            )}
-          </div>
           {hasLyricDance ? (
             <div className="relative" style={reelsMode ? { height: "100%" } : { height: 320 }}>
               <LyricDanceEmbed
@@ -267,6 +258,7 @@ export function SongFitPostCard({
                 prefetchedData={lyricDanceData ?? null}
                 avatarUrl={post.profiles?.avatar_url}
                 isVerified={(post.profiles as any)?.is_verified}
+                isInstrumental={isInstrumental}
                 userId={post.user_id}
                 onProfileClick={handleProfileClick}
               />

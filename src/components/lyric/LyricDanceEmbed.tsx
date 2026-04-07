@@ -27,6 +27,7 @@ interface LyricDanceEmbedProps {
   spotifyArtistId?: string | null;
   avatarUrl?: string | null;
   isVerified?: boolean;
+  isInstrumental?: boolean;
   userId?: string | null;
   onProfileClick?: () => void;
 }
@@ -49,6 +50,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   spotifyArtistId,
   avatarUrl,
   isVerified,
+  isInstrumental,
   userId,
   onProfileClick,
 }, ref) {
@@ -104,7 +106,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [activeMomentIdx, setActiveMomentIdx] = useState(0);
-  const [cardMode, setCardMode] = useState<CardMode>("dance");
+  const [cardMode, setCardMode] = useState<CardMode>(isInstrumental ? "beat" : "dance");
   const [hasUnlocked, setHasUnlocked] = useState(false);
 
   const playStartRef = useRef<number | null>(null);
@@ -227,8 +229,8 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
 
   useEffect(() => {
     if (!durationSec || !player) return;
-    if (currentTimeSec > durationSec + 2.2 && cardMode === "dance") {
-      setCardMode("empowerment");
+    if (currentTimeSec > durationSec + 2.2 && (cardMode === "dance" || cardMode === "beat")) {
+      setCardMode(cardMode === "beat" ? "vibe" : "empowerment");
     }
   }, [currentTimeSec, durationSec, cardMode, player]);
 
@@ -236,7 +238,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
   useEffect(() => {
     if (!player) return;
 
-    const isDance = cardMode === "dance";
+    const isDance = cardMode === "dance" || cardMode === "beat";
 
     // Canvas visibility
     if (containerRef.current) {
@@ -248,7 +250,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
     }
 
     // Audio lifecycle per mode
-    if (cardMode === "empowerment") {
+    if (cardMode === "empowerment" || cardMode === "vibe") {
       player.setMuted(true);
       player.audio.loop = false;
       if (panelPlayTimerRef.current) {
@@ -386,6 +388,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         onProfileClick={onProfileClick}
         cardMode={cardMode}
         onModeChange={setCardMode}
+        isInstrumental={isInstrumental}
       />
 
       {/* ── Fixed-height content slot ── */}
@@ -393,10 +396,10 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
         style={{ background: "#0a0a0a" }}
-        onClick={cardMode === "dance" ? handleCanvasTap : undefined}
+        onClick={(cardMode === "dance" || cardMode === "beat") ? handleCanvasTap : undefined}
       >
         {/* Dance mode — canvas + overlays, unchanged from today */}
-        {cardMode === "dance" && (
+        {(cardMode === "dance" || cardMode === "beat") && (
           <>
             {!isFeedEmbed && (
               <>
@@ -483,11 +486,11 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
         )}
 
         {/* Empowerment mode */}
-        {cardMode === "empowerment" && (
+        {(cardMode === "empowerment" || cardMode === "vibe") && (
           <EmpowermentModePanel
             danceId={danceId}
             empowermentPromise={((data ?? prefetchedData) as any)?.empowerment_promise ?? null}
-            onViewLyrics={() => setCardMode("lyric")}
+            onViewLyrics={isInstrumental ? undefined : () => setCardMode("lyric")}
           />
         )}
 
@@ -504,7 +507,7 @@ export const LyricDanceEmbed = forwardRef<LyricDanceEmbedHandle, LyricDanceEmbed
       </div>
 
       {/* LyricInteractionLayer — dance mode only */}
-      {cardMode === "dance" && (
+      {(cardMode === "dance" || cardMode === "beat") && (
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
           <LyricInteractionLayer
             moments={moments}
