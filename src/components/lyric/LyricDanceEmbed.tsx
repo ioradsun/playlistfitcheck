@@ -173,6 +173,12 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [fireUserMap, comments]);
 
   useEffect(() => {
+    if (!player || !data) return;
+    const isInst = !!(data as any)?.cinematic_direction?._instrumental;
+    player.beatVisEnabled = isInst;
+  }, [player, data]);
+
+  useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
     if (visible) {
       player.scheduleFullModeUpgrade();
