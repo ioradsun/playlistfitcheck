@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LyricFitTab } from "@/components/lyric/LyricFitTab";
 import ClaimBanner from "@/components/claim/ClaimBanner";
-import { preloadEssentia } from "@/hooks/useBeatGrid";
 import { Loader2, Users, Trash2, MousePointerClick, Music, Bomb, X, RefreshCw } from "lucide-react";
 import { PageLayout } from "@/components/PageLayout";
 import { supabase } from "@/integrations/supabase/client";
@@ -138,7 +137,6 @@ export default function Admin() {
   // Fetch reach rows when tab switches
   useEffect(() => {
     if (tab === "reach" && isAdmin) {
-      preloadEssentia();
       fetchReachRows().catch(console.error);
     }
   }, [tab, isAdmin, fetchReachRows]);

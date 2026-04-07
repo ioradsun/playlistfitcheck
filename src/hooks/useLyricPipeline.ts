@@ -4,11 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { persistQueue } from "@/lib/persistQueue";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
-import {
-  useBeatGrid,
-  preloadEssentia,
-  type BeatGridData,
-} from "@/hooks/useBeatGrid";
+import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import { extractPeaks } from "@/lib/audioUtils";
 import { buildPhrases } from "@/lib/phraseEngine";
@@ -17,7 +13,7 @@ import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { FilmMode } from "@/components/lyric/LyricFitTab";
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
-export type PipelineStageStatus = "pending" | "running" | "done";
+export type PipelineStageStatus = "pending" | "running" | "done" | "error";
 export interface PipelineStages {
   rhythm: PipelineStageStatus;
   sections: PipelineStageStatus;
@@ -35,6 +31,7 @@ export interface GenerationStatus {
 
 interface UsePipelineSchedulerParams {
   initialLyric: any;
+  filmMode: FilmMode;
   transcriptionDone: boolean;
   beatGridDone: boolean;
   lines: LyricLine[];
@@ -91,6 +88,7 @@ interface UsePipelineSchedulerReturn {
 
 export function usePipelineScheduler({
   initialLyric,
+  filmMode,
   transcriptionDone,
   beatGridDone,
   lines,
@@ -112,6 +110,7 @@ export function usePipelineScheduler({
   startHookDetection,
 }: UsePipelineSchedulerParams): UsePipelineSchedulerReturn {
   const isBeatProject = (() => {
+    if (filmMode === "beat") return true;
     if (!initialLyric) return false;
     const rd = (initialLyric as any).render_data;
     const cd =
@@ -538,10 +537,6 @@ export function useLyricPipeline({
     return sessionAudio.get("lyric", initialLyric.id) ?? null;
   });
 
-  useEffect(() => {
-    preloadEssentia();
-  }, []);
-
   const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(
     initialLyric?.id ?? null,
@@ -621,7 +616,10 @@ export function useLyricPipeline({
   const [beatGridDone, setBeatGridDone] = useState(
     () => !!(initialLyric as any)?.beat_grid,
   );
-  const { beatGrid: detectedGrid } = useBeatGrid(beatGrid ? null : audioBuffer);
+  const {
+    beatGrid: detectedGrid,
+    error: beatGridError,
+  } = useBeatGrid(beatGrid ? null : audioBuffer);
 
   const timestampedLines = useMemo(() => {
     return lines
@@ -686,6 +684,34 @@ export function useLyricPipeline({
       });
     }
   }, [detectedGrid, beatGrid]);
+
+  // Beat grid error propagation — prevents infinite "running" state
+  useEffect(() => {
+    if (!beatGridError) return;
+    if (generationStatus.beatGrid === "running") {
+      setGenerationStatus((prev) => ({ ...prev, beatGrid: "error" }));
+      setPipelineStages((prev) => ({ ...prev, rhythm: "error" }));
+    }
+  }, [beatGridError, generationStatus.beatGrid, setGenerationStatus, setPipelineStages]);
+
+  // Cascade: if beat grid fails in beat mode, cinematic can't run either
+  useEffect(() => {
+    if (filmMode !== "beat") return;
+    if (generationStatus.beatGrid !== "error") return;
+    if (
+      generationStatus.cinematicDirection !== "idle" &&
+      generationStatus.cinematicDirection !== "running"
+    )
+      return;
+    setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "error" }));
+    setPipelineStages((prev) => ({ ...prev, cinematic: "error" }));
+  }, [
+    filmMode,
+    generationStatus.beatGrid,
+    generationStatus.cinematicDirection,
+    setGenerationStatus,
+    setPipelineStages,
+  ]);
 
   useEffect(() => {
     if (!words?.length) {
@@ -1396,6 +1422,7 @@ export function useLyricPipeline({
 
   const scheduler = usePipelineScheduler({
     initialLyric,
+    filmMode,
     transcriptionDone,
     beatGridDone,
     lines,

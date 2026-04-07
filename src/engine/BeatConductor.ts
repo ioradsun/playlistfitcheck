@@ -180,8 +180,9 @@ export class BeatConductor {
     // no particle reactivity, no camera movement. Generate evenly-spaced
     // beats so the visual system always has a heartbeat.
     if (rawBeats.length === 0 && songDuration > 0 && period > 0) {
+      const phase = (beatGrid as any)._phase ?? 0;
       const synthetic: number[] = [];
-      for (let t = 0; t < songDuration; t += period) {
+      for (let t = phase; t < songDuration; t += period) {
         synthetic.push(t);
       }
       rawBeats = synthetic;

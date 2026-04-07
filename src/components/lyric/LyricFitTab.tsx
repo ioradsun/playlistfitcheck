@@ -205,7 +205,9 @@ export function LyricFitTab({
           sceneInput={sceneInputNode}
           onAudioSubmitted={p.handleAudioSubmitted}
           onUploadStarted={(payload) => {
-            setActiveTab("lyrics");
+            if (filmMode !== "beat") {
+              setActiveTab("lyrics");
+            }
             p.setPipelineStages((prev) => ({
               ...prev,
               transcript: filmMode === "beat" ? "done" : "running",
