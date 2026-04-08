@@ -60,8 +60,8 @@ FitButton.displayName = "FitButton";
 
 export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = false, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages, showDebug, hasData = false, filmMode = "song", playerReady = false, hasDance = false }: Props) {
   // Tab is locked if: explicitly disabled, pipeline not ready,
-  // OR pipeline is ready but a published dance exists and the player isn't ready yet
-  const isLocked = fitDisabled || (!fitUnlocked && fitReadiness !== "ready") || (fitReadiness === "ready" && hasDance && !playerReady);
+  // OR pipeline is ready but a dance exists and the player isn't ready yet
+  const isLocked = fitDisabled || fitReadiness !== "ready" || (!playerReady && hasDance);
   const isRunning = fitReadiness === "running";
   const isError = fitReadiness === "error";
   const isReady = fitReadiness === "ready";
