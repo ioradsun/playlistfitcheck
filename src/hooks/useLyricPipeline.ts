@@ -875,6 +875,38 @@ export function useLyricPipeline({
     }
   }, [initialLyric]);
 
+  // Re-sync generationStatus when initialLyric arrives with richer data than what
+  // was available at mount time (e.g. URL-loader revalidation after sidebar rawData load).
+  // hydratedRef intentionally NOT checked here — this only patches statuses, doesn't reinit.
+  useEffect(() => {
+    if (!initialLyric) return;
+
+    const hasCinematic = !!(
+      (initialLyric as any).cinematic_direction ||
+      (initialLyric as any).render_data?.cinematicDirection ||
+      (initialLyric as any).render_data?.cinematic_direction
+    );
+    if (hasCinematic) {
+      const cd =
+        (initialLyric as any).cinematic_direction ??
+        (initialLyric as any).render_data?.cinematicDirection ??
+        (initialLyric as any).render_data?.cinematic_direction;
+      setCinematicDirection((prev: any) => prev ?? cd);
+      setGenerationStatus((prev) =>
+        prev.cinematicDirection === "done" ? prev : { ...prev, cinematicDirection: "done" }
+      );
+    }
+
+    const hasBeatGrid = !!(initialLyric as any).beat_grid;
+    if (hasBeatGrid) {
+      setBeatGrid((prev) => prev ?? (initialLyric as any).beat_grid);
+      setBeatGridDone((prev: boolean) => prev || true);
+      setGenerationStatus((prev) =>
+        prev.beatGrid === "done" ? prev : { ...prev, beatGrid: "done" }
+      );
+    }
+  }, [initialLyric]);
+
   const danceIdLookedUpRef = useRef(!!pipelineDanceId);
   useEffect(() => {
     if (danceIdLookedUpRef.current || pipelineDanceId) return;
