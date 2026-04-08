@@ -33,7 +33,6 @@ import type { WaveformData } from "@/hooks/useAudioEngine";
 import type {
   LyricLine,
   LyricData,
-  LyricHook,
   SavedCustomHook,
 } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
@@ -97,6 +96,30 @@ const fmtTime = (sec: number) => {
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
+
+const fontMap: Record<string, string> = {
+  "bold-impact": "Oswald",
+  "clean-modern": "Montserrat",
+  "elegant-serif": "Playfair Display",
+  "raw-condensed": "Barlow Condensed",
+  "whisper-soft": "Nunito",
+  "tech-mono": "JetBrains Mono",
+  "display-heavy": "Bebas Neue",
+  "editorial-light": "Cormorant Garamond",
+};
+
+const captions: Record<number, string> = {
+  0: "for everyone who needed to hear this",
+  1: "this is what letting go sounds like",
+  2: "you already know who you were",
+  3: "this one hurts because it's true",
+  4: "something shifted — pay attention",
+  5: "none of it was wasted",
+};
+
+function getMainLines(ref: React.MutableRefObject<any[] | undefined>) {
+  return (ref.current || []).filter((l: any) => l.tag !== "adlib");
+}
 
 function SpotifyLinkField({
   spotifyTrackId,
@@ -584,6 +607,14 @@ export function FitTab({
   const wordsRef = useRef(words);
   linesRef.current = lyricData?.lines;
   wordsRef.current = words;
+  const lyricsText = useMemo(
+    () =>
+      (lyricData?.lines ?? [])
+        .filter((l: any) => l.tag !== "adlib")
+        .map((l: any) => l.text)
+        .join("\n"),
+    [lyricData?.lines],
+  );
 
   const transcriptInitRef = useRef(false);
   useEffect(() => {
@@ -605,9 +636,7 @@ export function FitTab({
       if (!handle) {
         return;
       }
-      const mainLines = (linesRef.current || []).filter(
-        (l: any) => l.tag !== "adlib",
-      );
+      const mainLines = getMainLines(linesRef);
       void (handle as any).reloadTranscript?.(
         mainLines,
         wordsRef.current ?? undefined,
@@ -643,9 +672,7 @@ export function FitTab({
     autoSaveTimerRef.current = setTimeout(async () => {
       const danceId = publishedDanceIdRef.current;
       if (!danceId) return;
-      const mainLines = (linesRef.current || []).filter(
-        (l: any) => l.tag !== "adlib",
-      );
+      const mainLines = getMainLines(linesRef);
 
       // Use the reconciled words from the player engine — updateTranscript() maps
       // edited line text back onto word timestamp slots. Those reconciled words
@@ -676,17 +703,6 @@ export function FitTab({
       setFontReady(false);
       return;
     }
-
-    const fontMap: Record<string, string> = {
-      "bold-impact": "Oswald",
-      "clean-modern": "Montserrat",
-      "elegant-serif": "Playfair Display",
-      "raw-condensed": "Barlow Condensed",
-      "whisper-soft": "Nunito",
-      "tech-mono": "JetBrains Mono",
-      "display-heavy": "Bebas Neue",
-      "editorial-light": "Cormorant Garamond",
-    };
 
     const typography = cinematicDirection.typography || "clean-modern";
     const fontName = fontMap[typography] || "Montserrat";
@@ -855,11 +871,6 @@ export function FitTab({
 
     const lines = lyricData?.lines;
     if (!Array.isArray(lines) || lines.length === 0) return;
-
-    const lyricsText = lines
-      .filter((l: any) => l.tag !== "adlib")
-      .map((l: any) => l.text)
-      .join("\n");
 
     setEmpowermentLoading(true);
     setEmpowermentError(false);
@@ -1542,14 +1553,6 @@ export function FitTab({
               if (!feeling) return null;
               const topFireLine = fireStrength[0];
               const topLine = allLines.find((l) => l.lineIndex === topFireLine?.line_index);
-              const captions: Record<number, string> = {
-                0: "for everyone who needed to hear this",
-                1: "this is what letting go sounds like",
-                2: "you already know who you were",
-                3: "this one hurts because it's true",
-                4: "something shifted — pay attention",
-                5: "none of it was wasted",
-              };
               const caption = captions[row.hook_index] ?? feeling;
               return (
                 <div key={row.hook_index} className="glass-card rounded-xl p-4 space-y-3 border border-primary/10">
@@ -1561,9 +1564,8 @@ export function FitTab({
                       onClick={() => {
                         const player = dancePlayerRef.current?.getPlayer();
                         if (player && topFireLine) {
-                          const line = allLines.find((l) => l.lineIndex === topFireLine.line_index);
-                          if (line) {
-                            player.setRegion(Math.max(0, line.startSec - 1.5), line.startSec + 10);
+                          if (topLine) {
+                            player.setRegion(Math.max(0, topLine.startSec - 1.5), topLine.startSec + 10);
                             (player as any).setClipCaption?.(caption);
                             player.play();
                           }
@@ -1577,7 +1579,7 @@ export function FitTab({
                       onClick={() => {
                         setClipComposerVisible(true);
                         setClipComposerCaption(caption);
-                        setClipComposerStart(Math.max(0, (allLines.find((l) => l.lineIndex === topFireLine?.line_index)?.startSec ?? 0) - 1.5));
+                        setClipComposerStart(Math.max(0, (topLine?.startSec ?? 0) - 1.5));
                       }}
                       className="flex-1 py-2 text-[9px] font-mono uppercase tracking-wider rounded-lg border border-primary/30 text-primary/70 hover:text-primary hover:bg-primary/5 transition-colors"
                     >
