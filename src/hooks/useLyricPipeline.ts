@@ -439,14 +439,14 @@ export function usePipelineScheduler({
   const imageSelfHealRef = useRef(false);
 
   useEffect(() => {
-    if (!beatGridDone) return;
+    if (!transcriptionDone || !beatGridDone || !lines?.length) return;
     if (cinematicTriggeredRef.current) return;
     cinematicTriggeredRef.current = true;
     const force = pipelineRetryCount > 0;
 
-    // Fire with whatever lines are available — Gemini listens to audio directly
-    void startCinematicDirection(lines?.length ? lines : [], force);
+    void startCinematicDirection(lines, force);
   }, [
+    transcriptionDone,
     beatGridDone,
     lines,
     pipelineRetryCount,
@@ -1379,8 +1379,7 @@ export function useLyricPipeline({
 
   const startCinematicDirection = useCallback(
     async (sourceLines: LyricLine[], force = false) => {
-      if (!lyricData) return;
-      if (!sourceLines.length && !audioUrl) return;
+      if (!lyricData || !sourceLines.length) return;
       const myRunId = ++runIdRef.current;
       {
         if (
@@ -1402,6 +1401,53 @@ export function useLyricPipeline({
         const lyricsForDirection = sourceLines
           .filter((l: any) => l.tag !== "adlib")
           .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+        const sectionCount = Math.min(
+          8,
+          Math.max(1, Math.ceil(lyricsForDirection.length / 4)),
+        );
+        const linesPerSection = Math.max(
+          1,
+          Math.ceil(lyricsForDirection.length / sectionCount),
+        );
+        const audioSections = Array.from({ length: sectionCount }, (_, i) => {
+          const startIdx = i * linesPerSection;
+          const endIdx = Math.min(
+            (i + 1) * linesPerSection,
+            lyricsForDirection.length,
+          ) - 1;
+          const firstLine = lyricsForDirection[startIdx];
+          const lastLine = lyricsForDirection[Math.max(startIdx, endIdx)];
+          const startSec = firstLine?.start ?? i * 10;
+          const endSec =
+            lastLine?.end ??
+            Math.max(startSec + 8, (i + 1) * 10);
+          const duration = Math.max(0.1, endSec - startSec);
+          const beatDensity = beatGrid?.bpm
+            ? (beatGrid.bpm / 60)
+            : lyricsForDirection
+                .slice(startIdx, endIdx + 1)
+                .filter((line) => line.text?.trim().length > 0).length / duration;
+
+          return {
+            index: i,
+            startSec,
+            endSec,
+            role:
+              i === 0
+                ? "intro"
+                : i === sectionCount - 1
+                  ? "outro"
+                  : "main",
+            avgEnergy: 0.5,
+            beatDensity,
+            lyrics: lyricsForDirection
+              .slice(startIdx, endIdx + 1)
+              .map((line, offset) => ({
+                text: line.text,
+                lineIndex: startIdx + offset,
+              })),
+          };
+        });
 
         const sharedBody = {
           title: lyricData.title || "Untitled",
@@ -1430,6 +1476,7 @@ export function useLyricPipeline({
             : undefined,
           lyricId: savedIdRef.current || undefined,
           artist_direction: sceneDescription?.trim() || undefined,
+          audioSections,
         };
 
         const { data: sceneResult } = await invokeWithTimeout(
