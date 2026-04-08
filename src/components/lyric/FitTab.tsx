@@ -85,6 +85,19 @@ interface Props {
   onPlayerReady?: (ready: boolean) => void;
 }
 
+const defaultStages: PipelineStages = {
+  rhythm: "pending",
+  sections: "pending",
+  cinematic: "pending",
+  transcript: "pending",
+};
+
+const fmtTime = (sec: number) => {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+};
+
 function SpotifyLinkField({
   spotifyTrackId,
   setSpotifyTrackId,
@@ -270,12 +283,6 @@ export function FitTab({
   const { user, profile } = useAuth();
   const { canCreate, credits, required } = useVoteGate();
 
-  const defaultStages: PipelineStages = {
-    rhythm: "pending",
-    sections: "pending",
-    cinematic: "pending",
-    transcript: "pending",
-  };
   const pipelineStages = pipelineStagesProp ?? defaultStages;
   const [publishedUrl, setPublishedUrl] = useState<string | null>(
     initialDanceUrl ?? null,
@@ -284,9 +291,13 @@ export function FitTab({
     initialDanceId ?? null,
   );
 
-  // pipelineDanceId is now resolved synchronously before FitTab mounts
-  // (via is_published on the full SELECT * row), so useState(initialDanceId)
-  // already captures the correct value. No late-sync effects needed.
+  useEffect(() => {
+    if (initialDanceId) setPublishedDanceId(initialDanceId);
+  }, [initialDanceId]);
+
+  useEffect(() => {
+    if (initialDanceUrl) setPublishedUrl(initialDanceUrl);
+  }, [initialDanceUrl]);
 
   const [prefetchedDanceData, setPrefetchedDanceData] =
     useState<LyricDanceData | null>(null);
@@ -339,11 +350,6 @@ export function FitTab({
       });
   }, [publishedDanceId, pipeline]);
 
-  // Initial prefetch
-  useEffect(() => {
-    refetchDanceData();
-  }, [refetchDanceData]);
-
   // ── CrowdFit publish state ─────────────────────────────────────────
   const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
   const [crowdfitToggling, setCrowdfitToggling] = useState(false);
@@ -381,18 +387,6 @@ export function FitTab({
   >([null, null]);
   const [feudSetupOpen, setFeudSetupOpen] = useState(false);
   const [feudTab, setFeudTab] = useState<0 | 1>(0);
-  const hookLoopRegionRef = useRef<{ start: number; end: number } | null>(null);
-
-  const hookAudioRef = useRef<HTMLAudioElement>(null);
-  const hookAudioUrl = useMemo(
-    () => (audioFile ? URL.createObjectURL(audioFile) : ""),
-    [audioFile],
-  );
-  useEffect(() => {
-    return () => {
-      if (hookAudioUrl) URL.revokeObjectURL(hookAudioUrl);
-    };
-  }, [hookAudioUrl]);
 
 
 
@@ -489,10 +483,11 @@ export function FitTab({
 
   // ── Audio playback + waveform ─────────────────────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string>("");
+  const fireHeatmapCanvasRef = useRef<HTMLCanvasElement>(null);
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const rafRef = useRef<number | null>(null);
   const parentWaveformRef = useRef(parentWaveform);
   parentWaveformRef.current = parentWaveform;
 
@@ -500,6 +495,7 @@ export function FitTab({
     if (!audioFile || audioFile.size === 0) return;
 
     const url = URL.createObjectURL(audioFile);
+    audioUrlRef.current = url;
     const audio = new Audio(url);
     audio.preload = "auto";
     audioRef.current = audio;
@@ -544,26 +540,12 @@ export function FitTab({
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("ended", onEnded);
       URL.revokeObjectURL(url);
+      if (audioUrlRef.current === url) audioUrlRef.current = "";
       audioRef.current = null;
     };
     // parentWaveform intentionally read from ref — avoids re-creating Audio + blob on waveform updates
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioFile]);
-
-  useEffect(() => {
-    if (!isPlaying) {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      return;
-    }
-    const tick = () => {
-      if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [isPlaying]);
 
   const handleSeek = useCallback((time: number) => {
     if (audioRef.current) {
@@ -807,15 +789,6 @@ export function FitTab({
     return () => clearTimeout(timer);
   }, [allGenDone, publishedDanceId, refetchDanceData, sectionImageUrls]);
 
-  // Refetch once more when section images finish generating but DB data is stale
-  useEffect(() => {
-    if (generationStatus.sectionImages !== "done") return;
-    if (!publishedDanceId) return;
-    if (prefetchedDanceData?.section_images?.some(Boolean)) return;
-    // Images just finished generating — refetch to get the URLs
-    refetchDanceData();
-  }, [generationStatus.sectionImages, publishedDanceId, prefetchedDanceData, refetchDanceData]);
-
   const allReady =
     generationStatus.beatGrid === "done" &&
     generationStatus.renderData === "done" &&
@@ -946,6 +919,160 @@ export function FitTab({
     [lyricData?.lines],
   );
 
+  const activeWaveform = useMemo(
+    () => waveform || parentWaveform || null,
+    [waveform, parentWaveform],
+  );
+
+  const fireHeatmapData = useMemo(() => {
+    if (!activeWaveform || rawFires.length === 0 || allLines.length === 0) {
+      return null;
+    }
+    const dur = activeWaveform.duration || 1;
+    const bucketCount = activeWaveform.peaks.length;
+    const buckets = new Float32Array(bucketCount);
+    for (const fire of rawFires) {
+      const idx = Math.min(
+        bucketCount - 1,
+        Math.max(0, Math.floor((fire.time_sec / dur) * bucketCount)),
+      );
+      const weight =
+        fire.hold_ms < 300 ? 1 : fire.hold_ms < 1000 ? 2 : fire.hold_ms < 3000 ? 4 : 8;
+      buckets[idx] += weight;
+    }
+    let maxBucket = 0;
+    for (let i = 0; i < bucketCount; i++) {
+      if (buckets[i] > maxBucket) maxBucket = buckets[i];
+    }
+    if (maxBucket > 0) {
+      for (let i = 0; i < bucketCount; i++) buckets[i] /= maxBucket;
+    }
+    let peakIdx = 0;
+    for (let i = 0; i < bucketCount; i++) {
+      if (buckets[i] > buckets[peakIdx]) peakIdx = i;
+    }
+    const peakTimeSec = (peakIdx / bucketCount) * dur;
+    const peakLine = allLines.reduce(
+      (best, line) =>
+        Math.abs(line.startSec - peakTimeSec) < Math.abs(best.startSec - peakTimeSec)
+          ? line
+          : best,
+      allLines[0],
+    );
+    return { buckets, peakTimeSec, peakLine };
+  }, [activeWaveform, rawFires, allLines]);
+
+  useEffect(() => {
+    const canvas = fireHeatmapCanvasRef.current;
+    if (!canvas || !fireHeatmapData || !activeWaveform) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.clientWidth * dpr;
+    canvas.height = canvas.clientHeight * dpr;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+    const cw = canvas.clientWidth;
+    const ch = canvas.clientHeight;
+    ctx.clearRect(0, 0, cw, ch);
+
+    const barW = Math.max(cw / activeWaveform.peaks.length, 1);
+    const gap = 1;
+
+    activeWaveform.peaks.forEach((peak, i) => {
+      const barH = Math.max(peak * ch * 0.85, 2);
+      const x = i * barW;
+      const heat = fireHeatmapData.buckets[i];
+      if (heat > 0.01) {
+        const r = 255;
+        const g = Math.round(140 - heat * 100);
+        const b = Math.round(30);
+        const a = 0.3 + heat * 0.65;
+        ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+      } else {
+        ctx.fillStyle = "rgba(150,150,150,0.25)";
+      }
+      ctx.fillRect(x, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
+    });
+
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(255,120,30,0.6)";
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < fireHeatmapData.buckets.length; i++) {
+      const x = (i / fireHeatmapData.buckets.length) * cw;
+      const y = ch - fireHeatmapData.buckets[i] * ch * 0.7 - 2;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }, [fireHeatmapData, activeWaveform]);
+
+  const beatSectionFires = useMemo(() => {
+    if (filmMode !== "beat" || rawFires.length === 0 || !beatGrid) return null;
+    const beats = beatGrid.beats;
+    const beatsPerSection = 16;
+    const sectionCount = Math.max(1, Math.ceil(beats.length / beatsPerSection));
+    return Array.from({ length: sectionCount }, (_, i) => {
+      const startSec = beats[i * beatsPerSection] ?? 0;
+      const endBeat = Math.min((i + 1) * beatsPerSection, beats.length) - 1;
+      const endSec = beats[endBeat] ?? (activeWaveform?.duration ?? 60);
+      const count = rawFires.filter(
+        (f) => (f.time_sec ?? 0) >= startSec && (f.time_sec ?? 0) < endSec,
+      ).length;
+      return { i, startSec, endSec, count };
+    });
+  }, [filmMode, rawFires, beatGrid, activeWaveform]);
+
+  const beatSectionSummary = useMemo(() => {
+    if (!beatSectionFires || beatSectionFires.length === 0) return null;
+    return {
+      maxSectionFires: Math.max(1, ...beatSectionFires.map((s) => s.count)),
+      topSection: beatSectionFires.reduce((a, b) => (b.count > a.count ? b : a)),
+    };
+  }, [beatSectionFires]);
+
+  const lyricFireBreakdown = useMemo(() => {
+    if (fireStrength.length === 0) return null;
+    const sections = ((cinematicDirection as any)?.sections as any[]) ?? [];
+    const linesBySection: Map<number, typeof allLines> = new Map();
+    for (const line of allLines) {
+      let secIdx = 0;
+      for (let s = 0; s < sections.length; s++) {
+        const sec = sections[s];
+        const start = sec.startSec ?? sec.start ?? 0;
+        const end = sec.endSec ?? sec.end ?? Infinity;
+        if (line.startSec >= start && line.startSec < end) {
+          secIdx = s;
+          break;
+        }
+      }
+      if (!linesBySection.has(secIdx)) linesBySection.set(secIdx, []);
+      linesBySection.get(secIdx)!.push(line);
+    }
+    const fireMap = new Map<
+      number,
+      { fire_count: number; fire_strength: number; avg_hold_ms: number }
+    >();
+    for (const row of fireStrength) fireMap.set(row.line_index, row);
+    const maxStrength = fireStrength[0]?.fire_strength ?? 1;
+    return { sections, linesBySection, fireMap, maxStrength };
+  }, [fireStrength, cinematicDirection, allLines]);
+
+  const sectionFireCounts = useMemo(() => {
+    if (!lyricFireBreakdown || lyricFireBreakdown.linesBySection.size < 2) return [];
+    const { linesBySection, fireMap, sections } = lyricFireBreakdown;
+    return Array.from(linesBySection.entries())
+      .map(([secIdx, lines]) => ({
+        secIdx,
+        fires: lines.reduce((s, l) => s + (fireMap.get(l.lineIndex)?.fire_count ?? 0), 0),
+        label:
+          (sections[secIdx] as any)?.description?.slice(0, 30) ??
+          `Section ${secIdx + 1}`,
+      }))
+      .filter((s) => s.fires > 0)
+      .sort((a, b) => b.fires - a.fires);
+  }, [lyricFireBreakdown]);
+
   useEffect(() => {
     setResultsLoaded(false);
     setFireStrength([]);
@@ -976,7 +1103,7 @@ export function FitTab({
         .eq("project_id", publishedDanceId),
       supabase
         .from("project_exposures" as any)
-        .select("session_id")
+        .select("session_id", { count: "exact" })
         .eq("project_id", publishedDanceId),
     ]).then(([strength, fires, dist, free, count, exposures]) => {
       setFireStrength(strength);
@@ -985,10 +1112,13 @@ export function FitTab({
       setFreeResponses((free.data as any[]) ?? []);
       setTotalFires(count.count ?? 0);
 
-      const uniqueSessions = new Set(
-        ((exposures.data ?? []) as any[]).map((r: any) => r.session_id),
+      // TODO: if project_exposures is not already session-deduplicated, switch this
+      // to a distinct-session count query and keep the Set fallback below.
+      setUniqueListeners(
+        exposures.count ??
+          new Set(((exposures.data ?? []) as any[]).map((r: any) => r.session_id))
+            .size,
       );
-      setUniqueListeners(uniqueSessions.size);
 
       setResultsLoaded(true);
     });
@@ -1000,11 +1130,6 @@ export function FitTab({
 
   return (
     <>
-      <audio
-        ref={hookAudioRef}
-        src={hookAudioUrl}
-        style={{ display: "none" }}
-      />
       <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
         {/* Dance preview — hidden on Data view */}
         <div style={{ display: subView === "fit" ? undefined : "none" }}>
@@ -1200,183 +1325,83 @@ export function FitTab({
                 )}
 
             {/* ── Fire Heatmap Waveform ── */}
-            {filmMode !== "beat" && rawFires.length > 0 && (waveform || parentWaveform) && allLines.length > 0 && (() => {
-              const wf = waveform || parentWaveform!;
-              const dur = wf.duration || 1;
-              const bucketCount = wf.peaks.length;
-              const buckets = new Float32Array(bucketCount);
-              for (const fire of rawFires) {
-                const idx = Math.min(bucketCount - 1, Math.max(0, Math.floor((fire.time_sec / dur) * bucketCount)));
-                const weight = fire.hold_ms < 300 ? 1 : fire.hold_ms < 1000 ? 2 : fire.hold_ms < 3000 ? 4 : 8;
-                buckets[idx] += weight;
-              }
-              let maxBucket = 0;
-              for (let i = 0; i < bucketCount; i++) if (buckets[i] > maxBucket) maxBucket = buckets[i];
-              if (maxBucket > 0) for (let i = 0; i < bucketCount; i++) buckets[i] /= maxBucket;
-
-              let peakIdx = 0;
-              for (let i = 0; i < bucketCount; i++) if (buckets[i] > buckets[peakIdx]) peakIdx = i;
-              const peakTimeSec = (peakIdx / bucketCount) * dur;
-              const peakLine = allLines.reduce((best, line) =>
-                Math.abs(line.startSec - peakTimeSec) < Math.abs(best.startSec - peakTimeSec) ? line : best,
-                allLines[0],
-              );
-
-              return (
-                <div className="glass-card rounded-xl p-4 space-y-2">
-                  <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
-                    fire heatmap
-                  </p>
-                  <div className="relative" style={{ height: 64 }}>
-                    <canvas
-                      ref={(el) => {
-                        if (!el) return;
-                        const dpr = window.devicePixelRatio || 1;
-                        el.width = el.clientWidth * dpr;
-                        el.height = el.clientHeight * dpr;
-                        const ctx = el.getContext("2d");
-                        if (!ctx) return;
-                        ctx.scale(dpr, dpr);
-                        const cw = el.clientWidth;
-                        const ch = el.clientHeight;
-                        ctx.clearRect(0, 0, cw, ch);
-
-                        const barW = Math.max(cw / wf.peaks.length, 1);
-                        const gap = 1;
-
-                        wf.peaks.forEach((peak, i) => {
-                          const barH = Math.max(peak * ch * 0.85, 2);
-                          const x = i * barW;
-                          const heat = buckets[i];
-                          if (heat > 0.01) {
-                            const r = 255;
-                            const g = Math.round(140 - heat * 100);
-                            const b = Math.round(30);
-                            const a = 0.3 + heat * 0.65;
-                            ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
-                          } else {
-                            ctx.fillStyle = "rgba(150,150,150,0.25)";
-                          }
-                          ctx.fillRect(x, (ch - barH) / 2, Math.max(barW - gap, 1), barH);
-                        });
-
-                        ctx.beginPath();
-                        ctx.strokeStyle = "rgba(255,120,30,0.6)";
-                        ctx.lineWidth = 1.5;
-                        for (let i = 0; i < bucketCount; i++) {
-                          const x = (i / bucketCount) * cw;
-                          const y = ch - buckets[i] * ch * 0.7 - 2;
-                          if (i === 0) ctx.moveTo(x, y);
-                          else ctx.lineTo(x, y);
-                        }
-                        ctx.stroke();
-                      }}
-                      className="absolute inset-0 w-full h-full"
-                    />
-                  </div>
-                  {peakLine && (
-                    <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
-                      Hottest moment at {Math.floor(peakTimeSec / 60)}:{String(Math.floor(peakTimeSec % 60)).padStart(2, "0")} — "{peakLine.text.slice(0, 50)}{peakLine.text.length > 50 ? "…" : ""}"
-                    </p>
-                  )}
+            {filmMode !== "beat" && fireHeatmapData && activeWaveform && (
+              <div className="glass-card rounded-xl p-4 space-y-2">
+                <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
+                  fire heatmap
+                </p>
+                <div className="relative" style={{ height: 64 }}>
+                  <canvas
+                    ref={fireHeatmapCanvasRef}
+                    className="absolute inset-0 w-full h-full"
+                  />
                 </div>
-              );
-            })()}
-
-            {filmMode === "beat" && rawFires.length > 0 && beatGrid && (() => {
-              const beats = beatGrid.beats;
-              const beatsPerSection = 16;
-              const sectionCount = Math.max(1, Math.ceil(beats.length / beatsPerSection));
-              const sectionFires = Array.from({ length: sectionCount }, (_, i) => {
-                const startSec = beats[i * beatsPerSection] ?? 0;
-                const endBeat = Math.min((i + 1) * beatsPerSection, beats.length) - 1;
-                const endSec = beats[endBeat] ?? ((waveform || parentWaveform)?.duration ?? 60);
-                const count = rawFires.filter(
-                  (f) => (f.time_sec ?? 0) >= startSec && (f.time_sec ?? 0) < endSec,
-                ).length;
-                return { i, startSec, endSec, count };
-              });
-
-              const maxSectionFires = Math.max(1, ...sectionFires.map((s) => s.count));
-              const topSection = sectionFires.reduce((a, b) => (b.count > a.count ? b : a), sectionFires[0]);
-              const fmtTime = (sec: number) => {
-                const m = Math.floor(sec / 60);
-                const s = Math.floor(sec % 60);
-                return `${m}:${s.toString().padStart(2, "0")}`;
-              };
-
-              return (
-                <div className="glass-card rounded-xl p-4 space-y-3">
-                  <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
-                    fire moments by timestamp
+                {fireHeatmapData.peakLine && (
+                  <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
+                    Hottest moment at {fmtTime(fireHeatmapData.peakTimeSec)} — "{fireHeatmapData.peakLine.text.slice(0, 50)}{fireHeatmapData.peakLine.text.length > 50 ? "…" : ""}"
                   </p>
-                  <div className="space-y-2">
-                    {sectionFires.map((section) => {
-                      const width = (section.count / maxSectionFires) * 100;
-                      const isTop = topSection?.i === section.i;
-                      return (
-                        <div key={section.i} className="space-y-1">
-                          <div className="flex items-center justify-between text-[10px] font-mono">
-                            <span className={isTop ? "text-primary" : "text-muted-foreground"}>
-                              {fmtTime(section.startSec)}
-                            </span>
-                            <span className={isTop ? "text-primary" : "text-muted-foreground/70"}>
-                              {section.count} fires
-                            </span>
-                          </div>
-                          <div className="h-1.5 rounded-full bg-muted/30 overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${width}%`,
-                                background: isTop ? "var(--primary)" : "rgba(255,120,30,0.45)",
-                              }}
-                            />
-                          </div>
+                )}
+              </div>
+            )}
+
+            {filmMode === "beat" && beatSectionFires && beatSectionSummary && (
+              <div className="glass-card rounded-xl p-4 space-y-3">
+                <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
+                  fire moments by timestamp
+                </p>
+                <div className="space-y-2">
+                  {beatSectionFires.map((section) => {
+                    const width =
+                      (section.count / beatSectionSummary.maxSectionFires) * 100;
+                    const isTop = beatSectionSummary.topSection?.i === section.i;
+                    return (
+                      <div key={section.i} className="space-y-1">
+                        <div className="flex items-center justify-between text-[10px] font-mono">
+                          <span className={isTop ? "text-primary" : "text-muted-foreground"}>
+                            {fmtTime(section.startSec)}
+                          </span>
+                          <span className={isTop ? "text-primary" : "text-muted-foreground/70"}>
+                            {section.count} fires
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <div className="h-1.5 rounded-full bg-muted/30 overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${width}%`,
+                              background: isTop
+                                ? "var(--primary)"
+                                : "rgba(255,120,30,0.45)",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
             {/* ── Section-by-section lyric breakdown ── */}
-            {fireStrength.length > 0 && (() => {
-              const sections = ((cinematicDirection as any)?.sections as any[]) ?? [];
-              const linesBySection: Map<number, typeof allLines> = new Map();
-
-              for (const line of allLines) {
-                let secIdx = 0;
-                for (let s = 0; s < sections.length; s++) {
-                  const sec = sections[s];
-                  const start = sec.startSec ?? sec.start ?? 0;
-                  const end = sec.endSec ?? sec.end ?? Infinity;
-                  if (line.startSec >= start && line.startSec < end) {
-                    secIdx = s;
-                    break;
-                  }
-                }
-                if (!linesBySection.has(secIdx)) linesBySection.set(secIdx, []);
-                linesBySection.get(secIdx)!.push(line);
-              }
-
-              const fireMap = new Map<number, { fire_count: number; fire_strength: number; avg_hold_ms: number }>();
-              for (const row of fireStrength) fireMap.set(row.line_index, row);
-
-              const maxStrength = fireStrength[0]?.fire_strength ?? 1;
-
-              return (
-                <div className="space-y-3">
-                  <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider px-1">
-                    fire by section
-                  </p>
-                  {Array.from(linesBySection.entries()).map(([secIdx, sectionLines]) => {
-                    const sec = sections[secIdx] ?? {};
-                    const sectionFires = sectionLines.reduce((sum, l) => sum + (fireMap.get(l.lineIndex)?.fire_count ?? 0), 0);
+            {lyricFireBreakdown && (
+              <div className="space-y-3">
+                <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider px-1">
+                  fire by section
+                </p>
+                {Array.from(lyricFireBreakdown.linesBySection.entries()).map(
+                  ([secIdx, sectionLines]) => {
+                    const sec = lyricFireBreakdown.sections[secIdx] ?? {};
+                    const sectionFires = sectionLines.reduce(
+                      (sum, l) =>
+                        sum +
+                        (lyricFireBreakdown.fireMap.get(l.lineIndex)?.fire_count ?? 0),
+                      0,
+                    );
                     if (sectionLines.length === 0) return null;
 
-                    const label = sec.description ? sec.description.slice(0, 40) : `Section ${secIdx + 1}`;
+                    const label = sec.description
+                      ? sec.description.slice(0, 40)
+                      : `Section ${secIdx + 1}`;
 
                     return (
                       <div key={secIdx} className="glass-card rounded-xl p-3 space-y-1.5">
@@ -1390,80 +1415,72 @@ export function FitTab({
                             </span>
                           )}
                         </div>
-                        {sectionLines.filter((l) => l.text.trim()).map((line) => {
-                          const fire = fireMap.get(line.lineIndex);
-                          const pct = fire ? Math.round((fire.fire_strength / maxStrength) * 100) : 0;
-                          const holdLabel = fire
-                            ? fire.avg_hold_ms < 300
-                              ? "tap"
-                              : fire.avg_hold_ms < 1000
-                                ? "hold"
-                                : "deep"
-                            : null;
+                        {sectionLines
+                          .filter((l) => l.text.trim())
+                          .map((line) => {
+                            const fire = lyricFireBreakdown.fireMap.get(line.lineIndex);
+                            const pct = fire
+                              ? Math.round(
+                                  (fire.fire_strength / lyricFireBreakdown.maxStrength) *
+                                    100,
+                                )
+                              : 0;
+                            const holdLabel = fire
+                              ? fire.avg_hold_ms < 300
+                                ? "tap"
+                                : fire.avg_hold_ms < 1000
+                                  ? "hold"
+                                  : "deep"
+                              : null;
 
-                          return (
-                            <div key={line.lineIndex} className="relative py-1">
-                              {pct > 0 && (
-                                <div
-                                  className="absolute inset-y-0 left-0 rounded"
-                                  style={{
-                                    width: `${pct}%`,
-                                    background: "linear-gradient(90deg, rgba(255,120,30,0.08) 0%, rgba(255,120,30,0.15) 100%)",
-                                  }}
-                                />
-                              )}
-                              <div className="relative flex items-center justify-between gap-2 px-1.5">
-                                <span
-                                  className={`text-[11px] leading-snug flex-1 min-w-0 ${
-                                    fire ? "text-foreground/80" : "text-muted-foreground/40"
-                                  }`}
-                                >
-                                  {line.text}
-                                </span>
-                                {fire && (
-                                  <span className="text-[9px] font-mono text-orange-400/50 shrink-0">
-                                    {fire.fire_count}× {holdLabel}
-                                  </span>
+                            return (
+                              <div key={line.lineIndex} className="relative py-1">
+                                {pct > 0 && (
+                                  <div
+                                    className="absolute inset-y-0 left-0 rounded"
+                                    style={{
+                                      width: `${pct}%`,
+                                      background:
+                                        "linear-gradient(90deg, rgba(255,120,30,0.08) 0%, rgba(255,120,30,0.15) 100%)",
+                                    }}
+                                  />
                                 )}
+                                <div className="relative flex items-center justify-between gap-2 px-1.5">
+                                  <span
+                                    className={`text-[11px] leading-snug flex-1 min-w-0 ${
+                                      fire
+                                        ? "text-foreground/80"
+                                        : "text-muted-foreground/40"
+                                    }`}
+                                  >
+                                    {line.text}
+                                  </span>
+                                  {fire && (
+                                    <span className="text-[9px] font-mono text-orange-400/50 shrink-0">
+                                      {fire.fire_count}× {holdLabel}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
                       </div>
                     );
-                  })}
+                  },
+                )}
 
-                  {linesBySection.size >= 2 && (() => {
-                    const sectionFireCounts = Array.from(linesBySection.entries())
-                      .map(([secIdx, lines]) => ({
-                        secIdx,
-                        fires: lines.reduce((s, l) => s + (fireMap.get(l.lineIndex)?.fire_count ?? 0), 0),
-                        label: (sections[secIdx] as any)?.description?.slice(0, 30) ?? `Section ${secIdx + 1}`,
-                      }))
-                      .filter((s) => s.fires > 0)
-                      .sort((a, b) => b.fires - a.fires);
-
-                    if (sectionFireCounts.length >= 2) {
-                      const top = sectionFireCounts[0];
-                      const second = sectionFireCounts[1];
-                      if (top.fires > second.fires * 2) {
-                        return (
-                          <p className="text-[11px] text-muted-foreground/50 px-1 leading-relaxed">
-                            "{top.label}" is carrying your song — it has {Math.round((top.fires / sectionFireCounts.reduce((s, c) => s + c.fires, 0)) * 100)}% of all fires. That's your clip section.
-                          </p>
-                        );
-                      }
-                      return (
-                        <p className="text-[11px] text-muted-foreground/50 px-1 leading-relaxed">
-                          Fires spread across multiple sections — your song holds attention from start to finish.
-                        </p>
-                      );
-                    }
-                    return null;
-                  })()}
-                </div>
-              );
-            })()}
+                {sectionFireCounts.length >= 2 &&
+                  (sectionFireCounts[0].fires > sectionFireCounts[1].fires * 2 ? (
+                    <p className="text-[11px] text-muted-foreground/50 px-1 leading-relaxed">
+                      "{sectionFireCounts[0].label}" is carrying your song — it has {Math.round((sectionFireCounts[0].fires / sectionFireCounts.reduce((s, c) => s + c.fires, 0)) * 100)}% of all fires. That's your clip section.
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground/50 px-1 leading-relaxed">
+                      Fires spread across multiple sections — your song holds attention from start to finish.
+                    </p>
+                  ))}
+              </div>
+            )}
 
             {/* ── What your song did (closing screen) ── */}
             {closingDist.length > 0 && empowermentPromise && (
@@ -1894,11 +1911,6 @@ export function FitTab({
                           : typeof section.end === "number" && section.end > 0
                             ? section.end
                             : null;
-                        const fmtTime = (t: number) => {
-                          const m = Math.floor(t / 60);
-                          const s = Math.floor(t % 60);
-                          return `${m}:${s.toString().padStart(2, "0")}`;
-                        };
                         const tsLabel = startSec != null
                           ? endSec != null
                             ? `${fmtTime(startSec)} – ${fmtTime(endSec)}`
