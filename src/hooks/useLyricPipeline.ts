@@ -568,10 +568,16 @@ export function useLyricPipeline({
   );
   const phraseResultRef = useRef<ReturnType<typeof buildPhrases> | null>(null);
   const [pipelineDanceId, setPipelineDanceId] = useState<string | null>(
-    (initialLyric as any)?.render_data?.pipelineDanceId ?? null,
+    (initialLyric as any)?.render_data?.pipelineDanceId
+    ?? ((initialLyric as any)?.is_published === true ? (initialLyric as any)?.id ?? null : null)
+    ?? null,
   );
   const [pipelineDanceUrl, setPipelineDanceUrl] = useState<string | null>(
-    (initialLyric as any)?.render_data?.pipelineDanceUrl ?? null,
+    (initialLyric as any)?.render_data?.pipelineDanceUrl
+    ?? ((initialLyric as any)?.is_published === true && (initialLyric as any)?.artist_slug && (initialLyric as any)?.url_slug
+        ? `/${(initialLyric as any).artist_slug}/${(initialLyric as any).url_slug}/lyric-dance`
+        : null)
+    ?? null,
   );
   const [sectionImageUrls, setSectionImageUrls] = useState<(string | null)[]>(
     Array.isArray((initialLyric as any)?.section_images)
@@ -922,16 +928,26 @@ export function useLyricPipeline({
     if (danceIdLookedUpRef.current || pipelineDanceId) return;
     if (!user || !initialLyric || !cinematicDirection) return;
     danceIdLookedUpRef.current = true;
+
+    const storedUrlSlug = (initialLyric as any)?.url_slug;
+    const storedArtistSlug = (initialLyric as any)?.artist_slug;
+
     void (async () => {
-      const { slugify } = await import("@/lib/slugify");
-      const s = slugify(initialLyric.title || "untitled");
-      const { data: d }: any = await supabase
+      let query = supabase
         .from("lyric_projects")
         .select("id, artist_slug, url_slug")
         .eq("user_id", user.id)
-        .eq("url_slug", s)
-        .eq("is_published", true)
-        .maybeSingle();
+        .eq("is_published", true);
+
+      if (storedUrlSlug && storedArtistSlug) {
+        query = query.eq("artist_slug", storedArtistSlug).eq("url_slug", storedUrlSlug);
+      } else {
+        const { slugify } = await import("@/lib/slugify");
+        const s = slugify(initialLyric.title || "untitled");
+        query = query.eq("url_slug", s);
+      }
+
+      const { data: d }: any = await query.maybeSingle();
       if (d) {
         setPipelineDanceId(d.id);
         setPipelineDanceUrl(`/${d.artist_slug}/${d.url_slug}/lyric-dance`);
