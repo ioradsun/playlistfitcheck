@@ -14,7 +14,7 @@ import {
   Sparkles,
   Eye,
   Zap,
-  Image,
+  Image as ImageIcon,
   Copy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -358,7 +358,15 @@ export function FitTab({
   const crowdfitTogglingRef = useRef(false);
   const [crowdfitToggling, setCrowdfitToggling] = useState(false);
 
-  const [fireData, setFireData] = useState(initialFireData);
+  const [fireData, setFireData] = useState({
+    fireStrength: null as any,
+    rawFires: [] as any[],
+    closingDist: [] as any[],
+    freeResponses: [] as any[],
+    totalFires: 0,
+    uniqueListeners: 0,
+    resultsLoaded: false,
+  });
 
 
 
@@ -527,7 +535,7 @@ export function FitTab({
     if (!sectionImageUrls.length) return;
     sectionImageUrls.forEach((url) => {
       if (!url) return;
-      const img = new Image();
+      const img = new window.Image();
       img.src = url;
     });
   }, [sectionImageUrls]);
@@ -1073,7 +1081,15 @@ export function FitTab({
   }, [lyricFireBreakdown]);
 
   useEffect(() => {
-    setFireData(initialFireData);
+    setFireData({
+      fireStrength: null,
+      rawFires: [],
+      closingDist: [],
+      freeResponses: [],
+      totalFires: 0,
+      uniqueListeners: 0,
+      resultsLoaded: false,
+    });
   }, [publishedDanceId]);
 
   useEffect(() => {
@@ -1263,11 +1279,11 @@ export function FitTab({
                 </div>
               )}
             </div>
-            {pipeline.savedId ? (
+            {savedId ? (
               <SpotifyLinkField
-                spotifyTrackId={pipeline.spotifyTrackId}
-                setSpotifyTrackId={pipeline.setSpotifyTrackId}
-                savedId={pipeline.savedId}
+                spotifyTrackId={pipeline.spotifyTrackId ?? null}
+                setSpotifyTrackId={pipeline.setSpotifyTrackId ?? (() => {})}
+                savedId={savedId}
               />
             ) : null}
 
