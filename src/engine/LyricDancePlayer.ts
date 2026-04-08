@@ -1791,6 +1791,10 @@ export class LyricDancePlayer {
     },
   ) {
     this.data = data;
+    // Normalize: DB stores lyrics as 'lines', engine uses 'lyrics' internally
+    if (!this.data.lyrics?.length && (this.data as any).lines?.length) {
+      this.data = { ...this.data, lyrics: (this.data as any).lines };
+    }
     this.bgCanvas = bgCanvas;
     this.textCanvas = textCanvas;
     this.container = container;
