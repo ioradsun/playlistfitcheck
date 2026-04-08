@@ -155,7 +155,11 @@ async function createDanceRowAndGenerateImages({
 
   const { slugify } = await import("@/lib/slugify");
   const songSlugVal = slugify(lyricData?.title || "untitled");
-  const artistSlugVal = slugify(artistNameRef.current || "artist");
+  const rawArtistName = artistNameRef.current;
+  const artistSlugVal =
+    rawArtistName && rawArtistName !== "artist"
+      ? slugify(rawArtistName)
+      : `artist-${user.id.slice(0, 8)}`;
 
   let resolvedDanceId: string | null = null;
   const { data: existing }: any = await supabase
@@ -207,7 +211,8 @@ async function createDanceRowAndGenerateImages({
         user_id: user.id,
         artist_slug: artistSlugVal,
         url_slug: songSlugVal,
-        artist_name: artistNameRef.current || "artist",
+        artist_name:
+          artistNameRef.current !== "artist" ? artistNameRef.current : null,
         title: lyricData?.title || "Untitled",
         audio_url: urlData.publicUrl,
         lines: isInstrumental
@@ -866,11 +871,15 @@ export function useLyricPipeline({
     if (!user) return;
     const p = supabase
       .from("profiles")
-      .select("display_name")
+      .select("display_name, spotify_artist_slug")
       .eq("id", user.id)
       .single()
       .then(({ data }) => {
-        if (data?.display_name) artistNameRef.current = data.display_name;
+        if (data?.display_name) {
+          artistNameRef.current = data.display_name;
+        } else if (data?.spotify_artist_slug) {
+          artistNameRef.current = data.spotify_artist_slug;
+        }
       });
     artistNameReadyRef.current = Promise.resolve(p);
   }, [user]);
@@ -1424,7 +1433,10 @@ export function useLyricPipeline({
 
         const sharedBody = {
           title: lyricData.title,
-          artist: artistNameRef.current,
+          artist:
+            artistNameRef.current !== "artist"
+              ? artistNameRef.current
+              : undefined,
           lines: lyricsForDirection,
           lyrics: lyricsForDirection
             .map((line: { text: string }) => line.text)
@@ -1749,7 +1761,10 @@ export function useLyricPipeline({
 
         const body = {
           title: lyricData?.title ?? "Untitled Beat",
-          artist: artistNameRef.current,
+          artist:
+            artistNameRef.current !== "artist"
+              ? artistNameRef.current
+              : undefined,
           bpm: beatGrid.bpm,
           lines: [],
           lyrics: "",
