@@ -232,6 +232,7 @@ export function usePipelineScheduler({
         (initialLyric as any).render_data?.cinematic_direction)
     ),
   );
+  const imageSelfHealRef = useRef(false);
 
   useEffect(() => {
     if (!transcriptionDone || !beatGridDone || !lines?.length) return;
@@ -246,6 +247,24 @@ export function usePipelineScheduler({
     lines,
     pipelineRetryCount,
     startCinematicDirection,
+  ]);
+
+  useEffect(() => {
+    if (imageSelfHealRef.current) return;
+    if (generationStatus.cinematicDirection !== "done") return;
+    if (generationStatus.sectionImages !== "idle") return;
+    if (!cinematicDirection || !lines?.length) return;
+    const sections = (cinematicDirection as any)?.sections;
+    if (!Array.isArray(sections) || sections.length === 0) return;
+
+    imageSelfHealRef.current = true;
+    setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "idle" }));
+    cinematicTriggeredRef.current = false;
+  }, [
+    generationStatus.cinematicDirection,
+    generationStatus.sectionImages,
+    cinematicDirection,
+    lines,
   ]);
 
   useEffect(() => {
