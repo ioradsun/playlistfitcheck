@@ -202,6 +202,8 @@ export class ParticleEngine {
   }
 
 
+  getSystem(): string { return this.config.system; }
+
   setSystem(system: string): void {
     this.config = { ...this.config, system, foreground: FOREGROUND_ALLOWED.has(system) };
     this.clear();
