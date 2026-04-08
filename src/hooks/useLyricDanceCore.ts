@@ -84,7 +84,7 @@ export function useLyricDanceCore({
     { bootMode: "minimal", eagerUpgrade: true, usePool, postId: _postId ?? lyricDanceId, evicted },
   );
   const durationSec = useMemo(() => {
-    const lines = data?.lyrics ?? [];
+    const lines = (data as any)?.lines ?? (data as any)?.lyrics ?? [];
     if (lines.length) {
       return (lines[lines.length - 1] as any).end ?? 0;
     }
