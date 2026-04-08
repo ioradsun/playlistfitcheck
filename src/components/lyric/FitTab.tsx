@@ -420,7 +420,7 @@ export function FitTab({
     setCrowdfitToggling(true);
     try {
       if (crowdfitPostId) {
-        // Remove from CrowdFit
+        // Remove from FMLY
         await supabase
           .from("feed_posts" as any)
           .update({ status: "removed" })
@@ -431,7 +431,7 @@ export function FitTab({
           .eq("id", publishedDanceId)
           .eq("user_id", user.id);
         setCrowdfitPostId(null);
-        toast.success("Removed from CrowdFit");
+        toast.success("Removed from FMLY");
       } else {
         // Look for existing removed post to reactivate
         const { data: existing }: any = await supabase
@@ -442,10 +442,11 @@ export function FitTab({
           .maybeSingle();
 
         if (existing) {
-          await supabase
+          const { error: reactivateError }: any = await supabase
             .from("feed_posts" as any)
             .update({ status: "live" })
             .eq("id", existing.id);
+          if (reactivateError) throw new Error(reactivateError.message);
           await supabase
             .from("lyric_projects")
             .update({ is_published: true, published_at: new Date().toISOString() })
@@ -455,26 +456,20 @@ export function FitTab({
         } else {
           const expiresAt = new Date();
           expiresAt.setDate(expiresAt.getDate() + 21);
-          const { data: inserted }: any = await supabase
+          const { data: inserted, error: insertError }: any = await supabase
             .from("feed_posts" as any)
             .insert({
               user_id: user.id,
-              title: lyricData.title || "Untitled",
               caption: "",
-                            project_id: publishedDanceId,
-              spotify_track_id: pipeline.spotifyTrackId ?? null,
-              spotify_track_url: pipeline.spotifyTrackId
-                ? `https://open.spotify.com/track/${pipeline.spotifyTrackId}`
-                : null,
-              album_art_url: null,
+              project_id: publishedDanceId,
               tags_json: [],
-              track_artists_json: [],
               status: "live",
               submitted_at: new Date().toISOString(),
               expires_at: expiresAt.toISOString(),
             })
             .select("id")
             .single();
+          if (insertError) throw new Error(insertError.message);
           if (inserted) {
             setCrowdfitPostId(inserted.id);
             await supabase
@@ -485,10 +480,10 @@ export function FitTab({
           }
         }
         window.dispatchEvent(new Event("songfit:dance-published"));
-        toast.success("Published to CrowdFit!");
+        toast.success("Published to FMLY!");
       }
     } catch (e: any) {
-      toast.error(e.message || "CrowdFit toggle failed");
+      toast.error(e.message || "Failed to post to FMLY");
     } finally {
       crowdfitTogglingRef.current = false;
       setCrowdfitToggling(false);
@@ -498,7 +493,6 @@ export function FitTab({
     publishedDanceId,
     publishedUrl,
     crowdfitPostId,
-    lyricData.title,
   ]);
 
   // ── Audio playback + waveform ─────────────────────────────────────────
