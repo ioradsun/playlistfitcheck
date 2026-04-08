@@ -36,7 +36,6 @@ import type { BeatGridData } from "@/hooks/useBeatGrid";
 // FrameRenderState import removed — V3 derives from cinematicDirection
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus } from "./LyricFitTab";
-import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useVoteGate } from "@/hooks/useVoteGate";
 
@@ -69,17 +68,15 @@ interface Props {
   cinematicDirection: any | null;
   generationStatus: GenerationStatus;
   words?: Array<{ word: string; start: number; end: number }> | null;
+  initialLyric?: any;
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
-  initialDanceId?: string | null;
-  initialDanceUrl?: string | null;
   sectionImageUrls?: (string | null)[];
   sectionImageProgress?: { done: number; total: number } | null;
   sectionImageError?: string | null;
   onTitleChange?: (newTitle: string) => void;
   subView?: "fit" | "data";
   filmMode?: "song" | "beat";
-  onPlayerReady?: (ready: boolean) => void;
 }
 
 const fmtTime = (sec: number) => {
@@ -271,52 +268,41 @@ export function FitTab({
   cinematicDirection,
   generationStatus,
   words,
+  initialLyric,
   onHeaderProject,
   onBack,
-  initialDanceId,
-  initialDanceUrl,
   sectionImageUrls = [],
   sectionImageProgress = null,
   sectionImageError = null,
   onTitleChange,
   subView = "fit",
   filmMode = "song",
-  onPlayerReady,
 }: Props) {
   const { user, profile } = useAuth();
   const { canCreate, credits, required } = useVoteGate();
 
-  const [publishedUrl, setPublishedUrl] = useState<string | null>(
-    initialDanceUrl ?? null,
-  );
-  const [publishedDanceId, setPublishedDanceId] = useState<string | null>(
-    initialDanceId ?? null,
-  );
+  const danceData = useMemo<LyricDanceData | null>(() => {
+    if (!savedId || !cinematicDirection || !beatGrid) return null;
+    return {
+      id: savedId,
+      cinematic_direction: cinematicDirection,
+      beat_grid: beatGrid,
+      words: words ?? null,
+      lines: lyricData?.lines ?? null,
+      section_images: sectionImageUrls.length ? sectionImageUrls : null,
+      palette: null,
+      auto_palettes: null,
+    } as any;
+  }, [savedId, cinematicDirection, beatGrid, words, lyricData, sectionImageUrls]);
 
-  useEffect(() => {
-    if (initialDanceId) setPublishedDanceId(initialDanceId);
-  }, [initialDanceId]);
-
-  useEffect(() => {
-    if (initialDanceUrl) setPublishedUrl(initialDanceUrl);
-  }, [initialDanceUrl]);
-
-  const [prefetchedDanceData, setPrefetchedDanceData] =
-    useState<LyricDanceData | null>(() => {
-      // For existing projects, the pipeline props already contain
-      // the full row data — use it directly, no DB fetch needed.
-      if (renderData && cinematicDirection && beatGrid && savedId) {
-        return {
-          id: savedId,
-          cinematic_direction: cinematicDirection,
-          beat_grid: beatGrid,
-          words: words ?? null,
-          section_images: sectionImageUrls.length ? sectionImageUrls : null,
-          lines: lyricData?.lines ?? null,
-        } as any;
-      }
-      return null;
-    });
+  const danceId = savedId;
+  const danceUrl = useMemo(() => {
+    const row = initialLyric as any;
+    if (row?.artist_slug && row?.url_slug) {
+      return `/${row.artist_slug}/${row.url_slug}/lyric-dance`;
+    }
+    return null;
+  }, [initialLyric]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxScene, setLightboxScene] = useState<{ imageUrl: string; description: string; timestamp: string; visualMood?: string; index: number } | null>(null);
   const [clipComposerVisible, setClipComposerVisible] = useState(false);
@@ -332,50 +318,8 @@ export function FitTab({
     const player = dancePlayerRef.current?.getPlayer();
     if (!player) return;
     player.beatVisEnabled = filmMode === "beat";
-  }, [filmMode, publishedDanceId, prefetchedDanceData]);
+  }, [filmMode, danceId, danceData]);
   const siteCopy = useSiteCopy();
-
-  const refetchDanceData = useCallback(() => {
-    if (!publishedDanceId) {
-      setPrefetchedDanceData(null);
-      return;
-    }
-    Promise.resolve(supabase
-      .from("lyric_projects" as any)
-      .select(LYRIC_DANCE_COLUMNS)
-      .eq("id", publishedDanceId)
-      .maybeSingle()
-      .then(({ data: row }) => {
-        if (row) {
-          setPrefetchedDanceData(row as any as LyricDanceData);
-          const dbImages = (row as any).section_images;
-          if (Array.isArray(dbImages) && dbImages.some(Boolean)) {
-            pipeline.setSectionImageUrls(dbImages);
-            pipeline.setSectionImageProgress({
-              done: dbImages.filter(Boolean).length,
-              total: dbImages.length,
-            });
-            if (dbImages.every(Boolean)) {
-              pipeline.setGenerationStatus((prev) => ({
-                ...prev,
-                sectionImages: "done",
-              }));
-            }
-          }
-        }
-      })).catch(() => {});
-  }, [publishedDanceId, pipeline]);
-
-  const hasFetchedRef = useRef(false);
-  useEffect(() => {
-    if (!publishedDanceId || hasFetchedRef.current) return;
-    if (prefetchedDanceData) {
-      hasFetchedRef.current = true;
-      return; // already have the data from props
-    }
-    hasFetchedRef.current = true;
-    refetchDanceData();
-  }, [publishedDanceId, prefetchedDanceData, refetchDanceData]);
 
   // ── CrowdFit publish state ─────────────────────────────────────────
   const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
@@ -396,7 +340,7 @@ export function FitTab({
 
   // Look for existing CrowdFit post when we know the dance ID
   useEffect(() => {
-    if (!publishedDanceId || !user) {
+    if (!danceId || !user) {
       setCrowdfitPostId(null);
       return;
     }
@@ -404,7 +348,7 @@ export function FitTab({
       .from("feed_posts" as any)
       .select("id, status")
       .eq("user_id", user.id)
-      .eq("project_id", publishedDanceId)
+      .eq("project_id", danceId)
       .maybeSingle()
       .then(({ data }: any) => {
         if (data && data.status !== "removed") {
@@ -413,14 +357,14 @@ export function FitTab({
           setCrowdfitPostId(null);
         }
       })).catch(() => setCrowdfitPostId(null));
-  }, [publishedDanceId, user]);
+  }, [danceId, user]);
 
   // CrowdFit toggle handler
   const handleCrowdfitToggle = useCallback(async () => {
     if (
       !user ||
-      !publishedDanceId ||
-      !publishedUrl ||
+      !danceId ||
+      !danceUrl ||
       crowdfitTogglingRef.current
     )
       return;
@@ -436,7 +380,7 @@ export function FitTab({
         await supabase
           .from("lyric_projects")
           .update({ is_published: false, published_at: null })
-          .eq("id", publishedDanceId)
+          .eq("id", danceId)
           .eq("user_id", user.id);
         setCrowdfitPostId(null);
         toast.success("Removed from FMLY");
@@ -446,7 +390,7 @@ export function FitTab({
           .from("feed_posts" as any)
           .select("id")
           .eq("user_id", user.id)
-          .eq("project_id", publishedDanceId)
+          .eq("project_id", danceId)
           .maybeSingle();
 
         if (existing) {
@@ -458,7 +402,7 @@ export function FitTab({
           await supabase
             .from("lyric_projects")
             .update({ is_published: true, published_at: new Date().toISOString() })
-            .eq("id", publishedDanceId)
+            .eq("id", danceId)
             .eq("user_id", user.id);
           setCrowdfitPostId(existing.id);
         } else {
@@ -469,7 +413,7 @@ export function FitTab({
             .insert({
               user_id: user.id,
               caption: "",
-              project_id: publishedDanceId,
+              project_id: danceId,
               tags_json: [],
               status: "live",
               submitted_at: new Date().toISOString(),
@@ -483,7 +427,7 @@ export function FitTab({
             await supabase
               .from("lyric_projects")
               .update({ is_published: true, published_at: new Date().toISOString() })
-              .eq("id", publishedDanceId)
+              .eq("id", danceId)
               .eq("user_id", user.id);
           }
         }
@@ -498,8 +442,8 @@ export function FitTab({
     }
   }, [
     user,
-    publishedDanceId,
-    publishedUrl,
+    danceId,
+    danceUrl,
     crowdfitPostId,
   ]);
 
@@ -659,8 +603,8 @@ export function FitTab({
   // link always show the original Whisper transcription.
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSaveInitRef = useRef(false);
-  const publishedDanceIdRef = useRef(publishedDanceId);
-  publishedDanceIdRef.current = publishedDanceId;
+  const danceIdRef = useRef(danceId);
+  danceIdRef.current = danceId;
 
   useEffect(() => {
     if (!lyricData?.lines) return;
@@ -670,11 +614,11 @@ export function FitTab({
       return;
     }
     // Nothing to save to if no dance is published yet
-    if (!publishedDanceIdRef.current) return;
+    if (!danceIdRef.current) return;
 
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(async () => {
-      const danceId = publishedDanceIdRef.current;
+      const danceId = danceIdRef.current;
       if (!danceId) return;
       const mainLines = getMainLines(linesRef);
       if (mainLines.length === 0) return;
@@ -729,75 +673,22 @@ export function FitTab({
       .catch(() => setFontReady(true));
   }, [cinematicDirection]);
 
-  const playerReady = useMemo(() => {
-    try {
-      if (!publishedDanceId) return false;
-      if (!prefetchedDanceData) return false;
-      const isInstrumental = !!(prefetchedDanceData.cinematic_direction as any)?._instrumental;
-
-      if (generationStatus.beatGrid !== "done") return false;
-      if (generationStatus.cinematicDirection !== "done") return false;
-
-      const sections = (cinematicDirection as any)?.sections;
-      if (Array.isArray(sections) && sections.length > 0 && !isInstrumental) {
-        if (
-          generationStatus.sectionImages !== "done" &&
-          generationStatus.sectionImages !== "error"
-        )
-          return false;
-      }
-
-      if (
-        !isInstrumental &&
-        (!prefetchedDanceData.words ||
-        (prefetchedDanceData.words as any[]).length === 0)
-      )
-        return false;
-      if (!prefetchedDanceData.beat_grid) return false;
-
-      // Ground-truth checks: ensure the prefetched DB snapshot has completed data.
-      const cd = prefetchedDanceData.cinematic_direction as any;
-      if (!cd || Array.isArray(cd)) return false;
-      // sections can be empty for instrumental/no-section songs — that's valid
-
-      if (Array.isArray(sections) && sections.length > 0 && !isInstrumental) {
-        const snapImages = (prefetchedDanceData as any).section_images;
-        if (!Array.isArray(snapImages) || !snapImages.some(Boolean))
-          return false;
-      }
-
-      if (!fontReady) return false;
-
-      return true;
-    } catch {
-      return false;
-    }
-  }, [
-    publishedDanceId,
-    prefetchedDanceData,
-    generationStatus,
-    cinematicDirection,
-    fontReady,
-  ]);
+  const playerReady = !!(danceData && fontReady);
 
   const LyricDanceEmbedModule = useMemo(
     () =>
-      publishedDanceId
+      danceId
         ? lazy(() =>
             import("@/components/lyric/LyricDanceEmbed").then((m) => ({
               default: m.LyricDanceEmbed,
             })),
           )
         : null,
-    [publishedDanceId],
+    [danceId],
   );
 
   useEffect(() => {
-    onPlayerReady?.(playerReady);
-  }, [playerReady, onPlayerReady]);
-
-  useEffect(() => {
-    if (playerReady || !publishedDanceId) {
+    if (playerReady || !danceId) {
       setImageWaitExpired(false);
       return;
     }
@@ -805,24 +696,7 @@ export function FitTab({
     setImageWaitExpired(false);
     const timer = setTimeout(() => setImageWaitExpired(true), 60_000);
     return () => clearTimeout(timer);
-  }, [playerReady, publishedDanceId]);
-
-  const allDone =
-    generationStatus.beatGrid === "done" &&
-    generationStatus.renderData === "done" &&
-    generationStatus.cinematicDirection === "done" &&
-    (generationStatus.sectionImages === "done" ||
-      generationStatus.sectionImages === "error");
-
-  // Refetch dance data when core pipeline finishes OR when image URLs arrive/change
-  useEffect(() => {
-    if (!publishedDanceId) return;
-    if (!allDone && !sectionImageUrls.some(Boolean)) return;
-    const timer = setTimeout(() => {
-      refetchDanceData();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [allDone, publishedDanceId, refetchDanceData, sectionImageUrls]);
+  }, [playerReady, danceId]);
 
   useEffect(() => {
     sectionImageUrls.filter(Boolean).forEach((url) => preloadImage(url!));
@@ -872,28 +746,28 @@ export function FitTab({
   // Hydrate empowermentPromise from DB snapshot once on load.
   // Prevents stale prefetched values from overriding regenerate attempts.
   useEffect(() => {
-    if (!prefetchedDanceData || hasHydratedEmpowerment) return;
+    if (!danceData || hasHydratedEmpowerment) return;
 
-    const stored = (prefetchedDanceData as any).empowerment_promise;
+    const stored = (danceData as any).empowerment_promise;
     if (stored?.hooks?.length && !empowermentPromise && !empowermentLoading) {
       setEmpowermentPromise(stored);
-      if (publishedDanceId) fetchVoteCounts(publishedDanceId);
+      if (danceId) fetchVoteCounts(danceId);
     }
 
     setHasHydratedEmpowerment(true);
   }, [
-    prefetchedDanceData,
+    danceData,
     hasHydratedEmpowerment,
     empowermentPromise,
     empowermentLoading,
-    publishedDanceId,
+    danceId,
     fetchVoteCounts,
   ]);
 
   useEffect(() => {
     if (!fmlyHookEnabled) return;
-    if (!publishedDanceId) return;
-    if (!allCoreDone && !prefetchedDanceData) return; // need either pipeline done OR DB data available
+    if (!danceId) return;
+    if (!allCoreDone && !danceData) return; // need either pipeline done OR DB data available
     if (empowermentPromise || empowermentLoading || empowermentError) return;
 
     const lines = lyricData?.lines;
@@ -926,19 +800,19 @@ export function FitTab({
           await supabase
             .from("lyric_projects" as any)
             .update({ empowerment_promise: data })
-            .eq("id", publishedDanceId);
+            .eq("id", danceId);
         } catch {
           // noop
         }
-        fetchVoteCounts(publishedDanceId);
+        fetchVoteCounts(danceId);
       })
       .catch(() => setEmpowermentError(true))
       .finally(() => setEmpowermentLoading(false));
   }, [
     fmlyHookEnabled,
     allCoreDone,
-    publishedDanceId,
-    prefetchedDanceData,
+    danceId,
+    danceData,
     empowermentPromise,
     empowermentLoading,
     empowermentError,
@@ -1121,30 +995,30 @@ export function FitTab({
       uniqueListeners: 0,
       resultsLoaded: false,
     });
-  }, [publishedDanceId]);
+  }, [danceId]);
 
   useEffect(() => {
-    if (subView !== "data" || !publishedDanceId || fireData.resultsLoaded) return;
+    if (subView !== "data" || !danceId || fireData.resultsLoaded) return;
     Promise.all([
-      fetchFireStrength(publishedDanceId),
-      fetchFireData(publishedDanceId),
+      fetchFireStrength(danceId),
+      fetchFireData(danceId),
       supabase
         .from("v_closing_distribution" as any)
         .select("hook_index, pick_count, pct")
-        .eq("project_id", publishedDanceId),
+        .eq("project_id", danceId),
       supabase
         .from("v_free_form_responses" as any)
         .select("free_text, repeat_count")
-        .eq("project_id", publishedDanceId)
+        .eq("project_id", danceId)
         .limit(20),
       supabase
         .from("project_fires" as any)
         .select("id", { count: "exact", head: true })
-        .eq("project_id", publishedDanceId),
+        .eq("project_id", danceId),
       supabase
         .from("project_exposures" as any)
         .select("session_id", { count: "exact" })
-        .eq("project_id", publishedDanceId),
+        .eq("project_id", danceId),
     ]).then(([strength, fires, dist, free, count, exposures]) => {
       // TODO: if project_exposures is not already session-deduplicated, switch this
       // to a distinct-session count query and keep the Set fallback below.
@@ -1163,7 +1037,7 @@ export function FitTab({
     }).catch(() => {
       setFireData((prev) => ({ ...prev, resultsLoaded: true }));
     });
-  }, [subView, publishedDanceId, fireData.resultsLoaded]);
+  }, [subView, danceId, fireData.resultsLoaded]);
 
   const handleRetryImages = useCallback(() => {
     void pipeline.retryImages();
@@ -1174,12 +1048,12 @@ export function FitTab({
       <div className="flex-1 px-4 py-6 space-y-4 max-w-2xl mx-auto">
         {/* Dance preview — hidden on Data view */}
         <div style={{ display: subView === "fit" ? undefined : "none" }}>
-          {publishedUrl && publishedDanceId ? (
+          {danceUrl && danceId ? (
             <div className="space-y-3">
             {/* Action toolbar — above the player */}
             <div className="flex items-center justify-center gap-1">
               <a
-                href={publishedUrl}
+                href={danceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
@@ -1196,12 +1070,12 @@ export function FitTab({
               </button>
               <button
                 onClick={() => {
-                  const parsed = publishedUrl
-                    ? parseLyricDanceUrl(publishedUrl)
+                  const parsed = danceUrl
+                    ? parseLyricDanceUrl(danceUrl)
                     : null;
                   const url = parsed
                     ? buildShareUrl(parsed.artistSlug, parsed.songSlug)
-                    : `${window.location.origin}${publishedUrl}`;
+                    : `${window.location.origin}${danceUrl}`;
                   navigator.clipboard
                     .writeText(url)
                     .then(() => toast.success("Link copied!"))
@@ -1248,7 +1122,7 @@ export function FitTab({
                       cinematicDirection,
                       words:
                         wordsRef.current ??
-                        (prefetchedDanceData as any)?.words ??
+                        (danceData as any)?.words ??
                         "no words available",
                     };
                     navigator.clipboard
@@ -1283,14 +1157,14 @@ export function FitTab({
                   {LyricDanceEmbedModule ? (
                     <LyricDanceEmbedModule
                       ref={dancePlayerRef}
-                      lyricDanceId={publishedDanceId}
+                      lyricDanceId={danceId}
                       songTitle={lyricData.title || "Untitled"}
                       artistName={profile?.display_name || ""}
                       avatarUrl={profile?.avatar_url ?? null}
                       isVerified={profile?.is_verified ?? false}
                       userId={user?.id ?? null}
-                      prefetchedData={prefetchedDanceData}
-                      lyricDanceUrl={publishedUrl ?? null}
+                      prefetchedData={danceData}
+                      lyricDanceUrl={danceUrl ?? null}
                     />
                   ) : null}
                 </Suspense>
@@ -1298,7 +1172,7 @@ export function FitTab({
                 <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-3">
                   <Loader2 size={20} className="animate-spin text-white/20" />
                   <span className="text-[10px] font-mono text-white/25 tracking-wider uppercase">
-                    {!prefetchedDanceData
+                    {!danceData
                       ? "loading..."
                       : generationStatus.sectionImages === "running"
                         ? `images ${sectionImageUrls.filter(Boolean).length}/${(cinematicDirection as any)?.sections?.length ?? "?"}`
@@ -1344,7 +1218,7 @@ export function FitTab({
 
         {subView === "data" && (
           <div className="space-y-5 pb-8">
-            {!publishedDanceId && (
+            {!danceId && (
               <div className="flex flex-col items-center gap-3 py-12">
                 <span style={{ fontSize: 32 }}>🔥</span>
                 <p className="text-[12px] text-muted-foreground text-center leading-relaxed max-w-[260px]">
@@ -1353,7 +1227,7 @@ export function FitTab({
               </div>
             )}
 
-            {publishedDanceId && (
+            {danceId && (
               <>
                 {/* ── Headline ── */}
                 {fireData.totalFires > 0 && (
