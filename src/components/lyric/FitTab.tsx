@@ -423,29 +423,6 @@ export function FitTab({
     !publishedUrl ||
     (publishedLyricsHash !== null && currentLyricsHash !== publishedLyricsHash);
 
-  useEffect(() => {
-    if (!user || !lyricData) return;
-    const songSlug = slugify(lyricData.title || "untitled");
-    if (!songSlug) return;
-
-    const danceP = supabase
-      .from("lyric_projects" as any)
-      .select("id, artist_slug, url_slug, lines")
-      .eq("user_id", user.id)
-      .eq("url_slug", songSlug)
-      .maybeSingle();
-
-
-    danceP.then((danceResult) => {
-      const dance = danceResult.data as any;
-      if (dance) {
-        setPublishedUrl(`/${dance.artist_slug}/${dance.url_slug}/lyric-dance`);
-        setPublishedDanceId(dance.id);
-        const pubLines = Array.isArray(dance.lines) ? dance.lines : [];
-        setPublishedLyricsHash(computeLyricsHash(pubLines));
-      }
-    });
-  }, [user, lyricData, computeLyricsHash]);
 
   // Look for existing CrowdFit post when we know the dance ID
   useEffect(() => {
