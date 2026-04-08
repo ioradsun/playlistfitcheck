@@ -183,7 +183,7 @@ export default function ArtistStage() {
           .order("engagement_score", { ascending: false })
           .limit(10)
           .then(({ data: posts }) => {
-            if (posts) setCrowdFitPosts(posts as CrowdFitPost[]);
+            if (posts) setCrowdFitPosts(posts as unknown as CrowdFitPost[]);
           });
 
         setLoading(false);
