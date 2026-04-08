@@ -39,7 +39,7 @@ import type {
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 // FrameRenderState import removed — V3 derives from cinematicDirection
 import type { HeaderProjectSetter } from "./LyricsTab";
-import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
+import type { GenerationStatus } from "./LyricFitTab";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useVoteGate } from "@/hooks/useVoteGate";
@@ -73,7 +73,6 @@ interface Props {
   words?: Array<{ word: string; start: number; end: number }> | null;
   onHeaderProject?: HeaderProjectSetter;
   onBack?: () => void;
-  pipelineStages?: PipelineStages;
   initialDanceId?: string | null;
   initialDanceUrl?: string | null;
   sectionImageUrls?: (string | null)[];
@@ -84,13 +83,6 @@ interface Props {
   filmMode?: "song" | "beat";
   onPlayerReady?: (ready: boolean) => void;
 }
-
-const defaultStages: PipelineStages = {
-  rhythm: "pending",
-  sections: "pending",
-  cinematic: "pending",
-  transcript: "pending",
-};
 
 const fmtTime = (sec: number) => {
   const m = Math.floor(sec / 60);
@@ -107,7 +99,9 @@ function SpotifyLinkField({
   setSpotifyTrackId: (id: string | null) => void;
   savedId: string | null;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(
+    spotifyTrackId ? `https://open.spotify.com/track/${spotifyTrackId}` : "",
+  );
   const [results, setResults] = useState<
     Array<{
       id: string;
@@ -119,12 +113,6 @@ function SpotifyLinkField({
   >([]);
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (spotifyTrackId && !query) {
-      setQuery(`https://open.spotify.com/track/${spotifyTrackId}`);
-    }
-  }, [spotifyTrackId, query]);
 
   const search = useCallback(
     async (q: string) => {
@@ -198,12 +186,6 @@ function SpotifyLinkField({
     }
   };
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
   return (
     <div style={{ padding: "8px 16px", position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
@@ -269,7 +251,6 @@ export function FitTab({
   words,
   onHeaderProject,
   onBack,
-  pipelineStages: pipelineStagesProp,
   initialDanceId,
   initialDanceUrl,
   sectionImageUrls = [],
@@ -283,7 +264,6 @@ export function FitTab({
   const { user, profile } = useAuth();
   const { canCreate, credits, required } = useVoteGate();
 
-  const pipelineStages = pipelineStagesProp ?? defaultStages;
   const [publishedUrl, setPublishedUrl] = useState<string | null>(
     initialDanceUrl ?? null,
   );
@@ -352,6 +332,7 @@ export function FitTab({
 
   // ── CrowdFit publish state ─────────────────────────────────────────
   const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
+  const crowdfitTogglingRef = useRef(false);
   const [crowdfitToggling, setCrowdfitToggling] = useState(false);
 
   const [fireStrength, setFireStrength] = useState<
@@ -413,7 +394,14 @@ export function FitTab({
 
   // CrowdFit toggle handler
   const handleCrowdfitToggle = useCallback(async () => {
-    if (!user || !publishedDanceId || !publishedUrl || crowdfitToggling) return;
+    if (
+      !user ||
+      !publishedDanceId ||
+      !publishedUrl ||
+      crowdfitTogglingRef.current
+    )
+      return;
+    crowdfitTogglingRef.current = true;
     setCrowdfitToggling(true);
     try {
       if (crowdfitPostId) {
@@ -470,6 +458,7 @@ export function FitTab({
     } catch (e: any) {
       toast.error(e.message || "CrowdFit toggle failed");
     } finally {
+      crowdfitTogglingRef.current = false;
       setCrowdfitToggling(false);
     }
   }, [
@@ -477,7 +466,6 @@ export function FitTab({
     publishedDanceId,
     publishedUrl,
     crowdfitPostId,
-    crowdfitToggling,
     lyricData.title,
   ]);
 
