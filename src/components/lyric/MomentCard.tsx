@@ -15,9 +15,6 @@ interface MomentCardProps {
   onSubmitComment: (text: string) => void;
   firedByUser: boolean;
   pressing: boolean;
-  fillLevel: number;
-  burstTrigger: number;
-  active?: boolean;
   fireAvatars: Array<{ url: string | null; name: string | null }>;
   fireAnonCount: number;
   children: ReactNode;
@@ -54,9 +51,6 @@ export function MomentCard({
   onSubmitComment,
   firedByUser,
   pressing,
-  fillLevel,
-  burstTrigger,
-  active = true,
   fireAvatars,
   fireAnonCount,
   children,
