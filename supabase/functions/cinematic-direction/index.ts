@@ -1,5 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+async function fetchAudioAsBase64(url: string): Promise<{ base64: string; mimeType: string } | null> {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const buffer = await resp.arrayBuffer();
+    // Skip if file is too large (>10MB) to avoid memory issues
+    if (buffer.byteLength > 10 * 1024 * 1024) {
+      console.warn("[cinematic-direction] Audio too large for inline processing, falling back to text-only");
+      return null;
+    }
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    const contentType = resp.headers.get("content-type") || "audio/mpeg";
+    return { base64, mimeType: contentType };
+  } catch (err) {
+    console.error("[cinematic-direction] Failed to fetch audio:", err);
+    return null;
+  }
+}
+
 function fetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -217,9 +241,15 @@ STORYTELLING RULES:
 
 6. One section per audio section provided. Match count exactly.
 
-` + SCENE_DIRECTION_PROMPT.slice(
-  SCENE_DIRECTION_PROMPT.indexOf("DOMINANT COLOR RULES"),
-);
+DOMINANT COLOR RULES:
+- dominantColor is a TINT DIRECTION — a color gel on a film light. It TINTS
+  the scene, not PAINTS it.
+- Mid-tone colors only (RGB values 60-180). Never near-black (any channel
+  below 30). Never near-white (all channels above 220).
+- Color should SHIFT across sections to reinforce the arc.
+- Good: "#4A6B8A" (steel blue), "#7B5A9E" (electric violet), "#C4962E" (rich amber)
+- Bad: "#0D0F14" (black), "#1B1026" (too dark), "#FFFFFF" (no direction)
+`;
 
 interface LyricLine {
   text: string;
@@ -247,6 +277,7 @@ interface RequestBody {
   lyricId?: string;
   id?: string;
   artist_direction?: string;
+  audio_url?: string;
   audioSections?: AudioSectionInput[];
   /** Word-level timestamps from ElevenLabs Scribe */
   words?: Array<{ word: string; start: number; end: number }>;
@@ -555,10 +586,18 @@ async function callScene(
   body: RequestBody,
   sceneSystemPrompt: string = SCENE_DIRECTION_PROMPT,
   modelOverride: string = PRIMARY_MODEL,
+  audioData?: { base64: string; mimeType: string } | null,
 ): Promise<Record<string, any>> {
+  const userContent: any = audioData
+    ? [
+        { type: "input_audio", input_audio: { data: audioData.base64, format: audioData.mimeType.includes("wav") ? "wav" : "mp3" } },
+        { type: "text", text: userMessage },
+      ]
+    : userMessage;
+
   const messages = [
     { role: "system", content: sceneSystemPrompt },
-    { role: "user", content: userMessage },
+    { role: "user", content: userContent },
   ];
 
   const makeRequest = async (model: string) => {
@@ -670,7 +709,7 @@ async function callScene(
             model: modelOverride,
             messages: [
               { role: "system", content: sceneSystemPrompt },
-              { role: "user", content: userMessage },
+              { role: "user", content: userContent },
               {
                 role: "user",
                 content:
@@ -822,11 +861,19 @@ serve(async (req) => {
     }
 
     if (body.mode === "scene") {
+      // Fetch audio for Gemini to listen to
+      let audioData: { base64: string; mimeType: string } | null = null;
+      if (body.audio_url) {
+        audioData = await fetchAudioAsBase64(body.audio_url);
+        if (!audioData) {
+          console.warn("[cinematic-direction] Audio fetch failed, falling back to text-only");
+        }
+      }
+
       // Build user message for scene mode inline
       const sectionList = (body.audioSections || [])
         .map((s: AudioSectionInput, i: number) => `  Section ${i + 1}: "${s.role || `Section ${i + 1}`}" (${fmt(s.startSec)}–${fmt(s.endSec)}, energy: ${(s.avgEnergy ?? 0).toFixed(2)}, beats/sec: ${(s.beatDensity ?? 0).toFixed(1)})`)
         .join("\n");
-      const audioData = (body as any).audioData;
       const audioPrefix = audioData
         ? "Audio is attached. LISTEN to it before generating your response. Follow the PROCESS steps: listen → transcribe → extract → direct.\n\n"
         : "";
@@ -839,8 +886,10 @@ serve(async (req) => {
         `Song: "${title}" by ${artist}`,
         bpm ? `BPM: ${bpm}` : "",
         lines.length > 0
-          ? `\nLyrics (reference — trust what you HEAR over this text):\n${lines.map((l) => l.text).join("\n")}`
-          : "\nNo lyrics text provided — transcribe from audio.",
+          ? `\nLyrics${audioData ? " (reference — trust what you HEAR over this text)" : ""}:\n${lines.map((l) => l.text).join("\n")}`
+          : audioData
+          ? "\nNo lyrics text provided — transcribe from audio."
+          : "",
         sectionList ? `\nAudio sections:\n${sectionList}` : "",
       ].filter(Boolean).join("\n");
 
@@ -855,6 +904,7 @@ serve(async (req) => {
         body,
         systemPrompt,
         customPrompts.sceneModel,
+        audioData,
       );
 
       return new Response(JSON.stringify({
