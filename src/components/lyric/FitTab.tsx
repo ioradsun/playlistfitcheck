@@ -15,14 +15,12 @@ import {
   Eye,
   Zap,
   Image,
-  Circle,
   Copy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { slugify } from "@/lib/slugify";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
@@ -34,7 +32,6 @@ import type {
   LyricLine,
   LyricData,
   LyricHook,
-  SavedCustomHook,
 } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 // FrameRenderState import removed — V3 derives from cinematicDirection
@@ -84,6 +81,38 @@ interface Props {
   filmMode?: "song" | "beat";
   onPlayerReady?: (ready: boolean) => void;
 }
+
+type FireDataState = {
+  fireStrength: Array<{
+    line_index: number;
+    fire_strength: number;
+    fire_count: number;
+    avg_hold_ms: number;
+  }>;
+  closingDist: Array<{
+    hook_index: number;
+    pick_count: number;
+    pct: number;
+  }>;
+  freeResponses: Array<{
+    free_text: string;
+    repeat_count: number;
+  }>;
+  totalFires: number;
+  resultsLoaded: boolean;
+  rawFires: Array<{ line_index: number; time_sec: number; hold_ms: number }>;
+  uniqueListeners: number;
+};
+
+const initialFireData: FireDataState = {
+  fireStrength: [],
+  closingDist: [],
+  freeResponses: [],
+  totalFires: 0,
+  resultsLoaded: false,
+  rawFires: [],
+  uniqueListeners: 0,
+};
 
 const defaultStages: PipelineStages = {
   rhythm: "pending",
@@ -354,39 +383,7 @@ export function FitTab({
   const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
   const [crowdfitToggling, setCrowdfitToggling] = useState(false);
 
-  const [fireStrength, setFireStrength] = useState<
-    Array<{
-      line_index: number;
-      fire_strength: number;
-      fire_count: number;
-      avg_hold_ms: number;
-    }>
-  >([]);
-  const [closingDist, setClosingDist] = useState<
-    Array<{
-      hook_index: number;
-      pick_count: number;
-      pct: number;
-    }>
-  >([]);
-  const [freeResponses, setFreeResponses] = useState<
-    Array<{
-      free_text: string;
-      repeat_count: number;
-    }>
-  >([]);
-  const [totalFires, setTotalFires] = useState(0);
-  const [resultsLoaded, setResultsLoaded] = useState(false);
-  const [rawFires, setRawFires] = useState<
-    Array<{ line_index: number; time_sec: number; hold_ms: number }>
-  >([]);
-  const [uniqueListeners, setUniqueListeners] = useState(0);
-  // User overrides per slot — null means "use AI hook"
-  const [customHooks, setCustomHooks] = useState<
-    [SavedCustomHook | null, SavedCustomHook | null]
-  >([null, null]);
-  const [feudSetupOpen, setFeudSetupOpen] = useState(false);
-  const [feudTab, setFeudTab] = useState<0 | 1>(0);
+  const [fireData, setFireData] = useState(initialFireData);
 
 
 
@@ -488,6 +485,7 @@ export function FitTab({
   const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const activeWaveform = waveform ?? parentWaveform ?? null;
   const parentWaveformRef = useRef(parentWaveform);
   parentWaveformRef.current = parentWaveform;
 
@@ -772,7 +770,7 @@ export function FitTab({
     return () => clearTimeout(timer);
   }, [playerReady, publishedDanceId]);
 
-  const allGenDone =
+  const allDone =
     generationStatus.beatGrid === "done" &&
     generationStatus.renderData === "done" &&
     generationStatus.cinematicDirection === "done" &&
@@ -782,14 +780,14 @@ export function FitTab({
   // Refetch dance data when core pipeline finishes OR when image URLs arrive/change
   useEffect(() => {
     if (!publishedDanceId) return;
-    if (!allGenDone && !sectionImageUrls.some(Boolean)) return;
+    if (!allDone && !sectionImageUrls.some(Boolean)) return;
     const timer = setTimeout(() => {
       refetchDanceData();
     }, 300);
     return () => clearTimeout(timer);
-  }, [allGenDone, publishedDanceId, refetchDanceData, sectionImageUrls]);
+  }, [allDone, publishedDanceId, refetchDanceData, sectionImageUrls]);
 
-  const allReady =
+  const allCoreDone =
     generationStatus.beatGrid === "done" &&
     generationStatus.renderData === "done" &&
     generationStatus.cinematicDirection === "done";
@@ -850,7 +848,7 @@ export function FitTab({
   useEffect(() => {
     if (!fmlyHookEnabled) return;
     if (!publishedDanceId) return;
-    if (!allReady && !prefetchedDanceData) return; // need either pipeline done OR DB data available
+    if (!allCoreDone && !prefetchedDanceData) return; // need either pipeline done OR DB data available
     if (empowermentPromise || empowermentLoading || empowermentError) return;
 
     const lines = lyricData?.lines;
@@ -894,7 +892,7 @@ export function FitTab({
       .finally(() => setEmpowermentLoading(false));
   }, [
     fmlyHookEnabled,
-    allReady,
+    allCoreDone,
     publishedDanceId,
     prefetchedDanceData,
     empowermentPromise,
@@ -919,19 +917,14 @@ export function FitTab({
     [lyricData?.lines],
   );
 
-  const activeWaveform = useMemo(
-    () => waveform || parentWaveform || null,
-    [waveform, parentWaveform],
-  );
-
   const fireHeatmapData = useMemo(() => {
-    if (!activeWaveform || rawFires.length === 0 || allLines.length === 0) {
+    if (!activeWaveform || fireData.rawFires.length === 0 || allLines.length === 0) {
       return null;
     }
     const dur = activeWaveform.duration || 1;
     const bucketCount = activeWaveform.peaks.length;
     const buckets = new Float32Array(bucketCount);
-    for (const fire of rawFires) {
+    for (const fire of fireData.rawFires) {
       const idx = Math.min(
         bucketCount - 1,
         Math.max(0, Math.floor((fire.time_sec / dur) * bucketCount)),
@@ -960,7 +953,7 @@ export function FitTab({
       allLines[0],
     );
     return { buckets, peakTimeSec, peakLine };
-  }, [activeWaveform, rawFires, allLines]);
+  }, [activeWaveform, fireData.rawFires, allLines]);
 
   useEffect(() => {
     const canvas = fireHeatmapCanvasRef.current;
@@ -1008,7 +1001,7 @@ export function FitTab({
   }, [fireHeatmapData, activeWaveform]);
 
   const beatSectionFires = useMemo(() => {
-    if (filmMode !== "beat" || rawFires.length === 0 || !beatGrid) return null;
+    if (filmMode !== "beat" || fireData.rawFires.length === 0 || !beatGrid) return null;
     const beats = beatGrid.beats;
     const beatsPerSection = 16;
     const sectionCount = Math.max(1, Math.ceil(beats.length / beatsPerSection));
@@ -1016,12 +1009,12 @@ export function FitTab({
       const startSec = beats[i * beatsPerSection] ?? 0;
       const endBeat = Math.min((i + 1) * beatsPerSection, beats.length) - 1;
       const endSec = beats[endBeat] ?? (activeWaveform?.duration ?? 60);
-      const count = rawFires.filter(
+      const count = fireData.rawFires.filter(
         (f) => (f.time_sec ?? 0) >= startSec && (f.time_sec ?? 0) < endSec,
       ).length;
       return { i, startSec, endSec, count };
     });
-  }, [filmMode, rawFires, beatGrid, activeWaveform]);
+  }, [filmMode, fireData.rawFires, beatGrid, activeWaveform]);
 
   const beatSectionSummary = useMemo(() => {
     if (!beatSectionFires || beatSectionFires.length === 0) return null;
@@ -1032,7 +1025,7 @@ export function FitTab({
   }, [beatSectionFires]);
 
   const lyricFireBreakdown = useMemo(() => {
-    if (fireStrength.length === 0) return null;
+    if (fireData.fireStrength.length === 0) return null;
     const sections = ((cinematicDirection as any)?.sections as any[]) ?? [];
     const linesBySection: Map<number, typeof allLines> = new Map();
     for (const line of allLines) {
@@ -1053,10 +1046,10 @@ export function FitTab({
       number,
       { fire_count: number; fire_strength: number; avg_hold_ms: number }
     >();
-    for (const row of fireStrength) fireMap.set(row.line_index, row);
-    const maxStrength = fireStrength[0]?.fire_strength ?? 1;
+    for (const row of fireData.fireStrength) fireMap.set(row.line_index, row);
+    const maxStrength = fireData.fireStrength[0]?.fire_strength ?? 1;
     return { sections, linesBySection, fireMap, maxStrength };
-  }, [fireStrength, cinematicDirection, allLines]);
+  }, [fireData.fireStrength, cinematicDirection, allLines]);
 
   const sectionFireCounts = useMemo(() => {
     if (!lyricFireBreakdown || lyricFireBreakdown.linesBySection.size < 2) return [];
@@ -1074,17 +1067,11 @@ export function FitTab({
   }, [lyricFireBreakdown]);
 
   useEffect(() => {
-    setResultsLoaded(false);
-    setFireStrength([]);
-    setClosingDist([]);
-    setFreeResponses([]);
-    setTotalFires(0);
-    setRawFires([]);
-    setUniqueListeners(0);
+    setFireData(initialFireData);
   }, [publishedDanceId]);
 
   useEffect(() => {
-    if (subView !== "data" || !publishedDanceId || resultsLoaded) return;
+    if (subView !== "data" || !publishedDanceId || fireData.resultsLoaded) return;
     Promise.all([
       fetchFireStrength(publishedDanceId),
       fetchFireData(publishedDanceId),
@@ -1106,23 +1093,22 @@ export function FitTab({
         .select("session_id", { count: "exact" })
         .eq("project_id", publishedDanceId),
     ]).then(([strength, fires, dist, free, count, exposures]) => {
-      setFireStrength(strength);
-      setRawFires(fires);
-      setClosingDist((dist.data as any[]) ?? []);
-      setFreeResponses((free.data as any[]) ?? []);
-      setTotalFires(count.count ?? 0);
-
       // TODO: if project_exposures is not already session-deduplicated, switch this
       // to a distinct-session count query and keep the Set fallback below.
-      setUniqueListeners(
-        exposures.count ??
+      setFireData({
+        fireStrength: strength,
+        rawFires: fires,
+        closingDist: (dist.data as any[]) ?? [],
+        freeResponses: (free.data as any[]) ?? [],
+        totalFires: count.count ?? 0,
+        uniqueListeners:
+          exposures.count ??
           new Set(((exposures.data ?? []) as any[]).map((r: any) => r.session_id))
             .size,
-      );
-
-      setResultsLoaded(true);
+        resultsLoaded: true,
+      });
     });
-  }, [subView, publishedDanceId, resultsLoaded]);
+  }, [subView, publishedDanceId, fireData.resultsLoaded]);
 
   const handleRetryImages = useCallback(() => {
     void pipeline.retryImages();
@@ -1272,7 +1258,7 @@ export function FitTab({
           ) : hasRealAudio ? (
             <div className="glass-card rounded-xl p-3">
               <LyricWaveform
-                waveform={waveform || parentWaveform || null}
+                waveform={activeWaveform}
                 isPlaying={isPlaying}
                 currentTime={currentTime}
                 onSeek={handleSeek}
@@ -1298,26 +1284,26 @@ export function FitTab({
             {publishedDanceId && (
               <>
                 {/* ── Headline ── */}
-                {totalFires > 0 && (
+                {fireData.totalFires > 0 && (
                   <div className="space-y-1.5 px-1">
                     <div className="flex items-baseline gap-3">
                       <span style={{ fontSize: 28 }}>🔥</span>
-                      <span className="text-[28px] font-mono font-medium text-foreground">{totalFires}</span>
+                      <span className="text-[28px] font-mono font-medium text-foreground">{fireData.totalFires}</span>
                       <span className="text-[11px] font-mono text-muted-foreground">fires</span>
-                      {uniqueListeners > 0 && (
+                      {fireData.uniqueListeners > 0 && (
                         <>
                           <span className="text-muted-foreground/30">·</span>
-                          <span className="text-[11px] font-mono text-muted-foreground">{uniqueListeners} listener{uniqueListeners !== 1 ? "s" : ""}</span>
+                          <span className="text-[11px] font-mono text-muted-foreground">{fireData.uniqueListeners} listener{fireData.uniqueListeners !== 1 ? "s" : ""}</span>
                         </>
                       )}
                     </div>
-                    {uniqueListeners > 1 && (
+                    {fireData.uniqueListeners > 1 && (
                       <p className="text-[12px] text-muted-foreground/60 leading-relaxed">
-                        {totalFires / uniqueListeners >= 3
-                          ? `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — people are reacting to multiple moments.`
-                          : totalFires / uniqueListeners >= 1.5
-                            ? `${(totalFires / uniqueListeners).toFixed(1)} fires per listener — your song has more than one moment that hits.`
-                            : `${(totalFires / uniqueListeners).toFixed(1)} fires per listener. More shares will reveal which lines connect deepest.`
+                        {fireData.totalFires / fireData.uniqueListeners >= 3
+                          ? `${(fireData.totalFires / fireData.uniqueListeners).toFixed(1)} fires per listener — people are reacting to multiple moments.`
+                          : fireData.totalFires / fireData.uniqueListeners >= 1.5
+                            ? `${(fireData.totalFires / fireData.uniqueListeners).toFixed(1)} fires per listener — your song has more than one moment that hits.`
+                            : `${(fireData.totalFires / fireData.uniqueListeners).toFixed(1)} fires per listener. More shares will reveal which lines connect deepest.`
                         }
                       </p>
                     )}
@@ -1483,7 +1469,7 @@ export function FitTab({
             )}
 
             {/* ── What your song did (closing screen) ── */}
-            {closingDist.length > 0 && empowermentPromise && (
+            {fireData.closingDist.length > 0 && empowermentPromise && (
               <div className="glass-card rounded-xl p-4 space-y-3">
                 <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
                   what your song did for them
@@ -1491,7 +1477,7 @@ export function FitTab({
                 <p className="text-[11px] text-muted-foreground/40 mb-1">
                   After listening: "How does this make you feel?"
                 </p>
-                {closingDist.map((row) => {
+                {fireData.closingDist.map((row) => {
                   const label = empowermentPromise.hooks[row.hook_index] ?? `feeling ${row.hook_index}`;
                   return (
                     <div key={row.hook_index} className="space-y-1">
@@ -1505,21 +1491,21 @@ export function FitTab({
                     </div>
                   );
                 })}
-                {closingDist.length >= 2 && closingDist[0]?.pct >= 50 && (
+                {fireData.closingDist.length >= 2 && fireData.closingDist[0]?.pct >= 50 && (
                   <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
-                    Over half landed on "{empowermentPromise.hooks[closingDist[0].hook_index]?.slice(0, 40)}." That's your song's emotional center — use it in captions and promo.
+                    Over half landed on "{empowermentPromise.hooks[fireData.closingDist[0].hook_index]?.slice(0, 40)}." That's your song's emotional center — use it in captions and promo.
                   </p>
                 )}
               </div>
             )}
 
             {/* ── In their own words ── */}
-            {freeResponses.length > 0 && (
+            {fireData.freeResponses.length > 0 && (
               <div className="glass-card rounded-xl p-4 space-y-2">
                 <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider mb-3">
                   in their own words
                 </p>
-                {freeResponses.map((r, i) => (
+                {fireData.freeResponses.map((r, i) => (
                   <div key={i} className="flex items-start gap-2.5 py-1.5 border-b border-border/20 last:border-0">
                     <span className="text-[11px] text-foreground/70 flex-1 leading-snug font-light italic">"{r.free_text}"</span>
                     {r.repeat_count > 1 && (
@@ -1527,7 +1513,7 @@ export function FitTab({
                     )}
                   </div>
                 ))}
-                {freeResponses.length >= 3 && (
+                {fireData.freeResponses.length >= 3 && (
                   <p className="text-[11px] text-muted-foreground/50 pt-2 leading-relaxed">
                     These are captions waiting to happen. When listeners describe your song in their own words, that's your marketing language.
                   </p>
@@ -1536,11 +1522,11 @@ export function FitTab({
             )}
 
             {/* ── Clip suggestions (kept) ── */}
-            {closingDist.slice(0, 3).map((row) => {
+            {fireData.closingDist.slice(0, 3).map((row) => {
               if (!empowermentPromise || row.pct < 10) return null;
               const feeling = empowermentPromise.hooks[row.hook_index];
               if (!feeling) return null;
-              const topFireLine = fireStrength[0];
+              const topFireLine = fireData.fireStrength[0];
               const topLine = allLines.find((l) => l.lineIndex === topFireLine?.line_index);
               const captions: Record<number, string> = {
                 0: "for everyone who needed to hear this",
@@ -1593,7 +1579,7 @@ export function FitTab({
                 visible={clipComposerVisible}
                 player={dancePlayerRef.current?.getPlayer() ?? null}
                 durationSec={dancePlayerRef.current?.getPlayer()?.audio?.duration ?? 0}
-                fires={rawFires}
+                fires={fireData.rawFires}
                 lines={allLines.map((l) => ({
                   lineIndex: l.lineIndex,
                   text: l.text,
@@ -1615,7 +1601,7 @@ export function FitTab({
             )}
 
             {/* ── Empty state ── */}
-                {totalFires === 0 && resultsLoaded && (
+                {fireData.totalFires === 0 && fireData.resultsLoaded && (
                   <div className="flex flex-col items-center gap-3 py-12">
                     <span style={{ fontSize: 32 }}>🔥</span>
                     <p className="text-[12px] text-muted-foreground text-center leading-relaxed max-w-[260px]">
@@ -1623,7 +1609,7 @@ export function FitTab({
                     </p>
                   </div>
                 )}
-                {totalFires === 0 && !resultsLoaded && (
+                {fireData.totalFires === 0 && !fireData.resultsLoaded && (
                   <div className="flex justify-center py-12">
                     <Loader2 size={18} className="animate-spin text-muted-foreground/30" />
                   </div>
@@ -1638,7 +1624,7 @@ export function FitTab({
           <>
         {/* Single-column report */}
         <div className="space-y-3">
-          {!allReady && (
+          {!allCoreDone && (
             <div className="glass-card rounded-xl p-4 space-y-2">
               <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
                 {hasErrors
@@ -1682,7 +1668,7 @@ export function FitTab({
           )}
 
           {fmlyHookEnabled &&
-            allReady &&
+            allCoreDone &&
             (empowermentLoading || empowermentPromise || empowermentError) && (
               <div className="glass-card rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
