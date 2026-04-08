@@ -280,19 +280,9 @@ export function FitTab({
     initialDanceId ?? null,
   );
 
-  // Sync dance ID/URL from parent when pipeline resolves after mount.
-  // useState only reads initialDanceId on mount — this effect picks up later updates.
-  useEffect(() => {
-    if (initialDanceId && initialDanceId !== publishedDanceId) {
-      setPublishedDanceId(initialDanceId);
-    }
-  }, [initialDanceId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (initialDanceUrl && initialDanceUrl !== publishedUrl) {
-      setPublishedUrl(initialDanceUrl);
-    }
-  }, [initialDanceUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  // pipelineDanceId is now resolved synchronously before FitTab mounts
+  // (via is_published on the full SELECT * row), so useState(initialDanceId)
+  // already captures the correct value. No late-sync effects needed.
 
   const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(
     null,
