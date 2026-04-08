@@ -1264,6 +1264,19 @@ const Index = () => {
                 onNewProject={handleNewLyric}
                 onHeaderProject={setHeaderProject}
                 onSavedId={(id) => {
+                  // Prime the cache with a stub so the loader finds it immediately
+                  // and skips the setLoadedLyric(null) path
+                  try {
+                    const existingRaw = localStorage.getItem(`tfm:lyric:${id}`);
+                    if (!existingRaw) {
+                      // Write enough for LyricsTab to show the right state (not uploader)
+                      const stub = {
+                        data: { id, title: "", lines: [], filename: "", audio_url: null },
+                        ts: Date.now(),
+                      };
+                      localStorage.setItem(`tfm:lyric:${id}`, JSON.stringify(stub));
+                    }
+                  } catch {}
                   projectLoadedRef.current = id;
                   navigateToProject("lyric", id);
                 }}
