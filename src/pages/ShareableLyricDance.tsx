@@ -17,9 +17,7 @@ import { SeoHead } from "@/components/SeoHead";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
-
-const ALL_COLUMNS =
-  "id,user_id,artist_slug,url_slug,artist_name,title,audio_url,section_images,palette,auto_palettes,album_art_url,empowerment_promise,beat_grid,lines,words,physics_spec,cinematic_direction,spotify_track_id";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 
 interface ProfileInfo {
   display_name: string | null;
@@ -65,7 +63,7 @@ export default function ShareableLyricDance() {
 
     supabase
       .from("lyric_projects" as any)
-      .select(ALL_COLUMNS)
+      .select(LYRIC_DANCE_COLUMNS)
       .eq("artist_slug", artistSlug)
       .eq("url_slug", songSlug)
       .maybeSingle()
