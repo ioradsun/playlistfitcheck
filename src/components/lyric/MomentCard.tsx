@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { Moment } from "@/lib/buildMoments";
-import { FireVessel } from "@/components/lyric/FireVessel";
+
 
 interface MomentCardProps {
   moment: Moment;
@@ -126,14 +126,7 @@ export function MomentCard({
             transition: "border-color 200ms ease",
           }}
         >
-          <FireVessel
-            size={16}
-            tier={tier}
-            pressing={pressing}
-            fillLevel={fillLevel}
-            burstTrigger={burstTrigger}
-            active={active}
-          />
+          <span style={{ fontSize: 16 }}>🔥</span>
         </button>
 
         {(fireAvatars.length > 0 || fireAnonCount > 0) && (
