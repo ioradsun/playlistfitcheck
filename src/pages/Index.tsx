@@ -158,18 +158,10 @@ const SidebarShell = () => (
   />
 );
 
+import { TOOL_TO_PATH, PATH_TO_TOOL_KEY } from "@/lib/routes";
+
 // PATH_TO_TAB is kept for URL → tab syncing in useEffect
-const PATH_TO_TAB: Record<string, string> = {
-  "/CrowdFit": "songfit",
-  "/SongFit": "songfit",
-  "/ProFit": "profit",
-  "/PlaylistFit": "playlist",
-  "/MixFit": "mix",
-  "/LyricFit": "lyric",
-  "/HitFit": "hitfit",
-  "/DreamFit": "dreamfit",
-  "/VibeFit": "vibefit",
-};
+const PATH_TO_TAB: Record<string, string> = PATH_TO_TOOL_KEY;
 
 const Index = () => {
   const { user, loading: authLoading, profile } = useAuth();
@@ -426,14 +418,7 @@ const Index = () => {
     setIsFetchingProject(true);
     setProjectMissing(false);
 
-    const pathMap: Record<string, string> = {
-      lyric: "/LyricFit",
-      mix: "/MixFit",
-      hitfit: "/HitFit",
-      profit: "/ProFit",
-      vibefit: "/VibeFit",
-      playlist: "/PlaylistFit",
-    };
+    const pathMap = TOOL_TO_PATH;
 
     let cancelled = false;
 
@@ -493,7 +478,7 @@ const Index = () => {
           setIsFetchingProject(false);
           setProjectMissing(true);
           toast.error("Project not found");
-          navigate(pathMap[tab] || "/CrowdFit", { replace: true });
+          navigate(pathMap[tab] || TOOL_TO_PATH.songfit, { replace: true });
           return;
         }
         projectLoadedRef.current = projectId;
