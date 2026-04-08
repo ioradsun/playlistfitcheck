@@ -404,6 +404,26 @@ export function FitTab({
           ...(urlSlugVal ? { url_slug: urlSlugVal } : {}),
         };
 
+        // Resolve potential 409: unpublish any conflicting row holding these slugs
+        if (artistSlug && urlSlugVal) {
+          const { data: conflicting }: any = await supabase
+            .from("lyric_projects" as any)
+            .select("id")
+            .eq("artist_slug", artistSlug)
+            .eq("url_slug", urlSlugVal)
+            .eq("is_published", true)
+            .is("deleted_at", null)
+            .neq("id", danceId)
+            .maybeSingle();
+
+          if (conflicting?.id) {
+            await supabase
+              .from("lyric_projects" as any)
+              .update({ is_published: false })
+              .eq("id", conflicting.id);
+          }
+        }
+
         // Look for existing removed post to reactivate
         const { data: existing }: any = await supabase
           .from("feed_posts" as any)
