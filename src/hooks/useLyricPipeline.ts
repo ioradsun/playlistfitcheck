@@ -1197,42 +1197,67 @@ export function useLyricPipeline({
           return;
         }
 
-        const { error: danceErr } = await supabase
-          .from("lyric_projects" as any)
-          .upsert({
-            user_id: user?.id ?? null,
-            artist_slug: claimMeta.artistSlug,
-            url_slug: claimMeta.songSlug,
-            artist_name: claimMeta.artistName,
-            title: claimMeta.songName,
-            audio_url: audioStorageUrl,
-            lines: lines.map((l: any) => ({
-              start: l.start,
-              end: l.end,
-              text: l.text,
-              tag: l.tag ?? "main",
-            })),
-            words: words?.length ? words : null,
-            cinematic_direction: cinematicDirection,
-            beat_grid: beatGrid ?? { bpm: 120, beats: [], confidence: 0 },
-            palette: cinematicDirection?.defaults?.palette ?? ["#ffffff", "#a855f7", "#ec4899"],
-            section_images: null,
-            auto_palettes: null,
-            album_art_url: claimMeta.albumArtUrl,
-          }, { onConflict: "artist_slug,url_slug" });
-
-        if (danceErr) {
-          console.error("[ClaimPublish] Upsert failed:", danceErr);
-          claimPublishedRef.current = false;
-          return;
-        }
-
-        const { data: danceRow } = await (supabase
+        // Check-then-act: partial unique index prevents standard upsert
+        const { data: existingClaim }: any = await supabase
           .from("lyric_projects" as any)
           .select("id")
           .eq("artist_slug", claimMeta.artistSlug)
           .eq("url_slug", claimMeta.songSlug)
-          .maybeSingle() as any) as { data: { id: string } | null };
+          .maybeSingle();
+
+        let danceErr: any = null;
+        let danceRow: { id: string } | null = null;
+
+        if (existingClaim?.id) {
+          const { error } = await supabase
+            .from("lyric_projects" as any)
+            .update({
+              user_id: user?.id ?? null,
+              artist_name: claimMeta.artistName,
+              title: claimMeta.songName,
+              audio_url: audioStorageUrl,
+              lines: lines.map((l: any) => ({
+                start: l.start, end: l.end, text: l.text, tag: l.tag ?? "main",
+              })),
+              words: words?.length ? words : null,
+              cinematic_direction: cinematicDirection,
+              beat_grid: beatGrid ?? { bpm: 120, beats: [], confidence: 0 },
+              palette: cinematicDirection?.defaults?.palette ?? ["#ffffff", "#a855f7", "#ec4899"],
+              section_images: null,
+              auto_palettes: null,
+              album_art_url: claimMeta.albumArtUrl,
+              is_published: true,
+            } as any)
+            .eq("id", existingClaim.id);
+          danceErr = error;
+          danceRow = existingClaim;
+        } else {
+          const { data: inserted, error } = await supabase
+            .from("lyric_projects" as any)
+            .insert({
+              user_id: user?.id ?? null,
+              artist_slug: claimMeta.artistSlug,
+              url_slug: claimMeta.songSlug,
+              artist_name: claimMeta.artistName,
+              title: claimMeta.songName,
+              audio_url: audioStorageUrl,
+              lines: lines.map((l: any) => ({
+                start: l.start, end: l.end, text: l.text, tag: l.tag ?? "main",
+              })),
+              words: words?.length ? words : null,
+              cinematic_direction: cinematicDirection,
+              beat_grid: beatGrid ?? { bpm: 120, beats: [], confidence: 0 },
+              palette: cinematicDirection?.defaults?.palette ?? ["#ffffff", "#a855f7", "#ec4899"],
+              section_images: null,
+              auto_palettes: null,
+              album_art_url: claimMeta.albumArtUrl,
+              is_published: true,
+            } as any)
+            .select("id")
+            .maybeSingle();
+          danceErr = error;
+          danceRow = inserted as any;
+        }
 
         const lyricDanceUrl = `/${claimMeta.artistSlug}/${claimMeta.songSlug}/lyric-dance`;
 
