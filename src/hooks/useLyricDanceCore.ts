@@ -94,7 +94,7 @@ export function useLyricDanceCore({
       return bg.beats[bg.beats.length - 1];
     }
     return 0;
-  }, [data?.lyrics, (data as any)?.beat_grid]);
+  }, [(data as any)?.lines ?? (data as any)?.lyrics, (data as any)?.beat_grid]);
 
   const lyricSections = useLyricSections(
     data?.words ?? null,
