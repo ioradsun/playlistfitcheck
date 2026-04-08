@@ -835,9 +835,6 @@ serve(async (req) => {
         .join("\n");
 
       const sceneUserMessage = [
-        body.audio_url
-          ? `Audio reference URL (do not fetch inline audio; use provided lyrics and section timing): ${body.audio_url}`
-          : "",
         body.artist_direction
           ? `ARTIST DIRECTION (this is the visual world — treat it as law): "${body.artist_direction}"`
           : "",

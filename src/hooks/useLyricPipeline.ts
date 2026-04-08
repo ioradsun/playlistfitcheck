@@ -1445,7 +1445,7 @@ export function useLyricPipeline({
           lyrics: lyricsForDirection
             .map((line: { text: string }) => line.text)
             .join("\n"),
-          audio_url: audioUrl || undefined,
+          audio_url: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
           beatGrid: beatGrid
             ? {
                 bpm: beatGrid.bpm,
@@ -1774,7 +1774,7 @@ export function useLyricPipeline({
           lines: [],
           lyrics: "",
           instrumental: true,
-          audio_url: audioUrl || undefined,
+          audio_url: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
           audioSections,
           beatGrid: {
             bpm: beatGrid.bpm,
