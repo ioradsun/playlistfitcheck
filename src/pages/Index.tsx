@@ -1448,6 +1448,7 @@ const Index = () => {
             <>
               {headerProject.onTitleChange ? (
                 <HeaderTitleInput
+                  key={headerProject.title}
                   title={headerProject.title}
                   onTitleChange={headerProject.onTitleChange!}
                 />
