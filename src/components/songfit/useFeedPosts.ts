@@ -19,6 +19,7 @@ import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { consumeFeedPrefetch, consumeLyricDataPrefetch, getCachedFeed, getCachedLyricData, cacheWrite } from "@/lib/prefetch";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 
 const PAGE_SIZE = 20;
 
@@ -113,10 +114,6 @@ async function scoreBillboard(
 // ── Lyric data fetching ─────────────────────────────────────────────────────
 // Fetch full lyric columns for all cards so player-ready fields are present.
 
-const LYRIC_FULL_COLUMNS =
-  "id,user_id,artist_slug,url_slug,artist_name,title,audio_url,lines,words," +
-  "physics_spec,cinematic_direction,section_images," +
-  "auto_palettes,beat_grid,palette,album_art_url,empowerment_promise,spotify_track_id";
 
 async function fetchLyricData(
   ids: string[],
@@ -132,7 +129,7 @@ async function fetchLyricData(
   if (needed.length > 0) {
     const { data: rows } = await supabase
       .from("lyric_projects" as any)
-      .select(LYRIC_FULL_COLUMNS)
+      .select(LYRIC_DANCE_COLUMNS)
       .in("id", needed);
 
     const cacheObj: Record<string, any> = {};
@@ -229,7 +226,7 @@ export function useFeedPosts(): FeedState {
 
   // ── fetchPosts: initial load & refresh ────────────────────────────────
   const fetchPosts = useCallback(async () => {
-    console.log("[useFeedPosts] fetchPosts called, feedView:", feedView);
+    
     if (feedView === "billboard") {
       if (posts.length === 0) setLoading(true);
       const result = await scoreBillboard(billboardMode);
@@ -255,9 +252,7 @@ export function useFeedPosts(): FeedState {
           .order("created_at", { ascending: false });
 
     let allPosts = (raw ?? []) as unknown as SongFitPost[];
-    console.log("[useFeedPosts] raw posts:", allPosts.length, "feedView:", feedView);
     const filtered = allPosts.filter((p) => matchesView(p, feedView));
-    console.log("[useFeedPosts] filtered posts:", filtered.length);
     const normalized = filtered.map(hydrateDefaults);
 
     // Preload album art for Spotify posts
