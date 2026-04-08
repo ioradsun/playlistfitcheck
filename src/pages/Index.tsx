@@ -318,7 +318,7 @@ const Index = () => {
           });
           // Revalidate in background — if DB is newer, update
           void supabase
-            .from("saved_lyrics")
+            .from("lyric_projects")
             .select("*")
             .eq("id", projectId)
             .eq("user_id", user.id)
@@ -341,7 +341,7 @@ const Index = () => {
     (async () => {
       try {
         const { data, error } = await supabase
-          .from("saved_lyrics")
+          .from("lyric_projects")
           .select("*")
           .eq("id", projectId)
           .eq("user_id", user.id)

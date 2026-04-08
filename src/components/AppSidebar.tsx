@@ -164,7 +164,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
         .order("updated_at", { ascending: false })
         .limit(20),
       supabase
-        .from("saved_lyrics")
+        .from("lyric_projects")
         .select("id, title, lines, words, filename, updated_at, audio_url, beat_grid, song_signature, render_data, fmly_lines, version_meta, section_images")
         .eq("user_id", user.id)
         .is("deleted_at", null)
@@ -440,7 +440,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
     const name = editLabel.trim();
     if (!name || editingId !== item.id) return;
     if (item.type === "mix") await supabase.from("mix_projects").update({ title: name }).eq("id", item.id);
-    else if (item.type === "lyric") await supabase.from("saved_lyrics").update({ title: name }).eq("id", item.id);
+    else if (item.type === "lyric") await supabase.from("lyric_projects").update({ title: name }).eq("id", item.id);
     else if (item.type === "playlist") await supabase.from("saved_searches").update({ playlist_name: name }).eq("id", item.id);
     setRecentItems((prev) =>
       prev.map((i) => (i.id === item.id ? { ...i, label: name } : i))

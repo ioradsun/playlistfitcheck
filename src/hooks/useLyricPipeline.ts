@@ -926,10 +926,11 @@ export function useLyricPipeline({
       const { slugify } = await import("@/lib/slugify");
       const s = slugify(initialLyric.title || "untitled");
       const { data: d }: any = await supabase
-        .from("shareable_lyric_dances")
-        .select("id, artist_slug, song_slug")
+        .from("lyric_projects")
+        .select("id, artist_slug, url_slug")
         .eq("user_id", user.id)
-        .eq("song_slug", s)
+        .eq("url_slug", s)
+        .eq("is_published", true)
         .maybeSingle();
       if (d) {
         setPipelineDanceId(d.id);
