@@ -114,9 +114,9 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     let mounted = true;
 
     supabase
-      .from("lyric_dance_comments" as any)
+      .from("project_comments" as any)
       .select("id, text, line_index, submitted_at, user_id")
-      .eq("dance_id", danceId)
+      .eq("project_id", danceId)
       .order("submitted_at", { ascending: true })
       .limit(300)
       .then(({ data: rows }) => { if (mounted && rows) setComments(rows as unknown as Comment[]); });
@@ -126,8 +126,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
-        table: "lyric_dance_comments",
-        filter: `dance_id=eq.${danceId}`,
+        table: "project_comments",
+        filter: `project_id=eq.${danceId}`,
       }, (payload: any) => {
         const c = payload.new as Comment;
         setComments((prev) => {

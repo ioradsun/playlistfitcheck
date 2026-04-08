@@ -18,8 +18,8 @@ export async function emitFire(
 ): Promise<void> {
   if (!fireTableAvailable) return;
 
-  const { error } = await supabase.from('lyric_dance_fires' as any).insert({
-    dance_id: danceId,
+  const { error } = await supabase.from('project_fires' as any).insert({
+    project_id: danceId,
     session_id: getSessionId(),
     line_index: lineIndex,
     time_sec: timeSec,
@@ -36,9 +36,9 @@ export async function emitExposure(
   lineIndex: number,
   source?: "feed" | "shareable" | "embed",
 ): Promise<void> {
-  supabase.from('lyric_dance_exposures' as any)
+  supabase.from('project_exposures' as any)
     .upsert({
-      dance_id: danceId,
+      project_id: danceId,
       session_id: getSessionId(),
       line_index: lineIndex,
       ...(source ? { source } : {}),
@@ -52,9 +52,9 @@ export async function emitClosingPick(
   freeText: string | null,
   source?: "feed" | "shareable" | "embed",
 ): Promise<void> {
-  supabase.from('lyric_dance_closing_picks' as any)
+  supabase.from('project_closing_picks' as any)
     .upsert({
-      dance_id: danceId,
+      project_id: danceId,
       session_id: getSessionId(),
       hook_index: hookIndex,
       free_text: freeText?.trim() || null,
@@ -77,10 +77,10 @@ export async function upsertPlay(
 
   const sessionId = getSessionId();
   const { error } = await supabase
-    .from('lyric_dance_plays' as any)
+    .from('project_plays' as any)
     .upsert(
       {
-        dance_id: danceId,
+        project_id: danceId,
         session_id: sessionId,
         user_id: opts.userId ?? null,
         was_muted: opts.wasMuted,
@@ -105,9 +105,9 @@ export async function fetchFireData(danceId: string): Promise<Array<{
 
   try {
     const { data, error } = await supabase
-      .from('lyric_dance_fires' as any)
+      .from('project_fires' as any)
       .select('line_index, time_sec, hold_ms, created_at')
-      .eq('dance_id', danceId)
+      .eq('project_id', danceId)
       .order('time_sec', { ascending: true });
 
     if (isMissingTableError(error)) fireTableAvailable = false;
@@ -127,7 +127,7 @@ export async function fetchFireStrength(danceId: string): Promise<Array<{
   const { data } = await supabase
     .from('v_fire_strength' as any)
     .select('line_index, fire_strength, fire_count, avg_hold_ms')
-    .eq('dance_id', danceId)
+    .eq('project_id', danceId)
     .order('fire_strength', { ascending: false });
   return (data as any[]) ?? [];
 }
@@ -140,9 +140,9 @@ export async function fetchSessionFires(
 
   try {
     const { data, error } = await supabase
-      .from('lyric_dance_fires' as any)
+      .from('project_fires' as any)
       .select('line_index, hold_ms')
-      .eq('dance_id', danceId)
+      .eq('project_id', danceId)
       .eq('session_id', sessionId);
 
     if (isMissingTableError(error)) fireTableAvailable = false;

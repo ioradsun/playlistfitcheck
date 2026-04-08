@@ -119,7 +119,7 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
     ? null
     : Promise.resolve(
         supabase
-          .from("songfit_posts")
+          .from("feed_posts" as any)
           .select(FEED_COLUMNS)
           .eq("status", "live")
           .limit(FEED_PAGE_SIZE)
@@ -149,7 +149,7 @@ export let lyricDataPrefetch: Promise<{ data: any[] | null; error: any }> | null
   _topLyricIds.length > 0
     ? Promise.resolve(
         supabase
-          .from("shareable_lyric_dances" as any)
+          .from("lyric_projects" as any)
           .select(LYRIC_DANCE_COLUMNS)
           .in("id", _topLyricIds)
       )
@@ -205,7 +205,7 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
 
   const networkPromise = Promise.resolve(
     supabase
-      .from("shareable_lyric_dances" as any)
+      .from("lyric_projects" as any)
       .select(LYRIC_DANCE_COLUMNS)
       .eq("artist_slug", artistSlug)
       .eq("song_slug", songSlug)

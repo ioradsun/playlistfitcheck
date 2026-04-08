@@ -874,41 +874,6 @@ export type Database = {
           },
         ]
       }
-      lyric_dance_angle_votes: {
-        Row: {
-          created_at: string
-          dance_id: string
-          hook_index: number
-          id: string
-          session_id: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          dance_id: string
-          hook_index: number
-          id?: string
-          session_id?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          dance_id?: string
-          hook_index?: number
-          id?: string
-          session_id?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lyric_dance_angle_votes_dance_id_fkey"
-            columns: ["dance_id"]
-            isOneToOne: false
-            referencedRelation: "shareable_lyric_dances"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       lyric_dance_comment_reactions: {
         Row: {
           comment_id: string
@@ -931,66 +896,7 @@ export type Database = {
           id?: string
           session_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "lyric_dance_comment_reactions_comment_id_fkey"
-            columns: ["comment_id"]
-            isOneToOne: false
-            referencedRelation: "lyric_dance_comments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      lyric_dance_comments: {
-        Row: {
-          dance_id: string
-          id: string
-          is_pinned: boolean | null
-          line_index: number | null
-          parent_comment_id: string | null
-          session_id: string | null
-          submitted_at: string
-          text: string
-          user_id: string | null
-        }
-        Insert: {
-          dance_id: string
-          id?: string
-          is_pinned?: boolean | null
-          line_index?: number | null
-          parent_comment_id?: string | null
-          session_id?: string | null
-          submitted_at?: string
-          text: string
-          user_id?: string | null
-        }
-        Update: {
-          dance_id?: string
-          id?: string
-          is_pinned?: boolean | null
-          line_index?: number | null
-          parent_comment_id?: string | null
-          session_id?: string | null
-          submitted_at?: string
-          text?: string
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lyric_dance_comments_dance_id_fkey"
-            columns: ["dance_id"]
-            isOneToOne: false
-            referencedRelation: "shareable_lyric_dances"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lyric_dance_comments_parent_comment_id_fkey"
-            columns: ["parent_comment_id"]
-            isOneToOne: false
-            referencedRelation: "lyric_dance_comments"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       lyric_dance_reactions: {
         Row: {
@@ -1020,15 +926,7 @@ export type Database = {
           section_index?: number | null
           session_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "lyric_dance_reactions_dance_id_fkey"
-            columns: ["dance_id"]
-            isOneToOne: false
-            referencedRelation: "shareable_lyric_dances"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       lyric_dance_signals: {
         Row: {
@@ -1058,15 +956,7 @@ export type Database = {
           user_id?: string | null
           would_replay?: boolean
         }
-        Relationships: [
-          {
-            foreignKeyName: "lyric_dance_signals_dance_id_fkey"
-            columns: ["dance_id"]
-            isOneToOne: false
-            referencedRelation: "shareable_lyric_dances"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       lyric_projects: {
         Row: {
@@ -1231,20 +1121,6 @@ export type Database = {
             columns: ["actor_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notifications_comment_id_fkey"
-            columns: ["comment_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_comments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notifications_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_posts"
             referencedColumns: ["id"]
           },
           {
@@ -1801,69 +1677,6 @@ export type Database = {
           },
         ]
       }
-      saved_lyrics: {
-        Row: {
-          audio_url: string | null
-          background_image_url: string | null
-          beat_grid: Json | null
-          created_at: string
-          deleted_at: string | null
-          filename: string | null
-          fmly_lines: Json | null
-          id: string
-          lines: Json
-          render_data: Json | null
-          section_images: Json | null
-          song_dna: Json | null
-          song_signature: Json | null
-          title: string
-          updated_at: string
-          user_id: string
-          version_meta: Json | null
-          words: Json | null
-        }
-        Insert: {
-          audio_url?: string | null
-          background_image_url?: string | null
-          beat_grid?: Json | null
-          created_at?: string
-          deleted_at?: string | null
-          filename?: string | null
-          fmly_lines?: Json | null
-          id?: string
-          lines?: Json
-          render_data?: Json | null
-          section_images?: Json | null
-          song_dna?: Json | null
-          song_signature?: Json | null
-          title?: string
-          updated_at?: string
-          user_id: string
-          version_meta?: Json | null
-          words?: Json | null
-        }
-        Update: {
-          audio_url?: string | null
-          background_image_url?: string | null
-          beat_grid?: Json | null
-          created_at?: string
-          deleted_at?: string | null
-          filename?: string | null
-          fmly_lines?: Json | null
-          id?: string
-          lines?: Json
-          render_data?: Json | null
-          section_images?: Json | null
-          song_dna?: Json | null
-          song_signature?: Json | null
-          title?: string
-          updated_at?: string
-          user_id?: string
-          version_meta?: Json | null
-          words?: Json | null
-        }
-        Relationships: []
-      }
       saved_searches: {
         Row: {
           blended_label: string | null
@@ -2078,111 +1891,6 @@ export type Database = {
           },
         ]
       }
-      shareable_lyric_dances: {
-        Row: {
-          album_art_url: string | null
-          artist_dna: Json | null
-          artist_name: string
-          artist_slug: string
-          audio_url: string
-          auto_palettes: Json | null
-          background_url: string | null
-          beat_grid: Json
-          cinematic_direction: Json | null
-          created_at: string
-          empowerment_promise: Json | null
-          fire_count: number
-          id: string
-          lyrics: Json
-          palette: Json
-          physics_spec: Json | null
-          post_id: string | null
-          scene_context: Json | null
-          scene_manifest: Json | null
-          section_images: Json | null
-          seed: string
-          song_name: string
-          song_slug: string
-          system_type: string
-          updated_at: string
-          user_id: string
-          words: Json | null
-        }
-        Insert: {
-          album_art_url?: string | null
-          artist_dna?: Json | null
-          artist_name: string
-          artist_slug: string
-          audio_url: string
-          auto_palettes?: Json | null
-          background_url?: string | null
-          beat_grid: Json
-          cinematic_direction?: Json | null
-          created_at?: string
-          empowerment_promise?: Json | null
-          fire_count?: number
-          id?: string
-          lyrics: Json
-          palette?: Json
-          physics_spec?: Json | null
-          post_id?: string | null
-          scene_context?: Json | null
-          scene_manifest?: Json | null
-          section_images?: Json | null
-          seed?: string
-          song_name: string
-          song_slug: string
-          system_type?: string
-          updated_at?: string
-          user_id: string
-          words?: Json | null
-        }
-        Update: {
-          album_art_url?: string | null
-          artist_dna?: Json | null
-          artist_name?: string
-          artist_slug?: string
-          audio_url?: string
-          auto_palettes?: Json | null
-          background_url?: string | null
-          beat_grid?: Json
-          cinematic_direction?: Json | null
-          created_at?: string
-          empowerment_promise?: Json | null
-          fire_count?: number
-          id?: string
-          lyrics?: Json
-          palette?: Json
-          physics_spec?: Json | null
-          post_id?: string | null
-          scene_context?: Json | null
-          scene_manifest?: Json | null
-          section_images?: Json | null
-          seed?: string
-          song_name?: string
-          song_slug?: string
-          system_type?: string
-          updated_at?: string
-          user_id?: string
-          words?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shareable_lyric_dances_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shareable_lyric_dances_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       site_copy: {
         Row: {
           copy_json: Json
@@ -2241,67 +1949,7 @@ export type Database = {
           id?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "songfit_comment_likes_comment_id_fkey"
-            columns: ["comment_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_comments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      songfit_comments: {
-        Row: {
-          content: string
-          created_at: string
-          id: string
-          likes_count: number
-          parent_comment_id: string | null
-          post_id: string
-          user_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          id?: string
-          likes_count?: number
-          parent_comment_id?: string | null
-          post_id: string
-          user_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          id?: string
-          likes_count?: number
-          parent_comment_id?: string | null
-          post_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "songfit_comments_parent_comment_id_fkey"
-            columns: ["parent_comment_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_comments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "songfit_comments_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "songfit_comments_user_id_profiles_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       songfit_cycle_history: {
         Row: {
@@ -2331,15 +1979,7 @@ export type Database = {
           post_id?: string
           started_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "songfit_cycle_history_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_posts"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       songfit_engagement_events: {
         Row: {
@@ -2363,15 +2003,7 @@ export type Database = {
           post_id?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "songfit_engagement_events_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_posts"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       songfit_follows: {
         Row: {
@@ -2393,181 +2025,6 @@ export type Database = {
           id?: string
         }
         Relationships: []
-      }
-      songfit_hook_reviews: {
-        Row: {
-          context_note: string | null
-          created_at: string
-          hook_rating: string
-          id: string
-          post_id: string
-          session_id: string | null
-          user_id: string | null
-          would_replay: boolean
-        }
-        Insert: {
-          context_note?: string | null
-          created_at?: string
-          hook_rating: string
-          id?: string
-          post_id: string
-          session_id?: string | null
-          user_id?: string | null
-          would_replay: boolean
-        }
-        Update: {
-          context_note?: string | null
-          created_at?: string
-          hook_rating?: string
-          id?: string
-          post_id?: string
-          session_id?: string | null
-          user_id?: string | null
-          would_replay?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "songfit_hook_reviews_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_posts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      songfit_likes: {
-        Row: {
-          created_at: string
-          id: string
-          post_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          post_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          post_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "songfit_likes_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_posts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "songfit_likes_user_id_profiles_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      songfit_posts: {
-        Row: {
-          album_art_url: string | null
-          album_title: string | null
-          caption: string | null
-          comments_count: number
-          cooldown_until: string | null
-          created_at: string
-          cycle_number: number
-          engagement_score: number
-          expires_at: string | null
-          id: string
-          impressions: number
-          legacy_boost: number
-          likes_count: number
-          lyric_dance_id: string | null
-          lyric_dance_url: string | null
-          peak_rank: number | null
-          preview_url: string | null
-          release_date: string | null
-          spotify_track_id: string | null
-          spotify_track_url: string | null
-          status: string
-          submitted_at: string
-          tags_json: Json
-          tips_total: number
-          track_artists_json: Json
-          track_title: string
-          user_id: string
-        }
-        Insert: {
-          album_art_url?: string | null
-          album_title?: string | null
-          caption?: string | null
-          comments_count?: number
-          cooldown_until?: string | null
-          created_at?: string
-          cycle_number?: number
-          engagement_score?: number
-          expires_at?: string | null
-          id?: string
-          impressions?: number
-          legacy_boost?: number
-          likes_count?: number
-          lyric_dance_id?: string | null
-          lyric_dance_url?: string | null
-          peak_rank?: number | null
-          preview_url?: string | null
-          release_date?: string | null
-          spotify_track_id?: string | null
-          spotify_track_url?: string | null
-          status?: string
-          submitted_at?: string
-          tags_json?: Json
-          tips_total?: number
-          track_artists_json?: Json
-          track_title: string
-          user_id: string
-        }
-        Update: {
-          album_art_url?: string | null
-          album_title?: string | null
-          caption?: string | null
-          comments_count?: number
-          cooldown_until?: string | null
-          created_at?: string
-          cycle_number?: number
-          engagement_score?: number
-          expires_at?: string | null
-          id?: string
-          impressions?: number
-          legacy_boost?: number
-          likes_count?: number
-          lyric_dance_id?: string | null
-          lyric_dance_url?: string | null
-          peak_rank?: number | null
-          preview_url?: string | null
-          release_date?: string | null
-          spotify_track_id?: string | null
-          spotify_track_url?: string | null
-          status?: string
-          submitted_at?: string
-          tags_json?: Json
-          tips_total?: number
-          track_artists_json?: Json
-          track_title?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "songfit_posts_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       songfit_reports: {
         Row: {
@@ -2594,51 +2051,7 @@ export type Database = {
           reason?: string
           reporter_user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "songfit_reports_comment_id_fkey"
-            columns: ["comment_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_comments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "songfit_reports_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_posts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      songfit_saves: {
-        Row: {
-          created_at: string
-          id: string
-          post_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          post_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          post_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "songfit_saves_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_posts"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       songfit_tips: {
         Row: {
@@ -2668,15 +2081,7 @@ export type Database = {
           tipper_user_id?: string
           tx_hash?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "songfit_tips_post_id_fkey"
-            columns: ["post_id"]
-            isOneToOne: false
-            referencedRelation: "songfit_posts"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       track_engagement: {
         Row: {

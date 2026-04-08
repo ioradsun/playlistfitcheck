@@ -926,14 +926,15 @@ export function useLyricPipeline({
       const { slugify } = await import("@/lib/slugify");
       const s = slugify(initialLyric.title || "untitled");
       const { data: d }: any = await supabase
-        .from("shareable_lyric_dances")
-        .select("id, artist_slug, song_slug")
+        .from("lyric_projects")
+        .select("id, artist_slug, url_slug")
         .eq("user_id", user.id)
-        .eq("song_slug", s)
+        .eq("url_slug", s)
+        .eq("is_published", true)
         .maybeSingle();
       if (d) {
         setPipelineDanceId(d.id);
-        setPipelineDanceUrl(`/${d.artist_slug}/${d.song_slug}/lyric-dance`);
+        setPipelineDanceUrl(`/${d.artist_slug}/${d.url_slug}/lyric-dance`);
       }
     })();
   }, [user, initialLyric, cinematicDirection, pipelineDanceId]);
@@ -968,13 +969,13 @@ export function useLyricPipeline({
         }
 
         const { error: danceErr } = await supabase
-          .from("shareable_lyric_dances" as any)
+          .from("lyric_projects" as any)
           .upsert({
             user_id: user?.id ?? null,
             artist_slug: claimMeta.artistSlug,
-            song_slug: claimMeta.songSlug,
+            url_slug: claimMeta.songSlug,
             artist_name: claimMeta.artistName,
-            song_name: claimMeta.songName,
+            title: claimMeta.songName,
             audio_url: audioStorageUrl,
             lyrics: lines.map((l: any) => ({
               start: l.start,
@@ -989,7 +990,7 @@ export function useLyricPipeline({
             section_images: null,
             auto_palettes: null,
             album_art_url: claimMeta.albumArtUrl,
-          }, { onConflict: "artist_slug,song_slug" });
+          }, { onConflict: "artist_slug,url_slug" });
 
         if (danceErr) {
           console.error("[ClaimPublish] Upsert failed:", danceErr);
@@ -998,10 +999,10 @@ export function useLyricPipeline({
         }
 
         const { data: danceRow } = await (supabase
-          .from("shareable_lyric_dances" as any)
+          .from("lyric_projects" as any)
           .select("id")
           .eq("artist_slug", claimMeta.artistSlug)
-          .eq("song_slug", claimMeta.songSlug)
+          .eq("url_slug", claimMeta.songSlug)
           .maybeSingle() as any) as { data: { id: string } | null };
 
         const lyricDanceUrl = `/${claimMeta.artistSlug}/${claimMeta.songSlug}/lyric-dance`;
@@ -1282,10 +1283,10 @@ export function useLyricPipeline({
 
             let resolvedDanceId: string | null = null;
             const { data: existing }: any = await supabase
-              .from("shareable_lyric_dances" as any)
+              .from("lyric_projects" as any)
               .select("id")
               .eq("user_id", user.id)
-              .eq("song_slug", songSlugVal)
+              .eq("url_slug", songSlugVal)
               .maybeSingle();
             if (existing?.id) {
               resolvedDanceId = existing.id;
@@ -1294,7 +1295,7 @@ export function useLyricPipeline({
                 `/${artistSlugVal}/${songSlugVal}/lyric-dance`,
               );
               await supabase
-                .from("shareable_lyric_dances" as any)
+                .from("lyric_projects" as any)
                 .update({ cinematic_direction: cinematicDirectionRef.current || enrichedScene } as any)
                 .eq("id", resolvedDanceId);
             } else {
@@ -1321,13 +1322,13 @@ export function useLyricPipeline({
                 .from("audio-clips")
                 .getPublicUrl(storagePath);
 
-              await supabase.from("shareable_lyric_dances" as any).upsert(
+              await supabase.from("lyric_projects" as any).upsert(
                 {
                   user_id: user.id,
                   artist_slug: artistSlugVal,
-                  song_slug: songSlugVal,
+                  url_slug: songSlugVal,
                   artist_name: artistNameRef.current || "artist",
-                  song_name: lyricData!.title || "Untitled",
+                  title: lyricData!.title || "Untitled",
                   audio_url: urlData.publicUrl,
                   lyrics: mainLines,
                   cinematic_direction: cinematicDirectionRef.current || enrichedScene,
@@ -1342,14 +1343,14 @@ export function useLyricPipeline({
                   palette: derivePaletteFromDirection(enrichedScene),
                   section_images: null,
                 } as any,
-                { onConflict: "artist_slug,song_slug" },
+                { onConflict: "artist_slug,url_slug" },
               );
 
               const { data: newRow }: any = await supabase
-                .from("shareable_lyric_dances" as any)
+                .from("lyric_projects" as any)
                 .select("id")
                 .eq("artist_slug", artistSlugVal)
-                .eq("song_slug", songSlugVal)
+                .eq("url_slug", songSlugVal)
                 .maybeSingle();
               resolvedDanceId = newRow?.id ?? null;
               if (resolvedDanceId) {
@@ -1634,16 +1635,16 @@ export function useLyricPipeline({
             let resolvedDanceId: string | null = null;
 
             const { data: existing }: any = await supabase
-              .from("shareable_lyric_dances" as any)
+              .from("lyric_projects" as any)
               .select("id")
               .eq("user_id", user.id)
-              .eq("song_slug", songSlugVal)
+              .eq("url_slug", songSlugVal)
               .maybeSingle();
 
             if (existing?.id) {
               resolvedDanceId = existing.id;
               await supabase
-                .from("shareable_lyric_dances" as any)
+                .from("lyric_projects" as any)
                 .update({
                   cinematic_direction: enrichedScene,
                   beat_grid: {
@@ -1675,13 +1676,13 @@ export function useLyricPipeline({
                 .from("audio-clips")
                 .getPublicUrl(storagePath);
 
-              await supabase.from("shareable_lyric_dances" as any).upsert(
+              await supabase.from("lyric_projects" as any).upsert(
                 {
                   user_id: user.id,
                   artist_slug: artistSlugVal,
-                  song_slug: songSlugVal,
+                  url_slug: songSlugVal,
                   artist_name: artistNameRef.current || "artist",
-                  song_name: lyricData?.title || "Untitled",
+                  title: lyricData?.title || "Untitled",
                   audio_url: urlData.publicUrl,
                   lyrics: [],
                   cinematic_direction: enrichedScene,
@@ -1695,14 +1696,14 @@ export function useLyricPipeline({
                   palette: derivePaletteFromDirection(enrichedScene),
                   section_images: null,
                 } as any,
-                { onConflict: "artist_slug,song_slug" },
+                { onConflict: "artist_slug,url_slug" },
               );
 
               const { data: newRow }: any = await supabase
-                .from("shareable_lyric_dances" as any)
+                .from("lyric_projects" as any)
                 .select("id")
                 .eq("artist_slug", artistSlugVal)
-                .eq("song_slug", songSlugVal)
+                .eq("url_slug", songSlugVal)
                 .maybeSingle();
               resolvedDanceId = newRow?.id ?? null;
             }

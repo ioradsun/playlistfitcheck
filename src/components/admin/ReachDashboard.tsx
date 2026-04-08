@@ -141,7 +141,7 @@ function BeatGridEnhancer({
         .slice(0, 50);
 
       const { error: updateErr } = await (supabase as any)
-        .from("shareable_lyric_dances")
+        .from("lyric_projects" as any)
         .update({
           beat_grid: {
             bpm: grid.bpm,
@@ -150,7 +150,7 @@ function BeatGridEnhancer({
           },
         })
         .eq("artist_slug", artistSlug)
-        .eq("song_slug", songSlug);
+        .eq("url_slug", songSlug);
 
       if (updateErr) throw new Error(updateErr.message);
 
@@ -175,10 +175,10 @@ function BeatGridEnhancer({
         const slugParts = row.lyric_dance_url.split("/").filter(Boolean);
         if (slugParts.length >= 2) {
           const { data: danceRow } = await (supabase as any)
-            .from("shareable_lyric_dances")
+            .from("lyric_projects" as any)
             .select("audio_url")
             .eq("artist_slug", slugParts[0])
-            .eq("song_slug", slugParts[1])
+            .eq("url_slug", slugParts[1])
             .maybeSingle();
           audioUrl = danceRow?.audio_url ?? null;
         }

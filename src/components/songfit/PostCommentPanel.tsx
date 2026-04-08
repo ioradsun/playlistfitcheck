@@ -119,15 +119,15 @@ export function PostCommentPanel({
 
     const loadComments = async () => {
       const { data } = await supabase
-        .from("songfit_comments")
+        .from("feed_comments" as any)
         .select("id, content, created_at, user_id, parent_comment_id")
         .eq("post_id", postId)
         .order("created_at", { ascending: true })
         .limit(200);
 
-      const rows = data ?? [];
+      const rows = (data ?? []) as any[];
       const userIds = [
-        ...new Set(rows.filter((r) => r.user_id).map((r) => r.user_id!)),
+        ...new Set(rows.filter((r: any) => r.user_id).map((r: any) => r.user_id!)),
       ];
       const profileMap: Record<
         string,
@@ -141,8 +141,8 @@ export function PostCommentPanel({
         for (const p of profiles ?? []) profileMap[p.id] = p;
       }
 
-      const withProfiles: Comment[] = rows.map((r) => ({
-        ...(r as any),
+      const withProfiles: Comment[] = rows.map((r: any) => ({
+        ...r,
         profiles: r.user_id ? (profileMap[r.user_id] ?? null) : null,
       }));
 
@@ -165,7 +165,7 @@ export function PostCommentPanel({
       const commentIds =
         (
           await supabase
-            .from("songfit_comments")
+            .from("feed_comments" as any)
             .select("id")
             .eq("post_id", postId)
         ).data?.map((r: any) => r.id) ?? [];

@@ -1,11 +1,11 @@
 /**
- * Canonical column lists for `shareable_lyric_dances` queries.
+ * Canonical column lists for `lyric_projects` queries.
  *
  * LYRIC_DANCE_COLUMNS includes authoring/runtime heavy fields needed to fully
  * instantiate a player.
  */
 
 export const LYRIC_DANCE_COLUMNS =
-  "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
-  "motion_profile_spec:physics_spec,cinematic_direction,section_images,scene_context,scene_manifest," +
-  "auto_palettes,beat_grid,palette,system_type,seed,artist_dna,album_art_url,empowerment_promise";
+  "id,user_id,artist_slug,url_slug,artist_name,title,audio_url,lines,words," +
+  "physics_spec,cinematic_direction,section_images," +
+  "auto_palettes,beat_grid,palette,empowerment_promise,album_art_url,is_published";

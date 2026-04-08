@@ -48,7 +48,7 @@ export function useLyricDanceCore({
     if (!lyricDanceId) return;
     let cancelled = false;
     (supabase
-      .from("shareable_lyric_dances" as any)
+      .from("lyric_projects" as any)
       .select(LYRIC_DANCE_COLUMNS)
       .eq("id", lyricDanceId)
       .maybeSingle() as unknown as Promise<any>)
@@ -173,9 +173,9 @@ export function useLyricDanceCore({
     let mounted = true;
     const hydrate = async () => {
       const { data: fires } = await supabase
-        .from("lyric_dance_fires" as any)
+        .from("project_fires" as any)
         .select("line_index, hold_ms, user_id")
-        .eq("dance_id", data.id);
+        .eq("project_id", data.id);
 
       if (!mounted || !fires) return;
 

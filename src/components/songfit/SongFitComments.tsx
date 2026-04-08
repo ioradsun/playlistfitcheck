@@ -148,7 +148,7 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
     if (!postId) return;
     setLoading(true);
     const { data } = await supabase
-      .from("songfit_comments")
+      .from("feed_comments" as any)
       .select("*, profiles!songfit_comments_user_id_profiles_fkey(display_name, avatar_url), likes_count")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
@@ -160,7 +160,7 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
     if (user && fetched.length > 0) {
       const ids = fetched.map(c => c.id);
       const { data: liked } = await supabase
-        .from("songfit_comment_likes")
+        .from("feed_comment_likes" as any)
         .select("comment_id")
         .eq("user_id", user.id)
         .in("comment_id", ids);
@@ -199,9 +199,9 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
     ));
     try {
       if (alreadyLiked) {
-        await supabase.from("songfit_comment_likes").delete().eq("comment_id", commentId).eq("user_id", user.id);
+        await supabase.from("feed_comment_likes" as any).delete().eq("comment_id", commentId).eq("user_id", user.id);
       } else {
-        await supabase.from("songfit_comment_likes").insert({ comment_id: commentId, user_id: user.id });
+        await supabase.from("feed_comment_likes" as any).insert({ comment_id: commentId, user_id: user.id });
       }
     } catch {
       // Revert on error
@@ -216,7 +216,7 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
     try {
       const insertData: any = { post_id: postId, user_id: user.id, content: text.trim() };
       if (replyTo) insertData.parent_comment_id = replyTo.id;
-      const { error } = await supabase.from("songfit_comments").insert(insertData);
+      const { error } = await supabase.from("feed_comments" as any).insert(insertData);
       if (error) throw error;
       setText("");
       setReplyTo(null);
@@ -244,7 +244,7 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
 
   const handleDelete = async (commentId: string) => {
     try {
-      const { error } = await supabase.from("songfit_comments").delete().eq("id", commentId);
+      const { error } = await supabase.from("feed_comments" as any).delete().eq("id", commentId);
       if (error) throw error;
       await fetchComments();
       if (postId) onCommentAdded?.(postId);

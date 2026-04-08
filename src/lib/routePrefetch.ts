@@ -69,7 +69,7 @@ export const prefetchRouteData = (path: string, options?: { userId?: string; ite
       await supabase.from("saved_searches").select("id").eq("user_id", options.userId).order("created_at", { ascending: false }).limit(1);
     }
     if (basePath === "/LyricFit" && options?.userId) {
-      await supabase.from("saved_lyrics").select("id").eq("user_id", options.userId).order("updated_at", { ascending: false }).limit(1);
+      await supabase.from("lyric_projects").select("id").eq("user_id", options.userId).order("updated_at", { ascending: false }).limit(1);
     }
     if (basePath === "/MixFit" && options?.userId) {
       await supabase.from("mix_projects").select("id").eq("user_id", options.userId).order("updated_at", { ascending: false }).limit(1);

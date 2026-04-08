@@ -402,7 +402,7 @@ function NowStreamingDrillDown({ post, navigate }: { post: SongFitPost; navigate
         .eq("post_id", post.id)
         .order("created_at", { ascending: true }),
       supabase
-        .from("songfit_comments")
+        .from("feed_comments" as any)
         .select("id, content, created_at, user_id, likes_count")
         .eq("post_id", post.id)
         .order("created_at", { ascending: false })
@@ -779,7 +779,7 @@ const SongDetail = () => {
     if (!postId) return;
     (async () => {
       const { data: postRow } = await supabase
-        .from("songfit_posts")
+        .from("feed_posts" as any)
         .select("*, profiles:user_id(display_name, avatar_url, is_verified)")
         .eq("id", postId)
         .single();
@@ -790,11 +790,11 @@ const SongDetail = () => {
       }
       setPost(postRow as unknown as SongFitPost);
 
-      if (postRow.lyric_dance_id) {
+      if ((postRow as any).project_id) {
         const { data: dance } = await supabase
-          .from("shareable_lyric_dances" as any)
+          .from("lyric_projects" as any)
           .select(LYRIC_DANCE_COLUMNS)
-          .eq("id", postRow.lyric_dance_id)
+          .eq("id", (postRow as any).project_id)
           .maybeSingle();
         if (dance) {
           const d = dance as any;
@@ -820,27 +820,27 @@ const SongDetail = () => {
       supabase
         .from("v_closing_distribution" as any)
         .select("hook_index, pick_count, pct")
-        .eq("dance_id", danceId),
+        .eq("project_id", danceId),
       supabase
         .from("v_free_form_responses" as any)
         .select("free_text, repeat_count")
-        .eq("dance_id", danceId)
+        .eq("project_id", danceId)
         .limit(20),
       supabase
-        .from("lyric_dance_fires" as any)
+        .from("project_fires" as any)
         .select("id", { count: "exact", head: true })
-        .eq("dance_id", danceId),
-      supabase.from("lyric_dance_exposures" as any).select("session_id").eq("dance_id", danceId),
+        .eq("project_id", danceId),
+      supabase.from("project_exposures" as any).select("session_id").eq("project_id", danceId),
       supabase
-        .from("lyric_dance_comments" as any)
+        .from("project_comments" as any)
         .select("id, text, line_index, submitted_at")
-        .eq("dance_id", danceId)
+        .eq("project_id", danceId)
         .order("submitted_at", { ascending: true })
         .limit(200),
       supabase
-        .from("lyric_dance_fires" as any)
+        .from("project_fires" as any)
         .select("source")
-        .eq("dance_id", danceId),
+        .eq("project_id", danceId),
     ]).then(([strength, fires, dist, free, count, exposures, commentRes, sourceRes]) => {
       setFireStrength(strength);
       setRawFires(fires);
@@ -859,10 +859,10 @@ const SongDetail = () => {
     });
 
     Promise.all([
-      supabase.from("lyric_dance_exposures" as any).select("session_id").eq("dance_id", danceId),
-      supabase.from("lyric_dance_fires" as any).select("session_id, line_index, created_at").eq("dance_id", danceId),
-      supabase.from("lyric_dance_closing_picks" as any).select("session_id").eq("dance_id", danceId),
-      supabase.from("lyric_dance_comments" as any).select("session_id").eq("dance_id", danceId),
+      supabase.from("project_exposures" as any).select("session_id").eq("project_id", danceId),
+      supabase.from("project_fires" as any).select("session_id, line_index, created_at").eq("project_id", danceId),
+      supabase.from("project_closing_picks" as any).select("session_id").eq("project_id", danceId),
+      supabase.from("project_comments" as any).select("session_id").eq("project_id", danceId),
     ]).then(([expRes, fireRes, closeRes, commentRes]) => {
       const expSessions = new Set(((expRes.data ?? []) as any[]).map((r: any) => r.session_id).filter(Boolean));
       const fireSessions = new Set(((fireRes.data ?? []) as any[]).map((r: any) => r.session_id).filter(Boolean));

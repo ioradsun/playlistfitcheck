@@ -442,7 +442,7 @@ export function LyricsTab({
         console.error("[handleTranscribe] FAILED", e);
         clearTimeout(transcribeTimeout);
         if (projectId) {
-          await supabase.from("saved_lyrics").delete().eq("id", projectId);
+          await supabase.from("lyric_projects").delete().eq("id", projectId);
         }
         setLyricData(null);
         setLines([]);

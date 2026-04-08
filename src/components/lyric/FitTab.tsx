@@ -323,7 +323,7 @@ export function FitTab({
       return;
     }
     supabase
-      .from("shareable_lyric_dances" as any)
+      .from("lyric_projects" as any)
       .select(LYRIC_DANCE_COLUMNS)
       .eq("id", publishedDanceId)
       .maybeSingle()
@@ -429,7 +429,7 @@ export function FitTab({
     if (!songSlug) return;
 
     const danceP = supabase
-      .from("shareable_lyric_dances" as any)
+      .from("lyric_projects" as any)
       .select("id, artist_slug, song_slug, lyrics")
       .eq("user_id", user.id)
       .eq("song_slug", songSlug)
@@ -721,7 +721,7 @@ export function FitTab({
       const reconciledWords = wordsRef.current ?? null;
 
       const { error } = await supabase
-        .from("shareable_lyric_dances" as any)
+        .from("lyric_projects" as any)
         .update({ lyrics: mainLines, words: reconciledWords })
         .eq("id", danceId);
       if (error) {
@@ -763,7 +763,7 @@ export function FitTab({
 
       // Fetch existing dance for palette reuse only (NOT audio)
       const { data: existingDance }: any = await supabase
-        .from("shareable_lyric_dances" as any)
+        .from("lyric_projects" as any)
         .select("section_images, auto_palettes")
         .eq("user_id", user.id)
         .eq("artist_slug", artistSlug)
@@ -830,7 +830,7 @@ export function FitTab({
       // palette            — from direction with fallback (required, NOT NULL)
       // section_images     — null if regenerating, preserved if not
       const { data: danceRow, error: insertError }: any = await supabase
-        .from("shareable_lyric_dances" as any)
+        .from("lyric_projects" as any)
         .upsert(
           {
             user_id: user.id,
@@ -1098,9 +1098,9 @@ export function FitTab({
 
   const fetchVoteCounts = useCallback(async (danceId: string) => {
     const { data } = await supabase
-      .from("lyric_dance_angle_votes" as any)
+      .from("project_angle_votes" as any)
       .select("hook_index")
-      .eq("dance_id", danceId);
+      .eq("project_id", danceId);
     if (!data) return;
     const counts = Array(6).fill(0);
     (data as any[]).forEach((row) => {
@@ -1168,7 +1168,7 @@ export function FitTab({
         setHasHydratedEmpowerment(true);
         setEmpowermentPromise(data);
         await supabase
-          .from("shareable_lyric_dances" as any)
+          .from("lyric_projects" as any)
           .update({ empowerment_promise: data })
           .eq("id", publishedDanceId);
         fetchVoteCounts(publishedDanceId);
@@ -1220,20 +1220,20 @@ export function FitTab({
       supabase
         .from("v_closing_distribution" as any)
         .select("hook_index, pick_count, pct")
-        .eq("dance_id", publishedDanceId),
+        .eq("project_id", publishedDanceId),
       supabase
         .from("v_free_form_responses" as any)
         .select("free_text, repeat_count")
-        .eq("dance_id", publishedDanceId)
+        .eq("project_id", publishedDanceId)
         .limit(20),
       supabase
-        .from("lyric_dance_fires" as any)
+        .from("project_fires" as any)
         .select("id", { count: "exact", head: true })
-        .eq("dance_id", publishedDanceId),
+        .eq("project_id", publishedDanceId),
       supabase
-        .from("lyric_dance_exposures" as any)
+        .from("project_exposures" as any)
         .select("session_id")
-        .eq("dance_id", publishedDanceId),
+        .eq("project_id", publishedDanceId),
     ]).then(([strength, fires, dist, free, count, exposures]) => {
       setFireStrength(strength);
       setRawFires(fires);

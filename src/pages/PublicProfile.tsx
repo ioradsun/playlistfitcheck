@@ -91,7 +91,7 @@ const PublicProfile = () => {
       });
     supabase.from("user_roles").select("role").eq("user_id", userId)
       .then(({ data }) => { setRoles(data?.map((r: any) => r.role) ?? []); });
-    supabase.from("songfit_posts")
+    supabase.from("feed_posts" as any)
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
@@ -104,7 +104,7 @@ const PublicProfile = () => {
         if (postIds.length === 0) return;
 
         // Fetch save counts
-        supabase.from("songfit_saves")
+        supabase.from("feed_saves" as any)
           .select("post_id")
           .in("post_id", postIds)
           .then(({ data: saves }) => {
@@ -116,7 +116,7 @@ const PublicProfile = () => {
 
         // Fetch hook reviews per post
         const { data: reviews } = await supabase
-          .from("songfit_hook_reviews")
+          .from("feed_hook_reviews" as any)
           .select("post_id, hook_rating, would_replay")
           .in("post_id", postIds);
         if (reviews) {
@@ -144,7 +144,7 @@ const PublicProfile = () => {
   useEffect(() => {
     if (!isOwner || !user) return;
     supabase
-      .from("songfit_saves")
+      .from("feed_saves" as any)
       .select("id, post_id, created_at, songfit_posts(id, track_title, spotify_track_url, album_art_url, track_artists_json)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })

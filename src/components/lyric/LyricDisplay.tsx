@@ -718,14 +718,14 @@ export function LyricDisplay({
 
       if (currentSavedId) {
         const { error } = await supabase
-          .from("saved_lyrics")
+          .from("lyric_projects")
           .update(payload as any)
           .eq("id", currentSavedId);
         if (error) throw error;
       } else {
         const { data: inserted, error } = await supabase
-          .from("saved_lyrics")
-          .insert({ ...payload, user_id: user.id, filename: audioFile.name })
+          .from("lyric_projects")
+          .insert({ ...payload, user_id: user.id, filename: audioFile.name } as any)
           .select("id")
           .single();
         if (error) throw error;
@@ -741,10 +741,11 @@ export function LyricDisplay({
       const publishedLines = explicitLines.filter((l) => l.tag !== "adlib");
       if (songSlug) {
         await supabase
-          .from("shareable_lyric_dances" as any)
-          .update({ lyrics: publishedLines } as any)
+          .from("lyric_projects")
+          .update({ lines: publishedLines } as any)
           .eq("user_id", user.id)
-          .eq("song_slug", songSlug);
+          .eq("url_slug", songSlug)
+          .eq("is_published", true);
       }
 
       setSaveStatus("saved");

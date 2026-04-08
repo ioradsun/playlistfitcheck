@@ -112,7 +112,7 @@ export const SongFitPostCard = memo(function SongFitPostCard({
   const handleSaveEdit = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase.from("songfit_posts").update({ caption: editCaption.trim() }).eq("id", post.id);
+      const { error } = await supabase.from("feed_posts" as any).update({ caption: editCaption.trim() }).eq("id", post.id);
       if (error) throw error;
       setLocalCaption(editCaption.trim());
       setEditing(false);
@@ -124,7 +124,7 @@ export const SongFitPostCard = memo(function SongFitPostCard({
 
   const handleDeletePost = async () => {
     try {
-      const { error } = await supabase.from("songfit_posts").delete().eq("id", post.id);
+      const { error } = await supabase.from("feed_posts" as any).delete().eq("id", post.id);
       if (error) throw error;
       toast.success("Post deleted");
       onRefresh();
@@ -137,8 +137,8 @@ export const SongFitPostCard = memo(function SongFitPostCard({
     setLiked(!wasLiked);
     setLikesCount((c) => wasLiked ? c - 1 : c + 1);
     try {
-      if (wasLiked) await supabase.from("songfit_likes").delete().eq("post_id", post.id).eq("user_id", user.id);
-      else { await supabase.from("songfit_likes").insert({ post_id: post.id, user_id: user.id }); logEngagementEvent(post.id, user.id, "like"); }
+      if (wasLiked) await supabase.from("feed_likes" as any).delete().eq("post_id", post.id).eq("user_id", user.id);
+      else { await supabase.from("feed_likes" as any).insert({ post_id: post.id, user_id: user.id }); logEngagementEvent(post.id, user.id, "like"); }
     } catch { setLiked(wasLiked); setLikesCount((c) => wasLiked ? c + 1 : c - 1); }
   };
 
@@ -147,8 +147,8 @@ export const SongFitPostCard = memo(function SongFitPostCard({
     const wasSaved = saved;
     setSaved(!wasSaved);
     try {
-      if (wasSaved) await supabase.from("songfit_saves").delete().eq("post_id", post.id).eq("user_id", user.id);
-      else { await supabase.from("songfit_saves").insert({ post_id: post.id, user_id: user.id }); logEngagementEvent(post.id, user.id, "save"); }
+      if (wasSaved) await supabase.from("feed_saves" as any).delete().eq("post_id", post.id).eq("user_id", user.id);
+      else { await supabase.from("feed_saves" as any).insert({ post_id: post.id, user_id: user.id }); logEngagementEvent(post.id, user.id, "save"); }
     } catch { setSaved(wasSaved); }
   };
 
