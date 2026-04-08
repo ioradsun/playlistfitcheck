@@ -31,9 +31,32 @@ const FALLBACK_MODEL = "google/gemini-2.5-flash";
 const SCENE_DIRECTION_PROMPT = `
 You are a lyric video director. Return JSON only. No markdown. No commentary.
 
+PROCESS — follow these steps in order:
+
+1. LISTEN. If audio is attached, listen to the entire song closely. Pay attention to:
+   - The vocal performance: whispered, sung, rapped, screamed
+   - The instrumentation: acoustic, electronic, orchestral, stripped-back
+   - Energy shifts: where the song builds, drops, peaks, and settles
+   - Production: layering, ad-libs, effects, space between sounds
+
+2. TRANSCRIBE. Write down the lyrics you hear in each section. Use the EXACT
+   words the artist sings — their specific metaphors, imagery, and language.
+   If lyrics are also provided in text, use those as a reference but trust
+   what you HEAR for emotional delivery and emphasis.
+
+3. EXTRACT. From the transcribed lyrics, pull out the concrete visual nouns:
+   places, objects, actions, weather, time of day, body language. These are
+   your scene ingredients. "Burning bridges" = fire + bridge. "3am drive" =
+   car + empty road + night. "Crying in the shower" = water + steam + tile.
+
+4. DIRECT. Build one cohesive visual world from those ingredients. Every
+   section lives in the same world but shows a different moment — like
+   scenes in a film, not slides in a deck. The energy you HEARD in the
+   audio drives the intensity of each scene.
+
 OUTPUT SCHEMA:
 {
-  "description": "one sentence, max 15 words",
+  "description": "one sentence, max 15 words — the visual world in a nutshell",
   "sceneTone": "dark|light|mixed",
   "fontProfile": {
     "force": "low|medium|high",
@@ -46,72 +69,10 @@ OUTPUT SCHEMA:
   "sections": [
     {
       "sectionIndex": 0,
-      "description": "one evocative sentence",
+      "description": "one evocative sentence — what the viewer SEES",
       "dominantColor": "#hex",
       "visualMood": "mood",
       "texture": "texture"
-    }
-  ]
-}
-
-MOODS: intimate, anthemic, dreamy, aggressive, melancholy, euphoric, eerie,
-vulnerable, triumphant, nostalgic, defiant, hopeful, raw, hypnotic, ethereal,
-haunted, celestial, noir, rebellious
-
-TEXTURES: dust, embers, smoke, rain, snow, stars, fireflies, petals, ash,
-crystals, confetti, lightning, bubbles, moths, glare, glitch, fire
-
-VISUAL WORLD RULES:
-1. If ARTIST DIRECTION is provided, treat it as law — it defines the visual
-   world. Build every section inside that world.
-
-2. If no ARTIST DIRECTION is provided, read the lyrics closely and extract
-   the specific objects, places, actions, and characters named in the words.
-   Build the visual world around those literal elements first — then layer
-   in emotional mood. A song about couch surfing should show couches, dim
-   apartments, borrowed floors, and distant stages. Do not substitute generic
-   mood imagery (waves, neon, fog) for the actual content of the lyrics.
-
-3. Build one cohesive visual world across all sections. Do not force visual
-   variety — coherence is more important than uniqueness.
-
-4. Color should reflect peak emotion, not just setting.
-   Luminance > 40% for lift/triumph. Dark for dread/isolation.
-
-DOMINANT COLOR RULES:
-- dominantColor is a TINT DIRECTION applied as a wash over the section image, NOT a
-  background fill. It should be a mid-tone color (RGB values 60-180 range) that
-  identifies the section's emotional color identity.
-- NEVER use near-black colors (any channel below 30). Dark mood is conveyed by the
-  mood grade system, not by dark dominantColors.
-- NEVER use near-white colors (all channels above 220). Bright mood still needs a
-  visible color direction.
-- Think of dominantColor as a color gel on a film light — it TINTS the scene, it
-  doesn't PAINT it.
-- Good: "#4A6B8A" (steel blue for noir), "#7B5A9E" (electric violet for ambition),
-  "#3D7A8F" (ocean teal for waves), "#C4962E" (rich amber for triumph)
-- Bad: "#0D0F14" (black — no color identity), "#1B1026" (too dark to see), "#FFFFFF"
-  (no direction)
-
-5. One section per audio section provided. Match section count exactly.
-`;
-
-const INSTRUMENTAL_SCENE_DIRECTION_PROMPT = `
-You are a visual world director for instrumental music.
-Return JSON only. No markdown. No commentary.
-
-OUTPUT JSON SCHEMA:
-{
-  "sceneTone": "dark|light|mixed",
-  "emotionalArc": "slow-burn|surge|collapse|dawn|eruption",
-  "description": "one-sentence world description",
-  "sections": [
-    {
-      "sectionIndex": 0,
-      "description": "one evocative sentence describing THIS section's visual moment",
-      "dominantColor": "#hex — a mid-tone tint direction (RGB 60-180), not near-black or near-white",
-      "visualMood": "one of the MOODS below — MUST VARY across sections to create a story arc",
-      "texture": "one of the TEXTURES below — MUST CHANGE at least twice across sections"
     }
   ]
 }
@@ -137,46 +98,125 @@ MOODS (each drives camera behavior, vignette, and visual intensity):
   noir — high contrast, moody shadows, cinematic cool
   rebellious — burning edges, sparks, untamed energy
 
-TEXTURES (the particle system overlaid on the scene):
+TEXTURES (particle system overlaid on each section):
   dust, embers, smoke, rain, snow, stars, fireflies, petals,
   ash, crystals, confetti, lightning, bubbles, moths, glare, glitch, fire
 
-CONTEXT:
-You are given an instrumental track — there are no lyrics.
-Build the visual world from the track's energy, BPM, and
-section structure alone. Use ARTIST DIRECTION as the anchor
-world if provided.
+VISUAL WORLD RULES:
+
+1. ARTIST DIRECTION IS LAW. If provided, it defines the world. Every section
+   lives inside that world. "Late night drive" = every scene is roads, headlights,
+   dashboard glow. "Club at 1am" = every scene is strobes, sweat, bass.
+
+2. LYRICS ARE THE BLUEPRINT. If no artist direction is given, the visual world
+   comes from what the artist is SAYING, not generic mood. A song about couch
+   surfing should show couches, dim apartments, borrowed floors — not waves and
+   fog. Extract the literal imagery from the words you heard. Then layer emotion
+   on top.
+
+3. ONE WORLD, MANY MOMENTS. Do not create disconnected scenes. Every section
+   is the same place at a different moment — like a time-lapse or a camera
+   moving through one continuous space. Coherence beats variety.
+
+4. ENERGY DRIVES INTENSITY. The section you HEARD as the quietest gets the
+   most muted, intimate visual. The section you HEARD as the loudest gets the
+   most vivid, dramatic visual. Match what you heard, not what you assume.
+
+5. THE HOOK IS THE CLIMAX. If you hear a lyric that repeats — a chorus, a
+   hook — that section gets the most visually powerful treatment. Maximum
+   color saturation, widest framing, boldest texture.
+
+DOMINANT COLOR RULES:
+- dominantColor is a TINT DIRECTION — a color gel on a film light. It TINTS
+  the scene, not PAINTS it.
+- Mid-tone colors only (RGB values 60-180). Never near-black (any channel
+  below 30). Never near-white (all channels above 220).
+- Color should SHIFT across sections to reinforce the arc.
+  Warm (amber/gold) for intimate/nostalgic. Cool (teal/blue) for ethereal/noir.
+  Hot (red/crimson) for aggressive/anthemic. Jewel tones for euphoric/dreamy.
+- Good: "#4A6B8A" (steel blue), "#7B5A9E" (electric violet), "#C4962E" (rich amber)
+- Bad: "#0D0F14" (black), "#1B1026" (too dark), "#FFFFFF" (no direction)
+
+SECTION DESCRIPTION RULES:
+- Each description must be UNIQUE and VISUAL — a one-sentence snapshot of what
+  the viewer sees in that moment. Not a mood label.
+- Good: "Rain streaks across a bus window as city lights blur into long smears of gold"
+- Good: "An empty parking lot at 4am, one streetlight buzzing, puddles reflecting nothing"
+- Bad: "intimate cinematic landscape"
+- Bad: "moody urban environment"
+- Ground descriptions in SPECIFIC nouns from the lyrics you heard.
+
+SECTION COUNT: One section per audio section provided. Match count exactly.
+`;
+
+const INSTRUMENTAL_SCENE_DIRECTION_PROMPT = `
+You are a visual world director for instrumental music.
+Return JSON only. No markdown. No commentary.
+
+PROCESS — follow these steps in order:
+
+1. LISTEN. If audio is attached, listen to the entire track closely. Pay attention to:
+   - Instrumentation: what instruments, synths, or samples do you hear
+   - Rhythm: driving, floating, syncopated, steady
+   - Energy arc: where it builds, peaks, drops, resolves
+   - Space: dense and layered vs sparse and minimal
+
+2. NOTE. Write down what you hear in each section: the dominant instrument,
+   the energy level, whether it's building or releasing. This is your
+   blueprint for visual intensity.
+
+3. DIRECT. Build one cohesive visual world from the track's character.
+   A lo-fi beat gets a different world than a cinematic orchestral piece.
+   Let the SOUND define the SETTING.
+
+OUTPUT JSON SCHEMA:
+{
+  "sceneTone": "dark|light|mixed",
+  "emotionalArc": "slow-burn|surge|collapse|dawn|eruption",
+  "description": "one-sentence world description",
+  "sections": [
+    {
+      "sectionIndex": 0,
+      "description": "one evocative sentence describing THIS section's visual moment",
+      "dominantColor": "#hex — a mid-tone tint direction (RGB 60-180), not near-black or near-white",
+      "visualMood": "one of the MOODS below — MUST VARY across sections to create a story arc",
+      "texture": "one of the TEXTURES below — MUST CHANGE at least twice across sections"
+    }
+  ]
+}
+
+MOODS: intimate, anthemic, dreamy, aggressive, melancholy, euphoric, eerie,
+vulnerable, triumphant, nostalgic, defiant, hopeful, raw, hypnotic, ethereal,
+haunted, celestial, noir, rebellious
+
+TEXTURES: dust, embers, smoke, rain, snow, stars, fireflies, petals, ash,
+crystals, confetti, lightning, bubbles, moths, glare, glitch, fire
 
 STORYTELLING RULES:
 
-1. VISUAL ARC IS MANDATORY. A beat video without lyrics must tell its
-   story through visual progression. Each section is a chapter.
-   - Intro sections: intimate, vulnerable, or dreamy — establish the world quietly
-   - Building sections: shift to hypnotic, nostalgic, or hopeful — the world wakes up
-   - Peak sections: anthemic, euphoric, aggressive, or triumphant — maximum visual energy
-   - Outro sections: return to intimate or ethereal — the world settles
+1. VISUAL ARC IS MANDATORY. Each section is a chapter in a visual story.
+   - Intro: intimate, vulnerable, or dreamy — establish the world quietly
+   - Building: shift to hypnotic, nostalgic, or hopeful — the world wakes up
+   - Peak: anthemic, euphoric, aggressive, or triumphant — maximum visual energy
+   - Outro: return to intimate or ethereal — the world settles
 
-2. TEXTURE MUST CHANGE. Using the same particle texture for every section
-   kills visual variety. Match texture to the section's energy:
-   - Low energy (<0.4): dust, fireflies, moths, snow, stars
-   - Mid energy (0.4-0.7): smoke, petals, rain, crystals, bubbles
-   - High energy (>0.7): embers, fire, confetti, lightning, glare, glitch
+2. TEXTURE MUST CHANGE across sections. Match texture to energy:
+   - Low energy: dust, fireflies, moths, snow, stars
+   - Mid energy: smoke, petals, rain, crystals, bubbles
+   - High energy: embers, fire, confetti, lightning, glare, glitch
 
-3. If ARTIST DIRECTION is provided, it defines the WORLD (location, culture,
-   setting). The visual arc and texture variation still apply WITHIN that world.
-   A Navratri celebration can start intimate and build to euphoric.
-   A dark warehouse beat can start eerie and build to aggressive.
+3. If ARTIST DIRECTION is provided, it defines the WORLD. The visual arc
+   and texture variation still apply WITHIN that world.
 
 4. dominantColor should shift across sections to reinforce the arc.
-   Warm (amber/gold) for intimate/nostalgic. Cool (teal/blue) for ethereal/noir.
-   Hot (red/orange) for aggressive/anthemic. Jewel tones for euphoric/dreamy.
 
-5. description per section should be UNIQUE and evocative — a one-sentence
-   snapshot of what the viewer SEES in that moment. Not a genre label.
+5. Each section description must be UNIQUE and VISUAL — a specific snapshot,
+   not a mood label.
    Good: "Dust motes spiral in amber floodlight as the first circle forms"
    Bad: "intimate cinematic landscape"
 
-6. One section per audio section provided. Match section count exactly.
+6. One section per audio section provided. Match count exactly.
+
 ` + SCENE_DIRECTION_PROMPT.slice(
   SCENE_DIRECTION_PROMPT.indexOf("DOMINANT COLOR RULES"),
 );
@@ -786,13 +826,21 @@ serve(async (req) => {
       const sectionList = (body.audioSections || [])
         .map((s: AudioSectionInput, i: number) => `  Section ${i + 1}: "${s.role || `Section ${i + 1}`}" (${fmt(s.startSec)}–${fmt(s.endSec)}, energy: ${(s.avgEnergy ?? 0).toFixed(2)}, beats/sec: ${(s.beatDensity ?? 0).toFixed(1)})`)
         .join("\n");
+      const audioData = (body as any).audioData;
+      const audioPrefix = audioData
+        ? "Audio is attached. LISTEN to it before generating your response. Follow the PROCESS steps: listen → transcribe → extract → direct.\n\n"
+        : "";
+
       const sceneUserMessage = [
+        audioPrefix,
         body.artist_direction
           ? `ARTIST DIRECTION (this is the visual world — treat it as law): "${body.artist_direction}"`
           : "",
         `Song: "${title}" by ${artist}`,
         bpm ? `BPM: ${bpm}` : "",
-        `\nLyrics:\n${lines.map((l) => l.text).join("\n")}`,
+        lines.length > 0
+          ? `\nLyrics (reference — trust what you HEAR over this text):\n${lines.map((l) => l.text).join("\n")}`
+          : "\nNo lyrics text provided — transcribe from audio.",
         sectionList ? `\nAudio sections:\n${sectionList}` : "",
       ].filter(Boolean).join("\n");
 
