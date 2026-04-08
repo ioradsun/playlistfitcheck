@@ -719,13 +719,8 @@ export function FitTab({
 
       // Ground-truth checks: ensure the prefetched DB snapshot has completed data.
       const cd = prefetchedDanceData.cinematic_direction as any;
-      if (
-        !cd ||
-        Array.isArray(cd) ||
-        !Array.isArray(cd.sections) ||
-        cd.sections.length === 0
-      )
-        return false;
+      if (!cd || Array.isArray(cd)) return false;
+      // sections can be empty for instrumental/no-section songs — that's valid
 
       if (Array.isArray(sections) && sections.length > 0 && !isInstrumental) {
         const snapImages = (prefetchedDanceData as any).section_images;

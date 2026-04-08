@@ -70,8 +70,6 @@ interface UsePipelineSchedulerReturn {
   fitStageLabel: string;
   pipelineStages: PipelineStages;
   setPipelineStages: React.Dispatch<React.SetStateAction<PipelineStages>>;
-  fitUnlocked: boolean;
-  setFitUnlocked: React.Dispatch<React.SetStateAction<boolean>>;
   pipelineRetryCount: number;
 
   pipelineTriggeredRef: React.MutableRefObject<boolean>;
@@ -328,28 +326,6 @@ export function usePipelineScheduler({
       (initialLyric as any).lines.length === 0
     );
   })();
-
-  const [fitUnlocked, setFitUnlocked] = useState(() => {
-    if (!initialLyric) return false;
-    const rd = (initialLyric as any).render_data;
-    const hasCoreData = !!(
-      (initialLyric as any).beat_grid &&
-      ((initialLyric as any).cinematic_direction ||
-        rd?.cinematicDirection ||
-        rd?.cinematic_direction)
-    );
-    if (!hasCoreData) return false;
-    const cd =
-      (initialLyric as any).cinematic_direction ||
-      rd?.cinematicDirection ||
-      rd?.cinematic_direction;
-    const sections = cd?.sections;
-    if (Array.isArray(sections) && sections.length > 0) {
-      const images = (initialLyric as any).section_images;
-      return Array.isArray(images) && images.some(Boolean);
-    }
-    return true;
-  });
 
   const [fitReadiness, setFitReadiness] = useState<FitReadiness>(() => {
     if (!initialLyric) return "not_started";
@@ -670,12 +646,6 @@ export function usePipelineScheduler({
     [setSectionImageError],
   );
 
-  useEffect(() => {
-    if (fitUnlocked || fitReadiness === "ready") {
-      setFitUnlocked(true);
-    }
-  }, [fitUnlocked, fitReadiness]);
-
   return {
     generationStatus,
     setGenerationStatus,
@@ -686,8 +656,6 @@ export function usePipelineScheduler({
     fitStageLabel,
     pipelineStages,
     setPipelineStages,
-    fitUnlocked,
-    setFitUnlocked,
     pipelineRetryCount,
     pipelineTriggeredRef,
     cinematicTriggeredRef,
@@ -988,7 +956,7 @@ export function useLyricPipeline({
 
   // ── Effect A (hydratedRef gate) ─────────────────────────────────────────────
   // Owns: waveformData (from render_data peaks), fitReadiness initial value
-  // (via generationStatus seed only), fitUnlocked initial value (derived), audio fetch.
+  // (via generationStatus seed only), audio fetch.
   // Uses hydratedRef so these side-effects fire exactly once.
   // Audio fetching in particular must never re-run on prop changes.
   const hydratedRef = useRef(false);
@@ -1673,8 +1641,6 @@ export function useLyricPipeline({
     fitStageLabel,
     pipelineStages,
     setPipelineStages,
-    fitUnlocked,
-    setFitUnlocked,
     pipelineRetryCount,
     pipelineTriggeredRef,
     cinematicTriggeredRef,
@@ -1930,7 +1896,6 @@ export function useLyricPipeline({
     setSectionImageProgress(null);
     setSectionImageError(null);
     setFitReadiness("not_started");
-    setFitUnlocked(false);
     setPipelineDanceId(null);
     setPipelineDanceUrl(null);
     setSpotifyTrackId(null);
@@ -1939,7 +1904,7 @@ export function useLyricPipeline({
     pipelineTriggeredRef.current = false;
     hookDetectionRunRef.current = false;
     onNewProject?.();
-  }, [onNewProject, setFitReadiness, setFitUnlocked, setGenerationStatus]);
+  }, [onNewProject, setFitReadiness, setGenerationStatus]);
 
   return {
     lyricData,
@@ -1990,7 +1955,6 @@ export function useLyricPipeline({
     fitStageLabel,
     pipelineStages,
     setPipelineStages,
-    fitUnlocked,
     fitDisabled,
     pipelineRetryCount,
     handleAudioSubmitted,
