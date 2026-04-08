@@ -365,7 +365,7 @@ export function LyricsTab({
                 method: "POST",
                 headers: {
                   apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                  Authorization: `Bearer ${accessToken}`,
                 },
                 body: formData,
                 signal: transcribeAbort.signal,
