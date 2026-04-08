@@ -1116,14 +1116,11 @@ const Index = () => {
             break;
           }
           case "lyric": {
-            if (data) {
+            if (data?.id) {
               setActiveTab("lyric");
-              setLoadedLyric(data);
-              setIsFetchingProject(false);
-              if (data.id) {
-                navTarget = `/LyricFit/${data.id}`;
-                projectLoadedRef.current = data.id;
-              }
+              setLoadedLyric(null);
+              setIsFetchingProject(true);
+              navTarget = `/LyricFit/${data.id}`;
             }
             break;
           }

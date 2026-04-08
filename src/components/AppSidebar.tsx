@@ -165,7 +165,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
         .limit(20),
       supabase
         .from("lyric_projects")
-        .select("id, title, lines, words, filename, updated_at, audio_url, beat_grid, song_signature, render_data, fmly_lines, version_meta, section_images")
+        .select("id, title, updated_at")
         .eq("user_id", user.id)
         .is("deleted_at", null)
         .order("updated_at", { ascending: false })
@@ -245,7 +245,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
           label: l.title || "Untitled",
           meta: formatDistanceToNow(new Date(l.updated_at), { addSuffix: true }),
           type: "lyric",
-          rawData: l,
+          rawData: { id: l.id },
         });
       });
     }
