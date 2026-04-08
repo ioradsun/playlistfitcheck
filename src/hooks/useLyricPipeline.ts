@@ -237,19 +237,7 @@ async function createDanceRowAndGenerateImages({
 
   setPipelineDanceId(resolvedDanceId);
   setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
-  if (resolvedDanceId && savedIdRef.current) {
-    persistQueue.enqueue({
-      table: "lyric_projects",
-      id: savedIdRef.current,
-      payload: {
-        render_data: {
-          ...(renderData ?? {}),
-          pipelineDanceId: resolvedDanceId,
-          pipelineDanceUrl: `/${artistSlugVal}/${songSlugVal}/lyric-dance`,
-        },
-      },
-    });
-  }
+  // pipelineDanceId/Url derived from the project row — no render_data persist needed.
 
   if (!hasSections) {
     setSectionImageUrls([]);
@@ -764,15 +752,17 @@ export function useLyricPipeline({
     null,
   );
   const phraseResultRef = useRef<ReturnType<typeof buildPhrases> | null>(null);
+  const _isPublished = (initialLyric as any)?.is_published === true;
+  const _projectId = (initialLyric as any)?.id ?? null;
+  const _artistSlug = (initialLyric as any)?.artist_slug ?? null;
+  const _urlSlug = (initialLyric as any)?.url_slug ?? null;
   const [pipelineDanceId, setPipelineDanceId] = useState<string | null>(
-    (initialLyric as any)?.render_data?.pipelineDanceId
-    ?? ((initialLyric as any)?.is_published === true ? ((initialLyric as any)?.id as string | null) : null),
+    _isPublished && _projectId ? _projectId : null,
   );
   const [pipelineDanceUrl, setPipelineDanceUrl] = useState<string | null>(
-    (initialLyric as any)?.render_data?.pipelineDanceUrl
-    ?? ((initialLyric as any)?.is_published === true && (initialLyric as any)?.artist_slug && (initialLyric as any)?.url_slug
-        ? `/${(initialLyric as any).artist_slug}/${(initialLyric as any).url_slug}/lyric-dance`
-        : null),
+    _isPublished && _artistSlug && _urlSlug
+      ? `/${_artistSlug}/${_urlSlug}/lyric-dance`
+      : null,
   );
   const [sectionImageUrls, setSectionImageUrls] = useState<(string | null)[]>(
     Array.isArray((initialLyric as any)?.section_images)
@@ -1129,37 +1119,15 @@ export function useLyricPipeline({
     }
   }, [initialLyric]);
 
-  const danceIdLookedUpRef = useRef(!!pipelineDanceId);
   useEffect(() => {
-    if (danceIdLookedUpRef.current || pipelineDanceId) return;
-    if (!user || !initialLyric || !cinematicDirection) return;
-    danceIdLookedUpRef.current = true;
-
-    const storedUrlSlug = (initialLyric as any)?.url_slug;
-    const storedArtistSlug = (initialLyric as any)?.artist_slug;
-
-    void (async () => {
-      let query = supabase
-        .from("lyric_projects")
-        .select("id, artist_slug, url_slug")
-        .eq("user_id", user.id)
-        .eq("is_published", true);
-
-      if (storedUrlSlug && storedArtistSlug) {
-        query = query.eq("artist_slug", storedArtistSlug).eq("url_slug", storedUrlSlug);
-      } else {
-        const { slugify } = await import("@/lib/slugify");
-        const s = slugify(initialLyric.title || "untitled");
-        query = query.eq("url_slug", s);
-      }
-
-      const { data: d }: any = await query.maybeSingle();
-      if (d) {
-        setPipelineDanceId(d.id);
-        setPipelineDanceUrl(`/${d.artist_slug}/${d.url_slug}/lyric-dance`);
-      }
-    })();
-  }, [user, initialLyric, cinematicDirection, pipelineDanceId]);
+    if (pipelineDanceId) return;
+    const row = initialLyric as any;
+    if (!row?.is_published || !row?.id) return;
+    setPipelineDanceId(row.id);
+    if (row.artist_slug && row.url_slug) {
+      setPipelineDanceUrl(`/${row.artist_slug}/${row.url_slug}/lyric-dance`);
+    }
+  }, [initialLyric, pipelineDanceId]);
 
   const claimPublishedRef = useRef(false);
   useEffect(() => {
@@ -1306,22 +1274,8 @@ export function useLyricPipeline({
     return () => clearTimeout(timer);
   }, [renderData, cinematicDirection]);
 
-  useEffect(() => {
-    const id = savedIdRef.current;
-    if (!id) return;
-    if (!pipelineDanceId && !pipelineDanceUrl) return;
-    persistQueue.enqueue({
-      table: "lyric_projects",
-      id,
-      payload: {
-        render_data: {
-          ...(renderDataRef.current || {}),
-          ...(pipelineDanceId ? { pipelineDanceId } : {}),
-          ...(pipelineDanceUrl ? { pipelineDanceUrl } : {}),
-        },
-      },
-    });
-  }, [pipelineDanceId, pipelineDanceUrl]);
+  // pipelineDanceId/Url are now derived from the project row directly —
+  // no need to persist them into render_data.
 
   const hookDetectionRunRef = useRef(false);
   const startHookDetection = useCallback(async () => {
