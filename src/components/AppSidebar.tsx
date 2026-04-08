@@ -410,7 +410,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
 
   const handleRenameRecent = async (item: RecentItem) => {
     const name = editLabel.trim();
-    if (!name) return;
+    if (!name || editingId !== item.id) return;
     if (item.type === "mix") await supabase.from("mix_projects").update({ title: name }).eq("id", item.id);
     else if (item.type === "lyric") await supabase.from("saved_lyrics").update({ title: name }).eq("id", item.id);
     else if (item.type === "playlist") await supabase.from("saved_searches").update({ playlist_name: name }).eq("id", item.id);
@@ -535,8 +535,8 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                                     className="w-full px-2 py-1 text-xs bg-sidebar-accent rounded-md border border-sidebar-border outline-none"
                                     value={editLabel}
                                     onChange={(e) => setEditLabel(e.target.value)}
-                                    onBlur={() => setEditingId(null)}
-                                    onKeyDown={(e) => e.key === "Escape" && setEditingId(null)}
+                                    onBlur={() => handleRenameRecent(item)}
+                                    onKeyDown={(e) => { if (e.key === "Escape") { setEditingId(null); } else if (e.key === "Enter") { e.preventDefault(); handleRenameRecent(item); } }}
                                   />
                                 </form>
                               ) : (
@@ -675,8 +675,8 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                                     className="w-full px-2 py-1 text-xs bg-sidebar-accent rounded-md border border-sidebar-border outline-none"
                                     value={editLabel}
                                     onChange={(e) => setEditLabel(e.target.value)}
-                                    onBlur={() => setEditingId(null)}
-                                    onKeyDown={(e) => e.key === "Escape" && setEditingId(null)}
+                                    onBlur={() => handleRenameRecent(item)}
+                                    onKeyDown={(e) => { if (e.key === "Escape") { setEditingId(null); } else if (e.key === "Enter") { e.preventDefault(); handleRenameRecent(item); } }}
                                   />
                                 </form>
                               ) : (

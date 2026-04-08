@@ -115,6 +115,34 @@ const AnalysisLoadingScreen = ({ hasSong }: { hasSong: boolean }) => (
   </div>
 );
 
+/** Controlled header title input — saves on blur/Enter, reverts on Escape/empty */
+function HeaderTitleInput({
+  title,
+  onTitleChange,
+}: {
+  title: string;
+  onTitleChange: (v: string) => void;
+}) {
+  const [draft, setDraft] = React.useState(title);
+  React.useEffect(() => { setDraft(title); }, [title]);
+  return (
+    <input
+      className="text-xs font-semibold bg-transparent border-none outline-none focus:ring-1 focus:ring-primary/40 rounded px-1 -ml-1 min-w-0 flex-1"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const v = draft.trim();
+        if (v && v !== title) onTitleChange(v);
+        else setDraft(title);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.currentTarget.blur(); }
+        if (e.key === "Escape") { setDraft(title); e.currentTarget.blur(); }
+      }}
+    />
+  );
+}
+
 /** Reserves sidebar width during Suspense — prevents layout shift */
 const SidebarShell = () => (
   <div
@@ -1419,18 +1447,9 @@ const Index = () => {
           {headerProject ? (
             <>
               {headerProject.onTitleChange ? (
-                <input
-                  key={headerProject.title}
-                  className="text-xs font-semibold bg-transparent border-none outline-none focus:ring-1 focus:ring-primary/40 rounded px-1 -ml-1 min-w-0 flex-1"
-                  defaultValue={headerProject.title}
-                  onBlur={(e) => {
-                    const v = e.currentTarget.value.trim();
-                    if (v && v !== headerProject.title) headerProject.onTitleChange!(v);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.currentTarget.blur(); }
-                    if (e.key === "Escape") { e.currentTarget.value = headerProject.title; e.currentTarget.blur(); }
-                  }}
+                <HeaderTitleInput
+                  title={headerProject.title}
+                  onTitleChange={headerProject.onTitleChange!}
                 />
               ) : (
                 <span className="text-xs font-semibold">
