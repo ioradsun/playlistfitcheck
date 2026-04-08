@@ -2782,15 +2782,26 @@ export class LyricDancePlayer {
         const tokens = line.text.trim().split(/\s+/).filter(Boolean);
         if (!tokens.length) continue;
         const slotCount = slotIdxs.length;
-        // Zip tokens onto slots
-        slotIdxs.forEach((slotIdx, si) => {
-          reconciled[slotIdx] = {
-            ...reconciled[slotIdx],
-            word: tokens[si] ?? tokens[tokens.length - 1], // clamp extras to last token
-          };
-        });
-        // If fewer slots than tokens: nothing we can do (timestamps are fixed)
-        // If more tokens than slots: they get collapsed into last slot — acceptable
+        if (tokens.length <= slotCount) {
+          // Same or fewer tokens than slots — zip 1:1, blank out extras
+          slotIdxs.forEach((slotIdx, si) => {
+            reconciled[slotIdx] = {
+              ...reconciled[slotIdx],
+              word: tokens[si] ?? "",
+            };
+          });
+        } else {
+          // More tokens than slots (user split a word) — distribute evenly across slots.
+          const chunkSize = tokens.length / slotCount;
+          slotIdxs.forEach((slotIdx, si) => {
+            const from = Math.round(si * chunkSize);
+            const to = Math.round((si + 1) * chunkSize);
+            reconciled[slotIdx] = {
+              ...reconciled[slotIdx],
+              word: tokens.slice(from, to).join(" "),
+            };
+          });
+        }
       }
       this.data = { ...this.data, words: reconciled };
     }
