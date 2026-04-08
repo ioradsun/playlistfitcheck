@@ -271,7 +271,7 @@ export function usePipelineScheduler({
         setRenderData(stub);
         if (savedIdRef.current) {
           persistQueue.enqueue({
-            table: "saved_lyrics",
+            table: "lyric_projects",
             id: savedIdRef.current,
             payload: { render_data: stub },
           });
@@ -378,7 +378,7 @@ export function usePipelineScheduler({
 
     if (savedIdRef.current) {
       persistQueue.enqueue({
-        table: "saved_lyrics",
+        table: "lyric_projects",
         id: savedIdRef.current,
         payload: {
           render_data: { cinematicDirection: null },
@@ -672,7 +672,7 @@ export function useLyricPipeline({
 
     if (savedIdRef.current) {
       persistQueue.enqueue({
-        table: "saved_lyrics",
+        table: "lyric_projects",
         id: savedIdRef.current,
         payload: {
           beat_grid: {
@@ -738,7 +738,7 @@ export function useLyricPipeline({
     const id = savedIdRef.current;
     if (id) {
       persistQueue.enqueue({
-        table: "saved_lyrics",
+        table: "lyric_projects",
         id,
         payload: { title: newTitle },
       });
@@ -1013,18 +1013,18 @@ export function useLyricPipeline({
             ghost_profile_id: claimMeta.ghostProfileId,
             user_id: user?.id ?? null,
             spotify_track_id: claimMeta.spotifyTrackId,
-            track_title: claimMeta.songName,
+            title: claimMeta.songName,
             artist_name: claimMeta.artistName,
             album_art_url: claimMeta.albumArtUrl,
             preview_url: audioStorageUrl,
             lyric_dance_url: lyricDanceUrl,
-            lyric_dance_id: danceRow?.id ?? null,
+            project_id: danceRow?.id ?? null,
           }, { onConflict: "ghost_profile_id,spotify_track_id" });
 
         if (danceRow?.id) {
           supabase.functions
             .invoke("generate-section-images", {
-              body: { lyric_dance_id: danceRow.id },
+              body: { project_id: danceRow.id },
             })
             .catch(() => {});
         }
@@ -1055,7 +1055,7 @@ export function useLyricPipeline({
       }
       if (pipelineDanceId) payload.pipelineDanceId = pipelineDanceId;
       if (pipelineDanceUrl) payload.pipelineDanceUrl = pipelineDanceUrl;
-      persistQueue.enqueue({ table: "saved_lyrics", id, payload: { render_data: payload } });
+      persistQueue.enqueue({ table: "lyric_projects", id, payload: { render_data: payload } });
     }, 1500);
     return () => clearTimeout(timer);
   }, [renderData, cinematicDirection, waveformData, pipelineDanceId, pipelineDanceUrl]);
@@ -1111,7 +1111,7 @@ export function useLyricPipeline({
         };
         if (savedIdRef.current) {
           persistQueue.enqueue({
-            table: "saved_lyrics",
+            table: "lyric_projects",
             id: savedIdRef.current,
             payload: { render_data: updated },
           });
@@ -1218,7 +1218,7 @@ export function useLyricPipeline({
           setRenderData(updatedRenderData);
           if (savedIdRef.current) {
             persistQueue.enqueue({
-              table: "saved_lyrics",
+              table: "lyric_projects",
               id: savedIdRef.current,
               payload: {
                 render_data: updatedRenderData,
@@ -1376,7 +1376,7 @@ export function useLyricPipeline({
             const { data: result, error } = await invokeWithTimeout(
               "generate-section-images",
               {
-                lyric_dance_id: resolvedDanceId,
+                project_id: resolvedDanceId,
                 saved_lyric_id: savedIdRef.current ?? undefined,
                 force: true,
               },
@@ -1613,7 +1613,7 @@ export function useLyricPipeline({
         setRenderData(updatedRenderData);
         if (savedIdRef.current) {
           persistQueue.enqueue({
-            table: "saved_lyrics",
+            table: "lyric_projects",
             id: savedIdRef.current,
             payload: { render_data: updatedRenderData },
           });
@@ -1721,7 +1721,7 @@ export function useLyricPipeline({
                 const { data: result, error } = await invokeWithTimeout(
                   "generate-section-images",
                   {
-                    lyric_dance_id: resolvedDanceId,
+                    project_id: resolvedDanceId,
                     saved_lyric_id: savedIdRef.current ?? undefined,
                     force: true,
                   },

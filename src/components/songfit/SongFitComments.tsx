@@ -149,7 +149,7 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
     setLoading(true);
     const { data } = await supabase
       .from("feed_comments" as any)
-      .select("*, profiles!songfit_comments_user_id_profiles_fkey(display_name, avatar_url), likes_count")
+      .select("*, profiles:user_id(display_name, avatar_url), likes_count")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
       .limit(200);

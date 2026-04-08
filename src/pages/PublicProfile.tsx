@@ -42,9 +42,9 @@ interface SavedPost {
   id: string;
   post_id: string;
   created_at: string;
-  songfit_posts: {
+  feed_posts: {
     id: string;
-    track_title: string;
+    title: string;
     spotify_track_url: string;
     album_art_url: string | null;
     track_artists_json: { name: string }[];
@@ -145,7 +145,7 @@ const PublicProfile = () => {
     if (!isOwner || !user) return;
     supabase
       .from("feed_saves" as any)
-      .select("id, post_id, created_at, songfit_posts(id, track_title, spotify_track_url, album_art_url, track_artists_json)")
+      .select("id, post_id, created_at, feed_posts(id, title, spotify_track_url, album_art_url, track_artists_json)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20)
@@ -471,7 +471,7 @@ const PublicProfile = () => {
                           <img src={s.album_art_url} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                         )}
                         <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{s.track_title}</p>
+                          <p className="text-sm font-medium truncate">{s.title}</p>
                           <div className="flex items-center gap-2.5 mt-0.5">
                             <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
                             {reviewSummaries[s.id] ? (
@@ -512,7 +512,7 @@ const PublicProfile = () => {
                   {savedPosts.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">No saved songs yet.</p>
                   ) : savedPosts.map(s => {
-                    const p = s.songfit_posts;
+                    const p = s.feed_posts;
                     if (!p) return null;
                     const artists = (p.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || "";
                     return (
@@ -525,7 +525,7 @@ const PublicProfile = () => {
                           <img src={p.album_art_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{p.track_title}</p>
+                          <p className="text-sm font-medium truncate">{p.title}</p>
                           {artists && <p className="text-xs text-muted-foreground truncate">{artists}</p>}
                         </div>
                       </div>

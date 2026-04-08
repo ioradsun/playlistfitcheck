@@ -19,11 +19,7 @@ import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 
 const ALL_COLUMNS =
-  "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name," +
-  "audio_url,section_images,palette,auto_palettes,album_art_url," +
-  "empowerment_promise,beat_grid," +
-  "lyrics,words,motion_profile_spec:physics_spec,cinematic_direction," +
-  "scene_context,scene_manifest,system_type,seed,artist_dna,spotify_track_id";
+  "id,user_id,artist_slug,url_slug,artist_name,title,audio_url,section_images,palette,auto_palettes,album_art_url,empowerment_promise,beat_grid,lines,words,physics_spec,cinematic_direction,spotify_track_id";
 
 interface ProfileInfo {
   display_name: string | null;
@@ -68,10 +64,10 @@ export default function ShareableLyricDance() {
     }
 
     supabase
-      .from("shareable_lyric_dances" as any)
+      .from("lyric_projects" as any)
       .select(ALL_COLUMNS)
       .eq("artist_slug", artistSlug)
-      .eq("song_slug", songSlug)
+      .eq("url_slug", songSlug)
       .maybeSingle()
       .then(({ data: row, error }: any) => {
         if (error || !row) { setNotFound(true); setLoading(false); return; }
@@ -108,7 +104,7 @@ export default function ShareableLyricDance() {
     const timer = setInterval(async () => {
       if (++attempts > 12) { clearInterval(timer); return; }
       const { data: fresh } = await supabase
-        .from("shareable_lyric_dances" as any).select("section_images")
+        .from("lyric_projects" as any).select("section_images")
         .eq("id", data.id).maybeSingle();
       const f = fresh as any;
       if (f?.section_images?.some?.(Boolean)) {
@@ -124,21 +120,21 @@ export default function ShareableLyricDance() {
     if (!isMarketingView || !data?.id) return;
     if (localEmpowerment ?? (data as any)?.empowerment_promise) return;
     if (empowermentGenStarted.current) return;
-    const lines = Array.isArray(data?.lyrics) ? data.lyrics as any[] : [];
+    const lines = Array.isArray(data?.lines) ? (data.lines as any[]) : [];
     if (!lines.length) return;
-    const lyricsText = lines.filter((l: any) => l?.tag !== "adlib")
+    const linesText = lines.filter((l: any) => l?.tag !== "adlib")
       .map((l: any) => String(l?.text ?? "").trim()).filter(Boolean).join("\n");
-    if (!lyricsText) return;
+    if (!linesText) return;
     const cd = data?.cinematic_direction as any;
     empowermentGenStarted.current = true;
     invokeWithTimeout("empowerment-promise", {
-      songTitle: data.song_name || "Untitled", lyricsText,
+      songTitle: data.title || "Untitled", linesText,
       emotionalArc: cd?.emotionalArc ?? null, sceneTone: cd?.sceneTone ?? null,
       chorusText: cd?.chorusText ?? null, meaning: null,
     }, 30_000).then(async ({ data: gen, error }) => {
       if (error || !gen) return;
       setLocalEmpowerment(gen);
-      await supabase.from("shareable_lyric_dances" as any)
+      await supabase.from("lyric_projects" as any)
         .update({ empowerment_promise: gen }).eq("id", data.id);
     }).catch(() => {});
   }, [isMarketingView, data, localEmpowerment]);
@@ -166,7 +162,7 @@ export default function ShareableLyricDance() {
   }
 
   // ── Derived ────────────────────────────────────────────────────────────
-  const coverSongName = data?.song_name ?? "";
+  const coverSongName = data?.title ?? "";
   const coverArtist = profile?.display_name ?? data?.artist_name ?? "";
   const coverAvatarUrl = profile?.avatar_url ?? null;
   const palette = useMemo(() => {
@@ -197,7 +193,7 @@ export default function ShareableLyricDance() {
           artistSlug={artistSlug}
           accent={palette?.[1] || palette?.[0] || data?.palette?.[1] || "#a855f7"}
           coverArtUrl={(data as any)?.album_art_url ?? data?.section_images?.[0] ?? null}
-          songName={data?.song_name} artistName={data?.artist_name}
+          songName={data?.title} artistName={data?.artist_name}
         />
       )}
 

@@ -119,7 +119,7 @@ function SpotifyLinkField({
         setResults([]);
         if (savedId) {
           persistQueue.enqueue({
-            table: "saved_lyrics",
+            table: "lyric_projects",
             id: savedId,
             payload: { spotify_track_id: urlMatch[1], spotify_track_url: q },
           });
@@ -159,7 +159,7 @@ function SpotifyLinkField({
     setResults([]);
     if (savedId) {
       persistQueue.enqueue({
-        table: "saved_lyrics",
+        table: "lyric_projects",
         id: savedId,
         payload: { spotify_track_id: track.id, spotify_track_url: track.url },
       });
@@ -172,7 +172,7 @@ function SpotifyLinkField({
     setResults([]);
     if (savedId) {
       persistQueue.enqueue({
-        table: "saved_lyrics",
+        table: "lyric_projects",
         id: savedId,
         payload: { spotify_track_id: null, spotify_track_url: null },
       });
@@ -430,18 +430,18 @@ export function FitTab({
 
     const danceP = supabase
       .from("lyric_projects" as any)
-      .select("id, artist_slug, song_slug, lyrics")
+      .select("id, artist_slug, url_slug, lines")
       .eq("user_id", user.id)
-      .eq("song_slug", songSlug)
+      .eq("url_slug", songSlug)
       .maybeSingle();
 
 
     danceP.then((danceResult) => {
       const dance = danceResult.data as any;
       if (dance) {
-        setPublishedUrl(`/${dance.artist_slug}/${dance.song_slug}/lyric-dance`);
+        setPublishedUrl(`/${dance.artist_slug}/${dance.url_slug}/lyric-dance`);
         setPublishedDanceId(dance.id);
-        const pubLines = Array.isArray(dance.lyrics) ? dance.lyrics : [];
+        const pubLines = Array.isArray(dance.lines) ? dance.lines : [];
         setPublishedLyricsHash(computeLyricsHash(pubLines));
       }
     });
@@ -454,10 +454,10 @@ export function FitTab({
       return;
     }
     supabase
-      .from("songfit_posts" as any)
+      .from("feed_posts" as any)
       .select("id, status")
       .eq("user_id", user.id)
-      .eq("lyric_dance_id", publishedDanceId)
+      .eq("project_id", publishedDanceId)
       .maybeSingle()
       .then(({ data }: any) => {
         if (data && data.status !== "removed") {
@@ -476,7 +476,7 @@ export function FitTab({
       if (crowdfitPostId) {
         // Remove from CrowdFit
         await supabase
-          .from("songfit_posts" as any)
+          .from("feed_posts" as any)
           .update({ status: "removed" })
           .eq("id", crowdfitPostId);
         setCrowdfitPostId(null);
@@ -484,15 +484,15 @@ export function FitTab({
       } else {
         // Look for existing removed post to reactivate
         const { data: existing }: any = await supabase
-          .from("songfit_posts" as any)
+          .from("feed_posts" as any)
           .select("id")
           .eq("user_id", user.id)
-          .eq("lyric_dance_id", publishedDanceId)
+          .eq("project_id", publishedDanceId)
           .maybeSingle();
 
         if (existing) {
           await supabase
-            .from("songfit_posts" as any)
+            .from("feed_posts" as any)
             .update({ status: "live" })
             .eq("id", existing.id);
           setCrowdfitPostId(existing.id);
@@ -500,13 +500,13 @@ export function FitTab({
           const expiresAt = new Date();
           expiresAt.setDate(expiresAt.getDate() + 21);
           const { data: inserted }: any = await supabase
-            .from("songfit_posts" as any)
+            .from("feed_posts" as any)
             .insert({
               user_id: user.id,
-              track_title: lyricData.title || "Untitled",
+              title: lyricData.title || "Untitled",
               caption: "",
               lyric_dance_url: publishedUrl,
-              lyric_dance_id: publishedDanceId,
+              project_id: publishedDanceId,
               spotify_track_id: pipeline.spotifyTrackId ?? null,
               spotify_track_url: pipeline.spotifyTrackId
                 ? `https://open.spotify.com/track/${pipeline.spotifyTrackId}`
@@ -722,7 +722,7 @@ export function FitTab({
 
       const { error } = await supabase
         .from("lyric_projects" as any)
-        .update({ lyrics: mainLines, words: reconciledWords })
+        .update({ lines: mainLines, words: reconciledWords })
         .eq("id", danceId);
       if (error) {
         // auto-save failed silently
@@ -767,7 +767,7 @@ export function FitTab({
         .select("section_images, auto_palettes")
         .eq("user_id", user.id)
         .eq("artist_slug", artistSlug)
-        .eq("song_slug", songSlug)
+        .eq("url_slug", songSlug)
         .maybeSingle();
 
       // Always upload fresh audio with a unique path to avoid stale cache hits
@@ -818,9 +818,9 @@ export function FitTab({
       // Upsert fields:
       // user_id            — from auth (required)
       // artist_slug        — from profile slug (required)
-      // song_slug          — from title slug (required)
+      // url_slug          — from title slug (required)
       // artist_name        — from profile (required)
-      // song_name          — from state (required)
+      // title          — from state (required)
       // audio_url          — from existing or fresh upload (required)
       // lyrics             — from state, adlibs filtered (required)
       // cinematic_direction — from state (nullable)
@@ -835,11 +835,11 @@ export function FitTab({
           {
             user_id: user.id,
             artist_slug: artistSlug,
-            song_slug: songSlug,
+            url_slug: songSlug,
             artist_name: displayName,
-            song_name: lyricData.title || "Untitled",
+            title: lyricData.title || "Untitled",
             audio_url: audioUrl,
-            lyrics: mainLines,
+            lines: mainLines,
             cinematic_direction: cinematicDirection || null,
             words: words ?? null,
             auto_palettes: danceNeedsRegeneration
@@ -863,7 +863,7 @@ export function FitTab({
               ? (sectionImageUrls.some(Boolean) ? sectionImageUrls : null)
               : (existingDance?.section_images ?? sectionImageUrls ?? null),
           },
-          { onConflict: "artist_slug,song_slug" },
+          { onConflict: "artist_slug,url_slug" },
         )
         .select("id")
         .single();
@@ -884,27 +884,27 @@ export function FitTab({
           const danceId = danceRow.id;
 
           const { data: existing }: any = await supabase
-            .from("songfit_posts" as any)
+            .from("feed_posts" as any)
             .select("id")
             .eq("user_id", user.id)
-            .eq("lyric_dance_id", danceId)
+            .eq("project_id", danceId)
             .maybeSingle();
 
           if (existing) {
             await supabase
-              .from("songfit_posts" as any)
+              .from("feed_posts" as any)
               .update({ lyric_dance_url: url })
               .eq("id", existing.id);
           } else {
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + 21);
 
-            await supabase.from("songfit_posts" as any).insert({
+            await supabase.from("feed_posts" as any).insert({
               user_id: user.id,
-              track_title: lyricData.title || "Untitled",
+              title: lyricData.title || "Untitled",
               caption: "",
               lyric_dance_url: url,
-              lyric_dance_id: danceId,
+              project_id: danceId,
               spotify_track_id: pipeline.spotifyTrackId ?? null,
               spotify_track_url: pipeline.spotifyTrackId
                 ? `https://open.spotify.com/track/${pipeline.spotifyTrackId}`
