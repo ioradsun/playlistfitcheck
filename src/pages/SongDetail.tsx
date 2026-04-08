@@ -790,11 +790,11 @@ const SongDetail = () => {
       }
       setPost(postRow as unknown as SongFitPost);
 
-      if (postRow.lyric_dance_id) {
+      if ((postRow as any).project_id) {
         const { data: dance } = await supabase
           .from("lyric_projects" as any)
           .select(LYRIC_DANCE_COLUMNS)
-          .eq("id", postRow.lyric_dance_id)
+          .eq("id", (postRow as any).project_id)
           .maybeSingle();
         if (dance) {
           const d = dance as any;

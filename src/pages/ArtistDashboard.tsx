@@ -279,7 +279,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
 
   const signals: SongSignal[] = [];
 
-  for (const post of inStudioPosts as PostRow[]) {
+  for (const post of inStudioPosts as unknown as PostRow[]) {
     const danceId = post.lyric_dance_id!;
     const fires = firesByDance[danceId] ?? { totalFires: 0, uniqueListeners: 0 };
     signals.push({
@@ -295,7 +295,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
     });
   }
 
-  for (const post of nowStreamingPosts as PostRow[]) {
+  for (const post of nowStreamingPosts as unknown as PostRow[]) {
     const eng = engagementByPost[post.id] ?? { spotifyClicks: 0, saves: 0 };
     signals.push({
       post,

@@ -125,9 +125,9 @@ export function PostCommentPanel({
         .order("created_at", { ascending: true })
         .limit(200);
 
-      const rows = data ?? [];
+      const rows = (data ?? []) as any[];
       const userIds = [
-        ...new Set(rows.filter((r) => r.user_id).map((r) => r.user_id!)),
+        ...new Set(rows.filter((r: any) => r.user_id).map((r: any) => r.user_id!)),
       ];
       const profileMap: Record<
         string,
@@ -141,8 +141,8 @@ export function PostCommentPanel({
         for (const p of profiles ?? []) profileMap[p.id] = p;
       }
 
-      const withProfiles: Comment[] = rows.map((r) => ({
-        ...(r as any),
+      const withProfiles: Comment[] = rows.map((r: any) => ({
+        ...r,
         profiles: r.user_id ? (profileMap[r.user_id] ?? null) : null,
       }));
 

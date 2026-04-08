@@ -106,7 +106,7 @@ export default function ArtistClaimPage() {
     const sectionImages = latestDance.section_images;
     if (!Array.isArray(sectionImages) || sectionImages.length === 0) return null;
     return `/${username}/${slugifySong(latestDance.title)}/lyric-dance`;
-  }, [latestDance?.id, latestDance?.section_images, latestDance?.song_name, latestVideo?.lyric_dance_url, username]);
+  }, [latestDance?.id, latestDance?.section_images, latestDance?.title, latestVideo?.lyric_dance_url, username]);
 
   const artistName = useMemo(
     () => latestVideo?.artist_name ?? profile?.display_name ?? username?.toUpperCase() ?? "Artist",
@@ -114,7 +114,7 @@ export default function ArtistClaimPage() {
   );
 
   const coverArtUrl = latestVideo?.album_art_url ?? latestDance?.album_art_url ?? null;
-  const displaySongName = latestVideo?.track_title ?? latestDance?.song_name ?? undefined;
+  const displaySongName = latestVideo?.track_title ?? latestDance?.title ?? undefined;
 
   if (loading) {
     return (

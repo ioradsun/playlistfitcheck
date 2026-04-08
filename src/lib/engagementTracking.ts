@@ -46,7 +46,7 @@ export async function checkDuplicateSubmission(
     .eq("spotify_track_id", spotifyTrackId)
     .in("status", ["live", "cooldown"])
     .limit(1)
-    .maybeSingle();
+    .maybeSingle() as any;
 
   if (data) {
     return { status: data.status, post: data };

@@ -81,7 +81,7 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
       .from("feed_hook_reviews" as any)
       .select("would_replay")
       .eq("post_id", postId);
-    const rows = data || [];
+    const rows = (data || []) as any[];
     let replay_yes = 0;
     for (const row of rows) {
       if (row.would_replay === true) replay_yes++;
