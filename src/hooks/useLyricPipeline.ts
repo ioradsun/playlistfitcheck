@@ -831,7 +831,7 @@ export function useLyricPipeline({
   });
   const runIdRef = useRef(0);
   const lastCompletedRunIdRef = useRef(0);
-  const audioFileBlobUrlRef = useRef<string | null>(null);
+  
 
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [waveformData, setWaveformData] = useState<WaveformData | null>(null);
@@ -1089,20 +1089,6 @@ export function useLyricPipeline({
     }
   }, [initialLyric]);
 
-  useEffect(() => {
-    if (!audioFile || audioUrl) return;
-    if (!audioFileBlobUrlRef.current) {
-      audioFileBlobUrlRef.current = URL.createObjectURL(audioFile);
-    }
-    setAudioUrl(audioFileBlobUrlRef.current);
-  }, [audioFile, audioUrl]);
-
-  useEffect(() => {
-    if (!audioUrl || !audioFileBlobUrlRef.current) return;
-    if (audioUrl === audioFileBlobUrlRef.current) return;
-    URL.revokeObjectURL(audioFileBlobUrlRef.current);
-    audioFileBlobUrlRef.current = null;
-  }, [audioUrl]);
 
   // ── Effect B (reactive sync) ────────────────────────────────────────────────
   // Owns: transcriptionDone, beatGrid, renderData, cinematicDirection, sectionImages.
@@ -1973,6 +1959,7 @@ export function useLyricPipeline({
     audioFile,
     setAudioFile,
     audioUrl,
+    setAudioUrl,
     hasRealAudio,
     setHasRealAudio,
     savedId,
