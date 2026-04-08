@@ -1010,7 +1010,7 @@ export function useLyricPipeline({
             artist_name: claimMeta.artistName,
             title: claimMeta.songName,
             audio_url: audioStorageUrl,
-            lyrics: lines.map((l: any) => ({
+            lines: lines.map((l: any) => ({
               start: l.start,
               end: l.end,
               text: l.text,
@@ -1716,7 +1716,7 @@ export function useLyricPipeline({
                   artist_name: artistNameRef.current || "artist",
                   title: lyricData?.title || "Untitled",
                   audio_url: urlData.publicUrl,
-                  lyrics: [],
+                  lines: [],
                   cinematic_direction: enrichedScene,
                   words: null,
                   beat_grid: {
