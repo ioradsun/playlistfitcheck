@@ -437,14 +437,14 @@ export function usePipelineScheduler({
   const imageSelfHealRef = useRef(false);
 
   useEffect(() => {
-    if (!transcriptionDone || !beatGridDone || !lines?.length) return;
+    if (!beatGridDone) return;
     if (cinematicTriggeredRef.current) return;
     cinematicTriggeredRef.current = true;
     const force = pipelineRetryCount > 0;
 
-    void startCinematicDirection(lines, force);
+    // Fire with whatever lines are available — Gemini listens to audio directly
+    void startCinematicDirection(lines?.length ? lines : [], force);
   }, [
-    transcriptionDone,
     beatGridDone,
     lines,
     pipelineRetryCount,
@@ -1409,6 +1409,7 @@ export function useLyricPipeline({
           lyrics: lyricsForDirection
             .map((line: { text: string }) => line.text)
             .join("\n"),
+          audio_url: audioUrl || undefined,
           beatGrid: beatGrid
             ? {
                 bpm: beatGrid.bpm,
@@ -1567,17 +1568,17 @@ export function useLyricPipeline({
           }
         })();
 
-        await Promise.allSettled([imagePromise]);
-        if (myRunId !== runIdRef.current) return;
-
-        if (!mountedRef.current) return;
+        // Mark cinematic direction done immediately — don't wait for images
         setGenerationStatus((prev) => ({
           ...prev,
           cinematicDirection: "done",
-          sectionImages:
-            prev.sectionImages === "error" ? "error" : "done",
         }));
         setPipelineStages((prev) => ({ ...prev, cinematic: "done" }));
+
+        // Images finish in background — imagePromise updates its own status
+        imagePromise.catch((err) => {
+          console.error("[Pipeline] Background image generation failed:", err);
+        });
       } catch (err) {
         console.error("[Pipeline] Cinematic direction failed:", err);
         setGenerationStatus((prev) => ({
@@ -1597,6 +1598,7 @@ export function useLyricPipeline({
       words,
       user,
       audioFile,
+      audioUrl,
       initialLyric,
       sceneDescription,
       audioDurationSec,
@@ -1734,6 +1736,7 @@ export function useLyricPipeline({
           lines: [],
           lyrics: "",
           instrumental: true,
+          audio_url: audioUrl || undefined,
           audioSections,
           beatGrid: {
             bpm: beatGrid.bpm,
@@ -1825,7 +1828,7 @@ export function useLyricPipeline({
         setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "error" }));
       }
     },
-    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages, user, audioFile, setSectionImageUrls, setSectionImageProgress],
+    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages, user, audioFile, audioUrl, setSectionImageUrls, setSectionImageProgress],
   );
 
   useEffect(() => {
