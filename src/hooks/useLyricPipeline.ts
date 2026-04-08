@@ -250,7 +250,7 @@ async function createDanceRowAndGenerateImages({
     "generate-section-images",
     {
       project_id: resolvedDanceId,
-      force: true,
+      force: false,
     },
     180_000,
   );
@@ -434,7 +434,7 @@ export function usePipelineScheduler({
     // Trigger image generation only (no AI re-call)
     const danceId = savedIdRef.current;
     if (danceId) {
-      invokeWithTimeout("generate-section-images", { project_id: danceId, force: true }, 180_000)
+      invokeWithTimeout("generate-section-images", { project_id: danceId, force: false }, 180_000)
         .then(({ data: result, error }) => {
           if (error) throw error;
           const urls: (string | null)[] = result?.urls || result?.section_images || [];
