@@ -744,12 +744,21 @@ export function useLyricPipeline({
     initialLyric?.spotify_track_id ?? null,
   );
 
-  const [renderData, setRenderData] = useState<any | null>(null);
+  const [renderData, setRenderData] = useState<any | null>(
+    () => (initialLyric as any)?.render_data ?? null,
+  );
   const renderDataRef = useRef<any | null>(null);
   renderDataRef.current = renderData;
-  const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(null);
+  const [beatGrid, setBeatGrid] = useState<BeatGridData | null>(
+    () => (initialLyric as any)?.beat_grid ?? null,
+  );
   const [cinematicDirection, setCinematicDirection] = useState<any | null>(
-    null,
+    () => {
+      const cd = (initialLyric as any)?.cinematic_direction ?? null;
+      if (cd) return cd;
+      const rd = (initialLyric as any)?.render_data;
+      return rd?.cinematicDirection ?? rd?.cinematic_direction ?? null;
+    },
   );
   const phraseResultRef = useRef<ReturnType<typeof buildPhrases> | null>(null);
   const _isPublished = (initialLyric as any)?.is_published === true;
