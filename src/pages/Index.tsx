@@ -926,16 +926,16 @@ const Index = () => {
 
   const handleNewLyric = useCallback(() => {
     setLoadedLyric(null);
-    transitionNavigate("/LyricFit", { replace: true });
+    transitionNavigate("/the-director", { replace: true });
   }, [transitionNavigate]);
   const handleNewMix = useCallback(() => {
     setLoadedMixProject(null);
     projectLoadedRef.current = null;
-    transitionNavigate("/MixFit", { replace: true });
+    transitionNavigate("/the-engineer", { replace: true });
   }, [transitionNavigate]);
   const handleNewHitFit = useCallback(() => {
     setLoadedHitFitAnalysis(null);
-    transitionNavigate("/HitFit", { replace: true });
+    transitionNavigate("/the-ar", { replace: true });
   }, [transitionNavigate]);
 
   const handleSidebarTabChange = useCallback(
@@ -964,17 +964,7 @@ const Index = () => {
         setActiveTab(tab);
       });
 
-      const pathMap: Record<string, string> = {
-        songfit: "/CrowdFit",
-        profit: "/ProFit",
-        playlist: "/PlaylistFit",
-        mix: "/MixFit",
-        lyric: "/LyricFit",
-        hitfit: "/HitFit",
-        dreamfit: "/DreamFit",
-        vibefit: "/VibeFit",
-      };
-      navigate(pathMap[tab] || "/CrowdFit", { replace: true });
+      navigate(TOOL_TO_PATH[tab] || TOOL_TO_PATH.songfit, { replace: true });
     },
     [setActiveTab, navigate],
   );
