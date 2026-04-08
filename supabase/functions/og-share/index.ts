@@ -37,7 +37,7 @@ serve(async (req) => {
     try {
       const { data: dance } = await supabase
         .from("lyric_projects")
-        .select("title, artist_name, section_images, album_art_url")
+        .select("id, title, artist_name, section_images, album_art_url")
         .eq("artist_slug", artistSlug)
         .eq("url_slug", songSlug)
         .maybeSingle();
@@ -49,15 +49,17 @@ serve(async (req) => {
         sectionImageUrl = images.find((image): image is string => typeof image === "string" && image.length > 0) || dance.album_art_url || null;
       }
 
-      const { data: post } = await supabase
-        .from("feed_posts")
-        .select("engagement_score")
-        .eq("lyric_dance_url", `/${artistSlug}/${songSlug}/lyric-dance`)
-        .eq("status", "live")
-        .maybeSingle();
+      if (dance) {
+        const { data: post } = await supabase
+          .from("feed_posts")
+          .select("engagement_score")
+          .eq("project_id", dance.id)
+          .eq("status", "live")
+          .maybeSingle();
 
-      if (typeof post?.engagement_score === "number") {
-        voteCount = Math.round(post.engagement_score);
+        if (typeof post?.engagement_score === "number") {
+          voteCount = Math.round(post.engagement_score);
+        }
       }
     } catch (error) {
       console.error("[og-share] DB query failed:", error);
