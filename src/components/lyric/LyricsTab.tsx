@@ -136,6 +136,7 @@ interface Props {
   autoSubmitFile?: File | null;
   filmMode?: FilmMode;
   onFilmModeChange?: (m: FilmMode) => void;
+  setAudioUrl?: (url: string | null) => void;
 }
 
 export function LyricsTab({
@@ -240,6 +241,9 @@ export function LyricsTab({
       setLyricData({ title: draftTitle, lines: [] });
       setLines([]);
       setAudioFile(file);
+      if (storageAudioUrl && setAudioUrl) {
+        setAudioUrl(storageAudioUrl);
+      }
       setHasRealAudio(true);
       setSavedId(projectId);
       if (projectId) {
