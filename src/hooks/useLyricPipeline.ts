@@ -1877,6 +1877,7 @@ export function useLyricPipeline({
   const isComplete = !!(
     beatGrid &&
     cinematicDirection &&
+    audioUrl &&
     (
       !(cinematicDirection as any)?.sections?.length ||
       (generationStatus.sectionImages === "done" && sectionImageUrls.some(Boolean))
