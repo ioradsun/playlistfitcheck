@@ -7,6 +7,7 @@ import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import { extractPeaks } from "@/lib/audioUtils";
+import { getCachedAudioBuffer } from "@/lib/audioDecodeCache";
 import { buildPhrases } from "@/lib/phraseEngine";
 import type { LyricData, LyricLine } from "@/components/lyric/LyricDisplay";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -812,6 +813,7 @@ export function useLyricPipeline({
   });
   const runIdRef = useRef(0);
   const lastCompletedRunIdRef = useRef(0);
+  const audioFileBlobUrlRef = useRef<string | null>(null);
 
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [waveformData, setWaveformData] = useState<WaveformData | null>(null);
@@ -922,8 +924,24 @@ export function useLyricPipeline({
 
   useEffect(() => {
     if (audioBuffer) return;
+    if (audioFile && audioFile.size > 0) {
+      let cancelled = false;
+      getCachedAudioBuffer(audioFile)
+        .then((buf) => {
+          if (!cancelled) {
+            setAudioBuffer(buf);
+            setWaveformData({ peaks: extractPeaks(buf), duration: buf.duration });
+          }
+        })
+        .catch((err) => {
+          console.error("[Pipeline] Audio decode from File failed:", err);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (!audioUrl) return;
-    if (!transcriptionDone && filmMode !== "beat") return;
 
     let cancelled = false;
     fetch(audioUrl)
@@ -935,11 +953,13 @@ export function useLyricPipeline({
           setWaveformData({ peaks: extractPeaks(buf), duration: buf.duration });
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("[Pipeline] Audio decode from URL failed:", err);
+      });
     return () => {
       cancelled = true;
     };
-  }, [audioUrl, audioBuffer, transcriptionDone, filmMode]);
+  }, [audioFile, audioUrl, audioBuffer]);
 
   const handleTitleChange = useCallback((newTitle: string) => {
     setLyricData((prev) => prev ? { ...prev, title: newTitle } : prev);
@@ -1053,10 +1073,18 @@ export function useLyricPipeline({
 
   useEffect(() => {
     if (!audioFile || audioUrl) return;
-    const blobUrl = URL.createObjectURL(audioFile);
-    setAudioUrl(blobUrl);
-    return () => URL.revokeObjectURL(blobUrl);
+    if (!audioFileBlobUrlRef.current) {
+      audioFileBlobUrlRef.current = URL.createObjectURL(audioFile);
+    }
+    setAudioUrl(audioFileBlobUrlRef.current);
   }, [audioFile, audioUrl]);
+
+  useEffect(() => {
+    if (!audioUrl || !audioFileBlobUrlRef.current) return;
+    if (audioUrl === audioFileBlobUrlRef.current) return;
+    URL.revokeObjectURL(audioFileBlobUrlRef.current);
+    audioFileBlobUrlRef.current = null;
+  }, [audioUrl]);
 
   // ── Effect B (reactive sync) ────────────────────────────────────────────────
   // Owns: transcriptionDone, beatGrid, renderData, cinematicDirection, sectionImages.
@@ -1834,7 +1862,6 @@ export function useLyricPipeline({
   const isComplete = !!(
     beatGrid &&
     cinematicDirection &&
-    audioUrl &&
     (
       !(cinematicDirection as any)?.sections?.length ||
       (generationStatus.sectionImages === "done" && sectionImageUrls.some(Boolean))
