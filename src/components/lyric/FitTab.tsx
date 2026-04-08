@@ -302,7 +302,17 @@ export function FitTab({
   }, [initialDanceUrl]);
 
   const [prefetchedDanceData, setPrefetchedDanceData] =
-    useState<LyricDanceData | null>(null);
+    useState<LyricDanceData | null>(
+      renderData && cinematicDirection && beatGrid
+        ? ({
+            id: savedId,
+            cinematic_direction: cinematicDirection,
+            beat_grid: beatGrid,
+            words: words ?? null,
+            section_images: sectionImageUrls.length ? sectionImageUrls : null,
+          } as any)
+        : null,
+    );
   const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxScene, setLightboxScene] = useState<{ imageUrl: string; description: string; timestamp: string; visualMood?: string; index: number } | null>(null);
   const [clipComposerVisible, setClipComposerVisible] = useState(false);
@@ -351,6 +361,13 @@ export function FitTab({
         }
       })).catch(() => {});
   }, [publishedDanceId, pipeline]);
+
+  const hasFetchedRef = useRef(false);
+  useEffect(() => {
+    if (!publishedDanceId || hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+    refetchDanceData();
+  }, [publishedDanceId, refetchDanceData]);
 
   // ── CrowdFit publish state ─────────────────────────────────────────
   const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);

@@ -1,7 +1,7 @@
 /* cache-bust: 2026-03-06-V2 */
 
 import * as React from "react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -57,7 +57,7 @@ export function LyricFitTab({
 
   const [activeTab, setActiveTab] = React.useState<LyricFitView>("lyrics");
   const [fitPlayerReady, setFitPlayerReady] = React.useState(false);
-  const fitReady = fitPlayerReady;
+  const [fontReady, setFontReady] = React.useState(false);
   const [sceneDescription, setSceneDescription] = React.useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const [filmMode, setFilmMode] = React.useState<FilmMode>(() => {
@@ -90,6 +90,28 @@ export function LyricFitTab({
     onClaimPublished,
     filmMode,
   });
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.fonts) {
+      setFontReady(true);
+      return;
+    }
+    setFontReady(document.fonts.check('600 48px "Montserrat"'));
+  }, [p.cinematicDirection]);
+
+  const projectAlreadyComplete = useMemo(
+    () =>
+      !!(
+        p.cinematicDirection &&
+        p.beatGrid &&
+        p.pipelineDanceId &&
+        (p.sectionImageUrls.some(Boolean) ||
+          !(p.cinematicDirection as any)?.sections?.length)
+      ),
+    [p.cinematicDirection, p.beatGrid, p.pipelineDanceId, p.sectionImageUrls],
+  );
+
+  const fitReady = fitPlayerReady || (projectAlreadyComplete && fontReady);
 
   const handleFilmModeChange = React.useCallback((m: FilmMode) => {
     setFilmMode(m);

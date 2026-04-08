@@ -761,16 +761,26 @@ export function useLyricPipeline({
     },
   );
   const phraseResultRef = useRef<ReturnType<typeof buildPhrases> | null>(null);
-  const _isPublished = (initialLyric as any)?.is_published === true;
   const _projectId = (initialLyric as any)?.id ?? null;
   const _artistSlug = (initialLyric as any)?.artist_slug ?? null;
   const _urlSlug = (initialLyric as any)?.url_slug ?? null;
+  const _hasCinematic = !!((initialLyric as any)?.cinematic_direction);
+  const _hasBeatGrid = !!((initialLyric as any)?.beat_grid);
+  const _sections = (initialLyric as any)?.cinematic_direction?.sections;
+  const _hasImages =
+    !Array.isArray(_sections) || _sections.length === 0
+      ? true
+      : Array.isArray((initialLyric as any)?.section_images) &&
+        (initialLyric as any).section_images.some(Boolean);
+  const _projectReady = _hasCinematic && _hasBeatGrid && _hasImages;
   const [pipelineDanceId, setPipelineDanceId] = useState<string | null>(
-    _isPublished && _projectId ? _projectId : null,
+    _projectReady && _projectId ? _projectId : null,
   );
   const [pipelineDanceUrl, setPipelineDanceUrl] = useState<string | null>(
-    _isPublished && _artistSlug && _urlSlug
+    _projectReady && _artistSlug && _urlSlug
       ? `/${_artistSlug}/${_urlSlug}/lyric-dance`
+      : _projectReady && _projectId
+        ? null
       : null,
   );
   const [sectionImageUrls, setSectionImageUrls] = useState<(string | null)[]>(
@@ -1131,7 +1141,13 @@ export function useLyricPipeline({
   useEffect(() => {
     if (pipelineDanceId) return;
     const row = initialLyric as any;
-    if (!row?.is_published || !row?.id) return;
+    if (!row?.id || !row?.cinematic_direction || !row?.beat_grid) return;
+    const sections = row.cinematic_direction?.sections;
+    const hasImages =
+      !Array.isArray(sections) || sections.length === 0
+        ? true
+        : Array.isArray(row.section_images) && row.section_images.some(Boolean);
+    if (!hasImages) return;
     setPipelineDanceId(row.id);
     if (row.artist_slug && row.url_slug) {
       setPipelineDanceUrl(`/${row.artist_slug}/${row.url_slug}/lyric-dance`);
