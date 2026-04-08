@@ -538,7 +538,6 @@ export function usePipelineScheduler({
       setFitReadiness("ready");
       setFitProgress(100);
       setFitStageLabel("Ready");
-      setPipelineStages((prev) => ({ ...prev, transcript: "done" }));
       return;
     }
     if (hasCoreRunning) {
@@ -555,13 +554,11 @@ export function usePipelineScheduler({
       } else {
         setFitStageLabel("Building your Fit…");
       }
-      setPipelineStages((prev) => ({ ...prev, transcript: "running" }));
       return;
     }
     if (hasError) {
       setFitReadiness("error");
       setFitStageLabel("Background generation failed");
-      setPipelineStages((prev) => ({ ...prev, transcript: "pending" }));
       return;
     }
     const allStatuses = Object.values(generationStatus);
