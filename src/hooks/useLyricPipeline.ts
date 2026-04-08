@@ -1259,6 +1259,12 @@ export function useLyricPipeline({
           danceRow = inserted as any;
         }
 
+        if (danceErr) {
+          console.error("[ClaimPublish] Insert/update failed:", danceErr);
+          claimPublishedRef.current = false;
+          return;
+        }
+
         const lyricDanceUrl = `/${claimMeta.artistSlug}/${claimMeta.songSlug}/lyric-dance`;
 
         await supabase
