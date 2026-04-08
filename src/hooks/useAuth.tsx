@@ -69,7 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setLoading(false);
           // Clean up auth params from URL after verification and show welcome toast
           if (window.location.search?.includes('code=') || window.location.hash?.includes('access_token')) {
-            window.history.replaceState({}, '', '/CrowdFit');
+            window.history.replaceState({}, '', '/fmly');
             if (event === 'SIGNED_IN') {
               toast.success("Welcome to the FMly ♫");
             }

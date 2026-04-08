@@ -27,7 +27,7 @@ export function PlusMenu({ open, onClose, anchor = "header" }: Props) {
 
   const go = (mode: "song" | "beat") => {
     onClose();
-    navigate(`/LyricFit?mode=${mode}`);
+    navigate(`/the-director?mode=${mode}`);
   };
 
   return (

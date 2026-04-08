@@ -16,6 +16,7 @@ import { lazy, Suspense } from "react";
 import { AdminPageImport } from "@/lib/routePrefetch";
 import { importWithRetry } from "@/lib/importWithRetry";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ROUTES, LEGACY_REDIRECTS } from "@/lib/routes";
 
 const Index = lazy(() =>
   importWithRetry(
@@ -50,22 +51,38 @@ export default function MainAppShell() {
             <VoteGateProvider>
               <ErrorBoundary>
                 <Routes>
-                  <Route path="/" element={<Navigate to="/CrowdFit" replace />} />
-                  <Route path="/CrowdFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/SongFit" element={<Navigate to="/CrowdFit" replace />} />
-                  <Route path="/ProFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/ProFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/PlaylistFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/PlaylistFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/MixFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/MixFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/LyricFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/LyricFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/HitFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/HitFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/DreamFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/VibeFit" element={<Suspense fallback={null}><Index /></Suspense>} />
-                  <Route path="/VibeFit/:projectId" element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path="/" element={<Navigate to={ROUTES.fmly} replace />} />
+
+                  {/* ── Primary tool routes ── */}
+                  <Route path={ROUTES.fmly} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={ROUTES.manager} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={`${ROUTES.manager}/:projectId`} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={ROUTES.plug} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={`${ROUTES.plug}/:projectId`} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={ROUTES.engineer} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={`${ROUTES.engineer}/:projectId`} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={ROUTES.director} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={`${ROUTES.director}/:projectId`} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={ROUTES.ar} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={`${ROUTES.ar}/:projectId`} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={ROUTES.fmlyMatters} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={ROUTES.creative} element={<Suspense fallback={null}><Index /></Suspense>} />
+                  <Route path={`${ROUTES.creative}/:projectId`} element={<Suspense fallback={null}><Index /></Suspense>} />
+
+                  {/* ── Legacy redirects ── */}
+                  {Object.entries(LEGACY_REDIRECTS).map(([from, to]) => (
+                    <Route key={from} path={from} element={<Navigate to={to} replace />} />
+                  ))}
+                  <Route path="/CrowdFit" element={<Navigate to={ROUTES.fmly} replace />} />
+
+                  {/* ── SEO pages ── */}
+                  <Route path="/fmly-seo" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/the-director-seo" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/the-engineer-seo" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/the-ar-seo" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/the-plug-seo" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  <Route path="/fmly-matters-seo" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
+                  {/* Legacy SEO paths */}
                   <Route path="/crowdfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
                   <Route path="/lyricfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
                   <Route path="/mixfit" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
