@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { useAudioProject } from "@/hooks/useAudioProject";
+import { v4 as uuidv4 } from "uuid";
 import { compressAudioFile } from "@/lib/compressAudio";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { toast } from "sonner";
@@ -222,19 +223,20 @@ export function LyricsTab({
       const ms = () => `${(performance.now() - t0).toFixed(0)}ms`;
       setLoading(true);
 
-      let projectId: string | null = null;
+      const projectId = savedId ?? (user ? uuidv4() : null);
       let storageAudioUrl: string | null = null;
-      try {
-        const project = await handleFileSelected(file, savedId ?? undefined);
-        
-        projectId = project?.projectId ?? null;
+      let uploadPromise: Promise<{ projectId: string; audioUrl: string; file: File } | null> | null = null;
+      uploadPromise = handleFileSelected(
+        file,
+        savedId ?? undefined,
+        projectId ?? undefined,
+      ).then((project) => {
         storageAudioUrl = project?.audioUrl ?? null;
-      } catch (e) {
-        console.error("[handleTranscribe] handleFileSelected failed", e);
-        toast.error("Failed to save project — try again");
-        setLoading(false);
-        return;
-      }
+        if (storageAudioUrl && setAudioUrl) {
+          setAudioUrl(storageAudioUrl);
+        }
+        return project;
+      });
 
       const draftTitle = resolveProjectTitle(null, file.name);
 
@@ -242,9 +244,6 @@ export function LyricsTab({
       setLyricData({ title: draftTitle, lines: [] });
       setLines([]);
       setAudioFile(file);
-      if (storageAudioUrl && setAudioUrl) {
-        setAudioUrl(storageAudioUrl);
-      }
       setHasRealAudio(true);
       setSavedId(projectId);
       if (projectId) {
@@ -397,6 +396,7 @@ export function LyricsTab({
         const phraseLines = wordsToLines(data.words, data.lines);
 
         if (user && projectId) {
+          if (uploadPromise) await uploadPromise;
           // Non-blocking — don't let DB persist block the UI
           persistQueue.enqueue({
             table: "lyric_projects",
@@ -451,6 +451,7 @@ export function LyricsTab({
         console.error("[handleTranscribe] FAILED", e);
         clearTimeout(transcribeTimeout);
         if (projectId) {
+          if (uploadPromise) await uploadPromise.catch(() => {});
           await supabase.from("lyric_projects").delete().eq("id", projectId);
         }
         setLyricData(null);
@@ -466,7 +467,7 @@ export function LyricsTab({
         setLoading(false);
       }
     },
-    [quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted, setSpotifyTrackId, filmMode, savedId],
+    [quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted, setSpotifyTrackId, filmMode, savedId, setAudioUrl],
   );
 
   // ── Auto-submit for claim pages ──────────────────────────────────────

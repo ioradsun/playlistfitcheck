@@ -439,15 +439,16 @@ export function usePipelineScheduler({
   const imageSelfHealRef = useRef(false);
 
   useEffect(() => {
-    if (!transcriptionDone || !beatGridDone || !lines?.length) return;
+    if (filmMode === "beat") return;
+    if (!audioUrl) return;
     if (cinematicTriggeredRef.current) return;
     cinematicTriggeredRef.current = true;
     const force = pipelineRetryCount > 0;
 
     void startCinematicDirection(lines, force);
   }, [
-    transcriptionDone,
-    beatGridDone,
+    filmMode,
+    audioUrl,
     lines,
     pipelineRetryCount,
     startCinematicDirection,
@@ -1417,7 +1418,7 @@ export function useLyricPipeline({
 
   const startCinematicDirection = useCallback(
     async (sourceLines: LyricLine[], force = false) => {
-      if (!lyricData || !sourceLines.length) return;
+      if (!lyricData) return;
       const myRunId = ++runIdRef.current;
       {
         if (
@@ -1439,53 +1440,56 @@ export function useLyricPipeline({
         const lyricsForDirection = sourceLines
           .filter((l: any) => l.tag !== "adlib")
           .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
-        const sectionCount = Math.min(
-          8,
-          Math.max(1, Math.ceil(lyricsForDirection.length / 4)),
-        );
-        const linesPerSection = Math.max(
-          1,
-          Math.ceil(lyricsForDirection.length / sectionCount),
-        );
-        const audioSections = Array.from({ length: sectionCount }, (_, i) => {
-          const startIdx = i * linesPerSection;
-          const endIdx = Math.min(
-            (i + 1) * linesPerSection,
-            lyricsForDirection.length,
-          ) - 1;
-          const firstLine = lyricsForDirection[startIdx];
-          const lastLine = lyricsForDirection[Math.max(startIdx, endIdx)];
-          const startSec = firstLine?.start ?? i * 10;
-          const endSec =
-            lastLine?.end ??
-            Math.max(startSec + 8, (i + 1) * 10);
-          const duration = Math.max(0.1, endSec - startSec);
-          const beatDensity = beatGrid?.bpm
-            ? (beatGrid.bpm / 60)
-            : lyricsForDirection
-                .slice(startIdx, endIdx + 1)
-                .filter((line) => line.text?.trim().length > 0).length / duration;
+        let audioSections: any[] = [];
+        if (lyricsForDirection.length > 0) {
+          const sectionCount = Math.min(
+            8,
+            Math.max(1, Math.ceil(lyricsForDirection.length / 4)),
+          );
+          const linesPerSection = Math.max(
+            1,
+            Math.ceil(lyricsForDirection.length / sectionCount),
+          );
+          audioSections = Array.from({ length: sectionCount }, (_, i) => {
+            const startIdx = i * linesPerSection;
+            const endIdx = Math.min(
+              (i + 1) * linesPerSection,
+              lyricsForDirection.length,
+            ) - 1;
+            const firstLine = lyricsForDirection[startIdx];
+            const lastLine = lyricsForDirection[Math.max(startIdx, endIdx)];
+            const startSec = firstLine?.start ?? i * 10;
+            const endSec =
+              lastLine?.end ??
+              Math.max(startSec + 8, (i + 1) * 10);
+            const duration = Math.max(0.1, endSec - startSec);
+            const beatDensity = beatGrid?.bpm
+              ? (beatGrid.bpm / 60)
+              : lyricsForDirection
+                  .slice(startIdx, endIdx + 1)
+                  .filter((line) => line.text?.trim().length > 0).length / duration;
 
-          return {
-            index: i,
-            startSec,
-            endSec,
-            role:
-              i === 0
-                ? "intro"
-                : i === sectionCount - 1
-                  ? "outro"
-                  : "main",
-            avgEnergy: 0.5,
-            beatDensity,
-            lyrics: lyricsForDirection
-              .slice(startIdx, endIdx + 1)
-              .map((line, offset) => ({
-                text: line.text,
-                lineIndex: startIdx + offset,
-              })),
-          };
-        });
+            return {
+              index: i,
+              startSec,
+              endSec,
+              role:
+                i === 0
+                  ? "intro"
+                  : i === sectionCount - 1
+                    ? "outro"
+                    : "main",
+              avgEnergy: 0.5,
+              beatDensity,
+              lyrics: lyricsForDirection
+                .slice(startIdx, endIdx + 1)
+                .map((line, offset) => ({
+                  text: line.text,
+                  lineIndex: startIdx + offset,
+                })),
+            };
+          });
+        }
 
         const sharedBody = {
           title: lyricData.title || "Untitled",
@@ -1972,10 +1976,14 @@ export function useLyricPipeline({
   const isComplete = !!(
     beatGrid &&
     cinematicDirection &&
+    generationStatus.cinematicDirection === "done" &&
     audioUrl &&
     (
-      !(cinematicDirection as any)?.sections?.length ||
-      (generationStatus.sectionImages === "done" && sectionImageUrls.some(Boolean))
+      !(cinematicDirection as any)?.sections?.length
+        ? generationStatus.sectionImages === "done" ||
+          generationStatus.sectionImages === "error"
+        : generationStatus.sectionImages === "done" &&
+          sectionImageUrls.some(Boolean)
     )
   );
 
