@@ -143,23 +143,20 @@ async function createDanceRowAndGenerateImages({
       ? slugify(rawArtistName)
       : `artist-${user.id.slice(0, 8)}`;
 
-  let resolvedDanceId: string | null = null;
-  const { data: existing }: any = await supabase
-    .from("lyric_projects" as any)
-    .select("id, user_id")
-    .eq("artist_slug", artistSlugVal)
-    .eq("url_slug", songSlugVal)
-    .eq("is_published", true)
-    .is("deleted_at", null)
-    .maybeSingle();
+  let resolvedDanceId: string | null = savedIdRef.current;
 
-  if (existing?.id) {
-    resolvedDanceId = existing.id;
+  if (resolvedDanceId) {
     await supabase
       .from("lyric_projects" as any)
       .update({
-        user_id: user.id,
+        artist_slug: artistSlugVal,
+        url_slug: songSlugVal,
+        artist_name:
+          artistNameRef.current !== "artist" ? artistNameRef.current : null,
+        title: lyricData?.title || "Untitled",
         cinematic_direction: cinematicDirection,
+        words: isInstrumental ? null : words ?? null,
+        palette: derivePaletteFromDirection(cinematicDirection),
         ...(beatGrid
           ? {
               beat_grid: {
@@ -232,6 +229,9 @@ async function createDanceRowAndGenerateImages({
     ).select("id").maybeSingle();
 
     resolvedDanceId = (insertedRow as any)?.id ?? null;
+    if (resolvedDanceId) {
+      savedIdRef.current = resolvedDanceId;
+    }
   }
 
   if (!resolvedDanceId) {
@@ -478,6 +478,8 @@ export function usePipelineScheduler({
     if (!lines?.length) return;
     if (renderData && beatGrid && cinematicDirection) {
       pipelineTriggeredRef.current = true;
+      cinematicTriggeredRef.current = true;
+      imageSelfHealRef.current = true;
       setGenerationStatus({
         beatGrid: "done",
         renderData: "done",
