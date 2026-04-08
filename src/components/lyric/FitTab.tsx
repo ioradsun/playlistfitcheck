@@ -14,7 +14,7 @@ import {
   Sparkles,
   Eye,
   Zap,
-  Image,
+  Image as ImageIcon,
   Copy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -326,7 +326,7 @@ export function FitTab({
       setPrefetchedDanceData(null);
       return;
     }
-    supabase
+    Promise.resolve(supabase
       .from("lyric_projects" as any)
       .select(LYRIC_DANCE_COLUMNS)
       .eq("id", publishedDanceId)
@@ -349,8 +349,7 @@ export function FitTab({
             }
           }
         }
-      })
-      .catch(() => {});
+      })).catch(() => {});
   }, [publishedDanceId, pipeline]);
 
   // ── CrowdFit publish state ─────────────────────────────────────────
@@ -358,7 +357,15 @@ export function FitTab({
   const crowdfitTogglingRef = useRef(false);
   const [crowdfitToggling, setCrowdfitToggling] = useState(false);
 
-  const [fireData, setFireData] = useState(initialFireData);
+  const [fireData, setFireData] = useState({
+    fireStrength: null as any,
+    rawFires: [] as any[],
+    closingDist: [] as any[],
+    freeResponses: [] as any[],
+    totalFires: 0,
+    uniqueListeners: 0,
+    resultsLoaded: false,
+  });
 
 
 
@@ -368,7 +375,7 @@ export function FitTab({
       setCrowdfitPostId(null);
       return;
     }
-    supabase
+    Promise.resolve(supabase
       .from("feed_posts" as any)
       .select("id, status")
       .eq("user_id", user.id)
@@ -380,8 +387,7 @@ export function FitTab({
         } else {
           setCrowdfitPostId(null);
         }
-      })
-      .catch(() => setCrowdfitPostId(null));
+      })).catch(() => setCrowdfitPostId(null));
   }, [publishedDanceId, user]);
 
   // CrowdFit toggle handler
@@ -527,7 +533,7 @@ export function FitTab({
     if (!sectionImageUrls.length) return;
     sectionImageUrls.forEach((url) => {
       if (!url) return;
-      const img = new Image();
+      const img = new window.Image();
       img.src = url;
     });
   }, [sectionImageUrls]);
@@ -1073,7 +1079,15 @@ export function FitTab({
   }, [lyricFireBreakdown]);
 
   useEffect(() => {
-    setFireData(initialFireData);
+    setFireData({
+      fireStrength: null,
+      rawFires: [],
+      closingDist: [],
+      freeResponses: [],
+      totalFires: 0,
+      uniqueListeners: 0,
+      resultsLoaded: false,
+    });
   }, [publishedDanceId]);
 
   useEffect(() => {
@@ -1263,11 +1277,11 @@ export function FitTab({
                 </div>
               )}
             </div>
-            {pipeline.savedId ? (
+            {savedId ? (
               <SpotifyLinkField
-                spotifyTrackId={pipeline.spotifyTrackId}
-                setSpotifyTrackId={pipeline.setSpotifyTrackId}
-                savedId={pipeline.savedId}
+                spotifyTrackId={pipeline.spotifyTrackId ?? null}
+                setSpotifyTrackId={pipeline.setSpotifyTrackId ?? (() => {})}
+                savedId={savedId}
               />
             ) : null}
 
@@ -1886,12 +1900,12 @@ export function FitTab({
                               </>
                             ) : sectionImageUrls.length > 0 ? (
                               <>
-                                <Image size={9} />
+                                <ImageIcon size={9} />
                                 Regenerate Images
                               </>
                             ) : (
                               <>
-                                <Image size={9} />
+                                <ImageIcon size={9} />
                                 Generate Images
                               </>
                             )}
@@ -1943,7 +1957,7 @@ export function FitTab({
                               />
                             ) : (
                               <div className="w-16 h-16 rounded-md bg-white/5 shrink-0 flex items-center justify-center">
-                                <Image
+                                <ImageIcon
                                   size={14}
                                   className="text-muted-foreground/30"
                                 />
