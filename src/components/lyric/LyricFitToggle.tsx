@@ -18,6 +18,8 @@ interface Props {
   showDebug?: boolean;
   hasData?: boolean;
   filmMode?: "song" | "beat";
+  playerReady?: boolean;
+  hasDance?: boolean;
 }
 
 const STAGE_LABELS: Record<keyof PipelineStages, string> = {
@@ -56,8 +58,10 @@ const FitButton = forwardRef<HTMLButtonElement, { isLocked: boolean; isRunning: 
 );
 FitButton.displayName = "FitButton";
 
-export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = false, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages, showDebug, hasData = false, filmMode = "song" }: Props) {
-  const isLocked = fitDisabled || (!fitUnlocked && fitReadiness !== "ready");
+export function LyricFitToggle({ view, onViewChange, fitDisabled, fitUnlocked = false, fitReadiness = "not_started", fitProgress = 0, fitStageLabel, pipelineStages, showDebug, hasData = false, filmMode = "song", playerReady = false, hasDance = false }: Props) {
+  // Tab is locked if: explicitly disabled, pipeline not ready,
+  // OR pipeline is ready but a published dance exists and the player isn't ready yet
+  const isLocked = fitDisabled || (!fitUnlocked && fitReadiness !== "ready") || (fitReadiness === "ready" && hasDance && !playerReady);
   const isRunning = fitReadiness === "running";
   const isError = fitReadiness === "error";
   const isReady = fitReadiness === "ready";

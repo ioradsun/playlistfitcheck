@@ -59,6 +59,7 @@ export function LyricFitTab({
   const siteCopy = useSiteCopy();
 
   const [activeTab, setActiveTab] = React.useState<LyricFitView>("lyrics");
+  const [fitPlayerReady, setFitPlayerReady] = React.useState(false);
   const [sceneDescription, setSceneDescription] = React.useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const [filmMode, setFilmMode] = React.useState<FilmMode>(() => {
@@ -109,10 +110,12 @@ export function LyricFitTab({
       p.fitReadiness !== "not_started"
     )
       return;
+    // Block fit if dance exists but player isn't ready yet
+    if (nextView === "fit" && p.pipelineDanceId && !fitPlayerReady) return;
     // Block data if no dance published yet
     if (nextView === "data" && !p.pipelineDanceId) return;
     setActiveTab(nextView);
-  }, [p.fitReadiness, p.fitUnlocked, p.pipelineDanceId]);
+  }, [p.fitReadiness, p.fitUnlocked, p.pipelineDanceId, fitPlayerReady]);
 
   const handleBackToLyrics = useCallback(
     () => handleViewChange("lyrics"),
@@ -166,6 +169,8 @@ export function LyricFitTab({
           fitStageLabel={p.fitStageLabel}
           pipelineStages={p.pipelineStages}
           hasData={!!p.pipelineDanceId}
+          playerReady={fitPlayerReady}
+          hasDance={!!p.pipelineDanceId}
         />
       )}
 
@@ -252,6 +257,7 @@ export function LyricFitTab({
             onTitleChange={p.handleTitleChange}
             subView={activeTab === "data" ? "data" : "fit"}
             filmMode={filmMode}
+            onPlayerReady={setFitPlayerReady}
           />
         </div>
       )}
