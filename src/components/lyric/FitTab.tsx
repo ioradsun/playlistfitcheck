@@ -6,7 +6,7 @@
  * v2: removed lyrics column, single-column report.
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import {
   Loader2,
   RefreshCw,
@@ -23,7 +23,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
-import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { FitExportModal } from "./FitExportModal";
 
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -46,6 +45,7 @@ import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { extractPeaks } from "@/lib/audioUtils";
 import { persistQueue } from "@/lib/persistQueue";
+import { getCachedAudioBuffer } from "@/lib/audioDecodeCache";
 
 interface Props {
   pipeline: {
@@ -472,16 +472,11 @@ export function FitTab({
     if (waveformFromParent) {
       setWaveform(waveformFromParent);
     } else {
-      const ctx = new AudioContext();
-      audioFile
-        .arrayBuffer()
-        .then((ab) => {
-          ctx.decodeAudioData(ab).then((buf) => {
-            setWaveform({
-              peaks: extractPeaks(buf, 200),
-              duration: buf.duration,
-            });
-            ctx.close();
+      getCachedAudioBuffer(audioFile)
+        .then((buf) => {
+          setWaveform({
+            peaks: extractPeaks(buf, 200),
+            duration: buf.duration,
           });
         })
         .catch(() => {});
@@ -500,6 +495,15 @@ export function FitTab({
     // parentWaveform intentionally read from ref — avoids re-creating Audio + blob on waveform updates
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioFile]);
+
+  useEffect(() => {
+    if (!sectionImageUrls.length) return;
+    sectionImageUrls.forEach((url) => {
+      if (!url) return;
+      const img = new Image();
+      img.src = url;
+    });
+  }, [sectionImageUrls]);
 
   const handleSeek = useCallback((time: number) => {
     if (audioRef.current) {
@@ -710,6 +714,18 @@ export function FitTab({
     cinematicDirection,
     fontReady,
   ]);
+
+  const LyricDanceEmbedModule = useMemo(
+    () =>
+      publishedDanceId
+        ? lazy(() =>
+            import("@/components/lyric/LyricDanceEmbed").then((m) => ({
+              default: m.LyricDanceEmbed,
+            })),
+          )
+        : null,
+    [publishedDanceId],
+  );
 
   useEffect(() => {
     onPlayerReady?.(playerReady);
@@ -1168,16 +1184,29 @@ export function FitTab({
             {/* Video player */}
             <div className="relative rounded-xl overflow-hidden w-full" style={{ height: 480 }}>
               {playerReady || imageWaitExpired ? (
-                <LyricDanceEmbed
-                  ref={dancePlayerRef}
-                  lyricDanceId={publishedDanceId}
-                  songTitle={lyricData.title || "Untitled"}
-                  artistName={profile?.display_name || ""}
-                  avatarUrl={profile?.avatar_url ?? null}
-                  isVerified={profile?.is_verified ?? false}
-                  userId={user?.id ?? null}
-                  prefetchedData={prefetchedDanceData}
-                />
+                <Suspense
+                  fallback={
+                    <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-3">
+                      <Loader2 size={20} className="animate-spin text-white/20" />
+                      <span className="text-[10px] font-mono text-white/25 tracking-wider uppercase">
+                        loading...
+                      </span>
+                    </div>
+                  }
+                >
+                  {LyricDanceEmbedModule ? (
+                    <LyricDanceEmbedModule
+                      ref={dancePlayerRef}
+                      lyricDanceId={publishedDanceId}
+                      songTitle={lyricData.title || "Untitled"}
+                      artistName={profile?.display_name || ""}
+                      avatarUrl={profile?.avatar_url ?? null}
+                      isVerified={profile?.is_verified ?? false}
+                      userId={user?.id ?? null}
+                      prefetchedData={prefetchedDanceData}
+                    />
+                  ) : null}
+                </Suspense>
               ) : (
                 <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-3">
                   <Loader2 size={20} className="animate-spin text-white/20" />
