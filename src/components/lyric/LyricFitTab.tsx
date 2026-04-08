@@ -122,10 +122,10 @@ export function LyricFitTab({
 
   useEffect(() => {
     if (!claimMeta) return;
-    if (p.lyricData && p.audioFile && activeTab === "lyrics") {
+    if (p.lyricData && p.audioFile && activeTab === "lyrics" && fitPlayerReady) {
       setActiveTab("fit");
     }
-  }, [claimMeta, p.lyricData, p.audioFile, activeTab]);
+  }, [claimMeta, p.lyricData, p.audioFile, activeTab, fitPlayerReady]);
 
   useEffect(() => {
     if (filmMode !== "beat") return;

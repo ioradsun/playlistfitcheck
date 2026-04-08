@@ -139,19 +139,7 @@ async function createDanceRowAndGenerateImages({
   }
 
   const dirSections = cinematicDirection?.sections;
-  if (!Array.isArray(dirSections) || dirSections.length === 0) {
-    setSectionImageUrls([]);
-    setSectionImageProgress(null);
-    setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
-    return {
-      resolvedDanceId: null,
-      artistSlugVal: null,
-      songSlugVal: null,
-      allComplete: true,
-      generatedCount: 0,
-      total: 0,
-    };
-  }
+  const hasSections = Array.isArray(dirSections) && dirSections.length > 0;
 
   const { slugify } = await import("@/lib/slugify");
   const songSlugVal = slugify(lyricData?.title || "untitled");
@@ -251,6 +239,21 @@ async function createDanceRowAndGenerateImages({
 
   setPipelineDanceId(resolvedDanceId);
   setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
+
+  if (!hasSections) {
+    setSectionImageUrls([]);
+    setSectionImageProgress(null);
+    setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
+    return {
+      resolvedDanceId,
+      artistSlugVal,
+      songSlugVal,
+      allComplete: true,
+      generatedCount: 0,
+      total: 0,
+    };
+  }
+
   setGenerationStatus((prev) => ({ ...prev, sectionImages: "running" }));
   setSectionImageProgress({ done: 0, total: dirSections.length });
 
