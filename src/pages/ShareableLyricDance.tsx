@@ -45,6 +45,17 @@ export default function ShareableLyricDance() {
     if (!artistSlug || !songSlug) return;
     setLoading(true);
 
+    const fetchProfile = (userId: string) => {
+      const loadProfile = () => {
+        supabase.from("profiles")
+          .select("display_name, avatar_url, is_verified")
+          .eq("id", userId).maybeSingle()
+          .then(({ data: p }) => { if (p) setProfile(p as ProfileInfo); });
+      };
+      if ("requestIdleCallback" in window) requestIdleCallback(loadProfile);
+      else setTimeout(loadProfile, 1000);
+    };
+
     const prefetched = consumeShareableDancePrefetch();
     if (prefetched) {
       prefetched.data.then(({ data: row, error }: any) => {
@@ -56,8 +67,23 @@ export default function ShareableLyricDance() {
             ? normalizeCinematicDirection(row.cinematic_direction)
             : row.cinematic_direction,
         } as LyricDanceData);
+        if (row.user_id) fetchProfile(row.user_id);
         setLoading(false);
       });
+      return;
+    }
+
+    const cached = readCachedDanceData(artistSlug, songSlug);
+    if (cached) {
+      setNotFound(false);
+      setData({
+        ...cached,
+        cinematic_direction: cached.cinematic_direction
+          ? normalizeCinematicDirection(cached.cinematic_direction)
+          : cached.cinematic_direction,
+      } as LyricDanceData);
+      if (cached.user_id) fetchProfile(cached.user_id);
+      setLoading(false);
       return;
     }
 
@@ -78,15 +104,7 @@ export default function ShareableLyricDance() {
         } as LyricDanceData);
         setLoading(false);
 
-        if (row.user_id) {
-          const loadProfile = () => {
-            supabase.from("profiles").select("display_name, avatar_url, is_verified")
-              .eq("id", row.user_id).maybeSingle()
-              .then(({ data: p }) => { if (p) setProfile(p as ProfileInfo); });
-          };
-          if ("requestIdleCallback" in window) requestIdleCallback(loadProfile);
-          else setTimeout(loadProfile, 1000);
-        }
+        if (row.user_id) fetchProfile(row.user_id);
       });
   }, [artistSlug, songSlug]);
 
