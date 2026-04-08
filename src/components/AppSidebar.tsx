@@ -338,6 +338,21 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
     });
   }, [user, optimisticItem]);
 
+  // Patch the sidebar localStorage cache when a rename happens so the next
+  // fetchRecents doesn't flash the old name from stale cache.
+  const patchSidebarCache = useCallback((id: string, label: string) => {
+    if (!user) return;
+    try {
+      const cacheKey = `tfm:sidebar:${user.id}`;
+      const raw = localStorage.getItem(cacheKey);
+      if (!raw) return;
+      const { items, ts } = JSON.parse(raw);
+      if (!Array.isArray(items)) return;
+      const patched = items.map((i: any) => i.id === id ? { ...i, label } : i);
+      localStorage.setItem(cacheKey, JSON.stringify({ items: patched, ts }));
+    } catch {}
+  }, [user]);
+
   // Listen for header-driven renames so sidebar label stays in sync
   useEffect(() => {
     const handler = (e: Event) => {
@@ -345,10 +360,11 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
       setRecentItems((prev) =>
         prev.map((item) => (item.id === id ? { ...item, label } : item)),
       );
+      patchSidebarCache(id, label);
     };
     window.addEventListener("project-renamed", handler);
     return () => window.removeEventListener("project-renamed", handler);
-  }, []);
+  }, [patchSidebarCache]);
 
   const closeMobileIfNeeded = () => {
     if (isMobile) setOpenMobile(false);
@@ -429,6 +445,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
     setRecentItems((prev) =>
       prev.map((i) => (i.id === item.id ? { ...i, label: name } : i))
     );
+    patchSidebarCache(item.id, name);
     setEditingId(null);
   };
 

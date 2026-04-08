@@ -979,33 +979,33 @@ export function LyricDisplay({
     [capturedSelectionText, activeLines, activeVersion],
   );
 
-  // Report project title + right content (save indicator) to header
+  // Report project title + onTitleChange to header — only re-runs when title or identity changes.
+  // Deliberately excludes saveStatus so a save cycle can't re-register the header with stale data.
+  const onHeaderProjectRef = useRef(onHeaderProject);
+  const onTitleChangeRef = useRef(onTitleChange);
+  const onBackRef = useRef(onBack);
+  useEffect(() => { onHeaderProjectRef.current = onHeaderProject; }, [onHeaderProject]);
+  useEffect(() => { onTitleChangeRef.current = onTitleChange; }, [onTitleChange]);
+  useEffect(() => { onBackRef.current = onBack; }, [onBack]);
+
   useEffect(() => {
     const title =
       data.title && data.title !== "Unknown" && data.title !== "Untitled"
         ? data.title
         : audioFile.name.replace(/\.[^.]+$/, "");
-    const rightContent = (
-      <>
-        {user && saveStatus !== "idle" && (
-          <span className="text-[10px] text-muted-foreground shrink-0">
-            {saveStatus === "saving" ? "● Saving…" : "✓ Saved"}
-          </span>
-        )}
-      </>
-    );
-    onHeaderProject?.({ title, onBack, rightContent, onTitleChange });
-    return () => onHeaderProject?.(null);
-  }, [
-    data.title,
-    audioFile.name,
-    onBack,
-    onHeaderProject,
-    saveStatus,
-    user,
-    isAdmin,
-    onTitleChange,
-    ]);
+    onHeaderProjectRef.current?.({ title, onBack: onBackRef.current, onTitleChange: onTitleChangeRef.current });
+    return () => onHeaderProjectRef.current?.(null);
+  }, [data.title, audioFile.name]);
+
+  // Separately update rightContent (save indicator) without re-registering title/onTitleChange.
+  useEffect(() => {
+    const rightContent = user && saveStatus !== "idle" ? (
+      <span className="text-[10px] text-muted-foreground shrink-0">
+        {saveStatus === "saving" ? "● Saving…" : "✓ Saved"}
+      </span>
+    ) : undefined;
+    window.dispatchEvent(new CustomEvent("header-right-content", { detail: { rightContent } }));
+  }, [saveStatus, user]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
