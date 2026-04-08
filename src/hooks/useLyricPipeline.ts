@@ -1801,7 +1801,10 @@ export function useLyricPipeline({
             persistQueue.enqueue({
               table: "lyric_projects",
               id: savedIdRef.current,
-              payload: { render_data: updatedRenderData },
+              payload: {
+                cinematic_direction: enrichedScene,
+                render_data: updatedRenderData,
+              },
             });
           }
           return updatedRenderData;
