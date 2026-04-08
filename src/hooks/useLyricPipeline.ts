@@ -1734,9 +1734,9 @@ export function useLyricPipeline({
         const body = {
           title: lyricData?.title ?? "Untitled Beat",
           artist:
-            artistNameRef.current !== "artist"
+            artistNameRef.current && artistNameRef.current !== "artist"
               ? artistNameRef.current
-              : undefined,
+              : "Unknown Artist",
           bpm: beatGrid.bpm,
           lines: [],
           lyrics: "",
