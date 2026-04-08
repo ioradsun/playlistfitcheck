@@ -160,7 +160,7 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
     if (user && fetched.length > 0) {
       const ids = fetched.map(c => c.id);
       const { data: liked } = await supabase
-        .from("feed_comment_likes" as any)
+        .from("feed_comment_likes")
         .select("comment_id")
         .eq("user_id", user.id)
         .in("comment_id", ids);
@@ -199,9 +199,9 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
     ));
     try {
       if (alreadyLiked) {
-        await supabase.from("feed_comment_likes" as any).delete().eq("comment_id", commentId).eq("user_id", user.id);
+        await supabase.from("feed_comment_likes").delete().eq("comment_id", commentId).eq("user_id", user.id);
       } else {
-        await supabase.from("feed_comment_likes" as any).insert({ comment_id: commentId, user_id: user.id });
+        await supabase.from("feed_comment_likes").insert({ comment_id: commentId, user_id: user.id });
       }
     } catch {
       // Revert on error
