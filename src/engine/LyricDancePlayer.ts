@@ -3200,7 +3200,7 @@ export class LyricDancePlayer {
       {
         const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
         const sections = (cd?.sections as any[]) ?? [];
-        const dur = this.audio?.duration || 1;
+        const dur = this.getSongDuration() || (this.audio?.duration > 0 ? this.audio.duration : 1);
         // In region mode, lock section index to the section at region_start.
         // A 10-second hook that crosses a section boundary would otherwise
         // cycle images every loop — distracting flicker instead of stable bg.
