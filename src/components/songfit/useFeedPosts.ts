@@ -225,7 +225,7 @@ export function useFeedPosts(): FeedState {
 
     let resolveTypographyFromDirection: ((cd: any) => any) | null = null;
     let getFontNamesForPreload: ((resolved: any) => string[]) | null = null;
-    let ensureFontReady: ((fontName: string) => Promise<void>) | null = null;
+    let ensureFontReady: ((fontName: string) => Promise<boolean>) | null = null;
     try {
       ({ resolveTypographyFromDirection, getFontNamesForPreload } = await import("@/lib/fontResolver"));
       ({ ensureFontReady } = await import("@/lib/fontReadinessCache"));
