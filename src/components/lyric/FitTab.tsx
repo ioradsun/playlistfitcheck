@@ -828,10 +828,7 @@ export function FitTab({
       // beat_grid          — from state with fallback (required, NOT NULL)
       // palette            — from direction with fallback (required, NOT NULL)
       // section_images     — null if regenerating, preserved if not
-      const { data: danceRow, error: insertError }: any = await supabase
-        .from("lyric_projects" as any)
-        .upsert(
-          {
+      const projectPayload: any = {
             user_id: user.id,
             artist_slug: artistSlug,
             url_slug: songSlug,
@@ -863,11 +860,39 @@ export function FitTab({
               : (existingDance?.section_images ?? sectionImageUrls ?? null),
             is_published: true,
             published_at: new Date().toISOString(),
-          },
-          { onConflict: "artist_slug,url_slug", ignoreDuplicates: false },
-        )
+      };
+
+      // Check for existing published project with same slug pair
+      const { data: existingRow }: any = await supabase
+        .from("lyric_projects" as any)
         .select("id")
-        .single();
+        .eq("artist_slug", artistSlug)
+        .eq("url_slug", songSlug)
+        .eq("is_published", true)
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      let danceRow: any;
+      let insertError: any;
+
+      if (existingRow?.id) {
+        const res: any = await supabase
+          .from("lyric_projects" as any)
+          .update(projectPayload)
+          .eq("id", existingRow.id)
+          .select("id")
+          .single();
+        danceRow = res.data;
+        insertError = res.error;
+      } else {
+        const res: any = await supabase
+          .from("lyric_projects" as any)
+          .insert(projectPayload)
+          .select("id")
+          .single();
+        danceRow = res.data;
+        insertError = res.error;
+      }
 
       if (insertError) throw insertError;
 
