@@ -326,7 +326,7 @@ export function FitTab({
       setPrefetchedDanceData(null);
       return;
     }
-    supabase
+    Promise.resolve(supabase
       .from("lyric_projects" as any)
       .select(LYRIC_DANCE_COLUMNS)
       .eq("id", publishedDanceId)
@@ -349,8 +349,7 @@ export function FitTab({
             }
           }
         }
-      })
-      .catch(() => {});
+      })).catch(() => {});
   }, [publishedDanceId, pipeline]);
 
   // ── CrowdFit publish state ─────────────────────────────────────────
@@ -376,7 +375,7 @@ export function FitTab({
       setCrowdfitPostId(null);
       return;
     }
-    supabase
+    Promise.resolve(supabase
       .from("feed_posts" as any)
       .select("id, status")
       .eq("user_id", user.id)
@@ -388,8 +387,7 @@ export function FitTab({
         } else {
           setCrowdfitPostId(null);
         }
-      })
-      .catch(() => setCrowdfitPostId(null));
+      })).catch(() => setCrowdfitPostId(null));
   }, [publishedDanceId, user]);
 
   // CrowdFit toggle handler
@@ -1902,12 +1900,12 @@ export function FitTab({
                               </>
                             ) : sectionImageUrls.length > 0 ? (
                               <>
-                                <Image size={9} />
+                                <ImageIcon size={9} />
                                 Regenerate Images
                               </>
                             ) : (
                               <>
-                                <Image size={9} />
+                                <ImageIcon size={9} />
                                 Generate Images
                               </>
                             )}
@@ -1959,7 +1957,7 @@ export function FitTab({
                               />
                             ) : (
                               <div className="w-16 h-16 rounded-md bg-white/5 shrink-0 flex items-center justify-center">
-                                <Image
+                                <ImageIcon
                                   size={14}
                                   className="text-muted-foreground/30"
                                 />

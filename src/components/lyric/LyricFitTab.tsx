@@ -252,7 +252,7 @@ export function LyricFitTab({
             words={p.words}
             onHeaderProject={activeTab === "fit" || activeTab === "data" ? onHeaderProject : undefined}
             onBack={handleBackToLyrics}
-            pipelineStages={p.pipelineStages}
+            
             parentWaveform={p.waveformData}
             initialDanceId={p.pipelineDanceId}
             initialDanceUrl={p.pipelineDanceUrl}
