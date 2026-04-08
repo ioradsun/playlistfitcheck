@@ -427,6 +427,7 @@ export default function MixFitCheck({ initialProject, onProjectSaved, onNewProje
         setTitle(newTitle);
         if (projectId) {
           supabase.from("mix_projects").update({ title: newTitle, updated_at: new Date().toISOString() }).eq("id", projectId).then(() => {});
+          window.dispatchEvent(new CustomEvent("project-renamed", { detail: { id: projectId, label: newTitle } }));
         }
       } });
       return () => onHeaderProject?.(null);

@@ -742,6 +742,10 @@ export function useLyricPipeline({
         id,
         payload: { title: newTitle },
       });
+      // Notify sidebar of the rename so it updates optimistically
+      window.dispatchEvent(
+        new CustomEvent("project-renamed", { detail: { id, label: newTitle } }),
+      );
     }
   }, []);
 

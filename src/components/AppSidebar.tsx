@@ -338,6 +338,18 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
     });
   }, [user, optimisticItem]);
 
+  // Listen for header-driven renames so sidebar label stays in sync
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { id, label } = (e as CustomEvent).detail;
+      setRecentItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, label } : item)),
+      );
+    };
+    window.addEventListener("project-renamed", handler);
+    return () => window.removeEventListener("project-renamed", handler);
+  }, []);
+
   const closeMobileIfNeeded = () => {
     if (isMobile) setOpenMobile(false);
   };
