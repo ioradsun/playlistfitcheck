@@ -124,20 +124,27 @@ function HeaderTitleInput({
   onTitleChange: (v: string) => void;
 }) {
   const [draft, setDraft] = React.useState(title);
-  React.useEffect(() => { setDraft(title); }, [title]);
+  const isFocusedRef = React.useRef(false);
+  // Only sync external title changes when the input is NOT focused —
+  // prevents effect re-fires (saveStatus, etc.) from clobbering the user's active draft.
+  React.useEffect(() => {
+    if (!isFocusedRef.current) setDraft(title);
+  }, [title]);
+  const commit = () => {
+    const v = draft.trim();
+    if (v && v !== title) onTitleChange(v);
+    else setDraft(title); // revert on empty
+  };
   return (
     <input
       className="text-xs font-semibold bg-transparent border-none outline-none focus:ring-1 focus:ring-primary/40 rounded px-1 -ml-1 min-w-0 flex-1"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        const v = draft.trim();
-        if (v && v !== title) onTitleChange(v);
-        else setDraft(title);
-      }}
+      onFocus={() => { isFocusedRef.current = true; }}
+      onBlur={() => { isFocusedRef.current = false; commit(); }}
       onKeyDown={(e) => {
         if (e.key === "Enter") { e.currentTarget.blur(); }
-        if (e.key === "Escape") { setDraft(title); e.currentTarget.blur(); }
+        if (e.key === "Escape") { setDraft(title); isFocusedRef.current = false; e.currentTarget.blur(); }
       }}
     />
   );
@@ -1448,7 +1455,6 @@ const Index = () => {
             <>
               {headerProject.onTitleChange ? (
                 <HeaderTitleInput
-                  key={headerProject.title}
                   title={headerProject.title}
                   onTitleChange={headerProject.onTitleChange!}
                 />
