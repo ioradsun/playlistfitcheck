@@ -306,19 +306,9 @@ serve(async (req) => {
       throw new Error(`Could not load lyric project ${project_id}`);
     }
 
-    const existingImages = danceRow?.section_images;
-    if (
-      !force &&
-      Array.isArray(existingImages) &&
-      existingImages.length > 0 &&
-      existingImages.every((url: string) => !!url)
-    ) {
-      await triggerPreviewPrecompute(sbUrl, sbKey, project_id);
-      return new Response(
-        JSON.stringify({ success: true, cached: true, section_images: existingImages, urls: existingImages }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    const existingImages = Array.isArray(danceRow?.section_images)
+      ? danceRow.section_images.filter((url): url is string => typeof url === "string" || url === null)
+      : [];
 
     const cinematicDirection = danceRow?.cinematic_direction;
     const artistDirection: string | undefined =
@@ -371,18 +361,24 @@ serve(async (req) => {
       );
     }
 
+    const normalizedExistingImages: (string | null)[] = existingImages.slice(0, sections.length);
+    while (normalizedExistingImages.length < sections.length) normalizedExistingImages.push(null);
+
+    if (!force && normalizedExistingImages.length > 0 && normalizedExistingImages.every(Boolean)) {
+      await triggerPreviewPrecompute(sbUrl, sbKey, project_id);
+      return new Response(
+        JSON.stringify({ success: true, cached: true, section_images: normalizedExistingImages, urls: normalizedExistingImages }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // ── Sequential generation with progressive DB saves ──
     // Process images one-by-one (or in pairs) to stay within edge function
     // time limits and avoid overwhelming the AI gateway with parallel requests.
     // After each successful image, save progress to the DB so partial results
     // survive a timeout.
 
-    const urls: (string | null)[] = Array.isArray(existingImages)
-      ? [...existingImages]
-      : new Array(sections.length).fill(null);
-
-    // Ensure urls array matches section count
-    while (urls.length < sections.length) urls.push(null);
+    const urls: (string | null)[] = [...normalizedExistingImages];
 
     // Process in pairs (concurrency = 2) for a balance of speed vs reliability
     const CONCURRENCY = 2;
