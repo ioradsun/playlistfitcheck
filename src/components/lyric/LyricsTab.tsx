@@ -206,7 +206,7 @@ export function LyricsTab({
 
   const handleTranscribe = useCallback(
     async (file: File, referenceLyrics?: string) => {
-      console.log("[handleTranscribe] START", { fileName: file.name, canUse: quota.canUse, tier: quota.tier, loading: quota.loading, user: !!user });
+      
       if (!quota.canUse) {
         console.warn("[handleTranscribe] BLOCKED by quota", { tier: quota.tier, used: quota.used, limit: quota.limit });
         toast.error(
@@ -224,7 +224,7 @@ export function LyricsTab({
       let storageAudioUrl: string | null = null;
       try {
         const project = await handleFileSelected(file);
-        console.log("[handleTranscribe] handleFileSelected result", { projectId: project?.projectId, audioUrl: project?.audioUrl?.slice(0, 60) });
+        
         projectId = project?.projectId ?? null;
         storageAudioUrl = project?.audioUrl ?? null;
       } catch (e) {
@@ -385,7 +385,7 @@ export function LyricsTab({
 
         const data = await response.json();
         clearTimeout(transcribeTimeout);
-        console.log("[handleTranscribe] response OK", { linesCount: data.lines?.length, wordsCount: data.words?.length, error: data.error });
+        
 
         if (data.error) throw new Error(data.error);
         if (!data.lines) throw new Error("Invalid response format");
@@ -468,10 +468,8 @@ export function LyricsTab({
   const autoSubmitProcessed = useRef(false);
   useEffect(() => {
     if (!autoSubmitFile) return;
-    console.log("[LyricsTab] autoSubmit effect", { hasFile: !!autoSubmitFile, processed: autoSubmitProcessed.current });
     if (autoSubmitProcessed.current) return;
     autoSubmitProcessed.current = true;
-    console.log("[LyricsTab] autoSubmit → calling handleTranscribe");
     handleTranscribe(autoSubmitFile);
   }, [autoSubmitFile, handleTranscribe]);
 
