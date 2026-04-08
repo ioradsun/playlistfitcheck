@@ -200,6 +200,22 @@ async function createDanceRowAndGenerateImages({
       .getPublicUrl(storagePath);
     setAudioUrl(urlData.publicUrl);
 
+    // Resolve potential 409: unpublish any conflicting row holding these slugs
+    const { data: conflicting }: any = await supabase
+      .from("lyric_projects" as any)
+      .select("id")
+      .eq("artist_slug", artistSlugVal)
+      .eq("url_slug", songSlugVal)
+      .eq("is_published", true)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (conflicting?.id) {
+      await supabase
+        .from("lyric_projects" as any)
+        .update({ is_published: false } as any)
+        .eq("id", conflicting.id);
+    }
+
     const { data: insertedRow } = await supabase.from("lyric_projects" as any).insert(
       {
         user_id: user.id,
