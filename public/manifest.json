@@ -2,7 +2,7 @@
   "name": "tools.fm — Music Tools for Independent Artists",
   "short_name": "tools.fm",
   "description": "Six free tools for independent musicians. No gatekeeping. Just clarity.",
-  "start_url": "/CrowdFit",
+  "start_url": "/fmly",
   "display": "standalone",
   "background_color": "#090a10",
   "theme_color": "#090a10",
