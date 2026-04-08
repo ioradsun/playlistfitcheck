@@ -302,8 +302,14 @@ export function FitTab({
     if (row?.artist_slug && row?.url_slug) {
       return `/${row.artist_slug}/${row.url_slug}/lyric-dance`;
     }
+    // Fallback: derive from lyricData title + user id so the player always renders
+    if (danceId && lyricData?.title) {
+      const fallbackArtist = user?.id ? `artist-${user.id.slice(0, 8)}` : "artist";
+      const fallbackSong = slugify(lyricData.title || "untitled");
+      return `/${fallbackArtist}/${fallbackSong}/lyric-dance`;
+    }
     return null;
-  }, [initialLyric]);
+  }, [initialLyric, danceId, lyricData?.title, user?.id]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxScene, setLightboxScene] = useState<{ imageUrl: string; description: string; timestamp: string; visualMood?: string; index: number } | null>(null);
   const [clipComposerVisible, setClipComposerVisible] = useState(false);
