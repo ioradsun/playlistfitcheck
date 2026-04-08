@@ -51,7 +51,7 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
     let cancelled = false;
     const check = async () => {
       let q = supabase
-        .from("songfit_hook_reviews")
+        .from("feed_hook_reviews" as any)
         .select("id, would_replay")
         .eq("post_id", postId);
       q = user
@@ -78,7 +78,7 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
 
   const fetchResults = async () => {
     const { data } = await supabase
-      .from("songfit_hook_reviews")
+      .from("feed_hook_reviews" as any)
       .select("would_replay")
       .eq("post_id", postId);
     const rows = data || [];
@@ -107,7 +107,7 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
       });
       (async () => {
         try {
-          let q = supabase.from("songfit_hook_reviews").delete().eq("post_id", postId);
+          let q = supabase.from("feed_hook_reviews" as any).delete().eq("post_id", postId);
           if (user) q = q.eq("user_id", user.id);
           else q = q.eq("session_id", sessionId).is("user_id", null);
           await q;
@@ -141,12 +141,12 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
         if (user) {
           payload.user_id = user.id;
           await supabase
-            .from("songfit_hook_reviews")
+            .from("feed_hook_reviews" as any)
             .upsert(payload, { onConflict: "user_id,post_id" });
         } else {
           payload.session_id = sessionId;
           await supabase
-            .from("songfit_hook_reviews")
+            .from("feed_hook_reviews" as any)
             .upsert(payload, { onConflict: "session_id,post_id" });
         }
       } catch {
@@ -172,12 +172,12 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
         if (user) {
           payload.user_id = user.id;
           await supabase
-            .from("songfit_hook_reviews")
+            .from("feed_hook_reviews" as any)
             .upsert(payload, { onConflict: "user_id,post_id" });
         } else {
           payload.session_id = sessionId;
           await supabase
-            .from("songfit_hook_reviews")
+            .from("feed_hook_reviews" as any)
             .upsert(payload, { onConflict: "session_id,post_id" });
         }
       } catch {

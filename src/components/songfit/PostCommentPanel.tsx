@@ -119,7 +119,7 @@ export function PostCommentPanel({
 
     const loadComments = async () => {
       const { data } = await supabase
-        .from("songfit_comments")
+        .from("feed_comments" as any)
         .select("id, content, created_at, user_id, parent_comment_id")
         .eq("post_id", postId)
         .order("created_at", { ascending: true })
@@ -165,7 +165,7 @@ export function PostCommentPanel({
       const commentIds =
         (
           await supabase
-            .from("songfit_comments")
+            .from("feed_comments" as any)
             .select("id")
             .eq("post_id", postId)
         ).data?.map((r: any) => r.id) ?? [];

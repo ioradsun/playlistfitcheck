@@ -177,7 +177,7 @@ export default function ArtistStage() {
 
         // Load CrowdFit posts
         supabase
-          .from("songfit_posts")
+          .from("feed_posts" as any)
           .select("id, track_title, album_art_url, likes_count, comments_count, status, peak_rank, spotify_track_id, spotify_track_url")
           .eq("user_id", matched.id)
           .order("engagement_score", { ascending: false })

@@ -40,7 +40,7 @@ export async function checkDuplicateSubmission(
   spotifyTrackId: string
 ): Promise<{ status: string; post: any } | null> {
   const { data } = await supabase
-    .from("songfit_posts")
+    .from("feed_posts" as any)
     .select("id, status, expires_at, cooldown_until, engagement_score, peak_rank")
     .eq("user_id", userId)
     .eq("spotify_track_id", spotifyTrackId)
@@ -62,7 +62,7 @@ export async function checkEligibleForReentry(
   spotifyTrackId: string
 ): Promise<any | null> {
   const { data } = await supabase
-    .from("songfit_posts")
+    .from("feed_posts" as any)
     .select("id, cycle_number, engagement_score")
     .eq("user_id", userId)
     .eq("spotify_track_id", spotifyTrackId)
@@ -82,7 +82,7 @@ export async function reenterSubmission(postId: string, previousScore: number) {
   const expiresAt = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000);
 
   const { error } = await supabase
-    .from("songfit_posts")
+    .from("feed_posts" as any)
     .update({
       status: "live",
       submitted_at: now.toISOString(),

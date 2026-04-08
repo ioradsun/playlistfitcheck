@@ -171,7 +171,7 @@ export function MomentPanel({
     onCommentAdded(optimistic);
 
     await supabase
-      .from("lyric_dance_comments" as any)
+      .from("project_comments" as any)
       .insert({
         dance_id: danceId,
         line_index: lineIndex,

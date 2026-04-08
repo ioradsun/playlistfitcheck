@@ -18,7 +18,7 @@ export async function emitFire(
 ): Promise<void> {
   if (!fireTableAvailable) return;
 
-  const { error } = await supabase.from('lyric_dance_fires' as any).insert({
+  const { error } = await supabase.from('project_fires' as any).insert({
     dance_id: danceId,
     session_id: getSessionId(),
     line_index: lineIndex,
@@ -36,7 +36,7 @@ export async function emitExposure(
   lineIndex: number,
   source?: "feed" | "shareable" | "embed",
 ): Promise<void> {
-  supabase.from('lyric_dance_exposures' as any)
+  supabase.from('project_exposures' as any)
     .upsert({
       dance_id: danceId,
       session_id: getSessionId(),
@@ -52,7 +52,7 @@ export async function emitClosingPick(
   freeText: string | null,
   source?: "feed" | "shareable" | "embed",
 ): Promise<void> {
-  supabase.from('lyric_dance_closing_picks' as any)
+  supabase.from('project_closing_picks' as any)
     .upsert({
       dance_id: danceId,
       session_id: getSessionId(),
@@ -77,7 +77,7 @@ export async function upsertPlay(
 
   const sessionId = getSessionId();
   const { error } = await supabase
-    .from('lyric_dance_plays' as any)
+    .from('project_plays' as any)
     .upsert(
       {
         dance_id: danceId,
@@ -105,7 +105,7 @@ export async function fetchFireData(danceId: string): Promise<Array<{
 
   try {
     const { data, error } = await supabase
-      .from('lyric_dance_fires' as any)
+      .from('project_fires' as any)
       .select('line_index, time_sec, hold_ms, created_at')
       .eq('dance_id', danceId)
       .order('time_sec', { ascending: true });
@@ -140,7 +140,7 @@ export async function fetchSessionFires(
 
   try {
     const { data, error } = await supabase
-      .from('lyric_dance_fires' as any)
+      .from('project_fires' as any)
       .select('line_index, hold_ms')
       .eq('dance_id', danceId)
       .eq('session_id', sessionId);

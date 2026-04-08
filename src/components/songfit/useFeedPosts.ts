@@ -50,7 +50,7 @@ async function scoreBillboard(
   }
 
   const { data: pool } = await supabase
-    .from("songfit_posts")
+    .from("feed_posts" as any)
     .select(POST_SELECT)
     .eq("status", "live")
     .limit(100)
@@ -69,10 +69,10 @@ async function scoreBillboard(
   };
 
   const [reviewsRes, commentsRes, followsRes, savesRes] = await Promise.all([
-    applyWindow(supabase.from("songfit_hook_reviews").select("post_id, would_replay").in("post_id", postIds)),
-    applyWindow(supabase.from("songfit_comments").select("post_id").in("post_id", postIds)),
+    applyWindow(supabase.from("feed_hook_reviews" as any).select("post_id, would_replay").in("post_id", postIds)),
+    applyWindow(supabase.from("feed_comments" as any).select("post_id").in("post_id", postIds)),
     applyWindow(supabase.from("songfit_follows").select("followed_user_id").in("followed_user_id", ownerIds)),
-    applyWindow(supabase.from("songfit_saves").select("post_id").in("post_id", postIds)),
+    applyWindow(supabase.from("feed_saves" as any).select("post_id").in("post_id", postIds)),
   ]);
 
   // Aggregate signals
@@ -131,7 +131,7 @@ async function fetchLyricData(
 
   if (needed.length > 0) {
     const { data: rows } = await supabase
-      .from("shareable_lyric_dances" as any)
+      .from("lyric_projects" as any)
       .select(LYRIC_FULL_COLUMNS)
       .in("id", needed);
 
@@ -248,7 +248,7 @@ export function useFeedPosts(): FeedState {
     const { data: raw } = prefetched
       ? await prefetched
       : await supabase
-          .from("songfit_posts")
+          .from("feed_posts" as any)
           .select(POST_SELECT)
           .eq("status", "live")
           .limit(PAGE_SIZE)
@@ -313,7 +313,7 @@ export function useFeedPosts(): FeedState {
 
     try {
       const { data } = await supabase
-        .from("songfit_posts")
+        .from("feed_posts" as any)
         .select(POST_SELECT)
         .eq("status", "live")
         .lt("created_at", cursorRef.current)
@@ -390,7 +390,7 @@ export function useFeedPosts(): FeedState {
       setSearchLoading(true);
       try {
         const { data } = await supabase
-          .from("songfit_posts")
+          .from("feed_posts" as any)
           .select(POST_SELECT)
           .eq("status", "live")
           .or(`track_title.ilike."%${q}%",caption.ilike."%${q}%"`)

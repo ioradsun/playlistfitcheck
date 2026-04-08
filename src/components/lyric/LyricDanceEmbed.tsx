@@ -114,7 +114,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     let mounted = true;
 
     supabase
-      .from("lyric_dance_comments" as any)
+      .from("project_comments" as any)
       .select("id, text, line_index, submitted_at, user_id")
       .eq("dance_id", danceId)
       .order("submitted_at", { ascending: true })

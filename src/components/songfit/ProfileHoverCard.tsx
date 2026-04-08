@@ -42,7 +42,7 @@ export function ProfileHoverCard({ userId, children }: Props) {
     const [profileRes, followersRes, postsRes] = await Promise.all([
       supabase.from("profiles").select("id, display_name, avatar_url, bio, spotify_artist_id, is_verified").eq("id", userId).maybeSingle(),
       supabase.from("songfit_follows").select("id", { count: "exact", head: true }).eq("followed_user_id", userId),
-      supabase.from("songfit_posts").select("id", { count: "exact", head: true }).eq("user_id", userId),
+      supabase.from("feed_posts" as any).select("id", { count: "exact", head: true }).eq("user_id", userId),
     ]);
     if (profileRes.data) setProfile(profileRes.data as ProfilePreview);
     setFollowerCount(followersRes.count ?? 0);

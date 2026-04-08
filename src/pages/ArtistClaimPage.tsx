@@ -69,7 +69,7 @@ export default function ArtistClaimPage() {
           .limit(1)
           .maybeSingle(),
         (supabase as any)
-          .from("shareable_lyric_dances")
+          .from("lyric_projects" as any)
           .select("id, song_name, album_art_url, section_images, created_at")
           .eq("artist_slug", username)
           .order("created_at", { ascending: false })

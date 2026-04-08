@@ -58,12 +58,12 @@ async function fetchListenerIntelligence(
 
   const [firesRes, exposuresRes, closingRes, commentsRes] = await Promise.all([
     supabase
-      .from("lyric_dance_fires" as any)
+      .from("project_fires" as any)
       .select("dance_id, session_id, line_index, created_at")
       .in("dance_id", danceIds),
-    supabase.from("lyric_dance_exposures" as any).select("dance_id, session_id").in("dance_id", danceIds),
-    supabase.from("lyric_dance_closing_picks" as any).select("dance_id, session_id").in("dance_id", danceIds),
-    supabase.from("lyric_dance_comments" as any).select("dance_id, session_id").in("dance_id", danceIds),
+    supabase.from("project_exposures" as any).select("dance_id, session_id").in("dance_id", danceIds),
+    supabase.from("project_closing_picks" as any).select("dance_id, session_id").in("dance_id", danceIds),
+    supabase.from("project_comments" as any).select("dance_id, session_id").in("dance_id", danceIds),
   ]);
 
   const fires = (firesRes.data ?? []) as any[];
@@ -182,7 +182,7 @@ interface SongSignal {
 
 async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
   const { data: posts } = await supabase
-    .from("songfit_posts")
+    .from("feed_posts" as any)
     .select(
       "id, track_title, album_art_url, created_at, impressions, likes_count, comments_count, tips_total, engagement_score, spotify_track_id, spotify_track_url, lyric_dance_id, lyric_dance_url, status",
     )
@@ -200,7 +200,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
   let topLineByDance: Record<string, { text: string; fireCount: number; avgHoldMs: number } | null> = {};
 
   if (danceIds.length > 0) {
-    const { data: fireRows } = await supabase.from("lyric_dance_fires" as any).select("dance_id").in("dance_id", danceIds);
+    const { data: fireRows } = await supabase.from("project_fires" as any).select("dance_id").in("dance_id", danceIds);
 
     const fireCountMap: Record<string, number> = {};
     for (const row of (fireRows ?? []) as any[]) {
@@ -208,7 +208,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
     }
 
     const { data: exposureRows } = await supabase
-      .from("lyric_dance_exposures" as any)
+      .from("project_exposures" as any)
       .select("dance_id, session_id")
       .in("dance_id", danceIds);
 
@@ -230,7 +230,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
       .in("dance_id", danceIds)
       .order("fire_strength", { ascending: false });
 
-    const { data: danceRows } = await supabase.from("shareable_lyric_dances" as any).select("id, lyrics").in("id", danceIds);
+    const { data: danceRows } = await supabase.from("lyric_projects" as any).select("id, lyrics").in("id", danceIds);
 
     const lyricsMap: Record<string, any[]> = {};
     for (const row of (danceRows ?? []) as any[]) {
