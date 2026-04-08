@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { persistQueue } from "@/lib/persistQueue";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
+import { getCachedAudioBuffer } from "@/lib/audioDecodeCache";
 import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import { extractPeaks } from "@/lib/audioUtils";
@@ -931,27 +932,21 @@ export function useLyricPipeline({
     if (allAnalysisLoaded) {
       return;
     }
+    if (!transcriptionDone && filmMode !== "beat") return;
 
     let cancelled = false;
-    const ctx = new AudioContext();
-    audioFile
-      .arrayBuffer()
-      .then((ab) =>
-        ctx.decodeAudioData(ab).then((buf) => {
-          if (!cancelled) {
-            setAudioBuffer(buf);
-            setWaveformData({ peaks: extractPeaks(buf), duration: buf.duration });
-          }
-          ctx.close();
-        }),
-      )
-      .catch(() => {
-        ctx.close();
-      });
+    getCachedAudioBuffer(audioFile)
+      .then((buf) => {
+        if (!cancelled) {
+          setAudioBuffer(buf);
+          setWaveformData({ peaks: extractPeaks(buf), duration: buf.duration });
+        }
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [audioFile, audioBuffer, allAnalysisLoaded]);
+  }, [audioFile, audioBuffer, allAnalysisLoaded, transcriptionDone, filmMode]);
 
   const handleTitleChange = useCallback((newTitle: string) => {
     setLyricData((prev) => prev ? { ...prev, title: newTitle } : prev);

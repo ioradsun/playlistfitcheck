@@ -100,6 +100,13 @@ export default defineConfig(({ mode }) => ({
       output: {
         manualChunks(id) {
           if (id.includes("/src/engine/")) return "lyric-engine";
+          if (id.includes("node_modules/@supabase/")) return "supabase";
+          if (id.includes("node_modules/lucide-react")) return "icons";
+          if (
+            id.includes("node_modules/sonner") ||
+            id.includes("node_modules/@radix-ui/")
+          )
+            return "ui";
         },
       },
     },
