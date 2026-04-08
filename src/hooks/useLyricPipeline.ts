@@ -202,7 +202,7 @@ async function createDanceRowAndGenerateImages({
       .from("audio-clips")
       .getPublicUrl(storagePath);
 
-    await supabase.from("lyric_projects" as any).upsert(
+    const { data: insertedRow } = await supabase.from("lyric_projects" as any).insert(
       {
         user_id: user.id,
         artist_slug: artistSlugVal,
@@ -227,8 +227,7 @@ async function createDanceRowAndGenerateImages({
         section_images: null,
         ...(isInstrumental ? {} : { is_published: true }),
       } as any,
-      { onConflict: "artist_slug,url_slug" },
-    );
+    ).select("id").maybeSingle();
 
     const { data: newRow }: any = await supabase
       .from("lyric_projects" as any)
