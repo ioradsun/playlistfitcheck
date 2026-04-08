@@ -7,7 +7,7 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 
 interface PostRow {
   id: string;
-  track_title: string;
+  title: string;
   album_art_url: string | null;
   created_at: string;
   impressions: number;
@@ -17,7 +17,7 @@ interface PostRow {
   engagement_score: number;
   spotify_track_id: string | null;
   spotify_track_url: string | null;
-  lyric_dance_id: string | null;
+  project_id: string | null;
   lyric_dance_url: string | null;
   status: string;
 }
@@ -59,11 +59,11 @@ async function fetchListenerIntelligence(
   const [firesRes, exposuresRes, closingRes, commentsRes] = await Promise.all([
     supabase
       .from("project_fires" as any)
-      .select("dance_id, session_id, line_index, created_at")
+      .select("project_id, session_id, line_index, created_at")
       .in("project_id", danceIds),
-    supabase.from("project_exposures" as any).select("dance_id, session_id").in("project_id", danceIds),
-    supabase.from("project_closing_picks" as any).select("dance_id, session_id").in("project_id", danceIds),
-    supabase.from("project_comments" as any).select("dance_id, session_id").in("project_id", danceIds),
+    supabase.from("project_exposures" as any).select("project_id, session_id").in("project_id", danceIds),
+    supabase.from("project_closing_picks" as any).select("project_id, session_id").in("project_id", danceIds),
+    supabase.from("project_comments" as any).select("project_id, session_id").in("project_id", danceIds),
   ]);
 
   const fires = (firesRes.data ?? []) as any[];
@@ -114,10 +114,10 @@ async function fetchListenerIntelligence(
   const perSong: ListenerIntelligence["perSong"] = {};
 
   for (const danceId of danceIds) {
-    const songFires = fires.filter((f: any) => f.dance_id === danceId);
-    const songExposures = exposures.filter((e: any) => e.dance_id === danceId);
-    const songClosings = closings.filter((c: any) => c.dance_id === danceId);
-    const songComments = comments.filter((c: any) => c.dance_id === danceId);
+    const songFires = fires.filter((f: any) => f.project_id === danceId);
+    const songExposures = exposures.filter((e: any) => e.project_id === danceId);
+    const songClosings = closings.filter((c: any) => c.project_id === danceId);
+    const songComments = comments.filter((c: any) => c.project_id === danceId);
 
     const exposureSessions = new Set(songExposures.map((e: any) => e.session_id).filter(Boolean)).size;
     const fireSessions = new Set(songFires.map((f: any) => f.session_id).filter(Boolean)).size;
@@ -184,7 +184,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
   const { data: posts } = await supabase
     .from("feed_posts" as any)
     .select(
-      "id, track_title, album_art_url, created_at, impressions, likes_count, comments_count, tips_total, engagement_score, spotify_track_id, spotify_track_url, lyric_dance_id, lyric_dance_url, status",
+      "id, title, album_art_url, created_at, impressions, likes_count, comments_count, tips_total, engagement_score, spotify_track_id, spotify_track_url, project_id, lyric_dance_url, status",
     )
     .eq("user_id", userId)
     .eq("status", "live")
@@ -192,15 +192,15 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
 
   if (!posts || posts.length === 0) return [];
 
-  const inStudioPosts = posts.filter((p: any) => p.lyric_dance_id);
-  const nowStreamingPosts = posts.filter((p: any) => p.spotify_track_id && !p.lyric_dance_id);
+  const inStudioPosts = posts.filter((p: any) => p.project_id);
+  const nowStreamingPosts = posts.filter((p: any) => p.spotify_track_id && !p.project_id);
 
-  const danceIds = inStudioPosts.map((p: any) => p.lyric_dance_id).filter(Boolean);
+  const danceIds = inStudioPosts.map((p: any) => p.project_id).filter(Boolean);
   let firesByDance: Record<string, { totalFires: number; uniqueListeners: number }> = {};
   let topLineByDance: Record<string, { text: string; fireCount: number; avgHoldMs: number } | null> = {};
 
   if (danceIds.length > 0) {
-    const { data: fireRows } = await supabase.from("project_fires" as any).select("dance_id").in("project_id", danceIds);
+    const { data: fireRows } = await supabase.from("project_fires" as any).select("project_id").in("project_id", danceIds);
 
     const fireCountMap: Record<string, number> = {};
     for (const row of (fireRows ?? []) as any[]) {
@@ -209,7 +209,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
 
     const { data: exposureRows } = await supabase
       .from("project_exposures" as any)
-      .select("dance_id, session_id")
+      .select("project_id, session_id")
       .in("project_id", danceIds);
 
     const listenerMap: Record<string, Set<string>> = {};
@@ -226,15 +226,15 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
 
     const { data: strengthRows } = await supabase
       .from("v_fire_strength" as any)
-      .select("dance_id, line_index, fire_strength, fire_count, avg_hold_ms")
+      .select("project_id, line_index, fire_strength, fire_count, avg_hold_ms")
       .in("project_id", danceIds)
       .order("fire_strength", { ascending: false });
 
-    const { data: danceRows } = await supabase.from("lyric_projects" as any).select("id, lyrics").in("id", danceIds);
+    const { data: danceRows } = await supabase.from("lyric_projects" as any).select("id, lines").in("id", danceIds);
 
     const lyricsMap: Record<string, any[]> = {};
     for (const row of (danceRows ?? []) as any[]) {
-      lyricsMap[row.id] = Array.isArray(row.lyrics) ? row.lyrics : [];
+      lyricsMap[row.id] = Array.isArray(row.lines) ? row.lines : [];
     }
 
     const topByDance: Record<string, any> = {};
@@ -267,7 +267,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
       .select("post_id, event_type")
       .in("post_id", nowStreamingIds);
 
-    const { data: saveRows } = await supabase.from("songfit_saves" as any).select("post_id").in("post_id", nowStreamingIds);
+    const { data: saveRows } = await supabase.from("feed_saves").select("post_id").in("post_id", nowStreamingIds);
 
     for (const postId of nowStreamingIds) {
       const clicks = ((events ?? []) as any[]).filter((e: any) => e.post_id === postId && e.event_type === "spotify_click").length;
@@ -280,7 +280,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
   const signals: SongSignal[] = [];
 
   for (const post of inStudioPosts as unknown as PostRow[]) {
-    const danceId = post.lyric_dance_id!;
+    const danceId = post.project_id!;
     const fires = firesByDance[danceId] ?? { totalFires: 0, uniqueListeners: 0 };
     signals.push({
       post,
@@ -351,7 +351,7 @@ function SongCard({ signal, onClick }: { signal: SongSignal; onClick: () => void
 
         <div className="flex-1 min-w-0 space-y-1.5">
           <div>
-            <p className="text-[13px] font-medium text-foreground truncate">{post.track_title}</p>
+            <p className="text-[13px] font-medium text-foreground truncate">{post.title}</p>
             <p className={`text-[9px] font-mono uppercase tracking-wider ${typeColor}`}>{typeLabel}</p>
           </div>
 
@@ -412,10 +412,10 @@ export default function ArtistDashboard() {
       }
       setFollowerTimeline(Array.from(days.entries()).map(([day, count]) => ({ day, count })));
 
-      const inStudioSignals = data.filter((s) => s.type === "in_studio" && s.post.lyric_dance_id);
-      const ids = inStudioSignals.map((s) => s.post.lyric_dance_id!);
+      const inStudioSignals = data.filter((s) => s.type === "in_studio" && s.post.project_id);
+      const ids = inStudioSignals.map((s) => s.post.project_id!);
       const titleMap: Record<string, string> = {};
-      for (const s of inStudioSignals) titleMap[s.post.lyric_dance_id!] = s.post.track_title;
+      for (const s of inStudioSignals) titleMap[s.post.project_id!] = s.post.title;
 
       if (ids.length > 0) {
         fetchListenerIntelligence(ids, titleMap).then(setListenerIntel);
@@ -499,9 +499,9 @@ export default function ArtistDashboard() {
             <div className="glass-card rounded-xl p-4 border border-orange-500/10">
               <p className="text-[12px] text-foreground/70 leading-relaxed">
                 {signals.filter((s) => s.totalFires > 0).length === 1
-                  ? `"${topSong.post.track_title}" has all your signal. Share it wider to see what lines connect.`
+                  ? `"${topSong.post.title}" has all your signal. Share it wider to see what lines connect.`
                   : topSong.totalFires > totals.fires * 0.6
-                    ? `"${topSong.post.track_title}" is your standout — ${Math.round((topSong.totalFires / totals.fires) * 100)}% of your total fires. Double down on sharing it.`
+                    ? `"${topSong.post.title}" is your standout — ${Math.round((topSong.totalFires / totals.fires) * 100)}% of your total fires. Double down on sharing it.`
                     : `Your fires are spread across ${signals.filter((s) => s.totalFires > 0).length} songs — your audience connects with your range, not just one moment.`}
               </p>
             </div>

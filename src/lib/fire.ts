@@ -42,7 +42,7 @@ export async function emitExposure(
       session_id: getSessionId(),
       line_index: lineIndex,
       ...(source ? { source } : {}),
-    }, { onConflict: 'dance_id,session_id,line_index', ignoreDuplicates: true })
+    }, { onConflict: 'project_id,session_id,line_index', ignoreDuplicates: true })
     .then();
 }
 
@@ -59,7 +59,7 @@ export async function emitClosingPick(
       hook_index: hookIndex,
       free_text: freeText?.trim() || null,
       ...(source ? { source } : {}),
-    }, { onConflict: 'dance_id,session_id' })
+    }, { onConflict: 'project_id,session_id' })
     .then();
 }
 
@@ -89,7 +89,7 @@ export async function upsertPlay(
         duration_sec: Math.round(opts.durationSec),
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'dance_id,session_id' },
+      { onConflict: 'project_id,session_id' },
     );
 
   if (isMissingTableError(error)) playTableAvailable = false;

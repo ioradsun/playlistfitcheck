@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export interface PersistJob {
-  table: "saved_lyrics" | "shareable_lyric_dances";
+  table: "lyric_projects";
   id: string;
   payload: Record<string, unknown>;
 }
@@ -66,7 +66,7 @@ class PersistQueue {
 
         if (!error) {
           // Invalidate localStorage cache for lyric rows so next load is fresh.
-          if (job.table === "saved_lyrics") {
+          if (job.table === "lyric_projects") {
             try {
               localStorage.removeItem(`tfm:lyric:${job.id}`);
             } catch {}

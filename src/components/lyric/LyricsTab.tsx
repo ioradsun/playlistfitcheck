@@ -191,7 +191,7 @@ export function LyricsTab({
 
   const { handleFileSelected, showAuthNudge, dismissAuthNudge } = useAudioProject({
     tool: "lyric",
-    dbTable: "saved_lyrics",
+    dbTable: "lyric_projects",
     buildStubRow: ({ file, userId }) => ({
       user_id: userId,
       title: resolveProjectTitle(null, file.name),
@@ -291,7 +291,7 @@ export function LyricsTab({
             onSavedId?.(projectId);
             onProjectSaved?.();
             persistQueue.enqueue({
-              table: "saved_lyrics",
+              table: "lyric_projects",
               id: projectId,
               payload: {
                 user_id: user?.id,
@@ -390,7 +390,7 @@ export function LyricsTab({
         if (user && projectId) {
           // Non-blocking — don't let DB persist block the UI
           persistQueue.enqueue({
-            table: "saved_lyrics",
+            table: "lyric_projects",
             id: projectId,
             payload: {
               user_id: user.id,

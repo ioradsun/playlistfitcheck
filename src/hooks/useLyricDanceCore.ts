@@ -228,7 +228,7 @@ export function useLyricDanceCore({
           event: "INSERT",
           schema: "public",
           table: "lyric_dance_fires",
-          filter: `dance_id=eq.${data.id}`,
+          filter: `project_id=eq.${data.id}`,
         },
         (payload: any) => {
           const { line_index, hold_ms, user_id } = payload.new;

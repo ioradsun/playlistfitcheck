@@ -31,7 +31,7 @@ const projectTableByType: Record<string, string> = {
   profit: "profit_reports",
   playlist: "saved_searches",
   mix: "mix_projects",
-  lyric: "saved_lyrics",
+  lyric: "lyric_projects",
   hitfit: "saved_hitfit",
   vibefit: "saved_vibefit",
 };

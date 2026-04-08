@@ -1,21 +1,14 @@
 export interface SongFitPost {
   id: string;
   user_id: string;
-  spotify_track_url: string;
-  spotify_track_id: string;
-  track_title: string;
-  track_artists_json: { name: string; id: string; spotifyUrl: string }[];
-  album_title: string | null;
-  album_art_url: string | null;
-  release_date: string | null;
-  preview_url: string | null;
+  project_id: string | null;
   caption: string;
   tags_json: string[];
   likes_count: number;
   comments_count: number;
-  tips_total: number;
+  fires_count: number;
+  saves_count: number;
   created_at: string;
-  // Submission lifecycle
   status: 'draft' | 'live' | 'expired' | 'cooldown' | 'eligible';
   submitted_at: string;
   expires_at: string | null;
@@ -23,18 +16,29 @@ export interface SongFitPost {
   cycle_number: number;
   engagement_score: number;
   peak_rank: number | null;
-  palette?: string[] | null;
   impressions: number;
   legacy_boost: number;
-  // joined
   profiles?: { display_name: string | null; avatar_url: string | null; spotify_artist_id: string | null; wallet_address?: string | null; is_verified?: boolean };
+  lyric_projects?: {
+    title: string;
+    artist_name: string | null;
+    artist_slug: string | null;
+    url_slug: string | null;
+    audio_url: string | null;
+    album_art_url: string | null;
+    spotify_track_id: string | null;
+    palette: string[] | null;
+    cinematic_direction: any;
+    beat_grid: any;
+    section_images: string[] | null;
+  };
+  spotify_track_id?: string | null;
+  spotify_track_url?: string | null;
+  album_art_url?: string | null;
+  track_artists_json?: { name: string; id?: string; spotifyUrl?: string }[];
+  lyric_dance_url?: string | null;
   user_has_liked?: boolean;
   user_has_saved?: boolean;
-  saves_count?: number;
-  // lyric dance link
-  lyric_dance_url?: string | null;
-  lyric_dance_id?: string | null;
-  // computed at query time for billboard
   billboard_score?: number;
   current_rank?: number;
 }

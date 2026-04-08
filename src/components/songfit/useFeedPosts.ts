@@ -23,13 +23,14 @@ import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 const PAGE_SIZE = 20;
 
 const POST_SELECT =
-  "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)";
+  "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)," +
+  "lyric_projects(title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id, palette, cinematic_direction, beat_grid, section_images)";
 
 // ── Filter helpers ──────────────────────────────────────────────────────────
 function matchesView(p: SongFitPost, view: FeedView): boolean {
   if (view === "all" || view === "billboard") return true;
   if (view === "now_streaming") return !!p.spotify_track_id;
-  if (view === "in_studio") return !!p.lyric_dance_url && !!p.lyric_dance_id;
+  if (view === "in_studio") return !!p.lyric_dance_url && !!p.project_id;
   return true;
 }
 
@@ -113,10 +114,9 @@ async function scoreBillboard(
 // Fetch full lyric columns for all cards so player-ready fields are present.
 
 const LYRIC_FULL_COLUMNS =
-  "id,user_id,post_id,artist_slug,song_slug,artist_name,song_name,audio_url,lyrics,words," +
-  "motion_profile_spec:physics_spec,cinematic_direction,section_images,scene_context,scene_manifest," +
-  "auto_palettes,beat_grid,palette,system_type,seed,artist_dna,album_art_url,empowerment_promise," +
-  "spotify_track_id";
+  "id,user_id,artist_slug,url_slug,artist_name,title,audio_url,lines,words," +
+  "physics_spec,cinematic_direction,section_images," +
+  "auto_palettes,beat_grid,palette,album_art_url,empowerment_promise,spotify_track_id";
 
 async function fetchLyricData(
   ids: string[],
@@ -262,7 +262,7 @@ export function useFeedPosts(): FeedState {
 
     // Preload album art for Spotify posts
     filtered
-      .filter((p) => !p.lyric_dance_id && p.album_art_url)
+      .filter((p) => !p.project_id && p.album_art_url)
       .forEach((p) => preloadImage(p.album_art_url!));
 
     // ── Render cards IMMEDIATELY — don't wait for lyric data ──
@@ -276,7 +276,7 @@ export function useFeedPosts(): FeedState {
     // ── Fetch lyric data in background — cards show covers while waiting ──
     // On return visits, lyricDataPrefetch has FULL columns for uncached lyric IDs
     // (fired at module eval in parallel with feed posts — zero waterfall).
-    const lyricIds = filtered.filter((p) => p.lyric_dance_id).map((p) => p.lyric_dance_id as string);
+    const lyricIds = filtered.filter((p) => p.project_id).map((p) => p.project_id as string);
     if (lyricIds.length > 0) {
       // Seed map from parallel prefetch (has cinematic_direction — player-ready)
       const lyricPrefetch = consumeLyricDataPrefetch();
@@ -335,8 +335,8 @@ export function useFeedPosts(): FeedState {
 
         // Fetch lyric data in background
         const newLyricIds = normalized
-          .filter((p) => p.lyric_dance_id && !lyricDataMap.has(p.lyric_dance_id))
-          .map((p) => p.lyric_dance_id as string);
+          .filter((p) => p.project_id && !lyricDataMap.has(p.project_id))
+          .map((p) => p.project_id as string);
         if (newLyricIds.length > 0) {
           fetchLyricData(newLyricIds, lyricDataMap).then((newMap) => {
             setLyricDataMap(new Map(newMap));
@@ -393,7 +393,7 @@ export function useFeedPosts(): FeedState {
           .from("feed_posts" as any)
           .select(POST_SELECT)
           .eq("status", "live")
-          .or(`track_title.ilike."%${q}%",caption.ilike."%${q}%"`)
+          .or(`caption.ilike."%${q}%"`)
           .order("created_at", { ascending: false })
           .limit(40);
 
@@ -401,8 +401,8 @@ export function useFeedPosts(): FeedState {
         setSearchResults(results);
 
         const lyricIds = results
-          .filter((p) => p.lyric_dance_id)
-          .map((p) => p.lyric_dance_id as string);
+          .filter((p) => p.project_id)
+          .map((p) => p.project_id as string);
 
         if (lyricIds.length > 0) {
           fetchLyricData(lyricIds, lyricDataMap).then((newMap) => {

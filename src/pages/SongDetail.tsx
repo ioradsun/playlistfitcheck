@@ -493,7 +493,7 @@ function NowStreamingDrillDown({ post, navigate }: { post: SongFitPost; navigate
             <ArrowLeft size={18} className="text-muted-foreground" />
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-lg font-semibold truncate">{post.track_title}</p>
+            <p className="text-lg font-semibold truncate">{post.lyric_projects?.title ?? post.caption}</p>
             <p className="text-[10px] font-mono text-green-400 uppercase tracking-wider">Now Streaming</p>
           </div>
         </div>
@@ -502,7 +502,7 @@ function NowStreamingDrillDown({ post, navigate }: { post: SongFitPost; navigate
         <div className="rounded-xl overflow-hidden" style={{ height: 232 }}>
           <LazySpotifyEmbed
             trackId={post.spotify_track_id!}
-            trackTitle={post.track_title}
+            trackTitle={post.lyric_projects?.title ?? post.caption}
             trackUrl={post.spotify_track_url!}
             postId={post.id}
             albumArtUrl={post.album_art_url}
@@ -733,8 +733,8 @@ const SongDetail = () => {
   const playerRef = useRef<LyricDanceEmbedHandle>(null);
 
   // Derived
-  const isInStudio = !!post?.lyric_dance_id;
-  const danceId = post?.lyric_dance_id;
+  const isInStudio = !!post?.project_id;
+  const danceId = post?.project_id;
 
   const lines: LineInfo[] = useMemo(() => {
     const raw = (danceData as any)?.lyrics;
@@ -976,7 +976,7 @@ const SongDetail = () => {
             <ArrowLeft size={18} className="text-muted-foreground" />
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-lg font-semibold truncate">{post.track_title}</p>
+            <p className="text-lg font-semibold truncate">{post.lyric_projects?.title ?? post.caption}</p>
             <p className="text-[10px] font-mono text-orange-400 uppercase tracking-wider">In Studio</p>
           </div>
         </div>
@@ -1164,7 +1164,7 @@ const SongDetail = () => {
                 number={String(totalFires)}
                 label="fires"
                 sublabel={uniqueListeners > 0 ? `from ${uniqueListeners} listeners` : undefined}
-                songTitle={post.track_title}
+                songTitle={post.lyric_projects?.title ?? post.caption}
               />
             </div>
             {funnel && funnel.repeatListeners > 0 && (
@@ -1173,7 +1173,7 @@ const SongDetail = () => {
                   number={String(funnel.repeatListeners)}
                   label="came back"
                   sublabel="returned on a different day"
-                  songTitle={post.track_title}
+                  songTitle={post.lyric_projects?.title ?? post.caption}
                   accentColor="rgba(168,85,247,0.8)"
                 />
               </div>
@@ -1184,7 +1184,7 @@ const SongDetail = () => {
                   number={String(funnel.deepListeners)}
                   label="deep listeners"
                   sublabel="fired on 3+ lines"
-                  songTitle={post.track_title}
+                  songTitle={post.lyric_projects?.title ?? post.caption}
                   accentColor="rgba(34,197,94,0.8)"
                 />
               </div>
@@ -1265,7 +1265,7 @@ const SongDetail = () => {
             initialStart={clipRegion.start}
             initialEnd={clipRegion.end}
             initialCaption={clipCaption}
-            songTitle={post.track_title}
+            songTitle={post.lyric_projects?.title ?? post.caption}
             onClose={() => {
               setClipEditorOpen(false);
               const p = playerRef.current?.getPlayer();
@@ -1281,8 +1281,8 @@ const SongDetail = () => {
               <LyricDanceEmbed
                 ref={playerRef}
                 lyricDanceId={danceId!}
-                songTitle={post.track_title}
-                artistName={(post as any).artist_name || post.track_title || ""}
+                songTitle={post.lyric_projects?.title ?? post.caption}
+                artistName={(post as any).artist_name || post.lyric_projects?.title ?? post.caption || ""}
                 avatarUrl={post.profiles?.avatar_url ?? null}
                 isVerified={post.profiles?.is_verified ?? false}
                 userId={post.user_id ?? null}

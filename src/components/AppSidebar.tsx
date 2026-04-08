@@ -284,7 +284,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   const fetchTrashed = useCallback(async () => {
     if (!user) { setTrashedItems([]); return; }
     const TABLE_MAP: { table: string; labelKey: string; dateKey: string; type: string; select: string }[] = [
-      { table: "saved_lyrics", labelKey: "title", dateKey: "deleted_at", type: "lyric", select: "id, title, deleted_at" },
+      { table: "lyric_projects", labelKey: "title", dateKey: "deleted_at", type: "lyric", select: "id, title, deleted_at" },
       { table: "mix_projects", labelKey: "title", dateKey: "deleted_at", type: "mix", select: "id, title, deleted_at" },
       { table: "saved_hitfit", labelKey: "filename", dateKey: "deleted_at", type: "hitfit", select: "id, filename, deleted_at" },
       { table: "saved_vibefit", labelKey: "song_title", dateKey: "deleted_at", type: "vibefit", select: "id, song_title, deleted_at" },
@@ -405,7 +405,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   const softDeleteTable = (type: string) => {
     const map: Record<string, string> = {
       profit: "profit_reports", playlist: "saved_searches", mix: "mix_projects",
-      lyric: "saved_lyrics", hitfit: "saved_hitfit", vibefit: "saved_vibefit",
+      lyric: "lyric_projects", hitfit: "saved_hitfit", vibefit: "saved_vibefit",
     };
     return map[type];
   };
