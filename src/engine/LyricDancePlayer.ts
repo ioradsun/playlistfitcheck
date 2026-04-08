@@ -3377,7 +3377,11 @@ export class LyricDancePlayer {
       }
     }
     // Fallback: use ratio-based boundaries
-    const dur = totalDurationSec ?? (this.audio?.duration || 1);
+    const dur = (totalDurationSec && totalDurationSec > 0)
+      ? totalDurationSec
+      : (this.audio?.duration > 0 ? this.audio.duration : null)
+      ?? (this.songEndSec > 0 ? this.songEndSec : null);
+    if (!dur) return 0;
     if (dur > 0) {
       const progress = currentTimeSec / dur;
       for (let i = 0; i < sections.length; i++) {
@@ -3595,7 +3599,10 @@ export class LyricDancePlayer {
         }
       }
       const mapped = (PARTICLE_SYSTEM_MAP as Record<string, string | undefined>)[texture?.toLowerCase?.() ?? ""]?.toLowerCase?.() ?? texture;
-      this.ambientParticleEngine?.setSystem(mapped);
+      const currentSystem = this.ambientParticleEngine?.getSystem?.();
+      if (mapped !== currentSystem) {
+        this.ambientParticleEngine?.setSystem(mapped);
+      }
       this.ambientParticleEngine?.setConfig({
         system: mapped,
         density: this.resolvedState.particleConfig.density ?? 0.8,
@@ -4650,7 +4657,9 @@ export class LyricDancePlayer {
 
   private toLegacyChapters(direction: CinematicDirection | null | undefined): any[] {
     if (!direction?.sections?.length) return [];
-    const dur = this.data.beat_grid?._duration || this.audio?.duration || undefined;
+    const dur = this.data.beat_grid?._duration
+      || (this.audio?.duration > 0 ? this.audio.duration : null)
+      || (this.songEndSec > 0 ? this.songEndSec : undefined);
     return enrichSections(direction.sections, dur).map((section) => ({
       title: section.description ?? `Section ${section.sectionIndex}`,
       startSec: section.startSec,
