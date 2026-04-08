@@ -112,10 +112,10 @@ export function LyricFitTab({
 
   useEffect(() => {
     if (!claimMeta) return;
-    if (p.lyricData && p.audioFile && activeTab === "lyrics" && p.isComplete) {
+    if (p.lyricData && (p.audioFile || p.savedId) && activeTab === "lyrics" && p.isComplete) {
       setActiveTab("fit");
     }
-  }, [claimMeta, p.lyricData, p.audioFile, activeTab, p.isComplete]);
+  }, [claimMeta, p.lyricData, p.audioFile, p.savedId, activeTab, p.isComplete]);
 
   useEffect(() => {
     if (filmMode !== "beat") return;
@@ -213,7 +213,7 @@ export function LyricFitTab({
         />
       </div>
 
-      {p.lyricData && p.audioFile && (
+      {p.lyricData && (p.audioFile || p.savedId) && (
         <div
           style={{
             display: activeTab === "fit" || activeTab === "data" ? "flex" : "none",
