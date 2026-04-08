@@ -1080,8 +1080,30 @@ export function useLyricPipeline({
       setAudioFile(cachedAudio);
       setHasRealAudio(true);
     } else if ((initialLyric as any).audio_url) {
-      setAudioUrl((initialLyric as any).audio_url as string);
+      const url = (initialLyric as any).audio_url as string;
+      setAudioUrl(url);
       setHasRealAudio(true);
+      // Hydrate audioFile in background for LyricsTab editor
+      const filename =
+        (initialLyric as any).filename ||
+        (initialLyric as any).title ||
+        "audio.mp3";
+      fetch(url)
+        .then((res) => res.blob())
+        .then((blob) => {
+          const file = new File([blob], filename, {
+            type: blob.type || "audio/mpeg",
+          });
+          setAudioFile(file);
+          if (initialLyric.id) {
+            sessionAudio.set("lyric", initialLyric.id, file, {
+              ttlMs: 20 * 60 * 1000,
+            });
+          }
+        })
+        .catch(() => {
+          console.warn("[Pipeline] Background audio hydration failed");
+        });
     } else {
       setAudioFile(null);
       setAudioUrl(null);
