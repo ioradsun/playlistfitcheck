@@ -754,7 +754,7 @@ const Index = () => {
     if (state?.returnTab) {
       const TAB_TO_PATH = TOOL_TO_PATH;
       setActiveTab(state.returnTab);
-      navigate(TAB_TO_PATH[state.returnTab] || crowdfitPath, { replace: true });
+      navigate(TAB_TO_PATH[state.returnTab] || TOOL_TO_PATH.songfit, { replace: true });
       if (
         !state.reportData &&
         !state.autoRun &&
@@ -766,7 +766,7 @@ const Index = () => {
 
     if (state?.reportData) {
       autoRunRef.current = true;
-      navigate("/PlaylistFit", { replace: true });
+      navigate("/the-plug", { replace: true });
       const {
         input,
         output,
