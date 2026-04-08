@@ -993,7 +993,7 @@ const Index = () => {
             if (data?.reportId && data?.blueprint && data?.artist) {
               setProfitSavedReport(data);
               setProfitLoadKey((k) => k + 1);
-              navTarget = `/ProFit/${data.reportId}`;
+              navTarget = `/the-manager/${data.reportId}`;
               projectLoadedRef.current = data.reportId;
             } else {
               const artistId = data?.spotify_artist_id;
@@ -1014,7 +1014,7 @@ const Index = () => {
               };
               setLoadedHitFitAnalysis(analysisWithFilename);
               if (data.id) {
-                navTarget = `/HitFit/${data.id}`;
+                navTarget = `/the-ar/${data.id}`;
                 projectLoadedRef.current = data.id;
               }
             }
@@ -1043,12 +1043,12 @@ const Index = () => {
               setVibeLoading(false);
               setSongFitLoading(false);
               if (data.id) {
-                navTarget = `/PlaylistFit/${data.id}`;
+                navTarget = `/the-plug/${data.id}`;
                 projectLoadedRef.current = data.id;
               }
             } else if (data?.playlist_url) {
               if (data.id) {
-                navTarget = `/PlaylistFit/${data.id}`;
+                navTarget = `/the-plug/${data.id}`;
                 projectLoadedRef.current = data.id;
               }
             }
@@ -1068,7 +1068,7 @@ const Index = () => {
               };
               setLoadedMixProject(mixData);
               if (data.id) {
-                navTarget = `/MixFit/${data.id}`;
+                navTarget = `/the-engineer/${data.id}`;
                 // Only mark as loaded if mixes have audio data — otherwise let the
                 // URL loader do a fresh DB fetch to get the real audio_urls.
                 const hasMixData =
@@ -1085,7 +1085,7 @@ const Index = () => {
               setActiveTab("lyric");
               setLoadedLyric(null);
               setIsFetchingProject(true);
-              navTarget = `/LyricFit/${data.id}`;
+              navTarget = `/the-director/${data.id}`;
             }
             break;
           }
@@ -1094,7 +1094,7 @@ const Index = () => {
               setLoadedVibeFitResult(data);
               setVibeFitLoadKey((k) => k + 1);
               if (data.id) {
-                navTarget = `/VibeFit/${data.id}`;
+                navTarget = `/the-creative/${data.id}`;
                 projectLoadedRef.current = data.id;
               }
             }
