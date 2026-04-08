@@ -861,8 +861,10 @@ export function FitTab({
             section_images: danceNeedsRegeneration
               ? (sectionImageUrls.some(Boolean) ? sectionImageUrls : null)
               : (existingDance?.section_images ?? sectionImageUrls ?? null),
+            is_published: true,
+            published_at: new Date().toISOString(),
           },
-          { onConflict: "artist_slug,url_slug" },
+          { onConflict: "artist_slug,url_slug", ignoreDuplicates: false },
         )
         .select("id")
         .single();
