@@ -789,13 +789,15 @@ const SongDetail = () => {
         return;
       }
       setPost(postRow as unknown as SongFitPost);
+      setLoading(false);
 
       if ((postRow as any).project_id) {
-        const { data: dance } = await supabase
+        const dancePromise = supabase
           .from("lyric_projects" as any)
           .select(LYRIC_DANCE_COLUMNS)
           .eq("id", (postRow as any).project_id)
           .maybeSingle();
+        const { data: dance } = await dancePromise;
         if (dance) {
           const d = dance as any;
           setDanceData({
@@ -803,10 +805,9 @@ const SongDetail = () => {
             cinematic_direction: d.cinematic_direction
               ? normalizeCinematicDirection(d.cinematic_direction)
               : null,
-          } as LyricDanceData);
+            } as LyricDanceData);
         }
       }
-      setLoading(false);
     })();
   }, [postId]);
 

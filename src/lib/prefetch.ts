@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import { preloadImage } from "@/lib/imagePreloadCache";
 
 /**
  * Prefetch cache — fires immediately at module evaluation time.
@@ -18,9 +19,18 @@ const _isEmbedRoute = _segments.length === 3;
 // ── Cache helpers ────────────────────────────────────────────────────────────
 
 const CACHE_PREFIX = "tfm:";
-const CACHE_TTL_MS = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 const DANCE_CACHE_PREFIX = "dance:";
-const DANCE_CACHE_TTL_MS = 0;
+const DANCE_CACHE_TTL_MS = 10 * 60 * 1000;
+const _preloadedAudio = new Set<string>();
+
+function preloadAudio(url: string) {
+  if (!url || _preloadedAudio.has(url)) return;
+  _preloadedAudio.add(url);
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.src = url;
+}
 
 interface CacheEntry<T> {
   data: T;
@@ -140,11 +150,8 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
               lyricCache[lp.id] = lp;
             }
 
-            const firstImg = lp.section_images?.[0];
-            if (firstImg) {
-              const img = new Image();
-              img.src = firstImg;
-            }
+            const sectionImages = lp.section_images ?? [];
+            sectionImages.filter(Boolean).forEach((url: string) => preloadImage(url));
 
             if (lp.album_art_url) {
               const img = new Image();
@@ -240,15 +247,10 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
     if (result.data) {
       cacheDanceData(artistSlug, songSlug, result.data);
       if (result.data.audio_url) {
-        const audio = new Audio();
-        audio.preload = "auto";
-        audio.src = result.data.audio_url;
+        preloadAudio(result.data.audio_url);
       }
-      const firstImg = result.data.section_images?.[0];
-      if (firstImg) {
-        const img = new Image();
-        img.src = firstImg;
-      }
+      const sectionImages = result.data.section_images ?? [];
+      sectionImages.filter(Boolean).forEach((url: string) => preloadImage(url));
     }
     return result;
   });
@@ -258,9 +260,7 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
     : networkPromise;
 
   if (cached?.audio_url) {
-    const audio = new Audio();
-    audio.preload = "auto";
-    audio.src = cached.audio_url;
+    preloadAudio(cached.audio_url);
   }
 
   if (cached) {

@@ -46,6 +46,7 @@ import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { extractPeaks } from "@/lib/audioUtils";
 import { persistQueue } from "@/lib/persistQueue";
+import { preloadImage } from "@/lib/imagePreloadCache";
 
 interface Props {
   pipeline: {
@@ -742,6 +743,10 @@ export function FitTab({
     }, 300);
     return () => clearTimeout(timer);
   }, [allDone, publishedDanceId, refetchDanceData, sectionImageUrls]);
+
+  useEffect(() => {
+    sectionImageUrls.filter(Boolean).forEach((url) => preloadImage(url!));
+  }, [sectionImageUrls]);
 
   const allCoreDone =
     generationStatus.beatGrid === "done" &&
