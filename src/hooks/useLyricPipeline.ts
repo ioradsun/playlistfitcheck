@@ -433,22 +433,40 @@ export function usePipelineScheduler({
   useEffect(() => {
     if (imageSelfHealRef.current) return;
     if (generationStatus.cinematicDirection !== "done") return;
-    if (runIdRef.current !== lastCompletedRunIdRef.current) return;
     if (generationStatus.sectionImages !== "idle") return;
-    if (!cinematicDirection || !lines?.length) return;
+    if (!cinematicDirection) return;
     const sections = (cinematicDirection as any)?.sections;
     if (!Array.isArray(sections) || sections.length === 0) return;
 
+    // Has cinematic + sections, but no images — generate images directly
+    // without re-running cinematic direction.
     imageSelfHealRef.current = true;
-    setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "idle" }));
-    cinematicTriggeredRef.current = false;
+    setGenerationStatus((prev) => ({ ...prev, sectionImages: "running" }));
+
+    // Trigger image generation only (no AI re-call)
+    const danceId = savedIdRef.current;
+    if (danceId) {
+      invokeWithTimeout("generate-section-images", { project_id: danceId, force: true }, 90_000)
+        .then(({ data: result, error }) => {
+          if (error) throw error;
+          const urls: (string | null)[] = result?.urls || result?.section_images || [];
+          const allComplete = result?.success === true || urls.every(Boolean);
+          setSectionImageUrls(urls);
+          setSectionImageProgress({ done: urls.filter(Boolean).length, total: sections.length });
+          setGenerationStatus((prev) => ({ ...prev, sectionImages: allComplete ? "done" : "error" }));
+        })
+        .catch(() => {
+          setGenerationStatus((prev) => ({ ...prev, sectionImages: "error" }));
+        });
+    }
   }, [
     generationStatus.cinematicDirection,
     generationStatus.sectionImages,
     cinematicDirection,
-    lines,
-    runIdRef,
-    lastCompletedRunIdRef,
+    savedIdRef,
+    setSectionImageUrls,
+    setSectionImageProgress,
+    setGenerationStatus,
   ]);
 
   useEffect(() => {
@@ -764,9 +782,18 @@ export function useLyricPipeline({
   const _projectId = (initialLyric as any)?.id ?? null;
   const _artistSlug = (initialLyric as any)?.artist_slug ?? null;
   const _urlSlug = (initialLyric as any)?.url_slug ?? null;
-  const _hasCinematic = !!((initialLyric as any)?.cinematic_direction);
+  const _rd = (initialLyric as any)?.render_data;
+  const _hasCinematic = !!(
+    (initialLyric as any)?.cinematic_direction ||
+    _rd?.cinematicDirection ||
+    _rd?.cinematic_direction
+  );
   const _hasBeatGrid = !!((initialLyric as any)?.beat_grid);
-  const _sections = (initialLyric as any)?.cinematic_direction?.sections;
+  const _sections =
+    (initialLyric as any)?.cinematic_direction?.sections ??
+    _rd?.cinematicDirection?.sections ??
+    _rd?.cinematic_direction?.sections ??
+    null;
   const _hasImages =
     !Array.isArray(_sections) || _sections.length === 0
       ? true
@@ -1468,6 +1495,7 @@ export function useLyricPipeline({
                 table: "lyric_projects",
                 id: savedIdRef.current,
                 payload: {
+                  cinematic_direction: enrichedScene,
                   render_data: updatedRenderData,
                 },
               });
