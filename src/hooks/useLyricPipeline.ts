@@ -569,15 +569,13 @@ export function useLyricPipeline({
   const phraseResultRef = useRef<ReturnType<typeof buildPhrases> | null>(null);
   const [pipelineDanceId, setPipelineDanceId] = useState<string | null>(
     (initialLyric as any)?.render_data?.pipelineDanceId
-    ?? ((initialLyric as any)?.is_published === true ? (initialLyric as any)?.id ?? null : null)
-    ?? null,
+    ?? ((initialLyric as any)?.is_published === true ? ((initialLyric as any)?.id as string | null) : null),
   );
   const [pipelineDanceUrl, setPipelineDanceUrl] = useState<string | null>(
     (initialLyric as any)?.render_data?.pipelineDanceUrl
     ?? ((initialLyric as any)?.is_published === true && (initialLyric as any)?.artist_slug && (initialLyric as any)?.url_slug
         ? `/${(initialLyric as any).artist_slug}/${(initialLyric as any).url_slug}/lyric-dance`
-        : null)
-    ?? null,
+        : null),
   );
   const [sectionImageUrls, setSectionImageUrls] = useState<(string | null)[]>(
     Array.isArray((initialLyric as any)?.section_images)
