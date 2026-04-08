@@ -1833,7 +1833,7 @@ export function useLyricPipeline({
     cinematicDirection &&
     (
       !(cinematicDirection as any)?.sections?.length ||
-      sectionImageUrls.some(Boolean)
+      (generationStatus.sectionImages === "done" && sectionImageUrls.some(Boolean))
     )
   );
 

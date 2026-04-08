@@ -60,7 +60,7 @@ interface Props {
     setSpotifyTrackId?: React.Dispatch<React.SetStateAction<string | null>>;
   };
   lyricData: LyricData;
-  audioFile: File;
+  audioFile: File | null;
   parentWaveform?: WaveformData | null;
   hasRealAudio: boolean;
   savedId: string | null;
@@ -560,10 +560,10 @@ export function FitTab({
       lyricData.title !== "Unknown" &&
       lyricData.title !== "Untitled"
         ? lyricData.title
-        : audioFile.name.replace(/\.[^.]+$/, "");
+        : (audioFile?.name ?? "Untitled").replace(/\.[^.]+$/, "");
     onHeaderProject({ title, onBack: onBack ?? (() => {}), onTitleChange });
     return () => onHeaderProject(null);
-  }, [lyricData.title, audioFile.name, onHeaderProject, onBack, onTitleChange]);
+  }, [lyricData.title, audioFile?.name, onHeaderProject, onBack, onTitleChange]);
 
   // ── Live transcript sync ──────────────────────────────────────────────
   // FitTab stays mounted (hidden) while the user edits in LyricsTab.
@@ -1117,7 +1117,7 @@ export function FitTab({
                   }
                   handleCrowdfitToggle();
                 }}
-                disabled={crowdfitToggling}
+                disabled={crowdfitToggling || (!crowdfitPostId && generationStatus.sectionImages === "running")}
                 className={`flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 ${
                   crowdfitPostId
                     ? "text-primary border-primary/40 bg-primary/5"
