@@ -222,7 +222,7 @@ async function triggerPreviewPrecompute(
         Authorization: `Bearer ${sbKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ dance_id: lyricDanceId }),
+      body: JSON.stringify({ project_id: lyricDanceId }),
     });
 
     if (!resp.ok) {

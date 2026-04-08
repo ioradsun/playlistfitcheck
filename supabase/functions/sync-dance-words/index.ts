@@ -9,9 +9,10 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { dance_id } = await req.json();
-    if (!dance_id) {
-      return new Response(JSON.stringify({ error: "dance_id required" }), {
+    const { project_id, dance_id } = await req.json();
+    const id = project_id ?? dance_id;
+    if (!id) {
+      return new Response(JSON.stringify({ error: "project_id required" }), {
         status: 400,
         headers: corsHeaders,
       });
@@ -25,7 +26,7 @@ Deno.serve(async (req) => {
     const { data: project, error } = await sb
       .from("lyric_projects")
       .select("id, words")
-      .eq("id", dance_id)
+      .eq("id", id)
       .single();
 
     if (error || !project) {

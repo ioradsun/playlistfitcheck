@@ -357,7 +357,7 @@ function FeedList({
           onRefresh={onRefresh}
           isBillboard={feedView === "billboard"}
           signalData={feedView === "billboard" ? signalMap[post.id] : undefined}
-          lyricDanceData={post.lyric_dance_id ? lyricDataMap.get(post.lyric_dance_id) ?? null : null}
+          lyricDanceData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
           reelsMode={reelsMode}
           isFirst={idx === 0}
           cardRefsMap={cardRefsMap}
