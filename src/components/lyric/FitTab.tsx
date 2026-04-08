@@ -1037,7 +1037,7 @@ export function FitTab({
   }, [beatSectionFires]);
 
   const lyricFireBreakdown = useMemo(() => {
-    if (fireData.fireStrength.length === 0) return null;
+    if (!fireData.fireStrength || fireData.fireStrength.length === 0) return null;
     const sections = ((cinematicDirection as any)?.sections as any[]) ?? [];
     const linesBySection: Map<number, typeof allLines> = new Map();
     for (const line of allLines) {
