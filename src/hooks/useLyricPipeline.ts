@@ -725,7 +725,7 @@ export function useLyricPipeline({
     initialLyric?.id ?? null,
   );
   const savedIdRef = useRef<string | null>(initialLyric?.id ?? null);
-  const renderDataLoadedFromDbRef = useRef(false);
+  const renderDataLoadedFromDbRef = useRef(!!(initialLyric as any)?.render_data);
   const [lines, setLines] = useState<LyricLine[]>(
     (initialLyric?.lines as any[]) ?? [],
   );
