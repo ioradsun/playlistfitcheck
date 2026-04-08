@@ -53,7 +53,7 @@ serve(async (req) => {
       const sb = createClient(supabaseUrl, supabaseKey);
 
       await sb
-        .from("lyric_dance_comments")
+        .from("project_comments")
         .update({ text })
         .eq("id", comment_id);
     }
