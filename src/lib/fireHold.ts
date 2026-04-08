@@ -15,7 +15,7 @@ export const fireWeight = (holdMs: number) => {
 };
 
 export function createFireHold(opts: {
-  onScaleUpdate: (scale: number) => void;
+  onScaleUpdate?: (scale: number) => void;
   onCanvasTrigger?: () => void;
 }): FireHoldController {
   let intervalId: number | null = null;
