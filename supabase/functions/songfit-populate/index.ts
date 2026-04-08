@@ -74,38 +74,14 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Check which tracks already exist to avoid duplicates
-    const trackIds = tracks
-      .filter((t) => t.track?.id)
-      .map((t) => t.track.id);
-
-    const { data: existing } = await supabase
-      .from("songfit_posts")
-      .select("spotify_track_id")
-      .in("spotify_track_id", trackIds);
-
-    const existingSet = new Set((existing || []).map((e: any) => e.spotify_track_id));
-
     const newPosts = tracks
-      .filter((t) => t.track?.id && !existingSet.has(t.track.id))
-      .map((t) => {
-        const track = t.track;
+      .filter((t) => t.track?.id)
+      .map(() => {
         return {
           user_id: userId,
-          spotify_track_url: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
-          spotify_track_id: track.id,
-          track_title: track.name,
-          track_artists_json: (track.artists || []).map((a: any) => ({
-            name: a.name,
-            id: a.id,
-            spotifyUrl: a.external_urls?.spotify,
-          })),
-          album_title: track.album?.name || null,
-          album_art_url: track.album?.images?.[0]?.url || null,
-          release_date: track.album?.release_date || null,
-          preview_url: track.preview_url || null,
           caption: "",
           tags_json: [],
+          status: "live",
         };
       });
 
@@ -120,7 +96,7 @@ serve(async (req) => {
     let inserted = 0;
     for (let i = 0; i < newPosts.length; i += 50) {
       const batch = newPosts.slice(i, i + 50);
-      const { error } = await supabase.from("songfit_posts").insert(batch);
+      const { error } = await supabase.from("feed_posts").insert(batch);
       if (error) {
         console.error("Batch insert error:", error);
         throw new Error(`Insert failed: ${error.message}`);

@@ -53,12 +53,12 @@ serve(async (req) => {
         .order("last_activity_at", { ascending: false })
         .limit(50),
       supabase
-        .from("lyric_dance_fires")
+        .from("project_fires")
         .select(`
         user_id, created_at,
-        shareable_lyric_dances!inner(user_id)
+        lyric_projects!inner(user_id)
       `)
-        .eq("shareable_lyric_dances.user_id", myId)
+        .eq("lyric_projects.user_id", myId)
         .not("user_id", "is", null)
         .neq("user_id", myId)
         .gte("created_at", thirtyDaysAgo)

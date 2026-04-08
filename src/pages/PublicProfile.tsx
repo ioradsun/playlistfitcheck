@@ -44,10 +44,9 @@ interface SavedPost {
   created_at: string;
   feed_posts: {
     id: string;
-    title: string;
-    spotify_track_url: string;
-    album_art_url: string | null;
-    track_artists_json: { name: string }[];
+    project_id: string | null;
+    caption: string;
+    lyric_projects: { title: string; album_art_url: string | null; spotify_track_id: string | null } | null;
   } | null;
 }
 
@@ -145,7 +144,7 @@ const PublicProfile = () => {
     if (!isOwner || !user) return;
     supabase
       .from("feed_saves" as any)
-      .select("id, post_id, created_at, feed_posts(id, title, spotify_track_url, album_art_url, track_artists_json)")
+      .select("id, post_id, created_at, feed_posts(id, project_id, caption, lyric_projects(title, album_art_url, spotify_track_id))")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20)
@@ -514,19 +513,17 @@ const PublicProfile = () => {
                   ) : savedPosts.map(s => {
                     const p = s.feed_posts;
                     if (!p) return null;
-                    const artists = (p.track_artists_json as any[])?.map((a: any) => a.name).join(", ") || "";
                     return (
                       <div
                         key={s.id}
                         onClick={() => navigate(`/song/${p.id}`)}
                         className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 cursor-pointer transition-colors"
                       >
-                        {p.album_art_url && (
-                          <img src={p.album_art_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                        {p.lyric_projects?.album_art_url && (
+                          <img src={p.lyric_projects.album_art_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{p.title}</p>
-                          {artists && <p className="text-xs text-muted-foreground truncate">{artists}</p>}
+                          <p className="text-sm font-medium truncate">{p.lyric_projects?.title ?? ""}</p>
                         </div>
                       </div>
                     );

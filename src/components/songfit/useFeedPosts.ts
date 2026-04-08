@@ -30,7 +30,7 @@ const POST_SELECT =
 function matchesView(p: SongFitPost, view: FeedView): boolean {
   if (view === "all" || view === "billboard") return true;
   if (view === "now_streaming") return !!p.spotify_track_id;
-  if (view === "in_studio") return !!p.lyric_dance_url && !!p.project_id;
+  if (view === "in_studio") return !!p.project_id;
   return true;
 }
 

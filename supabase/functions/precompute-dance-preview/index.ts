@@ -205,8 +205,8 @@ Deno.serve(async (req) => {
     );
 
     const { data: dance, error: danceError } = await supabase
-      .from("shareable_lyric_dances")
-      .select("id, section_images, auto_palettes, lyrics")
+      .from("lyric_projects")
+      .select("id, section_images, auto_palettes, lines")
       .eq("id", danceId)
       .maybeSingle();
 
@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
 
     const topReaction = computeTopReaction(
       (reactionRows ?? []) as Array<{ emoji: string | null; line_index: number | null }>,
-      (Array.isArray(dance.lyrics) ? dance.lyrics : null) as Array<{ text?: string }> | null,
+      (Array.isArray(dance.lines) ? dance.lines : null) as Array<{ text?: string }> | null,
     );
 
     const updatePayload: Record<string, unknown> = {
@@ -251,7 +251,7 @@ Deno.serve(async (req) => {
     }
 
     const { error: updateError } = await supabase
-      .from("shareable_lyric_dances")
+      .from("lyric_projects")
       .update(updatePayload)
       .eq("id", danceId);
 

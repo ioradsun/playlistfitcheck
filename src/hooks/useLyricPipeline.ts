@@ -1017,8 +1017,7 @@ export function useLyricPipeline({
             artist_name: claimMeta.artistName,
             album_art_url: claimMeta.albumArtUrl,
             preview_url: audioStorageUrl,
-            lyric_dance_url: lyricDanceUrl,
-            project_id: danceRow?.id ?? null,
+                        project_id: danceRow?.id ?? null,
           }, { onConflict: "ghost_profile_id,spotify_track_id" });
 
         if (danceRow?.id) {
@@ -1377,8 +1376,7 @@ export function useLyricPipeline({
               "generate-section-images",
               {
                 project_id: resolvedDanceId,
-                saved_lyric_id: savedIdRef.current ?? undefined,
-                force: true,
+                                force: true,
               },
               90_000,
             );
@@ -1722,8 +1720,7 @@ export function useLyricPipeline({
                   "generate-section-images",
                   {
                     project_id: resolvedDanceId,
-                    saved_lyric_id: savedIdRef.current ?? undefined,
-                    force: true,
+                                        force: true,
                   },
                   90_000,
                 );

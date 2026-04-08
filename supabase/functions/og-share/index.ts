@@ -36,21 +36,21 @@ serve(async (req) => {
   if (supabase) {
     try {
       const { data: dance } = await supabase
-        .from("shareable_lyric_dances")
-        .select("song_name, artist_name, section_images, album_art_url")
+        .from("lyric_projects")
+        .select("title, artist_name, section_images, album_art_url")
         .eq("artist_slug", artistSlug)
-        .eq("song_slug", songSlug)
+        .eq("url_slug", songSlug)
         .maybeSingle();
 
       if (dance) {
-        songName = dance.song_name || songName;
+        songName = dance.title || songName;
         artistName = dance.artist_name || artistName;
         const images = Array.isArray(dance.section_images) ? dance.section_images : [];
         sectionImageUrl = images.find((image): image is string => typeof image === "string" && image.length > 0) || dance.album_art_url || null;
       }
 
       const { data: post } = await supabase
-        .from("songfit_posts")
+        .from("feed_posts")
         .select("engagement_score")
         .eq("lyric_dance_url", `/${artistSlug}/${songSlug}/lyric-dance`)
         .eq("status", "live")
