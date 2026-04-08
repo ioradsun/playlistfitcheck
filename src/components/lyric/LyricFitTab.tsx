@@ -7,9 +7,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import {
   useLyricPipeline,
-  type FitReadiness,
-  type PipelineStages,
-  type PipelineStageStatus,
   type GenerationStatus,
 } from "@/hooks/useLyricPipeline";
 import type { LyricFitView } from "./LyricFitToggle";
@@ -17,7 +14,7 @@ import { LyricFitToggle } from "./LyricFitToggle";
 import { LyricsTab, type HeaderProjectSetter } from "./LyricsTab";
 import { FitTab } from "./FitTab";
 
-export type { FitReadiness, PipelineStages, PipelineStageStatus, GenerationStatus };
+export type { GenerationStatus };
 export type FilmMode = "song" | "beat";
 
 interface Props {
@@ -60,6 +57,7 @@ export function LyricFitTab({
 
   const [activeTab, setActiveTab] = React.useState<LyricFitView>("lyrics");
   const [fitPlayerReady, setFitPlayerReady] = React.useState(false);
+  const fitReady = fitPlayerReady;
   const [sceneDescription, setSceneDescription] = React.useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const [filmMode, setFilmMode] = React.useState<FilmMode>(() => {
@@ -102,18 +100,10 @@ export function LyricFitTab({
   }, [setSearchParams, p.audioFile, p.resetProject]);
 
   const handleViewChange = useCallback((nextView: LyricFitView) => {
-    // Block fit/data if pipeline isn't ready
-    if (
-      (nextView === "fit" || nextView === "data") &&
-      !p.fitUnlocked &&
-      p.fitReadiness !== "ready" &&
-      p.fitReadiness !== "not_started"
-    )
-      return;
-    // Block data if no dance published yet
+    if ((nextView === "fit" || nextView === "data") && !fitReady) return;
     if (nextView === "data" && !p.pipelineDanceId) return;
     setActiveTab(nextView);
-  }, [p.fitReadiness, p.fitUnlocked, p.pipelineDanceId, fitPlayerReady]);
+  }, [fitReady, p.pipelineDanceId]);
 
   const handleBackToLyrics = useCallback(
     () => handleViewChange("lyrics"),
@@ -161,14 +151,14 @@ export function LyricFitTab({
           view={activeTab}
           onViewChange={handleViewChange}
           fitDisabled={p.fitDisabled}
-          fitUnlocked={p.fitUnlocked}
-          fitReadiness={p.fitReadiness}
-          fitProgress={p.fitProgress}
-          fitStageLabel={p.fitStageLabel}
-          pipelineStages={p.pipelineStages}
+          fitReady={fitReady}
+          isRunning={
+            p.generationStatus.beatGrid === "running" ||
+            p.generationStatus.cinematicDirection === "running" ||
+            p.generationStatus.sectionImages === "running"
+          }
+          isError={Object.values(p.generationStatus).includes("error")}
           hasData={!!p.pipelineDanceId}
-          playerReady={fitPlayerReady}
-          hasDance={!!p.pipelineDanceId}
         />
       )}
 
