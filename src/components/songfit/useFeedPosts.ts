@@ -19,13 +19,14 @@ import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { consumeFeedPrefetch, consumeLyricDataPrefetch, getCachedFeed, getCachedLyricData, cacheWrite } from "@/lib/prefetch";
 import { preloadImage } from "@/lib/imagePreloadCache";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
-import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 
 const PAGE_SIZE = 20;
 
 const POST_SELECT =
   "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)," +
-  "lyric_projects(title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id, palette, cinematic_direction, beat_grid, section_images)";
+  "lyric_projects(id, title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id," +
+  "palette, cinematic_direction, beat_grid, section_images, auto_palettes, lines, words," +
+  "physics_spec, empowerment_promise)";
 
 // ── Filter helpers ──────────────────────────────────────────────────────────
 function matchesView(p: SongFitPost, view: FeedView): boolean {
@@ -110,56 +111,6 @@ async function scoreBillboard(
     signalMap,
   };
 }
-
-// ── Lyric data fetching ─────────────────────────────────────────────────────
-// Fetch full lyric columns for all cards so player-ready fields are present.
-
-
-async function fetchLyricData(
-  ids: string[],
-  existingMap: Map<string, LyricDanceData>,
-): Promise<Map<string, LyricDanceData>> {
-  if (ids.length === 0) return new Map();
-
-  const map = new Map(existingMap);
-
-  // Fetch full columns for all IDs that don't already have cinematic_direction
-  const needed = ids.filter((id) => !(map.get(id) as any)?.cinematic_direction);
-
-  if (needed.length > 0) {
-    const { data: rows } = await supabase
-      .from("lyric_projects" as any)
-      .select(LYRIC_DANCE_COLUMNS)
-      .in("id", needed);
-
-    const cacheObj: Record<string, any> = {};
-    for (const row of ((rows ?? []) as any[])) {
-      const merged = {
-        ...row,
-        cinematic_direction: row.cinematic_direction
-          ? normalizeCinematicDirection(row.cinematic_direction)
-          : row.cinematic_direction,
-      } as LyricDanceData;
-      map.set(row.id, merged);
-      cacheObj[row.id] = merged;
-    }
-
-    // Cache full rows for next visit
-    if (Object.keys(cacheObj).length > 0) {
-      const existing = getCachedLyricData() ?? {};
-      cacheWrite("lyric_data", { ...existing, ...cacheObj });
-    }
-  }
-
-  // Preload first section image for all rows
-  for (const id of ids) {
-    const img = (map.get(id) as any)?.section_images?.[0];
-    if (img) preloadImage(img);
-  }
-
-  return map;
-}
-
 
 // ── Hook ────────────────────────────────────────────────────────────────────
 export interface FeedState {
@@ -268,35 +219,54 @@ export function useFeedPosts(): FeedState {
     setLoading(false);
     setPendingNewCount(0);
 
-    // ── Fetch lyric data in background — cards show covers while waiting ──
-    // On return visits, lyricDataPrefetch has FULL columns for uncached lyric IDs
-    // (fired at module eval in parallel with feed posts — zero waterfall).
-    const lyricIds = filtered.filter((p) => p.project_id).map((p) => p.project_id as string);
-    if (lyricIds.length > 0) {
-      // Seed map from parallel prefetch (has cinematic_direction — player-ready)
-      const lyricPrefetch = consumeLyricDataPrefetch();
-      let seededMap = new Map(lyricDataMap);
-      if (lyricPrefetch) {
-        const { data: prefetchedRows } = await lyricPrefetch;
-        const cacheObj: Record<string, any> = {};
-        for (const row of (prefetchedRows ?? []) as any[]) {
-          const merged = {
-            ...row,
-            cinematic_direction: row.cinematic_direction
-              ? normalizeCinematicDirection(row.cinematic_direction)
-              : row.cinematic_direction,
-          } as LyricDanceData;
-          seededMap.set(row.id, merged);
-          cacheObj[row.id] = merged;
-        }
-        // Cache prefetched rows so they survive tab switches.
-        if (Object.keys(cacheObj).length > 0) {
-          const existing = getCachedLyricData() ?? {};
-          cacheWrite("lyric_data", { ...existing, ...cacheObj });
-        }
+    // ── Hydrate lyric data directly from joined lyric_projects rows ──
+    const lyricPrefetch = consumeLyricDataPrefetch();
+    void lyricPrefetch;
+
+    let resolveTypographyFromDirection: ((cd: any) => any) | null = null;
+    let getFontNamesForPreload: ((resolved: any) => string[]) | null = null;
+    let ensureFontReady: ((fontName: string) => Promise<void>) | null = null;
+    try {
+      ({ resolveTypographyFromDirection, getFontNamesForPreload } = await import("@/lib/fontResolver"));
+      ({ ensureFontReady } = await import("@/lib/fontReadinessCache"));
+    } catch {}
+
+    const newMap = new Map(lyricDataMap);
+    const cacheObj: Record<string, any> = {};
+    for (const post of filtered) {
+      const lp = (post as any).lyric_projects;
+      if (!lp?.id || !lp.cinematic_direction) continue;
+      if (newMap.has(lp.id) && (newMap.get(lp.id) as any)?.cinematic_direction) continue;
+
+      const merged = {
+        ...lp,
+        cinematic_direction: normalizeCinematicDirection(lp.cinematic_direction),
+      } as LyricDanceData;
+      newMap.set(lp.id, merged);
+      cacheObj[lp.id] = merged;
+
+      const firstImg = lp.section_images?.[0];
+      if (firstImg) preloadImage(firstImg);
+      if (lp.album_art_url) preloadImage(lp.album_art_url);
+
+      if (resolveTypographyFromDirection && getFontNamesForPreload && ensureFontReady) {
+        try {
+          const typo = resolveTypographyFromDirection(lp.cinematic_direction);
+          const fontNames = getFontNamesForPreload(typo);
+          fontNames.forEach((name) => {
+            void ensureFontReady(name);
+          });
+        } catch {}
       }
-      const newMap = await fetchLyricData(lyricIds, seededMap);
-      setLyricDataMap(new Map(newMap));
+    }
+
+    if (Object.keys(cacheObj).length > 0) {
+      const existing = getCachedLyricData() ?? {};
+      cacheWrite("lyric_data", { ...existing, ...cacheObj });
+    }
+
+    if (newMap.size > lyricDataMap.size) {
+      setLyricDataMap(newMap);
     }
   }, [feedView, billboardMode]);
 
@@ -328,14 +298,32 @@ export function useFeedPosts(): FeedState {
           return merged;
         });
 
-        // Fetch lyric data in background
-        const newLyricIds = normalized
-          .filter((p) => p.project_id && !lyricDataMap.has(p.project_id))
-          .map((p) => p.project_id as string);
-        if (newLyricIds.length > 0) {
-          fetchLyricData(newLyricIds, lyricDataMap).then((newMap) => {
-            setLyricDataMap(new Map(newMap));
-          });
+        const newMap = new Map(lyricDataMap);
+        const cacheObj: Record<string, any> = {};
+        for (const post of normalized) {
+          const lp = (post as any).lyric_projects;
+          if (!lp?.id || !lp.cinematic_direction) continue;
+          if (newMap.has(lp.id) && (newMap.get(lp.id) as any)?.cinematic_direction) continue;
+
+          const merged = {
+            ...lp,
+            cinematic_direction: normalizeCinematicDirection(lp.cinematic_direction),
+          } as LyricDanceData;
+          newMap.set(lp.id, merged);
+          cacheObj[lp.id] = merged;
+
+          const firstImg = lp.section_images?.[0];
+          if (firstImg) preloadImage(firstImg);
+          if (lp.album_art_url) preloadImage(lp.album_art_url);
+        }
+
+        if (Object.keys(cacheObj).length > 0) {
+          const existing = getCachedLyricData() ?? {};
+          cacheWrite("lyric_data", { ...existing, ...cacheObj });
+        }
+
+        if (newMap.size > lyricDataMap.size) {
+          setLyricDataMap(newMap);
         }
       }
       setHasMore((data ?? []).length === PAGE_SIZE);
@@ -395,14 +383,32 @@ export function useFeedPosts(): FeedState {
         const results = ((data ?? []) as unknown as SongFitPost[]).map(hydrateDefaults);
         setSearchResults(results);
 
-        const lyricIds = results
-          .filter((p) => p.project_id)
-          .map((p) => p.project_id as string);
+        const newMap = new Map(lyricDataMap);
+        const cacheObj: Record<string, any> = {};
+        for (const post of results) {
+          const lp = (post as any).lyric_projects;
+          if (!lp?.id || !lp.cinematic_direction) continue;
+          if (newMap.has(lp.id) && (newMap.get(lp.id) as any)?.cinematic_direction) continue;
 
-        if (lyricIds.length > 0) {
-          fetchLyricData(lyricIds, lyricDataMap).then((newMap) => {
-            setLyricDataMap(newMap);
-          });
+          const merged = {
+            ...lp,
+            cinematic_direction: normalizeCinematicDirection(lp.cinematic_direction),
+          } as LyricDanceData;
+          newMap.set(lp.id, merged);
+          cacheObj[lp.id] = merged;
+
+          const firstImg = lp.section_images?.[0];
+          if (firstImg) preloadImage(firstImg);
+          if (lp.album_art_url) preloadImage(lp.album_art_url);
+        }
+
+        if (Object.keys(cacheObj).length > 0) {
+          const existing = getCachedLyricData() ?? {};
+          cacheWrite("lyric_data", { ...existing, ...cacheObj });
+        }
+
+        if (newMap.size > lyricDataMap.size) {
+          setLyricDataMap(newMap);
         }
       } catch (err) {
         console.error("[useFeedPosts] search error:", err);
