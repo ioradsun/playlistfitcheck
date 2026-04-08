@@ -570,7 +570,7 @@ export class ParticleEngine {
         p.vx = (Math.random() - 0.5) * 1.4;
         p.vy = 1 + Math.random() * 2.4 * speed;
         p.size = 2 + Math.random() * 3;
-        p.decay = 0.007;
+        p.decay = 0.0034;
         p.rotationSpeed = (Math.random() - 0.5) * 0.2;
         break;
       case "rain": {
@@ -583,7 +583,7 @@ export class ParticleEngine {
         if (stormHint) p.vy *= 1.25;
         p.size = isDrizzle ? 7 + Math.random() * 5 : 10 + Math.random() * 9;
         p.opacity = isDrizzle ? 0.5 : 0.72;
-        p.decay = isDrizzle ? 0.024 : 0.035;
+        p.decay = isDrizzle ? 0.01 : 0.011;
         break;
       }
       case "snow":
@@ -592,7 +592,7 @@ export class ParticleEngine {
         p.vx = (Math.random() - 0.5) * 0.8;
         p.vy = 0.7 + Math.random() * 1.1 * speed;
         p.size = 3 + Math.random() * 4;
-        p.decay = 0.004;
+        p.decay = 0.0019;
         p.aux = Math.random() * 150;
         break;
       case "lightning":
@@ -628,7 +628,7 @@ export class ParticleEngine {
         p.vx = (Math.random() - 0.5) * 0.9;
         p.vy = 0.8 + Math.random() * 1.1 * speed;
         p.size = 6 + Math.random() * 6;
-        p.decay = 0.0045;
+        p.decay = 0.0021;
         p.rotationSpeed = (Math.random() - 0.5) * 0.1;
         break;
       case "dust":
@@ -664,7 +664,7 @@ export class ParticleEngine {
         p.vx = (Math.random() - 0.5) * 1.8;
         p.vy = 1.6 + Math.random() * 2.2 * speed;
         p.size = 6 + Math.random() * 4;
-        p.decay = 0.007;
+        p.decay = 0.0042;
         p.rotationSpeed = (Math.random() - 0.5) * 0.3;
         break;
       case "crystals":
@@ -673,7 +673,7 @@ export class ParticleEngine {
         p.vx = (Math.random() - 0.5) * 0.7;
         p.vy = 0.9 + Math.random() * 1.3 * speed;
         p.size = 4 + Math.random() * 6;
-        p.decay = 0.005;
+        p.decay = 0.0024;
         p.rotationSpeed = (Math.random() - 0.5) * 0.08;
         break;
       case "moths":
@@ -1250,4 +1250,3 @@ function drawNeonOrb(
   ctx.fill();
   ctx.restore();
 }
-
