@@ -158,18 +158,10 @@ const SidebarShell = () => (
   />
 );
 
+import { TOOL_TO_PATH, PATH_TO_TOOL_KEY } from "@/lib/routes";
+
 // PATH_TO_TAB is kept for URL → tab syncing in useEffect
-const PATH_TO_TAB: Record<string, string> = {
-  "/CrowdFit": "songfit",
-  "/SongFit": "songfit",
-  "/ProFit": "profit",
-  "/PlaylistFit": "playlist",
-  "/MixFit": "mix",
-  "/LyricFit": "lyric",
-  "/HitFit": "hitfit",
-  "/DreamFit": "dreamfit",
-  "/VibeFit": "vibefit",
-};
+const PATH_TO_TAB: Record<string, string> = PATH_TO_TOOL_KEY;
 
 const Index = () => {
   const { user, loading: authLoading, profile } = useAuth();
@@ -426,14 +418,7 @@ const Index = () => {
     setIsFetchingProject(true);
     setProjectMissing(false);
 
-    const pathMap: Record<string, string> = {
-      lyric: "/LyricFit",
-      mix: "/MixFit",
-      hitfit: "/HitFit",
-      profit: "/ProFit",
-      vibefit: "/VibeFit",
-      playlist: "/PlaylistFit",
-    };
+    const pathMap = TOOL_TO_PATH;
 
     let cancelled = false;
 
@@ -493,7 +478,7 @@ const Index = () => {
           setIsFetchingProject(false);
           setProjectMissing(true);
           toast.error("Project not found");
-          navigate(pathMap[tab] || "/CrowdFit", { replace: true });
+          navigate(pathMap[tab] || TOOL_TO_PATH.songfit, { replace: true });
           return;
         }
         projectLoadedRef.current = projectId;
@@ -669,7 +654,7 @@ const Index = () => {
         if (inserted) {
           savedSearchIdRef.current = inserted.id;
           projectLoadedRef.current = inserted.id;
-          navigate(`/PlaylistFit/${inserted.id}`, { replace: true });
+          navigate(`/the-plug/${inserted.id}`, { replace: true });
           // Optimistic update — inject into sidebar immediately, no refetch needed
           setOptimisticSidebarItem({
             id: inserted.id,
@@ -767,19 +752,9 @@ const Index = () => {
     if (autoRunRef.current) return;
 
     if (state?.returnTab) {
-      const crowdfitPath = "/CrowdFit";
-      const TAB_TO_PATH: Record<string, string> = {
-        songfit: crowdfitPath,
-        profit: "/ProFit",
-        playlist: "/PlaylistFit",
-        mix: "/MixFit",
-        lyric: "/LyricFit",
-        hitfit: "/HitFit",
-        dreamfit: "/DreamFit",
-        vibefit: "/VibeFit",
-      };
+      const TAB_TO_PATH = TOOL_TO_PATH;
       setActiveTab(state.returnTab);
-      navigate(TAB_TO_PATH[state.returnTab] || crowdfitPath, { replace: true });
+      navigate(TAB_TO_PATH[state.returnTab] || TOOL_TO_PATH.songfit, { replace: true });
       if (
         !state.reportData &&
         !state.autoRun &&
@@ -791,7 +766,7 @@ const Index = () => {
 
     if (state?.reportData) {
       autoRunRef.current = true;
-      navigate("/PlaylistFit", { replace: true });
+      navigate("/the-plug", { replace: true });
       const {
         input,
         output,
@@ -815,7 +790,7 @@ const Index = () => {
     } else if (state?.autoRun) {
       autoRunRef.current = true;
       const { playlistUrl, songUrl } = state.autoRun;
-      navigate("/PlaylistFit", { replace: true });
+      navigate("/the-plug", { replace: true });
       if (!playlistUrl) return;
 
       (async () => {
@@ -841,12 +816,12 @@ const Index = () => {
       })();
     } else if (state?.loadMixProject) {
       autoRunRef.current = true;
-      navigate("/MixFit", { replace: true });
+      navigate("/the-engineer", { replace: true });
       setLoadedMixProject(state.loadMixProject);
       setActiveTab("mix");
     } else if (state?.loadLyric) {
       autoRunRef.current = true;
-      navigate("/LyricFit", { replace: true });
+      navigate("/the-director", { replace: true });
       setLoadedLyric(state.loadLyric);
       setActiveTab("lyric");
     }
@@ -951,16 +926,16 @@ const Index = () => {
 
   const handleNewLyric = useCallback(() => {
     setLoadedLyric(null);
-    transitionNavigate("/LyricFit", { replace: true });
+    transitionNavigate("/the-director", { replace: true });
   }, [transitionNavigate]);
   const handleNewMix = useCallback(() => {
     setLoadedMixProject(null);
     projectLoadedRef.current = null;
-    transitionNavigate("/MixFit", { replace: true });
+    transitionNavigate("/the-engineer", { replace: true });
   }, [transitionNavigate]);
   const handleNewHitFit = useCallback(() => {
     setLoadedHitFitAnalysis(null);
-    transitionNavigate("/HitFit", { replace: true });
+    transitionNavigate("/the-ar", { replace: true });
   }, [transitionNavigate]);
 
   const handleSidebarTabChange = useCallback(
@@ -989,17 +964,7 @@ const Index = () => {
         setActiveTab(tab);
       });
 
-      const pathMap: Record<string, string> = {
-        songfit: "/CrowdFit",
-        profit: "/ProFit",
-        playlist: "/PlaylistFit",
-        mix: "/MixFit",
-        lyric: "/LyricFit",
-        hitfit: "/HitFit",
-        dreamfit: "/DreamFit",
-        vibefit: "/VibeFit",
-      };
-      navigate(pathMap[tab] || "/CrowdFit", { replace: true });
+      navigate(TOOL_TO_PATH[tab] || TOOL_TO_PATH.songfit, { replace: true });
     },
     [setActiveTab, navigate],
   );
@@ -1028,7 +993,7 @@ const Index = () => {
             if (data?.reportId && data?.blueprint && data?.artist) {
               setProfitSavedReport(data);
               setProfitLoadKey((k) => k + 1);
-              navTarget = `/ProFit/${data.reportId}`;
+              navTarget = `/the-manager/${data.reportId}`;
               projectLoadedRef.current = data.reportId;
             } else {
               const artistId = data?.spotify_artist_id;
@@ -1049,7 +1014,7 @@ const Index = () => {
               };
               setLoadedHitFitAnalysis(analysisWithFilename);
               if (data.id) {
-                navTarget = `/HitFit/${data.id}`;
+                navTarget = `/the-ar/${data.id}`;
                 projectLoadedRef.current = data.id;
               }
             }
@@ -1078,12 +1043,12 @@ const Index = () => {
               setVibeLoading(false);
               setSongFitLoading(false);
               if (data.id) {
-                navTarget = `/PlaylistFit/${data.id}`;
+                navTarget = `/the-plug/${data.id}`;
                 projectLoadedRef.current = data.id;
               }
             } else if (data?.playlist_url) {
               if (data.id) {
-                navTarget = `/PlaylistFit/${data.id}`;
+                navTarget = `/the-plug/${data.id}`;
                 projectLoadedRef.current = data.id;
               }
             }
@@ -1103,7 +1068,7 @@ const Index = () => {
               };
               setLoadedMixProject(mixData);
               if (data.id) {
-                navTarget = `/MixFit/${data.id}`;
+                navTarget = `/the-engineer/${data.id}`;
                 // Only mark as loaded if mixes have audio data — otherwise let the
                 // URL loader do a fresh DB fetch to get the real audio_urls.
                 const hasMixData =
@@ -1120,7 +1085,7 @@ const Index = () => {
               setActiveTab("lyric");
               setLoadedLyric(null);
               setIsFetchingProject(true);
-              navTarget = `/LyricFit/${data.id}`;
+              navTarget = `/the-director/${data.id}`;
             }
             break;
           }
@@ -1129,7 +1094,7 @@ const Index = () => {
               setLoadedVibeFitResult(data);
               setVibeFitLoadKey((k) => k + 1);
               if (data.id) {
-                navTarget = `/VibeFit/${data.id}`;
+                navTarget = `/the-creative/${data.id}`;
                 projectLoadedRef.current = data.id;
               }
             }

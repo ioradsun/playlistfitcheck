@@ -56,18 +56,20 @@ interface ToolItem {
   path: string;
 }
 
+import { ROUTES } from "@/lib/routes";
+
 const FMLY_TOOLS: ToolItem[] = [
-  { value: "songfit", label: "FMLY", path: "/CrowdFit" },
-  { value: "dreamfit", label: "FMLY Matters", path: "/DreamFit" },
+  { value: "songfit", label: "FMLY", path: ROUTES.fmly },
+  { value: "dreamfit", label: "FMLY Matters", path: ROUTES.fmlyMatters },
 ];
 
 const TEAM_TOOLS: ToolItem[] = [
-  { value: "lyric", label: "the Director", path: "/LyricFit" },
-  { value: "hitfit", label: "the A&R", path: "/HitFit" },
-  { value: "mix", label: "the Engineer", path: "/MixFit" },
-  { value: "profit", label: "the Manager", path: "/ProFit" },
-  { value: "playlist", label: "the Plug", path: "/PlaylistFit" },
-  { value: "vibefit", label: "the Creative", path: "/VibeFit" },
+  { value: "lyric", label: "the Director", path: ROUTES.director },
+  { value: "hitfit", label: "the A&R", path: ROUTES.ar },
+  { value: "mix", label: "the Engineer", path: ROUTES.engineer },
+  { value: "profit", label: "the Manager", path: ROUTES.manager },
+  { value: "playlist", label: "the Plug", path: ROUTES.plug },
+  { value: "vibefit", label: "the Creative", path: ROUTES.creative },
 ];
 
 export interface RecentItem {

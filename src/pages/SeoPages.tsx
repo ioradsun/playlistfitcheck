@@ -38,6 +38,45 @@ const softwareSchema = (name: string, path: string, description: string, feature
 });
 
 const toolPages: Record<string, SeoPageData & { appSchema: Record<string, unknown> }> = {
+  // New canonical SEO paths
+  "/fmly-seo": {
+    title: "FMLY — See What Your FMLY Is Making | tools.fm",
+    description: "Drop your track. The FMLY fires what connects. Real reactions from real music makers — not algorithm noise, not vanity metrics.",
+    h1: "FMLY — Your music. Their fire.",
+    ogImage: `${baseUrl}/og/crowdfit.png`,
+    sections: [
+      { heading: "What is FMLY?", body: "FMLY is the community stream at the heart of tools.fm. Artists drop songs and beats. The FMLY fires what connects. Real reactions from people who make music — not bots, not paid plays, not inflated numbers. Drop your track and find out what's hitting before the world does." },
+      { heading: "Who is FMLY for?", body: "FMLY is for people here for their songs, their beats, or their taste. Songs and beats are what you make. Taste is how you move the culture — the ear that fires a track before anyone knows the name. Every kind of creator belongs in the FMLY." },
+      { heading: "How does it work?", body: "Drop your track to the FMLY feed. Write a caption. The community fires the moments that hit — on the lines that land for songs, on the timestamps that connect for beats. You see exactly which part of your music resonates. Real signal. No gatekeeping." },
+      { heading: "Why FMLY over everywhere else?", body: "Everywhere else optimises for reach. FMLY optimises for truth. You're not performing for an algorithm. You're dropping for the family." },
+    ],
+    faq: [
+      { q: "Is FMLY free?", a: "Yes. FMLY is completely free on tools.fm." },
+      { q: "Do I need Spotify to use FMLY?", a: "You need a Spotify link for your track. FMLY uses Spotify embeds so the community hears it properly." },
+      { q: "What does firing mean?", a: "Firing is how the FMLY reacts. Tap or hold the fire button on the moments that hit. It tells the artist exactly which part of their track connects." },
+      { q: "What is taste?", a: "Taste is the people who make artists. The ones who fire a track before anyone knows the name. If you champion music more than you make it — you belong in the FMLY." },
+    ],
+    appSchema: softwareSchema("FMLY", "/fmly", "The community stream where artists drop music and the FMLY fires what connects.", ["Track drops", "Fire reactions", "Moment-level feedback", "Community follows", "FMLY Top 40"]),
+  },
+  "/the-director-seo": {
+    title: "the Director — Turn Sound Into Motion | tools.fm",
+    description: "Upload your song or beat. The Director builds a cinematic visual world around it. The FMLY fires it in real time.",
+    h1: "the Director — Turn sound into motion.",
+    ogImage: `${baseUrl}/og/lyricfit.png`,
+    sections: [
+      { heading: "What is the Director?", body: "The Director is the creative director on your team. Upload a song and your lyrics sync to a moving canvas — word by word, moment by moment, section by section. Upload a beat and the waveform becomes the visual. Section imagery shifts with the mood. The FMLY fires what connects in real time. Your sound finally has a world." },
+      { heading: "Songs and beats. Both.", body: "Song mode syncs your lyrics to a cinematic canvas. Every line gets a visual moment, every section gets its own imagery. Beat mode makes the waveform the star — section imagery shifts with the energy, fires land on timestamps. Same Director. Different fuel." },
+      { heading: "Who is the Director for?", body: "For artists who want their music to look as good as it sounds. For producers who want their beats to have a world. For anyone who has been posting static images over music and knows there is a better way." },
+      { heading: "How does the Director differ from the Creative?", body: "The Director handles the track in motion — the visual experience while the music plays. The Creative builds the world around the release — the art, the assets, the aesthetic on your socials. The Director is the track in motion. The Creative is the release in the world." },
+    ],
+    faq: [
+      { q: "Is the Director free?", a: "Yes. The Director is completely free on tools.fm." },
+      { q: "What audio formats work?", a: "MP3, WAV, and M4A. Upload your song or your beat — the Director handles both." },
+      { q: "What is the difference between song mode and beat mode?", a: "Song mode syncs your lyrics to the canvas. Beat mode skips the lyrics and uses the waveform as the visual — fires land on timestamps instead of lines." },
+    ],
+    appSchema: softwareSchema("the Director", "/the-director", "Upload your song or beat. The Director builds a cinematic visual world around it.", ["Lyric sync canvas", "Beat visualization", "Cinematic section imagery", "Real-time fire reactions", "Shareable visual output"]),
+  },
+  // Legacy SEO paths (kept for backwards compat)
   "/crowdfit": {
     title: "FMLY — See What Your FMLY Is Making | tools.fm",
     description: "Drop your track. The FMLY fires what connects. Real reactions from real music makers — not algorithm noise, not vanity metrics.",

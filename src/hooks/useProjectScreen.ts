@@ -38,17 +38,9 @@ export interface ProjectScreen {
   projectId: string | undefined;
 }
 
-export const PATH_TO_TOOL: Record<string, Tool> = {
-  "/CrowdFit":    "songfit",
-  "/SongFit":     "songfit",   // legacy redirect support
-  "/ProFit":      "profit",
-  "/PlaylistFit": "playlist",
-  "/MixFit":      "mix",
-  "/LyricFit":    "lyric",
-  "/HitFit":      "hitfit",
-  "/DreamFit":    "dreamfit",
-  "/VibeFit":     "vibefit",
-};
+import { PATH_TO_TOOL_KEY } from "@/lib/routes";
+
+export const PATH_TO_TOOL: Record<string, Tool> = PATH_TO_TOOL_KEY as Record<string, Tool>;
 
 interface UseProjectScreenOptions {
   pathname: string;

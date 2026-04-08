@@ -39,7 +39,7 @@ export function HitFitTab({ initialAnalysis, onProjectSaved, onNewProject, onHea
     getSidebarLabel: (file) => file.name.replace(/\.[^.]+$/, ""),
     getSidebarRawData: ({ projectId, audioUrl }) => ({ id: projectId, analysis: null, audio_url: audioUrl }),
     onOptimisticItem,
-    onProjectCreated: (id) => navigate(`/HitFit/${id}`, { replace: true }),
+    onProjectCreated: (id) => navigate(`/the-ar/${id}`, { replace: true }),
   });
 
   // Sync if initialAnalysis changes (loaded from sidebar)

@@ -506,13 +506,13 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                            className="flex items-center gap-1 overflow-hidden"
                          >
                            <button
-                             onClick={() => { setPlusOpen(false); navigate("/LyricFit?mode=song"); }}
+                             onClick={() => { setPlusOpen(false); navigate("/the-director?mode=song"); }}
                              className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-mono tracking-wide text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/50"
                            >
                              song
                            </button>
                            <button
-                             onClick={() => { setPlusOpen(false); navigate("/LyricFit?mode=beat"); }}
+                             onClick={() => { setPlusOpen(false); navigate("/the-director?mode=beat"); }}
                              className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-mono tracking-wide text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/50"
                            >
                              beat
@@ -648,13 +648,13 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
                         className="flex items-center gap-1 overflow-hidden"
                       >
                         <button
-                          onClick={() => { setPlusOpen(false); navigate("/LyricFit?mode=song"); }}
+                          onClick={() => { setPlusOpen(false); navigate("/the-director?mode=song"); }}
                           className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-mono tracking-wide text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/50"
                         >
                           song
                         </button>
                         <button
-                          onClick={() => { setPlusOpen(false); navigate("/LyricFit?mode=beat"); }}
+                          onClick={() => { setPlusOpen(false); navigate("/the-director?mode=beat"); }}
                           className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-mono tracking-wide text-muted-foreground transition-colors hover:text-foreground hover:bg-accent/50"
                         >
                           beat

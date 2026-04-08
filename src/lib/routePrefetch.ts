@@ -15,6 +15,16 @@ export const AdminPageImport = () => import("@/pages/Admin");
 export const ShareableLyricDanceImport = () => import("@/pages/ShareableLyricDance");
 
 const ROUTE_CHUNK_PREFETCH: Record<string, () => Promise<unknown>> = {
+  "/fmly": SongFitTabImport,
+  "/the-ar": HitFitTabImport,
+  "/the-creative": VibeFitTabImport,
+  "/the-manager": ProFitTabImport,
+  "/the-plug": AppSidebarImport,
+  "/the-engineer": MixFitCheckImport,
+  "/the-director": LyricFitTabImport,
+  "/fmly-matters": DreamFitTabImport,
+  "/admin": AdminPageImport,
+  // Legacy paths
   "/CrowdFit": SongFitTabImport,
   "/SongFit": SongFitTabImport,
   "/HitFit": HitFitTabImport,
@@ -24,7 +34,6 @@ const ROUTE_CHUNK_PREFETCH: Record<string, () => Promise<unknown>> = {
   "/MixFit": MixFitCheckImport,
   "/LyricFit": LyricFitTabImport,
   "/DreamFit": DreamFitTabImport,
-  "/admin": AdminPageImport,
 };
 
 const projectTableByType: Record<string, string> = {
@@ -65,13 +74,13 @@ export const prefetchRouteData = (path: string, options?: { userId?: string; ite
     }
 
     const basePath = path.replace(/\/[0-9a-f-]{36}$/, "");
-    if (basePath === "/PlaylistFit" && options?.userId) {
+    if ((basePath === "/the-plug" || basePath === "/PlaylistFit") && options?.userId) {
       await supabase.from("saved_searches").select("id").eq("user_id", options.userId).order("created_at", { ascending: false }).limit(1);
     }
-    if (basePath === "/LyricFit" && options?.userId) {
+    if ((basePath === "/the-director" || basePath === "/LyricFit") && options?.userId) {
       await supabase.from("lyric_projects").select("id").eq("user_id", options.userId).order("updated_at", { ascending: false }).limit(1);
     }
-    if (basePath === "/MixFit" && options?.userId) {
+    if ((basePath === "/the-engineer" || basePath === "/MixFit") && options?.userId) {
       await supabase.from("mix_projects").select("id").eq("user_id", options.userId).order("updated_at", { ascending: false }).limit(1);
     }
   })().finally(() => {
