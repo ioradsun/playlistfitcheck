@@ -598,7 +598,7 @@ export function usePipelineScheduler({
   }, [generationStatus]);
 
   const retryGeneration = useCallback(() => {
-    if (!audioFile || !lines.length) return;
+    if ((!audioFile && !audioUrl) || !lines.length) return;
 
     setRenderData(null);
     setCinematicDirection(null);
@@ -631,6 +631,7 @@ export function usePipelineScheduler({
     }, 100);
   }, [
     audioFile,
+    audioUrl,
     lines,
     setRenderData,
     setCinematicDirection,
@@ -1376,7 +1377,8 @@ export function useLyricPipeline({
 
   const startCinematicDirection = useCallback(
     async (sourceLines: LyricLine[], force = false) => {
-      if (!lyricData || !sourceLines.length) return;
+      if (!lyricData) return;
+      if (!sourceLines.length && !audioUrl) return;
       const myRunId = ++runIdRef.current;
       {
         if (

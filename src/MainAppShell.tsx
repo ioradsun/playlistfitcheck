@@ -11,7 +11,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { VoteGateProvider } from "@/hooks/useVoteGate";
 import { DmProvider } from "@/hooks/useDmContext";
 import { DmCompose } from "@/components/signals/DmCompose";
-import { Navigate, Routes, Route, useParams, useLocation } from "react-router-dom";
+import { Navigate, Routes, Route, useParams } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AdminPageImport } from "@/lib/routePrefetch";
 import { importWithRetry } from "@/lib/importWithRetry";
@@ -41,10 +41,9 @@ const PageLayout = lazy(() => importWithRetry(() => import("@/components/PageLay
 const Admin = lazy(AdminPageImport);
 
 /** Redirects legacy paths like /LyricFit/abc123 → /the-director/abc123 */
-function LegacyWildcardRedirect({ base, target }: { base: string; target: string }) {
-  const location = useLocation();
-  const rest = location.pathname.slice(base.length);
-  return <Navigate to={`${target}${rest}`} replace />;
+function LegacyWildcardRedirect({ target }: { target: string }) {
+  const { "*": rest } = useParams<{ "*": string }>();
+  return <Navigate to={rest ? `${target}/${rest}` : target} replace />;
 }
 
 export default function MainAppShell() {
@@ -81,7 +80,7 @@ export default function MainAppShell() {
                     <Route key={from} path={from} element={<Navigate to={to} replace />} />
                   ))}
                   {Object.entries(LEGACY_REDIRECTS).map(([from, to]) => (
-                    <Route key={`${from}/*`} path={`${from}/*`} element={<LegacyWildcardRedirect base={from} target={to} />} />
+                    <Route key={`${from}/*`} path={`${from}/*`} element={<LegacyWildcardRedirect target={to} />} />
                   ))}
 
                   {/* ── SEO pages ── */}
