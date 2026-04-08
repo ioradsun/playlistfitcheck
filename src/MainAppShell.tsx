@@ -11,7 +11,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { VoteGateProvider } from "@/hooks/useVoteGate";
 import { DmProvider } from "@/hooks/useDmContext";
 import { DmCompose } from "@/components/signals/DmCompose";
-import { Navigate, Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route, useParams, useLocation } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AdminPageImport } from "@/lib/routePrefetch";
 import { importWithRetry } from "@/lib/importWithRetry";
@@ -39,6 +39,13 @@ const FitWidget = lazy(() => importWithRetry(() => import("@/components/FitWidge
 const SignalsPanel = lazy(() => importWithRetry(() => import("@/components/signals/SignalsPanel").then(m => ({ default: m.SignalsPanel }))));
 const PageLayout = lazy(() => importWithRetry(() => import("@/components/PageLayout").then(m => ({ default: m.PageLayout }))));
 const Admin = lazy(AdminPageImport);
+
+/** Redirects legacy paths like /LyricFit/abc123 → /the-director/abc123 */
+function LegacyWildcardRedirect({ base, target }: { base: string; target: string }) {
+  const location = useLocation();
+  const rest = location.pathname.slice(base.length);
+  return <Navigate to={`${target}${rest}`} replace />;
+}
 
 export default function MainAppShell() {
   return (
