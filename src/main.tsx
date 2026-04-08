@@ -38,7 +38,6 @@ const CACHE_VERSION_KEY = "tfm:cache_version";
       }
 
       localStorage.setItem(CACHE_VERSION_KEY, String(CACHE_VERSION));
-      console.info("[cache] Invalidated all caches — version", CACHE_VERSION);
     }
   } catch {}
 })();

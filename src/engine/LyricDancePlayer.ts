@@ -5482,34 +5482,8 @@ export class LyricDancePlayer {
 
       if (!this._debugModeLogged && groupIdx === activeGroups[activeGroups.length - 1]) {
         this._debugModeLogged = true;
-        // Log ALL phrase groups with their words and times
-        const allGroups = this.compiledScene?.phraseGroups ?? [];
-        console.log(`[LyricDance] Total phrases: ${allGroups.length}`);
-        console.table(allGroups.slice(0, 20).map((gg: any, i: number) => ({
-          idx: i,
-          words: (gg.words ?? []).map((w: any) => w.text || w.word).join(' '),
-          wordCount: (gg.words ?? []).length,
-          start: gg.start?.toFixed(2),
-          end: gg.end?.toFixed(2),
-          dur: ((gg.end - gg.start) * 1000).toFixed(0) + 'ms',
-          mode: gg.presentationMode ?? 'UNDEF',
-          hero: gg.phraseHeroWord ?? 'none',
-        })));
-
-        // Check for word index alignment
-        const rawWords = this.data?.words ?? [];
-        const cdPhrases = (this.data?.cinematic_direction as any)?.phrases ?? [];
-        if (cdPhrases.length > 0 && rawWords.length > 0) {
-          console.log(`[LyricDance] Raw words: ${rawWords.length}, AI phrases: ${cdPhrases.length}`);
-          // Show first 5 AI phrase word ranges vs actual words
-          for (let pi = 0; pi < Math.min(5, cdPhrases.length); pi++) {
-            const [s, e] = cdPhrases[pi].wordRange;
-            const wordsInRange = rawWords.slice(s, e + 1).map((w: any) => w.word).join(' ');
-            console.log(`  Phrase ${pi}: [${s},${e}] = "${wordsInRange}" | hero: ${cdPhrases[pi].heroWord}`);
-          }
-        }
-
         // Flag any zero-duration or negative-duration words
+        const rawWords = this.data?.words ?? [];
         const badWords = rawWords.filter((w: any) => w.start >= w.end || w.end - w.start < 0.01);
         if (badWords.length > 0) {
           console.warn(`[LyricDance] ${badWords.length} zero/tiny-duration words:`, badWords.map((w: any) => `"${w.word}" ${w.start.toFixed(3)}-${w.end.toFixed(3)}`));
