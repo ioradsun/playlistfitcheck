@@ -50,8 +50,6 @@ export function MomentPanel({
   const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
   const [expandedMoment, setExpandedMoment] = useState<number | null>(null);
   const [pressing, setPressing] = useState<number | null>(null);
-  const [fillLevel, setFillLevel] = useState<Record<number, number>>({});
-  const [burstTrigger, setBurstTrigger] = useState<Record<number, number>>({});
   const [localFires, setLocalFires] = useState<Record<number, number>>({});
   const [playingMoment, setPlayingMoment] = useState<number | null>(null);
   const fireHoldControllersRef = useRef<Record<number, ReturnType<typeof createFireHold>>>({});
@@ -140,9 +138,7 @@ export function MomentPanel({
   const handleFireDown = useCallback((idx: number) => {
     setPressing(idx);
     if (!fireHoldControllersRef.current[idx]) {
-      fireHoldControllersRef.current[idx] = createFireHold({
-        onScaleUpdate: (scale) => setFillLevel((prev) => ({ ...prev, [idx]: Math.max(0, Math.min(1, (scale - 1) / 0.5)) })),
-      });
+      fireHoldControllersRef.current[idx] = createFireHold({});
     }
     fireHoldControllersRef.current[idx].start();
   }, []);
@@ -150,7 +146,6 @@ export function MomentPanel({
   const handleFireUp = useCallback((idx: number) => {
     setPressing(null);
     const holdData = fireHoldControllersRef.current[idx]?.stop();
-    setBurstTrigger((prev) => ({ ...prev, [idx]: (prev[idx] ?? 0) + 1 }));
     if (!holdData) return;
     const holdMs = holdData.holdMs;
     const scoreMs = holdMs < 180 ? 150 : holdMs;
@@ -219,9 +214,6 @@ export function MomentPanel({
                 onSubmitComment={(text) => handleSubmit(moment.index, text)}
                 firedByUser={firedMoments.has(moment.index)}
                 pressing={pressing === moment.index}
-                fillLevel={fillLevel[moment.index] ?? 0}
-                burstTrigger={burstTrigger[moment.index] ?? 0}
-                active={pressing === moment.index || expandedMoment === moment.index || currentMomentIndex === moment.index || playingMoment === moment.index}
                 fireAvatars={momentFireAvatars[moment.index]?.avatars ?? []}
                 fireAnonCount={momentFireAvatars[moment.index]?.anonCount ?? 0}
               >
