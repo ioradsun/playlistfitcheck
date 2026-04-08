@@ -302,17 +302,21 @@ export function FitTab({
   }, [initialDanceUrl]);
 
   const [prefetchedDanceData, setPrefetchedDanceData] =
-    useState<LyricDanceData | null>(
-      renderData && cinematicDirection && beatGrid
-        ? ({
-            id: savedId,
-            cinematic_direction: cinematicDirection,
-            beat_grid: beatGrid,
-            words: words ?? null,
-            section_images: sectionImageUrls.length ? sectionImageUrls : null,
-          } as any)
-        : null,
-    );
+    useState<LyricDanceData | null>(() => {
+      // For existing projects, the pipeline props already contain
+      // the full row data — use it directly, no DB fetch needed.
+      if (renderData && cinematicDirection && beatGrid && savedId) {
+        return {
+          id: savedId,
+          cinematic_direction: cinematicDirection,
+          beat_grid: beatGrid,
+          words: words ?? null,
+          section_images: sectionImageUrls.length ? sectionImageUrls : null,
+          lines: lyricData?.lines ?? null,
+        } as any;
+      }
+      return null;
+    });
   const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxScene, setLightboxScene] = useState<{ imageUrl: string; description: string; timestamp: string; visualMood?: string; index: number } | null>(null);
   const [clipComposerVisible, setClipComposerVisible] = useState(false);
@@ -365,9 +369,13 @@ export function FitTab({
   const hasFetchedRef = useRef(false);
   useEffect(() => {
     if (!publishedDanceId || hasFetchedRef.current) return;
+    if (prefetchedDanceData) {
+      hasFetchedRef.current = true;
+      return; // already have the data from props
+    }
     hasFetchedRef.current = true;
     refetchDanceData();
-  }, [publishedDanceId, refetchDanceData]);
+  }, [publishedDanceId, prefetchedDanceData, refetchDanceData]);
 
   // ── CrowdFit publish state ─────────────────────────────────────────
   const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
@@ -692,7 +700,9 @@ export function FitTab({
   }, [lyricData?.lines, words]);
 
 
-  const [fontReady, setFontReady] = useState(false);
+  const [fontReady, setFontReady] = useState(() => {
+    return document.fonts?.check('600 48px "Montserrat"') ?? false;
+  });
   const [imageWaitExpired, setImageWaitExpired] = useState(false);
 
   useEffect(() => {
