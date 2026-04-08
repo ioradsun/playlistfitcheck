@@ -54,7 +54,11 @@ export function useAudioProject(config: UseAudioProjectConfig) {
   const [showAuthNudge, setShowAuthNudge] = useState(false);
 
   const handleFileSelected = useCallback(
-    async (file: File, existingProjectId?: string | null): Promise<AudioProject | null> => {
+    async (
+      file: File,
+      existingProjectId?: string | null,
+      preGeneratedId?: string,
+    ): Promise<AudioProject | null> => {
       if (!user) {
         setShowAuthNudge(true);
         return null;
@@ -62,7 +66,7 @@ export function useAudioProject(config: UseAudioProjectConfig) {
 
       setIsCreating(true);
       try {
-        const projectId = existingProjectId ?? uuidv4();
+        const projectId = existingProjectId ?? preGeneratedId ?? uuidv4();
         const storagePath = getUnifiedStoragePath(user.id, config.tool, projectId, file.name);
         const audioUrl = await uploadAudioFile(storagePath, file);
 

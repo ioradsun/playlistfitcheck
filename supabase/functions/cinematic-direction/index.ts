@@ -146,7 +146,9 @@ SECTION DESCRIPTION RULES:
 - Bad: "moody urban environment"
 - Ground descriptions in SPECIFIC nouns from the lyrics you heard.
 
-SECTION COUNT: One section per audio section provided. Match count exactly.
+SECTION COUNT:
+- If audio sections are provided: one section per audio section. Match count exactly.
+- If audio sections are NOT provided: listen to the full song and divide it into 4-8 natural sections (intro, verse, chorus, bridge, outro as appropriate).
 `;
 
 const INSTRUMENTAL_SCENE_DIRECTION_PROMPT = `
@@ -215,7 +217,9 @@ STORYTELLING RULES:
    Good: "Dust motes spiral in amber floodlight as the first circle forms"
    Bad: "intimate cinematic landscape"
 
-6. One section per audio section provided. Match count exactly.
+6. SECTION COUNT:
+   - If audio sections are provided: one section per audio section. Match count exactly.
+   - If audio sections are NOT provided: listen to the full track and divide it into 4-8 natural sections (intro/build/peak/outro).
 
 DOMINANT COLOR RULES:
 - dominantColor is a TINT DIRECTION — a color gel on a film light. It TINTS
@@ -562,10 +566,23 @@ async function callScene(
   body: RequestBody,
   sceneSystemPrompt: string = SCENE_DIRECTION_PROMPT,
   modelOverride: string = PRIMARY_MODEL,
+  audioBase64?: string,
 ): Promise<Record<string, any>> {
+  const userContent = audioBase64
+    ? [
+        { type: "text", text: userMessage },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:audio/mpeg;base64,${audioBase64}`,
+          },
+        },
+      ]
+    : userMessage;
+
   const messages = [
     { role: "system", content: sceneSystemPrompt },
-    { role: "user", content: userMessage },
+    { role: "user", content: userContent },
   ];
 
   const makeRequest = async (model: string) => {
@@ -677,7 +694,7 @@ async function callScene(
               model: modelOverride,
               messages: [
                 { role: "system", content: sceneSystemPrompt },
-                { role: "user", content: userMessage },
+                { role: "user", content: userContent },
                 {
                   role: "user",
                   content:
@@ -829,6 +846,37 @@ serve(async (req) => {
     }
 
     if (body.mode === "scene") {
+      let audioBase64: string | undefined;
+      if (body.audio_url && !body.audio_url.startsWith("blob:")) {
+        try {
+          const audioResp = await fetchWithTimeout(
+            body.audio_url,
+            { method: "GET" },
+            15_000,
+          );
+          if (!audioResp.ok) {
+            throw new Error(`audio fetch failed (${audioResp.status})`);
+          }
+          const audioBytes = new Uint8Array(await audioResp.arrayBuffer());
+          let binary = "";
+          const chunkSize = 0x8000;
+          for (let i = 0; i < audioBytes.length; i += chunkSize) {
+            binary += String.fromCharCode(
+              ...audioBytes.subarray(i, Math.min(i + chunkSize, audioBytes.length)),
+            );
+          }
+          audioBase64 = btoa(binary);
+          console.log(
+            `[cinematic-direction] attached audio for scene request (${audioBytes.length} bytes, base64 length ${audioBase64.length})`,
+          );
+        } catch (audioErr) {
+          console.warn(
+            "[cinematic-direction] failed to fetch audio for multimodal scene request, continuing without audio:",
+            audioErr,
+          );
+        }
+      }
+
       // Build user message for scene mode inline
       const sectionList = (body.audioSections || [])
         .map((s: AudioSectionInput, i: number) => `  Section ${i + 1}: "${s.role || `Section ${i + 1}`}" (${fmt(s.startSec)}–${fmt(s.endSec)}, energy: ${(s.avgEnergy ?? 0).toFixed(2)}, beats/sec: ${(s.beatDensity ?? 0).toFixed(1)})`)
@@ -859,6 +907,7 @@ serve(async (req) => {
         body,
         systemPrompt,
         customPrompts.sceneModel,
+        audioBase64,
       );
 
       return new Response(JSON.stringify({
