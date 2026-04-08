@@ -1354,37 +1354,38 @@ export function useLyricPipeline({
                 .from("audio-clips")
                 .getPublicUrl(storagePath);
 
-              await supabase.from("lyric_projects" as any).upsert(
-                {
-                  user_id: user.id,
-                  artist_slug: artistSlugVal,
-                  url_slug: songSlugVal,
-                  artist_name: artistNameRef.current || "artist",
-                  title: lyricData!.title || "Untitled",
-                  audio_url: urlData.publicUrl,
-                  lyrics: mainLines,
-                  cinematic_direction: cinematicDirectionRef.current || enrichedScene,
-                  words: words ?? null,
-                  beat_grid: beatGrid
-                    ? {
-                        bpm: beatGrid.bpm,
-                        beats: beatGrid.beats,
-                        confidence: beatGrid.confidence,
-                      }
-                    : { bpm: 0, beats: [], confidence: 0 },
-                  palette: derivePaletteFromDirection(enrichedScene),
-                  section_images: null,
-                } as any,
-                { onConflict: "artist_slug,url_slug" },
-              );
-
-              const { data: newRow }: any = await supabase
+              const { data: insertedRow, error: insertErr } = await supabase
                 .from("lyric_projects" as any)
+                .insert(
+                  {
+                    user_id: user.id,
+                    artist_slug: artistSlugVal,
+                    url_slug: songSlugVal,
+                    artist_name: artistNameRef.current || "artist",
+                    title: lyricData!.title || "Untitled",
+                    audio_url: urlData.publicUrl,
+                    lines: mainLines,
+                    cinematic_direction: cinematicDirectionRef.current || enrichedScene,
+                    words: words ?? null,
+                    beat_grid: beatGrid
+                      ? {
+                          bpm: beatGrid.bpm,
+                          beats: beatGrid.beats,
+                          confidence: beatGrid.confidence,
+                        }
+                      : { bpm: 0, beats: [], confidence: 0 },
+                    palette: derivePaletteFromDirection(enrichedScene),
+                    section_images: null,
+                    is_published: true,
+                  } as any,
+                )
                 .select("id")
-                .eq("artist_slug", artistSlugVal)
-                .eq("url_slug", songSlugVal)
-                .maybeSingle();
-              resolvedDanceId = newRow?.id ?? null;
+                .single();
+
+              if (insertErr) {
+                console.error("[Pipeline] Insert dance row failed:", insertErr);
+              }
+              resolvedDanceId = (insertedRow as any)?.id ?? null;
               if (resolvedDanceId) {
                 setPipelineDanceId(resolvedDanceId);
                 setPipelineDanceUrl(
