@@ -84,7 +84,7 @@ export function useLyricDanceCore({
     { bootMode: "minimal", eagerUpgrade: true, usePool, postId: _postId ?? lyricDanceId, evicted },
   );
   const durationSec = useMemo(() => {
-    const lines = data?.lyrics ?? [];
+    const lines = (data as any)?.lines ?? (data as any)?.lyrics ?? [];
     if (lines.length) {
       return (lines[lines.length - 1] as any).end ?? 0;
     }
@@ -94,7 +94,7 @@ export function useLyricDanceCore({
       return bg.beats[bg.beats.length - 1];
     }
     return 0;
-  }, [data?.lyrics, (data as any)?.beat_grid]);
+  }, [(data as any)?.lines ?? (data as any)?.lyrics, (data as any)?.beat_grid]);
 
   const lyricSections = useLyricSections(
     data?.words ?? null,
