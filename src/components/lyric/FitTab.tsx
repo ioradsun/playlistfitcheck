@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import { slugify } from "@/lib/slugify";
 import {
   Loader2,
   RefreshCw,
