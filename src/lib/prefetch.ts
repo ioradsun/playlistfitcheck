@@ -112,7 +112,10 @@ export function consumeAuthPrefetch() {
 
 const FEED_PAGE_SIZE = 20;
 const FEED_COLUMNS =
-  "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)";
+  "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)," +
+  "lyric_projects(id, title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id," +
+  "palette, cinematic_direction, beat_grid, section_images, auto_palettes, lines, words," +
+  "physics_spec, empowerment_promise)";
 
 export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
   _isEmbedRoute
@@ -127,6 +130,44 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
       ).then((result) => {
         if (result.data && result.data.length > 0) {
           cacheWrite("feed_posts", result.data);
+
+          const lyricCache: Record<string, any> = getCachedLyricData() ?? {};
+          for (const post of result.data as any[]) {
+            const lp = post.lyric_projects;
+            if (!lp?.id) continue;
+
+            if (lp.cinematic_direction && !lyricCache[lp.id]?.cinematic_direction) {
+              lyricCache[lp.id] = lp;
+            }
+
+            const firstImg = lp.section_images?.[0];
+            if (firstImg) {
+              const img = new Image();
+              img.src = firstImg;
+            }
+
+            if (lp.album_art_url) {
+              const img = new Image();
+              img.src = lp.album_art_url;
+            }
+          }
+
+          if (Object.keys(lyricCache).length > 0) {
+            cacheWrite("lyric_data", lyricCache);
+          }
+
+          import("@/lib/fontResolver").then(({ resolveTypographyFromDirection, getFontNamesForPreload }) => {
+            import("@/lib/fontReadinessCache").then(({ ensureFontReady }) => {
+              for (const post of result.data as any[]) {
+                const cd = post.lyric_projects?.cinematic_direction;
+                if (!cd) continue;
+                try {
+                  const typo = resolveTypographyFromDirection(cd);
+                  getFontNamesForPreload(typo).forEach((name) => ensureFontReady(name));
+                } catch {}
+              }
+            });
+          });
         }
         return result;
       });
@@ -137,23 +178,8 @@ export function consumeFeedPrefetch() {
   return p;
 }
 
-// ── Lyric dance prefetch — fires IN PARALLEL with feed posts ────────────────
-const _cachedFeedForLyric = !_isEmbedRoute ? cacheRead<any[]>("feed_posts") : null;
-const _cachedLyricData = !_isEmbedRoute ? cacheRead<Record<string, any>>("lyric_data") : null;
-const _topLyricIds = (_cachedFeedForLyric ?? [])
-  .filter((p: any) => p.project_id)
-  .map((p: any) => p.project_id as string)
-  .filter((id) => !_cachedLyricData?.[id]?.cinematic_direction);
-
-export let lyricDataPrefetch: Promise<{ data: any[] | null; error: any }> | null =
-  _topLyricIds.length > 0
-    ? Promise.resolve(
-        supabase
-          .from("lyric_projects" as any)
-          .select(LYRIC_DANCE_COLUMNS)
-          .in("id", _topLyricIds)
-      )
-    : null;
+// ── Lyric dance prefetch — compatibility no-op ──────────────────────────────
+export let lyricDataPrefetch: Promise<{ data: any[] | null; error: any }> | null = null;
 
 export function consumeLyricDataPrefetch() {
   const p = lyricDataPrefetch;
