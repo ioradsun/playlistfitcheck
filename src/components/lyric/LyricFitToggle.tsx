@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
-import { Loader2, Lock, CheckCircle2, Bug } from "lucide-react";
+import { Loader2, CheckCircle2, Bug } from "lucide-react";
 
 export type LyricFitView = "lyrics" | "fit" | "data" | "debug";
 
@@ -16,8 +16,8 @@ interface Props {
   filmMode?: "song" | "beat";
 }
 
-const FitButton = forwardRef<HTMLButtonElement, { isLocked: boolean; isRunning: boolean; isError: boolean; isReady: boolean; view: LyricFitView; onClick: () => void }>(
-  ({ isLocked, isRunning, isError, isReady, view, onClick, ...props }, ref) => (
+const FitButton = forwardRef<HTMLButtonElement, { isLocked: boolean; isError: boolean; isReady: boolean; view: LyricFitView; onClick: () => void }>(
+  ({ isLocked, isError, isReady, view, onClick, ...props }, ref) => (
     <button
       ref={ref}
       onClick={onClick}
@@ -30,10 +30,9 @@ const FitButton = forwardRef<HTMLButtonElement, { isLocked: boolean; isRunning: 
       )}
       {...props}
     >
-      {isRunning && <Loader2 size={12} className="animate-spin text-primary" />}
-      {isLocked && !isRunning && !isError && <Lock size={10} />}
+      {isLocked && !isError && <Loader2 size={12} className="animate-spin text-primary" />}
       {isReady && <CheckCircle2 size={12} className="text-primary" />}
-      Fit
+      Video
     </button>
   )
 );
@@ -65,7 +64,7 @@ export function LyricFitToggle({ view, onViewChange, fitDisabled, fitReady, isRu
           </div>
         )}
         <div className="flex-1 flex flex-col items-center justify-center relative">
-          <FitButton isLocked={isLocked} isRunning={isRunning} isError={isError} isReady={isReady} view={view} onClick={handleClick} />
+          <FitButton isLocked={isLocked} isError={isError} isReady={isReady} view={view} onClick={handleClick} />
         </div>
         <div className="flex-1 flex items-center justify-center">
           <button
