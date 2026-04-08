@@ -59,6 +59,7 @@ export function FmlyBar({
   const animRef = useRef<number>(0);
   const scrubbingRef = useRef(false);
   const progressPctRef = useRef(0);
+  const playheadRef = useRef<HTMLDivElement>(null);
   const toastMomentRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
@@ -82,6 +83,15 @@ export function FmlyBar({
     : (player?.audio?.duration || 1);
   const progressPct = Math.max(0, Math.min(100, (currentTimeSec / Math.max(0.0001, totalDuration)) * 100));
   progressPctRef.current = progressPct;
+
+  // Drive playhead position directly on DOM — bypasses React diff/layout entirely
+  // so the line glides at 60fps instead of blinking with each React render.
+  useEffect(() => {
+    const el = playheadRef.current;
+    if (!el) return;
+    el.style.left = `${progressPct}%`;
+    el.style.opacity = progressPct > 0 ? "1" : "0";
+  });
 
   const currentMomentIdx = useMemo(
     () => moments.findIndex((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec),
@@ -419,20 +429,23 @@ export function FmlyBar({
             );
           })}
 
-          {/* Playhead line */}
-          {progressPct > 0 && (
-            <div
-              style={{
-                position: "absolute", top: 0, bottom: 0,
-                left: `${progressPct}%`,
-                width: "1.5px",
-                background: "rgba(255,255,255,0.25)",
-                boxShadow: "0 0 4px rgba(255,255,255,0.08)",
-                pointerEvents: "none",
-                zIndex: 2,
-              }}
-            />
-          )}
+          {/* Playhead line — position driven by direct DOM mutation (no React diff blink) */}
+          <div
+            ref={playheadRef}
+            style={{
+              position: "absolute", top: 0, bottom: 0,
+              left: "0%",
+              opacity: 0,
+              width: "1.5px",
+              background: "rgba(255,255,255,0.55)",
+              boxShadow: "0 0 6px rgba(255,255,255,0.3), 0 0 2px rgba(255,255,255,0.6)",
+              pointerEvents: "none",
+              zIndex: 2,
+              willChange: "left",
+              transition: "left 80ms linear, opacity 200ms ease",
+              borderRadius: "1px",
+            }}
+          />
 
           {/* Moment divider lines — visual only */}
           {moments.slice(0, -1).map((moment) => {
