@@ -2546,6 +2546,8 @@ export class LyricDancePlayer {
   resize(logicalW: number, logicalH: number): void {
     const prevCompiledW = this._compiledViewportW;
     const prevCompiledH = this._compiledViewportH;
+    const prevW = this.width;
+    const prevH = this.height;
     const w = Math.max(1, Math.floor(logicalW));
     const h = Math.max(1, Math.floor(logicalH));
     this.width = w;
@@ -2565,6 +2567,12 @@ export class LyricDancePlayer {
     this._vignetteKey = '';
     this._watermarkCache = null; // invalidate — dimensions depend on this.width
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
+    // If bounds changed significantly, clear stale out-of-bounds particles.
+    const boundsChanged = Math.abs(this.width - prevW) > 20 || Math.abs(this.height - prevH) > 20;
+    if (boundsChanged && this.fullModeEnabled) {
+      this.ambientParticleEngine?.clear();
+      this.ambientParticleEngine?.setSystem(this.activeSectionTexture || 'dust');
+    }
     this.lastSimFrame = -1;
     this._updateViewportScale();
     this._textMetricsCache.clear();

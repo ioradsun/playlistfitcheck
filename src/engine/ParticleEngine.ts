@@ -533,6 +533,13 @@ export class ParticleEngine {
   private spawnForSystem(p: Particle): void {
     const b = this.bounds;
     const speed = (0.5 + this.config.speed) * this.speedMultiplier;
+    const computeFallDecay = (avgVy: number): number => {
+      const canvasH = this.bounds.h || 540;
+      const travelTarget = canvasH * 0.85;
+      const safeVy = Math.max(0.01, avgVy);
+      const framesNeeded = Math.max(1, (travelTarget - p.y) / safeVy);
+      return 0.85 / framesNeeded;
+    };
     p.life = 1;
     p.rotation = Math.random() * Math.PI * 2;
     p.rotationSpeed = (Math.random() - 0.5) * 0.08;
@@ -570,7 +577,7 @@ export class ParticleEngine {
         p.vx = (Math.random() - 0.5) * 1.4;
         p.vy = 1 + Math.random() * 2.4 * speed;
         p.size = 2 + Math.random() * 3;
-        p.decay = 0.0034;
+        p.decay = computeFallDecay(2.2);
         p.rotationSpeed = (Math.random() - 0.5) * 0.2;
         break;
       case "rain": {
@@ -583,7 +590,7 @@ export class ParticleEngine {
         if (stormHint) p.vy *= 1.25;
         p.size = isDrizzle ? 7 + Math.random() * 5 : 10 + Math.random() * 9;
         p.opacity = isDrizzle ? 0.5 : 0.72;
-        p.decay = isDrizzle ? 0.01 : 0.011;
+        p.decay = isDrizzle ? computeFallDecay(6.9) : computeFallDecay(stormHint ? 15.75 : 12.6);
         break;
       }
       case "snow":
@@ -592,7 +599,7 @@ export class ParticleEngine {
         p.vx = (Math.random() - 0.5) * 0.8;
         p.vy = 0.7 + Math.random() * 1.1 * speed;
         p.size = 3 + Math.random() * 4;
-        p.decay = 0.0019;
+        p.decay = computeFallDecay(1.25);
         p.aux = Math.random() * 150;
         break;
       case "lightning":
@@ -628,7 +635,7 @@ export class ParticleEngine {
         p.vx = (Math.random() - 0.5) * 0.9;
         p.vy = 0.8 + Math.random() * 1.1 * speed;
         p.size = 6 + Math.random() * 6;
-        p.decay = 0.0021;
+        p.decay = computeFallDecay(1.35);
         p.rotationSpeed = (Math.random() - 0.5) * 0.1;
         break;
       case "dust":
@@ -664,7 +671,7 @@ export class ParticleEngine {
         p.vx = (Math.random() - 0.5) * 1.8;
         p.vy = 1.6 + Math.random() * 2.2 * speed;
         p.size = 6 + Math.random() * 4;
-        p.decay = 0.0042;
+        p.decay = computeFallDecay(2.7);
         p.rotationSpeed = (Math.random() - 0.5) * 0.3;
         break;
       case "crystals":
@@ -673,7 +680,7 @@ export class ParticleEngine {
         p.vx = (Math.random() - 0.5) * 0.7;
         p.vy = 0.9 + Math.random() * 1.3 * speed;
         p.size = 4 + Math.random() * 6;
-        p.decay = 0.0024;
+        p.decay = computeFallDecay(1.55);
         p.rotationSpeed = (Math.random() - 0.5) * 0.08;
         break;
       case "moths":
