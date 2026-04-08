@@ -329,6 +329,10 @@ export function LyricsTab({
         const transcribeAbort = new AbortController();
         transcribeTimeout = setTimeout(() => transcribeAbort.abort(), 120_000); // 2 min for large files
 
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token;
+        if (!accessToken) throw new Error("Not signed in – please log in and try again.");
+
         let response: Response | null = null;
         for (let attempt = 1; attempt <= MAX_TRANSCRIBE_ATTEMPTS; attempt++) {
           if (storageAudioUrl) {
@@ -338,7 +342,7 @@ export function LyricsTab({
                 method: "POST",
                 headers: {
                   apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                  Authorization: `Bearer ${accessToken}`,
                   "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
@@ -361,7 +365,7 @@ export function LyricsTab({
                 method: "POST",
                 headers: {
                   apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                  Authorization: `Bearer ${accessToken}`,
                 },
                 body: formData,
                 signal: transcribeAbort.signal,
