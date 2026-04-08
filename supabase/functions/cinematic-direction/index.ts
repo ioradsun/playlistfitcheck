@@ -637,7 +637,6 @@ async function callScene(
                   'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "fontProfile", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
               },
             ],
-            response_format: { type: "json_object" },
             max_completion_tokens: 8000,
           }),
         },
