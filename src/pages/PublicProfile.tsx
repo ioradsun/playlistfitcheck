@@ -233,7 +233,7 @@ const PublicProfile = () => {
     if (rank && (best === null || rank < best)) return rank;
     return best;
   }, null as number | null);
-  const totalLikes = submissions.reduce((sum, s) => sum + (s.likes_count || 0), 0);
+  const totalLikes = submissions.reduce((sum, s) => sum + (s.fires_count || 0), 0);
   const totalComments = submissions.reduce((sum, s) => sum + (s.comments_count || 0), 0);
   const totalSaves = Object.values(saveCounts).reduce((sum, c) => sum + c, 0);
   // Hook mode aggregate stats
@@ -466,11 +466,11 @@ const PublicProfile = () => {
                       className="w-full flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 transition-colors text-left"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        {s.album_art_url && (
-                          <img src={s.album_art_url} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                        {s.lyric_projects?.album_art_url && (
+                          <img src={s.lyric_projects.album_art_url} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                         )}
                         <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{s.title}</p>
+                          <p className="text-sm font-medium truncate">{s.lyric_projects?.title ?? s.caption}</p>
                           <div className="flex items-center gap-2.5 mt-0.5">
                             <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
                             {reviewSummaries[s.id] ? (

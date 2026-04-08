@@ -85,8 +85,8 @@ export const SongFitPostCard = memo(function SongFitPostCard({
 
   // ── Local UI state ──
   const [liked, setLiked] = useState(post.user_has_liked ?? false);
-  const [likesCount, setLikesCount] = useState(post.likes_count);
-  const [tipsTotal, setTipsTotal] = useState(post.tips_total || 0);
+  const [likesCount, setLikesCount] = useState(post.fires_count);
+  const [tipsTotal, setTipsTotal] = useState(0);
   const [isFollowing, setIsFollowing] = useState<boolean | null>(null);
   const [followChecked, setFollowChecked] = useState(false);
   const [captionExpanded, setCaptionExpanded] = useState(false);
@@ -98,8 +98,10 @@ export const SongFitPostCard = memo(function SongFitPostCard({
 
   // ── Derived ──
   const isOwnPost = user?.id === post.user_id;
-  const hasLyricDance = !!(post.lyric_dance_url && post.lyric_dance_id);
-  const isSpotifyOnly = !hasLyricDance && !!post.spotify_track_id && !post.lyric_dance_url;
+  const lyricDanceUrl = post.lyric_projects?.artist_slug && post.lyric_projects?.url_slug
+    ? `/${post.lyric_projects.artist_slug}/${post.lyric_projects.url_slug}/lyric-dance` : null;
+  const hasLyricDance = !!(lyricDanceUrl && post.project_id);
+  const isSpotifyOnly = !hasLyricDance && !!post.lyric_projects?.spotify_track_id && !lyricDanceUrl;
   const displayName = post.profiles?.display_name || "Anonymous";
   if (isSpotifyOnly) return null;
 
@@ -174,8 +176,8 @@ export const SongFitPostCard = memo(function SongFitPostCard({
 
   const handleShare = async () => {
     let url: string;
-    if (post.lyric_dance_url) {
-      const parsed = parseLyricDanceUrl(post.lyric_dance_url);
+    if (lyricDanceUrl) {
+      const parsed = parseLyricDanceUrl(lyricDanceUrl);
       url = parsed ? buildShareUrl(parsed.artistSlug, parsed.songSlug) : `${window.location.origin}/song/${post.id}`;
     } else { url = `${window.location.origin}/song/${post.id}`; }
     try { await navigator.clipboard.writeText(url); toast.success("Link copied!"); if (user) logEngagementEvent(post.id, user.id, "share"); }
@@ -204,7 +206,7 @@ export const SongFitPostCard = memo(function SongFitPostCard({
           <PlayerHeader
             avatarUrl={post.profiles?.avatar_url}
             artistName={displayName}
-            songTitle={post.track_title}
+            songTitle={post.lyric_projects?.title ?? post.caption}
             spotifyArtistId={(post.profiles as any)?.spotify_artist_id}
             isVerified={(post.profiles as any)?.is_verified}
             userId={post.user_id}
@@ -243,13 +245,13 @@ export const SongFitPostCard = memo(function SongFitPostCard({
           {hasLyricDance ? (
             <div className="relative" style={reelsMode ? { height: "100%" } : { height: 320 }}>
               <LyricDanceEmbed
-                lyricDanceId={post.lyric_dance_id!}
-                songTitle={post.track_title}
+                lyricDanceId={post.project_id!}
+                songTitle={post.lyric_projects?.title ?? post.caption}
                 artistName={displayName}
                 visible={visible}
                 postId={post.id}
-                lyricDanceUrl={post.lyric_dance_url ?? null}
-                spotifyTrackId={post.spotify_track_id}
+                lyricDanceUrl={lyricDanceUrl}
+                spotifyTrackId={post.lyric_projects?.spotify_track_id ?? null}
                 spotifyArtistId={(post.profiles as any)?.spotify_artist_id}
                 prefetchedData={lyricDanceData ?? null}
                 avatarUrl={post.profiles?.avatar_url}

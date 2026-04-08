@@ -57,10 +57,10 @@ serve(async (req) => {
       const tables = [
         "hook_comments", "hook_votes", "hookfit_posts",
         "project_comments", "lyric_dance_signals",
-        "songfit_tips", "feed_saves", "songfit_hook_reviews",
+        "feed_saves", "feed_hook_reviews",
         "songfit_engagement_events", "songfit_cycle_history",
-        "songfit_comment_likes", "feed_comments", "songfit_likes",
-        "songfit_reports", "songfit_blocks", "songfit_follows",
+        "feed_comments", "feed_likes",
+        "songfit_follows",
         "feed_posts",
         "battle_passes",
         "shareable_hooks", "lyric_projects",

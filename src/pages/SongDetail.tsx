@@ -501,11 +501,11 @@ function NowStreamingDrillDown({ post, navigate }: { post: SongFitPost; navigate
         {/* Spotify embed */}
         <div className="rounded-xl overflow-hidden" style={{ height: 232 }}>
           <LazySpotifyEmbed
-            trackId={post.spotify_track_id!}
+            trackId={post.lyric_projects?.spotify_track_id ?? ""}
             trackTitle={post.lyric_projects?.title ?? post.caption}
-            trackUrl={post.spotify_track_url!}
+            trackUrl={""}
             postId={post.id}
-            albumArtUrl={post.album_art_url}
+            albumArtUrl={post.lyric_projects?.album_art_url ?? null}
           />
         </div>
 
@@ -1242,9 +1242,10 @@ const SongDetail = () => {
               </button>
               <button
                 onClick={() => {
-                  const url = post.lyric_dance_url
-                    ? `${window.location.origin}${post.lyric_dance_url}`
-                    : window.location.href;
+                  const ldUrl = post.lyric_projects?.artist_slug && post.lyric_projects?.url_slug
+                    ? `${window.location.origin}/${post.lyric_projects.artist_slug}/${post.lyric_projects.url_slug}/lyric-dance`
+                    : null;
+                  const url = ldUrl || window.location.href;
                   navigator.clipboard.writeText(url).then(() => toast.success("Link copied!"));
                 }}
                 className="py-2.5 px-3 text-[9px] font-mono uppercase tracking-wider rounded-lg border border-border/40 text-muted-foreground hover:text-foreground transition-colors"
@@ -1282,7 +1283,7 @@ const SongDetail = () => {
                 ref={playerRef}
                 lyricDanceId={danceId!}
                 songTitle={post.lyric_projects?.title ?? post.caption}
-                artistName={(post as any).artist_name || post.lyric_projects?.title ?? post.caption || ""}
+                artistName={(post as any).artist_name || (post.lyric_projects?.title ?? post.caption) || ""}
                 avatarUrl={post.profiles?.avatar_url ?? null}
                 isVerified={post.profiles?.is_verified ?? false}
                 userId={post.user_id ?? null}

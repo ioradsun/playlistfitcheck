@@ -407,8 +407,8 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const filteredPosts = useMemo(() => {
     if (contentFilter === "all") return displayPosts;
     return displayPosts.filter((post) => {
-      if (!post.lyric_dance_id) return contentFilter === "lyrics";
-      const danceData = feed.lyricDataMap.get(post.lyric_dance_id);
+      if (!post.project_id) return contentFilter === "lyrics";
+      const danceData = feed.lyricDataMap.get(post.project_id);
       const isInstrumental = !!(danceData?.cinematic_direction as any)?._instrumental;
       return contentFilter === "beats" ? isInstrumental : !isInstrumental;
     });

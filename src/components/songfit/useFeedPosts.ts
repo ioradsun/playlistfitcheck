@@ -29,7 +29,7 @@ const POST_SELECT =
 // ── Filter helpers ──────────────────────────────────────────────────────────
 function matchesView(p: SongFitPost, view: FeedView): boolean {
   if (view === "all" || view === "billboard") return true;
-  if (view === "now_streaming") return !!p.spotify_track_id;
+  if (view === "now_streaming") return !!p.lyric_projects?.spotify_track_id;
   if (view === "in_studio") return !!p.project_id;
   return true;
 }
@@ -262,8 +262,8 @@ export function useFeedPosts(): FeedState {
 
     // Preload album art for Spotify posts
     filtered
-      .filter((p) => !p.project_id && p.album_art_url)
-      .forEach((p) => preloadImage(p.album_art_url!));
+      .filter((p) => !p.project_id && p.lyric_projects?.album_art_url)
+      .forEach((p) => preloadImage(p.lyric_projects!.album_art_url!));
 
     // ── Render cards IMMEDIATELY — don't wait for lyric data ──
     setPosts(normalized);
