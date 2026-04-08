@@ -425,6 +425,11 @@ export function FitTab({
           .from("feed_posts" as any)
           .update({ status: "removed" })
           .eq("id", crowdfitPostId);
+        await supabase
+          .from("lyric_projects")
+          .update({ is_published: false, published_at: null })
+          .eq("id", publishedDanceId)
+          .eq("user_id", user.id);
         setCrowdfitPostId(null);
         toast.success("Removed from CrowdFit");
       } else {
@@ -441,6 +446,11 @@ export function FitTab({
             .from("feed_posts" as any)
             .update({ status: "live" })
             .eq("id", existing.id);
+          await supabase
+            .from("lyric_projects")
+            .update({ is_published: true, published_at: new Date().toISOString() })
+            .eq("id", publishedDanceId)
+            .eq("user_id", user.id);
           setCrowdfitPostId(existing.id);
         } else {
           const expiresAt = new Date();
@@ -465,7 +475,14 @@ export function FitTab({
             })
             .select("id")
             .single();
-          if (inserted) setCrowdfitPostId(inserted.id);
+          if (inserted) {
+            setCrowdfitPostId(inserted.id);
+            await supabase
+              .from("lyric_projects")
+              .update({ is_published: true, published_at: new Date().toISOString() })
+              .eq("id", publishedDanceId)
+              .eq("user_id", user.id);
+          }
         }
         window.dispatchEvent(new Event("songfit:dance-published"));
         toast.success("Published to CrowdFit!");
