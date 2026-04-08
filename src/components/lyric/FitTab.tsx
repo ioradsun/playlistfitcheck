@@ -23,8 +23,6 @@ import { useSiteCopy } from "@/hooks/useSiteCopy";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slugify";
-import { getAudioStoragePath } from "@/lib/audioStoragePath";
-import { computeAutoPalettesFromUrls } from "@/lib/autoPalette";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
@@ -45,7 +43,7 @@ import type { GenerationStatus, PipelineStages } from "./LyricFitTab";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useVoteGate } from "@/hooks/useVoteGate";
-import { derivePaletteFromDirection } from "@/lib/lyricPalette";
+
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import type { UseLyricPipelineReturn } from "@/hooks/useLyricPipeline";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
@@ -262,7 +260,7 @@ export function FitTab({
   onPlayerReady,
 }: Props) {
   const { user, profile } = useAuth();
-  const { canCreate, credits, required, spendCredits } = useVoteGate();
+  const { canCreate, credits, required } = useVoteGate();
 
   const defaultStages: PipelineStages = {
     rhythm: "pending",
@@ -271,8 +269,6 @@ export function FitTab({
     transcript: "pending",
   };
   const pipelineStages = pipelineStagesProp ?? defaultStages;
-  const [publishing, setPublishing] = useState(false);
-  const [publishStatus, setPublishStatus] = useState("");
   const [publishedUrl, setPublishedUrl] = useState<string | null>(
     initialDanceUrl ?? null,
   );
@@ -284,9 +280,6 @@ export function FitTab({
   // (via is_published on the full SELECT * row), so useState(initialDanceId)
   // already captures the correct value. No late-sync effects needed.
 
-  const [publishedLyricsHash, setPublishedLyricsHash] = useState<string | null>(
-    null,
-  );
   const [prefetchedDanceData, setPrefetchedDanceData] =
     useState<LyricDanceData | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -393,25 +386,6 @@ export function FitTab({
     };
   }, [hookAudioUrl]);
 
-  // Simple hash of lyrics to detect transcript changes
-  const computeLyricsHash = useCallback((lns: LyricLine[]) => {
-    const text = lns
-      .filter((l) => l.tag !== "adlib")
-      .map((l) => `${l.text}|${l.start}|${l.end}`)
-      .join("\n");
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-      hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
-    }
-    return String(hash);
-  }, []);
-
-  const currentLyricsHash = lyricData?.lines
-    ? computeLyricsHash(lyricData.lines)
-    : null;
-  const danceNeedsRegeneration =
-    !publishedUrl ||
-    (publishedLyricsHash !== null && currentLyricsHash !== publishedLyricsHash);
 
 
   // Look for existing CrowdFit post when we know the dance ID
@@ -700,241 +674,6 @@ export function FitTab({
     };
   }, [lyricData?.lines, words]);
 
-  const handleDance = useCallback(async () => {
-    if (!user) {
-      toast.error("Sign in to publish your Dance");
-      return;
-    }
-    if (!cinematicDirection || !lyricData || !audioFile || publishing) return;
-    setPublishing(true);
-    setPublishStatus("Preparing…");
-
-    // Show a slow-publish warning after 30s but do NOT abort — storage uploads
-    // can legitimately take longer and calling setPublishing(false) here would
-    // trigger a React re-render that aborts the in-flight Supabase request.
-    const slowWarningId = setTimeout(() => {
-      setPublishStatus("Still working — large files take longer…");
-    }, 30_000);
-
-    try {
-      const displayName = profile?.display_name || "artist";
-      const artistSlug = slugify(displayName);
-      const songSlug = slugify(lyricData.title || "untitled");
-
-      if (!artistSlug || !songSlug) {
-        toast.error("Couldn't generate a valid URL — check song/artist name");
-        setPublishing(false);
-        return;
-      }
-
-      // Fetch existing dance for palette reuse only (NOT audio)
-      const { data: existingDance }: any = await supabase
-        .from("lyric_projects" as any)
-        .select("section_images, auto_palettes")
-        .eq("user_id", user.id)
-        .eq("artist_slug", artistSlug)
-        .eq("url_slug", songSlug)
-        .maybeSingle();
-
-      // Always upload fresh audio with a unique path to avoid stale cache hits
-      setPublishStatus("Uploading audio…");
-      const uniqueId = savedId || crypto.randomUUID();
-      const ext = audioFile.name.split(".").pop() || "webm";
-      const storagePath = `${user.id}/${artistSlug}/${songSlug}/${uniqueId}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from("audio-clips")
-        .upload(storagePath, audioFile, {
-          upsert: true,
-          contentType: audioFile.type || undefined,
-        });
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from("audio-clips")
-        .getPublicUrl(storagePath);
-      const audioUrl = urlData.publicUrl;
-
-      setPublishStatus("Publishing…");
-      const mainLines = lyricData.lines.filter((l) => l.tag !== "adlib");
-
-      // Compute auto palettes from existing section images (non-blocking)
-      let publishAutoPalettes: string[][] | null = null;
-      if (!danceNeedsRegeneration) {
-        try {
-          if (
-            Array.isArray(existingDance?.auto_palettes) &&
-            existingDance.auto_palettes.length > 0
-          ) {
-            publishAutoPalettes = existingDance.auto_palettes;
-          } else {
-            const urls = (existingDance?.section_images ?? []).filter(
-              (u: unknown): u is string => typeof u === "string" && Boolean(u),
-            );
-            if (urls.length > 0) {
-              publishAutoPalettes = await computeAutoPalettesFromUrls(urls);
-            }
-          }
-        } catch (paletteError) {
-          // auto palette precompute failed (non-blocking)
-        }
-      }
-      // When regenerating, both section_images and auto_palettes are nullified
-      // so fresh images + palettes are generated post-publish
-
-      // Upsert fields:
-      // user_id            — from auth (required)
-      // artist_slug        — from profile slug (required)
-      // url_slug          — from title slug (required)
-      // artist_name        — from profile (required)
-      // title          — from state (required)
-      // audio_url          — from existing or fresh upload (required)
-      // lyrics             — from state, adlibs filtered (required)
-      // cinematic_direction — from state (nullable)
-      // words              — from state (nullable)
-      // auto_palettes      — null if regenerating, preserved if not
-      // beat_grid          — from state with fallback (required, NOT NULL)
-      // palette            — from direction with fallback (required, NOT NULL)
-      // section_images     — null if regenerating, preserved if not
-      const projectPayload: any = {
-            user_id: user.id,
-            artist_slug: artistSlug,
-            url_slug: songSlug,
-            artist_name: displayName,
-            title: lyricData.title || "Untitled",
-            audio_url: audioUrl,
-            lines: mainLines,
-            cinematic_direction: cinematicDirection || null,
-            words: words ?? null,
-            auto_palettes: danceNeedsRegeneration
-              ? null
-              : (publishAutoPalettes ?? null),
-            beat_grid: beatGrid
-              ? {
-                  bpm: beatGrid.bpm,
-                  beats: beatGrid.beats,
-                  confidence: beatGrid.confidence,
-                  _duration: beatGrid._analysis?.duration || undefined,
-                }
-              : { bpm: 0, beats: [], confidence: 0 },
-            palette: derivePaletteFromDirection({
-              ...cinematicDirection,
-              auto_palettes: danceNeedsRegeneration
-                ? null
-                : (publishAutoPalettes ?? null),
-            }),
-            section_images: danceNeedsRegeneration
-              ? (sectionImageUrls.some(Boolean) ? sectionImageUrls : null)
-              : (existingDance?.section_images ?? sectionImageUrls ?? null),
-            is_published: true,
-            published_at: new Date().toISOString(),
-      };
-
-      // Check for existing published project with same slug pair
-      const { data: existingRow }: any = await supabase
-        .from("lyric_projects" as any)
-        .select("id")
-        .eq("artist_slug", artistSlug)
-        .eq("url_slug", songSlug)
-        .eq("is_published", true)
-        .is("deleted_at", null)
-        .maybeSingle();
-
-      let danceRow: any;
-      let insertError: any;
-
-      if (existingRow?.id) {
-        const res: any = await supabase
-          .from("lyric_projects" as any)
-          .update(projectPayload)
-          .eq("id", existingRow.id)
-          .select("id")
-          .single();
-        danceRow = res.data;
-        insertError = res.error;
-      } else {
-        const res: any = await supabase
-          .from("lyric_projects" as any)
-          .insert(projectPayload)
-          .select("id")
-          .single();
-        danceRow = res.data;
-        insertError = res.error;
-      }
-
-      if (insertError) throw insertError;
-
-      const url = `/${artistSlug}/${songSlug}/lyric-dance`;
-      setPublishedUrl(url);
-      setPublishedDanceId(danceRow?.id ?? null);
-      spendCredits();
-      setPublishedLyricsHash(currentLyricsHash);
-      toast.success("Lyric Dance page published!");
-
-      // ── Auto-post to CrowdFit (fire-and-forget) ──
-      (async () => {
-        try {
-          if (!danceRow?.id) return;
-          const danceId = danceRow.id;
-
-          const { data: existing }: any = await supabase
-            .from("feed_posts" as any)
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("project_id", danceId)
-            .maybeSingle();
-
-          if (existing) {
-            // post already exists for this project_id
-          } else {
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + 21);
-
-            await supabase.from("feed_posts" as any).insert({
-              user_id: user.id,
-              title: lyricData.title || "Untitled",
-              caption: "",
-                            project_id: danceId,
-              spotify_track_id: pipeline.spotifyTrackId ?? null,
-              spotify_track_url: pipeline.spotifyTrackId
-                ? `https://open.spotify.com/track/${pipeline.spotifyTrackId}`
-                : null,
-              album_art_url: null,
-              tags_json: [],
-              track_artists_json: [],
-              status: "live",
-              submitted_at: new Date().toISOString(),
-              expires_at: expiresAt.toISOString(),
-              palette: derivePaletteFromDirection(cinematicDirection) as any,
-            });
-          }
-
-          window.dispatchEvent(new Event("songfit:dance-published"));
-        } catch (e: any) {
-          // CrowdFit auto-post failed (non-blocking)
-        }
-      })();
-    } catch (e: any) {
-      toast.error(e.message || "Failed to publish lyric dance");
-    } finally {
-      clearTimeout(slowWarningId);
-      setPublishing(false);
-      setPublishStatus("");
-    }
-  }, [
-    user,
-    lyricData,
-    audioFile,
-    publishing,
-    beatGrid,
-    cinematicDirection,
-    words,
-    danceNeedsRegeneration,
-    currentLyricsHash,
-    spendCredits,
-    savedId,
-    sectionImageUrls,
-    profile,
-  ]);
 
   const [fontReady, setFontReady] = useState(false);
   const [imageWaitExpired, setImageWaitExpired] = useState(false);
@@ -1062,10 +801,6 @@ export function FitTab({
     generationStatus.renderData === "done" &&
     generationStatus.cinematicDirection === "done";
   const hasErrors = Object.values(generationStatus).includes("error");
-  const danceDisabled =
-    !cinematicDirection || publishing || !allReady || !canCreate;
-  // Republish only needs auth + not currently publishing (data already exists on server)
-  const republishDisabled = publishing;
 
   // ── Sections derived from renderData ─────────────────────────────────────
   const meaning = renderData?.meaning;
