@@ -229,13 +229,7 @@ async function createDanceRowAndGenerateImages({
       } as any,
     ).select("id").maybeSingle();
 
-    const { data: newRow }: any = await supabase
-      .from("lyric_projects" as any)
-      .select("id")
-      .eq("artist_slug", artistSlugVal)
-      .eq("url_slug", songSlugVal)
-      .maybeSingle();
-    resolvedDanceId = newRow?.id ?? null;
+    resolvedDanceId = (insertedRow as any)?.id ?? null;
   }
 
   if (!resolvedDanceId) {
