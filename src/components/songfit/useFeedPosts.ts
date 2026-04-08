@@ -213,6 +213,9 @@ export function useFeedPosts(): FeedState {
 
     // ── Render cards IMMEDIATELY — don't wait for lyric data ──
     setPosts(normalized);
+    try {
+      cacheWrite("feed_posts", allPosts);
+    } catch {}
     cursorRef.current = normalized[normalized.length - 1]?.created_at ?? null;
     newestRef.current = normalized[0]?.created_at ?? null;
     setHasMore(allPosts.length === PAGE_SIZE);
@@ -245,8 +248,9 @@ export function useFeedPosts(): FeedState {
       newMap.set(lp.id, merged);
       cacheObj[lp.id] = merged;
 
-      const firstImg = lp.section_images?.[0];
-      if (firstImg) preloadImage(firstImg);
+      (lp.section_images ?? [])
+        .filter(Boolean)
+        .forEach((url: string) => preloadImage(url));
       if (lp.album_art_url) preloadImage(lp.album_art_url);
 
       if (resolveTypographyFromDirection && getFontNamesForPreload && ensureFontReady) {
@@ -312,8 +316,9 @@ export function useFeedPosts(): FeedState {
           newMap.set(lp.id, merged);
           cacheObj[lp.id] = merged;
 
-          const firstImg = lp.section_images?.[0];
-          if (firstImg) preloadImage(firstImg);
+          (lp.section_images ?? [])
+            .filter(Boolean)
+            .forEach((url: string) => preloadImage(url));
           if (lp.album_art_url) preloadImage(lp.album_art_url);
         }
 
@@ -397,8 +402,9 @@ export function useFeedPosts(): FeedState {
           newMap.set(lp.id, merged);
           cacheObj[lp.id] = merged;
 
-          const firstImg = lp.section_images?.[0];
-          if (firstImg) preloadImage(firstImg);
+          (lp.section_images ?? [])
+            .filter(Boolean)
+            .forEach((url: string) => preloadImage(url));
           if (lp.album_art_url) preloadImage(lp.album_art_url);
         }
 
