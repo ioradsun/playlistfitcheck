@@ -640,6 +640,32 @@ export function FitTab({
 
   const playerReady = !!(danceData && fontReady);
 
+  // ── Audio bridge (must be after playerReady declaration) ─────────────
+  useEffect(() => {
+    const audio = dancePlayerRef.current?.getPlayer()?.audio;
+    if (!audio) return;
+
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    audio.addEventListener("ended", onEnded);
+
+    return () => {
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("ended", onEnded);
+    };
+  }, [playerReady]);
+
   const LyricDanceEmbedModule = useMemo(
     () =>
       danceId
