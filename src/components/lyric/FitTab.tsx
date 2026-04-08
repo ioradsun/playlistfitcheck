@@ -45,14 +45,22 @@ import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useVoteGate } from "@/hooks/useVoteGate";
 
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
-import type { UseLyricPipelineReturn } from "@/hooks/useLyricPipeline";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { extractPeaks } from "@/lib/audioUtils";
 import { persistQueue } from "@/lib/persistQueue";
 
 interface Props {
-  pipeline: UseLyricPipelineReturn;
+  pipeline: {
+    retryImages: () => void | Promise<void>;
+    setSectionImageUrls: React.Dispatch<React.SetStateAction<(string | null)[]>>;
+    setSectionImageProgress: React.Dispatch<
+      React.SetStateAction<{ done: number; total: number } | null>
+    >;
+    setGenerationStatus: React.Dispatch<React.SetStateAction<GenerationStatus>>;
+    spotifyTrackId?: string | null;
+    setSpotifyTrackId?: React.Dispatch<React.SetStateAction<string | null>>;
+  };
   lyricData: LyricData;
   audioFile: File;
   parentWaveform?: WaveformData | null;
@@ -509,8 +517,11 @@ export function FitTab({
     audio.addEventListener("pause", onPause);
     audio.addEventListener("ended", onEnded);
 
-    // Only decode locally if parent didn't provide waveform
-    if (!parentWaveformRef.current) {
+    const waveformFromParent = parentWaveformRef.current;
+    // Only decode locally if parent didn't provide waveform at effect fire time.
+    if (waveformFromParent) {
+      setWaveform(waveformFromParent);
+    } else {
       const ctx = new AudioContext();
       audioFile
         .arrayBuffer()

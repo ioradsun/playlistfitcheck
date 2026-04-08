@@ -233,7 +233,14 @@ export function LyricFitTab({
           }}
         >
           <FitTab
-            pipeline={p.pipelineCompat}
+            pipeline={{
+              retryImages: p.retryImages,
+              setSectionImageUrls: p.setSectionImageUrls,
+              setSectionImageProgress: p.setSectionImageProgress,
+              setGenerationStatus: p.setGenerationStatus,
+              spotifyTrackId: p.spotifyTrackId,
+              setSpotifyTrackId: p.setSpotifyTrackId,
+            }}
             lyricData={p.lyricData}
             audioFile={p.audioFile}
             hasRealAudio={p.hasRealAudio}
