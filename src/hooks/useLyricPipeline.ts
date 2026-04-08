@@ -96,7 +96,7 @@ async function createDanceRowAndGenerateImages({
   beatGrid,
   cinematicDirection,
   words,
-  renderData: _renderData,
+  renderData,
   audioDurationSec,
   setPipelineDanceId,
   setPipelineDanceUrl,
@@ -237,6 +237,19 @@ async function createDanceRowAndGenerateImages({
 
   setPipelineDanceId(resolvedDanceId);
   setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
+  if (resolvedDanceId && savedIdRef.current) {
+    persistQueue.enqueue({
+      table: "lyric_projects",
+      id: savedIdRef.current,
+      payload: {
+        render_data: {
+          ...(renderData ?? {}),
+          pipelineDanceId: resolvedDanceId,
+          pipelineDanceUrl: `/${artistSlugVal}/${songSlugVal}/lyric-dance`,
+        },
+      },
+    });
+  }
 
   if (!hasSections) {
     setSectionImageUrls([]);

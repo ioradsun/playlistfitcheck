@@ -168,6 +168,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
         .select("id, title, updated_at")
         .eq("user_id", user.id)
         .is("deleted_at", null)
+        .is("artist_slug", null)
         .order("updated_at", { ascending: false })
         .limit(20),
       supabase
