@@ -223,7 +223,7 @@ export function LyricsTab({
       let projectId: string | null = null;
       let storageAudioUrl: string | null = null;
       try {
-        const project = await handleFileSelected(file);
+        const project = await handleFileSelected(file, savedId ?? undefined);
         
         projectId = project?.projectId ?? null;
         storageAudioUrl = project?.audioUrl ?? null;
@@ -461,7 +461,7 @@ export function LyricsTab({
         setLoading(false);
       }
     },
-    [quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted, setSpotifyTrackId, filmMode],
+    [quota, handleFileSelected, user, onSavedId, onProjectSaved, resolveProjectTitle, setLyricData, setLines, setAudioFile, setHasRealAudio, setSavedId, onAudioSubmitted, onUploadStarted, setSpotifyTrackId, filmMode, savedId],
   );
 
   // ── Auto-submit for claim pages ──────────────────────────────────────
@@ -573,6 +573,11 @@ export function LyricsTab({
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto">
       {showAuthNudge ? <div className="w-full max-w-3xl mb-3"><AuthNudge onDismiss={dismissAuthNudge} /></div> : null}
+      {savedId && !audioFile && (
+        <p className="text-xs text-muted-foreground/50 text-center mb-2 font-mono">
+          re-upload your audio to resume
+        </p>
+      )}
         <LyricUploader
           onTranscribe={handleTranscribe}
           loading={loading}

@@ -54,7 +54,7 @@ export function useAudioProject(config: UseAudioProjectConfig) {
   const [showAuthNudge, setShowAuthNudge] = useState(false);
 
   const handleFileSelected = useCallback(
-    async (file: File): Promise<AudioProject | null> => {
+    async (file: File, existingProjectId?: string | null): Promise<AudioProject | null> => {
       if (!user) {
         setShowAuthNudge(true);
         return null;
@@ -62,31 +62,43 @@ export function useAudioProject(config: UseAudioProjectConfig) {
 
       setIsCreating(true);
       try {
-        const projectId = uuidv4();
+        const projectId = existingProjectId ?? uuidv4();
         const storagePath = getUnifiedStoragePath(user.id, config.tool, projectId, file.name);
         const audioUrl = await uploadAudioFile(storagePath, file);
 
-        const stubRow: Record<string, unknown> = {
-          id: projectId,
-          ...config.buildStubRow({ projectId, file, audioUrl, userId: user.id }),
-        };
-        // Only include audio_url if the table supports it
-        if (config.includeAudioUrl !== false) {
-          stubRow.audio_url = audioUrl;
+        if (existingProjectId) {
+          const { error: dbError } = await supabase
+            .from(config.dbTable as any)
+            .update({
+              audio_url: audioUrl,
+              filename: file.name,
+              updated_at: new Date().toISOString(),
+            } as any)
+            .eq("id", existingProjectId);
+          if (dbError) throw dbError;
+        } else {
+          const stubRow: Record<string, unknown> = {
+            id: projectId,
+            ...config.buildStubRow({ projectId, file, audioUrl, userId: user.id }),
+          };
+          // Only include audio_url if the table supports it
+          if (config.includeAudioUrl !== false) {
+            stubRow.audio_url = audioUrl;
+          }
+
+          const { error: dbError } = await supabase.from(config.dbTable as any).insert(stubRow as any);
+          if (dbError) throw dbError;
+
+          config.onOptimisticItem?.({
+            id: projectId,
+            label: config.getSidebarLabel(file),
+            meta: "just now",
+            type: config.tool === "crowdfit" ? "songfit" : config.tool,
+            rawData: config.getSidebarRawData({ projectId, file, audioUrl }),
+          });
+
+          config.onProjectCreated?.(projectId);
         }
-
-        const { error: dbError } = await supabase.from(config.dbTable as any).insert(stubRow as any);
-        if (dbError) throw dbError;
-
-        config.onOptimisticItem?.({
-          id: projectId,
-          label: config.getSidebarLabel(file),
-          meta: "just now",
-          type: config.tool === "crowdfit" ? "songfit" : config.tool,
-          rawData: config.getSidebarRawData({ projectId, file, audioUrl }),
-        });
-
-        config.onProjectCreated?.(projectId);
 
         return { projectId, audioUrl, file };
       } catch (error) {
