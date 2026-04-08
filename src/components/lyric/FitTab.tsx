@@ -1252,6 +1252,7 @@ export function FitTab({
                       isVerified={profile?.is_verified ?? false}
                       userId={user?.id ?? null}
                       prefetchedData={prefetchedDanceData}
+                      lyricDanceUrl={publishedUrl ?? null}
                     />
                   ) : null}
                 </Suspense>
