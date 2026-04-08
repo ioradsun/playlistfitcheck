@@ -66,99 +66,99 @@ serve(async (req) => {
       { data: follows },
     ] = await Promise.all([
       supabase
-        .from("lyric_dance_fires")
+        .from("project_fires")
         .select(`
           id, line_index, time_sec, hold_ms, created_at,
-          shareable_lyric_dances!inner(
-            id, song_name, artist_name, user_id
+          lyric_projects!inner(
+            id, title, artist_name, user_id
           )
         `)
         .eq("user_id", partnerId)
-        .eq("shareable_lyric_dances.user_id", myId)
+        .eq("lyric_projects.user_id", myId)
         .order("created_at", { ascending: true })
         .limit(200),
       supabase
-        .from("lyric_dance_fires")
+        .from("project_fires")
         .select(`
           id, line_index, time_sec, hold_ms, created_at,
-          shareable_lyric_dances!inner(
-            id, song_name, artist_name, user_id
+          lyric_projects!inner(
+            id, title, artist_name, user_id
           )
         `)
         .eq("user_id", myId)
-        .eq("shareable_lyric_dances.user_id", partnerId)
+        .eq("lyric_projects.user_id", partnerId)
         .order("created_at", { ascending: true })
         .limit(200),
       supabase
-        .from("lyric_dance_comments")
+        .from("project_comments")
         .select(`
           id, text, line_index, submitted_at,
-          shareable_lyric_dances!inner(id, song_name, user_id)
+          lyric_projects!inner(id, title, user_id)
         `)
         .eq("user_id", partnerId)
-        .eq("shareable_lyric_dances.user_id", myId)
+        .eq("lyric_projects.user_id", myId)
         .is("parent_comment_id", null)
         .order("submitted_at", { ascending: true })
         .limit(200),
       supabase
-        .from("lyric_dance_comments")
+        .from("project_comments")
         .select(`
           id, text, line_index, submitted_at,
-          shareable_lyric_dances!inner(id, song_name, user_id)
+          lyric_projects!inner(id, title, user_id)
         `)
         .eq("user_id", myId)
-        .eq("shareable_lyric_dances.user_id", partnerId)
+        .eq("lyric_projects.user_id", partnerId)
         .is("parent_comment_id", null)
         .order("submitted_at", { ascending: true })
         .limit(200),
       supabase
-        .from("songfit_comments")
+        .from("feed_comments")
         .select(`
           id, content, created_at,
-          songfit_posts!inner(id, track_title, user_id)
+          feed_posts!inner(id, project_id, user_id, lyric_projects(title))
         `)
         .eq("user_id", partnerId)
-        .eq("songfit_posts.user_id", myId)
+        .eq("feed_posts.user_id", myId)
         .order("created_at", { ascending: true })
         .limit(100),
       supabase
-        .from("songfit_comments")
+        .from("feed_comments")
         .select(`
           id, content, created_at,
-          songfit_posts!inner(id, track_title, user_id)
+          feed_posts!inner(id, project_id, user_id, lyric_projects(title))
         `)
         .eq("user_id", myId)
-        .eq("songfit_posts.user_id", partnerId)
+        .eq("feed_posts.user_id", partnerId)
         .order("created_at", { ascending: true })
         .limit(100),
       supabase
-        .from("lyric_dance_plays")
+        .from("project_plays")
         .select(`
           session_id, was_muted, max_progress_pct, play_count,
           duration_sec, updated_at,
-          shareable_lyric_dances!inner(id, song_name, user_id)
+          lyric_projects!inner(id, title, user_id)
         `)
         .eq("user_id", partnerId)
-        .eq("shareable_lyric_dances.user_id", myId)
+        .eq("lyric_projects.user_id", myId)
         .order("updated_at", { ascending: true }),
       supabase
-        .from("lyric_dance_plays")
+        .from("project_plays")
         .select(`
           session_id, was_muted, max_progress_pct, play_count,
           duration_sec, updated_at,
-          shareable_lyric_dances!inner(id, song_name, user_id)
+          lyric_projects!inner(id, title, user_id)
         `)
         .eq("user_id", myId)
-        .eq("shareable_lyric_dances.user_id", partnerId)
+        .eq("lyric_projects.user_id", partnerId)
         .order("updated_at", { ascending: true }),
       supabase
-        .from("songfit_saves")
+        .from("feed_saves")
         .select(`
           id, created_at,
-          songfit_posts!inner(id, track_title, user_id)
+          feed_posts!inner(id, project_id, user_id, lyric_projects(title))
         `)
         .eq("user_id", partnerId)
-        .eq("songfit_posts.user_id", myId)
+        .eq("feed_posts.user_id", myId)
         .order("created_at", { ascending: true })
         .limit(100),
       supabase
@@ -193,7 +193,7 @@ serve(async (req) => {
     ) => {
       const grouped = new Map<string, ActivityEvent>();
       for (const row of rows ?? []) {
-        const dance = row.shareable_lyric_dances;
+        const dance = row.lyric_projects;
         const key = `${dance?.id}-${row.line_index}`;
         const existing = grouped.get(key);
         if (existing) {
@@ -207,7 +207,7 @@ serve(async (req) => {
             kind: "fire",
             direction,
             created_at: row.created_at,
-            song_name: dance?.song_name,
+            song_name: dance?.title,
             line_index: row.line_index,
             time_sec: row.time_sec,
             hold_ms: row.hold_ms,
@@ -222,13 +222,13 @@ serve(async (req) => {
     events.push(...collapseFiresIntoGroups(myFires ?? [], "outgoing"));
 
     for (const row of playsOnMe ?? []) {
-      const dance = row.shareable_lyric_dances as any;
+      const dance = row.lyric_projects as any;
       events.push({
         id: `play-${row.session_id}`,
         kind: "play",
         direction: "incoming",
         created_at: row.updated_at,
-        song_name: dance?.song_name,
+        song_name: dance?.title,
         max_progress_pct: row.max_progress_pct,
         play_count: row.play_count,
         duration_sec: row.duration_sec,
@@ -237,13 +237,13 @@ serve(async (req) => {
     }
 
     for (const row of myPlays ?? []) {
-      const dance = row.shareable_lyric_dances as any;
+      const dance = row.lyric_projects as any;
       events.push({
         id: `play-${row.session_id}`,
         kind: "play",
         direction: "outgoing",
         created_at: row.updated_at,
-        song_name: dance?.song_name,
+        song_name: dance?.title,
         max_progress_pct: row.max_progress_pct,
         play_count: row.play_count,
         duration_sec: row.duration_sec,
@@ -252,63 +252,63 @@ serve(async (req) => {
     }
 
     for (const row of lyricCommentsOnMe ?? []) {
-      const dance = row.shareable_lyric_dances as any;
+      const dance = row.lyric_projects as any;
       events.push({
         id: row.id,
         kind: "lyric_comment",
         direction: "incoming",
         created_at: row.submitted_at,
-        song_name: dance?.song_name,
+        song_name: dance?.title,
         line_index: row.line_index,
         text: row.text,
       });
     }
 
     for (const row of myLyricComments ?? []) {
-      const dance = row.shareable_lyric_dances as any;
+      const dance = row.lyric_projects as any;
       events.push({
         id: row.id,
         kind: "lyric_comment",
         direction: "outgoing",
         created_at: row.submitted_at,
-        song_name: dance?.song_name,
+        song_name: dance?.title,
         line_index: row.line_index,
         text: row.text,
       });
     }
 
     for (const row of postCommentsOnMe ?? []) {
-      const post = row.songfit_posts as any;
+      const post = row.feed_posts as any;
       events.push({
         id: row.id,
         kind: "post_comment",
         direction: "incoming",
         created_at: row.created_at,
-        song_name: post?.track_title,
+        song_name: post?.lyric_projects?.title,
         text: row.content,
       });
     }
 
     for (const row of myPostComments ?? []) {
-      const post = row.songfit_posts as any;
+      const post = row.feed_posts as any;
       events.push({
         id: row.id,
         kind: "post_comment",
         direction: "outgoing",
         created_at: row.created_at,
-        song_name: post?.track_title,
+        song_name: post?.lyric_projects?.title,
         text: row.content,
       });
     }
 
     for (const row of savesOnMe ?? []) {
-      const post = row.songfit_posts as any;
+      const post = row.feed_posts as any;
       events.push({
         id: row.id,
         kind: "save",
         direction: "incoming",
         created_at: row.created_at,
-        song_name: post?.track_title,
+        song_name: post?.lyric_projects?.title,
       });
     }
 

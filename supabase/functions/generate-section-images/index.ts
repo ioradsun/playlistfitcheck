@@ -21,8 +21,7 @@ interface SectionInput {
 }
 
 interface RequestBody {
-  lyric_dance_id: string;
-  saved_lyric_id?: string;
+  project_id: string;
   force?: boolean;
 }
 
@@ -353,11 +352,11 @@ serve(async (req) => {
         },
       );
     }
-    const { lyric_dance_id, saved_lyric_id, force } = body;
+    const { project_id, force } = body;
 
-    if (!lyric_dance_id) {
+    if (!project_id) {
       return new Response(
-        JSON.stringify({ error: "lyric_dance_id is required" }),
+        JSON.stringify({ error: "project_id is required" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -375,13 +374,13 @@ serve(async (req) => {
     const supabase = createClient(sbUrl, sbKey);
 
     const { data: danceRow, error: danceError } = await supabase
-      .from("shareable_lyric_dances")
-      .select("cinematic_direction, section_images, lyrics, words")
-      .eq("id", lyric_dance_id)
+      .from("lyric_projects")
+      .select("cinematic_direction, section_images, lines, words")
+      .eq("id", project_id)
       .maybeSingle();
 
     if (danceError || !danceRow) {
-      throw new Error(`Could not load lyric dance ${lyric_dance_id}`);
+      throw new Error(`Could not load lyric project ${project_id}`);
     }
 
     const existingImages = danceRow?.section_images;
@@ -391,7 +390,7 @@ serve(async (req) => {
       existingImages.length > 0 &&
       existingImages.every((url: string) => !!url)
     ) {
-      await triggerPreviewPrecompute(sbUrl, sbKey, lyric_dance_id);
+      await triggerPreviewPrecompute(sbUrl, sbKey, project_id);
       return new Response(
         JSON.stringify({
           success: true,
@@ -411,7 +410,7 @@ serve(async (req) => {
       typeof cinematicDirection?._artistDirection === "string"
         ? cinematicDirection._artistDirection.trim() || undefined
         : undefined;
-    const lines = Array.isArray(danceRow?.lyrics) ? danceRow.lyrics : [];
+    const lines = Array.isArray(danceRow?.lines) ? danceRow.lines : [];
 
     const rawSections = Array.isArray(cinematicDirection?.sections)
       ? cinematicDirection.sections
@@ -530,7 +529,7 @@ serve(async (req) => {
         const corrected = enforceMinimumLuminance(base64, 0.12);
         const ext = corrected.includes("image/png") ? "png" : "jpg";
         const cacheBust = Date.now();
-        const path = `${lyric_dance_id}/section-${sections[i].sectionIndex}-${cacheBust}.${ext}`;
+        const path = `${project_id}/section-${sections[i].sectionIndex}-${cacheBust}.${ext}`;
         return uploadBase64ToStorage(supabase, corrected, path);
       }),
     );
@@ -542,26 +541,15 @@ serve(async (req) => {
 
     if (successCount > 0) {
       const { error: updateError } = await supabase
-        .from("shareable_lyric_dances")
+        .from("lyric_projects")
         .update({ section_images: urls, updated_at: new Date().toISOString() })
-        .eq("id", lyric_dance_id);
+        .eq("id", project_id);
 
       if (updateError) {
         console.error("[section-images] DB update error:", updateError.message);
       } else if (allComplete) {
         // Only trigger preview precompute if ALL images are ready
-        await triggerPreviewPrecompute(sbUrl, sbKey, lyric_dance_id);
-      }
-      if (saved_lyric_id) {
-        const { error: savedError } = await supabase
-          .from("saved_lyrics")
-          .update({ section_images: urls, updated_at: new Date().toISOString() })
-          .eq("id", saved_lyric_id);
-        if (savedError) {
-          console.error(
-            `[section-images] saved_lyrics update error: ${savedError.message}`,
-          );
-        }
+        await triggerPreviewPrecompute(sbUrl, sbKey, project_id);
       }
     }
 

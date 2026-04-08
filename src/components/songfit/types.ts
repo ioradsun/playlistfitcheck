@@ -4,10 +4,10 @@ export interface SongFitPost {
   project_id: string | null;
   caption: string;
   tags_json: string[];
-  likes_count: number;
-  comments_count: number;
   fires_count: number;
   saves_count: number;
+  comments_count: number;
+  impressions: number;
   created_at: string;
   status: 'draft' | 'live' | 'expired' | 'cooldown' | 'eligible';
   submitted_at: string;
@@ -16,7 +16,6 @@ export interface SongFitPost {
   cycle_number: number;
   engagement_score: number;
   peak_rank: number | null;
-  impressions: number;
   legacy_boost: number;
   profiles?: { display_name: string | null; avatar_url: string | null; spotify_artist_id: string | null; wallet_address?: string | null; is_verified?: boolean };
   lyric_projects?: {
@@ -32,11 +31,6 @@ export interface SongFitPost {
     beat_grid: any;
     section_images: string[] | null;
   };
-  spotify_track_id?: string | null;
-  spotify_track_url?: string | null;
-  album_art_url?: string | null;
-  track_artists_json?: { name: string; id?: string; spotifyUrl?: string }[];
-  lyric_dance_url?: string | null;
   user_has_liked?: boolean;
   user_has_saved?: boolean;
   billboard_score?: number;

@@ -505,8 +505,7 @@ export function FitTab({
               user_id: user.id,
               title: lyricData.title || "Untitled",
               caption: "",
-              lyric_dance_url: publishedUrl,
-              project_id: publishedDanceId,
+                            project_id: publishedDanceId,
               spotify_track_id: pipeline.spotifyTrackId ?? null,
               spotify_track_url: pipeline.spotifyTrackId
                 ? `https://open.spotify.com/track/${pipeline.spotifyTrackId}`
@@ -688,7 +687,7 @@ export function FitTab({
   }, [lyricData?.lines, words]);
 
   // ── Auto-save lyrics edits back to DB ────────────────────────────────
-  // The canvas preview now updates live, but `shareable_lyric_dances` still
+  // The canvas preview now updates live, but `lyric_projects` still
   // holds the old lyrics. Without writing back, page reload and the shareable
   // link always show the original Whisper transcription.
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -891,10 +890,7 @@ export function FitTab({
             .maybeSingle();
 
           if (existing) {
-            await supabase
-              .from("feed_posts" as any)
-              .update({ lyric_dance_url: url })
-              .eq("id", existing.id);
+            // post already exists for this project_id
           } else {
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + 21);
@@ -903,8 +899,7 @@ export function FitTab({
               user_id: user.id,
               title: lyricData.title || "Untitled",
               caption: "",
-              lyric_dance_url: url,
-              project_id: danceId,
+                            project_id: danceId,
               spotify_track_id: pipeline.spotifyTrackId ?? null,
               spotify_track_url: pipeline.spotifyTrackId
                 ? `https://open.spotify.com/track/${pipeline.spotifyTrackId}`
