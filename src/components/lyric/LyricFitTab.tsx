@@ -112,18 +112,18 @@ export function LyricFitTab({
 
   useEffect(() => {
     if (!claimMeta) return;
-    if (p.lyricData && (p.audioFile || p.savedId) && activeTab === "lyrics" && p.isComplete) {
+    if (p.lyricData && (p.audioUrl || p.savedId) && activeTab === "lyrics" && p.isComplete) {
       setActiveTab("fit");
     }
-  }, [claimMeta, p.lyricData, p.audioFile, p.savedId, activeTab, p.isComplete]);
+  }, [claimMeta, p.lyricData, p.audioUrl, p.savedId, activeTab, p.isComplete]);
 
   useEffect(() => {
     if (filmMode !== "beat") return;
     if (activeTab !== "lyrics") return;
-    if (p.audioFile || p.savedId || p.cinematicDirection) {
+    if (p.audioUrl || p.savedId || p.cinematicDirection) {
       setActiveTab("fit");
     }
-  }, [filmMode, activeTab, p.audioFile, p.savedId, p.cinematicDirection]);
+  }, [filmMode, activeTab, p.audioUrl, p.savedId, p.cinematicDirection]);
 
   const sceneInputNode = !p.lyricData ? (
     <div className="space-y-1.5">
@@ -213,7 +213,7 @@ export function LyricFitTab({
         />
       </div>
 
-      {p.lyricData && (p.audioFile || p.savedId) && (
+      {p.lyricData && (p.audioUrl || p.savedId) && (
         <div
           style={{
             display: activeTab === "fit" || activeTab === "data" ? "flex" : "none",
@@ -232,7 +232,7 @@ export function LyricFitTab({
               setSpotifyTrackId: p.setSpotifyTrackId,
             }}
             lyricData={p.lyricData}
-            audioFile={p.audioFile}
+            audioUrl={p.audioUrl}
             hasRealAudio={p.hasRealAudio}
             savedId={p.savedId}
             renderData={p.renderData}

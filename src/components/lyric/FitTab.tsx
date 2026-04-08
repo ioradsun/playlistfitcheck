@@ -43,10 +43,8 @@ import { useVoteGate } from "@/hooks/useVoteGate";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { fetchFireStrength, fetchFireData } from "@/lib/fire";
-import { extractPeaks } from "@/lib/audioUtils";
 import { persistQueue } from "@/lib/persistQueue";
 import { preloadImage } from "@/lib/imagePreloadCache";
-import { getCachedAudioBuffer } from "@/lib/audioDecodeCache";
 
 interface Props {
   pipeline: {
@@ -60,7 +58,7 @@ interface Props {
     setSpotifyTrackId?: React.Dispatch<React.SetStateAction<string | null>>;
   };
   lyricData: LyricData;
-  audioFile: File | null;
+  audioUrl: string | null;
   parentWaveform?: WaveformData | null;
   hasRealAudio: boolean;
   savedId: string | null;
@@ -260,7 +258,7 @@ function SpotifyLinkField({
 export function FitTab({
   pipeline,
   lyricData,
-  audioFile,
+  audioUrl,
   parentWaveform,
   hasRealAudio,
   savedId,
@@ -283,9 +281,10 @@ export function FitTab({
   const { canCreate, credits, required } = useVoteGate();
 
   const danceData = useMemo<LyricDanceData | null>(() => {
-    if (!savedId || !cinematicDirection || !beatGrid) return null;
+    if (!savedId || !cinematicDirection || !beatGrid || !audioUrl) return null;
     return {
       id: savedId,
+      audio_url: audioUrl,
       cinematic_direction: cinematicDirection,
       beat_grid: beatGrid,
       words: words ?? null,
@@ -294,7 +293,7 @@ export function FitTab({
       palette: null,
       auto_palettes: null,
     } as any;
-  }, [savedId, cinematicDirection, beatGrid, words, lyricData, sectionImageUrls]);
+  }, [savedId, audioUrl, cinematicDirection, beatGrid, words, lyricData, sectionImageUrls]);
 
   const danceId = savedId;
   const danceUrl = useMemo(() => {
@@ -469,24 +468,14 @@ export function FitTab({
   ]);
 
   // ── Audio playback + waveform ─────────────────────────────────────────
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioUrlRef = useRef<string>("");
   const fireHeatmapCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [waveform, setWaveform] = useState<WaveformData | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const activeWaveform = waveform ?? parentWaveform ?? null;
-  const parentWaveformRef = useRef(parentWaveform);
-  parentWaveformRef.current = parentWaveform;
+  const activeWaveform = parentWaveform ?? null;
 
   useEffect(() => {
-    if (!audioFile || audioFile.size === 0) return;
-
-    const url = URL.createObjectURL(audioFile);
-    audioUrlRef.current = url;
-    const audio = new Audio(url);
-    audio.preload = "auto";
-    audioRef.current = audio;
+    const audio = dancePlayerRef.current?.getPlayer()?.audio;
+    if (!audio) return;
 
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
     const onPlay = () => setIsPlaying(true);
@@ -501,34 +490,13 @@ export function FitTab({
     audio.addEventListener("pause", onPause);
     audio.addEventListener("ended", onEnded);
 
-    const waveformFromParent = parentWaveformRef.current;
-    // Only decode locally if parent didn't provide waveform at effect fire time.
-    if (waveformFromParent) {
-      setWaveform(waveformFromParent);
-    } else {
-      getCachedAudioBuffer(audioFile)
-        .then((buf) => {
-          setWaveform({
-            peaks: extractPeaks(buf, 200),
-            duration: buf.duration,
-          });
-        })
-        .catch(() => {});
-    }
-
     return () => {
-      audio.pause();
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("ended", onEnded);
-      URL.revokeObjectURL(url);
-      if (audioUrlRef.current === url) audioUrlRef.current = "";
-      audioRef.current = null;
     };
-    // parentWaveform intentionally read from ref — avoids re-creating Audio + blob on waveform updates
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audioFile]);
+  }, [playerReady]);
 
   useEffect(() => {
     if (!sectionImageUrls.length) return;
@@ -540,16 +508,15 @@ export function FitTab({
   }, [sectionImageUrls]);
 
   const handleSeek = useCallback((time: number) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      setCurrentTime(time);
-    }
+    const audio = dancePlayerRef.current?.getPlayer()?.audio;
+    if (audio) audio.currentTime = time;
   }, []);
 
   const handleTogglePlay = useCallback(() => {
-    if (!audioRef.current) return;
-    if (audioRef.current.paused) audioRef.current.play().catch(() => {});
-    else audioRef.current.pause();
+    const audio = dancePlayerRef.current?.getPlayer()?.audio;
+    if (!audio) return;
+    if (audio.paused) audio.play().catch(() => {});
+    else audio.pause();
   }, []);
 
   // ── Header project ────────────────────────────────────────────────────
@@ -560,10 +527,10 @@ export function FitTab({
       lyricData.title !== "Unknown" &&
       lyricData.title !== "Untitled"
         ? lyricData.title
-        : (audioFile?.name ?? "Untitled").replace(/\.[^.]+$/, "");
+        : ((initialLyric as any)?.title || "Untitled");
     onHeaderProject({ title, onBack: onBack ?? (() => {}), onTitleChange });
     return () => onHeaderProject(null);
-  }, [lyricData.title, audioFile?.name, onHeaderProject, onBack, onTitleChange]);
+  }, [lyricData.title, initialLyric, onHeaderProject, onBack, onTitleChange]);
 
   // ── Live transcript sync ──────────────────────────────────────────────
   // FitTab stays mounted (hidden) while the user edits in LyricsTab.
