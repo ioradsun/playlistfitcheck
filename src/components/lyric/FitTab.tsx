@@ -76,6 +76,7 @@ interface Props {
   onTitleChange?: (newTitle: string) => void;
   subView?: "fit" | "data";
   filmMode?: "song" | "beat";
+  onPlayerReady?: (ready: boolean) => void;
 }
 
 function SpotifyLinkField({
@@ -258,6 +259,7 @@ export function FitTab({
   onTitleChange,
   subView = "fit",
   filmMode = "song",
+  onPlayerReady,
 }: Props) {
   const { user, profile } = useAuth();
   const { canCreate, credits, required, spendCredits } = useVoteGate();
@@ -1033,6 +1035,10 @@ export function FitTab({
     cinematicDirection,
     fontReady,
   ]);
+
+  useEffect(() => {
+    onPlayerReady?.(playerReady);
+  }, [playerReady, onPlayerReady]);
 
   useEffect(() => {
     if (playerReady || !publishedDanceId) {
