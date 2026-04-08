@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { persistQueue } from "@/lib/persistQueue";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
-import { getCachedAudioBuffer } from "@/lib/audioDecodeCache";
 import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import { extractPeaks } from "@/lib/audioUtils";
@@ -96,6 +95,7 @@ async function createDanceRowAndGenerateImages({
   words,
   renderData,
   audioDurationSec,
+  setAudioUrl,
   setGenerationStatus,
   setSectionImageUrls,
   setSectionImageProgress,
@@ -111,6 +111,7 @@ async function createDanceRowAndGenerateImages({
   words: Array<{ word: string; start: number; end: number }> | null;
   renderData: any | null;
   audioDurationSec: number;
+  setAudioUrl: React.Dispatch<React.SetStateAction<string | null>>;
   setGenerationStatus: React.Dispatch<React.SetStateAction<GenerationStatus>>;
   setSectionImageUrls: React.Dispatch<React.SetStateAction<(string | null)[]>>;
   setSectionImageProgress: React.Dispatch<
@@ -118,7 +119,7 @@ async function createDanceRowAndGenerateImages({
   >;
   isInstrumental?: boolean;
 }) {
-  if (!user || !audioFile) {
+  if (!user) {
     setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
     return {
       resolvedDanceId: null,
@@ -171,6 +172,17 @@ async function createDanceRowAndGenerateImages({
       } as any)
       .eq("id", resolvedDanceId);
   } else {
+    if (!audioFile) {
+      setGenerationStatus((prev) => ({ ...prev, sectionImages: "error" }));
+      return {
+        resolvedDanceId: null,
+        artistSlugVal,
+        songSlugVal,
+        allComplete: false,
+        generatedCount: 0,
+        total: dirSections?.length ?? 0,
+      };
+    }
     const audioFileName = audioFile.name || "audio.webm";
     const storagePath = savedIdRef.current
       ? (await import("@/lib/audioStoragePath")).getAudioStoragePath(
@@ -188,6 +200,7 @@ async function createDanceRowAndGenerateImages({
     const { data: urlData } = supabase.storage
       .from("audio-clips")
       .getPublicUrl(storagePath);
+    setAudioUrl(urlData.publicUrl);
 
     const { data: insertedRow } = await supabase.from("lyric_projects" as any).insert(
       {
@@ -724,6 +737,9 @@ export function useLyricPipeline({
     if (!initialLyric?.id) return null;
     return sessionAudio.get("lyric", initialLyric.id) ?? null;
   });
+  const [audioUrl, setAudioUrl] = useState<string | null>(
+    (initialLyric as any)?.audio_url ?? null,
+  );
 
   const [hasRealAudio, setHasRealAudio] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(
@@ -904,16 +920,15 @@ export function useLyricPipeline({
     }));
   }, [words]);
 
-  const allAnalysisLoaded = !!(beatGrid && cinematicDirection);
   useEffect(() => {
-    if (audioBuffer || !audioFile || audioFile.size === 0) return;
-    if (allAnalysisLoaded) {
-      return;
-    }
+    if (audioBuffer) return;
+    if (!audioUrl) return;
     if (!transcriptionDone && filmMode !== "beat") return;
 
     let cancelled = false;
-    getCachedAudioBuffer(audioFile)
+    fetch(audioUrl)
+      .then((r) => r.arrayBuffer())
+      .then((ab) => new AudioContext().decodeAudioData(ab))
       .then((buf) => {
         if (!cancelled) {
           setAudioBuffer(buf);
@@ -924,7 +939,7 @@ export function useLyricPipeline({
     return () => {
       cancelled = true;
     };
-  }, [audioFile, audioBuffer, allAnalysisLoaded, transcriptionDone, filmMode]);
+  }, [audioUrl, audioBuffer, transcriptionDone, filmMode]);
 
   const handleTitleChange = useCallback((newTitle: string) => {
     setLyricData((prev) => prev ? { ...prev, title: newTitle } : prev);
@@ -968,8 +983,6 @@ export function useLyricPipeline({
   useEffect(() => {
     if (!initialLyric || hydratedRef.current) return;
     hydratedRef.current = true;
-
-    const filename = initialLyric.filename || "saved-lyrics.mp3";
 
     // Waveform peaks — UI optimisation, read once from render_data
     const loadedRenderData = (initialLyric as any).render_data ?? null;
@@ -1021,7 +1034,7 @@ export function useLyricPipeline({
       });
     }
 
-    // Audio — must never re-run; re-fetching on prop change would be catastrophic
+    // Audio — single playback resource
     const cachedAudio = initialLyric.id
       ? sessionAudio.get("lyric", initialLyric.id)
       : undefined;
@@ -1029,34 +1042,21 @@ export function useLyricPipeline({
       setAudioFile(cachedAudio);
       setHasRealAudio(true);
     } else if ((initialLyric as any).audio_url) {
-      const audioUrl = (initialLyric as any).audio_url as string;
-      const audioAbort = new AbortController();
-      const audioTimeout = setTimeout(() => audioAbort.abort(), 15_000);
-      fetch(audioUrl, { signal: audioAbort.signal })
-        .then((res) => res.blob())
-        .then((blob) => {
-          clearTimeout(audioTimeout);
-          const file = new File([blob], filename, {
-            type: blob.type || "audio/mpeg",
-          });
-          setAudioFile(file);
-          setHasRealAudio(true);
-          if (initialLyric.id)
-            sessionAudio.set("lyric", initialLyric.id, file, {
-              ttlMs: 20 * 60 * 1000,
-            });
-        })
-        .catch(() => {
-          clearTimeout(audioTimeout);
-          console.warn("[Pipeline] Audio fetch failed or timed out");
-          setAudioFile(null);
-          setHasRealAudio(false);
-        });
+      setAudioUrl((initialLyric as any).audio_url as string);
+      setHasRealAudio(true);
     } else {
       setAudioFile(null);
+      setAudioUrl(null);
       setHasRealAudio(false);
     }
   }, [initialLyric]);
+
+  useEffect(() => {
+    if (!audioFile || audioUrl) return;
+    const blobUrl = URL.createObjectURL(audioFile);
+    setAudioUrl(blobUrl);
+    return () => URL.revokeObjectURL(blobUrl);
+  }, [audioFile, audioUrl]);
 
   // ── Effect B (reactive sync) ────────────────────────────────────────────────
   // Owns: transcriptionDone, beatGrid, renderData, cinematicDirection, sectionImages.
@@ -1493,6 +1493,7 @@ export function useLyricPipeline({
               words,
               renderData,
               audioDurationSec,
+              setAudioUrl,
               setGenerationStatus,
               setSectionImageUrls,
               setSectionImageProgress,
@@ -1530,7 +1531,8 @@ export function useLyricPipeline({
         setGenerationStatus((prev) => ({
           ...prev,
           cinematicDirection: "done",
-          sectionImages: "done",
+          sectionImages:
+            prev.sectionImages === "error" ? "error" : "done",
         }));
         setPipelineStages((prev) => ({ ...prev, cinematic: "done" }));
       } catch (err) {
@@ -1748,7 +1750,7 @@ export function useLyricPipeline({
         setPipelineStages((prev) => ({ ...prev, cinematic: "done" }));
 
         // Create dance row and generate images (mirrors song pipeline)
-        if (user && audioFile) {
+        if (user) {
           try {
             await createDanceRowAndGenerateImages({
               user,
@@ -1761,6 +1763,7 @@ export function useLyricPipeline({
               words,
               renderData,
               audioDurationSec,
+              setAudioUrl,
               setGenerationStatus,
               setSectionImageUrls,
               setSectionImageProgress,
@@ -1831,6 +1834,7 @@ export function useLyricPipeline({
   const isComplete = !!(
     beatGrid &&
     cinematicDirection &&
+    audioUrl &&
     (
       !(cinematicDirection as any)?.sections?.length ||
       (generationStatus.sectionImages === "done" && sectionImageUrls.some(Boolean))
@@ -1844,6 +1848,7 @@ export function useLyricPipeline({
     setLines([]);
     setAudioBuffer(null);
     setWaveformData(null);
+    setAudioUrl(null);
     setTranscriptionDone(false);
     setBeatGridDone(false);
     setGenerationStatus({
@@ -1869,6 +1874,7 @@ export function useLyricPipeline({
     setLyricData,
     audioFile,
     setAudioFile,
+    audioUrl,
     hasRealAudio,
     setHasRealAudio,
     savedId,
