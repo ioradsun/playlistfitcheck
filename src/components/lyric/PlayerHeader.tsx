@@ -12,7 +12,7 @@ const MODE_ICONS: Record<CardMode, ReactNode> = {
   listen: <Waves size={14} />,
   moments: <LayoutList size={14} />,
   results: <BarChart2 size={14} />,
-  empowerment: <ExternalLink size={14} />,
+  empowerment: <Sparkles size={14} />,
 };
 
 const MODES: CardMode[] = ["listen", "moments", "results", "empowerment"];
