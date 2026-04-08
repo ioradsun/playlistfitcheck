@@ -947,8 +947,23 @@ export function useLyricPipeline({
       getCachedAudioBuffer(audioFile)
         .then((buf) => {
           if (!cancelled) {
+            const peaks = extractPeaks(buf);
+            const waveform = { peaks, duration: buf.duration };
             setAudioBuffer(buf);
-            setWaveformData({ peaks: extractPeaks(buf), duration: buf.duration });
+            setWaveformData(waveform);
+            const id = savedIdRef.current;
+            if (id) {
+              persistQueue.enqueue({
+                table: "lyric_projects",
+                id,
+                payload: {
+                  render_data: {
+                    waveformPeaks: peaks,
+                    waveformDuration: buf.duration,
+                  },
+                },
+              });
+            }
           }
         })
         .catch((err) => {
@@ -967,8 +982,23 @@ export function useLyricPipeline({
       .then((ab) => new AudioContext().decodeAudioData(ab))
       .then((buf) => {
         if (!cancelled) {
+          const peaks = extractPeaks(buf);
+          const waveform = { peaks, duration: buf.duration };
           setAudioBuffer(buf);
-          setWaveformData({ peaks: extractPeaks(buf), duration: buf.duration });
+          setWaveformData(waveform);
+          const id = savedIdRef.current;
+          if (id) {
+            persistQueue.enqueue({
+              table: "lyric_projects",
+              id,
+              payload: {
+                render_data: {
+                  waveformPeaks: peaks,
+                  waveformDuration: buf.duration,
+                },
+              },
+            });
+          }
         }
       })
       .catch((err) => {
