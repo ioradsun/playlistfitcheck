@@ -482,6 +482,209 @@ export type Database = {
         }
         Relationships: []
       }
+      feed_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          likes_count: number
+          parent_comment_id: string | null
+          post_id: string
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          likes_count?: number
+          parent_comment_id?: string | null
+          post_id: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          likes_count?: number
+          parent_comment_id?: string | null
+          post_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feed_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "feed_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feed_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "feed_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feed_hook_reviews: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          session_id: string | null
+          user_id: string | null
+          would_replay: boolean | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          session_id?: string | null
+          user_id?: string | null
+          would_replay?: boolean | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          session_id?: string | null
+          user_id?: string | null
+          would_replay?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feed_hook_reviews_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "feed_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feed_likes: {
+        Row: {
+          created_at: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feed_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "feed_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feed_posts: {
+        Row: {
+          caption: string
+          comments_count: number
+          cooldown_until: string | null
+          created_at: string
+          cycle_number: number
+          engagement_score: number
+          expires_at: string | null
+          fires_count: number
+          id: string
+          impressions: number
+          legacy_boost: number
+          peak_rank: number | null
+          project_id: string
+          saves_count: number
+          status: string
+          submitted_at: string
+          tags_json: Json
+          user_id: string
+        }
+        Insert: {
+          caption?: string
+          comments_count?: number
+          cooldown_until?: string | null
+          created_at?: string
+          cycle_number?: number
+          engagement_score?: number
+          expires_at?: string | null
+          fires_count?: number
+          id?: string
+          impressions?: number
+          legacy_boost?: number
+          peak_rank?: number | null
+          project_id: string
+          saves_count?: number
+          status?: string
+          submitted_at?: string
+          tags_json?: Json
+          user_id: string
+        }
+        Update: {
+          caption?: string
+          comments_count?: number
+          cooldown_until?: string | null
+          created_at?: string
+          cycle_number?: number
+          engagement_score?: number
+          expires_at?: string | null
+          fires_count?: number
+          id?: string
+          impressions?: number
+          legacy_boost?: number
+          peak_rank?: number | null
+          project_id?: string
+          saves_count?: number
+          status?: string
+          submitted_at?: string
+          tags_json?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feed_posts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feed_saves: {
+        Row: {
+          created_at: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feed_saves_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "feed_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ghost_artist_profiles: {
         Row: {
           claim_token: string
@@ -865,6 +1068,99 @@ export type Database = {
           },
         ]
       }
+      lyric_projects: {
+        Row: {
+          album_art_url: string | null
+          artist_name: string | null
+          artist_slug: string | null
+          audio_url: string | null
+          auto_palettes: Json | null
+          beat_grid: Json | null
+          cinematic_direction: Json | null
+          created_at: string
+          deleted_at: string | null
+          empowerment_promise: Json | null
+          filename: string | null
+          fmly_lines: Json | null
+          id: string
+          is_published: boolean
+          lines: Json | null
+          palette: string[] | null
+          physics_spec: Json | null
+          published_at: string | null
+          render_data: Json | null
+          section_images: string[] | null
+          song_signature: Json | null
+          spotify_track_id: string | null
+          title: string
+          updated_at: string
+          url_slug: string | null
+          user_id: string
+          version_meta: Json | null
+          words: Json | null
+        }
+        Insert: {
+          album_art_url?: string | null
+          artist_name?: string | null
+          artist_slug?: string | null
+          audio_url?: string | null
+          auto_palettes?: Json | null
+          beat_grid?: Json | null
+          cinematic_direction?: Json | null
+          created_at?: string
+          deleted_at?: string | null
+          empowerment_promise?: Json | null
+          filename?: string | null
+          fmly_lines?: Json | null
+          id?: string
+          is_published?: boolean
+          lines?: Json | null
+          palette?: string[] | null
+          physics_spec?: Json | null
+          published_at?: string | null
+          render_data?: Json | null
+          section_images?: string[] | null
+          song_signature?: Json | null
+          spotify_track_id?: string | null
+          title?: string
+          updated_at?: string
+          url_slug?: string | null
+          user_id: string
+          version_meta?: Json | null
+          words?: Json | null
+        }
+        Update: {
+          album_art_url?: string | null
+          artist_name?: string | null
+          artist_slug?: string | null
+          audio_url?: string | null
+          auto_palettes?: Json | null
+          beat_grid?: Json | null
+          cinematic_direction?: Json | null
+          created_at?: string
+          deleted_at?: string | null
+          empowerment_promise?: Json | null
+          filename?: string | null
+          fmly_lines?: Json | null
+          id?: string
+          is_published?: boolean
+          lines?: Json | null
+          palette?: string[] | null
+          physics_spec?: Json | null
+          published_at?: string | null
+          render_data?: Json | null
+          section_images?: string[] | null
+          song_signature?: Json | null
+          spotify_track_id?: string | null
+          title?: string
+          updated_at?: string
+          url_slug?: string | null
+          user_id?: string
+          version_meta?: Json | null
+          words?: Json | null
+        }
+        Relationships: []
+      }
       mix_projects: {
         Row: {
           created_at: string
@@ -1223,6 +1519,243 @@ export type Database = {
             columns: ["artist_id"]
             isOneToOne: false
             referencedRelation: "profit_artists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_angle_votes: {
+        Row: {
+          created_at: string
+          hook_index: number | null
+          id: string
+          project_id: string
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          hook_index?: number | null
+          id?: string
+          project_id: string
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          hook_index?: number | null
+          id?: string
+          project_id?: string
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_angle_votes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_closing_picks: {
+        Row: {
+          created_at: string
+          free_text: string | null
+          hook_index: number | null
+          id: string
+          project_id: string
+          session_id: string | null
+          source: string | null
+        }
+        Insert: {
+          created_at?: string
+          free_text?: string | null
+          hook_index?: number | null
+          id?: string
+          project_id: string
+          session_id?: string | null
+          source?: string | null
+        }
+        Update: {
+          created_at?: string
+          free_text?: string | null
+          hook_index?: number | null
+          id?: string
+          project_id?: string
+          session_id?: string | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_closing_picks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_comments: {
+        Row: {
+          created_at: string
+          id: string
+          line_index: number | null
+          project_id: string
+          session_id: string | null
+          source: string | null
+          text: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          line_index?: number | null
+          project_id: string
+          session_id?: string | null
+          source?: string | null
+          text: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          line_index?: number | null
+          project_id?: string
+          session_id?: string | null
+          source?: string | null
+          text?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_comments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_exposures: {
+        Row: {
+          id: string
+          line_index: number | null
+          project_id: string
+          session_id: string | null
+          source: string | null
+          user_id: string | null
+        }
+        Insert: {
+          id?: string
+          line_index?: number | null
+          project_id: string
+          session_id?: string | null
+          source?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          id?: string
+          line_index?: number | null
+          project_id?: string
+          session_id?: string | null
+          source?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_exposures_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_fires: {
+        Row: {
+          created_at: string
+          hold_ms: number | null
+          id: string
+          line_index: number | null
+          project_id: string
+          session_id: string | null
+          source: string | null
+          time_sec: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          hold_ms?: number | null
+          id?: string
+          line_index?: number | null
+          project_id: string
+          session_id?: string | null
+          source?: string | null
+          time_sec?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          hold_ms?: number | null
+          id?: string
+          line_index?: number | null
+          project_id?: string
+          session_id?: string | null
+          source?: string | null
+          time_sec?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_fires_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_plays: {
+        Row: {
+          duration_sec: number | null
+          id: string
+          max_progress_pct: number | null
+          play_count: number | null
+          project_id: string
+          session_id: string | null
+          updated_at: string
+          user_id: string | null
+          was_muted: boolean | null
+        }
+        Insert: {
+          duration_sec?: number | null
+          id?: string
+          max_progress_pct?: number | null
+          play_count?: number | null
+          project_id: string
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+          was_muted?: boolean | null
+        }
+        Update: {
+          duration_sec?: number | null
+          id?: string
+          max_progress_pct?: number | null
+          play_count?: number | null
+          project_id?: string
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+          was_muted?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_plays_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_projects"
             referencedColumns: ["id"]
           },
         ]
