@@ -3,7 +3,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Mail, Waves, LayoutList, BarChart2, ExternalLink } from "lucide-react";
+import { User, Mail, Waves, LayoutList, BarChart2, ExternalLink, Sparkles } from "lucide-react";
 import { useDmContext } from "@/hooks/useDmContext";
 
 export type CardMode = "listen" | "moments" | "results" | "empowerment";
