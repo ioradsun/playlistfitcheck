@@ -126,8 +126,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
-        table: "lyric_dance_comments",
-        filter: `dance_id=eq.${danceId}`,
+        table: "project_comments",
+        filter: `project_id=eq.${danceId}`,
       }, (payload: any) => {
         const c = payload.new as Comment;
         setComments((prev) => {

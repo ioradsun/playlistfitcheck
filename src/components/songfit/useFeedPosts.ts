@@ -361,7 +361,7 @@ export function useFeedPosts(): FeedState {
       .channel("crowdfit-new-posts")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "songfit_posts", filter: "status=eq.live" },
+        { event: "INSERT", schema: "public", table: "feed_posts", filter: "status=eq.live" },
         (payload) => {
           const newRow = payload.new as { created_at?: string; user_id?: string };
           if (!newRow?.created_at) return;
