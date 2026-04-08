@@ -2840,7 +2840,57 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_closing_distribution: {
+        Row: {
+          dance_id: string | null
+          hook_index: number | null
+          pct: number | null
+          pick_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_closing_picks_project_id_fkey"
+            columns: ["dance_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_fire_strength: {
+        Row: {
+          avg_hold_ms: number | null
+          dance_id: string | null
+          fire_count: number | null
+          fire_strength: number | null
+          line_index: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_fires_project_id_fkey"
+            columns: ["dance_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_free_form_responses: {
+        Row: {
+          dance_id: string | null
+          free_text: string | null
+          repeat_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_closing_picks_project_id_fkey"
+            columns: ["dance_id"]
+            isOneToOne: false
+            referencedRelation: "lyric_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       has_role: {
