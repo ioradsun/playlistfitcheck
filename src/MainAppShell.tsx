@@ -69,11 +69,13 @@ export default function MainAppShell() {
                   <Route path={ROUTES.creative} element={<Suspense fallback={null}><Index /></Suspense>} />
                   <Route path={`${ROUTES.creative}/:projectId`} element={<Suspense fallback={null}><Index /></Suspense>} />
 
-                  {/* ── Legacy redirects ── */}
+                  {/* ── Legacy redirects (exact + wildcard) ── */}
                   {Object.entries(LEGACY_REDIRECTS).map(([from, to]) => (
                     <Route key={from} path={from} element={<Navigate to={to} replace />} />
                   ))}
-                  <Route path="/CrowdFit" element={<Navigate to={ROUTES.fmly} replace />} />
+                  {Object.entries(LEGACY_REDIRECTS).map(([from, to]) => (
+                    <Route key={`${from}/*`} path={`${from}/*`} element={<LegacyWildcardRedirect base={from} target={to} />} />
+                  ))}
 
                   {/* ── SEO pages ── */}
                   <Route path="/fmly-seo" element={<Suspense fallback={null}><SeoPages /></Suspense>} />
