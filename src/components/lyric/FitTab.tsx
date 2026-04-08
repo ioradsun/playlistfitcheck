@@ -371,9 +371,15 @@ export function FitTab({
       return;
     crowdfitTogglingRef.current = true;
     setCrowdfitToggling(true);
+
+    // Derive artist_slug + url_slug from publishedUrl or fallback
+    const urlParts = danceUrl?.match(/^\/([^/]+)\/([^/]+)\/lyric-dance/);
+    const artistSlug = urlParts?.[1] ?? slugify(`artist-${user.id.slice(0, 8)}`);
+    const urlSlugVal = urlParts?.[2] ?? slugify(lyricData?.title || "untitled");
+
     try {
       if (crowdfitPostId) {
-        // Remove from FMLY
+        // Remove from FMLY — keep slugs so public URL survives
         await supabase
           .from("feed_posts" as any)
           .update({ status: "removed" })
@@ -386,6 +392,13 @@ export function FitTab({
         setCrowdfitPostId(null);
         toast.success("Removed from FMLY");
       } else {
+        const publishPayload = {
+          is_published: true,
+          published_at: new Date().toISOString(),
+          ...(artistSlug ? { artist_slug: artistSlug } : {}),
+          ...(urlSlugVal ? { url_slug: urlSlugVal } : {}),
+        };
+
         // Look for existing removed post to reactivate
         const { data: existing }: any = await supabase
           .from("feed_posts" as any)
@@ -402,7 +415,7 @@ export function FitTab({
           if (reactivateError) throw new Error(reactivateError.message);
           await supabase
             .from("lyric_projects")
-            .update({ is_published: true, published_at: new Date().toISOString() })
+            .update(publishPayload)
             .eq("id", danceId)
             .eq("user_id", user.id);
           setCrowdfitPostId(existing.id);
@@ -427,7 +440,7 @@ export function FitTab({
             setCrowdfitPostId(inserted.id);
             await supabase
               .from("lyric_projects")
-              .update({ is_published: true, published_at: new Date().toISOString() })
+              .update(publishPayload)
               .eq("id", danceId)
               .eq("user_id", user.id);
           }
@@ -446,6 +459,7 @@ export function FitTab({
     danceId,
     danceUrl,
     crowdfitPostId,
+    lyricData?.title,
   ]);
 
   // ── Audio playback + waveform ─────────────────────────────────────────
