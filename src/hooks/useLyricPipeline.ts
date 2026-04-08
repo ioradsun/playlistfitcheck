@@ -1549,6 +1549,8 @@ export function useLyricPipeline({
         getTypography(typoPreset);
         deriveFrameState(enrichedScene, 0, 0.5);
 
+        setGenerationStatus((prev) => ({ ...prev, sectionImages: "running" }));
+
         const imagePromise = (async () => {
           const dirSections = enrichedScene?.sections;
           if (!mountedRef.current) return;
