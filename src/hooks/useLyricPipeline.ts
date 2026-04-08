@@ -766,59 +766,41 @@ export function useLyricPipeline({
     savedIdRef.current = savedId;
   }, [savedId]);
 
+  // ── Effect A: one-time hydration (audio, waveform, fit readiness) ──────────
+  // Uses hydratedRef so these side-effects fire exactly once.
+  // Audio fetching in particular must never re-run on prop changes.
   const hydratedRef = useRef(false);
   useEffect(() => {
     if (!initialLyric || hydratedRef.current) return;
     hydratedRef.current = true;
 
     const filename = initialLyric.filename || "saved-lyrics.mp3";
-    setTranscriptionDone(
-      Array.isArray(initialLyric.lines) && initialLyric.lines.length > 0,
-    );
 
-    const savedBg = (initialLyric as any).beat_grid;
-
-    if (savedBg) {
-      setBeatGrid(savedBg as BeatGridData);
-      setGenerationStatus((prev) => ({ ...prev, beatGrid: "done" }));
-      setBeatGridDone(true);
+    // Waveform peaks — UI optimisation, read once from render_data
+    const loadedRenderData = (initialLyric as any).render_data ?? null;
+    if (loadedRenderData) {
+      renderDataLoadedFromDbRef.current = true;
+      const savedPeaks = (loadedRenderData as any)?.waveformPeaks;
+      const savedDuration = (loadedRenderData as any)?.waveformDuration;
+      if (Array.isArray(savedPeaks) && savedPeaks.length > 0 && savedDuration > 0) {
+        setWaveformData({ peaks: savedPeaks, duration: savedDuration });
+      }
     }
 
-    const loadedRenderData = (initialLyric as any).render_data ?? null;
+    // Fit readiness — complex conditional, must only run once on load
+    const savedBg = (initialLyric as any).beat_grid;
     const loadedCinematicDirection =
       (initialLyric as any).cinematic_direction ??
       (loadedRenderData as any)?.cinematicDirection ??
       (loadedRenderData as any)?.cinematic_direction ??
       null;
 
-    if (loadedRenderData) {
-      renderDataLoadedFromDbRef.current = true;
-      setRenderData(loadedRenderData);
-      setGenerationStatus((prev) => ({ ...prev, renderData: "done" }));
-
-      const savedPeaks = (loadedRenderData as any)?.waveformPeaks;
-      const savedDuration = (loadedRenderData as any)?.waveformDuration;
-      if (
-        Array.isArray(savedPeaks) &&
-        savedPeaks.length > 0 &&
-        savedDuration > 0
-      ) {
-        setWaveformData({ peaks: savedPeaks, duration: savedDuration });
-      }
-    }
-
-    if (loadedCinematicDirection) {
-      setCinematicDirection(loadedCinematicDirection);
-      setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "done" }));
-    }
-
     if (savedBg && loadedCinematicDirection) {
       pipelineTriggeredRef.current = true;
       const sections = loadedCinematicDirection.sections;
       const savedSectionImages = (initialLyric as any).section_images;
       const hasSections = Array.isArray(sections) && sections.length > 0;
-      const hasImages =
-        Array.isArray(savedSectionImages) && savedSectionImages.some(Boolean);
+      const hasImages = Array.isArray(savedSectionImages) && savedSectionImages.some(Boolean);
       if (!hasSections || hasImages) {
         setFitReadiness("ready");
         setFitProgress(100);
@@ -830,28 +812,13 @@ export function useLyricPipeline({
       }
 
       import("@/engine/presetDerivation").then(({ deriveFrameState, getTypography }) => {
-        const typoPreset =
-          loadedCinematicDirection.typography || "clean-modern";
+        const typoPreset = loadedCinematicDirection.typography || "clean-modern";
         getTypography(typoPreset);
         deriveFrameState(loadedCinematicDirection, 0, 0.5);
       });
     }
 
-    const savedSectionImages = (initialLyric as any).section_images;
-    if (
-      Array.isArray(savedSectionImages) &&
-      savedSectionImages.length > 0 &&
-      savedSectionImages.some(Boolean)
-    ) {
-      setSectionImageUrls(savedSectionImages);
-      setSectionImageProgress({
-        done: savedSectionImages.filter(Boolean).length,
-        total: savedSectionImages.length,
-      });
-      setSectionImageError(null);
-      setGenerationStatus((prev) => ({ ...prev, sectionImages: "done" }));
-    }
-
+    // Audio — must never re-run; re-fetching on prop change would be catastrophic
     const cachedAudio = initialLyric.id
       ? sessionAudio.get("lyric", initialLyric.id)
       : undefined;
@@ -888,34 +855,64 @@ export function useLyricPipeline({
     }
   }, [initialLyric]);
 
-  // Re-sync generationStatus when initialLyric arrives with richer data than what
-  // was available at mount time (e.g. URL-loader revalidation after sidebar rawData load).
-  // hydratedRef intentionally NOT checked here — this only patches statuses, doesn't reinit.
+  // ── Effect B: reactive field sync (first-write-wins, no hydratedRef) ────────
+  // Runs whenever initialLyric prop changes — safe because every setter uses
+  // (prev) => prev ?? incoming, so existing pipeline state always wins.
+  // This means: sidebar rawData load (possibly missing fields) triggers mount,
+  // then URL-loader revalidation arrives with the full row and this effect
+  // fills in any gaps without clobbering anything the user has touched.
   useEffect(() => {
     if (!initialLyric) return;
 
-    const hasCinematic = !!(
-      (initialLyric as any).cinematic_direction ||
-      (initialLyric as any).render_data?.cinematicDirection ||
-      (initialLyric as any).render_data?.cinematic_direction
-    );
-    if (hasCinematic) {
-      const cd =
-        (initialLyric as any).cinematic_direction ??
-        (initialLyric as any).render_data?.cinematicDirection ??
-        (initialLyric as any).render_data?.cinematic_direction;
-      setCinematicDirection((prev: any) => prev ?? cd);
+    // transcriptionDone — once true, stays true
+    const hasLines = Array.isArray(initialLyric.lines) && initialLyric.lines.length > 0;
+    if (hasLines) setTranscriptionDone((prev) => prev || true);
+
+    // beatGrid
+    const savedBg = (initialLyric as any).beat_grid;
+    if (savedBg) {
+      setBeatGrid((prev) => prev ?? savedBg);
+      setBeatGridDone((prev) => prev || true);
+      setGenerationStatus((prev) =>
+        prev.beatGrid === "done" ? prev : { ...prev, beatGrid: "done" }
+      );
+    }
+
+    // renderData
+    const loadedRenderData = (initialLyric as any).render_data ?? null;
+    if (loadedRenderData) {
+      setRenderData((prev: any) => prev ?? loadedRenderData);
+      setGenerationStatus((prev) =>
+        prev.renderData === "done" ? prev : { ...prev, renderData: "done" }
+      );
+    }
+
+    // cinematicDirection
+    const loadedCinematicDirection =
+      (initialLyric as any).cinematic_direction ??
+      (loadedRenderData as any)?.cinematicDirection ??
+      (loadedRenderData as any)?.cinematic_direction ??
+      null;
+    if (loadedCinematicDirection) {
+      setCinematicDirection((prev: any) => prev ?? loadedCinematicDirection);
       setGenerationStatus((prev) =>
         prev.cinematicDirection === "done" ? prev : { ...prev, cinematicDirection: "done" }
       );
     }
 
-    const hasBeatGrid = !!(initialLyric as any).beat_grid;
-    if (hasBeatGrid) {
-      setBeatGrid((prev) => prev ?? (initialLyric as any).beat_grid);
-      setBeatGridDone((prev: boolean) => prev || true);
+    // sectionImages
+    const savedSectionImages = (initialLyric as any).section_images;
+    if (Array.isArray(savedSectionImages) && savedSectionImages.length > 0 && savedSectionImages.some(Boolean)) {
+      setSectionImageUrls((prev) => (prev.some(Boolean) ? prev : savedSectionImages));
+      setSectionImageProgress((prev) =>
+        prev ?? {
+          done: savedSectionImages.filter(Boolean).length,
+          total: savedSectionImages.length,
+        }
+      );
+      setSectionImageError(null);
       setGenerationStatus((prev) =>
-        prev.beatGrid === "done" ? prev : { ...prev, beatGrid: "done" }
+        prev.sectionImages === "done" ? prev : { ...prev, sectionImages: "done" }
       );
     }
   }, [initialLyric]);
