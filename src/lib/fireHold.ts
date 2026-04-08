@@ -15,7 +15,7 @@ export const fireWeight = (holdMs: number) => {
 };
 
 export function createFireHold(opts: {
-  onScaleUpdate: (scale: number) => void;
+  onScaleUpdate?: (scale: number) => void;
   onCanvasTrigger?: () => void;
 }): FireHoldController {
   let intervalId: number | null = null;
@@ -31,7 +31,7 @@ export function createFireHold(opts: {
         tickCount += 1;
         const elapsed = performance.now() - (startTime ?? 0);
         const intensity = Math.min(1, elapsed / 2000);
-        opts.onScaleUpdate(1 + intensity * 0.5);
+        opts.onScaleUpdate?.(1 + intensity * 0.5);
         if (opts.onCanvasTrigger && tickCount % CANVAS_TRIGGER_INTERVAL === 0) {
           opts.onCanvasTrigger();
         }
@@ -42,7 +42,7 @@ export function createFireHold(opts: {
         window.clearInterval(intervalId);
         intervalId = null;
       }
-      opts.onScaleUpdate(1);
+      opts.onScaleUpdate?.(1);
       if (startTime == null) return null;
       const holdMs = performance.now() - startTime;
       startTime = null;

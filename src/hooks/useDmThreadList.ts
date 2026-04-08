@@ -25,7 +25,9 @@ export function useDmThreadList() {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("get-dm-threads");
-      if (!error && data) {
+      if (error) {
+        console.warn("[dm-threads] fetch failed:", error);
+      } else if (data) {
         setThreads((data as { threads?: DmThreadSummary[] }).threads ?? []);
       }
     } finally {
