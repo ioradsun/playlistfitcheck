@@ -7,6 +7,7 @@ import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import type { CardMode } from "@/components/lyric/PlayerHeader";
 import { MomentPanel } from "@/components/lyric/MomentPanel";
 import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
+import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
 
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { audioController } from "@/lib/audioController";
@@ -299,6 +300,14 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     player.audio.loop = true;
   }, [cardMode, player, containerRef]);
 
+  useEffect(() => {
+    if (!durationSec || !player) return;
+    if (currentTimeSec > durationSec + 2.2 && cardMode === "listen") {
+      setCardMode("empowerment");
+      player.audio.loop = false;
+    }
+  }, [currentTimeSec, durationSec, cardMode, player]);
+
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
     const currentTime = player?.audio?.currentTime ?? 0;
@@ -346,6 +355,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
   const seekOnly = useCallback((timeSec: number) => {
     player?.seek(timeSec);
+    if (timeSec <= 0.05) setCardMode("listen");
   }, [player]);
 
   useEffect(() => {
@@ -414,16 +424,17 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               </div>
             )}
 
-
-            {currentTimeSec > durationSec + 2.2 && (
-              <button
-                onClick={() => setCardMode("moments")}
-                style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 60, fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "8px 18px", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", cursor: "pointer" }}
-              >
-                see hottest moments →
-              </button>
-            )}
           </>
+        )}
+
+        {cardMode === "empowerment" && (
+          <EmpowermentModePanel
+            danceId={danceId ?? null}
+            empowermentPromise={
+              ((data ?? prefetchedData) as any)?.empowerment_promise ?? null
+            }
+            onDismiss={() => setCardMode("moments")}
+          />
         )}
 
         {cardMode === "moments" && (
