@@ -615,10 +615,10 @@ async function callScene(
   }
 
   // If primary model fails with retryable error, try fallback
-  if (!resp.ok && (resp.status === 429 || resp.status >= 500)) {
+  if (!resp.ok && (resp.status === 400 || resp.status === 429 || resp.status >= 500)) {
     const errText = await resp.text().catch(() => "");
     console.warn(
-      `[cinematic-direction] scene primary model failed (${resp.status}): ${errText.slice(0, 100)}, trying fallback`,
+      `[cinematic-direction] scene primary model failed (${resp.status}): ${errText.slice(0, 200)}, trying fallback`,
     );
     await new Promise((r) => setTimeout(r, 2000));
     resp = await makeRequest(FALLBACK_MODEL);
