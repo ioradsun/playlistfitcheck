@@ -110,8 +110,6 @@ export function LyricFitTab({
       p.fitReadiness !== "not_started"
     )
       return;
-    // Block fit if dance exists but player isn't ready yet
-    if (nextView === "fit" && p.pipelineDanceId && !fitPlayerReady) return;
     // Block data if no dance published yet
     if (nextView === "data" && !p.pipelineDanceId) return;
     setActiveTab(nextView);

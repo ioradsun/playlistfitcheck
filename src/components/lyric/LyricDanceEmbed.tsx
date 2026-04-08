@@ -83,6 +83,17 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const isPrimary = isFeedEmbed && audioState.effectivePrimaryId === postId;
   const feedMuted = isFeedEmbed ? audioState.muted : muted;
 
+  // Auto-play for non-feed embeds (FitTab) when player is ready
+  useEffect(() => {
+    if (!isFeedEmbed && playerReady && player && !hasUnlocked) {
+      unlockAudio();
+      setHasUnlocked(true);
+      player.setMuted(false);
+      player.play(true);
+      setMuted(false);
+    }
+  }, [isFeedEmbed, playerReady, player, hasUnlocked, setMuted]);
+
   useImperativeHandle(ref, () => ({
     getPlayer: () => player ?? null,
     reloadTranscript: (lines: any[], words?: any[]) => {
@@ -403,12 +414,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               </div>
             )}
 
-            {!isFeedEmbed && !hasUnlocked && (
-              <div style={{ position: "absolute", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, pointerEvents: "none" }}>
-                <span style={{ fontSize: 36, opacity: 0.35, animation: "ld-pulse 2s ease-in-out infinite" }}>▶</span>
-                <span style={{ fontSize: 10, fontFamily: "monospace", color: "rgba(255,255,255,0.2)", letterSpacing: "0.12em", textTransform: "lowercase" }}>tap to play</span>
-              </div>
-            )}
 
             {currentTimeSec > durationSec + 2.2 && (
               <button
