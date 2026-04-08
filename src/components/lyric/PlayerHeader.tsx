@@ -365,7 +365,7 @@ export function PlayerHeader({
                   </motion.button>
                 );
               })}
-              {lyricDanceUrl && showMenuButton && (
+              {lyricDanceUrl && (
                 <motion.button
                   type="button"
                   initial={{ opacity: 0 }}
