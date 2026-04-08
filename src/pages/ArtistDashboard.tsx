@@ -60,10 +60,10 @@ async function fetchListenerIntelligence(
     supabase
       .from("project_fires" as any)
       .select("dance_id, session_id, line_index, created_at")
-      .in("dance_id", danceIds),
-    supabase.from("project_exposures" as any).select("dance_id, session_id").in("dance_id", danceIds),
-    supabase.from("project_closing_picks" as any).select("dance_id, session_id").in("dance_id", danceIds),
-    supabase.from("project_comments" as any).select("dance_id, session_id").in("dance_id", danceIds),
+      .in("project_id", danceIds),
+    supabase.from("project_exposures" as any).select("dance_id, session_id").in("project_id", danceIds),
+    supabase.from("project_closing_picks" as any).select("dance_id, session_id").in("project_id", danceIds),
+    supabase.from("project_comments" as any).select("dance_id, session_id").in("project_id", danceIds),
   ]);
 
   const fires = (firesRes.data ?? []) as any[];
@@ -78,7 +78,7 @@ async function fetchListenerIntelligence(
     if (!row.session_id) continue;
     allSessions.add(row.session_id);
     if (!sessionSongs.has(row.session_id)) sessionSongs.set(row.session_id, new Set());
-    sessionSongs.get(row.session_id)?.add(row.dance_id);
+    sessionSongs.get(row.session_id)?.add(row.project_id);
   }
 
   let sessionsMultipleSongs = 0;
@@ -200,22 +200,22 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
   let topLineByDance: Record<string, { text: string; fireCount: number; avgHoldMs: number } | null> = {};
 
   if (danceIds.length > 0) {
-    const { data: fireRows } = await supabase.from("project_fires" as any).select("dance_id").in("dance_id", danceIds);
+    const { data: fireRows } = await supabase.from("project_fires" as any).select("dance_id").in("project_id", danceIds);
 
     const fireCountMap: Record<string, number> = {};
     for (const row of (fireRows ?? []) as any[]) {
-      fireCountMap[row.dance_id] = (fireCountMap[row.dance_id] ?? 0) + 1;
+      fireCountMap[row.project_id] = (fireCountMap[row.project_id] ?? 0) + 1;
     }
 
     const { data: exposureRows } = await supabase
       .from("project_exposures" as any)
       .select("dance_id, session_id")
-      .in("dance_id", danceIds);
+      .in("project_id", danceIds);
 
     const listenerMap: Record<string, Set<string>> = {};
     for (const row of (exposureRows ?? []) as any[]) {
-      if (!listenerMap[row.dance_id]) listenerMap[row.dance_id] = new Set();
-      listenerMap[row.dance_id].add(row.session_id);
+      if (!listenerMap[row.project_id]) listenerMap[row.project_id] = new Set();
+      listenerMap[row.project_id].add(row.session_id);
     }
 
     for (const danceId of danceIds) {
@@ -227,7 +227,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
     const { data: strengthRows } = await supabase
       .from("v_fire_strength" as any)
       .select("dance_id, line_index, fire_strength, fire_count, avg_hold_ms")
-      .in("dance_id", danceIds)
+      .in("project_id", danceIds)
       .order("fire_strength", { ascending: false });
 
     const { data: danceRows } = await supabase.from("lyric_projects" as any).select("id, lyrics").in("id", danceIds);
@@ -239,7 +239,7 @@ async function fetchPortfolioData(userId: string): Promise<SongSignal[]> {
 
     const topByDance: Record<string, any> = {};
     for (const row of (strengthRows ?? []) as any[]) {
-      if (!topByDance[row.dance_id]) topByDance[row.dance_id] = row;
+      if (!topByDance[row.project_id]) topByDance[row.project_id] = row;
     }
 
     for (const danceId of danceIds) {
