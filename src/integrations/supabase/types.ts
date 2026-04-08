@@ -683,6 +683,13 @@ export type Database = {
             referencedRelation: "lyric_projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "feed_posts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       feed_saves: {
