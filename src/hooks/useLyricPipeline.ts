@@ -144,9 +144,11 @@ async function createDanceRowAndGenerateImages({
   let resolvedDanceId: string | null = null;
   const { data: existing }: any = await supabase
     .from("lyric_projects" as any)
-    .select("id")
-    .eq("user_id", user.id)
+    .select("id, user_id")
+    .eq("artist_slug", artistSlugVal)
     .eq("url_slug", songSlugVal)
+    .eq("is_published", true)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (existing?.id) {
@@ -154,6 +156,7 @@ async function createDanceRowAndGenerateImages({
     await supabase
       .from("lyric_projects" as any)
       .update({
+        user_id: user.id,
         cinematic_direction: cinematicDirection,
         ...(beatGrid
           ? {
