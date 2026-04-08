@@ -534,7 +534,6 @@ async function callScene(
           body: JSON.stringify({
             model,
             messages,
-            response_format: { type: "json_object" },
             max_completion_tokens: 8000,
           }),
         },
