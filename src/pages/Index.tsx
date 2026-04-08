@@ -790,7 +790,7 @@ const Index = () => {
     } else if (state?.autoRun) {
       autoRunRef.current = true;
       const { playlistUrl, songUrl } = state.autoRun;
-      navigate("/PlaylistFit", { replace: true });
+      navigate("/the-plug", { replace: true });
       if (!playlistUrl) return;
 
       (async () => {
@@ -816,12 +816,12 @@ const Index = () => {
       })();
     } else if (state?.loadMixProject) {
       autoRunRef.current = true;
-      navigate("/MixFit", { replace: true });
+      navigate("/the-engineer", { replace: true });
       setLoadedMixProject(state.loadMixProject);
       setActiveTab("mix");
     } else if (state?.loadLyric) {
       autoRunRef.current = true;
-      navigate("/LyricFit", { replace: true });
+      navigate("/the-director", { replace: true });
       setLoadedLyric(state.loadLyric);
       setActiveTab("lyric");
     }
