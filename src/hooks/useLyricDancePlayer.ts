@@ -213,6 +213,12 @@ export function useLyricDancePlayer(
       }
 
       await p.init();
+      // Pre-load audio metadata so songEndSec/duration is valid for
+      // section resolution before user taps play.
+      if (p.audio && p.audio.networkState === HTMLMediaElement.NETWORK_EMPTY) {
+        p.audio.preload = "metadata";
+        p.audio.load();
+      }
       // Shareable pages: compile scene NOW while user reads the cover.
       // By the time they tap "Listen Now", the scene is fully baked.
       if (eagerUpgrade && bootMode === "minimal") {

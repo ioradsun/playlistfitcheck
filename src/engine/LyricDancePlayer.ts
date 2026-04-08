@@ -2186,6 +2186,14 @@ export class LyricDancePlayer {
     }
     this._updateViewportScale();
     this._textMetricsCache.clear();
+    // Fallback: derive songEndSec from lines data if audio duration isn't available yet
+    if (this.songEndSec <= 0) {
+      const lines = (this.data as any).lyrics ?? (this.data as any).lines ?? [];
+      if (lines.length) {
+        this.songEndSec = (lines[lines.length - 1].end ?? 0) + 1;
+      }
+    }
+
     const playStart = this.data.region_start ?? this.songStartSec;
     if (this.audio.currentTime <= 0 || this.data.region_start != null) {
       this.audio.currentTime = playStart;
