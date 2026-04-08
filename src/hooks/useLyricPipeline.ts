@@ -41,6 +41,7 @@ interface UsePipelineSchedulerParams {
   beatGrid: BeatGridData | null;
   cinematicDirection: any | null;
   audioFile: File | null;
+  audioUrl: string | null;
   savedIdRef: React.MutableRefObject<string | null>;
   hookDetectionRunRef: React.MutableRefObject<boolean>;
 
@@ -321,6 +322,7 @@ export function usePipelineScheduler({
   beatGrid,
   cinematicDirection,
   audioFile,
+  audioUrl,
   savedIdRef,
   hookDetectionRunRef,
   setRenderData,
@@ -1618,6 +1620,7 @@ export function useLyricPipeline({
     beatGrid,
     cinematicDirection,
     audioFile,
+    audioUrl,
     savedIdRef,
     hookDetectionRunRef,
     setRenderData,
