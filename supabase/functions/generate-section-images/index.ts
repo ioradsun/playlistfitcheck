@@ -372,16 +372,15 @@ serve(async (req) => {
       );
     }
 
-    // ── Sequential generation with progressive DB saves ──
-    // Process images one-by-one (or in pairs) to stay within edge function
-    // time limits and avoid overwhelming the AI gateway with parallel requests.
-    // After each successful image, save progress to the DB so partial results
+    // ── Batched generation with progressive DB saves ──
+    // Process sections in a single full-size batch for maximum parallelism.
+    // After each batch, save progress to the DB so partial results
     // survive a timeout.
 
     const urls: (string | null)[] = [...normalizedExistingImages];
 
-    // Process in pairs (concurrency = 2) for a balance of speed vs reliability
-    const CONCURRENCY = 2;
+    // Process all pending sections in parallel
+    const CONCURRENCY = sections.length;
     for (let i = 0; i < sections.length; i += CONCURRENCY) {
       const batch = sections.slice(i, i + CONCURRENCY);
 
