@@ -83,17 +83,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const isPrimary = isFeedEmbed && audioState.effectivePrimaryId === postId;
   const feedMuted = isFeedEmbed ? audioState.muted : muted;
 
-  // Auto-play for non-feed embeds (FitTab) when player is ready
-  useEffect(() => {
-    if (!isFeedEmbed && playerReady && player && !hasUnlocked) {
-      unlockAudio();
-      setHasUnlocked(true);
-      player.setMuted(false);
-      player.play(true);
-      setMuted(false);
-    }
-  }, [isFeedEmbed, playerReady, player, hasUnlocked, setMuted]);
-
   useImperativeHandle(ref, () => ({
     getPlayer: () => player ?? null,
     reloadTranscript: (lines: any[], words?: any[]) => {
@@ -111,6 +100,17 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [cardMode, setCardMode] = useState<CardMode>("listen");
   const [hasUnlocked, setHasUnlocked] = useState(false);
+
+  // Auto-play for non-feed embeds (FitTab) when player is ready
+  useEffect(() => {
+    if (!isFeedEmbed && playerReady && player && !hasUnlocked) {
+      unlockAudio();
+      setHasUnlocked(true);
+      player.setMuted(false);
+      player.play(true);
+      setMuted(false);
+    }
+  }, [isFeedEmbed, playerReady, player, hasUnlocked, setMuted]);
 
   const playStartRef = useRef<number | null>(null);
   const totalDurationRef = useRef<number>(0);
