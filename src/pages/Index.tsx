@@ -1165,17 +1165,9 @@ const Index = () => {
 
   const navigateToProject = useCallback(
     (tool: string, id: string) => {
-      const pathMap: Record<string, string> = {
-        profit: "ProFit",
-        playlist: "PlaylistFit",
-        mix: "MixFit",
-        lyric: "LyricFit",
-        hitfit: "HitFit",
-        vibefit: "VibeFit",
-      };
-      const prefix = pathMap[tool];
-      if (prefix && id && location.pathname !== `/${prefix}/${id}`) {
-        transitionNavigate(`/${prefix}/${id}`, { replace: true });
+      const prefix = TOOL_TO_PATH[tool];
+      if (prefix && id && location.pathname !== `${prefix}/${id}`) {
+        transitionNavigate(`${prefix}/${id}`, { replace: true });
       }
     },
     [transitionNavigate, location.pathname],
