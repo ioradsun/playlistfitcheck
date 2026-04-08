@@ -1593,6 +1593,8 @@ export class LyricDancePlayer {
   private _viewportFontScale = 1;
   private _compiledViewportW = 960;
   private _compiledViewportH = 540;
+  private _compiledWidth = 960;
+  private _compiledHeight = 540;
   private _compiledWasPortrait = false;
   private _evalFrame: ScaledKeyframe | null = null;
   private _evalChunks: ScaledKeyframe['chunks'] | null = null;
@@ -2073,6 +2075,7 @@ export class LyricDancePlayer {
           this._bakedVersion = BAKER_VERSION;
           this.compiledScene = cached.scene;
           this.chunks = new Map(cached.chunks);
+          this._markCompiledViewport(this.width || 960, this.height || 540);
           // Still need payload + conductor for audio sync
           const payload = this.buildScenePayload();
           this.payload = payload;
@@ -2572,6 +2575,11 @@ export class LyricDancePlayer {
     if (this.payload && this.compiledScene) {
       const sizeChanged = w !== prevCompiledW || h !== prevCompiledH;
       if (sizeChanged) {
+        if (
+          Math.abs(w - this._compiledWidth) < 4 &&
+          Math.abs(h - this._compiledHeight) < 4
+        )
+          return;
         this.compiledScene = compileScene(this.payload, { viewportWidth: w, viewportHeight: h });
         this._buildChunkCacheFromScene(this.compiledScene);
         this._markCompiledViewport(w, h);
@@ -3117,6 +3125,7 @@ export class LyricDancePlayer {
         if (this.payload && this.compiledScene) {
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
           this._buildChunkCacheFromScene(this.compiledScene);
+          this._markCompiledViewport(this.width || 960, this.height || 540);
         }
       }
 
@@ -4760,6 +4769,8 @@ export class LyricDancePlayer {
   private _markCompiledViewport(width: number, height: number): void {
     this._compiledViewportW = Math.max(1, Math.floor(width));
     this._compiledViewportH = Math.max(1, Math.floor(height));
+    this._compiledWidth = this._compiledViewportW;
+    this._compiledHeight = this._compiledViewportH;
     this._compiledWasPortrait = this._compiledViewportH > this._compiledViewportW;
   }
 

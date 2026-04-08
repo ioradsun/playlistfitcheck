@@ -6,7 +6,7 @@
  * v2: removed lyrics column, single-column report.
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import {
   Loader2,
   RefreshCw,
@@ -23,7 +23,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
-import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { FitExportModal } from "./FitExportModal";
 
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -47,6 +46,7 @@ import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { extractPeaks } from "@/lib/audioUtils";
 import { persistQueue } from "@/lib/persistQueue";
 import { preloadImage } from "@/lib/imagePreloadCache";
+import { getCachedAudioBuffer } from "@/lib/audioDecodeCache";
 
 interface Props {
   pipeline: {
@@ -87,6 +87,30 @@ const fmtTime = (sec: number) => {
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
+
+const fontMap: Record<string, string> = {
+  "bold-impact": "Oswald",
+  "clean-modern": "Montserrat",
+  "elegant-serif": "Playfair Display",
+  "raw-condensed": "Barlow Condensed",
+  "whisper-soft": "Nunito",
+  "tech-mono": "JetBrains Mono",
+  "display-heavy": "Bebas Neue",
+  "editorial-light": "Cormorant Garamond",
+};
+
+const captions: Record<number, string> = {
+  0: "for everyone who needed to hear this",
+  1: "this is what letting go sounds like",
+  2: "you already know who you were",
+  3: "this one hurts because it's true",
+  4: "something shifted — pay attention",
+  5: "none of it was wasted",
+};
+
+function getMainLines(ref: React.MutableRefObject<any[] | undefined>) {
+  return (ref.current || []).filter((l: any) => l.tag !== "adlib");
+}
 
 function SpotifyLinkField({
   spotifyTrackId,
@@ -473,16 +497,11 @@ export function FitTab({
     if (waveformFromParent) {
       setWaveform(waveformFromParent);
     } else {
-      const ctx = new AudioContext();
-      audioFile
-        .arrayBuffer()
-        .then((ab) => {
-          ctx.decodeAudioData(ab).then((buf) => {
-            setWaveform({
-              peaks: extractPeaks(buf, 200),
-              duration: buf.duration,
-            });
-            ctx.close();
+      getCachedAudioBuffer(audioFile)
+        .then((buf) => {
+          setWaveform({
+            peaks: extractPeaks(buf, 200),
+            duration: buf.duration,
           });
         })
         .catch(() => {});
@@ -501,6 +520,15 @@ export function FitTab({
     // parentWaveform intentionally read from ref — avoids re-creating Audio + blob on waveform updates
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioFile]);
+
+  useEffect(() => {
+    if (!sectionImageUrls.length) return;
+    sectionImageUrls.forEach((url) => {
+      if (!url) return;
+      const img = new Image();
+      img.src = url;
+    });
+  }, [sectionImageUrls]);
 
   const handleSeek = useCallback((time: number) => {
     if (audioRef.current) {
@@ -539,6 +567,14 @@ export function FitTab({
   const wordsRef = useRef(words);
   linesRef.current = lyricData?.lines;
   wordsRef.current = words;
+  const lyricsText = useMemo(
+    () =>
+      (lyricData?.lines ?? [])
+        .filter((l: any) => l.tag !== "adlib")
+        .map((l: any) => l.text)
+        .join("\n"),
+    [lyricData?.lines],
+  );
 
   const transcriptInitRef = useRef(false);
   useEffect(() => {
@@ -560,9 +596,7 @@ export function FitTab({
       if (!handle) {
         return;
       }
-      const mainLines = (linesRef.current || []).filter(
-        (l: any) => l.tag !== "adlib",
-      );
+      const mainLines = getMainLines(linesRef);
       void (handle as any).reloadTranscript?.(
         mainLines,
         wordsRef.current ?? undefined,
@@ -598,9 +632,7 @@ export function FitTab({
     autoSaveTimerRef.current = setTimeout(async () => {
       const danceId = publishedDanceIdRef.current;
       if (!danceId) return;
-      const mainLines = (linesRef.current || []).filter(
-        (l: any) => l.tag !== "adlib",
-      );
+      const mainLines = getMainLines(linesRef);
 
       // Use the reconciled words from the player engine — updateTranscript() maps
       // edited line text back onto word timestamp slots. Those reconciled words
@@ -631,17 +663,6 @@ export function FitTab({
       setFontReady(false);
       return;
     }
-
-    const fontMap: Record<string, string> = {
-      "bold-impact": "Oswald",
-      "clean-modern": "Montserrat",
-      "elegant-serif": "Playfair Display",
-      "raw-condensed": "Barlow Condensed",
-      "whisper-soft": "Nunito",
-      "tech-mono": "JetBrains Mono",
-      "display-heavy": "Bebas Neue",
-      "editorial-light": "Cormorant Garamond",
-    };
 
     const typography = cinematicDirection.typography || "clean-modern";
     const fontName = fontMap[typography] || "Montserrat";
@@ -711,6 +732,18 @@ export function FitTab({
     cinematicDirection,
     fontReady,
   ]);
+
+  const LyricDanceEmbedModule = useMemo(
+    () =>
+      publishedDanceId
+        ? lazy(() =>
+            import("@/components/lyric/LyricDanceEmbed").then((m) => ({
+              default: m.LyricDanceEmbed,
+            })),
+          )
+        : null,
+    [publishedDanceId],
+  );
 
   useEffect(() => {
     onPlayerReady?.(playerReady);
@@ -814,11 +847,6 @@ export function FitTab({
 
     const lines = lyricData?.lines;
     if (!Array.isArray(lines) || lines.length === 0) return;
-
-    const lyricsText = lines
-      .filter((l: any) => l.tag !== "adlib")
-      .map((l: any) => l.text)
-      .join("\n");
 
     setEmpowermentLoading(true);
     setEmpowermentError(false);
@@ -1173,16 +1201,29 @@ export function FitTab({
             {/* Video player */}
             <div className="relative rounded-xl overflow-hidden w-full" style={{ height: 480 }}>
               {playerReady || imageWaitExpired ? (
-                <LyricDanceEmbed
-                  ref={dancePlayerRef}
-                  lyricDanceId={publishedDanceId}
-                  songTitle={lyricData.title || "Untitled"}
-                  artistName={profile?.display_name || ""}
-                  avatarUrl={profile?.avatar_url ?? null}
-                  isVerified={profile?.is_verified ?? false}
-                  userId={user?.id ?? null}
-                  prefetchedData={prefetchedDanceData}
-                />
+                <Suspense
+                  fallback={
+                    <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-3">
+                      <Loader2 size={20} className="animate-spin text-white/20" />
+                      <span className="text-[10px] font-mono text-white/25 tracking-wider uppercase">
+                        loading...
+                      </span>
+                    </div>
+                  }
+                >
+                  {LyricDanceEmbedModule ? (
+                    <LyricDanceEmbedModule
+                      ref={dancePlayerRef}
+                      lyricDanceId={publishedDanceId}
+                      songTitle={lyricData.title || "Untitled"}
+                      artistName={profile?.display_name || ""}
+                      avatarUrl={profile?.avatar_url ?? null}
+                      isVerified={profile?.is_verified ?? false}
+                      userId={user?.id ?? null}
+                      prefetchedData={prefetchedDanceData}
+                    />
+                  ) : null}
+                </Suspense>
               ) : (
                 <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-3">
                   <Loader2 size={20} className="animate-spin text-white/20" />
@@ -1489,14 +1530,6 @@ export function FitTab({
               if (!feeling) return null;
               const topFireLine = fireData.fireStrength[0];
               const topLine = allLines.find((l) => l.lineIndex === topFireLine?.line_index);
-              const captions: Record<number, string> = {
-                0: "for everyone who needed to hear this",
-                1: "this is what letting go sounds like",
-                2: "you already know who you were",
-                3: "this one hurts because it's true",
-                4: "something shifted — pay attention",
-                5: "none of it was wasted",
-              };
               const caption = captions[row.hook_index] ?? feeling;
               return (
                 <div key={row.hook_index} className="glass-card rounded-xl p-4 space-y-3 border border-primary/10">
@@ -1508,9 +1541,8 @@ export function FitTab({
                       onClick={() => {
                         const player = dancePlayerRef.current?.getPlayer();
                         if (player && topFireLine) {
-                          const line = allLines.find((l) => l.lineIndex === topFireLine.line_index);
-                          if (line) {
-                            player.setRegion(Math.max(0, line.startSec - 1.5), line.startSec + 10);
+                          if (topLine) {
+                            player.setRegion(Math.max(0, topLine.startSec - 1.5), topLine.startSec + 10);
                             (player as any).setClipCaption?.(caption);
                             player.play();
                           }
@@ -1524,7 +1556,7 @@ export function FitTab({
                       onClick={() => {
                         setClipComposerVisible(true);
                         setClipComposerCaption(caption);
-                        setClipComposerStart(Math.max(0, (allLines.find((l) => l.lineIndex === topFireLine?.line_index)?.startSec ?? 0) - 1.5));
+                        setClipComposerStart(Math.max(0, (topLine?.startSec ?? 0) - 1.5));
                       }}
                       className="flex-1 py-2 text-[9px] font-mono uppercase tracking-wider rounded-lg border border-primary/30 text-primary/70 hover:text-primary hover:bg-primary/5 transition-colors"
                     >
