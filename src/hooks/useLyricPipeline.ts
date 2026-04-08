@@ -742,10 +742,23 @@ export function useLyricPipeline({
         id,
         payload: { title: newTitle },
       });
-      // Notify sidebar of the rename so it updates optimistically
       window.dispatchEvent(
         new CustomEvent("project-renamed", { detail: { id, label: newTitle } }),
       );
+      // Patch the project-level cache so the new title survives page reloads
+      // (e.g. after code deploys). Without this the pipeline re-initialises from
+      // stale cache and the rename visually reverts.
+      try {
+        const cacheKey = `tfm:lyric:${id}`;
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.data) {
+            parsed.data.title = newTitle;
+            localStorage.setItem(cacheKey, JSON.stringify(parsed));
+          }
+        }
+      } catch {}
     }
   }, []);
 
