@@ -654,7 +654,7 @@ const Index = () => {
         if (inserted) {
           savedSearchIdRef.current = inserted.id;
           projectLoadedRef.current = inserted.id;
-          navigate(`/PlaylistFit/${inserted.id}`, { replace: true });
+          navigate(`/the-plug/${inserted.id}`, { replace: true });
           // Optimistic update — inject into sidebar immediately, no refetch needed
           setOptimisticSidebarItem({
             id: inserted.id,
@@ -752,17 +752,7 @@ const Index = () => {
     if (autoRunRef.current) return;
 
     if (state?.returnTab) {
-      const crowdfitPath = "/CrowdFit";
-      const TAB_TO_PATH: Record<string, string> = {
-        songfit: crowdfitPath,
-        profit: "/ProFit",
-        playlist: "/PlaylistFit",
-        mix: "/MixFit",
-        lyric: "/LyricFit",
-        hitfit: "/HitFit",
-        dreamfit: "/DreamFit",
-        vibefit: "/VibeFit",
-      };
+      const TAB_TO_PATH = TOOL_TO_PATH;
       setActiveTab(state.returnTab);
       navigate(TAB_TO_PATH[state.returnTab] || crowdfitPath, { replace: true });
       if (
