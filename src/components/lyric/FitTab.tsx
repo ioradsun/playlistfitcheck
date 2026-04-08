@@ -349,7 +349,8 @@ export function FitTab({
             }
           }
         }
-      });
+      })
+      .catch(() => {});
   }, [publishedDanceId, pipeline]);
 
   // ── CrowdFit publish state ─────────────────────────────────────────
@@ -379,7 +380,8 @@ export function FitTab({
         } else {
           setCrowdfitPostId(null);
         }
-      });
+      })
+      .catch(() => setCrowdfitPostId(null));
   }, [publishedDanceId, user]);
 
   // CrowdFit toggle handler
@@ -633,6 +635,7 @@ export function FitTab({
       const danceId = publishedDanceIdRef.current;
       if (!danceId) return;
       const mainLines = getMainLines(linesRef);
+      if (mainLines.length === 0) return;
 
       // Use the reconciled words from the player engine — updateTranscript() maps
       // edited line text back onto word timestamp slots. Those reconciled words
@@ -674,57 +677,62 @@ export function FitTab({
     }
 
     setFontReady(false);
-    import("@/lib/fontReadinessCache").then(({ ensureFontReady }) => {
-      ensureFontReady(fontName).then((loaded) => {
+    import("@/lib/fontReadinessCache")
+      .then(({ ensureFontReady }) => ensureFontReady(fontName))
+      .then((loaded) => {
         setFontReady(loaded || true);
-      });
-    });
+      })
+      .catch(() => setFontReady(true));
   }, [cinematicDirection]);
 
   const playerReady = useMemo(() => {
-    if (!publishedDanceId) return false;
-    if (!prefetchedDanceData) return false;
-    const isInstrumental = !!(prefetchedDanceData.cinematic_direction as any)?._instrumental;
+    try {
+      if (!publishedDanceId) return false;
+      if (!prefetchedDanceData) return false;
+      const isInstrumental = !!(prefetchedDanceData.cinematic_direction as any)?._instrumental;
 
-    if (generationStatus.beatGrid !== "done") return false;
-    if (generationStatus.cinematicDirection !== "done") return false;
+      if (generationStatus.beatGrid !== "done") return false;
+      if (generationStatus.cinematicDirection !== "done") return false;
 
-    const sections = (cinematicDirection as any)?.sections;
-    if (Array.isArray(sections) && sections.length > 0 && !isInstrumental) {
+      const sections = (cinematicDirection as any)?.sections;
+      if (Array.isArray(sections) && sections.length > 0 && !isInstrumental) {
+        if (
+          generationStatus.sectionImages !== "done" &&
+          generationStatus.sectionImages !== "error"
+        )
+          return false;
+      }
+
       if (
-        generationStatus.sectionImages !== "done" &&
-        generationStatus.sectionImages !== "error"
+        !isInstrumental &&
+        (!prefetchedDanceData.words ||
+        (prefetchedDanceData.words as any[]).length === 0)
       )
         return false;
-    }
+      if (!prefetchedDanceData.beat_grid) return false;
 
-    if (
-      !isInstrumental &&
-      (!prefetchedDanceData.words ||
-      (prefetchedDanceData.words as any[]).length === 0)
-    )
-      return false;
-    if (!prefetchedDanceData.beat_grid) return false;
-
-    // Ground-truth checks: ensure the prefetched DB snapshot has completed data.
-    const cd = prefetchedDanceData.cinematic_direction as any;
-    if (
-      !cd ||
-      Array.isArray(cd) ||
-      !Array.isArray(cd.sections) ||
-      cd.sections.length === 0
-    )
-      return false;
-
-    if (Array.isArray(sections) && sections.length > 0 && !isInstrumental) {
-      const snapImages = (prefetchedDanceData as any).section_images;
-      if (!Array.isArray(snapImages) || !snapImages.some(Boolean))
+      // Ground-truth checks: ensure the prefetched DB snapshot has completed data.
+      const cd = prefetchedDanceData.cinematic_direction as any;
+      if (
+        !cd ||
+        Array.isArray(cd) ||
+        !Array.isArray(cd.sections) ||
+        cd.sections.length === 0
+      )
         return false;
+
+      if (Array.isArray(sections) && sections.length > 0 && !isInstrumental) {
+        const snapImages = (prefetchedDanceData as any).section_images;
+        if (!Array.isArray(snapImages) || !snapImages.some(Boolean))
+          return false;
+      }
+
+      if (!fontReady) return false;
+
+      return true;
+    } catch {
+      return false;
     }
-
-    if (!fontReady) return false;
-
-    return true;
   }, [
     publishedDanceId,
     prefetchedDanceData,
@@ -806,16 +814,20 @@ export function FitTab({
   const [hookVoteCounts, setHookVoteCounts] = useState<number[]>([]);
 
   const fetchVoteCounts = useCallback(async (danceId: string) => {
-    const { data } = await supabase
-      .from("project_angle_votes" as any)
-      .select("hook_index")
-      .eq("project_id", danceId);
-    if (!data) return;
-    const counts = Array(6).fill(0);
-    (data as any[]).forEach((row) => {
-      counts[row.hook_index] = (counts[row.hook_index] ?? 0) + 1;
-    });
-    setHookVoteCounts(counts);
+    try {
+      const { data } = await supabase
+        .from("project_angle_votes" as any)
+        .select("hook_index")
+        .eq("project_id", danceId);
+      if (!data) return;
+      const counts = Array(6).fill(0);
+      (data as any[]).forEach((row) => {
+        counts[row.hook_index] = (counts[row.hook_index] ?? 0) + 1;
+      });
+      setHookVoteCounts(counts);
+    } catch {
+      // noop
+    }
   }, []);
 
   // Hydrate empowermentPromise from DB snapshot once on load.
@@ -871,10 +883,14 @@ export function FitTab({
 
         setHasHydratedEmpowerment(true);
         setEmpowermentPromise(data);
-        await supabase
-          .from("lyric_projects" as any)
-          .update({ empowerment_promise: data })
-          .eq("id", publishedDanceId);
+        try {
+          await supabase
+            .from("lyric_projects" as any)
+            .update({ empowerment_promise: data })
+            .eq("id", publishedDanceId);
+        } catch {
+          // noop
+        }
         fetchVoteCounts(publishedDanceId);
       })
       .catch(() => setEmpowermentError(true))
@@ -947,6 +963,7 @@ export function FitTab({
   useEffect(() => {
     const canvas = fireHeatmapCanvasRef.current;
     if (!canvas || !fireHeatmapData || !activeWaveform) return;
+    if (canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = canvas.clientWidth * dpr;
     canvas.height = canvas.clientHeight * dpr;
@@ -1096,6 +1113,8 @@ export function FitTab({
             .size,
         resultsLoaded: true,
       });
+    }).catch(() => {
+      setFireData((prev) => ({ ...prev, resultsLoaded: true }));
     });
   }, [subView, publishedDanceId, fireData.resultsLoaded]);
 
@@ -1138,7 +1157,8 @@ export function FitTab({
                     : `${window.location.origin}${publishedUrl}`;
                   navigator.clipboard
                     .writeText(url)
-                    .then(() => toast.success("Link copied!"));
+                    .then(() => toast.success("Link copied!"))
+                    .catch(() => toast.error("Copy failed"));
                 }}
                 className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
                 title="Copy Link"
@@ -1184,7 +1204,9 @@ export function FitTab({
                         (prefetchedDanceData as any)?.words ??
                         "no words available",
                     };
-                    navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
+                    navigator.clipboard
+                      .writeText(JSON.stringify(debugInfo, null, 2))
+                      .catch(() => {});
                     const model = meta?.scene?.model || (meta ? "unknown" : "loaded from DB");
                     const sceneSource = meta?.scene?.scenePromptSource || (meta ? "?" : "saved");
                     const phraseMode = meta?.mode || "deterministic_v3";
@@ -1771,7 +1793,7 @@ export function FitTab({
                                   )}
                                   <button
                                     onClick={() => {
-                                      navigator.clipboard.writeText(hook);
+                                      navigator.clipboard.writeText(hook).catch(() => {});
                                     }}
                                     className="p-1 text-muted-foreground hover:text-foreground transition-colors"
                                   >
