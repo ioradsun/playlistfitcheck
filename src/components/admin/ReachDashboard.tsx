@@ -150,7 +150,7 @@ function BeatGridEnhancer({
           },
         })
         .eq("artist_slug", artistSlug)
-        .eq("song_slug", songSlug);
+        .eq("url_slug", songSlug);
 
       if (updateErr) throw new Error(updateErr.message);
 
@@ -178,7 +178,7 @@ function BeatGridEnhancer({
             .from("lyric_projects" as any)
             .select("audio_url")
             .eq("artist_slug", slugParts[0])
-            .eq("song_slug", slugParts[1])
+            .eq("url_slug", slugParts[1])
             .maybeSingle();
           audioUrl = danceRow?.audio_url ?? null;
         }

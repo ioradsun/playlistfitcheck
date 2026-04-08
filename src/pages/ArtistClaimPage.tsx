@@ -21,7 +21,7 @@ type ArtistLyricVideoRow = {
 
 type ClaimDanceRow = {
   id: string;
-  song_name: string;
+  title: string;
   album_art_url: string | null;
   section_images: string[] | null;
   created_at: string;
@@ -70,7 +70,7 @@ export default function ArtistClaimPage() {
           .maybeSingle(),
         (supabase as any)
           .from("lyric_projects" as any)
-          .select("id, song_name, album_art_url, section_images, created_at")
+          .select("id, title, album_art_url, section_images, created_at")
           .eq("artist_slug", username)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -105,7 +105,7 @@ export default function ArtistClaimPage() {
     if (!username || !latestDance?.id) return null;
     const sectionImages = latestDance.section_images;
     if (!Array.isArray(sectionImages) || sectionImages.length === 0) return null;
-    return `/${username}/${slugifySong(latestDance.song_name)}/lyric-dance`;
+    return `/${username}/${slugifySong(latestDance.title)}/lyric-dance`;
   }, [latestDance?.id, latestDance?.section_images, latestDance?.song_name, latestVideo?.lyric_dance_url, username]);
 
   const artistName = useMemo(
