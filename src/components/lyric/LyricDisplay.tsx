@@ -106,7 +106,7 @@ function normalizeRenderDataWithManifest(
 
 interface Props {
   data: LyricData;
-  audioFile: File;
+  audioFile: File | null;
   words?: Array<{ word: string; start: number; end: number }> | null;
   hasRealAudio?: boolean;
   savedId?: string | null;
@@ -304,6 +304,7 @@ export function LyricDisplay({
   const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
   const { decodeFile, play, stop, playingId, getPlayheadPosition } =
     useAudioEngine();
+  const audioFileName = audioFile?.name ?? "audio.mp3";
 
   // Audio state
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -494,6 +495,7 @@ export function LyricDisplay({
 
   // ── Audio setup ───────────────────────────────────────────────────────────
   useEffect(() => {
+    if (!audioFile) return;
     const url = URL.createObjectURL(audioFile);
     audioUrlRef.current = url;
     const audio = new Audio(url);
@@ -671,7 +673,7 @@ export function LyricDisplay({
     try {
       // Upload audio to storage if we have a real file
       let audioUrl: string | null = null;
-      if (hasRealAudio && audioFile.size > 0) {
+      if (hasRealAudio && audioFile && audioFile.size > 0) {
         const fileExt = audioFile.name.split(".").pop() || "webm";
         const storagePath = `${user.id}/lyric/${currentSavedId || crypto.randomUUID()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
@@ -725,7 +727,7 @@ export function LyricDisplay({
       } else {
         const { data: inserted, error } = await supabase
           .from("lyric_projects")
-          .insert({ ...payload, user_id: user.id, filename: audioFile.name } as any)
+          .insert({ ...payload, user_id: user.id, filename: audioFileName } as any)
           .select("id")
           .single();
         if (error) throw error;
@@ -864,7 +866,7 @@ export function LyricDisplay({
   const baseName = (
     data.title !== "Unknown" && data.title !== "Untitled"
       ? data.title
-      : audioFile.name.replace(/\.[^.]+$/, "")
+      : audioFileName.replace(/\.[^.]+$/, "")
   ).replace(/\s+/g, "_");
   const versionSuffix =
     activeVersion === "explicit" ? "Explicit" : "FMLY_Friendly";
@@ -993,10 +995,10 @@ export function LyricDisplay({
     const title =
       data.title && data.title !== "Unknown" && data.title !== "Untitled"
         ? data.title
-        : audioFile.name.replace(/\.[^.]+$/, "");
+        : audioFileName.replace(/\.[^.]+$/, "");
     onHeaderProjectRef.current?.({ title, onBack: onBackRef.current, onTitleChange: onTitleChangeRef.current });
     return () => onHeaderProjectRef.current?.(null);
-  }, [data.title, audioFile.name]);
+  }, [data.title, audioFileName]);
 
   // Separately update rightContent (save indicator) without re-registering title/onTitleChange.
   useEffect(() => {

@@ -491,7 +491,7 @@ export function LyricsTab({
   }, [onNewProject, setLyricData, setAudioFile, setHasRealAudio, setSavedId, setFmlyLines, setVersionMeta, setSpotifyTrackId]);
 
   // State A: lines loaded → full editor
-  if (lyricData && audioFile && lyricData.lines.length > 0) {
+  if (lyricData && (audioFile || savedId) && lyricData.lines.length > 0) {
     return (
       <div className="flex-1 px-4 py-6 space-y-3">
         <LyricDisplay
