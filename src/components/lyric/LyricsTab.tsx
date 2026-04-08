@@ -169,6 +169,7 @@ export function LyricsTab({
   autoSubmitFile = null,
   filmMode = "song",
   onFilmModeChange,
+  setAudioUrl,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [debugData, setDebugData] = useState<any | null>(null);

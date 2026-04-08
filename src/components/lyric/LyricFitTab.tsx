@@ -210,6 +210,7 @@ export function LyricFitTab({
           autoSubmitFile={autoSubmitFile}
           filmMode={filmMode}
           onFilmModeChange={handleFilmModeChange}
+          setAudioUrl={p.setAudioUrl}
         />
       </div>
 
